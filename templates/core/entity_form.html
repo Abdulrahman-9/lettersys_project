@@ -1,0 +1,183 @@
+{% extends 'base.html' %}
+{# إدخال/تعديل جهة (اسم، رمز، نوع) #}
+{% block title %}{% if is_edit %}تعديل جهة{% else %}إضافة جهة{% endif %}{% endblock %}
+
+{% block page_sidebar %}
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">ملخص الجهة</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">إجمالي الجهات</div>
+        <strong>{{ total_entities|default:'-' }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-buildings"></i> قاعدة الجهات</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">وضع الصفحة</div>
+        <strong>{% if is_edit %}تعديل{% else %}إضافة{% endif %}</strong>
+      </div>
+      <span class="app-context-chip"><i class="bi bi-pencil-square"></i> نموذج</span>
+    </div>
+  </div>
+</div>
+
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">إحصاءات النوع</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">مصدّرة</div>
+        <strong>{{ type_counts.issuer|default:0 }}</strong>
+      </div>
+      <span class="app-context-chip"><i class="bi bi-arrow-up-right"></i> صادر</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">مستلمة</div>
+        <strong>{{ type_counts.receiver|default:0 }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-arrow-down-left"></i> وارد</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">كلاهما</div>
+        <strong>{{ type_counts.both|default:0 }}</strong>
+      </div>
+      <span class="app-context-chip is-success"><i class="bi bi-arrow-left-right"></i> مزدوج</span>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+      <h4 class="fw-bold mb-1">{% if is_edit %}تعديل جهة{% else %}إضافة جهة جديدة{% endif %}</h4>
+      <p class="text-muted mb-0">أدخل اسم الجهة، رمزها (اختياري)، وحدد نوعها.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'entity_list' %}">
+      <i class="bi bi-arrow-left me-1"></i>رجوع إلى الجهات
+    </a>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% if form.errors %}
+          <div class="alert alert-danger small">يوجد حقول تحتاج مراجعة.</div>
+          {% endif %}
+
+          {% if is_edit and editing_entity %}
+          <div class="alert alert-info d-flex justify-content-between align-items-center">
+            <div>
+              <strong>{{ editing_entity.name }}</strong>{% if editing_entity.code %} ({{ editing_entity.code }}){% endif %}
+            </div>
+            <span class="badge bg-secondary">{{ editing_entity.get_etype_display }}</span>
+          </div>
+          {% endif %}
+
+          <form method="post" novalidate class="row g-3">
+            {% csrf_token %}
+            <div class="col-md-6 col-sm-12">
+              <label class="form-label fw-semibold" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+              {{ form.name }}
+              {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|striptags }}</div>{% endif %}
+            </div>
+            <div class="col-md-6 col-sm-12">
+              <label class="form-label fw-semibold" for="{{ form.code.id_for_label }}">{{ form.code.label }}</label>
+              {{ form.code }}
+              {% if form.code.errors %}<div class="text-danger small mt-1">{{ form.code.errors|striptags }}</div>{% endif %}
+              <div class="form-text">أحرف أو أرقام أو نقط (مثال: م.ك.ح أو ش4)</div>
+            </div>
+            <div class="col-md-6 col-sm-12">
+              <label class="form-label fw-semibold" for="{{ form.etype.id_for_label }}">{{ form.etype.label }}</label>
+              {{ form.etype }}
+              {% if form.etype.errors %}<div class="text-danger small mt-1">{{ form.etype.errors|striptags }}</div>{% endif %}
+            </div>
+            <div class="col-md-6 col-sm-12 d-flex align-items-center gap-3 pt-4">
+              <div class="form-check">
+                {{ form.is_active }}
+                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+              </div>
+            </div>
+
+            <!-- ─── بيانات الاتصال ─── -->
+            <div class="col-12 mt-3">
+              <hr class="my-1">
+              <h6 class="text-muted fw-semibold mb-2" style="font-size:0.82rem;letter-spacing:.03em;">
+                <i class="bi bi-envelope me-1"></i> بيانات الاتصال <span class="fw-normal text-muted">(اختياري)</span>
+              </h6>
+            </div>
+            <div class="col-md-6 col-sm-12">
+              <label class="form-label fw-semibold" for="{{ form.email.id_for_label }}">
+                {{ form.email.label }}
+                <span class="badge bg-secondary fw-normal ms-1" style="font-size:.7rem">اختياري</span>
+              </label>
+              {{ form.email }}
+              {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors|striptags }}</div>{% endif %}
+              <div class="form-text">يُستخدم لإرسال إشعارات المراسلات الرسمية</div>
+            </div>
+            <div class="col-md-6 col-sm-12">
+              <label class="form-label fw-semibold" for="{{ form.email_cc.id_for_label }}">{{ form.email_cc.label }}</label>
+              {{ form.email_cc }}
+              {% if form.email_cc.errors %}<div class="text-danger small mt-1">{{ form.email_cc.errors|striptags }}</div>{% endif %}
+              <div class="form-text">عناوين إضافية تستلم نسخة من الإشعار، مفصولة بفاصلة</div>
+            </div>
+            <div class="col-md-4 col-sm-12">
+              <label class="form-label fw-semibold" for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+              {{ form.phone }}
+            </div>
+            <div class="col-md-4 col-sm-12">
+              <label class="form-label fw-semibold" for="{{ form.contact_person.id_for_label }}">{{ form.contact_person.label }}</label>
+              {{ form.contact_person }}
+            </div>
+            <div class="col-md-4 col-sm-12">
+              <label class="form-label fw-semibold" for="{{ form.address.id_for_label }}">{{ form.address.label }}</label>
+              {{ form.address }}
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+              {{ form.notes }}
+            </div>
+
+            <!-- ─── تفضيلات الإشعارات ─── -->
+            <div class="col-12 mt-2">
+              <hr class="my-1">
+              <h6 class="text-muted fw-semibold mb-2" style="font-size:0.82rem;letter-spacing:.03em;">
+                <i class="bi bi-bell me-1"></i> تفضيلات الإشعارات التلقائية
+              </h6>
+            </div>
+            <div class="col-md-6 col-sm-12">
+              <div class="form-check form-switch">
+                {{ form.notify_on_receive }}
+                <label class="form-check-label" for="{{ form.notify_on_receive.id_for_label }}">
+                  {{ form.notify_on_receive.label }}
+                  <div class="form-text mt-0">يُرسَل بريد للجهة عند تسجيل كتاب وارد منها</div>
+                </label>
+              </div>
+            </div>
+            <div class="col-md-6 col-sm-12">
+              <div class="form-check form-switch">
+                {{ form.notify_on_send }}
+                <label class="form-check-label" for="{{ form.notify_on_send.id_for_label }}">
+                  {{ form.notify_on_send.label }}
+                  <div class="form-text mt-0">يُرسَل بريد للجهة عند تسجيل كتاب صادر إليها</div>
+                </label>
+              </div>
+            </div>
+
+            <div class="col-12 d-flex gap-2 mt-3">
+              <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>{% if is_edit %}حفظ التعديل{% else %}حفظ الجهة{% endif %}</button>
+              <a href="{% url 'entity_list' %}" class="btn btn-outline-secondary">إلغاء</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

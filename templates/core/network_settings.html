@@ -1,0 +1,700 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}إعدادات الربط الشبكي{% endblock %}
+
+{% block content %}
+<div class="container-fluid ns-page" style="max-width:960px; padding:24px 16px;">
+
+  {# ── رأس الصفحة ── #}
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'sequence_settings' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-right"></i>
+    </a>
+    <div>
+      <h4 class="mb-0 fw-bold d-flex align-items-center gap-2">
+        <i class="bi bi-diagram-3 text-primary"></i> إعدادات الربط الشبكي
+      </h4>
+      <p class="text-muted mb-0" style="font-size:.88rem;">
+        ربط أجهزة متعددة بنفس قاعدة البيانات — مشاركة الكتب والعدادات والأرقام التسلسلية.
+      </p>
+    </div>
+    <div class="ms-auto d-flex gap-2">
+      <span class="ns-status-chip" id="dbStatusChip">
+        <span class="ns-dot"></span> جارٍ الفحص…
+      </span>
+    </div>
+  </div>
+
+  {# ── بطاقة الحالة العامة ── #}
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="ns-stat-card">
+        <div class="ns-stat-icon text-primary"><i class="bi bi-hdd-network"></i></div>
+        <div>
+          <div class="ns-stat-label">قاعدة البيانات الحالية</div>
+          <div class="ns-stat-value" id="currentDbHost">{{ current_db_host }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="ns-stat-card">
+        <div class="ns-stat-icon text-success"><i class="bi bi-people"></i></div>
+        <div>
+          <div class="ns-stat-label">المستخدمون النشطون</div>
+          <div class="ns-stat-value" id="activeUsersCount">{{ active_users }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="ns-stat-card">
+        <div class="ns-stat-icon text-warning"><i class="bi bi-shield-lock"></i></div>
+        <div>
+          <div class="ns-stat-label">أمان العدادات</div>
+          <div class="ns-stat-value" style="font-size:.82rem;">SELECT FOR UPDATE ✓</div>
+          <div class="text-muted" style="font-size:.75rem;">منع التضارب نشط عبر قاعدة البيانات المشتركة</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── خطوة 1: هذا الجهاز ── #}
+  <div class="ns-section mb-3">
+    <div class="ns-section-header">
+      <span class="ns-step-badge">1</span>
+      <span>معلومات هذا الجهاز</span>
+    </div>
+    <div class="ns-section-body">
+      <div class="row g-3">
+        <div class="col-md-5">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">الاسم الودّي للجهاز</label>
+          <input type="text" id="deviceName" class="form-control form-control-sm"
+                 placeholder="مثال: مكتب المدير — PC-1"
+                 value="{{ cfg.device_name }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">
+            عنوان IP هذا الجهاز
+          </label>
+          <div class="input-group input-group-sm">
+            <input type="text" id="thisHost" class="form-control"
+                   placeholder="{{ local_ip }}"
+                   value="{{ cfg.this_host|default:local_ip }}">
+            <button class="btn btn-outline-secondary" type="button" id="detectIpBtn"
+                    title="اكتشاف تلقائي">
+              <i class="bi bi-wifi"></i>
+            </button>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">منفذ التطبيق</label>
+          <input type="number" id="appPort" class="form-control form-control-sm"
+                 value="{{ cfg.app_port }}" min="1" max="65535">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── خطوة 2: دور الجهاز ── #}
+  <div class="ns-section mb-3">
+    <div class="ns-section-header">
+      <span class="ns-step-badge">2</span>
+      <span>دور هذا الجهاز في الشبكة</span>
+    </div>
+    <div class="ns-section-body">
+      <div class="ns-role-grid" id="roleGrid">
+
+        <label class="ns-role-card {% if cfg.role == 'standalone' or not cfg.is_configured %}ns-role-active{% endif %}"
+               data-role="standalone">
+          <input type="radio" name="deviceRole" value="standalone"
+                 {% if cfg.role == 'standalone' or not cfg.is_configured %}checked{% endif %}>
+          <div class="ns-role-icon"><i class="bi bi-pc-display"></i></div>
+          <div class="ns-role-title">مستقل</div>
+          <div class="ns-role-desc">جهاز واحد — قاعدة بياناته الخاصة.<br>لا يحتاج إعداداً إضافياً.</div>
+        </label>
+
+        <label class="ns-role-card {% if cfg.role == 'master' %}ns-role-active{% endif %}"
+               data-role="master">
+          <input type="radio" name="deviceRole" value="master"
+                 {% if cfg.role == 'master' %}checked{% endif %}>
+          <div class="ns-role-icon text-primary"><i class="bi bi-server"></i></div>
+          <div class="ns-role-title">ماستر (رئيسي)</div>
+          <div class="ns-role-desc">
+            يشغّل PostgreSQL ويستقبل الأجهزة التابعة.<br>
+            أعطِ الأجهزة الأخرى IP هذا الجهاز.
+          </div>
+        </label>
+
+        <label class="ns-role-card {% if cfg.role == 'slave' %}ns-role-active{% endif %}"
+               data-role="slave">
+          <input type="radio" name="deviceRole" value="slave"
+                 {% if cfg.role == 'slave' %}checked{% endif %}>
+          <div class="ns-role-icon text-success"><i class="bi bi-display"></i></div>
+          <div class="ns-role-title">تابع</div>
+          <div class="ns-role-desc">
+            يتصل بقاعدة بيانات الماستر.<br>
+            أدخل IP الماستر أدناه.
+          </div>
+        </label>
+
+      </div>
+    </div>
+  </div>
+
+  {# ── خطوة 3-أ: إعدادات الماستر ── #}
+  <div class="ns-section mb-3 ns-role-panel" id="panelMaster"
+       style="{% if cfg.role != 'master' %}display:none{% endif %}">
+    <div class="ns-section-header ns-header-primary">
+      <i class="bi bi-server me-2"></i>
+      إعدادات الماستر — معلومات الاتصال للأجهزة التابعة
+    </div>
+    <div class="ns-section-body">
+      <p class="text-muted" style="font-size:.85rem;">
+        أعطِ هذه المعلومات لكل جهاز تابع ليتصل بقاعدة بياناتك.
+      </p>
+      <div class="ns-info-box" id="masterInfoBox">
+        <div class="ns-info-row">
+          <span class="ns-info-key">DB_HOST</span>
+          <span class="ns-info-val" id="masterIpDisplay">{{ local_ip }}</span>
+        </div>
+        <div class="ns-info-row">
+          <span class="ns-info-key">DB_PORT</span>
+          <span class="ns-info-val">{{ current_db_port }}</span>
+        </div>
+        <div class="ns-info-row">
+          <span class="ns-info-key">DB_NAME</span>
+          <span class="ns-info-val">{{ current_db_name }}</span>
+        </div>
+        <div class="ns-info-row">
+          <span class="ns-info-key">DB_USER</span>
+          <span class="ns-info-val">{{ current_db_user }}</span>
+        </div>
+        <div class="ns-info-row">
+          <span class="ns-info-key">DB_PASSWORD</span>
+          <span class="ns-info-val ns-password-mask" id="masterPwDisplay">••••••••</span>
+        </div>
+      </div>
+      <div class="mt-2 d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-primary" id="copyMasterConfig">
+          <i class="bi bi-clipboard me-1"></i>نسخ للحافظة
+        </button>
+        <div class="ms-auto text-muted" style="font-size:.8rem; align-self:center;">
+          <i class="bi bi-shield-check me-1"></i>
+          تأكد من أن PostgreSQL يقبل الاتصالات من شبكتك المحلية في pg_hba.conf
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── خطوة 3-ب: إعدادات التابع ── #}
+  <div class="ns-section mb-3 ns-role-panel" id="panelSlave"
+       style="{% if cfg.role != 'slave' %}display:none{% endif %}">
+    <div class="ns-section-header ns-header-success">
+      <i class="bi bi-plug me-2"></i>
+      الاتصال بالماستر — بيانات قاعدة بيانات الجهاز الرئيسي
+    </div>
+    <div class="ns-section-body">
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">
+            عنوان IP الماستر <span class="text-danger">*</span>
+          </label>
+          <div class="input-group input-group-sm">
+            <input type="text" id="masterHost" class="form-control"
+                   placeholder="مثال: 192.168.1.10"
+                   value="{{ cfg.master_host }}">
+            <button class="btn btn-outline-success" type="button" id="pingMasterBtn"
+                    title="فحص الاتصال">
+              <i class="bi bi-broadcast me-1"></i>فحص
+            </button>
+          </div>
+          <div id="pingMasterResult" class="mt-1" style="font-size:.8rem;"></div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">منفذ PostgreSQL</label>
+          <input type="number" id="masterDbPort" class="form-control form-control-sm"
+                 value="{{ cfg.master_db_port }}" min="1" max="65535">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">اسم قاعدة البيانات</label>
+          <input type="text" id="masterDbName" class="form-control form-control-sm"
+                 value="{{ cfg.master_db_name }}" placeholder="lettersys">
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">المستخدم</label>
+          <input type="text" id="masterDbUser" class="form-control form-control-sm"
+                 value="{{ cfg.master_db_user }}" placeholder="lettersys_user">
+        </div>
+        <div class="col-md-5">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">كلمة المرور</label>
+          <div class="input-group input-group-sm">
+            <input type="password" id="masterDbPassword" class="form-control"
+                   placeholder="اتركه فارغاً للإبقاء على الحالي"
+                   autocomplete="new-password">
+            <button class="btn btn-outline-secondary" type="button" id="togglePwBtn">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button type="button" class="btn btn-sm btn-success w-100" id="testDbBtn">
+            <i class="bi bi-database-check me-1"></i>اختبار الاتصال
+          </button>
+        </div>
+      </div>
+
+      <div id="testDbResult" class="ns-alert" style="display:none;"></div>
+
+    </div>
+  </div>
+
+  {# ── خطوة 4: الأجهزة المعروفة ── #}
+  <div class="ns-section mb-3">
+    <div class="ns-section-header">
+      <span class="ns-step-badge">{% if cfg.role == 'slave' %}4{% else %}3{% endif %}</span>
+      <span>الأجهزة المعروفة في الشبكة</span>
+      <div class="ms-auto d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshDevicesBtn"
+                title="تحديث الحالة">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="pingAllBtn">
+          <i class="bi bi-broadcast me-1"></i>فحص الكل
+        </button>
+        <button type="button" class="btn btn-sm btn-primary" id="scanSubnetBtn">
+          <i class="bi bi-radar me-1"></i>مسح الشبكة تلقائياً
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="addDeviceBtn">
+          <i class="bi bi-plus-lg me-1"></i>إضافة يدوياً
+        </button>
+      </div>
+    </div>
+    <div class="ns-section-body p-0">
+
+      {# نموذج الإضافة اليدوية #}
+      <div id="addDeviceForm" class="p-3 border-bottom bg-light" style="display:none;">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold" style="font-size:.82rem;">عنوان IP</label>
+            <input type="text" id="newDeviceIp" class="form-control form-control-sm"
+                   placeholder="192.168.1.x">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold" style="font-size:.82rem;">المنفذ</label>
+            <input type="number" id="newDevicePort" class="form-control form-control-sm"
+                   value="8000" min="1" max="65535">
+          </div>
+          <div class="col-md-3">
+            <button type="button" class="btn btn-sm btn-success" id="pingNewDeviceBtn">
+              <i class="bi bi-broadcast me-1"></i>فحص وإضافة
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-1" id="cancelAddDevice">
+              إلغاء
+            </button>
+          </div>
+        </div>
+        <div id="addDeviceResult" class="mt-2" style="font-size:.82rem;"></div>
+      </div>
+
+      {# مؤشر المسح #}
+      <div id="scanProgress" class="p-3 text-center" style="display:none;">
+        <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+        <span id="scanProgressText">جارٍ مسح الشبكة <span id="scanSubnet"></span>…</span>
+        <div class="text-muted mt-1" style="font-size:.8rem;">
+          يستغرق المسح الكامل 8–15 ثانية
+        </div>
+      </div>
+
+      {# جدول الأجهزة #}
+      <div class="table-responsive">
+        <table class="table table-sm ns-devices-table mb-0">
+          <thead>
+            <tr>
+              <th style="width:28px;"></th>
+              <th>الاسم</th>
+              <th>عنوان IP</th>
+              <th>الدور</th>
+              <th>الحالة</th>
+              <th>آخر اتصال</th>
+              <th>زمن الاستجابة</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="devicesTableBody">
+            {% for node in nodes %}
+            <tr data-node-id="{{ node.pk }}">
+              <td>
+                {% if node.is_current %}
+                  <i class="bi bi-pc-display text-primary" title="هذا الجهاز"></i>
+                {% else %}
+                  <i class="bi bi-display text-muted"></i>
+                {% endif %}
+              </td>
+              <td>{{ node.name }}
+                {% if node.is_current %}
+                  <span class="badge bg-primary ms-1" style="font-size:.7rem;">أنا</span>
+                {% endif %}
+              </td>
+              <td><code>{{ node.ip_address }}:{{ node.app_port }}</code></td>
+              <td>
+                {% if node.role == 'master' %}
+                  <span class="badge" style="background:#0369a1;font-size:.72rem;">ماستر</span>
+                {% else %}
+                  <span class="badge" style="background:#16a34a;font-size:.72rem;">تابع</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if node.is_online %}
+                  <span class="ns-online-dot"></span> متصل
+                {% else %}
+                  <span class="ns-offline-dot"></span> غير متصل
+                {% endif %}
+              </td>
+              <td class="text-muted" style="font-size:.8rem;">
+                {% if node.last_seen %}{{ node.last_seen|timesince }} مضت{% else %}—{% endif %}
+              </td>
+              <td>
+                {% if node.last_ping_ms %}
+                  <span class="ns-ping-badge {% if node.last_ping_ms < 50 %}ns-ping-good{% elif node.last_ping_ms < 200 %}ns-ping-ok{% else %}ns-ping-slow{% endif %}">
+                    {{ node.last_ping_ms }}ms
+                  </span>
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if not node.is_current %}
+                <button class="btn btn-xs ns-btn-delete" data-node-id="{{ node.pk }}"
+                        title="حذف من السجل">
+                  <i class="bi bi-trash3"></i>
+                </button>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr id="emptyDevicesRow">
+              <td colspan="8" class="text-center text-muted py-4" style="font-size:.9rem;">
+                <i class="bi bi-diagram-3 me-2"></i>
+                لا توجد أجهزة مسجّلة — اضغط "مسح الشبكة" أو "إضافة يدوياً"
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── خطوة 5: دليل ضبط PostgreSQL للشبكة ── #}
+  <div class="ns-section mb-3">
+    <div class="ns-section-header" data-bs-toggle="collapse" data-bs-target="#pgGuidePanel"
+         style="cursor:pointer; user-select:none;">
+      <span class="ns-step-badge" style="background:#6366f1;">?</span>
+      <span>دليل ضبط PostgreSQL للسماح بالاتصال من الأجهزة التابعة</span>
+      <i class="bi bi-chevron-down ms-auto" style="font-size:.8rem; opacity:.5;"></i>
+    </div>
+    <div class="collapse" id="pgGuidePanel">
+      <div class="ns-section-body">
+
+        <div class="alert alert-info d-flex gap-2 align-items-start py-2 px-3 mb-3" style="font-size:.83rem;">
+          <i class="bi bi-info-circle-fill mt-1" style="flex-shrink:0;"></i>
+          <span>هذه الخطوة مطلوبة على <strong>الجهاز الماستر فقط</strong> — تسمح لـ PostgreSQL بقبول اتصالات الأجهزة التابعة على الشبكة المحلية.</span>
+        </div>
+
+        {# ─ خطوة A ─ #}
+        <div class="ns-guide-step">
+          <div class="ns-guide-num">1</div>
+          <div>
+            <div class="fw-semibold mb-1">ابحث عن ملف <code>pg_hba.conf</code></div>
+            <div class="ns-code-block">
+              <div class="ns-code-line text-muted">-- Windows (PostgreSQL 15)</div>
+              <div class="ns-code-line">C:\Program Files\PostgreSQL\15\data\pg_hba.conf</div>
+              <div class="ns-code-line text-muted mt-1">-- Linux</div>
+              <div class="ns-code-line">/etc/postgresql/15/main/pg_hba.conf</div>
+            </div>
+          </div>
+        </div>
+
+        {# ─ خطوة B ─ #}
+        <div class="ns-guide-step">
+          <div class="ns-guide-num">2</div>
+          <div class="flex-grow-1">
+            <div class="fw-semibold mb-1">أضف السطر التالي في نهاية الملف</div>
+            <div class="ns-code-block d-flex justify-content-between align-items-center gap-2">
+              <code id="pgHbaLine">host&nbsp;&nbsp;&nbsp;&nbsp;{{ current_db_name }}&nbsp;&nbsp;&nbsp;&nbsp;{{ current_db_user }}&nbsp;&nbsp;&nbsp;&nbsp;192.168.1.0/24&nbsp;&nbsp;&nbsp;&nbsp;scram-sha-256</code>
+              <button class="btn btn-xs btn-outline-secondary" id="copyPgLine" title="نسخ">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+            <div class="text-muted mt-1" style="font-size:.78rem;">
+              غيّر <code>192.168.1.0/24</code> ليتطابق مع نطاق شبكتك الفعلية.
+              استخدم <code>scram-sha-256</code> لـ PostgreSQL 14+ أو <code>md5</code> للإصدارات الأقدم.
+            </div>
+          </div>
+        </div>
+
+        {# ─ خطوة C ─ #}
+        <div class="ns-guide-step">
+          <div class="ns-guide-num">3</div>
+          <div>
+            <div class="fw-semibold mb-1">أعد تحميل PostgreSQL (بدون إيقاف الخدمة)</div>
+            <div class="ns-code-block">
+              <div class="ns-code-line text-muted">-- Windows (PowerShell كمسؤول)</div>
+              <div class="ns-code-line">pg_ctl reload -D "C:\Program Files\PostgreSQL\15\data"</div>
+              <div class="ns-code-line text-muted mt-1">-- Linux</div>
+              <div class="ns-code-line">sudo systemctl reload postgresql</div>
+            </div>
+          </div>
+        </div>
+
+        {# ─ خطوة D ─ #}
+        <div class="ns-guide-step">
+          <div class="ns-guide-num">4</div>
+          <div>
+            <div class="fw-semibold mb-1">أضف عنوان IP الماستر لـ <code>CSRF_TRUSTED_ORIGINS</code> في <code>.env</code></div>
+            <div class="ns-code-block">
+              <div class="ns-code-line">CSRF_TRUSTED_ORIGINS=http://localhost:8000,http://{{ local_ip }}:8000</div>
+            </div>
+            <div class="text-muted mt-1" style="font-size:.78rem;">مطلوب حتى تقبل Django طلبات POST من الأجهزة التابعة.</div>
+          </div>
+        </div>
+
+        {# ─ خطوة E ─ #}
+        <div class="ns-guide-step">
+          <div class="ns-guide-num">5</div>
+          <div>
+            <div class="fw-semibold mb-1">تحقق من جدار الحماية (Windows Firewall / UFW)</div>
+            <div class="ns-code-block">
+              <div class="ns-code-line text-muted">-- Windows (PowerShell كمسؤول)</div>
+              <div class="ns-code-line">New-NetFirewallRule -DisplayName "PostgreSQL LAN" -Direction Inbound -Protocol TCP -LocalPort {{ current_db_port|default:"5432" }} -Action Allow</div>
+              <div class="ns-code-line text-muted mt-1">-- Linux (UFW)</div>
+              <div class="ns-code-line">sudo ufw allow from 192.168.1.0/24 to any port {{ current_db_port|default:"5432" }}</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {# ── خطوة 6: حفظ الإعدادات ── #}
+  <div class="d-flex gap-2 align-items-center mt-4">
+    <button type="button" class="btn btn-primary" id="saveConfigBtn">
+      <i class="bi bi-floppy me-1"></i>حفظ الإعدادات
+    </button>
+    <a href="{% url 'sequence_settings' %}" class="btn btn-outline-secondary">إلغاء</a>
+
+    <div id="saveResult" class="ms-3" style="display:none;"></div>
+  </div>
+
+  {# ── شريط إعادة التشغيل ── #}
+  <div class="ns-restart-banner" id="restartBanner" style="display:none;">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <strong>يجب إعادة تشغيل الخادم</strong> لتطبيق إعدادات قاعدة البيانات الجديدة.
+    <div class="mt-2 ns-restart-cmd">
+      <code>python manage.py runserver</code>
+      <small class="ms-2 text-muted">أو أعد تشغيل خدمة gunicorn / uwsgi</small>
+    </div>
+  </div>
+
+</div>
+
+{# ── الأنماط ── #}
+<style>
+/* ── متغيرات ── */
+:root {
+  --ns-border: #e2e8f0;
+  --ns-bg: #f8fafc;
+  --ns-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+/* ── تخطيط الصفحة ── */
+.ns-page { font-size: .9rem; }
+
+/* ── بطاقات الإحصاء ── */
+.ns-stat-card {
+  display: flex; align-items: center; gap: 14px;
+  background: #fff; border: 1px solid var(--ns-border);
+  border-radius: 12px; padding: 14px 16px;
+  box-shadow: var(--ns-shadow);
+}
+.ns-stat-icon { font-size: 1.8rem; }
+.ns-stat-label { font-size: .78rem; color: #64748b; }
+.ns-stat-value { font-size: .95rem; font-weight: 600; margin-top: 2px; }
+
+/* ── أقسام ── */
+.ns-section {
+  background: #fff; border: 1px solid var(--ns-border);
+  border-radius: 12px; overflow: hidden;
+  box-shadow: var(--ns-shadow);
+}
+.ns-section-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; font-weight: 600;
+  background: var(--ns-bg); border-bottom: 1px solid var(--ns-border);
+  font-size: .88rem;
+}
+.ns-header-primary { background: #eff6ff; border-bottom-color: #bfdbfe; }
+.ns-header-success  { background: #f0fdf4; border-bottom-color: #bbf7d0; }
+.ns-section-body { padding: 16px; }
+.ns-step-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #667eea; color: #fff; font-size: .75rem; font-weight: 700;
+}
+
+/* ── بطاقات الدور ── */
+.ns-role-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 12px;
+}
+.ns-role-card {
+  border: 2px solid var(--ns-border); border-radius: 12px;
+  padding: 14px; cursor: pointer; transition: border-color .15s, background .15s;
+  text-align: center; position: relative;
+}
+.ns-role-card input[type=radio] { position: absolute; opacity: 0; width: 0; height: 0; }
+.ns-role-card:hover { border-color: #667eea; background: #f5f3ff; }
+.ns-role-active { border-color: #667eea !important; background: #f0edff !important; }
+.ns-role-icon { font-size: 1.8rem; margin-bottom: 6px; }
+.ns-role-title { font-weight: 700; margin-bottom: 4px; font-size: .88rem; }
+.ns-role-desc { font-size: .78rem; color: #64748b; line-height: 1.4; }
+
+/* ── صندوق معلومات الماستر ── */
+.ns-info-box {
+  background: #f0f4ff; border: 1px solid #c7d2fe;
+  border-radius: 8px; padding: 12px 14px;
+  font-family: monospace; font-size: .82rem;
+}
+.ns-info-row { display: flex; gap: 12px; padding: 3px 0; border-bottom: 1px dashed #c7d2fe; }
+.ns-info-row:last-child { border-bottom: none; }
+.ns-info-key { color: #3730a3; min-width: 140px; font-weight: 600; }
+.ns-info-val { color: #1e293b; }
+.ns-password-mask { letter-spacing: 2px; }
+
+/* ── جدول الأجهزة ── */
+.ns-devices-table th {
+  font-size: .78rem; font-weight: 600; color: #64748b;
+  background: var(--ns-bg); padding: 8px 12px;
+}
+.ns-devices-table td { padding: 9px 12px; vertical-align: middle; font-size: .85rem; }
+.ns-devices-table tbody tr:hover { background: #f8fafc; }
+
+/* ── حالة الاتصال ── */
+.ns-online-dot, .ns-offline-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px;
+}
+.ns-online-dot  { background: #16a34a; box-shadow: 0 0 0 3px #dcfce7; }
+.ns-offline-dot { background: #94a3b8; }
+
+/* ── زمن الاستجابة ── */
+.ns-ping-badge {
+  display: inline-block; padding: 1px 8px; border-radius: 20px;
+  font-size: .75rem; font-weight: 600;
+}
+.ns-ping-good { background: #dcfce7; color: #15803d; }
+.ns-ping-ok   { background: #fef9c3; color: #854d0e; }
+.ns-ping-slow { background: #fee2e2; color: #b91c1c; }
+
+/* ── زر حذف مصغّر ── */
+.btn-xs { padding: 2px 7px; font-size: .78rem; }
+.ns-btn-delete {
+  border: 1px solid #fca5a5; color: #dc2626; background: #fff;
+  border-radius: 6px; transition: background .12s;
+}
+.ns-btn-delete:hover { background: #fee2e2; color: #b91c1c; }
+
+/* ── شريط الحالة العلوي ── */
+.ns-status-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 20px;
+  background: #f1f5f9; border: 1px solid var(--ns-border);
+  font-size: .8rem; font-weight: 500;
+}
+.ns-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #94a3b8; display: inline-block;
+}
+.ns-dot.online  { background: #16a34a; box-shadow: 0 0 0 3px #dcfce7; }
+.ns-dot.offline { background: #ef4444; }
+
+/* ── تنبيهات ── */
+.ns-alert { padding: 10px 14px; border-radius: 8px; font-size: .85rem; }
+.ns-alert-success { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
+.ns-alert-error   { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; }
+.ns-alert-info    { background: #eff6ff; border: 1px solid #93c5fd; color: #1e40af; }
+
+/* ── شريط إعادة التشغيل ── */
+.ns-restart-banner {
+  margin-top: 16px; padding: 14px 16px;
+  background: #fffbeb; border: 1px solid #fbbf24; border-radius: 10px;
+  color: #92400e; font-size: .88rem;
+}
+.ns-restart-cmd {
+  background: #fff; border-radius: 6px; padding: 8px 12px;
+  border: 1px solid #fde68a; font-size: .82rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .ns-role-grid { grid-template-columns: 1fr; }
+}
+
+/* ── دليل pg_hba ── */
+.ns-guide-step {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--ns-border);
+}
+.ns-guide-step:last-child { border-bottom: none; }
+.ns-guide-num {
+  flex-shrink: 0;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: #6366f1; color: #fff;
+  font-size: .75rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 2px;
+}
+.ns-code-block {
+  background: #1e1e2e; color: #cdd6f4;
+  border-radius: 8px; padding: 10px 14px;
+  font-family: 'Courier New', monospace; font-size: .78rem;
+  direction: ltr; text-align: left;
+  margin-top: 6px; overflow-x: auto;
+}
+.ns-code-line { line-height: 1.8; white-space: pre; }
+.ns-code-block .text-muted { color: #6c7086 !important; }
+</style>
+
+<script src="{% static 'network_settings.js' %}?v=20260503b"></script>
+<script>
+window.NS_URLS = {
+  localIp:       "{% url 'network-local-ip' %}",
+  saveConfig:    "{% url 'network-save-config' %}",
+  testDb:        "{% url 'network-test-db' %}",
+  testPing:      "{% url 'network-test-ping' %}",
+  scanSubnet:    "{% url 'network-scan-subnet' %}",
+  devices:       "{% url 'network-devices' %}",
+  pingAll:       "{% url 'network-ping-all' %}",
+  devicesStream: "{% url 'network-devices-stream' %}",
+  deleteDevice:  "/books/api/network/device/{pk}/delete/",
+};
+window.NS_CSRF = "{{ csrf_token }}";
+window.NS_CFG = {
+  role:       "{{ cfg.role }}",
+  configured: {{ cfg.is_configured|yesno:"true,false" }},
+  localIp:    "{{ local_ip }}",
+};
+
+// ─── نسخ سطر pg_hba ─────────────────────────────────────────────────────────
+document.getElementById('copyPgLine')?.addEventListener('click', function () {
+  const text = document.getElementById('pgHbaLine')?.textContent?.replace(/\u00a0/g, ' ') || '';
+  navigator.clipboard.writeText(text.trim()).then(() => {
+    this.innerHTML = '<i class="bi bi-check-lg"></i>';
+    setTimeout(() => { this.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 2000);
+  }).catch(() => {});
+});
+</script>
+{% endblock %}

@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+{% block title %}التنبيهات{% endblock %}
+
+{% block page_sidebar %}
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">حالة الإشعارات</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">إجمالي الإشعارات</div>
+        <strong>{{ notifications|length }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-bell"></i> مركز التنبيهات</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">غير مقروءة</div>
+        <strong>{{ navbar_unread_notifications|default:0 }}</strong>
+      </div>
+      <span class="app-context-chip is-danger"><i class="bi bi-dot"></i> جديد</span>
+    </div>
+  </div>
+</div>
+
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">إجراءات سريعة</div>
+  <div class="app-context-list">
+    <a class="app-context-link" href="{% url 'book_unified' %}?tab=overdue">
+      <span>فتح الكتب المتأخرة</span>
+      <i class="bi bi-lightning-charge"></i>
+    </a>
+    <a class="app-context-link" href="{% url 'dashboard' %}">
+      <span>العودة للوحة التحكم</span>
+      <i class="bi bi-grid"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+.timeline-container {
+  position: relative;
+  padding: 2rem 0;
+}
+.timeline-item {
+  position: relative;
+  padding-right: 3rem;
+  padding-bottom: 2rem;
+  border-right: 3px solid #e2e8f0;
+}
+.timeline-item:last-child {
+  border-right: none;
+  padding-bottom: 0;
+}
+.timeline-icon {
+  position: absolute;
+  right: -1.25rem;
+  top: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+  font-size: 1.2rem;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  z-index: 1;
+}
+.timeline-icon.read {
+  background: linear-gradient(135deg, #94a3b8, #cbd5e1);
+}
+.notification-card {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.5rem;
+  transition: all 0.3s;
+  position: relative;
+}
+.notification-card.unread {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(139, 92, 246, 0.05));
+  border-color: #3b82f6;
+}
+.notification-card:hover {
+  transform: translateX(-8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+.notification-badge {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.mark-read-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  border: 2px solid #e2e8f0;
+  background: white;
+  transition: all 0.3s;
+  font-size: 0.875rem;
+}
+.mark-read-btn:hover {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: white;
+  transform: scale(1.05);
+}
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+.empty-state-icon {
+  font-size: 5rem;
+  color: #cbd5e1;
+  margin-bottom: 1rem;
+}
+</style>
+
+<div class="container-fluid animate-fade-in">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="fw-bold mb-1 gradient-text">مركز الإشعارات</h4>
+      <p class="text-muted mb-0">تابع جميع تحديثات وتنبيهات النظام</p>
+    </div>
+    <div class="d-flex gap-2">
+      <span class="badge bg-primary-subtle text-primary px-3 py-2">
+        <i class="bi bi-bell me-1"></i>
+        {{ notifications|length }} إشعار
+      </span>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      {% if notifications %}
+      <div class="timeline-container">
+        {% for n in notifications %}
+        <div class="timeline-item animate-fade-in" style="animation-delay: {{ forloop.counter0|add:'0.1' }}s;">
+          <div class="timeline-icon {% if n.is_read %}read{% endif %}">
+            <i class="bi {% if n.is_read %}bi-check-circle{% else %}bi-bell-fill{% endif %}"></i>
+          </div>
+          
+          <div class="notification-card {% if not n.is_read %}unread{% endif %}">
+            {% if not n.is_read %}
+            <span class="notification-badge">
+              <i class="bi bi-star-fill me-1"></i>جديد
+            </span>
+            {% endif %}
+            
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div class="flex-grow-1">
+                <h6 class="fw-bold mb-1">
+                  {% if 'overdue' in n.message|lower or 'متأخر' in n.message %}
+                    <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>
+                  {% elif 'new' in n.message|lower or 'جديد' in n.message %}
+                    <i class="bi bi-plus-circle-fill text-success me-1"></i>
+                  {% else %}
+                    <i class="bi bi-info-circle-fill text-info me-1"></i>
+                  {% endif %}
+                  {{ n.message }}
+                </h6>
+                <p class="text-muted small mb-0">
+                  <i class="bi bi-clock me-1"></i>
+                  {{ n.created_at|timesince }} مضت
+                </p>
+              </div>
+            </div>
+            
+            {% if not n.is_read %}
+            <div class="d-flex gap-2 mt-3">
+              <a class="mark-read-btn" href="{% url 'notification_mark_read' n.id %}">
+                <i class="bi bi-check2 me-1"></i>تعليم كمقروء
+              </a>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <i class="bi bi-bell-slash"></i>
+        </div>
+        <h5 class="text-muted">لا توجد إشعارات حالياً</h5>
+        <p class="text-muted">سيتم عرض جميع التحديثات والتنبيهات هنا</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

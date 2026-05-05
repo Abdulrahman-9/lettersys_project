@@ -1,0 +1,98 @@
+{
+  "name": "نظام إدارة الكتب",
+  "short_name": "إدارة الكتب",
+  "description": "نظام متقدم لإدارة الكتب الواردة والصادرة",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff4e4",
+  "theme_color": "#ff9233",
+  "orientation": "portrait-primary",
+  "dir": "rtl",
+  "lang": "ar",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/static/img/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/mdoc-logo.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/img/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "لوحة التحكم",
+      "short_name": "الرئيسية",
+      "description": "الانتقال إلى لوحة التحكم",
+      "url": "/",
+      "icons": [
+        {
+          "src": "/static/img/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "قائمة الكتب",
+      "short_name": "الكتب",
+      "description": "عرض جميع الكتب",
+      "url": "/books/",
+      "icons": [
+        {
+          "src": "/static/img/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "إضافة كتاب وارد",
+      "short_name": "كتاب وارد",
+      "description": "إضافة كتاب وارد جديد",
+      "url": "/books/create/incoming/",
+      "icons": [
+        {
+          "src": "/static/img/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false
+}

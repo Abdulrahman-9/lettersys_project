@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-danger text-white">
+          <h5 class="mb-0"><i class="bi bi-trash me-2"></i>تأكيد حذف المرفق</h5>
+        </div>
+        <div class="card-body">
+          <p class="mb-4">هل أنت متأكد أنك تريد نقل هذا المرفق إلى سلة المهملات؟ يمكن استعادته لاحقاً.</p>
+          <div class="mb-3">
+            <strong>اسم الملف:</strong>
+            <span class="text-break">{{ attachment.file.name }}</span>
+          </div>
+          <form method="post">
+            {% csrf_token %}
+            <a href="{% url 'book_detail' book.pk %}" class="btn btn-secondary">إلغاء</a>
+            <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>نقل إلى السلة</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

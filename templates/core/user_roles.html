@@ -1,0 +1,507 @@
+{% extends "base.html" %}
+{% block title %}المستخدمون والأدوار{% endblock %}
+
+{% block content %}
+<style>
+.role-card {
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  transition: all 0.3s;
+  background: white;
+}
+.role-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+  transform: translateY(-4px);
+}
+.role-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  margin: 0 auto 1rem;
+}
+.user-avatar {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.password-strength {
+  height: 4px;
+  border-radius: 2px;
+  background: #e2e8f0;
+  transition: all 0.3s;
+}
+.password-strength.weak { background: #ef4444; width: 33%; }
+.password-strength.medium { background: #f59e0b; width: 66%; }
+.password-strength.strong { background: #22c55e; width: 100%; }
+</style>
+
+<div class="container py-4 animate-fade-in">
+  <!-- عرض الرسائل -->
+  {% if messages %}
+  <div class="row mb-3">
+    <div class="col-12">
+      {% for message in messages %}
+      <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi {% if 'success' in message.tags %}bi-check-circle-fill{% elif 'error' in message.tags or 'danger' in message.tags %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
+        <strong>{{ message }}</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm h-100 animate-scale-in">
+        <div class="card-header bg-white border-0 p-3">
+          <h6 class="mb-0 fw-bold">
+            <i class="bi bi-shield-check text-primary me-2"></i>
+            الأدوار المتاحة
+          </h6>
+        </div>
+        <div class="card-body p-3">
+          <div class="d-flex flex-column gap-3">
+            <div class="role-card p-3">
+              <div class="role-icon" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1)); color: #3b82f6;">
+                <i class="bi bi-star-fill"></i>
+              </div>
+              <div class="text-center">
+                <div class="fw-bold mb-1">مشرف النظام</div>
+                <small class="text-muted">وصول كامل لكل الخصائص</small>
+                <div class="mt-2">
+                  <span class="badge bg-primary">Admin</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="role-card p-3">
+              <div class="role-icon" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.1)); color: #f59e0b;">
+                <i class="bi bi-clipboard-check"></i>
+              </div>
+              <div class="text-center">
+                <div class="fw-bold mb-1">متابعة</div>
+                <small class="text-muted">تغيير حالات وعرض تقارير</small>
+                <div class="mt-2">
+                  <span class="badge bg-warning text-dark">Controller</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="role-card p-3">
+              <div class="role-icon" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(124, 58, 237, 0.1)); color: #8b5cf6;">
+                <i class="bi bi-pencil-square"></i>
+              </div>
+              <div class="text-center">
+                <div class="fw-bold mb-1">مدخل بيانات</div>
+                <small class="text-muted">إضافة/تعديل كتب وجهات</small>
+                <div class="mt-2">
+                  <span class="badge bg-secondary">Entry</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="role-card p-3">
+              <div class="role-icon" style="background: linear-gradient(135deg, rgba(148, 163, 184, 0.1), rgba(100, 116, 139, 0.1)); color: #94a3b8;">
+                <i class="bi bi-eye"></i>
+              </div>
+              <div class="text-center">
+                <div class="fw-bold mb-1">عرض فقط</div>
+                <small class="text-muted">استعراض بدون تعديل</small>
+                <div class="mt-2">
+                  <span class="badge bg-light text-dark">Viewer</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm h-100 animate-slide-in-right">
+        <div class="card-header bg-white border-0 p-3 d-flex justify-content-between align-items-center">
+          <h6 class="mb-0 fw-bold">
+            <i class="bi bi-people-fill text-success me-2"></i>
+            المستخدمون
+          </h6>
+          <span class="badge bg-info-subtle text-info px-3 py-2">
+            {{ users|length }} مستخدم
+          </span>
+        </div>
+        <div class="card-body p-3">
+          <div class="card border-2 border-primary border-dashed mb-4 p-4">
+            <h6 class="fw-bold mb-3">
+              <i class="bi bi-person-plus-fill text-primary me-2"></i>
+              إضافة مستخدم جديد
+            </h6>
+            <form method="post" id="createUserForm" class="row g-3">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="create">
+              
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">
+                  <i class="bi bi-person me-1"></i>اسم المستخدم <span class="text-danger">*</span>
+                </label>
+                <input class="form-control" name="username" id="username" required minlength="3" placeholder="أدخل اسم المستخدم">
+                <small class="text-muted">3 أحرف على الأقل</small>
+              </div>
+              
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">
+                  <i class="bi bi-envelope me-1"></i>البريد الإلكتروني
+                </label>
+                <input class="form-control" name="email" type="email" placeholder="اختياري">
+              </div>
+              
+              <div class="col-md-12">
+                <label class="form-label fw-semibold">
+                  <i class="bi bi-shield-lock me-1"></i>الدور <span class="text-danger">*</span>
+                </label>
+                <select class="form-select" name="role_new" required>
+                  {% for code,label in role_choices %}
+                  <option value="{{ code }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">
+                  <i class="bi bi-key me-1"></i>كلمة المرور <span class="text-danger">*</span>
+                </label>
+                <input class="form-control" name="password" id="password" type="password" required minlength="4" placeholder="4 أحرف على الأقل">
+                <div class="password-strength mt-2" id="passwordStrength"></div>
+                <small class="text-muted" id="passwordHint">قوة كلمة المرور</small>
+              </div>
+              
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">
+                  <i class="bi bi-key-fill me-1"></i>تأكيد كلمة المرور <span class="text-danger">*</span>
+                </label>
+                <input class="form-control" name="password2" id="password2" type="password" required minlength="4" placeholder="أعد إدخال كلمة المرور">
+                <small class="text-muted" id="matchStatus"></small>
+              </div>
+              
+              <div class="col-12 d-flex justify-content-end gap-2">
+                <button type="reset" class="btn btn-outline-secondary">
+                  <i class="bi bi-x-circle me-1"></i>إلغاء
+                </button>
+                <button type="submit" class="btn btn-primary hover-lift" id="submitBtn">
+                  <i class="bi bi-person-plus me-1"></i>إضافة المستخدم
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>المستخدم</th>
+                  <th>البريد</th>
+                  <th>الدور الحالي</th>
+                  <th>كلمة المرور</th>
+                  <th class="text-end">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for u in users %}
+                <tr>
+                  <td>
+                    <div class="user-avatar" style="width: 35px; height: 35px; font-size: 0.9rem; margin-right: 8px; display: inline-flex;">{{ u.username|first|upper }}</div>
+                    {{ u.username }}
+                  </td>
+                  <td class="text-muted small">{{ u.email|default:"-" }}</td>
+                  <td>
+                    {% if u.is_superuser %}<span class="badge bg-primary">مشرف النظام</span>
+                    {% elif u.groups.all|length %}
+                      {% with role=u.groups.first.name %}
+                        {% if role == "controller" %}<span class="badge bg-warning text-dark">متابعة</span>
+                        {% elif role == "data_entry" %}<span class="badge bg-secondary">مدخل بيانات</span>
+                        {% else %}<span class="badge bg-light text-dark">عرض فقط</span>
+                        {% endif %}
+                      {% endwith %}
+                    {% else %}<span class="badge bg-light text-dark">عرض فقط</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="tooltip" title="عرض كلمة المرور" onclick="showPassword('{{ u.id }}', '{{ u.username }}')">
+                      <i class="bi bi-eye me-1"></i>عرض
+                    </button>
+                  </td>
+                  <td class="text-end">
+                    <div class="d-flex gap-2 justify-content-end flex-wrap">
+                      <form method="post" class="d-inline-flex gap-2 align-items-center">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update">
+                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                        <select name="role" class="form-select form-select-sm" style="width: 140px;">
+                          <option value="admin" {% if u.role == "admin" %}selected{% endif %}>مدير النظام</option>
+                          <option value="controller" {% if u.role == "controller" %}selected{% endif %}>متابعة</option>
+                          <option value="data_entry" {% if u.role == "data_entry" %}selected{% endif %}>مدخل بيانات</option>
+                          <option value="viewer" {% if u.role == "viewer" %}selected{% endif %}>عرض فقط</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-primary" type="submit" title="حفظ الدور">
+                          <i class="bi bi-save me-1"></i>حفظ
+                        </button>
+                      </form>
+                      <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUser('{{ u.id }}', '{{ u.username }}')" title="حذف المستخدم">
+                        <i class="bi bi-trash me-1"></i>حذف
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted py-3">لا يوجد مستخدمون.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="alert alert-info border-0 shadow-sm small mb-0 mt-3">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            <strong>ملاحظة:</strong> اختيار "مدير النظام" يمنح صلاحية كاملة (superuser). الأدوار الأخرى تعيّن مجموعات صلاحيات مناسبة.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Password strength checker
+  const passwordInput = document.getElementById('password');
+  const password2Input = document.getElementById('password2');
+  const strengthBar = document.getElementById('passwordStrength');
+  const strengthHint = document.getElementById('passwordHint');
+  const matchStatus = document.getElementById('matchStatus');
+  const submitBtn = document.getElementById('submitBtn');
+  
+  if (passwordInput && strengthBar) {
+    passwordInput.addEventListener('input', () => {
+      const password = passwordInput.value;
+      let strength = 0;
+      
+      if (password.length >= 4) strength++;
+      if (password.length >= 8) strength++;
+      if (/[0-9]/.test(password)) strength++;
+      if (/[a-zA-Z]/.test(password) && /[0-9]/.test(password)) strength++;
+      
+      strengthBar.className = 'password-strength';
+      if (strength === 0) {
+        strengthBar.classList.remove('weak', 'medium', 'strong');
+        strengthHint.textContent = 'قوة كلمة المرور';
+        strengthHint.className = 'text-muted';
+      } else if (strength <= 2) {
+        strengthBar.classList.add('weak');
+        strengthHint.textContent = 'ضعيفة';
+        strengthHint.className = 'text-danger';
+      } else if (strength === 3) {
+        strengthBar.classList.add('medium');
+        strengthHint.textContent = 'متوسطة';
+        strengthHint.className = 'text-warning';
+      } else {
+        strengthBar.classList.add('strong');
+        strengthHint.textContent = 'قوية';
+        strengthHint.className = 'text-success';
+      }
+      
+      checkPasswordMatch();
+    });
+  }
+  
+  if (password2Input && matchStatus) {
+    password2Input.addEventListener('input', checkPasswordMatch);
+  }
+  
+  function checkPasswordMatch() {
+    if (!password2Input.value) {
+      matchStatus.textContent = '';
+      matchStatus.className = 'text-muted';
+      return;
+    }
+    
+    if (passwordInput.value === password2Input.value) {
+      matchStatus.textContent = '✓ كلمتا المرور متطابقتان';
+      matchStatus.className = 'text-success';
+      password2Input.classList.remove('is-invalid');
+      password2Input.classList.add('is-valid');
+    } else {
+      matchStatus.textContent = '✗ كلمتا المرور غير متطابقتان';
+      matchStatus.className = 'text-danger';
+      password2Input.classList.remove('is-valid');
+      password2Input.classList.add('is-invalid');
+    }
+  }
+  
+  // Form validation
+  const form = document.getElementById('createUserForm');
+  if (form) {
+    form.addEventListener('submit', (e) => {
+      if (passwordInput.value !== password2Input.value) {
+        e.preventDefault();
+        notifyUserRoles('كلمتا المرور غير متطابقتان.', 'warning', { title: 'تحقق من كلمة المرور' });
+        return false;
+      }
+      
+      if (passwordInput.value.length < 4) {
+        e.preventDefault();
+        notifyUserRoles('كلمة المرور يجب أن تكون 4 أحرف على الأقل.', 'warning', { title: 'كلمة المرور قصيرة' });
+        return false;
+      }
+      
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>جاري الإضافة...';
+    });
+  }
+  
+  // Auto-dismiss alerts after 5 seconds
+  setTimeout(() => {
+    document.querySelectorAll('.alert').forEach(alert => {
+      const bsAlert = new bootstrap.Alert(alert);
+      bsAlert.close();
+    });
+  }, 5000);
+})();
+
+// دالة حذف المستخدم
+function notifyUserRoles(message, type = 'info', opts = {}) {
+  if (window.ToastCenter && typeof window.ToastCenter.show === 'function') {
+    return window.ToastCenter.show(type, message, opts);
+  }
+  alert(message);
+  return null;
+}
+
+async function deleteUser(userId, username) {
+  const confirmed = window.ToastCenter && typeof window.ToastCenter.confirm === 'function'
+    ? await window.ToastCenter.confirm({
+        type: 'warning',
+        title: 'تأكيد حذف المستخدم',
+        message: `سيتم حذف المستخدم "${username}" نهائياً ولا يمكن التراجع عن هذا الإجراء.`,
+        confirmLabel: 'حذف المستخدم',
+        cancelLabel: 'إلغاء',
+        confirmClassName: 'btn btn-sm btn-danger',
+      })
+    : confirm(`هل تريد بالتأكيد حذف المستخدم "${username}"?\n\nهذا الإجراء لا يمكن التراجع عنه!`);
+
+  if (!confirmed) {
+    return;
+  }
+  
+  // إنشاء نموذج مخفي للحذف
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.innerHTML = `
+    <input type="hidden" name="csrfmiddlewaretoken" value="${document.querySelector('[name=csrfmiddlewaretoken]').value}">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="user_id" value="${userId}">
+  `;
+  document.body.appendChild(form);
+  form.submit();
+}
+
+// دالة عرض كلمة المرور
+function showPassword(userId, username) {
+  const xhr = new XMLHttpRequest();
+  xhr.open('GET', `/books/api/user-password/${userId}/`, true);
+  xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+  
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      const data = JSON.parse(xhr.responseText);
+      if (data.success) {
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'passwordModal';
+        modal.setAttribute('tabindex', '-1');
+        modal.innerHTML = `
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+              <div class="modal-header bg-light border-0">
+                <h6 class="modal-title fw-bold">
+                  <i class="bi bi-shield-check text-primary me-2"></i>
+                  كلمة مرور المستخدم: <strong>${username}</strong>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                <div class="alert alert-warning border-0 mb-3">
+                  <i class="bi bi-exclamation-triangle me-2"></i>
+                  <strong>تحذير:</strong> احفظ كلمة المرور في مكان آمن وشارها مع المستخدم فقط.
+                </div>
+                <div class="input-group">
+                  <input type="text" class="form-control form-control-lg fw-monospace" id="passwordField" value="${data.password}" readonly style="letter-spacing: 2px;">
+                  <button class="btn btn-outline-primary" type="button" onclick="copyPassword('${data.password}', event)">
+                    <i class="bi bi-clipboard me-1"></i>نسخ
+                  </button>
+                </div>
+                <small class="text-muted d-block mt-2">
+                  <i class="bi bi-info-circle me-1"></i>
+                  يمكن للمستخدم تغيير كلمة المرور بعد تسجيل الدخول الأول.
+                </small>
+              </div>
+              <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        document.body.appendChild(modal);
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        
+        // حذف النموذج بعد إغلاقه
+        modal.addEventListener('hidden.bs.modal', () => {
+          modal.remove();
+        });
+      } else {
+        notifyUserRoles(data.message || 'تعذر جلب كلمة المرور.', 'error', { title: 'خطأ في البيانات' });
+      }
+    } else {
+      notifyUserRoles('خطأ في جلب بيانات المستخدم.', 'error', { title: 'فشل الطلب' });
+    }
+  };
+  
+  xhr.onerror = function() {
+    notifyUserRoles('خطأ في الاتصال بالخادم.', 'error', { title: 'تعذر الوصول إلى الخادم' });
+  };
+  
+  xhr.send();
+}
+
+// دالة نسخ كلمة المرور
+function copyPassword(password, event) {
+  navigator.clipboard.writeText(password).then(() => {
+    const btn = event.target.closest('button');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check me-1"></i>تم النسخ!';
+    btn.classList.add('btn-success');
+    btn.classList.remove('btn-outline-primary');
+    
+    setTimeout(() => {
+      btn.innerHTML = originalText;
+      btn.classList.remove('btn-success');
+      btn.classList.add('btn-outline-primary');
+    }, 2000);
+
+    notifyUserRoles('تم نسخ كلمة المرور.', 'success', { title: 'تم النسخ', delay: 3000 });
+  }).catch(() => {
+    notifyUserRoles('فشل نسخ كلمة المرور.', 'error', { title: 'تعذر النسخ' });
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}ملء الكتب - بداية سريعة{% endblock %}
+
+{% block extra_css %}
+<style>
+    .quick-start-hero {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 3rem 2rem;
+        border-radius: 10px;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    
+    .quick-start-hero h1 {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .quick-start-hero p {
+        font-size: 1.2rem;
+        opacity: 0.95;
+    }
+    
+    .action-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .action-card {
+        background: white;
+        border-radius: 10px;
+        padding: 2rem;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: 2px solid transparent;
+    }
+    
+    .action-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        border-color: #667eea;
+    }
+    
+    .action-card-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .action-card h5 {
+        color: #333;
+        margin-bottom: 0.5rem;
+    }
+    
+    .action-card p {
+        color: #666;
+        font-size: 0.95rem;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+    
+    .stat-label {
+        color: #666;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
+    
+    .recent-activity {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .activity-item {
+        display: flex;
+        align-items: center;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .activity-item:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+    
+    .activity-icon {
+        font-size: 1.5rem;
+        margin-right: 1rem;
+    }
+    
+    .activity-content {
+        flex: 1;
+    }
+    
+    .activity-time {
+        color: #999;
+        font-size: 0.85rem;
+    }
+    
+    .btn-large {
+        padding: 0.75rem 1.5rem;
+        font-size: 1rem;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: bold;
+    }
+    
+    .btn-primary-large {
+        background: #667eea;
+        color: white;
+    }
+    
+    .btn-primary-large:hover {
+        background: #5568d3;
+    }
+    
+    .btn-secondary-large {
+        background: #e9ecef;
+        color: #333;
+    }
+    
+    .btn-secondary-large:hover {
+        background: #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Hero Section -->
+    <div class="quick-start-hero">
+        <h1>🎯 مرحباً بك</h1>
+        <p>ملء نماذج الكتب بسهولة وسرعة</p>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="action-cards">
+        <div class="action-card" onclick="window.location.href='{% url 'extraction-smart-desktop' %}'">
+            <div class="action-card-icon">📤</div>
+            <h5>سحب البيانات</h5>
+            <p>رفع صورة واترك النظام يستخرج البيانات تلقائياً</p>
+        </div>
+        
+        <div class="action-card" onclick="window.location.href='{% url 'book_unified' %}'">
+            <div class="action-card-icon">📚</div>
+            <h5>عرض الكتب</h5>
+            <p>استعراض جميع الكتب المدخلة والمحفوظة</p>
+        </div>
+        
+        <div class="action-card" onclick="window.location.href='{% url 'book_create_incoming' %}'">
+            <div class="action-card-icon">✏️</div>
+            <h5>إضافة كتاب يدوياً</h5>
+            <p>ملء نموذج الكتاب بالبيانات الكاملة</p>
+        </div>
+    </div>
+    
+    <!-- Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number" id="totalBooks">0</div>
+            <div class="stat-label">إجمالي الكتب</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-number" id="extractionSuccess">0%</div>
+            <div class="stat-label">معدل النجاح</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-number" id="todayCount">0</div>
+            <div class="stat-label">اليوم</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-number" id="pending">0</div>
+            <div class="stat-label">في الانتظار</div>
+        </div>
+    </div>
+    
+    <!-- Recent Activity -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="recent-activity">
+                <h5 style="margin-bottom: 1.5rem; color: #333;">📝 النشاط الأخير</h5>
+                <div id="activityList" style="min-height: 100px;">
+                    <p style="color: #999; text-align: center;">جارٍ تحميل النشاط...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div style="background: white; border-radius: 10px; padding: 1.5rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                <h5 style="margin-bottom: 1rem; color: #333;">💡 نصائح</h5>
+                <ul style="color: #666; padding-left: 1.5rem;">
+                    <li>استخدم صور واضحة لأفضل نتائج استخراج</li>
+                    <li>تأكد من إضاءة جيدة وعدم وجود ظلال</li>
+                    <li>يمكن تصحيح البيانات بعد الاستخراج</li>
+                    <li>احفظ التصحيحات لتحسين النظام</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Load statistics
+async function loadStats() {
+    try {
+        const response = await fetch("{% url 'ai_extraction_statistics' %}");
+        const data = await response.json();
+        
+        const totalProcessed = data.total_images_processed || 0;
+        const successRate = totalProcessed ? ((data.successful_extractions || 0) / totalProcessed) * 100 : 0;
+
+        document.getElementById('totalBooks').textContent = totalProcessed;
+        document.getElementById('extractionSuccess').textContent = successRate.toFixed(0) + '%';
+        document.getElementById('todayCount').textContent = data.successful_extractions || 0;
+        document.getElementById('pending').textContent = data.manual_review_required || 0;
+        
+        // Load recent activity
+        loadActivity();
+    } catch (err) {
+        console.error('Error loading stats:', err);
+    }
+}
+
+function loadActivity() {
+    const mockActivity = [
+        { icon: '✓', text: 'تم استخراج كتاب جديد', time: 'منذ 5 دقائق' },
+        { icon: '📤', text: 'تم رفع مستند للمراجعة', time: 'منذ 20 دقيقة' },
+        { icon: '💾', text: 'تم حفظ تصحيحات', time: 'منذ ساعة' },
+        { icon: '📚', text: 'تمت إضافة 3 كتب جديدة', time: 'منذ ساعتين' },
+    ];
+    
+    const html = mockActivity.map(item => `
+        <div class="activity-item">
+            <div class="activity-icon">${item.icon}</div>
+            <div class="activity-content">
+                <div>${item.text}</div>
+                <div class="activity-time">${item.time}</div>
+            </div>
+        </div>
+    `).join('');
+    
+    document.getElementById('activityList').innerHTML = html;
+}
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', loadStats);
+</script>
+{% endblock %}

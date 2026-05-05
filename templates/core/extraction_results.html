@@ -1,0 +1,855 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}مراجعة الاستخراج الذكي{% endblock %}
+
+{% block page_sidebar %}
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">ملخص الاستخراج</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">الحالة</div>
+        <strong>{{ review_status_label }}</strong>
+      </div>
+      <span class="app-context-chip"><i class="bi bi-clipboard-check"></i> مراجعة</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">النوع المعتمد حالياً</div>
+        <strong>{{ normalized_book_kind_label }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-diagram-3"></i> رباعي</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">الثقة الكلية</div>
+        <strong>{{ overall_confidence_percent }}%</strong>
+      </div>
+      <span class="app-context-chip is-success"><i class="bi bi-speedometer2"></i> جودة</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">عدد الترشيحات</div>
+        <strong>{{ entity_candidate_total }}</strong>
+      </div>
+      <span class="app-context-chip"><i class="bi bi-buildings"></i> جهات</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">سجل التعلم</div>
+        <strong>{{ feedback_count }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-journal-check"></i> ملاحظات</span>
+    </div>
+  </div>
+</div>
+
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">اختصارات</div>
+  <div class="app-context-list">
+    {% if extraction.attachment and extraction.attachment.file %}
+    <a class="app-context-link" href="{{ extraction.attachment.file.url }}" target="_blank" rel="noopener">
+      <span>فتح المرفق</span>
+      <i class="bi bi-paperclip"></i>
+    </a>
+    {% endif %}
+    <a class="app-context-link" href="{% url 'extraction-smart-desktop' %}?kind={{ normalized_book_kind }}">
+      <span>فتح الإدخال الذكي</span>
+      <i class="bi bi-upc-scan"></i>
+    </a>
+    {% if extraction.book_id %}
+    <a class="app-context-link" href="{% url 'book_detail' extraction.book_id %}">
+      <span>عرض الكتاب المرتبط</span>
+      <i class="bi bi-journal-text"></i>
+    </a>
+    {% endif %}
+    <a class="app-context-link" href="{% url 'dashboard' %}">
+      <span>العودة للوحة التحكم</span>
+      <i class="bi bi-grid-1x2"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .extraction-review-page {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .review-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) 280px;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    border-radius: 28px;
+    background:
+      radial-gradient(circle at top right, rgba(255, 163, 26, 0.22), transparent 32%),
+      linear-gradient(145deg, #fffaf2, #ffffff 52%, #f3fbfb);
+    border: 1px solid rgba(217, 119, 6, 0.12);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+  }
+
+  .review-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .review-hero h1 {
+    margin: 0.9rem 0 0.55rem;
+    font-size: clamp(1.65rem, 2vw, 2.35rem);
+    font-weight: 800;
+    color: #111827;
+  }
+
+  .review-hero p {
+    margin: 0;
+    max-width: 70ch;
+    color: #475569;
+    line-height: 1.75;
+  }
+
+  .review-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.9rem;
+    margin-top: 1.25rem;
+  }
+
+  .review-meta-card {
+    padding: 1rem;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+  }
+
+  .review-meta-card span,
+  .review-meta-card small {
+    display: block;
+    color: #64748b;
+  }
+
+  .review-meta-card strong {
+    display: block;
+    margin: 0.35rem 0;
+    color: #0f172a;
+    font-size: 1rem;
+  }
+
+  .review-hero-score {
+    display: grid;
+    gap: 0.6rem;
+    align-content: start;
+    padding: 1.2rem;
+    border-radius: 24px;
+    color: white;
+    background: linear-gradient(160deg, #0f766e, #134e4a);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  }
+
+  .review-hero-score.medium {
+    background: linear-gradient(160deg, #b45309, #92400e);
+  }
+
+  .review-hero-score.low {
+    background: linear-gradient(160deg, #b91c1c, #7f1d1d);
+  }
+
+  .review-score-label {
+    font-size: 0.88rem;
+    opacity: 0.88;
+  }
+
+  .review-score-value {
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .review-score-meta {
+    font-size: 0.95rem;
+    opacity: 0.88;
+  }
+
+  .review-score-note {
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    font-size: 0.88rem;
+    line-height: 1.7;
+  }
+
+  .review-banner {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem 1.15rem;
+    border-radius: 22px;
+    border: 1px solid rgba(14, 116, 144, 0.14);
+    background: linear-gradient(135deg, #f0fdfa, #f8fafc);
+    color: #134e4a;
+  }
+
+  .review-banner.approved {
+    border-color: rgba(5, 150, 105, 0.18);
+    background: linear-gradient(135deg, #ecfdf5, #f8fafc);
+    color: #065f46;
+  }
+
+  .review-banner.rejected {
+    border-color: rgba(220, 38, 38, 0.18);
+    background: linear-gradient(135deg, #fef2f2, #fff7ed);
+    color: #991b1b;
+  }
+
+  .review-banner-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.75);
+    font-size: 1.3rem;
+  }
+
+  .review-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.95fr);
+    gap: 1.25rem;
+  }
+
+  .review-sidebar {
+    display: grid;
+    gap: 1.25rem;
+    align-content: start;
+  }
+
+  .review-card {
+    padding: 1.25rem;
+    border-radius: 24px;
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+  }
+
+  .review-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .review-card-head.compact {
+    margin-bottom: 0.85rem;
+  }
+
+  .review-card h2 {
+    margin: 0;
+    font-size: 1.12rem;
+    font-weight: 800;
+    color: #0f172a;
+  }
+
+  .review-card p {
+    margin: 0.35rem 0 0;
+    color: #64748b;
+    line-height: 1.7;
+    font-size: 0.94rem;
+  }
+
+  .field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .field-block {
+    display: grid;
+    gap: 0.45rem;
+    padding: 1rem;
+    border-radius: 18px;
+    background: #f8fafc;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  .field-block-wide {
+    grid-column: 1 / -1;
+  }
+
+  .field-block label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .field-note {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.84rem;
+    line-height: 1.6;
+  }
+
+  .review-input,
+  .review-select {
+    width: 100%;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 14px;
+    background: white;
+    padding: 0.82rem 0.95rem;
+    color: #0f172a;
+    font-size: 0.96rem;
+  }
+
+  .review-input:focus,
+  .review-select:focus {
+    outline: none;
+    border-color: rgba(14, 116, 144, 0.55);
+    box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.12);
+  }
+
+  .review-textarea {
+    min-height: 120px;
+    resize: vertical;
+  }
+
+  .conf-pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 60px;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    background: #e2e8f0;
+    color: #334155;
+  }
+
+  .conf-pill.high {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .conf-pill.medium {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .conf-pill.low {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .candidate-section {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  .candidate-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    color: #0f172a;
+    font-weight: 700;
+  }
+
+  .candidate-count {
+    font-size: 0.82rem;
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .candidate-list {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .candidate-button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.82rem 0.95rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 16px;
+    background: #f8fafc;
+    color: #0f172a;
+    text-align: right;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  .candidate-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(14, 116, 144, 0.34);
+    box-shadow: 0 12px 30px rgba(14, 116, 144, 0.08);
+  }
+
+  .candidate-button.active {
+    border-color: rgba(5, 150, 105, 0.38);
+    background: #ecfdf5;
+    color: #065f46;
+  }
+
+  .candidate-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .empty-state {
+    padding: 0.95rem;
+    border-radius: 16px;
+    background: #f8fafc;
+    color: #64748b;
+    text-align: center;
+  }
+
+  .action-bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .action-bar-stacked {
+    justify-content: stretch;
+    flex-direction: column;
+  }
+
+  .feedback-status {
+    padding: 0.8rem 0.95rem;
+    border-radius: 14px;
+    background: #ecfeff;
+    color: #155e75;
+    font-size: 0.9rem;
+  }
+
+  .feedback-status.is-error {
+    background: #fef2f2;
+    color: #991b1b;
+  }
+
+  @media (max-width: 1280px) {
+    .review-layout,
+    .review-hero {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .field-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .review-card-head {
+      flex-direction: column;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid extraction-review-page">
+  <section class="review-hero">
+    <div>
+      <div class="review-eyebrow"><i class="bi bi-cpu"></i> مراجعة استخراج ذكي</div>
+      <h1>تدقيق بيانات المرفق قبل الاعتماد</h1>
+      <p>هذه الشاشة توحّد نتائج الاستخراج مع التصنيف الرباعي للكتب، وتمنح نقطة اعتماد واحدة قبل دمج البيانات في المسار التشغيلي المعتمد داخل النظام.</p>
+
+      <div class="review-meta-grid">
+        <div class="review-meta-card">
+          <span>المرفق</span>
+          <strong>{{ attachment_display_name }}</strong>
+          <small>معرّف المرفق #{{ extraction.attachment_id }}</small>
+        </div>
+        <div class="review-meta-card">
+          <span>النوع الحالي</span>
+          <strong>{{ normalized_book_kind_label }}</strong>
+          <small>{% if kind_scope == 'internal' %}مسار داخلي{% else %}مسار خارجي{% endif %}</small>
+        </div>
+        <div class="review-meta-card">
+          <span>زمن OCR</span>
+          <strong>{{ extraction.ocr_result.processing_time|floatformat:2 }} ثانية</strong>
+          <small>ثقة OCR {{ ocr_confidence_percent }}%</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="review-hero-score {{ overall_confidence_state }}">
+      <div class="review-score-label">الثقة الكلية</div>
+      <div class="review-score-value">{{ overall_confidence_percent }}%</div>
+      <div class="review-score-meta">دقة OCR: {{ ocr_confidence_percent }}%</div>
+      {% if is_legacy_kind_guess %}
+      <div class="review-score-note">التخمين الأصلي كان ثنائياً فقط، لذلك تم تحويله افتراضياً إلى {{ normalized_book_kind_label }} حتى تقوم أنت بتثبيت التصنيف النهائي.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <div id="reviewBanner" class="review-banner {{ extraction.status }}">
+    <div class="review-banner-icon">
+      {% if extraction.status == 'approved' %}
+      <i class="bi bi-patch-check-fill"></i>
+      {% elif extraction.status == 'rejected' %}
+      <i class="bi bi-x-octagon-fill"></i>
+      {% else %}
+      <i class="bi bi-exclamation-diamond-fill"></i>
+      {% endif %}
+    </div>
+    <div>
+      <strong id="reviewBannerTitle">الحالة: {{ review_status_label }}</strong>
+      <div id="reviewBannerText">
+        {% if extraction.status == 'approved' %}
+        هذا الاستخراج مُعتمد حالياً ويمكن الرجوع إليه كمرجع نهائي.
+        {% elif extraction.status == 'rejected' %}
+        هذا الاستخراج مرفوض حالياً ويحتاج إعادة مراجعة أو إعادة معالجة للمرفق.
+        {% else %}
+        راجع الحقول المميزة بدرجات الثقة، ثم اعتمد التصنيف الرباعي الصحيح قبل إغلاق السجل.
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <form id="extractionReviewForm" class="review-layout">
+    {% csrf_token %}
+
+    <section class="review-card">
+      <div class="review-card-head">
+        <div>
+          <h2>الحقول الأساسية</h2>
+          <p>عدّل ما يحتاج تصحيحاً فقط. الحقول ذات الثقة المنخفضة تبقى ظاهرة بوضوح لتسريع قرار الاعتماد.</p>
+        </div>
+        {% if extraction.book_id %}
+        <a class="btn btn-outline-secondary" href="{% url 'book_detail' extraction.book_id %}">
+          <i class="bi bi-box-arrow-up-left me-1"></i> فتح الكتاب المرتبط
+        </a>
+        {% endif %}
+      </div>
+
+      <div class="field-grid">
+        <div class="field-block">
+          <label for="book_number">رقم الكتاب في نظامنا <span class="conf-pill {{ book_number_confidence_state }}">{{ book_number_confidence_percent }}%</span></label>
+          <input id="book_number" name="book_number" class="review-input review-control" value="{{ extraction.book_number|default:'' }}">
+        </div>
+
+        <div class="field-block">
+          <label for="book_date">تاريخ الكتاب <span class="conf-pill {{ book_date_confidence_state }}">{{ book_date_confidence_percent }}%</span></label>
+          <input id="book_date" name="book_date" type="date" class="review-input review-control" value="{{ extraction.book_date|date:'Y-m-d' }}">
+        </div>
+
+        <div class="field-block field-block-wide">
+          <label for="title">العنوان <span class="conf-pill {{ title_confidence_state }}">{{ title_confidence_percent }}%</span></label>
+          <input id="title" name="title" class="review-input review-control" value="{{ extraction.title|default:'' }}">
+        </div>
+
+        <div class="field-block">
+          <label for="secret_level">مستوى السرية <span class="conf-pill {{ secret_level_confidence_state }}">{{ secret_level_confidence_percent }}%</span></label>
+          <select id="secret_level" name="secret_level" class="review-select review-control">
+            <option value="">-- اختر --</option>
+            <option value="normal" {% if extraction.secret_level == 'normal' %}selected{% endif %}>اعتيادي</option>
+            <option value="secret" {% if extraction.secret_level == 'secret' %}selected{% endif %}>سري</option>
+            <option value="topsecret" {% if extraction.secret_level == 'topsecret' %}selected{% endif %}>سري للغاية</option>
+          </select>
+        </div>
+
+        <div class="field-block">
+          <label for="book_kind">النوع النهائي <span class="conf-pill {{ book_kind_confidence_state }}">{{ book_kind_confidence_percent }}%</span></label>
+          <select id="book_kind" name="book_kind" class="review-select review-control">
+            {% for value, label in kind_choices %}
+            <option value="{{ value }}" {% if normalized_book_kind == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <p class="field-note">اعتماد هذا الحقل هو الخطوة التي تنقل الاستخراج من النموذج الثنائي القديم إلى التصنيف الرباعي الحالي.</p>
+        </div>
+
+        <div class="field-block field-block-wide">
+          <label for="margin_text">الهوامش والملاحظات المستخرجة <span class="conf-pill {{ margin_confidence_state }}">{{ margin_confidence_percent }}%</span></label>
+          <textarea id="margin_text" name="margin_text" class="review-input review-textarea review-control">{{ extraction.margin_text|default:'' }}</textarea>
+        </div>
+
+        <div class="field-block field-block-wide">
+          <label for="reviewNotes">ملاحظات قرار المراجعة</label>
+          <textarea id="reviewNotes" class="review-input review-textarea review-control" placeholder="دوّن سبب الرفض أو التعديل النهائي قبل حفظ القرار"></textarea>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button type="button" class="btn btn-outline-danger" data-review-action="reject">
+          <i class="bi bi-x-circle me-1"></i> رفض الاستخراج
+        </button>
+        <button type="button" class="btn btn-success" data-review-action="approve">
+          <i class="bi bi-check-circle me-1"></i> اعتماد الاستخراج
+        </button>
+      </div>
+    </section>
+
+    <aside class="review-sidebar">
+      <section class="review-card">
+        <div class="review-card-head compact">
+          <div>
+            <h2>ترشيحات الجهات</h2>
+            <p>اختر الجهة الأنسب من المرشحات المحفوظة قبل اعتماد السجل.</p>
+          </div>
+        </div>
+
+        <div class="candidate-section">
+          <div class="candidate-header">
+            <span>الجهة المصدرة</span>
+            <span class="candidate-count">{{ extraction.issuing_entity_candidates|length }} مرشح</span>
+          </div>
+          <input type="hidden" id="issuing_entity_id" class="review-control" value="{{ extraction.issuing_entity_id|default:'' }}">
+          <div class="candidate-list">
+            {% for candidate in extraction.issuing_entity_candidates %}
+            <button
+              type="button"
+              class="candidate-button{% if extraction.issuing_entity_id and candidate.id == extraction.issuing_entity_id %} active{% endif %}"
+              data-target="issuing_entity_id"
+              data-value="{{ candidate.id|default:'' }}"
+              {% if not candidate.id %}disabled{% endif %}
+            >
+              <strong>{{ candidate.name|default:'مرشح غير مسمى' }}</strong>
+              <span>{{ candidate.score|default:0|floatformat:0 }}%</span>
+            </button>
+            {% empty %}
+            <div class="empty-state">لا توجد ترشيحات محفوظة لجهة الإصدار.</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="candidate-section mt-3">
+          <div class="candidate-header">
+            <span>الجهة المستلمة</span>
+            <span class="candidate-count">{{ extraction.receiving_entity_candidates|length }} مرشح</span>
+          </div>
+          <input type="hidden" id="receiving_entity_id" class="review-control" value="{{ extraction.receiving_entity_id|default:'' }}">
+          <div class="candidate-list">
+            {% for candidate in extraction.receiving_entity_candidates %}
+            <button
+              type="button"
+              class="candidate-button{% if extraction.receiving_entity_id and candidate.id == extraction.receiving_entity_id %} active{% endif %}"
+              data-target="receiving_entity_id"
+              data-value="{{ candidate.id|default:'' }}"
+              {% if not candidate.id %}disabled{% endif %}
+            >
+              <strong>{{ candidate.name|default:'مرشح غير مسمى' }}</strong>
+              <span>{{ candidate.score|default:0|floatformat:0 }}%</span>
+            </button>
+            {% empty %}
+            <div class="empty-state">لا توجد ترشيحات محفوظة لجهة الاستلام.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="review-card">
+        <div class="review-card-head compact">
+          <div>
+            <h2>ملاحظة تعلم</h2>
+            <p>أرسل فرقاً واضحاً بين القراءة الآلية والقيمة الصحيحة لتحسين الجودة في الجولات القادمة.</p>
+          </div>
+        </div>
+
+        <div class="field-block field-block-wide">
+          <label for="feedback_field">الحقل المصحح</label>
+          <select id="feedback_field" class="review-select">
+            <option value="book_number">رقم الكتاب</option>
+            <option value="book_date">تاريخ الكتاب</option>
+            <option value="title">العنوان</option>
+            <option value="secret_level">مستوى السرية</option>
+            <option value="book_kind">النوع</option>
+            <option value="margin_text">الهوامش</option>
+          </select>
+        </div>
+
+        <div class="field-block field-block-wide">
+          <label for="feedback_original">القيمة الأصلية</label>
+          <input id="feedback_original" class="review-input" placeholder="اكتب القيمة التي التقطها النظام إن كانت مختلفة بوضوح">
+        </div>
+
+        <div class="field-block field-block-wide">
+          <label for="feedback_corrected">القيمة الصحيحة</label>
+          <input id="feedback_corrected" class="review-input" placeholder="القيمة المعتمدة بعد التصحيح">
+        </div>
+
+        <div class="field-block field-block-wide">
+          <label for="feedback_notes">الشرح</label>
+          <textarea id="feedback_notes" class="review-input review-textarea" placeholder="اشرح سبب التصحيح أو سياق الخطأ"></textarea>
+        </div>
+
+        <div class="action-bar action-bar-stacked">
+          <button type="button" class="btn btn-outline-secondary" id="saveFeedbackBtn">
+            <i class="bi bi-journal-plus me-1"></i> حفظ ملاحظة التعلم
+          </button>
+          <div id="feedbackStatus" class="feedback-status" hidden></div>
+        </div>
+      </section>
+    </aside>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function() {
+    const form = document.getElementById('extractionReviewForm');
+    if (!form) {
+      return;
+    }
+
+    const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
+    const reviewBanner = document.getElementById('reviewBanner');
+    const reviewBannerTitle = document.getElementById('reviewBannerTitle');
+    const reviewBannerText = document.getElementById('reviewBannerText');
+
+    function setBanner(state, title, text) {
+      reviewBanner.classList.remove('pending', 'approved', 'rejected', 'reviewed', 'extracted');
+      reviewBanner.classList.add(state);
+      reviewBannerTitle.textContent = title;
+      reviewBannerText.textContent = text;
+    }
+
+    function serializeFields() {
+      return {
+        book_number: document.getElementById('book_number').value.trim(),
+        book_date: document.getElementById('book_date').value,
+        title: document.getElementById('title').value.trim(),
+        secret_level: document.getElementById('secret_level').value,
+        book_kind: document.getElementById('book_kind').value,
+        margin_text: document.getElementById('margin_text').value.trim(),
+        issuing_entity_id: document.getElementById('issuing_entity_id').value,
+        receiving_entity_id: document.getElementById('receiving_entity_id').value
+      };
+    }
+
+    function lockReviewControls() {
+      form.querySelectorAll('.review-control, .candidate-button, [data-review-action]').forEach((element) => {
+        element.disabled = true;
+      });
+    }
+
+    document.querySelectorAll('.candidate-button').forEach((button) => {
+      button.addEventListener('click', () => {
+        const targetId = button.dataset.target;
+        const value = button.dataset.value;
+        if (!targetId || !value) {
+          return;
+        }
+
+        const hiddenInput = document.getElementById(targetId);
+        if (!hiddenInput) {
+          return;
+        }
+
+        hiddenInput.value = value;
+        document.querySelectorAll(`.candidate-button[data-target="${targetId}"]`).forEach((item) => {
+          item.classList.remove('active');
+        });
+        button.classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('[data-review-action]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const action = button.dataset.reviewAction;
+        button.disabled = true;
+        setBanner('reviewed', 'الحالة: جارٍ الحفظ', 'يتم الآن تثبيت قرار المراجعة وتحديث السجل النهائي.');
+
+        try {
+          const response = await fetch('{% url "ai_review_extraction" extraction.id %}', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+              action,
+              notes: document.getElementById('reviewNotes').value.trim(),
+              fields: serializeFields()
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error('تعذر حفظ قرار المراجعة الحالي.');
+          }
+
+          const data = await response.json();
+          const approved = data.status === 'approved';
+          setBanner(
+            approved ? 'approved' : 'rejected',
+            `الحالة: ${approved ? 'موافق عليه' : 'مرفوض'}`,
+            approved
+              ? 'تم اعتماد الاستخراج بعد ضبط التصنيف الرباعي والحقول المعدلة.'
+              : (document.getElementById('reviewNotes').value.trim() || 'تم رفض الاستخراج وإيقاف اعتماده.')
+          );
+          lockReviewControls();
+        } catch (error) {
+          button.disabled = false;
+          setBanner('rejected', 'خطأ في الحفظ', error.message || 'تعذر حفظ القرار الحالي.');
+        }
+      });
+    });
+
+    const feedbackButton = document.getElementById('saveFeedbackBtn');
+    const feedbackStatus = document.getElementById('feedbackStatus');
+
+    function showFeedbackStatus(text, isError) {
+      feedbackStatus.hidden = false;
+      feedbackStatus.textContent = text;
+      feedbackStatus.classList.toggle('is-error', Boolean(isError));
+    }
+
+    if (feedbackButton) {
+      feedbackButton.addEventListener('click', async () => {
+        feedbackButton.disabled = true;
+        showFeedbackStatus('جاري حفظ ملاحظة التعلم...', false);
+
+        try {
+          const response = await fetch('{% url "ai_submit_feedback" extraction.id %}', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+              field_name: document.getElementById('feedback_field').value,
+              original_value: document.getElementById('feedback_original').value.trim(),
+              corrected_value: document.getElementById('feedback_corrected').value.trim(),
+              feedback_type: document.getElementById('feedback_corrected').value.trim() ? 'incorrect' : 'partial',
+              reason: document.getElementById('feedback_notes').value.trim()
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error('فشل حفظ ملاحظة التعلم.');
+          }
+
+          showFeedbackStatus('تم إرسال الملاحظة للتعلم والتحسين.', false);
+          document.getElementById('feedback_original').value = '';
+          document.getElementById('feedback_corrected').value = '';
+          document.getElementById('feedback_notes').value = '';
+        } catch (error) {
+          showFeedbackStatus(error.message || 'فشل حفظ الملاحظة.', true);
+        } finally {
+          feedbackButton.disabled = false;
+        }
+      });
+    }
+  })();
+</script>
+{% endblock %}

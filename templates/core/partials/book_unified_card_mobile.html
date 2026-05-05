@@ -1,0 +1,223 @@
+{% load static %}
+{% comment %}
+============================================
+BOOK UNIFIED CARD (Mobile View)
+بطاقة للعرض على الموبايل بديل للجدول
+============================================
+{% endcomment %}
+
+{% with book.time_state as time_state %}
+{% with book.delay_days as delay_days %}
+
+<div class="book-card
+           {% if book.final_status == 'done' %}book-card-done
+           {% elif time_state == 'danger' %}book-card-overdue
+           {% elif time_state == 'today' %}book-card-today
+           {% elif time_state == 'future' %}book-card-upcoming
+           {% else %}book-card-normal{% endif %}"
+     data-book-id="{{ book.id }}">
+  
+  {# Card Header #}
+  <div class="book-card-header">
+    <div class="card-header-right">
+      {# Checkbox #}
+      <div class="form-check">
+        <input 
+          class="form-check-input row-checkbox" 
+          type="checkbox" 
+          value="{{ book.id }}"
+          aria-label="تحديد كتاب {{ book.our_number }}"
+        >
+      </div>
+    </div>
+    
+    <div class="card-header-left">
+      {# رقم الكتاب #}
+      <div class="card-book-number">
+        {% if book.is_incoming %}
+          <i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>
+        {% else %}
+          <i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>
+        {% endif %}
+        <span class="book-number-text">{{ book.our_number|default:"-" }}</span>
+      </div>
+      
+      {# رقم ثانوي #}
+      {% if book.sender_number %}
+      <div class="card-secondary-number">
+        <span class="secondary-number-badge-mobile 
+                     {% if book.is_incoming %}badge-incoming{% else %}badge-outgoing{% endif %}">
+          {% if book.is_incoming %}و-{% else %}ص-{% endif %}{{ book.sender_number }}
+        </span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  
+  {# Due Indicator Banner (إذا كان متأخر أو اليوم) #}
+  {% if book.final_status != 'done' %}
+    {% if time_state == 'danger' %}
+    <div class="card-due-banner banner-overdue">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span>متأخر {{ delay_days }} يوم</span>
+    </div>
+    {% elif time_state == 'today' %}
+    <div class="card-due-banner banner-today">
+      <i class="bi bi-calendar-event-fill"></i>
+      <span>مستحق اليوم</span>
+    </div>
+    {% endif %}
+  {% endif %}
+  
+  {# Card Body #}
+  <div class="book-card-body">
+    {# العنوان #}
+    <div class="card-title" title="{{ book.title }}">
+      {{ book.title|default:"بدون عنوان"|truncatewords:20 }}
+    </div>
+    
+    {# الحالات #}
+    <div class="card-badges">
+      {# نوع الكتاب #}
+      {% if book.is_incoming %}
+        <span class="badge badge-kind-incoming-mobile">
+          <i class="bi bi-arrow-down-circle"></i> {{ book.kind_label }}
+        </span>
+      {% else %}
+        <span class="badge badge-kind-outgoing-mobile">
+          <i class="bi bi-arrow-up-circle"></i> {{ book.kind_label }}
+        </span>
+      {% endif %}
+      
+      {# حالة الإنجاز #}
+      {% if book.final_status == 'pending' %}
+        <span class="badge badge-status-pending-mobile">
+          <i class="bi bi-hourglass-split"></i>
+          {% if book.is_outgoing %}قيد الإرسال{% else %}قيد المتابعة{% endif %}
+        </span>
+      {% elif book.final_status == 'hold' %}
+        <span class="badge badge-status-hold-mobile">
+          <i class="bi bi-pause-circle"></i>
+          {% if book.is_outgoing %}معلق{% else %}بالحفظ{% endif %}
+        </span>
+      {% elif book.final_status == 'done' %}
+        <span class="badge badge-status-done-mobile">
+          <i class="bi bi-check-circle-fill"></i>
+          {% if book.is_outgoing %}مجاب{% else %}منجزة{% endif %}
+        </span>
+      {% endif %}
+      
+      {# مرفق #}
+      {% if book.attachment %}
+        <span class="badge badge-has-attachment-mobile">
+          <i class="bi bi-paperclip"></i> مرفق
+        </span>
+      {% endif %}
+    </div>
+    
+    {# الجهات #}
+    <div class="card-entity">
+      <i class="bi bi-building"></i>
+      {% for e in book.issuing_entities.all %}
+        <span>{{ e.name|truncatewords:6 }}</span>{% if not forloop.last %}<span class="text-muted">,</span>{% endif %}
+      {% empty %}
+        <span class="text-muted">—</span>
+      {% endfor %}
+    </div>
+    
+    {# التاريخ #}
+    <div class="card-date">
+      <i class="bi bi-calendar3"></i>
+      <span>{{ book.date|date:"Y-m-d" }}</span>
+    </div>
+  </div>
+  
+  {# Card Footer - إجراءات #}
+  <div class="book-card-footer">
+    {# أيقونات الإجراءات #}
+    <div class="card-action-icons">
+      {# معاينة #}
+      {% if book.attachment %}
+      <button 
+        class="card-action-btn btn-preview-mobile" 
+        data-book-id="{{ book.id }}"
+        data-book-attachment="{{ book.attachment.url }}"
+        data-book-title="{{ book.title|default:'بدون عنوان' }}"
+        aria-label="معاينة"
+      >
+        <i class="bi bi-file-earmark-pdf"></i>
+      </button>
+      {% else %}
+      <button class="card-action-btn btn-preview-mobile-disabled" disabled>
+        <i class="bi bi-file-earmark"></i>
+      </button>
+      {% endif %}
+      
+      {# عرض #}
+      <a 
+        href="{% url 'book_detail' book.id %}" 
+        class="card-action-btn btn-view-mobile"
+        aria-label="عرض"
+      >
+        <i class="bi bi-eye"></i>
+      </a>
+      
+      {# تعديل #}
+      <a 
+        href="{% url 'book_edit' book.id %}" 
+        class="card-action-btn btn-edit-mobile"
+        aria-label="تعديل"
+      >
+        <i class="bi bi-pencil"></i>
+      </a>
+      
+      {# حذف #}
+      <button 
+        class="card-action-btn btn-delete-mobile" 
+        data-book-id="{{ book.id }}"
+        data-book-number="{{ book.our_number }}"
+        data-delete-url="{% url 'api_delete_book' book.id %}"
+        aria-label="حذف"
+      >
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+    
+    {# Toggle الحالة #}
+    <div class="card-status-toggle">
+      <div class="btn-group btn-group-sm w-100" role="group">
+        <button 
+          type="button" 
+          class="btn btn-toggle-status-mobile {% if book.final_status == 'pending' %}active{% endif %}"
+          data-book-id="{{ book.id }}"
+          data-status="pending"
+          data-status-url="{% url 'api_book_inline_status' book.id %}"
+        >
+          <i class="bi bi-hourglass-split"></i>
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-toggle-status-mobile {% if book.final_status == 'hold' %}active{% endif %}"
+          data-book-id="{{ book.id }}"
+          data-status="hold"
+          data-status-url="{% url 'api_book_inline_status' book.id %}"
+        >
+          <i class="bi bi-pause-circle"></i>
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-toggle-status-mobile {% if book.final_status == 'done' %}active{% endif %}"
+          data-book-id="{{ book.id }}"
+          data-status="done"
+          data-status-url="{% url 'api_book_inline_status' book.id %}"
+        >
+          <i class="bi bi-check-circle"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+  
+</div>
+
+{% endwith %}
+{% endwith %}

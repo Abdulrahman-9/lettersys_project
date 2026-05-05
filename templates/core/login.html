@@ -1,0 +1,284 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}تسجيل الدخول{% endblock %}
+
+{% block extra_head %}
+<style>
+  body {
+    background: linear-gradient(135deg, #e8f0ff 0%, #fdf6e3 50%, #fff4e4 100%);
+    min-height: 100vh;
+  }
+  
+  .login-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .login-wrapper::before {
+    content: '';
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.1), transparent);
+    top: -250px;
+    right: -250px;
+    border-radius: 50%;
+    z-index: 0;
+  }
+  
+  .login-wrapper::after {
+    content: '';
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.1), transparent);
+    bottom: -200px;
+    left: -200px;
+    border-radius: 50%;
+    z-index: 0;
+  }
+  
+  .login-card {
+    max-width: 500px;
+    width: 100%;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.15);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    position: relative;
+    z-index: 1;
+    animation: slideUp 0.6s ease-out;
+  }
+  
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .login-hero {
+    background: linear-gradient(135deg, #0d6efd 0%, #1d4ed8 50%, #3b82f6 100%);
+    color: #fff;
+    border-radius: 20px 20px 0 0;
+    padding: 2.5rem 2rem;
+    box-shadow: 0 8px 32px rgba(13, 110, 253, 0.3);
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+  }
+  
+  .login-hero::before {
+    content: '';
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    top: -50px;
+    right: -50px;
+  }
+  
+  .login-hero i {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+    display: block;
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  .login-hero h5 { 
+    margin: 0.5rem 0 0.25rem;
+    font-weight: 800;
+    font-size: 1.75rem;
+    position: relative;
+    z-index: 1;
+  }
+  
+  .login-hero p { 
+    margin: 0;
+    opacity: 0.95;
+    font-size: 1rem;
+    position: relative;
+    z-index: 1;
+  }
+  
+  .login-form {
+    padding: 2rem;
+  }
+  
+  .login-form .form-control {
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
+    border: 2px solid #e5e7eb;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+  }
+  
+  .login-form .form-control:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  }
+  
+  .login-form .form-label {
+    color: #374151;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+  }
+  
+  .login-form .btn-login {
+    border-radius: 14px;
+    padding: 0.85rem 1.5rem;
+    font-weight: 700;
+    font-size: 1.05rem;
+    background: linear-gradient(135deg, #0d6efd 0%, #1d4ed8 50%, #3b82f6 100%);
+    border: none;
+    box-shadow: 0 8px 24px rgba(13, 110, 253, 0.3);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .login-form .btn-login::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+  }
+  
+  .login-form .btn-login:hover::before {
+    width: 300px;
+    height: 300px;
+  }
+  
+  .login-form .btn-login:hover { 
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(13, 110, 253, 0.4);
+  }
+  
+  .login-note { 
+    color: #6b7280;
+    font-size: 0.95rem;
+    text-align: center;
+    margin-top: 1.5rem;
+  }
+  
+  .login-info {
+    background: #f3f4f6;
+    border-left: 4px solid #3b82f6;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1.5rem;
+  }
+  
+  .login-info h6 {
+    color: #1f2937;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+  }
+  
+  .login-info p {
+    color: #6b7280;
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  
+  @media (max-width: 576px) {
+    .login-hero {
+      padding: 2rem;
+    }
+    
+    .login-form {
+      padding: 1.5rem;
+    }
+    
+    .login-hero h5 {
+      font-size: 1.5rem;
+    }
+    
+    .login-hero i {
+      font-size: 3rem;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-wrapper">
+  <div class="login-card">
+    <!-- Hero Section -->
+    <div class="login-hero">
+      <img src="{% static 'img/md-o-c-logo.png' %}" alt="شركة نفط الوسط" class="logo-login mb-3" style="max-width: 120px; height: auto;">
+      <h5>نظام إدارة الكتب</h5>
+      <p>تسجيل الدخول للوصول إلى لوحة التحكم</p>
+    </div>
+    
+    <!-- Login Form -->
+    <form method="post" class="login-form">
+      {% csrf_token %}
+      
+      <div class="mb-3">
+        <label class="form-label fw-semibold">
+          <i class="bi bi-person-fill text-primary me-2"></i>اسم المستخدم
+        </label>
+        <input type="text" name="username" class="form-control" placeholder="أدخل اسم المستخدم" required autofocus>
+      </div>
+      
+      <div class="mb-3">
+        <label class="form-label fw-semibold">
+          <i class="bi bi-key-fill text-primary me-2"></i>كلمة المرور
+        </label>
+        <input type="password" name="password" class="form-control" placeholder="أدخل كلمة المرور" required>
+      </div>
+      
+      <!-- ✅ Remember Me Checkbox (جديد) -->
+      <div class="form-check mb-3 d-flex align-items-center">
+        <input class="form-check-input cursor-pointer" type="checkbox" id="id_remember_me" name="remember_me" value="on">
+        <label class="form-check-label ms-2 cursor-pointer fw-500" for="id_remember_me">
+          <i class="bi bi-bookmark-check text-primary me-1"></i>تذكرني لمدة 30 يوم
+        </label>
+      </div>
+      
+      <div class="d-grid mb-3">
+        <button class="btn btn-login text-white" type="submit">
+          <i class="bi bi-box-arrow-in-right me-2"></i>تسجيل الدخول
+        </button>
+      </div>
+      
+      <div class="login-note small">
+        <i class="bi bi-info-circle me-1"></i>
+        دخول آمن ومركزي لإدارة الكتب والمراسلات
+      </div>
+    </form>
+    
+    <!-- Info Box -->
+    <div class="login-info">
+      <h6 class="mb-1">
+        <i class="bi bi-info-circle-fill text-primary me-2"></i>معلومات النظام
+      </h6>
+      <p>شركة نفط الوسط - قسم المتابعة</p>
+      <p class="mb-0">نظام تتبع الكتب والمراسلات الإلكتروني</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

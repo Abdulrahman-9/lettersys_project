@@ -1,0 +1,281 @@
+{# مودال معاينة الكتاب الموحد — يُضمن في base.html ليعمل من أي صفحة #}
+<div class="modal fade" id="bookPreviewModal" tabindex="-1" aria-labelledby="bookPreviewTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+
+      {# Header #}
+      <div class="modal-header py-2 px-3" id="bookPreviewHeader" style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff;">
+        <div>
+          <h6 class="modal-title mb-0" id="bookPreviewTitle">تفاصيل الكتاب</h6>
+          <small id="bpNumber" class="opacity-75"></small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+
+      {# Body #}
+      <div class="modal-body p-0" id="bookPreviewBody">
+
+        {# Loading state #}
+        <div id="bpLoading" class="text-center py-5">
+          <div class="spinner-border text-primary"></div>
+          <div class="mt-2 text-muted small">جارٍ التحميل...</div>
+        </div>
+
+        {# Error state #}
+        <div id="bpError" class="text-center py-5 d-none">
+          <i class="bi bi-exclamation-triangle text-danger" style="font-size:2.5rem;"></i>
+          <div class="mt-2 text-muted" id="bpErrorMsg">حدث خطأ</div>
+        </div>
+
+        {# Content #}
+        <div id="bpContent" class="d-none">
+
+          {# Kind + Status badges #}
+          <div class="d-flex flex-wrap gap-2 px-3 pt-3">
+            <span class="badge" id="bpKindBadge"></span>
+            <span class="badge" id="bpStatusBadge"></span>
+            <span class="badge bg-danger-subtle text-danger d-none" id="bpOverdueBadge"><i class="bi bi-clock-history me-1"></i>متأخر</span>
+            <span class="badge bg-warning-subtle text-warning d-none" id="bpFollowupBadge"><i class="bi bi-bell me-1"></i>يحتاج متابعة</span>
+          </div>
+
+          {# Title #}
+          <div class="px-3 pt-2">
+            <h5 class="fw-bold mb-0" id="bpTitle"></h5>
+          </div>
+
+          {# Info Grid #}
+          <div class="px-3 py-3">
+            <div class="row g-2">
+              <div class="col-6 col-md-4">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">رقمنا</div>
+                  <div class="fw-semibold" id="bpOurNumber">—</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-4 d-none" id="bpSenderNumGroup">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">رقم صادر الجهة</div>
+                  <div class="fw-semibold" id="bpSenderNumber">—</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-4">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">تاريخنا</div>
+                  <div class="fw-semibold" id="bpDate">—</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-4 d-none" id="bpSenderDateGroup">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">تاريخ الجهة</div>
+                  <div class="fw-semibold" id="bpSenderDate">—</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-4">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">مستوى السرية</div>
+                  <div class="fw-semibold" id="bpSecret">—</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-4 d-none" id="bpDueDateGroup">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">موعد المتابعة</div>
+                  <div class="fw-semibold" id="bpDueDate">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# Entities #}
+          <div class="px-3 pb-2">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <div class="small text-muted mb-1"><i class="bi bi-building me-1"></i>الجهة المصدّرة</div>
+                <div id="bpIssuingEntities" class="d-flex flex-wrap gap-1"></div>
+              </div>
+              <div class="col-md-6">
+                <div class="small text-muted mb-1"><i class="bi bi-building me-1"></i>الجهة المستلمة</div>
+                <div id="bpReceivingEntities" class="d-flex flex-wrap gap-1"></div>
+              </div>
+            </div>
+          </div>
+
+          {# Margin #}
+          <div class="px-3 pb-2 d-none" id="bpMarginGroup">
+            <div class="small text-muted mb-1"><i class="bi bi-chat-left-text me-1"></i>ملاحظات</div>
+            <div class="p-2 bg-light rounded small" id="bpMargin"></div>
+          </div>
+
+          {# Attachments #}
+          <div class="px-3 pb-2 d-none" id="bpAttachmentsGroup">
+            <div class="small text-muted mb-1"><i class="bi bi-paperclip me-1"></i>المرفقات</div>
+            <div id="bpAttachments" class="d-flex flex-column gap-1"></div>
+          </div>
+
+          {# Meta #}
+          <div class="px-3 pb-3 border-top pt-2 mt-2">
+            <div class="d-flex justify-content-between small text-muted">
+              <span><i class="bi bi-person me-1"></i><span id="bpCreatedBy"></span></span>
+              <span><i class="bi bi-clock me-1"></i><span id="bpCreatedAt"></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Footer #}
+      <div class="modal-footer py-2 px-3">
+        <a href="#" class="btn btn-sm btn-outline-primary" id="bpEditLink"><i class="bi bi-pencil me-1"></i>تعديل</a>
+        <a href="#" class="btn btn-sm btn-primary" id="bpDetailLink"><i class="bi bi-eye me-1"></i>عرض كامل</a>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">إغلاق</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * BookPreviewModal — مودال عرض تفاصيل الكتاب الموحد
+ * يعمل من أي صفحة: أضف data-book-preview="<book_id>" لأي عنصر
+ */
+(function() {
+  'use strict';
+
+  let modalInstance = null;
+
+  function getModal() {
+    if (!modalInstance) {
+      const el = document.getElementById('bookPreviewModal');
+      if (el) modalInstance = new bootstrap.Modal(el);
+    }
+    return modalInstance;
+  }
+
+  const KIND_COLORS = {
+    'outgoing_internal': { bg: '#ecfeff', text: '#0891b2', label: 'صادر داخلي' },
+    'outgoing_external': { bg: '#ecfeff', text: '#0e7490', label: 'صادر خارجي' },
+    'incoming_internal': { bg: '#f5f3ff', text: '#7c3aed', label: 'وارد داخلي' },
+    'incoming_external': { bg: '#f5f3ff', text: '#6d28d9', label: 'وارد خارجي' },
+  };
+
+  const STATUS_COLORS = {
+    'archived': 'bg-secondary-subtle text-secondary',
+    'pending': 'bg-warning-subtle text-warning',
+    'done': 'bg-success-subtle text-success',
+    'hold': 'bg-info-subtle text-info',
+  };
+
+  function show(id) { document.getElementById(id)?.classList.remove('d-none'); }
+  function hide(id) { document.getElementById(id)?.classList.add('d-none'); }
+  function text(id, val) { const el = document.getElementById(id); if (el) el.textContent = val || '—'; }
+  function html(id, val) { const el = document.getElementById(id); if (el) el.innerHTML = val; }
+
+  function entityBadges(entities) {
+    if (!entities?.length) return '<span class="text-muted small">—</span>';
+    return entities.map(e => {
+      const safe = (e.name || '').replace(/</g, '&lt;');
+      return `<span class="badge bg-primary-subtle text-primary border">${safe}</span>`;
+    }).join('');
+  }
+
+  async function openBookPreview(bookId) {
+    const modal = getModal();
+    if (!modal) return;
+
+    // Reset states
+    show('bpLoading'); hide('bpContent'); hide('bpError');
+    modal.show();
+
+    try {
+      const resp = await fetch(`/books/api/book/${bookId}/preview/`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `خطأ ${resp.status}`);
+      }
+
+      const d = await resp.json();
+
+      // Header color by kind
+      const kc = KIND_COLORS[d.kind] || KIND_COLORS['incoming_internal'];
+      const header = document.getElementById('bookPreviewHeader');
+      if (header) header.style.background = `linear-gradient(135deg, ${kc.text}, ${kc.text}cc)`;
+
+      text('bpNumber', `#${d.our_number}`);
+      text('bpTitle', d.title);
+      text('bpOurNumber', d.our_number);
+      text('bpDate', d.date);
+      text('bpSecret', d.secret_level);
+      text('bpCreatedBy', d.created_by);
+      text('bpCreatedAt', d.created_at);
+
+      // Kind badge
+      const kindBadge = document.getElementById('bpKindBadge');
+      if (kindBadge) {
+        kindBadge.textContent = kc.label;
+        kindBadge.style.cssText = `background:${kc.bg};color:${kc.text};`;
+      }
+
+      // Status badge
+      const statusBadge = document.getElementById('bpStatusBadge');
+      if (statusBadge) {
+        statusBadge.className = `badge ${STATUS_COLORS[d.final_status] || 'bg-secondary'}`;
+        statusBadge.textContent = d.status_label;
+      }
+
+      // Conditional fields
+      if (d.is_incoming && d.sender_number) { show('bpSenderNumGroup'); text('bpSenderNumber', d.sender_number); } else { hide('bpSenderNumGroup'); }
+      if (d.is_incoming && d.sender_date) { show('bpSenderDateGroup'); text('bpSenderDate', d.sender_date); } else { hide('bpSenderDateGroup'); }
+      if (d.needs_followup) { show('bpFollowupBadge'); show('bpDueDateGroup'); text('bpDueDate', d.due_date); } else { hide('bpFollowupBadge'); hide('bpDueDateGroup'); }
+      if (d.is_overdue) { show('bpOverdueBadge'); } else { hide('bpOverdueBadge'); }
+
+      // Entities
+      html('bpIssuingEntities', entityBadges(d.issuing_entities));
+      html('bpReceivingEntities', entityBadges(d.receiving_entities));
+
+      // Margin
+      if (d.margin) { show('bpMarginGroup'); text('bpMargin', d.margin); } else { hide('bpMarginGroup'); }
+
+      // Attachments
+      if (d.attachments?.length) {
+        show('bpAttachmentsGroup');
+        html('bpAttachments', d.attachments.map(a => {
+          const safeName = (a.name || 'ملف').replace(/</g, '&lt;');
+          const sizeKB = a.size ? `(${(a.size/1024).toFixed(0)} KB)` : '';
+          return `<a href="${a.url}" target="_blank" class="d-flex align-items-center gap-2 text-decoration-none p-2 bg-light rounded small">
+            <i class="bi bi-file-earmark text-primary"></i>
+            <span>${safeName} <span class="text-muted">${sizeKB}</span></span>
+            <i class="bi bi-box-arrow-up-right ms-auto text-muted"></i>
+          </a>`;
+        }).join(''));
+      } else { hide('bpAttachmentsGroup'); }
+
+      // Links
+      const editLink = document.getElementById('bpEditLink');
+      const detailLink = document.getElementById('bpDetailLink');
+      if (editLink) editLink.href = d.edit_url;
+      if (detailLink) detailLink.href = d.detail_url;
+
+      hide('bpLoading'); show('bpContent');
+
+    } catch (err) {
+      hide('bpLoading'); hide('bpContent'); show('bpError');
+      text('bpErrorMsg', err.message || 'حدث خطأ أثناء التحميل');
+    }
+  }
+
+  // Global click handler: any element with data-book-preview="<id>"
+  document.addEventListener('click', function(e) {
+    const trigger = e.target.closest('[data-book-preview]');
+    if (trigger) {
+      e.preventDefault();
+      const bookId = trigger.dataset.bookPreview;
+      if (bookId) openBookPreview(bookId);
+    }
+  });
+
+  // Expose globally for programmatic use
+  window.openBookPreview = openBookPreview;
+})();
+</script>

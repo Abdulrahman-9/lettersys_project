@@ -1,0 +1,406 @@
+/* ============================================
+   نظام التصميم الموحد (Design System)
+   يحدد جميع الألوان والمسافات والأيقونات
+   ============================================ */
+
+:root {
+  /* ===== Color System ===== */
+  /* Primary Colors - Blue Gradient */
+  --color-primary: #3b82f6;
+  --color-primary-light: #60a5fa;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  
+  /* Secondary Colors - Purple Gradient */
+  --color-secondary: #8b5cf6;
+  --color-secondary-light: #a78bfa;
+  --color-secondary-dark: #6d28d9;
+  --color-secondary-50: #f5f3ff;
+  --color-secondary-500: #8b5cf6;
+  --color-secondary-600: #7c3aed;
+  
+  /* Success Colors */
+  --color-success: #10b981;
+  --color-success-light: #34d399;
+  --color-success-dark: #059669;
+  --color-success-50: #f0fdf4;
+  
+  /* Warning Colors */
+  --color-warning: #f59e0b;
+  --color-warning-light: #fbbf24;
+  --color-warning-dark: #d97706;
+  --color-warning-50: #fffbeb;
+  
+  /* Danger Colors */
+  --color-danger: #ef4444;
+  --color-danger-light: #f87171;
+  --color-danger-dark: #dc2626;
+  --color-danger-50: #fef2f2;
+  
+  /* Info Colors */
+  --color-info: #06b6d4;
+  --color-info-light: #22d3ee;
+  --color-info-dark: #0891b2;
+  --color-info-50: #ecfeff;
+  
+  /* Neutral Colors */
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+  
+  /* Background Colors */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #f1f5f9;
+  
+  /* Text Colors */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+  
+  /* Border Colors */
+  --color-border-light: #e2e8f0;
+  --color-border-medium: #cbd5e1;
+  --color-border-dark: #94a3b8;
+  
+  /* ===== Gradient System ===== */
+  --gradient-primary: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  --gradient-success: linear-gradient(135deg, var(--color-success), var(--color-success-light));
+  --gradient-warning: linear-gradient(135deg, var(--color-warning), var(--color-warning-light));
+  --gradient-danger: linear-gradient(135deg, var(--color-danger), var(--color-danger-light));
+  --gradient-info: linear-gradient(135deg, var(--color-info), var(--color-info-light));
+  --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  
+  /* ===== Spacing System ===== */
+  --space-0: 0;
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+  --space-16: 4rem;     /* 64px */
+  
+  /* ===== Border Radius System ===== */
+  --radius-sm: 0.375rem;   /* 6px */
+  --radius-md: 0.5rem;     /* 8px */
+  --radius-lg: 0.75rem;    /* 12px */
+  --radius-xl: 1rem;       /* 16px */
+  --radius-2xl: 1.5rem;    /* 24px */
+  --radius-full: 9999px;
+  
+  /* ===== Shadow System ===== */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+  
+  /* ===== Typography System ===== */
+  --font-family-primary: 'Cairo', 'Tajawal', sans-serif;
+  --font-family-mono: 'Monaco', 'Courier New', monospace;
+  
+  --font-size-xs: 0.75rem;     /* 12px */
+  --font-size-sm: 0.875rem;    /* 14px */
+  --font-size-md: 1rem;        /* 16px */
+  --font-size-lg: 1.125rem;    /* 18px */
+  --font-size-xl: 1.25rem;     /* 20px */
+  --font-size-2xl: 1.5rem;     /* 24px */
+  --font-size-3xl: 1.875rem;   /* 30px */
+  --font-size-4xl: 2.25rem;    /* 36px */
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-black: 800;
+  
+  /* ===== Animation System ===== */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* ===== Z-Index System ===== */
+  --z-dropdown: 1000;
+  --z-modal: 1050;
+  --z-tooltip: 1100;
+  --z-notification: 1200;
+  
+  /* ===== Icon System ===== */
+  --icon-size-xs: 0.75rem;    /* 12px */
+  --icon-size-sm: 1rem;       /* 16px */
+  --icon-size-md: 1.25rem;    /* 20px */
+  --icon-size-lg: 1.5rem;     /* 24px */
+  --icon-size-xl: 2rem;       /* 32px */
+}
+
+/* ===== Utility Classes ===== */
+
+/* Spacing Utilities */
+.gap-xs { gap: var(--space-1); }
+.gap-sm { gap: var(--space-2); }
+.gap-md { gap: var(--space-3); }
+.gap-lg { gap: var(--space-4); }
+.gap-xl { gap: var(--space-6); }
+
+/* Color Utilities */
+.text-primary { color: var(--color-primary); }
+.text-secondary { color: var(--color-secondary); }
+.text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
+.text-danger { color: var(--color-danger); }
+.text-info { color: var(--color-info); }
+.text-muted { color: var(--color-text-muted); }
+
+.bg-primary { background-color: var(--color-primary); }
+.bg-secondary { background-color: var(--color-secondary); }
+.bg-success { background-color: var(--color-success); }
+.bg-warning { background-color: var(--color-warning); }
+.bg-danger { background-color: var(--color-danger); }
+.bg-info { background-color: var(--color-info); }
+
+/* Gradient Utilities */
+.gradient-primary { background: var(--gradient-primary); }
+.gradient-success { background: var(--gradient-success); }
+.gradient-warning { background: var(--gradient-warning); }
+.gradient-danger { background: var(--gradient-danger); }
+.gradient-info { background: var(--gradient-info); }
+
+/* Border Radius Utilities */
+.rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.rounded-xl { border-radius: var(--radius-xl); }
+.rounded-2xl { border-radius: var(--radius-2xl); }
+.rounded-full { border-radius: var(--radius-full); }
+
+/* Shadow Utilities */
+.shadow-sm { box-shadow: var(--shadow-sm); }
+.shadow-md { box-shadow: var(--shadow-md); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+.shadow-xl { box-shadow: var(--shadow-xl); }
+.shadow-2xl { box-shadow: var(--shadow-2xl); }
+
+/* Icon Utilities */
+.icon-xs { font-size: var(--icon-size-xs); }
+.icon-sm { font-size: var(--icon-size-sm); }
+.icon-md { font-size: var(--icon-size-md); }
+.icon-lg { font-size: var(--icon-size-lg); }
+.icon-xl { font-size: var(--icon-size-xl); }
+
+/* ===== Responsive Design - Ultra Small Screens ===== */
+@media (max-width: 375px) {
+  :root {
+    /* تقليل الخطوط */
+    --font-size-xs: 0.688rem;    /* 11px */
+    --font-size-sm: 0.813rem;    /* 13px */
+    --font-size-md: 0.938rem;    /* 15px */
+    --font-size-lg: 1.063rem;    /* 17px */
+    
+    /* تقليل المسافات */
+    --space-1: 0.188rem;   /* 3px */
+    --space-2: 0.375rem;   /* 6px */
+    --space-3: 0.563rem;   /* 9px */
+    --space-4: 0.75rem;    /* 12px */
+    --space-5: 0.938rem;   /* 15px */
+    --space-6: 1.125rem;   /* 18px */
+    
+    /* تقليل الأيقونات */
+    --icon-size-sm: 0.875rem;   /* 14px */
+    --icon-size-md: 1rem;       /* 16px */
+    --icon-size-lg: 1.25rem;    /* 20px */
+  }
+  
+  /* تصغير الأزرار */
+  .btn {
+    font-size: var(--font-size-sm);
+    padding: var(--space-2) var(--space-3);
+  }
+  
+  .btn-sm {
+    font-size: var(--font-size-xs);
+    padding: var(--space-1) var(--space-2);
+  }
+  
+  /* تصغير الحقول */
+  .form-control, .form-select {
+    font-size: var(--font-size-sm);
+    padding: var(--space-2) var(--space-3);
+  }
+  
+  /* تصغير البطاقات */
+  .card-body {
+    padding: var(--space-3);
+  }
+  
+  /* إخفاء العناصر غير الضرورية */
+  .hide-xs {
+    display: none !important;
+  }
+  
+  /* Stack العناصر عمودياً */
+  .flex-xs-column {
+    flex-direction: column !important;
+  }
+  
+  /* عرض كامل */
+  .w-xs-full {
+    width: 100% !important;
+  }
+}
+
+/* ===== Component Standardization ===== */
+
+/* Buttons - Unified Styles */
+.btn-system {
+  font-family: var(--font-family-primary);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-2) var(--space-4);
+  gap: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-system:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-system:active {
+  transform: translateY(0);
+}
+
+/* Cards - Unified Styles */
+.card-system {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border-light);
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+}
+
+.card-system:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* Inputs - Unified Styles */
+.input-system {
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--color-border-light);
+  font-family: var(--font-family-primary);
+  padding: var(--space-3) var(--space-4);
+  transition: all var(--transition-base);
+  background: var(--color-bg-primary);
+}
+
+.input-system:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+/* Badges - Unified Styles */
+.badge-system {
+  font-family: var(--font-family-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Tables - Unified Styles */
+.table-system {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.table-system thead {
+  background: var(--gradient-primary);
+  color: white;
+}
+
+.table-system tbody tr {
+  transition: all var(--transition-fast);
+}
+
+.table-system tbody tr:hover {
+  background: var(--color-primary-50);
+}
+
+/* Modals - Unified Styles */
+.modal-system .modal-content {
+  border-radius: var(--radius-xl);
+  border: none;
+  box-shadow: var(--shadow-2xl);
+}
+
+.modal-system .modal-header {
+  background: var(--gradient-primary);
+  color: white;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: var(--space-4) var(--space-6);
+}
+
+/* Tooltips - Unified Styles */
+.tooltip-system {
+  background: var(--color-gray-900);
+  color: white;
+  font-size: var(--font-size-sm);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-tooltip);
+}
+
+/* Alerts - Unified Styles */
+.alert-system {
+  border-radius: var(--radius-lg);
+  border: none;
+  padding: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-sm);
+}
+
+.alert-system-success {
+  background: var(--color-success-50);
+  color: var(--color-success-dark);
+}
+
+.alert-system-warning {
+  background: var(--color-warning-50);
+  color: var(--color-warning-dark);
+}
+
+.alert-system-danger {
+  background: var(--color-danger-50);
+  color: var(--color-danger-dark);
+}
+
+.alert-system-info {
+  background: var(--color-info-50);
+  color: var(--color-info-dark);
+}

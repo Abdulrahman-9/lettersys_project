@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}سلة المهملات{% endblock %}
+
+{% block page_sidebar %}
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">ملخص السلة</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">كتب محذوفة</div>
+        <strong>{{ deleted_books|length }}</strong>
+      </div>
+      <span class="app-context-chip is-danger"><i class="bi bi-trash"></i> كتب</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">مرفقات محذوفة</div>
+        <strong>{{ deleted_attachments|length }}</strong>
+      </div>
+      <span class="app-context-chip"><i class="bi bi-paperclip"></i> مرفقات</span>
+    </div>
+  </div>
+</div>
+
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">اختصارات</div>
+  <div class="app-context-list">
+    <a class="app-context-link" href="{% url 'book_unified' %}">
+      <span>العودة للأرشيف</span>
+      <i class="bi bi-journal-text"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-1">سلة المهملات</h4>
+    <p class="text-muted mb-0">استعادة العناصر أو حذفها نهائياً.</p>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-header bg-white">
+    <h6 class="mb-0">الكتب المحذوفة</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>الرقم</th>
+            <th>العنوان</th>
+            <th>الجهة</th>
+            <th>تاريخ الحذف</th>
+            <th class="text-end">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for book in deleted_books %}
+          <tr>
+            <td>{{ book.our_number|default:book.id }}</td>
+            <td>{{ book.title|default:'—' }}</td>
+            <td>{{ book.first_issuing_entity|default:'—' }}</td>
+            <td>{{ book.deleted_at|date:"Y-m-d H:i" }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-success" href="{% url 'restore_book' book.id %}">استعادة</a>
+              <form method="post" action="{% url 'purge_book' book.id %}" class="d-inline">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('حذف نهائي للكتاب؟');">حذف نهائي</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center text-muted py-4">لا توجد كتب محذوفة.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="card-header bg-white">
+    <h6 class="mb-0">المرفقات المحذوفة</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>الملف</th>
+            <th>الكتاب</th>
+            <th>تاريخ الحذف</th>
+            <th class="text-end">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for att in deleted_attachments %}
+          <tr>
+            <td class="text-truncate" style="max-width:240px">{{ att.file.name|default:'—' }}</td>
+            <td>{{ att.book.our_number|default:att.book.id }}</td>
+            <td>{{ att.deleted_at|date:"Y-m-d H:i" }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-success" href="{% url 'restore_attachment' att.id %}">استعادة</a>
+              <form method="post" action="{% url 'purge_attachment' att.id %}" class="d-inline">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('حذف نهائي للمرفق؟');">حذف نهائي</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="text-center text-muted py-4">لا توجد مرفقات محذوفة.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

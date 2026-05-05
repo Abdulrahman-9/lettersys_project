@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}إعدادات العدّادات التسلسلية{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 800px; padding: 24px;">
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <a href="{% url 'extraction-smart-desktop' %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-right"></i>
+        </a>
+        <div>
+            <h4 class="mb-1 fw-bold">⚙️ إعدادات العدّادات التسلسلية</h4>
+            <p class="text-muted mb-0" style="font-size: 0.9rem;">تحكم بالرقم التسلسلي والبادئة لكل نوع كتاب.</p>
+        </div>
+    </div>
+
+    {% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+        {{ msg }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+            {% for seq in sequences %}
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm" style="border-radius: 14px;">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            {% if seq.kind == 'incoming_internal' %}
+                            <span style="width:10px;height:10px;border-radius:50%;background:#0f766e;display:inline-block;"></span>
+                            {% elif seq.kind == 'incoming_external' %}
+                            <span style="width:10px;height:10px;border-radius:50%;background:#0369a1;display:inline-block;"></span>
+                            {% elif seq.kind == 'outgoing_internal' %}
+                            <span style="width:10px;height:10px;border-radius:50%;background:#b45309;display:inline-block;"></span>
+                            {% elif seq.kind == 'outgoing_external' %}
+                            <span style="width:10px;height:10px;border-radius:50%;background:#9f1239;display:inline-block;"></span>
+                            {% endif %}
+                            <strong>{{ seq.label }}</strong>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">البادئة</label>
+                            <input type="text" name="prefix_{{ seq.kind }}" value="{{ seq.obj.prefix }}" class="form-control form-control-sm" placeholder="مثال: و/">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">الرقم التالي</label>
+                            <input type="number" name="next_number_{{ seq.kind }}" value="{{ seq.obj.next_number }}" min="1" class="form-control form-control-sm">
+                        </div>
+                        <div class="text-muted mt-2" style="font-size:0.8rem;">
+                            المعاينة: <strong>{{ seq.obj.prefix }}{{ seq.obj.next_number }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {# ── قسم إعدادات الحجز الشبكي ── #}
+        <div class="col-12 mt-2">
+            <div class="card border-0 shadow-sm" style="border-radius:14px; border-right: 4px solid #667eea !important; border: 1px solid #e2e8f0;">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <span style="font-size:1.3rem;">🌐</span>
+                        <div>
+                            <strong style="font-size:0.95rem;">إعدادات الحجز الشبكي للأرقام الفريدة</strong>
+                            <p class="text-muted mb-0" style="font-size:0.8rem;">
+                                عند استخدام التطبيق من أكثر من جهاز على الشبكة، يحجز كل مستخدم رقماً ذرياً لمدة محددة
+                                لمنع تعارض الأرقام. بعد انقضاء المدة يُلغى الحجز تلقائياً ويُعاد للمجمع.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                                ⏱ مدة صلاحية الحجز (دقيقة)
+                            </label>
+                            <input type="number" name="reservation_expire_minutes"
+                                   value="{{ reservation_settings.expire_minutes }}"
+                                   min="5" max="480" class="form-control form-control-sm"
+                                   placeholder="45">
+                            <div class="form-text">المدى المسموح: 5 – 480 دقيقة. القيمة الافتراضية: 45 دقيقة.</div>
+                        </div>
+                        <div class="col-md-7 d-flex align-items-end">
+                            <div class="p-2 rounded" style="background:#f0f4ff; border:1px solid #c7d2fe; font-size:0.82rem; width:100%;">
+                                <div class="mb-1"><strong>🔒 الوضع الحالي:</strong>
+                                    {% if reservation_settings.is_custom %}
+                                    <span class="badge" style="background:#16a34a;">مخصص</span>
+                                    {% else %}
+                                    <span class="badge" style="background:#64748b;">افتراضي (45 دق)</span>
+                                    {% endif %}
+                                </div>
+                                <div class="mb-1"><strong>📡 نمط العمل:</strong> شبكي ذري — كل مستخدم يحجز رقمه لوحده</div>
+                                <div><strong>🛡 الحماية:</strong> SELECT FOR UPDATE على قاعدة البيانات (آمن مع PostgreSQL)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-1"></i>حفظ الإعدادات
+            </button>
+            <a href="{% url 'extraction-smart-desktop' %}" class="btn btn-outline-secondary">إلغاء</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

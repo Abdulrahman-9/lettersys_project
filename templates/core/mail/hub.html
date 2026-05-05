@@ -1,0 +1,1214 @@
+{% extends "base.html" %}
+{% load static %}
+{% load safe_html %}
+
+{% block title %}البريد الرسمي — نظام إدارة الكتب{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ══════════════════════════════════════════════
+   قسم البريد — سمة مرئية موحدة مع التطبيق
+   ══════════════════════════════════════════════ */
+
+/* ── header القسم ── */
+.mail-page-header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem 1.5rem .75rem;
+  background: rgba(255,255,255,.82);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(111,70,40,.12);
+}
+.mail-page-title {
+  font-size: 1.18rem;
+  font-weight: 800;
+  color: var(--deep-brown);
+}
+.mail-page-subtitle {
+  font-size: .78rem;
+  color: var(--muted-brown);
+}
+
+/* ── شريط التبويبات ── */
+.mail-tabs-bar {
+  display: flex;
+  gap: 0;
+  padding: 0 1.25rem;
+  background: rgba(255,255,255,.72);
+  border-bottom: 2px solid rgba(111,70,40,.1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mail-tabs-bar::-webkit-scrollbar { display: none; }
+
+.mail-tab {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .72rem 1.15rem;
+  font-size: .87rem;
+  font-weight: 600;
+  color: var(--soft-brown);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  transition: all .2s;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mail-tab:hover { color: var(--warm-clay); background: rgba(248,218,192,.35); }
+.mail-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: rgba(249,168,38,.07);
+}
+.mail-tab-badge {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: .7rem;
+  font-weight: 700;
+}
+.mail-tab-badge.badge-danger {
+  background: #dc3545;
+}
+
+/* ── حاوية المحتوى ── */
+.mail-content {
+  padding: 1.25rem 1.5rem;
+  max-width: 1400px;
+}
+
+/* ── بطاقات الإحصاء ── */
+.mail-stat-cards {
+  display: flex;
+  gap: .85rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+.mail-stat-card {
+  flex: 1;
+  min-width: 130px;
+  background: rgba(255,255,255,.86);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: .85rem 1rem;
+  box-shadow: 0 2px 8px var(--card-shadow);
+  text-align: center;
+}
+.mail-stat-card .stat-num {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--warm-clay);
+  line-height: 1;
+}
+.mail-stat-card .stat-lbl {
+  font-size: .75rem;
+  color: var(--muted-brown);
+  margin-top: .2rem;
+}
+.mail-stat-card.stat-ok .stat-num   { color: #28a745; }
+.mail-stat-card.stat-fail .stat-num { color: #dc3545; }
+.mail-stat-card.stat-warn .stat-num { color: var(--warm-amber); }
+
+/* ── شريط الفلاتر ── */
+.mail-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.mail-filter-bar .form-select,
+.mail-filter-bar .form-control {
+  font-size: .83rem;
+  border-color: rgba(111,70,40,.2);
+  background: rgba(255,255,255,.9);
+  color: var(--deep-brown);
+  border-radius: 8px;
+  max-width: 200px;
+}
+.mail-filter-bar .form-select:focus,
+.mail-filter-bar .form-control:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(249,168,38,.18);
+}
+.mail-filter-bar .btn-filter {
+  background: var(--warm-clay);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: .42rem .9rem;
+  font-size: .83rem;
+  font-weight: 600;
+}
+.mail-filter-bar .btn-filter:hover { background: var(--accent-2); }
+
+/* ── جدول البريد ── */
+.mail-table-wrap {
+  background: rgba(255,255,255,.88);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px var(--card-shadow);
+  overflow: hidden;
+}
+.mail-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.mail-table thead th {
+  background: rgba(248,218,192,.55);
+  color: var(--soft-brown);
+  font-weight: 700;
+  padding: .65rem 1rem;
+  border-bottom: 1px solid var(--card-border);
+  white-space: nowrap;
+}
+.mail-table tbody tr {
+  transition: background .15s;
+  border-bottom: 1px solid rgba(111,70,40,.07);
+}
+.mail-table tbody tr:hover { background: rgba(248,218,192,.25); }
+.mail-table tbody td { padding: .6rem 1rem; color: var(--deep-brown); }
+
+/* ── badges الحالة ── */
+.mail-status {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 8px;
+  font-size: .73rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.mail-status.sent    { background:#d4edda; color:#155724; }
+.mail-status.failed  { background:#f8d7da; color:#721c24; }
+.mail-status.pending { background:#fff3cd; color:#856404; }
+.mail-status.open    { background:#cce5ff; color:#004085; }
+.mail-status.waiting { background:#fff3cd; color:#856404; }
+.mail-status.replied { background:#d4edda; color:#155724; }
+.mail-status.closed  { background:#e2e3e5; color:#383d41; }
+
+/* ── بريد وارد غير مقروء ── */
+.inbox-row-unread td:first-child::before {
+  content: '';
+  display: inline-block;
+  width: 8px; height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  margin-left: .5rem;
+  vertical-align: middle;
+}
+.inbox-row-unread { font-weight: 700; }
+
+/* ── نموذج Compose ── */
+.compose-card {
+  background: rgba(255,255,255,.92);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  box-shadow: 0 4px 18px var(--card-shadow);
+  padding: 1.5rem;
+  max-width: 860px;
+}
+.compose-label {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--soft-brown);
+  margin-bottom: .3rem;
+}
+.compose-input {
+  border: 1px solid rgba(111,70,40,.2);
+  border-radius: 8px;
+  background: rgba(255,255,255,.9);
+  color: var(--deep-brown);
+  font-size: .88rem;
+  width: 100%;
+  padding: .48rem .8rem;
+}
+.compose-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(249,168,38,.18);
+}
+.compose-body-editor {
+  min-height: 220px;
+  border: 1px solid rgba(111,70,40,.2);
+  border-radius: 8px;
+  padding: .6rem .8rem;
+  font-size: .88rem;
+  resize: vertical;
+}
+.compose-body-editor:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.compose-hint {
+  font-size: .75rem;
+  color: var(--muted-brown);
+  margin-top: .2rem;
+}
+
+/* ── خيط المحادثة ── */
+.thread-timeline { display: flex; flex-direction: column; gap: .85rem; }
+.thread-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 82%;
+  padding: .9rem 1.1rem;
+  border-radius: 14px;
+  font-size: .87rem;
+  line-height: 1.6;
+  position: relative;
+}
+.thread-msg.sent {
+  align-self: flex-end;
+  background: rgba(249,168,38,.13);
+  border: 1px solid rgba(249,168,38,.3);
+}
+.thread-msg.received {
+  align-self: flex-start;
+  background: rgba(255,255,255,.92);
+  border: 1px solid var(--card-border);
+}
+.thread-msg-meta {
+  font-size: .72rem;
+  color: var(--muted-brown);
+  margin-bottom: .35rem;
+}
+
+/* ── إعدادات SMTP/IMAP ── */
+.settings-section {
+  background: rgba(255,255,255,.9);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.4rem;
+  margin-bottom: 1.1rem;
+  box-shadow: 0 2px 8px var(--card-shadow);
+}
+.settings-section-title {
+  font-size: .92rem;
+  font-weight: 800;
+  color: var(--deep-brown);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.settings-test-btn {
+  background: rgba(248,218,192,.6);
+  border: 1px solid var(--warm-clay);
+  color: var(--deep-brown);
+  border-radius: 8px;
+  padding: .38rem .9rem;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .2s;
+}
+.settings-test-btn:hover { background: var(--warm-sand); }
+
+/* ── قوالب الإيميل ── */
+.template-card {
+  background: rgba(255,255,255,.88);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: .85rem 1rem;
+  margin-bottom: .6rem;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  box-shadow: 0 1px 6px var(--card-shadow);
+}
+.template-card-name { font-weight: 700; color: var(--deep-brown); font-size: .9rem; }
+.template-card-kind { font-size: .75rem; color: var(--muted-brown); }
+
+/* ── صفحة الخيط: no thread ── */
+.mail-empty {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--muted-brown);
+}
+.mail-empty i { font-size: 2.8rem; opacity: .35; display: block; margin-bottom: .75rem; }
+
+/* ── pagination ── */
+.mail-pagination { display: flex; gap: .4rem; align-items: center; margin-top: 1rem; }
+.mail-pagination a, .mail-pagination span {
+  padding: .38rem .8rem;
+  border-radius: 7px;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--soft-brown);
+  background: rgba(255,255,255,.8);
+  border: 1px solid var(--card-border);
+  text-decoration: none;
+}
+.mail-pagination a:hover { background: rgba(248,218,192,.6); }
+.mail-pagination .current {
+  background: var(--warm-clay);
+  color: #fff;
+  border-color: var(--warm-clay);
+}
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div>
+  <!-- ── Header ── -->
+  <div class="mail-page-header">
+    <div class="d-flex align-items-center gap-2 flex-grow-1">
+      <i class="bi bi-envelope-fill" style="font-size:1.4rem;color:var(--warm-clay)"></i>
+      <div>
+        <div class="mail-page-title">البريد الرسمي</div>
+        <div class="mail-page-subtitle">مراسلات الجهات — صادر / وارد / محادثات</div>
+      </div>
+    </div>
+    <a href="{% url 'mail_compose' %}" class="btn btn-sm d-flex align-items-center gap-1"
+       style="background:var(--warm-clay);color:#fff;border-radius:8px;font-weight:700;font-size:.85rem">
+      <i class="bi bi-pencil-square"></i> إنشاء رسالة
+    </a>
+  </div>
+
+  <!-- ── شريط التبويبات ── -->
+  <div class="mail-tabs-bar">
+    <a href="{% url 'mail_sent' %}" class="mail-tab {% if active_tab == 'sent' %}active{% endif %}">
+      <i class="bi bi-send-fill"></i>
+      <span>الصادر</span>
+      {% if stats.total %}<span class="mail-tab-badge">{{ stats.total }}</span>{% endif %}
+    </a>
+    <a href="{% url 'mail_inbox' %}" class="mail-tab {% if active_tab == 'inbox' %}active{% endif %}">
+      <i class="bi bi-inbox-fill"></i>
+      <span>الوارد</span>
+      {% if unread_count %}<span class="mail-tab-badge badge-danger">{{ unread_count }}</span>{% endif %}
+    </a>
+    <a href="{% url 'mail_compose' %}" class="mail-tab {% if active_tab == 'compose' %}active{% endif %}">
+      <i class="bi bi-pencil-square"></i>
+      <span>إنشاء رسالة</span>
+    </a>
+    {% if request.user.is_staff %}
+    <a href="{% url 'mail_templates' %}" class="mail-tab {% if active_tab == 'templates' or active_tab == 'template_edit' %}active{% endif %}">
+      <i class="bi bi-file-earmark-richtext"></i>
+      <span>القوالب</span>
+    </a>
+    <a href="{% url 'mail_settings' %}" class="mail-tab {% if active_tab == 'settings' %}active{% endif %}">
+      <i class="bi bi-gear-fill"></i>
+      <span>الإعدادات</span>
+    </a>
+    {% endif %}
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       التبويبات المحتوى
+  ══════════════════════════════════════════ -->
+  <div class="mail-content">
+
+    {% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}{{ msg.tags }}{% endif %} alert-dismissible fade show" role="alert" style="border-radius:10px;font-size:.88rem">
+      {{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- ════ الصادر ════ -->
+    {% if active_tab == 'sent' %}
+
+    <!-- إحصاءات سريعة -->
+    <div class="mail-stat-cards">
+      <div class="mail-stat-card">
+        <div class="stat-num">{{ stats.total }}</div>
+        <div class="stat-lbl">إجمالي الإرسال</div>
+      </div>
+      <div class="mail-stat-card stat-ok">
+        <div class="stat-num">{{ stats.sent }}</div>
+        <div class="stat-lbl">أُرسِل بنجاح</div>
+      </div>
+      <div class="mail-stat-card stat-fail">
+        <div class="stat-num">{{ stats.failed }}</div>
+        <div class="stat-lbl">فشل الإرسال</div>
+      </div>
+      <div class="mail-stat-card stat-warn">
+        <div class="stat-num">{{ stats.pending }}</div>
+        <div class="stat-lbl">في الانتظار</div>
+      </div>
+    </div>
+
+    <!-- شريط الفلاتر -->
+    <form class="mail-filter-bar" method="get">
+      <input type="text" name="q" class="form-control" placeholder="بحث بالموضوع أو العنوان..." value="{{ search }}" style="max-width:240px">
+      <select name="status" class="form-select" style="max-width:145px">
+        <option value="">كل الحالات</option>
+        {% for val, lbl in STATUS_CHOICES %}
+        <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+      <select name="trigger" class="form-select" style="max-width:145px">
+        <option value="">كل الأنواع</option>
+        {% for val, lbl in TRIGGER_CHOICES %}
+        <option value="{{ val }}" {% if trigger_filter == val %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+      <select name="entity" class="form-select" style="max-width:175px">
+        <option value="">كل الجهات</option>
+        {% for ent in entities %}
+        <option value="{{ ent.pk }}" {% if entity_filter == ent.pk|stringformat:"s" %}selected{% endif %}>{{ ent.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn-filter">
+        <i class="bi bi-funnel me-1"></i>تصفية
+      </button>
+      {% if search or status_filter or entity_filter or trigger_filter %}
+      <a href="{% url 'mail_sent' %}" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;font-size:.82rem">مسح</a>
+      {% endif %}
+    </form>
+
+    <!-- الجدول -->
+    <div class="mail-table-wrap">
+      <table class="mail-table">
+        <thead>
+          <tr>
+            <th>الموضوع</th>
+            <th>إلى</th>
+            <th>الجهة</th>
+            <th>الكتاب</th>
+            <th>النوع</th>
+            <th>الحالة</th>
+            <th>تاريخ الإرسال</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in page_obj %}
+          <tr>
+            <td>
+              <strong style="font-size:.88rem">{{ log.subject|truncatechars:55 }}</strong>
+              {% if log.thread %}
+              <a href="{% url 'mail_thread' log.thread.pk %}" class="ms-1" style="font-size:.73rem;color:var(--accent)">
+                <i class="bi bi-chat-dots"></i> محادثة
+              </a>
+              {% endif %}
+            </td>
+            <td style="direction:ltr;text-align:right;font-size:.8rem">{{ log.to_address|truncatechars:35 }}</td>
+            <td>{{ log.entity.name|default:"—" }}</td>
+            <td>
+              {% if log.book %}
+              <a href="{% url 'book_detail' log.book.pk %}" style="color:var(--warm-clay);font-weight:600;font-size:.82rem">
+                {{ log.book.our_number|default:log.book.pk }}
+              </a>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if log.trigger == 'auto' %}<span class="mail-status pending">تلقائي</span>
+              {% elif log.trigger == 'manual' %}<span class="mail-status open">يدوي</span>
+              {% else %}<span class="mail-status waiting">تذكير</span>{% endif %}
+            </td>
+            <td>
+              <span class="mail-status {{ log.status }}">{{ log.get_status_display }}</span>
+              {% if log.error_msg %}
+              <span class="ms-1" title="{{ log.error_msg }}" style="cursor:help;color:#dc3545">⚠</span>
+              {% endif %}
+            </td>
+            <td style="font-size:.78rem;color:var(--muted-brown)">{{ log.sent_at|date:"Y/m/d H:i" }}</td>
+            <td>
+              <button class="btn btn-sm" style="border-radius:7px;font-size:.75rem;border:1px solid var(--card-border)"
+                      onclick="previewEmail({{ log.pk }})">
+                <i class="bi bi-eye"></i>
+              </button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="mail-empty"><i class="bi bi-send"></i>لا توجد رسائل مرسلة</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="mail-pagination">
+      {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"><i class="bi bi-chevron-right"></i></a>
+      {% endif %}
+      <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"><i class="bi bi-chevron-left"></i></a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+
+    <!-- ════ الوارد ════ -->
+    {% elif active_tab == 'inbox' %}
+
+    <div class="d-flex align-items-center justify-content-between mb-3 gap-2 flex-wrap">
+      <div class="d-flex align-items-center gap-2">
+        <strong style="color:var(--deep-brown)">البريد الوارد</strong>
+        {% if unread_count %}
+        <span class="mail-tab-badge badge-danger">{{ unread_count }} غير مقروء</span>
+        {% endif %}
+      </div>
+      {% if request.user.is_staff %}
+      <button class="btn btn-sm" id="syncBtn"
+              style="background:rgba(248,218,192,.7);border:1px solid var(--warm-clay);border-radius:8px;font-weight:700;font-size:.82rem;color:var(--deep-brown)"
+              onclick="triggerSync()">
+        <i class="bi bi-arrow-repeat me-1"></i>مزامنة الآن
+      </button>
+      {% endif %}
+    </div>
+
+    <!-- فلاتر -->
+    <form class="mail-filter-bar" method="get">
+      <input type="text" name="q" class="form-control" placeholder="بحث..." value="{{ search }}" style="max-width:220px">
+      <select name="read" class="form-select" style="max-width:150px">
+        <option value="">الكل</option>
+        <option value="0" {% if read_filter == '0' %}selected{% endif %}>غير مقروء</option>
+        <option value="1" {% if read_filter == '1' %}selected{% endif %}>مقروء</option>
+      </select>
+      <button type="submit" class="btn-filter"><i class="bi bi-funnel me-1"></i>تصفية</button>
+      {% if search or read_filter %}
+      <a href="{% url 'mail_inbox' %}" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;font-size:.82rem">مسح</a>
+      {% endif %}
+    </form>
+
+    <div class="mail-table-wrap">
+      <table class="mail-table">
+        <thead>
+          <tr>
+            <th>المرسِل</th>
+            <th>الموضوع</th>
+            <th>الخيط / الكتاب</th>
+            <th>تاريخ الاستلام</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inc in page_obj %}
+          <tr class="{% if not inc.is_read %}inbox-row-unread{% endif %}">
+            <td>
+              <div style="font-weight:{% if not inc.is_read %}700{% else %}400{% endif %};font-size:.87rem">
+                {{ inc.from_name|default:inc.from_address }}
+              </div>
+              <div style="font-size:.75rem;direction:ltr;text-align:right;color:var(--muted-brown)">{{ inc.from_address }}</div>
+            </td>
+            <td style="max-width:280px">{{ inc.subject|truncatechars:60 }}</td>
+            <td>
+              {% if inc.thread %}
+              <a href="{% url 'mail_thread' inc.thread.pk %}" style="color:var(--accent);font-size:.82rem;font-weight:700">
+                <i class="bi bi-chat-dots me-1"></i>{{ inc.thread.subject|truncatechars:35 }}
+              </a>
+              {% if inc.thread.book %}
+              <div style="font-size:.73rem;color:var(--muted-brown)">
+                كتاب: <a href="{% url 'book_detail' inc.thread.book.pk %}" style="color:var(--warm-clay)">{{ inc.thread.book.our_number }}</a>
+              </div>
+              {% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td style="font-size:.78rem;color:var(--muted-brown)">{{ inc.received_at|date:"Y/m/d H:i" }}</td>
+            <td>
+              <a href="{% url 'mail_thread' inc.thread.pk %}" class="btn btn-sm"
+                 style="border-radius:7px;font-size:.75rem;border:1px solid var(--card-border)"
+                 onclick="markRead({{ inc.pk }})">
+                <i class="bi bi-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="mail-empty"><i class="bi bi-inbox"></i>لا توجد رسائل واردة</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+    <div class="mail-pagination">
+      {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}"><i class="bi bi-chevron-right"></i></a>{% endif %}
+      <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}"><i class="bi bi-chevron-left"></i></a>{% endif %}
+    </div>
+    {% endif %}
+
+
+    <!-- ════ إنشاء رسالة ════ -->
+    {% elif active_tab == 'compose' %}
+
+    {% if not smtp_ok %}
+    <div class="alert alert-warning d-flex align-items-center gap-2" style="border-radius:10px;font-size:.87rem">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span>خدمة البريد غير مفعّلة.
+        {% if request.user.is_staff %}
+        <a href="{% url 'mail_settings' %}" class="fw-bold" style="color:var(--warm-clay)">افتح الإعدادات</a> لتكوين SMTP.
+        {% else %}
+        يرجى التواصل مع المدير.
+        {% endif %}
+      </span>
+    </div>
+    {% endif %}
+
+    <div class="compose-card">
+      <h6 style="font-weight:800;color:var(--deep-brown);margin-bottom:1.25rem">
+        <i class="bi bi-pencil-square me-2" style="color:var(--warm-clay)"></i>
+        {% if book %}رسالة جديدة — بشأن كتاب رقم {{ book.our_number }}{% else %}رسالة جديدة{% endif %}
+      </h6>
+
+      <!-- اختيار قالب -->
+      {% if templates %}
+      <div class="mb-3">
+        <label class="compose-label">قالب جاهز (اختياري)</label>
+        <div class="d-flex gap-2 flex-wrap">
+          {% for tpl in templates %}
+          <button type="button" class="btn btn-sm" onclick="loadTemplate({{ tpl.pk }}{% if book %}, {{ book.pk }}{% else %}, null{% endif %}{% if prefill.entity_id %}, {{ prefill.entity_id }}{% else %}, null{% endif %})"
+                  style="background:rgba(248,218,192,.5);border:1px solid var(--warm-clay);border-radius:8px;font-size:.8rem;font-weight:600;color:var(--deep-brown)">
+            <i class="bi bi-file-earmark-richtext me-1"></i>{{ tpl.name }}
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <form id="composeForm" onsubmit="sendMail(event)">
+        {% if book %}<input type="hidden" name="book_id" id="f_book_id" value="{{ book.pk }}">{% else %}<input type="hidden" name="book_id" id="f_book_id" value="">{% endif %}
+        <input type="hidden" id="f_entity_id" value="{{ prefill.entity_id|default:'' }}">
+        <input type="hidden" id="f_template_id" value="">
+
+        <div class="mb-3">
+          <label class="compose-label">إلى (البريد الإلكتروني) <span style="color:#dc3545">*</span></label>
+          <div class="d-flex gap-2">
+            <select id="f_entity_select" onchange="onEntityChange(this)" class="compose-input" style="max-width:220px">
+              <option value="">— اختر الجهة —</option>
+              {% for ent in entities %}
+              <option value="{{ ent.pk }}" data-email="{{ ent.email }}" {% if prefill.entity_id == ent.pk %}selected{% endif %}>{{ ent.name }}</option>
+              {% endfor %}
+            </select>
+            <input type="email" id="f_to" class="compose-input" placeholder="أو أدخل البريد مباشرة" value="{{ prefill.to|default:'' }}" required>
+          </div>
+          <div class="compose-hint">اختر الجهة من القائمة أو اكتب البريد مباشرة</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="compose-label">نسخة إلى (CC) — اختياري</label>
+          <input type="text" id="f_cc" class="compose-input" placeholder="عناوين مفصولة بفاصلة">
+        </div>
+
+        <div class="mb-3">
+          <label class="compose-label">الموضوع <span style="color:#dc3545">*</span></label>
+          <input type="text" id="f_subject" class="compose-input" value="{{ prefill.subject|default:'' }}" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="compose-label">نص الرسالة <span style="color:#dc3545">*</span></label>
+          <textarea id="f_body" class="compose-input compose-body-editor" required></textarea>
+          <div class="compose-hint">يدعم HTML — مثل <code>&lt;b&gt;نص عريض&lt;/b&gt;</code></div>
+        </div>
+
+        <div class="d-flex gap-2 mt-1">
+          <button type="submit" class="btn" id="sendBtn"
+                  style="background:var(--warm-clay);color:#fff;border-radius:8px;font-weight:700;font-size:.88rem;padding:.5rem 1.4rem">
+            <i class="bi bi-send me-1"></i>إرسال
+          </button>
+          <button type="button" class="btn btn-outline-secondary" onclick="previewCompose()"
+                  style="border-radius:8px;font-size:.88rem">
+            <i class="bi bi-eye me-1"></i>معاينة
+          </button>
+        </div>
+      </form>
+    </div>
+
+
+    <!-- ════ خيط المحادثة ════ -->
+    {% elif active_tab == 'thread' %}
+
+    <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
+      <div>
+        <h6 style="font-weight:800;color:var(--deep-brown);margin-bottom:.1rem">
+          <i class="bi bi-chat-dots-fill me-2" style="color:var(--warm-clay)"></i>{{ thread.subject }}
+        </h6>
+        <div style="font-size:.78rem;color:var(--muted-brown)">
+          {% if thread.entity %}<i class="bi bi-buildings me-1"></i>{{ thread.entity.name }} &nbsp;|&nbsp; {% endif %}
+          {% if thread.book %}<i class="bi bi-journal-text me-1"></i>كتاب: <a href="{% url 'book_detail' thread.book.pk %}" style="color:var(--warm-clay)">{{ thread.book.our_number }}</a> &nbsp;|&nbsp; {% endif %}
+          <i class="bi bi-clock me-1"></i>{{ thread.last_activity|date:"Y/m/d H:i" }}
+        </div>
+      </div>
+      <div class="ms-auto d-flex align-items-center gap-2">
+        <span class="mail-status {{ thread.status }}">{{ thread.get_status_display }}</span>
+        <select id="threadStatusSel" onchange="changeThreadStatus({{ thread.pk }}, this.value)"
+                style="border-radius:7px;border:1px solid var(--card-border);font-size:.8rem;padding:.3rem .6rem;background:rgba(255,255,255,.9)">
+          <option value="open"    {% if thread.status == 'open' %}selected{% endif %}>مفتوح</option>
+          <option value="waiting" {% if thread.status == 'waiting' %}selected{% endif %}>بانتظار رد</option>
+          <option value="replied" {% if thread.status == 'replied' %}selected{% endif %}>تم الرد</option>
+          <option value="closed"  {% if thread.status == 'closed' %}selected{% endif %}>مغلق</option>
+        </select>
+        <a href="{% url 'mail_compose' %}?thread={{ thread.pk }}"
+           class="btn btn-sm" style="background:var(--warm-clay);color:#fff;border-radius:8px;font-size:.82rem;font-weight:700">
+          <i class="bi bi-reply me-1"></i>رد
+        </a>
+      </div>
+    </div>
+
+    <div class="thread-timeline" style="max-width:800px">
+      {% for item in timeline %}
+      <div class="thread-msg {{ item.type }}">
+        <div class="thread-msg-meta">
+          {% if item.type == 'sent' %}
+          <i class="bi bi-send me-1"></i>أرسله: {{ item.obj.sent_by.get_full_name|default:item.obj.sent_by.username }}
+          &nbsp;—&nbsp; {{ item.at|date:"Y/m/d H:i" }}
+          &nbsp;&mdash;&nbsp; إلى: <span style="direction:ltr;display:inline">{{ item.obj.to_address }}</span>
+          &nbsp;<span class="mail-status {{ item.obj.status }}">{{ item.obj.get_status_display }}</span>
+          {% else %}
+          <i class="bi bi-inbox me-1"></i>من: {{ item.obj.from_name|default:item.obj.from_address }}
+          &nbsp;—&nbsp; {{ item.at|date:"Y/m/d H:i" }}
+          {% endif %}
+        </div>
+        <div>
+          {% if item.type == 'sent' %}
+          {{ item.obj.body_html|sanitize_email_html }}
+          {% else %}
+          {{ item.obj.body_html|sanitize_email_html|default:item.obj.body_text }}
+          {% endif %}
+        </div>
+      </div>
+      {% empty %}
+      <div class="mail-empty"><i class="bi bi-chat-square"></i>لا توجد رسائل في هذا الخيط بعد</div>
+      {% endfor %}
+    </div>
+
+
+    <!-- ════ إعدادات البريد ════ -->
+    {% elif active_tab == 'settings' %}
+
+    <form method="post" id="settingsForm">
+      {% csrf_token %}
+
+      <!-- هوية المؤسسة -->
+      <div class="settings-section">
+        <div class="settings-section-title"><i class="bi bi-building" style="color:var(--warm-clay)"></i> هوية المؤسسة</div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="compose-label">اسم المؤسسة</label>
+            <input name="org_name" class="compose-input" value="{{ cfg.org_name }}">
+          </div>
+          <div class="col-md-6">
+            <label class="compose-label">بريد المؤسسة الرسمي (From)</label>
+            <input name="org_email" type="email" class="compose-input" value="{{ cfg.org_email }}" dir="ltr">
+          </div>
+          <div class="col-md-6">
+            <label class="compose-label">الرد على (Reply-To) — اختياري</label>
+            <input name="reply_to" type="email" class="compose-input" value="{{ cfg.reply_to }}" dir="ltr">
+          </div>
+          <div class="col-12">
+            <label class="compose-label">توقيع البريد (HTML)</label>
+            <textarea name="email_signature" class="compose-input" rows="3">{{ cfg.email_signature }}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- SMTP -->
+      <div class="settings-section">
+        <div class="settings-section-title"><i class="bi bi-send" style="color:var(--warm-clay)"></i> إعدادات SMTP (الإرسال)</div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="compose-label">خادم SMTP</label>
+            <input name="smtp_host" class="compose-input" value="{{ cfg.smtp_host }}" dir="ltr" placeholder="smtp.gmail.com">
+          </div>
+          <div class="col-md-2">
+            <label class="compose-label">المنفذ</label>
+            <input name="smtp_port" type="number" class="compose-input" value="{{ cfg.smtp_port }}" dir="ltr">
+          </div>
+          <div class="col-md-4 d-flex align-items-end gap-3">
+            <div class="form-check">
+              <input name="smtp_use_tls" type="checkbox" class="form-check-input" id="ckTLS" {% if cfg.smtp_use_tls %}checked{% endif %}>
+              <label class="form-check-label" for="ckTLS">TLS</label>
+            </div>
+            <div class="form-check">
+              <input name="smtp_use_ssl" type="checkbox" class="form-check-input" id="ckSSL" {% if cfg.smtp_use_ssl %}checked{% endif %}>
+              <label class="form-check-label" for="ckSSL">SSL</label>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="compose-label">المستخدم</label>
+            <input name="smtp_user" class="compose-input" value="{{ cfg.smtp_user }}" dir="ltr" autocomplete="off">
+          </div>
+          <div class="col-md-6">
+            <label class="compose-label">كلمة المرور</label>
+            <input name="smtp_password" type="password" class="compose-input" placeholder="اتركه فارغاً للإبقاء على القيمة الحالية" dir="ltr" autocomplete="new-password">
+          </div>
+          <div class="col-12">
+            <button type="button" class="settings-test-btn" onclick="testSMTP()">
+              <i class="bi bi-lightning me-1"></i>اختبار الاتصال SMTP
+            </button>
+            <span id="smtpTestResult" class="ms-2" style="font-size:.82rem"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- IMAP -->
+      <div class="settings-section">
+        <div class="settings-section-title"><i class="bi bi-inbox" style="color:var(--warm-clay)"></i> إعدادات IMAP (استقبال الردود)</div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="compose-label">خادم IMAP</label>
+            <input name="imap_host" class="compose-input" value="{{ cfg.imap_host }}" dir="ltr" placeholder="imap.gmail.com">
+          </div>
+          <div class="col-md-2">
+            <label class="compose-label">المنفذ</label>
+            <input name="imap_port" type="number" class="compose-input" value="{{ cfg.imap_port }}" dir="ltr">
+          </div>
+          <div class="col-md-4 d-flex align-items-end gap-3">
+            <div class="form-check">
+              <input name="imap_use_ssl" type="checkbox" class="form-check-input" id="ckImapSSL" {% if cfg.imap_use_ssl %}checked{% endif %}>
+              <label class="form-check-label" for="ckImapSSL">SSL</label>
+            </div>
+            <div class="form-check">
+              <input name="imap_sync_enabled" type="checkbox" class="form-check-input" id="ckImapSync" {% if cfg.imap_sync_enabled %}checked{% endif %}>
+              <label class="form-check-label" for="ckImapSync">مزامنة تلقائية</label>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="compose-label">المستخدم</label>
+            <input name="imap_user" class="compose-input" value="{{ cfg.imap_user }}" dir="ltr" autocomplete="off">
+          </div>
+          <div class="col-md-4">
+            <label class="compose-label">كلمة المرور</label>
+            <input name="imap_password" type="password" class="compose-input" placeholder="اتركه فارغاً للإبقاء" dir="ltr" autocomplete="new-password">
+          </div>
+          <div class="col-md-2">
+            <label class="compose-label">المجلد</label>
+            <input name="imap_folder" class="compose-input" value="{{ cfg.imap_folder }}" dir="ltr">
+          </div>
+          <div class="col-12">
+            <button type="button" class="settings-test-btn" onclick="testIMAP()">
+              <i class="bi bi-lightning me-1"></i>اختبار الاتصال IMAP
+            </button>
+            <span id="imapTestResult" class="ms-2" style="font-size:.82rem"></span>
+            {% if cfg.imap_last_sync %}
+            <span class="ms-3" style="font-size:.75rem;color:var(--muted-brown)">
+              آخر مزامنة: {{ cfg.imap_last_sync|date:"Y/m/d H:i" }}
+            </span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- تفعيل -->
+      <div class="settings-section">
+        <div class="settings-section-title"><i class="bi bi-toggle-on" style="color:var(--warm-clay)"></i> التفعيل</div>
+        <div class="d-flex gap-4 flex-wrap">
+          <div class="form-check form-switch">
+            <input name="is_active" type="checkbox" class="form-check-input" id="ckActive" {% if cfg.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="ckActive">تفعيل إرسال البريد</label>
+          </div>
+          <div class="form-check form-switch">
+            <input name="send_on_save" type="checkbox" class="form-check-input" id="ckAutoSend" {% if cfg.send_on_save %}checked{% endif %}>
+            <label class="form-check-label" for="ckAutoSend">إرسال تلقائي عند حفظ كتاب</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-1">
+        <button type="submit" class="btn" style="background:var(--warm-clay);color:#fff;border-radius:8px;font-weight:700;font-size:.88rem;padding:.5rem 1.5rem">
+          <i class="bi bi-save me-1"></i>حفظ الإعدادات
+        </button>
+      </div>
+    </form>
+
+
+    <!-- ════ القوالب ════ -->
+    {% elif active_tab == 'templates' %}
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <strong style="color:var(--deep-brown)">قوالب الإيميلات</strong>
+      <a href="{% url 'mail_template_new' %}" class="btn btn-sm"
+         style="background:var(--warm-clay);color:#fff;border-radius:8px;font-weight:700;font-size:.82rem">
+        <i class="bi bi-plus-circle me-1"></i>قالب جديد
+      </a>
+    </div>
+
+    {% for tpl in templates %}
+    <div class="template-card">
+      <div class="flex-grow-1">
+        <div class="template-card-name">{{ tpl.name }}
+          {% if not tpl.is_active %}<span class="mail-status failed" style="margin-right:.5rem">معطّل</span>{% endif %}
+          {% if tpl.is_default %}<span class="mail-status open" style="margin-right:.5rem">افتراضي</span>{% endif %}
+        </div>
+        <div class="template-card-kind">
+          {{ tpl.slug }} &nbsp;|&nbsp;
+          {% if tpl.applicable_kind == 'any' %}كل الأنواع{% elif tpl.applicable_kind == 'incoming' %}وارد{% else %}صادر{% endif %}
+          &nbsp;|&nbsp; <span style="direction:ltr;display:inline">{{ tpl.subject_template|truncatechars:55 }}</span>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{% url 'mail_template_edit' tpl.pk %}" class="btn btn-sm"
+           style="border:1px solid var(--card-border);border-radius:7px;font-size:.78rem">
+          <i class="bi bi-pencil"></i>
+        </a>
+        <form method="post" action="{% url 'mail_template_delete' tpl.pk %}" onsubmit="return confirm('حذف القالب «{{ tpl.name }}»؟')">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm"
+                  style="border:1px solid #dc3545;color:#dc3545;border-radius:7px;font-size:.78rem">
+            <i class="bi bi-trash"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+    {% empty %}
+    <div class="mail-empty"><i class="bi bi-file-earmark-richtext"></i>لا توجد قوالب بعد</div>
+    {% endfor %}
+
+
+    <!-- ════ إنشاء / تعديل قالب ════ -->
+    {% elif active_tab == 'template_edit' %}
+
+    <div class="compose-card">
+      <h6 style="font-weight:800;color:var(--deep-brown);margin-bottom:1.25rem">
+        <i class="bi bi-file-earmark-richtext me-2" style="color:var(--warm-clay)"></i>
+        {% if instance %}تعديل القالب «{{ instance.name }}»{% else %}قالب جديد{% endif %}
+      </h6>
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="compose-label">اسم القالب <span style="color:#dc3545">*</span></label>
+            <input name="name" class="compose-input" value="{{ instance.name|default:'' }}" required>
+          </div>
+          <div class="col-md-3">
+            <label class="compose-label">المعرّف (slug) <span style="color:#dc3545">*</span></label>
+            <input name="slug" class="compose-input" value="{{ instance.slug|default:'' }}" dir="ltr" required>
+            <div class="compose-hint">أحرف إنجليزية وشرطات فقط</div>
+          </div>
+          <div class="col-md-3">
+            <label class="compose-label">يُطبَّق على</label>
+            <select name="applicable_kind" class="compose-input">
+              {% for val, lbl in KIND_CHOICES %}
+              <option value="{{ val }}" {% if instance.applicable_kind == val %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="compose-label">موضوع الإيميل <span style="color:#dc3545">*</span></label>
+            <input name="subject_template" class="compose-input" value="{{ instance.subject_template|default:'' }}" required>
+            <div class="compose-hint">متغيرات: &#123;&#123; book.our_number &#125;&#125; &#123;&#123; book.title &#125;&#125; &#123;&#123; entity.name &#125;&#125;</div>
+          </div>
+          <div class="col-12">
+            <label class="compose-label">نص الرسالة (HTML) <span style="color:#dc3545">*</span></label>
+            <textarea name="body_html" class="compose-input compose-body-editor" required>{{ instance.body_html|default:'' }}</textarea>
+            <div class="compose-hint">متغيرات: &#123;&#123; book.our_number &#125;&#125; &#123;&#123; entity.name &#125;&#125; &#123;&#123; user.get_full_name &#125;&#125;</div>
+          </div>
+          <div class="col-12 d-flex gap-3">
+            <div class="form-check">
+              <input name="is_active" type="checkbox" class="form-check-input" id="ckTplActive" {% if instance.is_active or not instance %}checked{% endif %}>
+              <label class="form-check-label" for="ckTplActive">مفعّل</label>
+            </div>
+            <div class="form-check">
+              <input name="is_default" type="checkbox" class="form-check-input" id="ckTplDefault" {% if instance.is_default %}checked{% endif %}>
+              <label class="form-check-label" for="ckTplDefault">افتراضي لهذا النوع</label>
+            </div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="btn" style="background:var(--warm-clay);color:#fff;border-radius:8px;font-weight:700;font-size:.88rem">
+            <i class="bi bi-save me-1"></i>حفظ القالب
+          </button>
+          <a href="{% url 'mail_templates' %}" class="btn btn-outline-secondary" style="border-radius:8px;font-size:.88rem">إلغاء</a>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+
+  </div>{# end mail-content #}
+</div>
+
+<!-- Modal معاينة الإيميل -->
+<div class="modal fade" id="emailPreviewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="border-radius:14px">
+      <div class="modal-header" style="background:rgba(248,218,192,.4);border-bottom:1px solid var(--card-border)">
+        <h6 class="modal-title fw-bold" style="color:var(--deep-brown)">معاينة الإيميل</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="emailPreviewBody" style="padding:1.5rem;min-height:200px">
+        <div class="text-center text-muted py-4"><i class="bi bi-hourglass-split"></i> جارٍ التحميل...</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+// ═════════════════════════════════════════════
+//  JavaScript لقسم البريد
+// ═════════════════════════════════════════════
+
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+// ── Toast ──
+function showToast(msg, ok = true) {
+  if (window.ToastCenter && typeof window.ToastCenter.show === 'function') {
+    window.ToastCenter.show(ok ? 'success' : 'error', msg, {
+      title: ok ? 'تمت العملية' : 'تعذر إكمال العملية',
+      delay: ok ? 3500 : 5500,
+    });
+    return;
+  }
+
+  alert(msg);
+}
+
+// ── إرسال رسالة ──
+async function sendMail(e) {
+  e.preventDefault();
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جارٍ الإرسال...';
+
+  const payload = {
+    to:          document.getElementById('f_to')?.value?.trim(),
+    cc:          document.getElementById('f_cc')?.value?.trim(),
+    subject:     document.getElementById('f_subject')?.value?.trim(),
+    body:        document.getElementById('f_body')?.value?.trim(),
+    book_id:     document.getElementById('f_book_id')?.value || null,
+    entity_id:   document.getElementById('f_entity_id')?.value || null,
+    template_id: document.getElementById('f_template_id')?.value || null,
+  };
+
+  try {
+    const res = await fetch('{% url "mail-api-compose" %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('تم الإرسال بنجاح ✓');
+      document.getElementById('composeForm')?.reset();
+      if (data.thread_id) {
+        setTimeout(() => { window.location = `/books/mail/thread/${data.thread_id}/`; }, 1400);
+      }
+    } else {
+      showToast(data.message || 'حدث خطأ', false);
+    }
+  } catch(err) {
+    showToast('خطأ في الاتصال', false);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send me-1"></i>إرسال';
+  }
+}
+
+// ── تحميل قالب ──
+async function loadTemplate(tplId, bookId, entityId) {
+  document.getElementById('f_template_id').value = tplId;
+  const params = new URLSearchParams();
+  if (bookId)   params.set('book_id',   bookId);
+  if (entityId) params.set('entity_id', entityId);
+  const res  = await fetch(`/books/mail/api/template/${tplId}/preview/?${params}`);
+  const data = await res.json();
+  if (data.success) {
+    if (document.getElementById('f_subject')) document.getElementById('f_subject').value = data.subject;
+    if (document.getElementById('f_body'))    document.getElementById('f_body').value    = data.body;
+    showToast('تم تحميل القالب');
+  }
+}
+
+// ── اختيار الجهة ──
+function onEntityChange(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  const email = opt.dataset.email || '';
+  document.getElementById('f_entity_id').value = opt.value;
+  if (email && document.getElementById('f_to')) document.getElementById('f_to').value = email;
+}
+
+// ── معاينة compose ──
+function previewCompose() {
+  const body = document.getElementById('f_body')?.value || '';
+  const subj = document.getElementById('f_subject')?.value || '';
+  const modal = new bootstrap.Modal(document.getElementById('emailPreviewModal'));
+  document.getElementById('emailPreviewBody').innerHTML = `
+    <div class="mb-2"><strong>الموضوع:</strong> ${subj}</div>
+    <hr>
+    <div>${body}</div>`;
+  modal.show();
+}
+
+// ── معاينة سجل مرسل ──
+async function previewEmail(logId) {
+  const modal = new bootstrap.Modal(document.getElementById('emailPreviewModal'));
+  document.getElementById('emailPreviewBody').innerHTML = '<div class="text-center py-4"><span class="spinner-border"></span></div>';
+  modal.show();
+  // جلب من API سجل الإيميل الموجود
+  try {
+    const res  = await fetch(`/books/api/email/logs/0/?log_id=${logId}`);
+    const data = await res.json();
+    if (data.logs && data.logs.length) {
+      const l = data.logs.find(x => x.id == logId) || data.logs[0];
+      document.getElementById('emailPreviewBody').innerHTML = `
+        <div class="mb-1"><strong>إلى:</strong> ${l.to_address}</div>
+        <div class="mb-2"><strong>الموضوع:</strong> ${l.subject}</div>
+        <hr>${l.body_html || '<em>لا يوجد محتوى HTML</em>'}`;
+    } else {
+      document.getElementById('emailPreviewBody').innerHTML = '<p class="text-muted">لا يمكن تحميل المحتوى</p>';
+    }
+  } catch { document.getElementById('emailPreviewBody').innerHTML = '<p class="text-danger">خطأ في التحميل</p>'; }
+}
+
+// ── تحديد وارد كمقروء ──
+async function markRead(pk) {
+  await fetch(`/books/mail/api/inbox/${pk}/read/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': CSRF },
+  });
+}
+
+// ── مزامنة IMAP يدوية ──
+async function triggerSync() {
+  const btn = document.getElementById('syncBtn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جارٍ المزامنة...';
+  try {
+    const res  = await fetch('{% url "mail-api-inbox-sync" %}', { method: 'POST', headers: { 'X-CSRFToken': CSRF } });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`المزامنة اكتملت — ${data.new} رسالة جديدة`);
+      if (data.new > 0) setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast(data.message || 'فشل المزامنة', false);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>مزامنة الآن';
+  }
+}
+
+// ── تغيير حالة الخيط ──
+async function changeThreadStatus(threadId, status) {
+  const res  = await fetch(`/books/mail/api/thread/${threadId}/status/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ status }),
+  });
+  const data = await res.json();
+  showToast(data.success ? 'تم تحديث الحالة' : (data.message || 'خطأ'), data.success);
+}
+
+// ── اختبار SMTP ──
+async function testSMTP() {
+  const el = document.getElementById('smtpTestResult');
+  el.textContent = 'جارٍ الاختبار...';
+  el.style.color = 'var(--muted-brown)';
+  const res  = await fetch('{% url "mail-api-test-smtp" %}', { method: 'POST', headers: { 'X-CSRFToken': CSRF } });
+  const data = await res.json();
+  el.textContent = data.message;
+  el.style.color = data.success ? '#28a745' : '#dc3545';
+}
+
+// ── اختبار IMAP ──
+async function testIMAP() {
+  const el = document.getElementById('imapTestResult');
+  el.textContent = 'جارٍ الاختبار...';
+  el.style.color = 'var(--muted-brown)';
+  const res  = await fetch('{% url "mail-api-test-imap" %}', { method: 'POST', headers: { 'X-CSRFToken': CSRF } });
+  const data = await res.json();
+  el.textContent = data.message;
+  el.style.color = data.success ? '#28a745' : '#dc3545';
+}
+</script>
+{% endblock %}

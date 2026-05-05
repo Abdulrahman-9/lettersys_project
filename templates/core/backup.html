@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}النسخ الاحتياطي لقواعد البيانات{% endblock %}
+
+{% block page_sidebar %}
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">معلومات النسخ</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">المسار الحالي</div>
+        <strong>قاعدة البيانات</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-database"></i> تشغيل</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">عدد النسخ المتوفرة</div>
+        <strong>{{ existing_backups|length|default:0 }}</strong>
+      </div>
+      <span class="app-context-chip"><i class="bi bi-archive"></i> محفوظ</span>
+    </div>
+  </div>
+</div>
+
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">اختصارات</div>
+  <div class="app-context-list">
+    <a class="app-context-link" href="{% url 'dashboard' %}">
+      <span>العودة للوحة التحكم</span>
+      <i class="bi bi-grid-1x2"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0">
+  <div class="card-header bg-white">
+    <h5 class="mb-0">إنشاء نسخة احتياطية لقاعدة البيانات</h5>
+  </div>
+  <div class="card-body">
+    <p class="text-muted mb-4">
+      قاعدة PostgreSQL الحالية:
+      <code>{{ database_name }}@{{ database_host }}:{{ database_port }}</code>
+    </p>
+    <form method="post" class="row g-3">
+      {% csrf_token %}
+      <div class="col-12 col-md-7">
+        <label class="form-label">مسار الحفظ</label>
+        <input class="form-control" type="text" name="target_directory" value="{{ default_directory }}">
+        <div class="form-text">ضع مسار مجلد النسخ الاحتياطي (سيُنشأ تلقائياً إن لم يكن موجوداً).</div>
+      </div>
+      <div class="col-12 col-md-5">
+        <label class="form-label">اسم الملف الاحتياطي</label>
+        <input class="form-control" type="text" name="file_name" value="{{ suggested_name }}">
+        <div class="form-text">سيتم إنشاء dump بصيغة PostgreSQL ثم تشفيره بامتداد .dump.enc.</div>
+      </div>
+      <div class="col-12 text-end">
+        <button class="btn btn-brand px-4" type="submit">إنشاء النسخة الاحتياطية</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if existing_backups %}
+<div class="card shadow-sm border-0 mt-4">
+  <div class="card-header bg-white">
+    <h6 class="mb-0">النسخ الاحتياطية المتوفرة في المسار الافتراضي</h6>
+  </div>
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>اسم الملف</th>
+          <th>الحجم (MB)</th>
+          <th>تاريخ التعديل</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for backup in existing_backups %}
+        <tr>
+          <td>{{ backup.name }}</td>
+          <td>{{ backup.size_mb }} م.ب</td>
+          <td>{{ backup.modified|date:"Y-m-d H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

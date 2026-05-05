@@ -1,0 +1,907 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}استخراج ذكي - نظام متقدم{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260504">
+{% endblock %}
+{% block content %}
+<!-- CSRF Token (hidden but available for JS) -->
+{% csrf_token %}
+
+{# ── شريط رأس مدمج (يحلّ بصرياً محل الشريط العلوي المُلغى في وضع التطبيق) ── #}
+<div class="app-page-header">
+    <div class="brand">
+        <img src="{% static 'img/md-o-c-logo.png' %}" alt="الشركة">
+        <span>نظام الكتب</span>
+    </div>
+    <div class="header-divider"></div>
+    <div class="header-title">
+        <i class="bi bi-upc-scan me-1"></i>الإدخال الذكي
+    </div>
+    <div class="header-spacer"></div>
+    {% if request.user.is_authenticated %}
+    <a class="header-action" href="{% url 'notifications' %}" title="التنبيهات">
+        <i class="bi bi-bell"></i>
+        <span>التنبيهات</span>
+        {% if navbar_unread_notifications %}<span style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:800;">{{ navbar_unread_notifications }}</span>{% endif %}
+    </a>
+    <div class="header-user">
+        <i class="bi bi-person-circle"></i>
+        <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+    </div>
+    {% endif %}
+</div>
+
+<div
+    class="extraction-container"
+    data-initial-kind="{{ initial_kind }}"
+    data-scan-capture-endpoint="{% url 'scan_capture_api' %}"
+    data-smart-extract-endpoint="{% url 'ai_smart_extract' %}"
+    data-entity-list-endpoint="{% url 'entity-list-api' %}"
+    data-suggestions-endpoint="{% url 'ai_suggestions' %}"
+    data-save-book-endpoint="{% url 'save-book-api' %}"
+    data-next-number-endpoint="{% url 'next-number-api' %}"
+    data-reservation-reserve-endpoint="{% url 'reservation-reserve' %}"
+    data-reservation-void-endpoint="{% url 'reservation-void' %}"
+    data-reservation-status-endpoint="{% url 'reservation-status' %}"
+    data-settings-url="{% url 'sequence_settings' %}"
+>
+    <!-- الجانب الأيسر: نماذج الإدخال -->
+    <div class="extraction-form-panel">
+        <!-- input file مخفي -->
+        <input type="file" id="fileInput" style="display: none;" accept="image/*,.pdf">
+        <!-- شارة الملف القديمة منقولة لرأس المعاينة (modal-header) — يُبقى فقط fileName/fileSize/scanPagesCount مخفية للتوافق -->
+        <div id="filePreview" style="display: none;">
+            <span id="fileIcon">📄</span>
+            <span id="fileName"></span>
+            <span id="fileSize"></span>
+            <span id="scanPagesCount"></span>
+            <button type="button" id="clearFile"></button>
+        </div>
+
+        <!-- 🚨 بانر تحذير: استخراج بيانات افتراضية (fallback) -->
+        <div id="fallbackBanner" class="fallback-banner" style="display: none;" role="alert" aria-live="polite">
+            <span class="fallback-banner-icon">⚠️</span>
+            <div class="fallback-banner-content">
+                <div class="fallback-banner-title">بيانات افتراضية — راجعها يدوياً قبل الحفظ</div>
+                <div class="fallback-banner-sub" id="fallbackBannerReason">خدمة الذكاء الاصطناعي غير متاحة الآن</div>
+            </div>
+            <button type="button" class="fallback-banner-close" id="fallbackBannerClose" title="إخفاء">×</button>
+        </div>
+
+        <!-- شبكة النماذج بـ 3 أعمدة -->
+        <div class="extraction-form-grid">
+            <!-- ===== تبويبات التصنيف ===== -->
+            <div class="kind-tabs-wrapper">
+                <div class="kind-tabs" id="kindTabs">
+                    <button type="button" class="kind-tab" data-kind="incoming_internal">
+                        <span class="kind-tab-dot"></span>
+                        <span class="kind-tab-label">وارد داخلي</span>
+                        <span class="kind-tab-number" id="tabNum_incoming_internal">—</span>
+                    </button>
+                    <button type="button" class="kind-tab" data-kind="incoming_external">
+                        <span class="kind-tab-dot"></span>
+                        <span class="kind-tab-label">وارد خارجي</span>
+                        <span class="kind-tab-number" id="tabNum_incoming_external">—</span>
+                    </button>
+                    <button type="button" class="kind-tab" data-kind="outgoing_internal">
+                        <span class="kind-tab-dot"></span>
+                        <span class="kind-tab-label">صادر داخلي</span>
+                        <span class="kind-tab-number" id="tabNum_outgoing_internal">—</span>
+                    </button>
+                    <button type="button" class="kind-tab" data-kind="outgoing_external">
+                        <span class="kind-tab-dot"></span>
+                        <span class="kind-tab-label">صادر خارجي</span>
+                        <span class="kind-tab-number" id="tabNum_outgoing_external">—</span>
+                    </button>
+                </div>
+                <a href="{% url 'sequence_settings' %}" class="kind-tabs-settings" title="إعدادات العدّادات">
+                    <i class="bi bi-gear"></i>
+                </a>
+            </div>
+
+            <select class="form-control-smart" id="bookKind" style="display:none;">
+                <option value="incoming_internal" {% if initial_kind == 'incoming_internal' %}selected{% endif %}>📥 وارد داخلي</option>
+                <option value="incoming_external" {% if initial_kind == 'incoming_external' %}selected{% endif %}>📬 وارد خارجي</option>
+                <option value="outgoing_internal" {% if initial_kind == 'outgoing_internal' %}selected{% endif %}>📤 صادر داخلي</option>
+                <option value="outgoing_external" {% if initial_kind == 'outgoing_external' %}selected{% endif %}>🌍 صادر خارجي</option>
+            </select>
+
+            <div class="desktop-workbench">
+                <!-- قسم الكتاب الأساسي -->
+                <div class="form-section form-section-double">
+                    <div class="form-section-title">
+                        <span class="form-section-icon">📚</span>
+                        بيانات الكتاب الأساسية
+                    </div>
+
+                    <div class="field-grid-two">
+                        <div class="form-group-smart">
+                            <div class="label-with-confidence">
+                                <label class="field-label" id="bookNumberLabel">
+                                    رقمنا
+                                    <span class="field-required">*</span>
+                                </label>
+                                <span class="confidence-badge high" id="bookNumberConfidence" style="display: none;">
+                                    <span class="confidence-indicator" style="background: #16a34a;"></span>
+                                    <span id="bookNumberConfidenceValue">95%</span>
+                                </span>
+                            </div>
+                            <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
+                            <div class="input-hint" id="bookNumberHint">
+                                رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.
+                                <span class="network-lock-chip" title="الحجز الشبكي للأرقام الفريدة مفعل">
+                                    <i class="bi bi-shield-lock"></i>حجز شبكي مفعل
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="form-group-smart" id="senderNumberGroup">
+                            <label class="field-label" id="senderNumberLabel">رقم الجهة المرسلة</label>
+                            <input type="text" class="form-control-smart" id="senderNumber" placeholder="مثال: 241/و">
+                            <div class="input-hint" id="senderNumberHint">يظهر هذا الحقل في الوارد لتوثيق رقم الجهة الخارجية أو الداخلية.</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group-smart">
+                        <div class="label-with-confidence">
+                            <label class="field-label">
+                                العنوان
+                                <span class="field-required">*</span>
+                            </label>
+                            <span class="confidence-badge high" id="titleConfidence" style="display: none;">
+                                <span class="confidence-indicator" style="background: #16a34a;"></span>
+                                <span id="titleConfidenceValue">92%</span>
+                            </span>
+                        </div>
+                        <input type="text" class="form-control-smart" id="title" placeholder="موضوع الكتاب أو خلاصة المراسلة">
+                        <div class="input-hint">اكتب عنواناً واضحاً يسهل البحث عنه لاحقاً في الأرشيف.</div>
+                    </div>
+
+                    <div class="field-grid-two">
+                        <div class="form-group-smart">
+                            <div class="label-with-confidence">
+                                <label class="field-label" id="dateLabel">
+                                    تاريخنا
+                                    <span class="field-required">*</span>
+                                </label>
+                                <span class="confidence-badge medium" id="dateConfidence" style="display: none;">
+                                    <span class="confidence-indicator" style="background: #d97706;"></span>
+                                    <span id="dateConfidenceValue">78%</span>
+                                </span>
+                            </div>
+                            <div class="date-input-row">
+                                <input type="date" class="form-control-smart" id="date" disabled tabindex="-1">
+                                <label class="date-edit-toggle" title="تفعيل تعديل التاريخ">
+                                    <input type="checkbox" id="dateEditToggle">
+                                    <span class="toggle-icon">✏️</span>
+                                </label>
+                            </div>
+                            <div class="input-hint" id="dateHint">تاريخ القيد — اضغط على أيقونة التعديل لتغييره.</div>
+                        </div>
+
+                        <div class="form-group-smart" id="senderDateGroup">
+                            <label class="field-label" id="senderDateLabel">تاريخ الجهة المرسلة</label>
+                            <input type="date" class="form-control-smart" id="senderDate">
+                            <div class="input-hint" id="senderDateHint">لتوثيق تاريخ الكتاب لدى الجهة التي أرسلته.</div>
+                        </div>
+                    </div>
+
+                    <div class="followup-card" id="followupCard">
+                        <div class="followup-card-header">
+                            <div>
+                                <div class="followup-card-title">المتابعة والإنجاز</div>
+                                <p class="followup-card-copy">فعّل المتابعة إذا كان الكتاب يحتاج موعد إنجاز أو مراجعة لاحقة.</p>
+                            </div>
+                            <input type="checkbox" id="needsFollowup" class="followup-switch">
+                        </div>
+                        <div class="form-group-smart is-hidden" id="dueDateGroup" style="margin-bottom: 0;">
+                            <label class="field-label">تاريخ المتابعة</label>
+                            <input type="date" class="form-control-smart" id="dueDate">
+                            <div class="input-hint" id="dueDateHint">إذا تُرك فارغاً سيتم اقتراح موعد بعد 7 أيام من تاريخنا.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="desktop-sidebar-stack">
+                    <!-- قسم الجهات -->
+                    <div class="form-section form-section-single">
+                        <div class="form-section-title">
+                            <span class="form-section-icon">🏢</span>
+                            الجهات المرتبطة
+                        </div>
+
+                        <div class="form-group-smart">
+                            <label class="field-label">
+                                جهة الإصدار
+                                <span class="field-required">*</span>
+                                <small class="text-muted">(يمكن إضافة أكثر من جهة)</small>
+                            </label>
+                            <div class="entity-input-container" style="position: relative;">
+                                <div class="multi-tag-wrapper" id="issuingTagWrapper">
+                                    <input type="text" class="tag-text-input" id="issuingEntity"
+                                           placeholder="اكتب اسم الجهة أو رمزها ثم Enter..." autocomplete="off">
+                                </div>
+                                <div class="entity-dropdown-container" id="issuingEntityDropdown" style="
+                                    position: absolute; top: 100%; left: 0; right: 0;
+                                    background: white; border: 1px solid #e2e8f0;
+                                    border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                    max-height: 250px; overflow-y: auto; z-index: 1000;
+                                    display: none; margin-top: 8px;
+                                "></div>
+                            </div>
+                        </div>
+
+                        <div class="form-group-smart">
+                            <label class="field-label">
+                                جهة الاستقبال
+                                <span class="field-required">*</span>
+                                <small class="text-muted">(يمكن إضافة أكثر من جهة)</small>
+                            </label>
+                            <div class="entity-input-container" style="position: relative;">
+                                <div class="multi-tag-wrapper" id="receivingTagWrapper">
+                                    <input type="text" class="tag-text-input" id="receivingEntity"
+                                           placeholder="اكتب اسم الجهة أو رمزها ثم Enter..." autocomplete="off">
+                                </div>
+                                <div class="entity-dropdown-container" id="receivingEntityDropdown" style="
+                                    position: absolute; top: 100%; left: 0; right: 0;
+                                    background: white; border: 1px solid #e2e8f0;
+                                    border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                    max-height: 250px; overflow-y: auto; z-index: 1000;
+                                    display: none; margin-top: 8px;
+                                "></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- قسم الخصائص -->
+                    <div class="form-section form-section-single">
+                        <div class="form-section-title">
+                            <span class="form-section-icon">⚙️</span>
+                            الخصائص والأرشفة
+                        </div>
+
+                        <div class="form-group-smart">
+                            <label class="field-label">🔒 مستوى السرية</label>
+                            <select class="form-control-smart" id="secretLevel" data-default="normal">
+                                <option value="normal" selected>🔓 اعتيادي</option>
+                                <option value="secret">🔒 سري</option>
+                                <option value="topsecret">🔐 سري للغاية</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group-smart">
+                            <label class="field-label">📌 نوع المستند</label>
+                            <select class="form-control-smart" id="documentTypeSelect" aria-label="نوع المستند"></select>
+                            <input type="text" class="form-control-smart mt-2" id="documentTypeCustom"
+                                   placeholder="أدخل نوعاً جديداً غير موجود في القائمة"
+                                   maxlength="100" autocomplete="off" dir="auto"
+                                   style="display:none;">
+                            <div class="input-hint" id="documentTypeHint">يُختار النوع الافتراضي تلقائياً حسب التبويب الحالي، ويمكنك تغييره أو إضافة نوع جديد.</div>
+                        </div>
+
+                        <div class="form-group-smart">
+                            <label class="field-label">📝 ملاحظات</label>
+                            <textarea class="form-control-smart" id="margin" placeholder="ملاحظات إضافية أو تعليمات أرشيفية" rows="6"></textarea>
+                            <div class="input-hint"><span id="charCount">0</span> / 1000</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- شريط الإجراءات الثابت -->
+        <div class="action-bar">
+            <div class="validation-indicator" id="validationIndicator">
+                <span class="validation-dot"></span>
+                <span id="validationText">ملء الحقول المطلوبة...</span>
+            </div>
+            <div style="flex-grow: 1;"></div>
+            <button type="button" class="btn-action-secondary" id="extractButton" title="إعادة استخراج البيانات من الملف يدوياً">
+                🔍 استخراج
+            </button>
+            <button type="button" class="btn-action-primary" id="saveButton" title="حفظ الكتاب في النظام">
+                ✓ حفظ الكتاب
+            </button>
+        </div>
+    </div>
+
+    <!-- الجانب الأيمن: المودال الدائم -->
+    <div class="extraction-preview-modal">
+        <div class="modal-header">
+            <div class="modal-header-title">
+                <i class="bi bi-file-earmark-text-fill"></i>
+                <span>معاينة المستند</span>
+            </div>
+            <div class="modal-header-fileinfo" id="modalFileInfo" style="display: none;">
+                <span class="modal-header-filename" id="modalFileName" title=""></span>
+                <span class="modal-header-filemeta" id="modalFileMeta"></span>
+            </div>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <div class="empty-state" id="dropZone" title="اضغط أو اسحب الملف هنا">
+                <div class="empty-state-icon">📄</div>
+                <div class="empty-state-text">اسحب الملف هنا أو اضغط للرفع</div>
+                <div class="empty-state-hint">PDF أو الصور (حتى 10MB) — أو استخدم زر "مسح من السكانر"</div>
+            </div>
+        </div>
+
+        <!-- شريط أزرار المسح الضوئي (محاذٍ لشريط الإجراءات في اللوحة اليسرى) -->
+        <div class="scan-action-bar">
+            <div class="scan-progress-inline" id="scanProgress" style="display: none;">
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                <span class="progress-message">جاري المسح...</span>
+            </div>
+            <div class="scan-action-bar-buttons">
+                <button type="button" class="btn-scan-action btn-scan-action-danger" id="clearScannedButton" style="display: none;" title="حذف الملف الممسوح وإعادة المسح">
+                    <i class="bi bi-trash3 me-1"></i>حذف
+                </button>
+                <button type="button" class="btn-scan-action btn-scan-action-secondary" id="scanMoreButton" style="display: none;" title="مسح صفحات إضافية ودمجها">
+                    <i class="bi bi-plus-circle me-1"></i>مسح المزيد
+                </button>
+                <button type="button" class="btn-scan-action btn-scan-action-upload" id="uploadFileButton" title="رفع ملف من جهازك (PDF أو صورة)">
+                    <i class="bi bi-cloud-arrow-up me-1"></i>رفع ملف
+                </button>
+                <button type="button" class="btn-scan-action btn-scan-action-primary {% if initial_kind_direction == 'incoming' %}is-incoming{% else %}is-outgoing{% endif %}" id="startScanButton" title="بدء المسح من السكانر">
+                    <i class="bi bi-upc-scan me-1"></i>مسح من السكانر
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="documentTypeCatalogData" type="application/json">{{ document_type_catalog_json|safe }}</script>
+<script id="documentTypeDefaultsData" type="application/json">{{ document_type_defaults_json|safe }}</script>
+
+<script src="{% static 'extraction_smart.js' %}?v=20260428-doc-type"></script>
+<script src="{% static 'keyboard_nav.js' %}"></script>
+<script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
+
+{# ── \u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0646\u0635 \u0627\u0644\u062a\u0646\u0628\u0624\u064a \u0639\u0644\u0649 \u062d\u0642\u0644 \u0627\u0644\u0639\u0646\u0648\u0627\u0646 ── #}
+<script>
+(function(){
+  'use strict';
+  function initTitleAC() {
+    const ta = document.getElementById('title');
+    if (!ta || !window.TitleAutocomplete) return;
+    if (ta.dataset.taBound) return;
+    ta.dataset.taBound = '1';
+    try {
+      new TitleAutocomplete(ta, {
+        kindGetter: () => document.getElementById('bookKind')?.value || ''
+      });
+      // حفظ العنوان في الـhistory المحلي عند نجاح الحفظ
+      const _saveBtn = document.getElementById('saveButton');
+      if (_saveBtn) {
+        _saveBtn.addEventListener('click', () => {
+          const v = ta.value && ta.value.trim();
+          if (v && v.length >= 4) TitleAutocomplete.saveToHistory(v);
+        });
+      }
+    } catch(e) { console.warn('TitleAutocomplete init failed:', e); }
+  }
+  if (document.readyState !== 'loading') initTitleAC();
+  else document.addEventListener('DOMContentLoaded', initTitleAC, { once: true });
+})();
+</script>
+
+{# ══════════════════════════════════════════════════════════════════ #}
+{# ── Multi-Entity Tag Input — يستبدل الحقل الأحادي بحقل متعدد الجهات ── #}
+{# ══════════════════════════════════════════════════════════════════ #}
+<script>
+(function() {
+  'use strict';
+
+  // ── EntityTagInput: نظام إدخال متعدد الجهات لكل حقل ──
+  class EntityTagInput {
+    constructor(opts) {
+      this.wrapper      = document.getElementById(opts.wrapperId);
+      this.input        = document.getElementById(opts.inputId);
+      this.dropdown     = document.getElementById(opts.dropdownId);
+      this.entityType   = opts.entityType;            // 'issuer' | 'receiver'
+      this.tags         = [];                         // [{id, name, code, isNew}]
+      this.highlightIdx = -1;
+      this.debounceTimer = null;
+      this._reqSeq = 0;
+      this._lastResults = [];
+      if (!this.wrapper || !this.input || !this.dropdown) return;
+      this._init();
+    }
+
+    _init() {
+      this.wrapper.addEventListener('click', e => {
+        if (e.target === this.wrapper) this.input.focus();
+      });
+
+      this.input.addEventListener('input', () => {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = setTimeout(() => this._search(this.input.value.trim()), 200);
+      });
+
+      this.input.addEventListener('keydown', e => {
+                const advance = () => setTimeout(() => window.extractionSystem?.handleCompositeFieldAdvance?.(this.input.id), 0);
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (this.highlightIdx >= 0) {
+            const items = this.dropdown.querySelectorAll('.entity-suggestion-item, .new-entity-option');
+            items[this.highlightIdx]?.click();
+                        advance();
+          } else if (this.input.value.trim()) {
+                        Promise.resolve(this._resolveOrCreate(this.input.value.trim())).finally(advance);
+                    } else {
+                        advance();
+          }
+                } else if (e.key === 'Tab' && !e.shiftKey && this.input.value.trim()) {
+                    e.preventDefault();
+                    Promise.resolve(this._resolveOrCreate(this.input.value.trim(), true)).finally(advance);
+        } else if (e.key === 'Backspace' && !this.input.value && this.tags.length) {
+          this.removeTag(this.tags.length - 1);
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault(); this._moveHighlight(1);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault(); this._moveHighlight(-1);
+        } else if (e.key === 'Escape') {
+          this._hideDropdown();
+        } else if (e.key === ',' || e.key === '،') {
+          // فاصلة كمحفّز للإضافة
+          if (this.input.value.trim()) {
+            e.preventDefault();
+            this._resolveOrCreate(this.input.value.trim());
+          }
+        }
+      });
+
+      this.input.addEventListener('blur', () => setTimeout(() => this._hideDropdown(), 200));
+
+      // عندما يملأ الـ AI الحقل قيمةً نصيّة — حوّلها تلقائياً إلى وسم
+      this.input.addEventListener('change', () => {
+        const v = this.input.value.trim();
+        if (v && this.tags.length === 0) {
+          // محاولة المطابقة مع جهة موجودة
+          this._resolveOrCreate(v, /*silent*/ true);
+        }
+      });
+    }
+
+    _resolveOrCreate(query, silent = false) {
+      const q = query.toLowerCase();
+      // جرّب أولاً من النتائج الأخيرة
+      const exact = (this._lastResults || []).find(r =>
+        (r.name||'').toLowerCase() === q || (r.code||'').toLowerCase() === q
+      );
+            if (exact) { this.addEntity(exact); return Promise.resolve(exact); }
+      // ثمّ ابحث على السيرفر للتأكد من عدم وجود مطابقة دقيقة
+            return fetch(`/books/api/search/entities/?q=${encodeURIComponent(query)}&limit=8`,
+            { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.ok ? r.json() : { results: [] })
+        .then(data => {
+          const found = (data.results || []).find(r =>
+            (r.text||r.name||'').toLowerCase() === q || (r.code||'').toLowerCase() === q
+          );
+          if (found) {
+            this.addEntity({ id: found.id, name: found.text || found.name, code: found.code || '' });
+          } else {
+            this.addNewEntity(query);
+          }
+        })
+                .catch(() => this.addNewEntity(query));
+    }
+
+    async _search(query) {
+      if (!query) { this._hideDropdown(); return; }
+      const q = query.toLowerCase();
+      const existingIds = new Set(this.tags.filter(t => t.id).map(t => t.id));
+      let matches = [];
+
+      const reqId = ++this._reqSeq;
+      try {
+        const resp = await fetch(`/books/api/search/entities/?q=${encodeURIComponent(query)}&limit=10`,
+                                 { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (reqId !== this._reqSeq) return;
+        if (resp.ok) {
+          const data = await resp.json();
+          matches = (data.results || [])
+            .filter(r => !existingIds.has(r.id))
+            .map(r => ({ id: r.id, name: r.text || r.name, code: r.code || '' }))
+            .slice(0, 8);
+        }
+      } catch(_) {}
+
+      this._lastResults = matches;
+      this.dropdown.replaceChildren();
+      this.highlightIdx = -1;
+
+      matches.forEach((entity, idx) => {
+        const item = document.createElement('div');
+        item.className = 'entity-suggestion-item';
+        item.dataset.idx = idx;
+        item.style.cssText = 'padding:10px 14px;border-bottom:1px solid #e2e8f0;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:white;';
+        const left = document.createElement('span');
+        left.textContent = entity.name || '';
+        const right = document.createElement('small');
+        right.style.cssText = 'color:#64748b;font-size:0.78rem;';
+        right.textContent = entity.code ? `[${entity.code}]` : '';
+        item.appendChild(left); item.appendChild(right);
+        item.addEventListener('mouseenter', () => { this.highlightIdx = idx; this._updateHighlight(); item.style.background='#f0f9ff'; });
+        item.addEventListener('mouseleave', () => { item.style.background = 'white'; });
+        item.addEventListener('mousedown', e => { e.preventDefault(); this.addEntity(entity); });
+        this.dropdown.appendChild(item);
+      });
+
+      // خيار الإنشاء الجديد إن لم تكن هناك مطابقة دقيقة
+      const existingNames = new Set(this.tags.map(t => t.name.toLowerCase()));
+      const exactMatch = matches.some(e =>
+        (e.name||'').toLowerCase() === q || (e.code||'').toLowerCase() === q
+      );
+      if (!exactMatch && !existingNames.has(q)) {
+        const newItem = document.createElement('div');
+        newItem.className = 'entity-suggestion-item new-entity-option';
+        newItem.style.cssText = 'padding:10px 14px;cursor:pointer;background:#f0fdf4;color:#059669;font-weight:500;';
+        newItem.textContent = `➕ إضافة "${query}" كجهة جديدة`;
+        newItem.dataset.idx = matches.length;
+        newItem.addEventListener('mouseenter', () => { this.highlightIdx = matches.length; this._updateHighlight(); });
+        newItem.addEventListener('mousedown', e => { e.preventDefault(); this.addNewEntity(query); });
+        this.dropdown.appendChild(newItem);
+      }
+
+      this.dropdown.style.display = this.dropdown.children.length ? 'block' : 'none';
+    }
+
+    addEntity(entity) {
+      if (!entity || !entity.id) return;
+      if (this.tags.some(t => t.id === entity.id)) { this._reset(); return; }
+      this.tags.push({ id: entity.id, name: entity.name, code: entity.code || '', isNew: false });
+      this._render(); this._reset();
+    }
+
+    addNewEntity(name) {
+      const clean = (name || '').replace(/<[^>]*>/g, '').replace(/javascript:/gi, '').trim();
+      if (!clean) return;
+      if (this.tags.some(t => t.name.toLowerCase() === clean.toLowerCase())) { this._reset(); return; }
+      this.tags.push({ id: null, name: clean, code: '', isNew: true });
+      this._render(); this._reset();
+    }
+
+    removeTag(idx) {
+      this.tags.splice(idx, 1);
+      this._render();
+      try { this.input.dispatchEvent(new Event('input', { bubbles: true })); } catch(e) {}
+      if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+    }
+
+    clear() { this.tags = []; this._render(); }
+
+    loadTags(arr) {
+      this.tags = (arr || []).map(t => ({ id: t.id, name: t.name, code: t.code || '', isNew: false }));
+      this._render();
+    }
+
+    getIds()   { return this.tags.filter(t => !t.isNew).map(t => t.id); }
+    getNames() { return this.tags.filter(t => t.isNew).map(t => t.name); }
+    count()    { return this.tags.length; }
+
+    _render() {
+      this.wrapper.querySelectorAll('.entity-tag').forEach(el => el.remove());
+      this.tags.forEach((tag, idx) => {
+        const badge = document.createElement('span');
+        badge.className = `entity-tag${tag.isNew ? ' new-entity' : ''}`;
+        const codeHtml = tag.code ? `<span class="tag-code">${tag.code.replace(/</g,'&lt;')}</span>` : '';
+        const nameHtml = (tag.name || '').replace(/</g,'&lt;');
+        badge.innerHTML = `${codeHtml}${nameHtml}${tag.isNew ? ' <small>(جديدة)</small>' : ''}
+          <button type="button" class="tag-remove" aria-label="حذف">&times;</button>`;
+        badge.querySelector('.tag-remove').addEventListener('click', e => {
+          e.stopPropagation(); this.removeTag(idx);
+        });
+        this.wrapper.insertBefore(badge, this.input);
+      });
+      this.wrapper.classList.toggle('has-error', this.tags.length === 0);
+    }
+
+    _moveHighlight(dir) {
+      const items = this.dropdown.querySelectorAll('.entity-suggestion-item, .new-entity-option');
+      if (!items.length) return;
+      this.highlightIdx = Math.max(-1, Math.min(items.length - 1, this.highlightIdx + dir));
+      this._updateHighlight();
+    }
+    _updateHighlight() {
+      this.dropdown.querySelectorAll('.entity-suggestion-item, .new-entity-option').forEach((el, i) => {
+        if (i === this.highlightIdx) {
+          el.style.outline = '2px solid #3b82f6'; el.style.background = '#dbeafe';
+        } else {
+          el.style.outline = 'none';
+          if (!el.classList.contains('new-entity-option')) el.style.background = 'white';
+        }
+      });
+    }
+    _hideDropdown() {
+      this.dropdown.style.display = 'none';
+      this.highlightIdx = -1;
+    }
+    _reset() {
+      this.input.value = '';
+      this._hideDropdown();
+      this.input.focus();
+      try { this.input.dispatchEvent(new Event('input', { bubbles: true })); } catch(e) {}
+      if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+    }
+  }
+
+  // ── إنشاء المُدير العام ──
+  window.entityTagManagers = {
+    issuing:   null,
+    receiving: null
+  };
+
+  function initEntityTagManagers() {
+    if (window.entityTagManagers.issuing) return;
+    window.entityTagManagers.issuing = new EntityTagInput({
+      wrapperId: 'issuingTagWrapper', inputId: 'issuingEntity',
+      dropdownId: 'issuingEntityDropdown', entityType: 'issuer'
+    });
+    window.entityTagManagers.receiving = new EntityTagInput({
+      wrapperId: 'receivingTagWrapper', inputId: 'receivingEntity',
+      dropdownId: 'receivingEntityDropdown', entityType: 'receiver'
+    });
+  }
+
+  // ──────────────────────────────────────────────────────
+  // ── Patch ExtractionSmartSystem prototype قبل الإنشاء ──
+  // ──────────────────────────────────────────────────────
+  if (typeof ExtractionSmartSystem !== 'undefined') {
+    // 1) إلغاء آلية الـ entity dropdown القديمة (سنبني خاصتنا)
+    ExtractionSmartSystem.prototype.setupEntityCodeRecognition = function() {
+      initEntityTagManagers();
+      console.log('[ExtractionSmart] ✓ Multi-tag entity input ready');
+    };
+
+    // 2) تعديل التحقق من الحقول: إن كان حقل جهة → فحص عدد الوسوم
+    const _origValidateField = ExtractionSmartSystem.prototype.validateField;
+    ExtractionSmartSystem.prototype.validateField = function(fieldId) {
+      if (fieldId === 'issuingEntity' || fieldId === 'receivingEntity') {
+        const mgrKey = fieldId === 'issuingEntity' ? 'issuing' : 'receiving';
+        const mgr = window.entityTagManagers && window.entityTagManagers[mgrKey];
+        const ok = !!(mgr && mgr.count() > 0);
+        const wrap = document.getElementById(fieldId === 'issuingEntity' ? 'issuingTagWrapper' : 'receivingTagWrapper');
+        if (wrap) wrap.classList.toggle('has-error', !ok);
+        return ok;
+      }
+      return _origValidateField ? _origValidateField.call(this, fieldId) : true;
+    };
+
+    // 3) تعديل applyExtractionResult: عند ملء الـ AI لقيمة جهة → حوّلها لوسم
+    const _origApplyExtraction = ExtractionSmartSystem.prototype.applyExtractionResult;
+    ExtractionSmartSystem.prototype.applyExtractionResult = function(data) {
+      // إذا كانت قيمة الجهة array → استخدم كل العناصر
+      const aiIssuing   = data.issuing_entity;
+      const aiReceiving = data.receiving_entity;
+      // ندع الأصل يملأ الحقل النصي ثم نحوّله لوسم بعد ذلك
+      if (_origApplyExtraction) _origApplyExtraction.call(this, data);
+      setTimeout(() => {
+        const mgrI = window.entityTagManagers?.issuing;
+        const mgrR = window.entityTagManagers?.receiving;
+        const tryAdd = (mgr, val) => {
+          if (!mgr || !val) return;
+          const items = Array.isArray(val) ? val : String(val).split(/[،,;]/);
+          items.forEach(v => {
+            const s = (v||'').trim();
+            if (s && !mgr.tags.some(t => t.name.toLowerCase() === s.toLowerCase())) {
+              mgr._resolveOrCreate(s, true);
+            }
+          });
+          // تنظيف الـ input النصي بعد التحويل
+          if (mgr.input) mgr.input.value = '';
+        };
+        tryAdd(mgrI, aiIssuing);
+        tryAdd(mgrR, aiReceiving);
+        if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+      }, 50);
+    };
+
+    // 4) تعديل saveBook: إرسال arrays بدل قيم مفردة
+    const _origSaveBook = ExtractionSmartSystem.prototype.saveBook;
+    ExtractionSmartSystem.prototype.saveBook = async function() {
+      // قبل البدء: إن كان هناك نص مُدخل ولم يُحوَّل لوسم بعد — حوّله الآن وانتظره.
+      // هذا يمنع فقدان الجهات الجديدة عند ضغط حفظ مباشرة دون Tab/Enter.
+      const pendingResolutions = ['issuing','receiving'].map(k => {
+        const mgr = window.entityTagManagers?.[k];
+        if (mgr && mgr.input && mgr.input.value.trim()) {
+          return Promise.resolve(mgr._resolveOrCreate(mgr.input.value.trim(), true));
+        }
+        return Promise.resolve();
+      });
+      try { await Promise.all(pendingResolutions); } catch(e) { console.warn('Pending entity flush failed:', e); }
+
+      // اعترض submitBookData لإضافة arrays قبل الإرسال
+      const _origSubmit = this.submitBookData.bind(this);
+      this.submitBookData = (formData) => {
+        // أزل القيم المفردة القديمة
+        formData.delete('issuing_entity');
+        formData.delete('receiving_entity');
+        // أضف arrays
+        const mgrI = window.entityTagManagers?.issuing;
+        const mgrR = window.entityTagManagers?.receiving;
+        (mgrI?.getIds()   || []).forEach(id => formData.append('issuing_entity_ids[]',   id));
+        (mgrI?.getNames() || []).forEach(n  => formData.append('issuing_entity_new[]',   n));
+        (mgrR?.getIds()   || []).forEach(id => formData.append('receiving_entity_ids[]', id));
+        (mgrR?.getNames() || []).forEach(n  => formData.append('receiving_entity_new[]', n));
+        // إعادة المرجع الأصلي للمستخدم القادم
+        this.submitBookData = _origSubmit;
+        return _origSubmit(formData);
+      };
+
+      return _origSaveBook.call(this);
+    };
+
+    // 5) عند المسح الذكي للنموذج بعد الحفظ — امسح الوسوم أيضاً
+    const _origSmartClear = ExtractionSmartSystem.prototype.smartClearAndStay;
+    if (_origSmartClear) {
+      ExtractionSmartSystem.prototype.smartClearAndStay = function(kind) {
+        window.entityTagManagers?.issuing?.clear();
+        window.entityTagManagers?.receiving?.clear();
+        return _origSmartClear.call(this, kind);
+      };
+    }
+  }
+
+  // تأكد من التهيئة لو نُفّذ السكربت بعد DOM ready
+  if (document.readyState !== 'loading') {
+    initEntityTagManagers();
+  } else {
+    document.addEventListener('DOMContentLoaded', initEntityTagManagers, { once: true });
+  }
+})();
+</script>
+<script>
+  // (أزرار التكبير/التصغير/الملاءمة أُزيلت — يكفي زر التنزيل في تذييل المعاينة)
+
+  // Form validation and indicator
+  function updateValidationIndicator() {
+    const bookNumber = document.getElementById('bookNumber')?.value?.trim();
+    const title = document.getElementById('title')?.value?.trim();
+    const date = document.getElementById('date')?.value;
+    const mgrI = window.entityTagManagers?.issuing;
+    const mgrR = window.entityTagManagers?.receiving;
+    const issuingOk   = !!(mgrI && mgrI.count() > 0);
+    const receivingOk = !!(mgrR && mgrR.count() > 0);
+
+    const filled = [bookNumber, title, date].filter(f => f).length
+                 + (issuingOk ? 1 : 0) + (receivingOk ? 1 : 0);
+    const totalRequired = 5;
+    const isFilled = filled === totalRequired;
+    
+    const indicator = document.getElementById('validationIndicator');
+    const text = document.getElementById('validationText');
+    const saveBtn = document.getElementById('saveButton');
+    
+    if (isFilled) {
+      indicator.classList.add('success');
+      indicator.classList.remove('pending');
+      text.textContent = `✓ جاهز للحفظ (${filled}/${totalRequired})`;
+      saveBtn.disabled = false;
+    } else {
+      indicator.classList.remove('success');
+      indicator.classList.add('pending');
+      text.textContent = `ملء الحقول المطلوبة: ${filled}/${totalRequired}`;
+      saveBtn.disabled = true;
+    }
+  }
+  
+  // Character counter for notes
+  function updateCharCount() {
+    const textarea = document.getElementById('margin');
+    const charCount = document.getElementById('charCount');
+    if (textarea && charCount) {
+      charCount.textContent = textarea.value.length;
+    }
+  }
+  
+  // File upload info display
+  function displayFileInfo(file) {
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const fileIcon = document.getElementById('fileIcon');
+    
+    if (fileName && fileSize) {
+      const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+      fileName.textContent = file.name;
+      fileSize.textContent = `${sizeInMB} MB`;
+      
+      // Set icon based on file type
+      if (file.type === 'application/pdf') {
+        fileIcon.textContent = '📕';
+      } else if (file.type.startsWith('image/')) {
+        fileIcon.textContent = '🖼️';
+      }
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    // Initialize keyboard navigation
+    const formContainer = document.querySelector('.extraction-form-panel');
+    
+    if (formContainer) {
+      window.keyboardNavigator = new AdvancedKeyboardNavigator({
+        formSelector: '.extraction-form-panel',
+        selectorsMap: {
+          'book_number': '#bookNumber',
+                    'sender_number': '#senderNumber',
+          'title': '#title',
+          'date': '#date',
+                    'sender_date': '#senderDate',
+          'due_date': '#dueDate',
+          'issuing_entity': '#issuingEntity',
+          'receiving_entity': '#receivingEntity',
+          'secret_level': '#secretLevel',
+                    'document_type': '#documentTypeSelect',
+                    'document_type_custom': '#documentTypeCustom',
+          'book_kind': '#bookKind',
+          'margin': '#margin'
+        },
+        submitCallback: function() {
+          document.getElementById('saveButton')?.click();
+        }
+      });
+    }
+    
+    // Add validation listeners
+    const validationFields = ['bookNumber', 'title', 'date', 'issuingEntity', 'receivingEntity'];
+    validationFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('change', updateValidationIndicator);
+        el.addEventListener('input', updateValidationIndicator);
+      }
+    });
+    
+    // Character counter
+    const textarea = document.getElementById('margin');
+    if (textarea) {
+      textarea.addEventListener('input', updateCharCount);
+    }
+    
+    // File display
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          displayFileInfo(e.target.files[0]);
+        }
+      });
+    }
+    
+    // Initial validation check
+    updateValidationIndicator();
+
+    // === Date field: default to today, disabled unless toggle checked ===
+    const dateField = document.getElementById('date');
+    const dateToggle = document.getElementById('dateEditToggle');
+    const senderDateField = document.getElementById('senderDate');
+    const todayISO = new Date().toISOString().split('T')[0];
+
+    // Set both dates to today on load
+    if (dateField && !dateField.value) {
+      dateField.value = todayISO;
+    }
+    if (senderDateField && !senderDateField.value) {
+      senderDateField.value = todayISO;
+    }
+
+    // Toggle: enable/disable date editing
+    if (dateToggle && dateField) {
+      dateToggle.addEventListener('change', function() {
+        if (this.checked) {
+          dateField.disabled = false;
+          dateField.removeAttribute('tabindex');
+          dateField.focus();
+        } else {
+          dateField.disabled = true;
+          dateField.tabIndex = -1;
+        }
+      });
+    }
+
+    console.log('[Extraction Form] Enhanced initialization complete');
+  });
+</script>{% endblock %}

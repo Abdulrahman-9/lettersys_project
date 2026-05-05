@@ -1,0 +1,54 @@
+Django==4.2.14
+openpyxl==3.1.2
+Pillow==10.3.0
+django-ratelimit==4.1.0
+cryptography==46.0.3
+pypdf==5.2.0
+PyPDF2==3.0.1
+python-magic==0.4.27
+djangorestframework==3.14.0
+
+# ===================================
+# Database (PostgreSQL + Full-Text Search)
+# ===================================
+psycopg2-binary>=2.9.0
+
+# ===================================
+# Caching & Performance (للبحث السريع)
+# ===================================
+redis>=5.0.0
+django-redis>=5.4.0
+
+# ===================================
+# AI & Machine Learning Libraries
+# ===================================
+
+# OCR
+easyocr>=1.6.0
+pytesseract>=0.3.10
+
+# NLP & Text Processing
+spacy>=3.5.0
+fuzzywuzzy>=0.18.0
+python-Levenshtein>=0.23.0
+
+# Image Processing
+opencv-python>=4.8.0
+numpy>=1.24.0
+Pillow>=10.0.0
+
+# PDF Processing
+PyMuPDF>=1.23.0
+
+# Date Parsing
+python-dateutil>=2.8.2
+
+# Async Tasks
+celery>=5.3.0
+redis>=5.0.0
+
+# Additional
+requests>=2.31.0
+
+# HTML Sanitization (حماية XSS في عرض محتوى البريد الخارجي)
+bleach>=6.1.0

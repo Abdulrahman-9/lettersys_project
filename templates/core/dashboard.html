@@ -1,0 +1,355 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}لوحة التحكم{% endblock %}
+
+{% block extra_head %}
+<style>
+  .stat-card {
+    border-radius: 16px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: none;
+    overflow: hidden;
+    position: relative;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent));
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+  }
+  .stat-card:hover::before {
+    transform: scaleX(1);
+  }
+  .stat-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.15);
+  }
+  .stat-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
+  }
+  .stat-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    line-height: 1;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .quick-action-card {
+    border-radius: 16px;
+    border: 2px dashed #e5e7eb;
+    transition: all 0.3s ease;
+  }
+  .quick-action-card:hover {
+    border-color: var(--accent);
+    background: linear-gradient(135deg, rgba(255, 146, 51, 0.05), rgba(255, 123, 24, 0.05));
+    transform: scale(1.02);
+  }
+  .progress-ring {
+    transform: rotate(-90deg);
+  }
+</style>
+{% endblock %}
+
+{% block page_sidebar %}
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">ملخص اليوم</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">إجمالي الكتب</div>
+        <strong>{{ total }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-files"></i> أرشيف</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">الكتب المتأخرة</div>
+        <strong>{{ overdue }}</strong>
+      </div>
+      <span class="app-context-chip is-danger"><i class="bi bi-exclamation-triangle"></i> عاجل</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">كتب اليوم</div>
+        <strong>{{ today_count }}</strong>
+      </div>
+      <span class="app-context-chip"><i class="bi bi-calendar-day"></i> اليوم</span>
+    </div>
+  </div>
+</div>
+
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">اختصارات تشغيلية</div>
+  <div class="app-context-list">
+    <a class="app-context-link" href="{% url 'extraction-smart-desktop' %}">
+      <span>إدخال كتاب جديد</span>
+      <i class="bi bi-plus-circle"></i>
+    </a>
+    <a class="app-context-link" href="{% url 'book_unified' %}?tab=overdue">
+      <span>متابعة المتأخرات</span>
+      <i class="bi bi-lightning-charge"></i>
+    </a>
+    <a class="app-context-link" href="{% url 'reports' %}">
+      <span>فتح التقارير</span>
+      <i class="bi bi-bar-chart-line"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+  <!-- Header بالوغو -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card shadow-sm border-0">
+        <div class="card-body text-center py-5">
+          <img src="{% static 'img/md-o-c-logo.png' %}" alt="شركة نفط الوسط" style="max-width: 150px; height: auto; margin-bottom: 20px;">
+          <h3 class="mt-3 mb-2">مرحباً في لوحة التحكم</h3>
+          <p class="text-muted">نظام إدارة الكتب والمراسلات الإلكتروني</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- إحصائيات سريعة -->
+  <div class="row g-4 mb-4">
+    <!-- إجمالي الكتب -->
+    <div class="col-lg-3 col-md-6">
+      <div class="card stat-card h-100 shadow-sm animate-scale-in">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+              <p class="text-muted mb-1 small text-uppercase">إجمالي الكتب</p>
+              <div class="stat-value">{{ total }}</div>
+            </div>
+            <div class="stat-icon text-primary">
+              <i class="bi bi-files"></i>
+            </div>
+          </div>
+          <div class="d-flex gap-3 small">
+            <div class="d-flex align-items-center gap-1">
+              <i class="bi bi-calendar-day text-primary"></i>
+              <span class="text-muted">اليوم:</span>
+              <strong>{{ today_count }}</strong>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+              <i class="bi bi-calendar-week text-primary"></i>
+              <span class="text-muted">الأسبوع:</span>
+              <strong>{{ week_count }}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الكتب الواردة -->
+    <div class="col-lg-3 col-md-6">
+      <div class="card stat-card h-100 shadow-sm animate-scale-in" style="animation-delay: 0.1s">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+              <p class="text-muted mb-1 small text-uppercase">الكتب الواردة</p>
+              <div class="stat-value" style="color: #3b82f6;">{{ incoming_total }}</div>
+            </div>
+            <div class="stat-icon" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05));">
+              <i class="bi bi-inbox-fill text-primary"></i>
+            </div>
+          </div>
+          <div class="small">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted">قيد المتابعة:</span>
+              <strong class="text-cyan">{{ incoming_pending }}</strong>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span class="text-muted">منجزة:</span>
+              <strong class="text-success">{{ incoming_done }}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الكتب الصادرة -->
+    <div class="col-lg-3 col-md-6">
+      <div class="card stat-card h-100 shadow-sm animate-scale-in" style="animation-delay: 0.2s">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+              <p class="text-muted mb-1 small text-uppercase">الكتب الصادرة</p>
+              <div class="stat-value" style="color: #f59e0b;">{{ outgoing_total }}</div>
+            </div>
+            <div class="stat-icon" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));">
+              <i class="bi bi-send-fill text-warning"></i>
+            </div>
+          </div>
+          <div class="small">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted">قيد الإرسال:</span>
+              <strong class="text-warning">{{ outgoing_pending }}</strong>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span class="text-muted">تم الإرسال:</span>
+              <strong class="text-success">{{ outgoing_done }}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الكتب المتأخرة -->
+    <div class="col-lg-3 col-md-6">
+      <div class="card stat-card h-100 shadow-sm animate-scale-in" style="animation-delay: 0.3s">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+              <p class="text-muted mb-1 small text-uppercase">كتب متأخرة</p>
+              <div class="stat-value text-danger {{ overdue|yesno:'animate-pulse,' }}">{{ overdue }}</div>
+            </div>
+            <div class="stat-icon" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));">
+              <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+            </div>
+          </div>
+          <div class="small">
+            <div class="alert alert-danger p-2 mb-0 d-flex align-items-center gap-2">
+              <i class="bi bi-clock-history"></i>
+              <span>تحتاج متابعة عاجلة</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- إجراءات سريعة -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <h5 class="fw-bold mb-3"><i class="bi bi-lightning-charge-fill text-warning me-2"></i>إجراءات سريعة</h5>
+    </div>
+
+    <!-- إضافة كتاب وارد -->
+    <div class="col-lg-4 col-md-6">
+      <a href="{% url 'extraction-smart-desktop' %}" class="text-decoration-none">
+        <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
+          <div class="card-body">
+            <div class="mb-3">
+              <div class="stat-icon mx-auto" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05));">
+                <i class="bi bi-inbox-fill text-primary"></i>
+              </div>
+            </div>
+            <h6 class="fw-bold mb-2">إدخال كتاب جديد</h6>
+            <p class="text-muted small mb-0">اختر بين وارد/صادر داخلي أو خارجي</p>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <!-- إضافة كتاب صادر -->
+    <div class="col-lg-4 col-md-6">
+      <a href="{% url 'extraction-smart-desktop' %}" class="text-decoration-none">
+        <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
+          <div class="card-body">
+            <div class="mb-3">
+              <div class="stat-icon mx-auto" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));">
+                <i class="bi bi-send-fill text-warning"></i>
+              </div>
+            </div>
+            <h6 class="fw-bold mb-2">الإدخال الذكي والسكانر</h6>
+            <p class="text-muted small mb-0">ابدأ من الملف أو السكانر ثم حدد النوع المناسب</p>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <!-- وصول سريع -->
+    <div class="col-lg-4 col-md-6">
+      <a href="{% url 'book_unified' %}?tab=overdue" class="text-decoration-none">
+        <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
+          <div class="card-body">
+            <div class="mb-3">
+              <div class="stat-icon mx-auto" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.05));">
+                <i class="bi bi-lightning-charge-fill" style="color: #6366f1;"></i>
+              </div>
+            </div>
+            <h6 class="fw-bold mb-2">الوصول السريع</h6>
+            <p class="text-muted small mb-0">تحديث سريع للحالات</p>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <!-- قائمة الكتب -->
+    <div class="col-lg-4 col-md-6">
+      <a href="{% url 'book_unified' %}" class="text-decoration-none">
+        <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
+          <div class="card-body">
+            <div class="mb-3">
+              <div class="stat-icon mx-auto" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05));">
+                <i class="bi bi-list-ul text-success"></i>
+              </div>
+            </div>
+            <h6 class="fw-bold mb-2">قائمة الكتب</h6>
+            <p class="text-muted small mb-0">عرض وبحث جميع الكتب</p>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <!-- التقارير -->
+    <div class="col-lg-4 col-md-6">
+      <a href="{% url 'reports' %}" class="text-decoration-none">
+        <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
+          <div class="card-body">
+            <div class="mb-3">
+              <div class="stat-icon mx-auto" style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(168, 85, 247, 0.05));">
+                <i class="bi bi-bar-chart-fill" style="color: #a855f7;"></i>
+              </div>
+            </div>
+            <h6 class="fw-bold mb-2">التقارير</h6>
+            <p class="text-muted small mb-0">إحصائيات وتقارير شاملة</p>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <!-- الجهات -->
+    <div class="col-lg-4 col-md-6">
+      <a href="{% url 'entity_list' %}" class="text-decoration-none">
+        <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
+          <div class="card-body">
+            <div class="mb-3">
+              <div class="stat-icon mx-auto" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(236, 72, 153, 0.05));">
+                <i class="bi bi-building" style="color: #ec4899;"></i>
+              </div>
+            </div>
+            <h6 class="fw-bold mb-2">الجهات</h6>
+            <p class="text-muted small mb-0">إدارة الجهات والمنظمات</p>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a class="btn btn-primary" href="{% url 'extraction-smart-desktop' %}"><i class="bi bi-plus-circle me-1"></i>إضافة كتاب جديد</a>
+          <a class="btn btn-soft" href="{% url 'book_unified' %}?tab=incoming"><i class="bi bi-list-check me-1"></i>متابعة الواردة</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,620 @@
+{% extends 'base.html' %}
+{# صفحة قائمة الكتب: بحث/تصفية وشارات النوع/الحالة والاستحقاق
+   - بحث متقدم ومتعدد الحقول
+   - فلاتر قابلة للتخصيص (النوع، الحالة، التاريخ، الاستحقاق)
+   - pagination موزع في أعلى وأسفل الصفحة
+   - معايير الوصولية (Accessibility) بـ ARIA labels
+   - responsive design للأجهزة المحمولة
+#}
+{% load static %}
+{% block title %}قائمة الكتب{% endblock %}
+
+{% block page_sidebar %}
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">ملخص القائمة</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">إجمالي النتائج</div>
+        <strong>{{ total_count }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-table"></i> نتائج</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">الصفحة الحالية</div>
+        <strong>{{ page_obj.number }} / {{ total_pages }}</strong>
+      </div>
+      <span class="app-context-chip"><i class="bi bi-layout-text-sidebar"></i> تصفح</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">فلتر النوع</div>
+        <strong>{{ request.GET.kind|default:'الكل' }}</strong>
+      </div>
+      <span class="app-context-chip is-success"><i class="bi bi-funnel"></i> نشط</span>
+    </div>
+  </div>
+</div>
+
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">اختصارات</div>
+  <div class="app-context-list">
+    <a class="app-context-link" href="{% url 'book_unified' %}">
+      <span>فتح الكتب الموحدة</span>
+      <i class="bi bi-journal-text"></i>
+    </a>
+    <a class="app-context-link" href="{% url 'extraction-smart-desktop' %}">
+      <span>إدخال كتاب جديد</span>
+      <i class="bi bi-plus-circle"></i>
+    </a>
+    <a class="app-context-link" href="{% url 'book_list' %}">
+      <span>تصفير الفلاتر</span>
+      <i class="bi bi-arrow-counterclockwise"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{% comment %} Helper macro for sort links {% endcomment %}
+{% with '' as placeholder %}
+<div class="container-fluid px-0">
+  <div class="card shadow-sm border-0 rounded-3 animate-scale-in">
+    <div class="card-body border-0">
+      <form method="get" class="row g-2 align-items-end mb-3">
+        <div class="col-md-4 col-12">
+          <label class="form-label mb-1 fw-semibold">بحث مباشر</label>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+            <input id="searchInput" 
+                   type="text" 
+                   class="form-control" 
+                   name="q" 
+                   placeholder="ابحث برقم فريد أو رقم كتاب أو عنوان أو جهة..." 
+                   value="{{ request.GET.q }}"
+                   data-live-search="#bookTableBody"
+                   autocomplete="off"
+                   title="يمكنك البحث برقم الكتاب أو الرقم الفريد أو العنوان أو الجهة">
+          </div>
+        </div>
+        <div class="col-md-4 col-6">
+          <label class="form-label mb-1 fw-semibold" for="filterKind">نوع الكتاب</label>
+          <select id="filterKind" class="form-select form-select-sm" name="kind" aria-label="اختر نوع الكتاب من التصنيف الرباعي أو من التجميع العام">
+            <option value="">الكل</option>
+            <option value="incoming" {% if request.GET.kind == 'incoming' %}selected{% endif %}>كل الوارد</option>
+            <option value="incoming_internal" {% if request.GET.kind == 'incoming_internal' %}selected{% endif %}>وارد داخلي</option>
+            <option value="incoming_external" {% if request.GET.kind == 'incoming_external' %}selected{% endif %}>وارد خارجي</option>
+            <option value="outgoing" {% if request.GET.kind == 'outgoing' %}selected{% endif %}>كل الصادر</option>
+            <option value="outgoing_internal" {% if request.GET.kind == 'outgoing_internal' %}selected{% endif %}>صادر داخلي</option>
+            <option value="outgoing_external" {% if request.GET.kind == 'outgoing_external' %}selected{% endif %}>صادر خارجي</option>
+          </select>
+        </div>
+        <div class="col-md-4 col-6">
+          <label class="form-label mb-1 fw-semibold" for="filterStatus">الحالة النهائية</label>
+          <select id="filterStatus" class="form-select form-select-sm" name="status" aria-label="اختر حالة الكتاب: قيد المتابعة أو معلقة أو منجزة">
+            <option value="">الكل</option>
+            <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>قيد الإرسال/المتابعة</option>
+            <option value="hold" {% if request.GET.status == 'hold' %}selected{% endif %}>معلق/بالحفظ</option>
+            <option value="done" {% if request.GET.status == 'done' %}selected{% endif %}>مجاب/منجزة</option>
+          </select>
+        </div>
+        
+        <!-- Advanced Filters -->
+        <div class="col-md-3 col-6">
+          <label class="form-label mb-1 fw-semibold" for="dateFrom">من التاريخ</label>
+          <input id="dateFrom" type="date" class="form-control form-control-sm" name="date_from" value="{{ date_from }}" aria-label="تاريخ البداية">
+        </div>
+        <div class="col-md-3 col-6">
+          <label class="form-label mb-1 fw-semibold" for="dateTo">إلى التاريخ</label>
+          <input id="dateTo" type="date" class="form-control form-control-sm" name="date_to" value="{{ date_to }}" aria-label="تاريخ النهاية">
+        </div>
+        <div class="col-md-3 col-6">
+          <label class="form-label mb-1 fw-semibold" for="dueStatus">حالة الاستحقاق</label>
+          <select id="dueStatus" class="form-select form-select-sm" name="due_status" aria-label="اختر حالة الاستحقاق: متأخر أو مستحق اليوم أو قادم">
+            <option value="">الكل</option>
+            <option value="overdue" {% if due_status == 'overdue' %}selected{% endif %}>متأخر</option>
+            <option value="today" {% if due_status == 'today' %}selected{% endif %}>مستحق اليوم</option>
+            <option value="upcoming" {% if due_status == 'upcoming' %}selected{% endif %}>قادم</option>
+            <option value="done" {% if due_status == 'done' %}selected{% endif %}>مكتمل</option>
+          </select>
+        </div>
+        <div class="col-md-3 col-6">
+          <label class="form-label mb-1 fw-semibold" for="entityFilter">الجهة</label>
+          <select id="entityFilter" class="form-select form-select-sm" name="entity_id" aria-label="اختر الجهة المصدرة">
+            <option value="">الكل</option>
+            {% for entity in entities %}
+            <option value="{{ entity.id }}" {% if entity_id|stringformat:"s" == entity.id|stringformat:"s" %}selected{% endif %}>{{ entity.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="col-12 d-flex gap-2 mt-2 flex-wrap">
+          <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-funnel me-1"></i>تطبيق التصفية</button>
+          <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_list' %}" onclick="FilterStateManager.clearFilters();">إعادة التعيين</a>
+        </div>
+      </form>
+
+      <!-- Desktop Table View -->
+      <div class="table-responsive d-none d-lg-block">
+        <form method="post">
+          {% csrf_token %}
+          <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div class="book-count-info" role="status" aria-live="polite">
+              <i class="bi bi-book"></i>
+              <span>عدد النتائج: <strong>{{ total_count }}</strong> | الصفحة <strong>{{ page_obj.number }}</strong> من <strong>{{ total_pages }}</strong></span>
+            </div>
+          </div>
+          
+          <!-- Pagination Top -->
+          {% include 'core/partials/pagination.html' %}
+          <div class="d-flex gap-2 flex-wrap mb-2 align-items-center justify-content-between">
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+              <button type="button" id="bulk-delete-btn" class="btn btn-outline-danger btn-sm bulk-delete-btn" disabled>
+                <i class="bi bi-trash me-1"></i>نقل <span id="selectedCount">0</span> إلى السلة
+              </button>
+              <div class="text-muted small">
+                <span id="selectionInfo"></span>
+              </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap align-items-center no-print">
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-label="إظهار أو إخفاء الأعمدة">
+                  الأعمدة
+                </button>
+                <div class="dropdown-menu p-2 shadow-sm">
+                  <div class="form-check">
+                    <input class="form-check-input column-toggle" type="checkbox" value="entities" id="col-entities" checked>
+                    <label class="form-check-label" for="col-entities">الجهات</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input column-toggle" type="checkbox" value="status" id="col-status" checked>
+                    <label class="form-check-label" for="col-status">النوع/الحالة</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input column-toggle" type="checkbox" value="due" id="col-due" checked>
+                    <label class="form-check-label" for="col-due">الاستحقاق</label>
+                  </div>
+                </div>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="exportCsvBtn" aria-label="تصدير النتائج إلى CSV">
+                <i class="bi bi-download me-1"></i>تصدير CSV
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="printTableBtn" aria-label="طباعة الجدول">
+                <i class="bi bi-printer me-1"></i>طباعة
+              </button>
+            </div>
+          </div>
+          <table class="table table-hover align-middle mb-0 book-list-table">
+            <thead class="table-light">
+              <tr>
+                <th data-col="select"><input type="checkbox" class="form-check-input select-all-checkbox" onclick="document.querySelectorAll('#bookTableBody input[type=checkbox]').forEach(cb=>cb.checked=this.checked); updateSelectionCounter();"></th>
+                <th data-col="number" title="رقم الكتاب">
+                  <a href="?sort=book_number&sort_dir={% if sort_by == 'book_number' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}{% for key, val in request.GET.items %}{% if key != 'sort' and key != 'sort_dir' %}&{{ key }}={{ val|urlencode }}{% endif %}{% endfor %}" class="text-decoration-none text-dark sortable-header">
+                    رقم الكتاب
+                    {% if sort_by == 'book_number' %}<i class="bi bi-arrow-{% if sort_dir == 'desc' %}down{% else %}up{% endif %} ms-1"></i>{% endif %}
+                  </a>
+                </th>
+                <th data-col="title" title="العنوان">
+                  <a href="?sort=title&sort_dir={% if sort_by == 'title' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}{% for key, val in request.GET.items %}{% if key != 'sort' and key != 'sort_dir' %}&{{ key }}={{ val|urlencode }}{% endif %}{% endfor %}" class="text-decoration-none text-dark sortable-header">
+                    العنوان
+                    {% if sort_by == 'title' %}<i class="bi bi-arrow-{% if sort_dir == 'desc' %}down{% else %}up{% endif %} ms-1"></i>{% endif %}
+                  </a>
+                </th>
+                <th data-col="entities" title="الجهات">الجهات</th>
+                <th data-col="status" title="النوع والحالة">النوع/الحالة</th>
+                <th data-col="due" title="الاستحقاق الزمني">الاستحقاق</th>
+                <th data-col="actions" class="text-end" title="إجراءات">إجراء</th>
+              </tr>
+            </thead>
+            <tbody id="bookTableBody">
+              {% for book in books %}
+              <tr>
+                <td data-col="select"><input type="checkbox" class="form-check-input row-checkbox" name="selected" value="{{ book.id }}" aria-label="اختر كتاب {{ book.id }}" onchange="updateSelectionCounter();"></td>
+                <td data-col="number">
+                  <a href="{% url 'book_detail' book.id %}?from=list" title="عرض تفاصيل الكتاب">{{ book.our_number|default:"-" }}</a>
+                  <div class="small mt-1">
+                    {% if book.sender_number %}
+                      <span class="badge {% if book.is_incoming %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                        <i class="bi {% if book.is_incoming %}bi-arrow-down-left{% else %}bi-arrow-up-right{% endif %} me-1"></i>
+                        {{ book.sender_number }}
+                      </span>
+                    {% else %}
+                      <span class="text-muted">-</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td data-col="title">
+                  <span title="{{ book.title }}" class="text-truncate d-inline-block" style="max-width: 260px;">
+                    {{ book.title|default:"-"|truncatewords:12 }}
+                  </span>
+                </td>
+                <td data-col="entities">
+                  <div class="fw-semibold" style="max-width: 200px;">
+                    {% for e in book.issuing_entities.all %}
+                      <span class="badge bg-light text-dark mb-1" title="{{ e.name }}{% if e.code %} [{{ e.code }}]{% endif %}">
+                        {% if e.code %}<small class="text-muted">[{{ e.code }}]</small> {% endif %}{{ e.name|truncatewords:4 }}
+                      </span>
+                    {% endfor %}
+                    {% for name in book.archived_issuing_names %}
+                      <span class="badge bg-light text-muted fst-italic mb-1" title="جهة محذوفة (أرشيف نصي)">
+                        <i class="bi bi-archive"></i> {{ name|truncatewords:4 }}
+                      </span>
+                    {% endfor %}
+                    {% if not book.issuing_entities.all and not book.archived_issuing_names %}
+                      <span class="text-muted">-</span>
+                    {% endif %}
+                  </div>
+                  <div class="text-muted small" style="max-width: 200px;">
+                    {% for e in book.receiving_entities.all %}
+                      <span class="badge bg-secondary-subtle text-dark mb-1" title="{{ e.name }}{% if e.code %} [{{ e.code }}]{% endif %}">
+                        {% if e.code %}<small class="text-muted">[{{ e.code }}]</small> {% endif %}{{ e.name|truncatewords:4 }}
+                      </span>
+                    {% endfor %}
+                    {% for name in book.archived_receiving_names %}
+                      <span class="badge bg-light text-muted fst-italic mb-1" title="جهة محذوفة (أرشيف نصي)">
+                        <i class="bi bi-archive"></i> {{ name|truncatewords:4 }}
+                      </span>
+                    {% endfor %}
+                    {% if not book.receiving_entities.all and not book.archived_receiving_names %}
+                      <span class="text-muted">-</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td data-col="status">
+                  {% if book.is_incoming %}
+                    <span class="badge kind-incoming">{{ book.kind_label }}</span>
+                  {% else %}
+                    <span class="badge kind-outgoing">{{ book.kind_label }}</span>
+                  {% endif %}
+                  <div class="mt-1">
+                    {% if book.is_outgoing %}
+                      {% if book.final_status == 'pending' %}
+                        <span class="status-badge status-pending">قيد الإرسال</span>
+                      {% elif book.final_status == 'hold' %}
+                        <span class="status-badge status-hold">معلق</span>
+                      {% else %}
+                        <span class="status-badge status-done">مجاب</span>
+                      {% endif %}
+                    {% else %}
+                      {% if book.final_status == 'pending' %}
+                        <span class="status-badge status-pending">قيد المتابعة</span>
+                      {% elif book.final_status == 'hold' %}
+                        <span class="status-badge status-hold">بالحفظ</span>
+                      {% else %}
+                        <span class="status-badge status-done">منجزة</span>
+                      {% endif %}
+                    {% endif %}
+                  </div>
+                </td>
+                <td data-col="due">
+                  {% if book.final_status == 'done' %}
+                    <span class="status-badge status-done">مكتمل</span>
+                  {% elif book.is_incoming and book.final_status == 'hold' %}
+                    <span class="status-badge status-done">مكتمل</span>
+                  {% else %}
+                    {% if book.time_state == 'danger' %}
+                      <span class="due-badge due-danger">متأخر {{ book.delay_days }} يوم</span>
+                    {% elif book.time_state == 'today' %}
+                      <span class="due-badge due-today">مستحق اليوم</span>
+                    {% elif book.time_state == 'future' %}
+                      <span class="due-badge due-future">مستحق بعد {{ book.delay_days }} يوم</span>
+                    {% else %}
+                      <span class="due-badge due-normal">-</span>
+                    {% endif %}
+                  {% endif %}
+                </td>
+                <td data-col="actions" class="text-end">
+                  <div class="d-flex gap-2 align-items-center justify-content-end">
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'book_detail' book.id %}?from=list" title="عرض تفاصيل الكتاب" aria-label="عرض تفاصيل الكتاب {{ book.id }}">
+                      <i class="bi bi-eye"></i>
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-delete-ajax" data-book-id="{{ book.id }}" title="نقل إلى سلة المهملات" aria-label="حذف الكتاب {{ book.id }}">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="7" class="text-center text-muted py-3">لا توجد سجلات مطابقة.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </form>
+        
+        <!-- Pagination Bottom -->
+        {% if page_obj.has_other_pages %}
+        <nav aria-label="pagination-bottom" class="mt-3">
+          <ul class="pagination pagination-sm justify-content-center">
+            {% if page_obj.has_previous %}
+              <li class="page-item">
+                <a class="page-link" href="?page=1{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val|urlencode }}{% endif %}{% endfor %}"><i class="bi bi-chevron-double-left"></i></a>
+              </li>
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val|urlencode }}{% endif %}{% endfor %}"><i class="bi bi-chevron-left"></i> السابق</a>
+              </li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-left"></i></span></li>
+              <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i> السابق</span></li>
+            {% endif %}
+            
+            <li class="page-item"><span class="page-link">{{ page_obj.number }} / {{ total_pages }}</span></li>
+            
+            {% if page_obj.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val|urlencode }}{% endif %}{% endfor %}">التالي <i class="bi bi-chevron-right"></i></a>
+              </li>
+              <li class="page-item">
+                <a class="page-link" href="?page={{ total_pages }}{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val|urlencode }}{% endif %}{% endfor %}"><i class="bi bi-chevron-double-right"></i></a>
+              </li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link">التالي <i class="bi bi-chevron-right"></i></span></li>
+              <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-right"></i></span></li>
+            {% endif %}
+          </ul>
+        </nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endwith %}
+
+<script>
+  // ✨ === نظام Table Enhancements: Sorting + Filtering + Row Expansion === ✨
+  
+  class TableManager {
+    constructor(tableSelector) {
+      this.table = document.querySelector(tableSelector);
+      this.tbody = this.table?.querySelector('tbody');
+      this.originalRows = [];
+      
+      if (this.table && this.tbody) {
+        this.init();
+      }
+    }
+    
+    init() {
+      // حفظ الصفوف الأصلية
+      this.originalRows = Array.from(this.tbody.querySelectorAll('tr'));
+      
+      // إضافة Row Expansion
+      this.initRowExpansion();
+      
+      // إضافة Quick Actions
+      this.initQuickActions();
+    }
+    
+    // Row Expansion - عرض التفاصيل السريعة
+    initRowExpansion() {
+      this.tbody.addEventListener('click', (e) => {
+        const titleCell = e.target.closest('td[data-col="title"]');
+        if (!titleCell) return;
+        
+        const row = e.target.closest('tr');
+        if (!row) return;
+        
+        // إضافة class تفاعلي
+        row.classList.toggle('row-expanded');
+        
+        // يمكن إضافة تأثيرات بصرية هنا
+        if (row.classList.contains('row-expanded')) {
+          row.style.backgroundColor = '#f0f7ff';
+        } else {
+          row.style.backgroundColor = '';
+        }
+      });
+    }
+    
+    // Quick Actions مع Tooltips
+    initQuickActions() {
+      const buttons = this.tbody.querySelectorAll('a, button');
+      buttons.forEach(btn => {
+        if (btn.title) {
+          btn.addEventListener('mouseenter', () => {
+            this.showTooltip(btn);
+          });
+        }
+      });
+    }
+    
+    showTooltip(element) {
+      const title = element.title;
+      if (!title) return;
+      
+      const tooltip = document.createElement('div');
+      tooltip.className = 'tooltip-custom bg-dark text-white small rounded px-2 py-1';
+      tooltip.textContent = title;
+      tooltip.style.position = 'absolute';
+      tooltip.style.zIndex = '1000';
+      
+      document.body.appendChild(tooltip);
+      
+      const rect = element.getBoundingClientRect();
+      tooltip.style.top = (rect.top - tooltip.offsetHeight - 5) + 'px';
+      tooltip.style.left = (rect.left + rect.width / 2 - tooltip.offsetWidth / 2) + 'px';
+      
+      setTimeout(() => tooltip.remove(), 2000);
+    }
+  }
+  
+  // تفعيل Table Manager
+  const tableManager = new TableManager('.book-list-table');
+  
+  // Helpers
+  function getVisibleColumnCount() {
+    const table = document.querySelector('table.book-list-table');
+    if (!table) return 7;
+    return table.querySelectorAll('thead th:not(.d-none)').length;
+  }
+
+  function setColumnVisibility(columnKey, isVisible) {
+    document.querySelectorAll(`[data-col="${columnKey}"]`).forEach(cell => {
+      cell.classList.toggle('d-none', !isVisible);
+    });
+  }
+
+  // ✨ === Column Toggle === ✨
+  const columnToggles = document.querySelectorAll('.column-toggle');
+  if (columnToggles.length) {
+    columnToggles.forEach(toggle => {
+      const key = toggle.value;
+      setColumnVisibility(key, toggle.checked);
+      toggle.addEventListener('change', (e) => {
+        setColumnVisibility(key, e.target.checked);
+      });
+    });
+  }
+
+  // ✨ === Export CSV === ✨
+  const exportCsvBtn = document.getElementById('exportCsvBtn');
+  if (exportCsvBtn) {
+    exportCsvBtn.addEventListener('click', () => {
+      const exportColumns = [
+        { key: 'number', label: 'رقم الكتاب' },
+        { key: 'title', label: 'العنوان' },
+        { key: 'entities', label: 'الجهات' },
+        { key: 'status', label: 'النوع/الحالة' },
+        { key: 'due', label: 'الاستحقاق' }
+      ];
+
+      const visibleColumns = exportColumns.filter(col => {
+        const headerCell = document.querySelector(`th[data-col="${col.key}"]`);
+        return headerCell && !headerCell.classList.contains('d-none');
+      });
+
+      const table = document.querySelector('table.book-list-table');
+      if (!table) return;
+
+      const rows = Array.from(table.querySelectorAll('tbody tr'))
+        .filter(row => !row.classList.contains('search-no-results'));
+
+      const csvLines = [];
+      csvLines.push(visibleColumns.map(col => `"${col.label}"`).join(','));
+
+      rows.forEach(row => {
+        const values = visibleColumns.map(col => {
+          const cell = row.querySelector(`td[data-col="${col.key}"]`);
+          const raw = cell ? cell.textContent.trim().replace(/\s+/g, ' ') : '';
+          const escaped = raw.replace(/"/g, '""');
+          return `"${escaped}"`;
+        });
+        csvLines.push(values.join(','));
+      });
+
+      const csvContent = csvLines.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `book_list_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  // ✨ === Print Table === ✨
+  const printTableBtn = document.getElementById('printTableBtn');
+  if (printTableBtn) {
+    printTableBtn.addEventListener('click', () => window.print());
+  }
+
+  // ✨ === Live Search Enhancement === ✨
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      const query = e.target.value.toLowerCase().trim();
+      
+      searchTimeout = setTimeout(() => {
+        if (!query) {
+          // إعادة تحميل الصفحة إذا كانت البحث فارغة
+          document.querySelectorAll('#bookTableBody tr').forEach(row => {
+            row.style.display = '';
+            row.classList.remove('search-hidden');
+          });
+          
+          // إزالة رسالة عدم وجود نتائج
+          const noResults = document.querySelector('.search-no-results');
+          if (noResults) noResults.remove();
+          
+          // إعادة تعيين الاختيارات
+          updateSelectionCounter();
+          return;
+        }
+        
+        // تصفية الصفوف بناءً على البحث المباشر (بدون تعديل DOM)
+        const tbody = document.getElementById('bookTableBody');
+        let visibleCount = 0;
+        
+        tbody.querySelectorAll('tr').forEach(row => {
+          const cells = row.querySelectorAll('td');
+          let found = false;
+          
+          // البحث في جميع الأعمدة (بدون تعديل المحتوى)
+          cells.forEach(cell => {
+            if (cell.textContent.toLowerCase().includes(query)) {
+              found = true;
+            }
+          });
+          
+          if (found) {
+            row.style.display = '';
+            row.classList.remove('search-hidden');
+            visibleCount++;
+            
+            // تسليط ضوء بسيط فقط (بدون تعديل الخلفية الدائمة)
+            row.classList.add('search-highlight');
+          } else {
+            row.style.display = 'none';
+            row.classList.add('search-hidden');
+          }
+        });
+        
+        // عرض رسالة إذا لم توجد نتائج
+        let noResultsRow = tbody.querySelector('tr.search-no-results');
+        if (visibleCount === 0 && query) {
+          if (!noResultsRow) {
+            const emptyRow = document.createElement('tr');
+            emptyRow.className = 'search-no-results';
+            emptyRow.innerHTML = `<td colspan="${getVisibleColumnCount()}" class="text-center text-muted py-4"><strong>${query}</strong> لا توجد نتائج للبحث عن</td>`;
+            tbody.appendChild(emptyRow);
+          }
+        } else if (noResultsRow) {
+          noResultsRow.remove();
+        }
+        
+        // إعادة تعيين عداد الاختيارات بعد البحث
+        updateSelectionCounter();
+        
+        // إزالة التسليط بعد 2 ثانية
+        setTimeout(() => {
+          document.querySelectorAll('#bookTableBody tr.search-highlight').forEach(row => {
+            row.classList.remove('search-highlight');
+          });
+        }, 2000);
+      }, 300);
+    });
+  }
+  
+  // ✨ === Keyboard Shortcuts === ✨
+  document.addEventListener('keydown', (e) => {
+    // Ctrl+F: Focus على حقل البحث
+    if (e.ctrlKey && e.key === 'f') {
+      e.preventDefault();
+      searchInput?.focus();
+    }
+    
+    // Ctrl+R: إعادة تعيين التصفية
+    if (e.ctrlKey && e.key === 'r') {
+      e.preventDefault();
+      FilterStateManager.clearFilters();
+      window.location.href = '{% url "book_list" %}';
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% comment %}
+Reusable Pagination Component
+Params:
+- page_obj: Django paginator page object
+- request: Request object for query string preservation
+- total_pages: Total number of pages (from context)
+{% endcomment %}
+
+{% if page_obj.has_other_pages %}
+<nav aria-label="page-navigation" class="mb-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page=1{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val|urlencode }}{% endif %}{% endfor %}"><i class="bi bi-chevron-double-left"></i></a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val|urlencode }}{% endif %}{% endfor %}"><i class="bi bi-chevron-left"></i> السابق</a>
+      </li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-left"></i></span></li>
+      <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i> السابق</span></li>
+    {% endif %}
+
+    <li class="page-item"><span class="page-link">{{ page_obj.number }} / {{ total_pages }}</span></li>
+
+    {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val|urlencode }}{% endif %}{% endfor %}">التالي <i class="bi bi-chevron-right"></i></a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="?page={{ total_pages }}{% for key, val in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ val|urlencode }}{% endif %}{% endfor %}"><i class="bi bi-chevron-double-right"></i></a>
+      </li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">التالي <i class="bi bi-chevron-right"></i></span></li>
+      <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-right"></i></span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}

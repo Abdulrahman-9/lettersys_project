@@ -1,0 +1,258 @@
+{% extends 'base.html' %}
+{% block title %}{{ entity.name }} — تفاصيل الجهة{% endblock %}
+
+{% block page_sidebar %}
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">ملف الجهة</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">اسم الجهة</div>
+        <strong>{{ entity.name }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-building"></i> جهة</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">الرمز</div>
+        <strong>{{ entity.code|default:'—' }}</strong>
+      </div>
+      <span class="app-context-chip"><i class="bi bi-upc"></i> تعريف</span>
+    </div>
+  </div>
+</div>
+
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">أقسام السجل</div>
+  <div class="nav nav-pills flex-column gap-2" role="tablist" aria-orientation="vertical">
+    <button class="btn btn-light text-end active" id="issued-tab" data-bs-toggle="tab" data-bs-target="#issued-pane" type="button" role="tab" aria-selected="true">
+      <i class="bi bi-arrow-up-right text-primary me-1"></i>كتب مُصدرة
+      <span class="badge bg-primary ms-1">{{ issued_count }}</span>
+    </button>
+    <button class="btn btn-light text-end" id="received-tab" data-bs-toggle="tab" data-bs-target="#received-pane" type="button" role="tab" aria-selected="false">
+      <i class="bi bi-arrow-down-left text-success me-1"></i>كتب مُستلمة
+      <span class="badge bg-success ms-1">{{ received_count }}</span>
+    </button>
+  </div>
+</div>
+
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">إجراءات</div>
+  <div class="app-context-list">
+    <a class="app-context-link" href="{% url 'entity_list' %}">
+      <span>العودة للقائمة</span>
+      <i class="bi bi-arrow-right"></i>
+    </a>
+    <a class="app-context-link" href="{% url 'entity_edit' entity.pk %}">
+      <span>تعديل الجهة</span>
+      <i class="bi bi-pencil-square"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="py-4">
+  <!-- بطاقة رأس الجهة -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body p-4">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
+        <div>
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="badge bg-primary-subtle text-primary fs-6 px-3 py-2"><i class="bi bi-building me-1"></i>{{ entity.name }}</span>
+            {% if entity.code %}<span class="badge bg-secondary-subtle text-secondary">{{ entity.code }}</span>{% endif %}
+            {% if entity.etype == 'issuer' %}
+              <span class="badge bg-info-subtle text-info">جهة مرسلة</span>
+            {% elif entity.etype == 'receiver' %}
+              <span class="badge bg-success-subtle text-success">جهة مستقبلة</span>
+            {% elif entity.etype == 'both' %}
+              <span class="badge bg-warning-subtle text-warning">مرسلة ومستقبلة</span>
+            {% endif %}
+          </div>
+          {% if entity.notes %}
+            <p class="text-muted mb-0">{{ entity.notes }}</p>
+          {% endif %}
+        </div>
+        <div class="d-flex gap-2">
+          <a href="{% url 'entity_list' %}" class="btn btn-sm btn-light"><i class="bi bi-arrow-right me-1"></i>القائمة</a>
+          <a href="{% url 'entity_edit' entity.pk %}" class="btn btn-sm btn-dark"><i class="bi bi-pencil-square me-1"></i>تعديل</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- إحصائيات سريعة -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center p-3">
+        <div class="fs-2 fw-bold text-primary">{{ issued_count }}</div>
+        <small class="text-muted">كتاب مُصدر</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center p-3">
+        <div class="fs-2 fw-bold text-success">{{ received_count }}</div>
+        <small class="text-muted">كتاب مُستلم</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center p-3">
+        <div class="fs-2 fw-bold text-dark">{{ issued_count|add:received_count }}</div>
+        <small class="text-muted">إجمالي الكتب</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center p-3">
+        <div class="fs-2 fw-bold text-info">
+          {% if entity.etype == 'issuer' %}مرسلة{% elif entity.etype == 'receiver' %}مستقبلة{% else %}كلاهما{% endif %}
+        </div>
+        <small class="text-muted">نوع الجهة</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content">
+    <!-- كتب مُصدرة -->
+    <div class="tab-pane fade show active" id="issued-pane" role="tabpanel">
+      <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
+        <div class="card-body p-0">
+          {% if issued_books %}
+          <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:50px">#</th>
+                  <th>رقم الكتاب</th>
+                  <th>العنوان</th>
+                  <th>النوع</th>
+                  <th>التاريخ</th>
+                  <th>الجهة المستلمة</th>
+                  <th>الحالة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for book in issued_books %}
+                <tr style="cursor:pointer" data-book-preview="{{ book.pk }}">
+                  <td class="text-muted">{{ forloop.counter }}</td>
+                  <td class="fw-bold">
+                    <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number }}</a>
+                  </td>
+                  <td>{{ book.title|truncatechars:60 }}</td>
+                  <td><span class="badge bg-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}-subtle text-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}">{{ book.kind_label }}</span></td>
+                  <td class="text-muted">{{ book.date|date:"Y/m/d" }}</td>
+                  <td>
+                    {% for e in book.receiving_entities.all %}
+                      <span class="badge bg-light text-dark">{{ e.name }}</span>
+                    {% empty %}
+                      <span class="text-muted">—</span>
+                    {% endfor %}
+                  </td>
+                  <td>
+                    {% if book.final_status == 'pending' %}<span class="badge bg-warning-subtle text-warning">قيد المتابعة</span>
+                    {% elif book.final_status == 'done' %}<span class="badge bg-success-subtle text-success">منجزة</span>
+                    {% elif book.final_status == 'hold' %}<span class="badge bg-secondary-subtle text-secondary">معلقة</span>
+                    {% else %}<span class="badge bg-info-subtle text-info">مؤرشف</span>{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if issued_books.has_other_pages %}
+          <div class="p-3 border-top">
+            <nav><ul class="pagination pagination-sm justify-content-center mb-0">
+              {% if issued_books.has_previous %}
+                <li class="page-item"><a class="page-link" href="?pi={{ issued_books.previous_page_number }}{% if request.GET.pr %}&pr={{ request.GET.pr }}{% endif %}">&laquo;</a></li>
+              {% endif %}
+              {% for p in issued_books.paginator.page_range %}
+                <li class="page-item {% if p == issued_books.number %}active{% endif %}"><a class="page-link" href="?pi={{ p }}{% if request.GET.pr %}&pr={{ request.GET.pr }}{% endif %}">{{ p }}</a></li>
+              {% endfor %}
+              {% if issued_books.has_next %}
+                <li class="page-item"><a class="page-link" href="?pi={{ issued_books.next_page_number }}{% if request.GET.pr %}&pr={{ request.GET.pr }}{% endif %}">&raquo;</a></li>
+              {% endif %}
+            </ul></nav>
+          </div>
+          {% endif %}
+          {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+            لا توجد كتب مُصدرة من هذه الجهة
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- كتب مُستلمة -->
+    <div class="tab-pane fade" id="received-pane" role="tabpanel">
+      <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
+        <div class="card-body p-0">
+          {% if received_books %}
+          <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:50px">#</th>
+                  <th>رقم الكتاب</th>
+                  <th>العنوان</th>
+                  <th>النوع</th>
+                  <th>التاريخ</th>
+                  <th>الجهة المصدرة</th>
+                  <th>الحالة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for book in received_books %}
+                <tr style="cursor:pointer" data-book-preview="{{ book.pk }}">
+                  <td class="text-muted">{{ forloop.counter }}</td>
+                  <td class="fw-bold">
+                    <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number }}</a>
+                  </td>
+                  <td>{{ book.title|truncatechars:60 }}</td>
+                  <td><span class="badge bg-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}-subtle text-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}">{{ book.kind_label }}</span></td>
+                  <td class="text-muted">{{ book.date|date:"Y/m/d" }}</td>
+                  <td>
+                    {% for e in book.issuing_entities.all %}
+                      <span class="badge bg-light text-dark">{{ e.name }}</span>
+                    {% empty %}
+                      <span class="text-muted">—</span>
+                    {% endfor %}
+                  </td>
+                  <td>
+                    {% if book.final_status == 'pending' %}<span class="badge bg-warning-subtle text-warning">قيد المتابعة</span>
+                    {% elif book.final_status == 'done' %}<span class="badge bg-success-subtle text-success">منجزة</span>
+                    {% elif book.final_status == 'hold' %}<span class="badge bg-secondary-subtle text-secondary">معلقة</span>
+                    {% else %}<span class="badge bg-info-subtle text-info">مؤرشف</span>{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if received_books.has_other_pages %}
+          <div class="p-3 border-top">
+            <nav><ul class="pagination pagination-sm justify-content-center mb-0">
+              {% if received_books.has_previous %}
+                <li class="page-item"><a class="page-link" href="?pr={{ received_books.previous_page_number }}{% if request.GET.pi %}&pi={{ request.GET.pi }}{% endif %}">&laquo;</a></li>
+              {% endif %}
+              {% for p in received_books.paginator.page_range %}
+                <li class="page-item {% if p == received_books.number %}active{% endif %}"><a class="page-link" href="?pr={{ p }}{% if request.GET.pi %}&pi={{ request.GET.pi }}{% endif %}">{{ p }}</a></li>
+              {% endfor %}
+              {% if received_books.has_next %}
+                <li class="page-item"><a class="page-link" href="?pr={{ received_books.next_page_number }}{% if request.GET.pi %}&pi={{ request.GET.pi }}{% endif %}">&raquo;</a></li>
+              {% endif %}
+            </ul></nav>
+          </div>
+          {% endif %}
+          {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+            لا توجد كتب مُستلمة لهذه الجهة
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,179 @@
+{% load static %}
+{% comment %}
+============================================
+BOOK UNIFIED TABS NAVIGATION
+7 تبويبات: الكل، وارد، صادر، متأخر، اليوم، قريب، منجز
+============================================
+{% endcomment %}
+
+<div class="book-unified-tabs">
+  <div class="tabs-container" role="tablist">
+    
+    {# Tab 1: الكل #}
+    <button 
+      class="tab-btn active" 
+      role="tab"
+      data-tab="all"
+      data-filter-kind=""
+      data-filter-status=""
+      data-filter-due=""
+      id="tab-all"
+      aria-selected="true"
+      aria-controls="tabpanel-all"
+    >
+      <i class="bi bi-globe2 tab-icon"></i>
+      <span class="tab-label">الكل</span>
+      <span class="tab-badge" id="badge-all">{{ total_count|default:0 }}</span>
+    </button>
+    
+    {# Tab 2: وارد (مع قائمة فرعية: الكل / داخلي / خارجي) #}
+    <div class="tab-dropdown-wrapper">
+      <button 
+        class="tab-btn" 
+        role="tab"
+        data-tab="incoming"
+        data-filter-kind="incoming"
+        data-filter-status=""
+        data-filter-due=""
+        id="tab-incoming"
+        aria-selected="false"
+        aria-controls="tabpanel-incoming"
+      >
+        <i class="bi bi-box-arrow-in-down tab-icon"></i>
+        <span class="tab-label">وارد</span>
+        <span class="tab-badge" id="badge-incoming">{{ incoming_count|default:0 }}</span>
+        <i class="bi bi-chevron-down tab-chevron ms-1" style="font-size:.65rem;opacity:.6"></i>
+      </button>
+      <div class="tab-sub-menu">
+        <button class="tab-sub-item active" data-sub-kind="incoming" title="كل الوارد">
+          <i class="bi bi-inbox"></i> الكل
+        </button>
+        <button class="tab-sub-item" data-sub-kind="incoming_internal" title="وارد داخلي">
+          <i class="bi bi-building"></i> داخلي
+        </button>
+        <button class="tab-sub-item" data-sub-kind="incoming_external" title="وارد خارجي">
+          <i class="bi bi-globe2"></i> خارجي
+        </button>
+      </div>
+    </div>
+    
+    {# Tab 3: صادر (مع قائمة فرعية: الكل / داخلي / خارجي) #}
+    <div class="tab-dropdown-wrapper">
+      <button 
+        class="tab-btn" 
+        role="tab"
+        data-tab="outgoing"
+        data-filter-kind="outgoing"
+        data-filter-status=""
+        data-filter-due=""
+        id="tab-outgoing"
+        aria-selected="false"
+        aria-controls="tabpanel-outgoing"
+      >
+        <i class="bi bi-box-arrow-up tab-icon"></i>
+        <span class="tab-label">صادر</span>
+        <span class="tab-badge" id="badge-outgoing">{{ outgoing_count|default:0 }}</span>
+        <i class="bi bi-chevron-down tab-chevron ms-1" style="font-size:.65rem;opacity:.6"></i>
+      </button>
+      <div class="tab-sub-menu">
+        <button class="tab-sub-item active" data-sub-kind="outgoing" title="كل الصادر">
+          <i class="bi bi-send"></i> الكل
+        </button>
+        <button class="tab-sub-item" data-sub-kind="outgoing_internal" title="صادر داخلي">
+          <i class="bi bi-building"></i> داخلي
+        </button>
+        <button class="tab-sub-item" data-sub-kind="outgoing_external" title="صادر خارجي">
+          <i class="bi bi-globe2"></i> خارجي
+        </button>
+      </div>
+    </div>
+    
+    {# Tab 4: متأخر (Priority) #}
+    <button 
+      class="tab-btn tab-danger" 
+      role="tab"
+      data-tab="overdue"
+      data-filter-kind=""
+      data-filter-status=""
+      data-filter-due="overdue"
+      id="tab-overdue"
+      aria-selected="false"
+      aria-controls="tabpanel-overdue"
+    >
+      <i class="bi bi-exclamation-triangle tab-icon"></i>
+      <span class="tab-label">متأخر</span>
+      <span class="tab-badge tab-badge-danger" id="badge-overdue">{{ overdue_count|default:0 }}</span>
+    </button>
+    
+    {# Tab 5: اليوم #}
+    <button 
+      class="tab-btn tab-warning" 
+      role="tab"
+      data-tab="today"
+      data-filter-kind=""
+      data-filter-status=""
+      data-filter-due="today"
+      id="tab-today"
+      aria-selected="false"
+      aria-controls="tabpanel-today"
+    >
+      <i class="bi bi-calendar-event tab-icon"></i>
+      <span class="tab-label">اليوم</span>
+      <span class="tab-badge tab-badge-warning" id="badge-today">{{ today_count|default:0 }}</span>
+    </button>
+    
+    {# Tab 6: قريب #}
+    <button 
+      class="tab-btn tab-info" 
+      role="tab"
+      data-tab="upcoming"
+      data-filter-kind=""
+      data-filter-status=""
+      data-filter-due="upcoming"
+      id="tab-upcoming"
+      aria-selected="false"
+      aria-controls="tabpanel-upcoming"
+    >
+      <i class="bi bi-calendar-week tab-icon"></i>
+      <span class="tab-label">قريب</span>
+      <span class="tab-badge tab-badge-info" id="badge-upcoming">{{ upcoming_count|default:0 }}</span>
+    </button>
+    
+    {# Tab 7: منجز #}
+    <button 
+      class="tab-btn tab-success" 
+      role="tab"
+      data-tab="done"
+      data-filter-kind=""
+      data-filter-status="done"
+      data-filter-due=""
+      id="tab-done"
+      aria-selected="false"
+      aria-controls="tabpanel-done"
+    >
+      <i class="bi bi-check-circle tab-icon"></i>
+      <span class="tab-label">منجز</span>
+      <span class="tab-badge tab-badge-success" id="badge-done">{{ done_count|default:0 }}</span>
+    </button>
+    
+  </div>
+  
+  {# Scroll Indicators #}
+  <button class="tab-scroll-btn tab-scroll-left" id="tabScrollLeft" style="display: none;">
+    <i class="bi bi-chevron-right"></i>
+  </button>
+  <button class="tab-scroll-btn tab-scroll-right" id="tabScrollRight" style="display: none;">
+    <i class="bi bi-chevron-left"></i>
+  </button>
+</div>
+
+{# Tab Panels Content (hidden, for accessibility) #}
+<div class="visually-hidden">
+  <div id="tabpanel-all" role="tabpanel" aria-labelledby="tab-all"></div>
+  <div id="tabpanel-incoming" role="tabpanel" aria-labelledby="tab-incoming"></div>
+  <div id="tabpanel-outgoing" role="tabpanel" aria-labelledby="tab-outgoing"></div>
+  <div id="tabpanel-overdue" role="tabpanel" aria-labelledby="tab-overdue"></div>
+  <div id="tabpanel-today" role="tabpanel" aria-labelledby="tab-today"></div>
+  <div id="tabpanel-upcoming" role="tabpanel" aria-labelledby="tab-upcoming"></div>
+  <div id="tabpanel-done" role="tabpanel" aria-labelledby="tab-done"></div>
+</div>

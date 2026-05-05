@@ -1,0 +1,225 @@
+/* Mobile card view and responsive rules for Book Unified page */
+
+.mobile-cards-container {
+  display: none;
+  padding: 0.75rem;
+  gap: 0.65rem;
+}
+
+.book-card {
+  border: 1px solid rgba(111, 70, 40, 0.17);
+  border-radius: 0.85rem;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(77, 44, 25, 0.08);
+  overflow: hidden;
+}
+
+.book-card-overdue {
+  background: linear-gradient(160deg, #fff1f1 0%, #ffffff 65%);
+}
+
+.book-card-today {
+  background: linear-gradient(160deg, #fff8ec 0%, #ffffff 65%);
+}
+
+.book-card-upcoming {
+  background: linear-gradient(160deg, #f2f9ff 0%, #ffffff 65%);
+}
+
+.book-card-done {
+  background: linear-gradient(160deg, #f4f5f6 0%, #ffffff 65%);
+}
+
+.book-card-header,
+.book-card-body,
+.book-card-footer {
+  padding: 0.68rem 0.75rem;
+}
+
+.book-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(111, 70, 40, 0.12);
+}
+
+.card-book-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 800;
+  color: #2f221b;
+}
+
+.secondary-number-badge-mobile {
+  display: inline-flex;
+  margin-top: 0.3rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  font-weight: 700;
+}
+
+.card-due-banner {
+  margin: 0.45rem 0.75rem 0;
+  border-radius: 0.55rem;
+  padding: 0.35rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.banner-overdue {
+  background: rgba(239, 68, 68, 0.15);
+  color: #b42318;
+}
+
+.banner-today {
+  background: rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+
+.card-title {
+  font-weight: 700;
+  color: #2f221b;
+  line-height: 1.5;
+  margin-bottom: 0.45rem;
+}
+
+.card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.badge-kind-incoming-mobile,
+.badge-kind-outgoing-mobile,
+.badge-status-pending-mobile,
+.badge-status-hold-mobile,
+.badge-status-done-mobile,
+.badge-has-attachment-mobile {
+  font-size: 0.7rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+}
+
+.badge-kind-incoming-mobile {
+  background: rgba(14, 165, 233, 0.14);
+  color: #075985;
+}
+
+.badge-kind-outgoing-mobile {
+  background: rgba(249, 115, 22, 0.15);
+  color: #9a3412;
+}
+
+.badge-status-pending-mobile {
+  background: rgba(245, 158, 11, 0.19);
+  color: #854d0e;
+}
+
+.badge-status-hold-mobile {
+  background: rgba(148, 163, 184, 0.24);
+  color: #334155;
+}
+
+.badge-status-done-mobile {
+  background: rgba(34, 197, 94, 0.22);
+  color: #166534;
+}
+
+.badge-has-attachment-mobile {
+  background: rgba(59, 130, 246, 0.18);
+  color: #1d4ed8;
+}
+
+.card-entity,
+.card-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #78533e;
+  font-size: 0.77rem;
+  margin-top: 0.35rem;
+}
+
+.book-card-footer {
+  border-top: 1px solid rgba(111, 70, 40, 0.12);
+}
+
+.card-action-icons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.card-action-btn {
+  border: 1px solid rgba(111, 70, 40, 0.2);
+  border-radius: 0.45rem;
+  background: #fff;
+  color: #65412d;
+  min-height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.card-action-btn:active {
+  transform: scale(0.98);
+}
+
+.btn-preview-mobile { color: #0369a1; }
+.btn-view-mobile { color: #2563eb; }
+.btn-edit-mobile { color: #ca8a04; }
+.btn-delete-mobile { color: #dc2626; }
+.btn-preview-mobile-disabled { opacity: 0.4; }
+
+.card-status-toggle .btn-toggle-status-mobile {
+  border-color: rgba(111, 70, 40, 0.2);
+  color: #7b5942;
+  background: #fff;
+}
+
+.card-status-toggle .btn-toggle-status-mobile.active[data-status="pending"] {
+  background: rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+
+.card-status-toggle .btn-toggle-status-mobile.active[data-status="hold"] {
+  background: rgba(148, 163, 184, 0.24);
+  color: #334155;
+}
+
+.card-status-toggle .btn-toggle-status-mobile.active[data-status="done"] {
+  background: rgba(34, 197, 94, 0.23);
+  color: #166534;
+}
+
+/* Responsive switching */
+@media (max-width: 991.98px) {
+  .desktop-table-container {
+    display: none;
+  }
+
+  .mobile-cards-container {
+    display: grid;
+  }
+
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 992px) {
+  .desktop-table-container {
+    display: block;
+  }
+
+  .mobile-cards-container {
+    display: none;
+  }
+}

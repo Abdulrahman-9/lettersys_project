@@ -1,0 +1,32 @@
+<div class="table-responsive" id="dueReportTable">
+  <table class="table table-sm align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>رقم الكتاب</th>
+        <th>نوع الكتاب</th>
+        <th>عنوان الكتاب</th>
+        <th>الجهة المعنية</th>
+        <th><span class="badge bg-light text-muted">تاريخ الاستحقاق</span></th>
+        <th>حالة الاستحقاق</th>
+        <th class="note-cell">ملاحظات</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for record in due_records %}
+      <tr>
+        <td>{{ record.book_number }}</td>
+        <td><span class="kind-chip kind-chip-{{ record.kind }}">{{ record.kind_label }}</span></td>
+        <td>{{ record.title }}</td>
+        <td>{{ record.entity }}</td>
+        <td><span class="badge bg-light text-muted">{{ record.due_date }}</span></td>
+        <td><span class="status-chip {{ record.status_class }}">{{ record.phrase }}</span></td>
+        <td class="note-cell"></td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="7" class="text-center text-muted py-3">لا توجد كتب مطابقة للإعدادات الحالية.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

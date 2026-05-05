@@ -1,0 +1,274 @@
+{% load static %}
+{% comment %}
+============================================
+BOOK UNIFIED ROW
+صف واحد في جدول الكتب مع:
+- تلوين كامل حسب الاستحقاق
+- أيقونات للنوع والحالة
+- إجراءات سريعة (معاينة، عرض، تعديل، حذف)
+- Toggle pills للحالة
+============================================
+{% endcomment %}
+
+{% with book.time_state as time_state %}
+{% with book.delay_days as delay_days %}
+
+<tr class="book-row
+         {% if book.final_status == 'done' %}book-row-done
+         {% elif time_state == 'danger' %}book-row-overdue
+         {% elif time_state == 'today' %}book-row-today
+         {% elif time_state == 'future' %}book-row-upcoming
+         {% else %}book-row-normal{% endif %}"
+    data-book-id="{{ book.id }}"
+    data-book-number="{{ book.our_number }}"
+    data-status="{{ book.final_status }}"
+    data-kind="{{ book.kind_direction }}">
+  
+  {# Column 1: Checkbox #}
+  <td class="col-select">
+    <div class="form-check">
+      <input 
+        class="form-check-input row-checkbox" 
+        type="checkbox" 
+        value="{{ book.id }}"
+        aria-label="تحديد كتاب رقم {{ book.our_number }}"
+        data-book-id="{{ book.id }}"
+      >
+    </div>
+  </td>
+  
+  {# Column 2: رقم الكتاب + معلومات إضافية #}
+  <td class="col-number">
+    <div class="book-number-cell">
+      {# رقم الكتاب الأساسي (clickable للمعاينة) #}
+      <div class="book-number-main">
+        <a 
+          href="#" 
+          class="book-number-link" 
+          data-book-id="{{ book.id }}"
+          data-bs-toggle="tooltip"
+          title="نقر للمعاينة السريعة"
+        >
+          {% if book.is_incoming %}
+            <i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>
+          {% else %}
+            <i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>
+          {% endif %}
+          <span class="book-number-text">{{ book.our_number|default:"-" }}</span>
+        </a>
+      </div>
+      
+      {# رقم وارد/صادر الثانوي #}
+      {% if book.sender_number %}
+      <div class="book-number-secondary">
+        <span class="secondary-number-badge 
+                     {% if book.is_incoming %}badge-incoming{% else %}badge-outgoing{% endif %}">
+          {% if book.is_incoming %}و-{% else %}ص-{% endif %}{{ book.sender_number }}
+        </span>
+      </div>
+      {% endif %}
+      
+      {# شارة الاستحقاق #}
+      {% if book.final_status != 'done' %}
+        {% if time_state == 'danger' %}
+        <div class="due-indicator due-overdue">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <span>متأخر {{ delay_days }} يوم</span>
+        </div>
+        {% elif time_state == 'today' %}
+        <div class="due-indicator due-today">
+          <i class="bi bi-calendar-event-fill"></i>
+          <span>مستحق اليوم</span>
+        </div>
+        {% elif time_state == 'future' and delay_days <= 3 %}
+        <div class="due-indicator due-soon">
+          <i class="bi bi-clock-fill"></i>
+          <span>بعد {{ delay_days }} يوم</span>
+        </div>
+        {% endif %}
+      {% endif %}
+      
+      {# تاريخ التسجيل (صغير) #}
+      <div class="book-date-registered">
+        <i class="bi bi-calendar3"></i>
+        {{ book.date|date:"Y-m-d" }}
+      </div>
+    </div>
+  </td>
+  
+  {# Column 3: العنوان + الحالة #}
+  <td class="col-title">
+    <div class="book-title-cell">
+      {# العنوان #}
+      <div class="book-title-text" title="{{ book.title }}">
+        {{ book.title|default:"بدون عنوان"|truncatewords:15 }}
+      </div>
+      
+      {# شارات الحالة #}
+      <div class="book-status-badges">
+        {# حالة النوع #}
+        {% if book.is_incoming %}
+          <span class="status-badge badge-kind-incoming">
+            <i class="bi bi-arrow-down-circle"></i>
+            {{ book.kind_label }}
+          </span>
+        {% else %}
+          <span class="status-badge badge-kind-outgoing">
+            <i class="bi bi-arrow-up-circle"></i>
+            {{ book.kind_label }}
+          </span>
+        {% endif %}
+        
+        {# حالة الإنجاز #}
+        {% if book.final_status == 'pending' %}
+          <span class="status-badge badge-status-pending">
+            <i class="bi bi-hourglass-split"></i>
+            {% if book.is_outgoing %}قيد الإرسال{% else %}قيد المتابعة{% endif %}
+          </span>
+        {% elif book.final_status == 'hold' %}
+          <span class="status-badge badge-status-hold">
+            <i class="bi bi-pause-circle"></i>
+            {% if book.is_outgoing %}معلق{% else %}بالحفظ{% endif %}
+          </span>
+        {% elif book.final_status == 'done' %}
+          <span class="status-badge badge-status-done">
+            <i class="bi bi-check-circle-fill"></i>
+            {% if book.is_outgoing %}مجاب{% else %}منجزة{% endif %}
+          </span>
+        {% endif %}
+        
+        {# مرفق #}
+        {% if book.attachment %}
+          <span class="status-badge badge-has-attachment" title="يوجد مرفق">
+            <i class="bi bi-paperclip"></i>
+          </span>
+        {% endif %}
+      </div>
+    </div>
+  </td>
+  
+  {# Column 4: الجهة #}
+  <td class="col-entity">
+    <div class="book-entity-cell">
+      {# جهات الإصدار #}
+      <div class="entity-primary">
+        <i class="bi bi-building entity-icon"></i>
+        {% for e in book.issuing_entities.all %}
+          <span class="entity-name" title="{{ e.name }}">{{ e.name|truncatewords:5 }}</span>{% if not forloop.last %}<span class="text-muted mx-1">·</span>{% endif %}
+        {% empty %}
+          <span class="entity-name text-muted">—</span>
+        {% endfor %}
+      </div>
+      
+      {# جهات الاستلام #}
+      {% with recv=book.receiving_entities.all %}
+      {% if recv %}
+      <div class="entity-secondary">
+        <i class="bi bi-arrow-left-right"></i>
+        {% for e in recv %}
+          <span class="entity-name-secondary" title="{{ e.name }}">{{ e.name|truncatewords:4 }}</span>{% if not forloop.last %}<span class="text-muted mx-1">·</span>{% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endwith %}
+    </div>
+  </td>
+  
+  {# Column 5: الإجراءات #}
+  <td class="col-actions">
+    <div class="book-actions-cell">
+      {# صف الأيقونات العلوي: معاينة ، عرض ، تعديل ، حذف #}
+      <div class="action-icons-row">
+        {# معاينة المستند #}
+        {% if book.attachment %}
+        <button 
+          class="action-icon-btn btn-preview" 
+          data-book-id="{{ book.id }}"
+          data-book-attachment="{{ book.attachment.url }}"
+          data-book-title="{{ book.title|default:'بدون عنوان' }}"
+          title="معاينة المستند"
+          aria-label="معاينة مستند كتاب {{ book.our_number }}"
+        >
+          <i class="bi bi-file-earmark-pdf"></i>
+        </button>
+        {% else %}
+        <button class="action-icon-btn btn-preview-disabled" disabled title="لا يوجد مرفق">
+          <i class="bi bi-file-earmark"></i>
+        </button>
+        {% endif %}
+        
+        {# عرض التفاصيل #}
+        <a 
+          href="{% url 'book_detail' book.id %}" 
+          class="action-icon-btn btn-view"
+          title="عرض التفاصيل"
+          aria-label="عرض تفاصيل كتاب {{ book.our_number }}"
+        >
+          <i class="bi bi-eye"></i>
+        </a>
+        
+        {# تعديل #}
+        <a 
+          href="{% url 'book_edit' book.id %}" 
+          class="action-icon-btn btn-edit"
+          title="تعديل"
+          aria-label="تعديل كتاب {{ book.our_number }}"
+        >
+          <i class="bi bi-pencil"></i>
+        </a>
+        
+        {# حذف #}
+        <button 
+          class="action-icon-btn btn-delete" 
+          data-book-id="{{ book.id }}"
+          data-book-number="{{ book.our_number }}"
+          data-delete-url="{% url 'api_delete_book' book.id %}"
+          title="نقل إلى السلة"
+          aria-label="حذف كتاب {{ book.our_number }}"
+        >
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+      
+      {# صف Toggle Pills للحالة #}
+      <div class="status-toggle-row">
+        <div class="btn-group btn-group-sm status-toggle-group" role="group" aria-label="تحديث حالة الكتاب">
+          <button 
+            type="button" 
+            class="btn btn-toggle-status {% if book.final_status == 'pending' %}active{% endif %}"
+            data-book-id="{{ book.id }}"
+            data-status="pending"
+            data-status-url="{% url 'api_book_inline_status' book.id %}"
+            title="قيد المتابعة/الإرسال"
+          >
+            <i class="bi bi-hourglass-split"></i>
+          </button>
+          <button 
+            type="button" 
+            class="btn btn-toggle-status {% if book.final_status == 'hold' %}active{% endif %}"
+            data-book-id="{{ book.id }}"
+            data-status="hold"
+            data-status-url="{% url 'api_book_inline_status' book.id %}"
+            title="معلق/بالحفظ"
+          >
+            <i class="bi bi-pause-circle"></i>
+          </button>
+          <button 
+            type="button" 
+            class="btn btn-toggle-status {% if book.final_status == 'done' %}active{% endif %}"
+            data-book-id="{{ book.id }}"
+            data-status="done"
+            data-status-url="{% url 'api_book_inline_status' book.id %}"
+            title="منجز/مجاب"
+          >
+            <i class="bi bi-check-circle"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </td>
+  
+</tr>
+
+{% endwith %}
+{% endwith %}

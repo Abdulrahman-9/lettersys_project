@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="Oil and gas skyline">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#061327"/>
+      <stop offset="1" stop-color="#0e2b44"/>
+    </linearGradient>
+    <linearGradient id="flare" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb45d"/>
+      <stop offset="1" stop-color="#ff7033"/>
+    </linearGradient>
+    <linearGradient id="grid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="rgba(255,255,255,0.15)"/>
+      <stop offset="1" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+    <pattern id="mesh" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M0 0h60v60H0z" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#mesh)"/>
+  <g transform="translate(0,660)" fill="#081c2b" opacity=".8">
+    <path d="M0 120h240l40-80 60 80h180l80-140 90 140h220l50-60 50 60h340V240H0z"/>
+  </g>
+  <g transform="translate(170,430)" fill="none" stroke="#0f3a54" stroke-width="10">
+    <path d="M0 220h180l-70-220h-40z"/>
+    <path d="M60 0v220"/>
+    <path d="M20 80h120"/>
+    <path d="M0 150h180"/>
+  </g>
+  <g transform="translate(520,360)" fill="none" stroke="#0f3a54" stroke-width="8">
+    <path d="M0 260h200l-80-260h-40z"/>
+    <path d="M80 0v260"/>
+    <path d="M40 90h120"/>
+    <path d="M20 160h160"/>
+  </g>
+  <g transform="translate(980,330)" fill="#0c283d">
+    <rect width="180" height="300" rx="12"/>
+    <rect x="210" width="90" height="250" rx="8"/>
+    <rect x="320" width="70" height="200" rx="6"/>
+  </g>
+  <g transform="translate(1100,260)">
+    <path d="M0 220h60l-10-160h-40z" fill="#102f49"/>
+    <rect x="15" y="-40" width="30" height="80" rx="6" fill="#102f49"/>
+    <path d="M30 -40v-80" stroke="#fdcf8c" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="30" cy="-130" r="18" fill="url(#flare)"/>
+  </g>
+  <g transform="translate(0,0)" fill="url(#grid)">
+    <rect width="1600" height="900"/>
+  </g>
+  <g fill="#ffb45d" opacity=".35">
+    <circle cx="1380" cy="140" r="120"/>
+    <circle cx="240" cy="200" r="80"/>
+  </g>
+</svg>

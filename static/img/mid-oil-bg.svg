@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#091524"/>
+      <stop offset="55%" stop-color="#0e2942"/>
+      <stop offset="100%" stop-color="#132b3b"/>
+    </linearGradient>
+    <linearGradient id="flare" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffdc73" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#ff7a18" stop-opacity="0.8"/>
+    </linearGradient>
+    <linearGradient id="dunes" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#c58a44"/>
+      <stop offset="100%" stop-color="#f1c27d"/>
+    </linearGradient>
+    <linearGradient id="pipe" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#24384f"/>
+      <stop offset="100%" stop-color="#17263a"/>
+    </linearGradient>
+    <g id="rig">
+      <path d="M40 40 L90 0 L140 40" fill="none" stroke="#f9c859" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M60 40 L60 140" stroke="#c97a2c" stroke-width="6"/>
+      <path d="M120 40 L120 140" stroke="#c97a2c" stroke-width="6"/>
+      <rect x="50" y="140" width="80" height="14" fill="#f9c859"/>
+      <path d="M60 40 L180 80" stroke="#ffe6a7" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="180" cy="80" r="12" fill="#ffe6a7"/>
+      <circle cx="90" cy="40" r="16" fill="#ffd056" opacity="0.9"/>
+    </g>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <g opacity="0.18" stroke="#1d3550" stroke-width="140" fill="none">
+    <path d="M-200 840 Q300 620 820 780 T1800 760"/>
+  </g>
+  <rect y="720" width="1600" height="180" fill="url(#dunes)" opacity="0.7"/>
+  <g opacity="0.65">
+    <use href="#rig" x="120" y="470"/>
+    <use href="#rig" x="520" y="500" transform="scale(1.15)"/>
+    <use href="#rig" x="980" y="490" transform="scale(1.2)"/>
+    <use href="#rig" x="1320" y="520" transform="scale(0.95)"/>
+  </g>
+  <g fill="url(#pipe)">
+    <rect x="0" y="690" width="1600" height="40" opacity="0.35"/>
+    <rect x="0" y="650" width="1600" height="20" opacity="0.2"/>
+  </g>
+  <g opacity="0.1" fill="#ffffff">
+    <circle cx="1390" cy="200" r="90"/>
+    <circle cx="1350" cy="210" r="60"/>
+  </g>
+  <g opacity="0.85">
+    <rect x="1180" y="260" width="28" height="220" fill="#e2e8f0" opacity="0.4"/>
+    <rect x="1186" y="210" width="16" height="55" fill="url(#flare)"/>
+    <circle cx="1194" cy="205" r="22" fill="url(#flare)"/>
+  </g>
+  <text x="100" y="190" fill="#d0d8e0" font-family="'Tajawal', 'Cairo', sans-serif" font-size="42" opacity="0.25">
+    شركة نفط الوسط
+  </text>
+</svg>

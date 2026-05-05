@@ -1,0 +1,230 @@
+<!doctype html>
+{% load static %}
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="نظام متقدم لإدارة الكتب الواردة والصادرة مع متابعة آلية">
+    <meta name="theme-color" content="#ff9233">
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="إدارة الكتب">
+    <link rel="apple-touch-icon" href="{% static 'img/icon-192x192.png' %}">
+    <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
+    
+    <title>{% block title %}نظام إدارة الكتب{% endblock %}</title>
+    
+    <!-- Stylesheets -->
+    <link href="{% static 'vendor/bootstrap/bootstrap.rtl.min.css' %}?v=20260419-shellfix" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css?v=20260419-shellfix" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Design System (موحد للألوان والمسافات) -->
+    <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260419-shellfix">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20260419-shellfix">
+    
+    <style>
+      /* ضمان طباعة الألوان في جميع المتصفحات */
+      @media print {
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+      }
+    </style>
+    
+    {# Optional per-page CSS block (for legacy templates) #}
+    {% block extra_css %}{% endblock %}
+
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body class="bg-body{% if request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %} app-shell-body{% endif %}">
+    {% if request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
+    <main class="app-auth-main">
+    {% else %}
+    <header class="app-topbar">
+      <div class="app-topbar-brand">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'dashboard' %}">
+          <img src="{% static 'img/md-o-c-logo.png' %}" alt="الشركة" style="height: 40px; width: auto;">
+          <span class="brand-text">نظام الكتب</span>
+        </a>
+        <div class="app-topbar-copy">أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة</div>
+      </div>
+      <div class="app-topbar-actions">
+        {% if request.user.is_authenticated %}
+        <a class="app-topbar-alert" href="{% url 'notifications' %}">
+          <i class="bi bi-bell"></i>
+          <span>التنبيهات</span>
+          {% if navbar_unread_notifications %}
+          <span class="app-topbar-alert-badge">{{ navbar_unread_notifications }}</span>
+          {% endif %}
+        </a>
+        <div class="app-topbar-user">
+          <i class="bi bi-person-circle"></i>
+          <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+        </div>
+        {% else %}
+        <a class="btn btn-sm btn-primary rounded-pill" href="{% url 'login' %}"><i class="bi bi-box-arrow-in-left me-1"></i>تسجيل الدخول</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside class="app-sidebar">
+        <div class="app-sidebar-panel">
+          <div class="app-sidebar-section-title">التنقل الرئيسي</div>
+          <nav class="app-sidebar-nav">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" href="{% url 'dashboard' %}">
+              <i class="bi bi-grid-1x2-fill"></i>
+              <span>لوحة التحكم</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'extraction-smart-desktop' or request.resolver_match.url_name == 'extraction-results-ui' or request.resolver_match.url_name == 'extraction-quick-start' %} active{% endif %}" href="{% url 'extraction-smart-desktop' %}">
+              <i class="bi bi-upc-scan"></i>
+              <span>الإدخال الذكي</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' and request.GET.tab != 'overdue' %} active{% endif %}" href="{% url 'book_unified' %}">
+              <i class="bi bi-journal-text"></i>
+              <span>الكتب الموحدة</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' %} active{% endif %}" href="{% url 'book_unified' %}">
+              <i class="bi bi-list-ul"></i>
+              <span>قائمة الكتب</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' and request.GET.tab == 'overdue' %} active{% endif %}" href="{% url 'book_unified' %}?tab=overdue">
+              <i class="bi bi-lightning-charge-fill"></i>
+              <span>الوصول السريع</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'notifications' %} active{% endif %}" href="{% url 'notifications' %}">
+              <i class="bi bi-bell-fill"></i>
+              <span>التنبيهات</span>
+              {% if navbar_unread_notifications %}
+              <span class="app-sidebar-link-badge">{{ navbar_unread_notifications }}</span>
+              {% endif %}
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name in 'mail_hub,mail_sent,mail_inbox,mail_compose,mail_thread,mail_settings,mail_templates,mail_template_new,mail_template_edit' %} active{% endif %}" href="{% url 'mail_sent' %}">
+              <i class="bi bi-envelope-fill"></i>
+              <span>البريد</span>
+              {% comment %} unread badge — injected by context processor {% endcomment %}
+              {% if mail_inbox_unread %}<span class="app-sidebar-link-badge" style="background:#dc3545">{{ mail_inbox_unread }}</span>{% endif %}
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'reports' %} active{% endif %}" href="{% url 'reports' %}">
+              <i class="bi bi-graph-up-arrow"></i>
+              <span>التقارير</span>
+            </a>
+            {% if request.user.is_staff %}
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'trash_list' %} active{% endif %}" href="{% url 'trash_list' %}">
+              <i class="bi bi-trash3"></i>
+              <span>سلة المهملات</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'entity_list' or request.resolver_match.url_name == 'entity_detail' or request.resolver_match.url_name == 'entity_create' or request.resolver_match.url_name == 'entity_edit' %} active{% endif %}" href="{% url 'entity_list' %}">
+              <i class="bi bi-buildings"></i>
+              <span>الجهات</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'user_roles' %} active{% endif %}" href="{% url 'user_roles' %}">
+              <i class="bi bi-person-gear"></i>
+              <span>المستخدمون</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'backup_database' %} active{% endif %}" href="{% url 'backup_database' %}">
+              <i class="bi bi-cloud-arrow-down-fill"></i>
+              <span>النسخ الاحتياطي</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'sequence_settings' %} active{% endif %}" href="{% url 'sequence_settings' %}">
+              <i class="bi bi-gear"></i>
+              <span>العدّادات التسلسلية</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'network_settings' %} active{% endif %}" href="{% url 'network_settings' %}">
+              <i class="bi bi-diagram-3"></i>
+              <span>الربط الشبكي</span>
+            </a>
+            {% endif %}
+          </nav>
+        </div>
+
+        {% block page_sidebar %}{% endblock %}
+
+        {% if request.user.is_authenticated %}
+        <div class="app-sidebar-panel app-sidebar-panel-footer">
+          <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="app-sidebar-logout">
+              <i class="bi bi-box-arrow-left"></i>
+              <span>تسجيل الخروج</span>
+            </button>
+          </form>
+        </div>
+        {% endif %}
+      </aside>
+
+      <main class="app-main">
+    {% endif %}
+
+    {% block content %}{% endblock %}
+
+    {% if request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
+    </main>
+    {% else %}
+      </main>
+    </div>
+    {% endif %}
+
+    <!-- Toast stack for global messages -->
+    <div class="toast-container toast-center p-3 toast-stack">
+      {% for m in messages %}
+      {% with tag=m.tags %}
+      <div class="toast fancy-toast" role="alert" aria-live="assertive" aria-atomic="true"
+           data-bs-autohide="true"
+           data-bs-delay="{% if 'error' in tag %}6000{% elif 'warning' in tag %}5000{% else %}3800{% endif %}">
+        <div class="d-flex align-items-center gap-2">
+          <div class="toast-accent {% if 'success' in tag %}bg-success{% elif 'warning' in tag %}bg-warning{% elif 'error' in tag %}bg-danger{% else %}bg-primary{% endif %}"></div>
+          <div class="ps-2 d-flex align-items-center">
+            {% if 'success' in tag %}
+              <i class="bi bi-check-circle-fill fs-4 text-success"></i>
+            {% elif 'warning' in tag %}
+              <i class="bi bi-exclamation-triangle-fill fs-4 text-warning"></i>
+            {% elif 'error' in tag %}
+              <i class="bi bi-x-circle-fill fs-4 text-danger"></i>
+            {% else %}
+              <i class="bi bi-info-circle-fill fs-4 text-primary"></i>
+            {% endif %}
+          </div>
+          <div class="toast-body flex-grow-1 fw-semibold">
+            {{ m }}
+          </div>
+          <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="إغلاق"></button>
+        </div>
+      </div>
+      {% endwith %}
+      {% endfor %}
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+
+    <!-- مودال معاينة الكتاب الموحد (يعمل من أي صفحة) -->
+    {% include "core/partials/book_preview_modal.html" %}
+    
+    <!-- jQuery (مطلوب لـ Smart Merge UI) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    <!-- نظام الأكواد الخطأ الموحد -->
+    <script src="{% static 'error-codes.js' %}"></script>
+    
+    <!-- نظام التسجيل والتحليلات -->
+    <script src="{% static 'logging-system.js' %}"></script>
+    
+    <!-- نظام إدارة الكتب - JavaScript الحديث -->
+    <script src="{% static 'app.js' %}"></script>
+    
+    <!-- Smart Merge System -->
+    <script src="{% static 'pdf_viewer.js' %}"></script>
+    <script src="{% static 'smart_merge_ui.js' %}"></script>
+    
+    <!-- Additional Page Scripts -->
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>

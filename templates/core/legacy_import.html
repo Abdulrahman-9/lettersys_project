@@ -1,0 +1,370 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}استيراد البيانات القديمة{% endblock %}
+
+{% block page_sidebar %}
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">حالة الاستعادة</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">ملف .bak</div>
+        <strong>ARCHMDOC</strong>
+      </div>
+      <span class="app-context-chip {% if restore_done %}is-success{% else %}is-warning{% endif %}">
+        <i class="bi bi-{% if restore_done %}check-circle{% else %}hourglass-split{% endif %}"></i>
+        {% if restore_done %}جاهز{% else %}قيد الاستعادة{% endif %}
+      </span>
+    </div>
+    {% if total_records %}
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">إجمالي السجلات</div>
+        <strong>{{ total_records|floatformat:"0" }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-table"></i></span>
+    </div>
+    {% endif %}
+    {% if tables %}
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">عدد الجداول</div>
+        <strong>{{ tables|length }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-grid"></i></span>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="app-sidebar-section-title mt-3">روابط سريعة</div>
+  <div class="app-context-list">
+    <a href="{% url 'backup_database' %}" class="app-context-item text-decoration-none">
+      <div><strong>النسخ الاحتياطي</strong></div>
+      <i class="bi bi-arrow-left text-muted"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  {# ── رأس الصفحة ── #}
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <div class="p-2 rounded-3 bg-warning bg-opacity-10">
+      <i class="bi bi-database-up fs-4 text-warning"></i>
+    </div>
+    <div>
+      <h4 class="mb-0 fw-semibold">استيراد البيانات القديمة</h4>
+      <p class="text-muted small mb-0">استيراد بيانات قسم المتابعة من النظام القديم (ARCHMDOC)</p>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}{{ msg.tags }}{% endif %} alert-dismissible fade show">
+        {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {# ── المرحلة 1: الاستعادة ── #}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center py-3">
+      <h6 class="mb-0 fw-semibold">
+        <span class="badge bg-{% if restore_done %}success{% else %}warning{% endif %} me-2">1</span>
+        استعادة قاعدة البيانات القديمة
+      </h6>
+      <span class="badge bg-{% if restore_done %}success{% else %}secondary{% endif %}">
+        {% if restore_done %}مكتمل{% else %}قيد التنفيذ{% endif %}
+      </span>
+    </div>
+    <div class="card-body">
+      {% if restore_done %}
+        <div class="alert alert-success d-flex align-items-center gap-2 mb-0">
+          <i class="bi bi-check-circle-fill"></i>
+          <div>تمت استعادة قاعدة البيانات ARCHMDOC بنجاح. البيانات جاهزة للتحليل والاستيراد.</div>
+        </div>
+      {% else %}
+        <div class="alert alert-warning d-flex align-items-center gap-2 mb-2">
+          <div class="spinner-border spinner-border-sm text-warning" id="restore-spinner"></div>
+          <div>جاري استعادة قاعدة البيانات... الصفحة تتحدث تلقائياً.</div>
+        </div>
+        <div class="bg-dark rounded p-3" style="max-height:200px;overflow-y:auto;font-family:monospace;font-size:0.8rem;" id="restore-log-box">
+          <pre class="text-light mb-0" id="restore-log-text">{{ restore_log }}</pre>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if restore_done %}
+
+  {# ── المرحلة 2: تحليل البيانات ── #}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center py-3">
+      <h6 class="mb-0 fw-semibold">
+        <span class="badge bg-info me-2">2</span>
+        تحليل بنية البيانات القديمة
+      </h6>
+    </div>
+    <div class="card-body">
+      {% if tables %}
+      <div class="row g-3 mb-3">
+        {% for t in tables %}
+        <div class="col-md-4 col-lg-3">
+          <div class="border rounded p-3">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-semibold small">{{ t.table }}</div>
+                <div class="text-muted" style="font-size:0.75rem;">{{ t.columns }} عمود</div>
+              </div>
+              {% if counts %}
+              <span class="badge bg-primary-subtle text-primary">
+                {{ counts|get_item:t.table|default:"—" }}
+              </span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {# تفاصيل الأعمدة مع خريطة المطابقة #}
+      <div class="accordion" id="schemaAccordion">
+        {% for table_name, cols in schema_by_table.items %}
+        <div class="accordion-item border-0 border-bottom">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2 fw-semibold" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#schema-{{ forloop.counter }}">
+              <i class="bi bi-table me-2 text-primary"></i>
+              {{ table_name }}
+              <span class="badge bg-secondary ms-2">{{ cols|length }} عمود</span>
+              {% if counts %}<span class="badge bg-info ms-1">{{ counts|get_item:table_name|default:0 }} سجل</span>{% endif %}
+            </button>
+          </h2>
+          <div id="schema-{{ forloop.counter }}" class="accordion-collapse collapse">
+            <div class="accordion-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>العمود</th><th>النوع</th><th>خريطة المطابقة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for col in cols %}
+                    <tr>
+                      <td class="font-monospace small">{{ col.column }}</td>
+                      <td><span class="badge bg-light text-dark">{{ col.type }}</span></td>
+                      <td>
+                        <select class="form-select form-select-sm field-map-select"
+                                data-table="{{ table_name }}"
+                                data-col="{{ col.column }}">
+                          <option value="">— لا تستورد —</option>
+                          <optgroup label="Book (الكتاب)">
+                            <option value="our_number">رقمنا (our_number)</option>
+                            <option value="sender_number">رقم الجهة (sender_number)</option>
+                            <option value="title">العنوان (title)</option>
+                            <option value="date">تاريخنا (date)</option>
+                            <option value="sender_date">تاريخ الجهة (sender_date)</option>
+                            <option value="kind">نوع الكتاب (kind)</option>
+                            <option value="final_status">الحالة (final_status)</option>
+                            <option value="secret_level">درجة السرية (secret_level)</option>
+                            <option value="margin">الملاحظات (margin)</option>
+                            <option value="needs_followup">يحتاج متابعة (needs_followup)</option>
+                            <option value="due_date">تاريخ المتابعة (due_date)</option>
+                          </optgroup>
+                          <optgroup label="Entity (الجهات)">
+                            <option value="issuing_entity">الجهة المصدرة (issuing)</option>
+                            <option value="receiving_entity">الجهة المستلمة (receiving)</option>
+                          </optgroup>
+                        </select>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── المرحلة 3: تشغيل الاستيراد ── #}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-transparent border-bottom py-3">
+      <h6 class="mb-0 fw-semibold">
+        <span class="badge bg-success me-2">3</span>
+        تشغيل الاستيراد
+      </h6>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">الجدول المراد استيراده</label>
+          <select class="form-select" id="import-table">
+            <option value="">— الكل —</option>
+            {% for t in tables %}
+            <option value="{{ t.table }}">{{ t.table }} ({{ counts|get_item:t.table|default:0 }} سجل)</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">بادئة الأرقام المتعارضة</label>
+          <input type="text" class="form-control" id="import-prefix" value="قديم-">
+        </div>
+        <div class="col-md-4 d-flex align-items-end gap-2">
+          <button class="btn btn-outline-secondary" id="btn-dryrun">
+            <i class="bi bi-eye me-1"></i> معاينة
+          </button>
+          <button class="btn btn-success" id="btn-import">
+            <i class="bi bi-cloud-download me-1"></i> استيراد فعلي
+          </button>
+        </div>
+      </div>
+
+      {# نتائج الاستيراد #}
+      <div id="import-result" class="d-none">
+        <hr>
+        <div class="row g-3 text-center mb-3">
+          <div class="col-3">
+            <div class="p-3 bg-light rounded">
+              <div class="fs-4 fw-bold text-primary" id="res-total">—</div>
+              <div class="small text-muted">إجمالي</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="p-3 bg-success bg-opacity-10 rounded">
+              <div class="fs-4 fw-bold text-success" id="res-created">—</div>
+              <div class="small text-muted">تم إنشاؤها</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="p-3 bg-warning bg-opacity-10 rounded">
+              <div class="fs-4 fw-bold text-warning" id="res-skipped">—</div>
+              <div class="small text-muted">تم تخطيها</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="p-3 bg-danger bg-opacity-10 rounded">
+              <div class="fs-4 fw-bold text-danger" id="res-failed">—</div>
+              <div class="small text-muted">فشل</div>
+            </div>
+          </div>
+        </div>
+        <div id="res-errors" class="d-none">
+          <p class="fw-semibold text-danger mb-1">أخطاء:</p>
+          <ul id="res-errors-list" class="small text-danger"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% endif %}{# restore_done #}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = '{{ csrf_token }}';
+const STATUS_URL = "{% url 'legacy_import_status' %}";
+const RUN_URL    = "{% url 'legacy_import_run' %}";
+
+// ── مراقبة حالة الاستعادة (لو لم تكتمل بعد) ──────────────
+{% if not restore_done %}
+function pollStatus() {
+  fetch(STATUS_URL).then(r => r.json()).then(data => {
+    const logEl = document.getElementById('restore-log-text');
+    if (logEl) logEl.textContent = data.log;
+    const box = document.getElementById('restore-log-box');
+    if (box) box.scrollTop = box.scrollHeight;
+    if (data.done) {
+      location.reload();
+    } else {
+      setTimeout(pollStatus, 5000);
+    }
+  });
+}
+setTimeout(pollStatus, 5000);
+{% endif %}
+
+// ── جمع خريطة الحقول من الـ selects ──────────────────────
+function collectFieldMap() {
+  const map = {};
+  document.querySelectorAll('.field-map-select').forEach(sel => {
+    if (sel.value) {
+      map[sel.dataset.col] = sel.value;
+    }
+  });
+  return map;
+}
+
+// ── تشغيل الاستيراد (معاينة أو فعلي) ────────────────────
+function runImport(dryRun) {
+  const fieldMap  = collectFieldMap();
+  const tableName = document.getElementById('import-table')?.value || '';
+  const prefix    = document.getElementById('import-prefix')?.value || 'قديم-';
+
+  const btn = dryRun ? document.getElementById('btn-dryrun') : document.getElementById('btn-import');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> جاري...';
+
+  const body = new URLSearchParams({
+    field_map:  JSON.stringify(fieldMap),
+    dry_run:    dryRun ? '1' : '0',
+    table_name: tableName,
+    prefix:     prefix,
+    csrfmiddlewaretoken: CSRF,
+  });
+
+  fetch(RUN_URL, { method: 'POST', body })
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+
+      const box = document.getElementById('import-result');
+      box.classList.remove('d-none');
+      document.getElementById('res-total').textContent   = data.total   ?? '—';
+      document.getElementById('res-created').textContent = data.created ?? '—';
+      document.getElementById('res-skipped').textContent = data.skipped ?? '—';
+      document.getElementById('res-failed').textContent  = data.failed  ?? '—';
+
+      const errBox  = document.getElementById('res-errors');
+      const errList = document.getElementById('res-errors-list');
+      errList.innerHTML = '';
+      if (data.errors && data.errors.length) {
+        errBox.classList.remove('d-none');
+        data.errors.forEach(e => {
+          const li = document.createElement('li');
+          li.textContent = e;
+          errList.appendChild(li);
+        });
+      } else {
+        errBox.classList.add('d-none');
+      }
+
+      if (!data.ok) {
+        alert('خطأ: ' + data.error);
+      }
+    })
+    .catch(e => {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+      alert('خطأ في الاتصال: ' + e);
+    });
+}
+
+document.getElementById('btn-dryrun')?.addEventListener('click',  () => runImport(true));
+document.getElementById('btn-import')?.addEventListener('click', () => {
+  if (confirm('هل أنت متأكد من بدء الاستيراد الفعلي؟ لا يمكن التراجع.')) {
+    runImport(false);
+  }
+});
+</script>
+{% endblock %}
