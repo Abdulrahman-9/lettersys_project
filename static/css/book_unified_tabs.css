@@ -1,194 +1,403 @@
-/* Tabs styling for Book Unified page */
+/* ═════════════════════════════════════════════════════════════
+   التبويبات الرئيسية + شريط الفلترة
+═════════════════════════════════════════════════════════════ */
 
-.book-unified-tabs {
+/* ── التبويبان الرئيسيان: وارد / صادر — عرض الصفحة كاملاً ── */
+.tabs-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 0 0 0.7rem;
+  border-radius: 0.85rem;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
   position: relative;
-  background: transparent;
+  border: 1px solid var(--border);
 }
 
-.tabs-container {
+.tab-main {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  padding: 1rem 1.2rem;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: #475569;
+  transition: background 0.25s ease, color 0.25s ease;
+  overflow: hidden;
+}
+
+.tab-main::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 3px;
+  background: transparent;
+  transition: background 0.3s ease;
+}
+
+.tab-main .tab-icon {
+  font-size: 1.55rem;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: transform 0.25s ease, color 0.25s ease;
+  color: #94a3b8;
+}
+
+.tab-main .tab-text {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 0.45rem;
-  overflow: visible;
-  padding: 0;
+  align-items: flex-start;
+  line-height: 1.15;
+  text-align: start;
 }
 
-.tab-btn {
-  border: 1px solid rgba(111, 70, 40, 0.12);
-  border-bottom: 1px solid rgba(111, 70, 40, 0.12);
-  background: rgba(255, 255, 255, 0.86);
-  color: #7b5942;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  justify-content: flex-start;
-  min-height: 3rem;
-  padding: 0.8rem 0.9rem;
-  font-size: 0.9rem;
+.tab-main .tab-label {
+  font-size: 1.18rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.tab-main .tab-count {
+  font-size: 0.78rem;
   font-weight: 700;
-  white-space: nowrap;
-  transition: all 0.2s ease;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.1rem;
+  transition: color 0.25s ease;
+}
+
+.tab-main:hover {
+  background: #f8fafc;
+}
+
+.tab-main:hover .tab-icon { transform: scale(1.08); }
+
+/* — وارد نشط (royal blue) — */
+.tab-main.tab-incoming.active {
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  color: #fff;
+}
+.tab-main.tab-incoming.active .tab-icon,
+.tab-main.tab-incoming.active .tab-count { color: #dbeafe; }
+.tab-main.tab-incoming.active::after { background: #fbbf24; }
+
+/* — صادر نشط (ذهبي ملكي مزجّج / glossy royal gold) — */
+.tab-main.tab-outgoing.active {
+  background:
+    /* لمعة علوية ناعمة لتأثير الزجاج */
+    linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 50%),
+    /* تدرّج ذهبي رئيسي: داكن خفيف → ذهبي براق → فاتح زجاجي */
+    linear-gradient(135deg, #ca8a04 0%, #eab308 45%, #fbbf24 100%);
+  color: #4a2a05;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(146, 64, 14, 0.18);
+}
+.tab-main.tab-outgoing.active .tab-icon { color: #78350f; }
+.tab-main.tab-outgoing.active .tab-count { color: #78350f; opacity: 0.85; }
+.tab-main.tab-outgoing.active::after { background: #1e40af; }
+
+/* — divider بين التبويبين — */
+.tab-main + .tab-main {
+  border-inline-start: 1px solid var(--border);
+}
+
+@media (max-width: 600px) {
+  .tab-main {
+    padding: 0.65rem 0.5rem;
+    gap: 0.45rem;
+  }
+  .tab-main .tab-icon { font-size: 1.2rem; }
+  .tab-main .tab-label { font-size: 1rem; }
+  .tab-main .tab-count { font-size: 0.7rem; }
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   شريط الفلترة المضغوط
+   - بحث + scope + status pills في صف واحد
+═════════════════════════════════════════════════════════════ */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.7rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  margin: 0 0 0.55rem;
+  flex-wrap: wrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+/* — حقل البحث — */
+.fb-search {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 200px;
+  max-width: 380px;
+}
+
+.fb-search input {
   width: 100%;
-  border-radius: 0.9rem;
+  padding: 0.45rem 2rem 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  font-size: 0.88rem;
+  transition: all 0.2s ease;
 }
 
-.tab-btn:hover {
-  color: #3b2a1f;
-  background: rgba(255, 248, 240, 0.92);
+.fb-search input:focus {
+  outline: none;
+  background: #fff;
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 3px var(--theme-glow);
 }
 
-.tab-btn.active {
-  color: #1f2937;
-  border-color: rgba(255, 146, 51, 0.28);
-  background: linear-gradient(135deg, rgba(255, 166, 38, 0.16), rgba(216, 123, 68, 0.1));
-  box-shadow: inset 0 0 0 1px rgba(255, 146, 51, 0.1);
-}
-
-.tab-icon {
+.fb-search-icon {
+  position: absolute;
+  inset-inline-end: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
   font-size: 0.95rem;
 }
 
-.tab-badge {
-  min-width: 1.3rem;
-  height: 1.3rem;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.1);
-  color: inherit;
+.fb-search-clear {
+  position: absolute;
+  inset-inline-end: 0.45rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.1rem 0.35rem;
+  line-height: 1;
+}
+.fb-search-clear:hover { color: #ef4444; }
+
+/* — scope toggle (داخلي/خارجي) — */
+.fb-scope {
+  display: inline-flex;
+  background: #f1f5f9;
+  border-radius: 0.5rem;
+  padding: 0.18rem;
+  border: 1px solid var(--border);
+}
+
+.fb-scope-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 0 0.25rem;
-  font-size: 0.72rem;
-  font-weight: 800;
-  margin-right: auto;
-}
-
-.tab-danger.active {
-  color: #b42318;
-  border-bottom-color: #ef4444;
-}
-
-.tab-warning.active {
-  color: #92400e;
-  border-bottom-color: #f59e0b;
-}
-
-.tab-info.active {
-  color: #0c4a6e;
-  border-bottom-color: #0ea5e9;
-}
-
-.tab-success.active {
-  color: #166534;
-  border-bottom-color: #22c55e;
-}
-
-.tab-badge-danger {
-  background: rgba(239, 68, 68, 0.18);
-}
-
-.tab-badge-warning {
-  background: rgba(245, 158, 11, 0.18);
-}
-
-.tab-badge-info {
-  background: rgba(14, 165, 233, 0.18);
-}
-
-.tab-badge-success {
-  background: rgba(34, 197, 94, 0.18);
-}
-
-.tab-scroll-btn {
-  display: none !important;
-}
-
-@media (max-width: 768px) {
-  .tabs-container {
-    padding: 0;
-  }
-
-  .tab-btn {
-    min-height: 2.7rem;
-    padding: 0.72rem 0.8rem;
-    font-size: 0.83rem;
-  }
-
-  .tab-sub-menu {
-    position: static;
-    border-radius: 0.85rem;
-    box-shadow: none;
-  }
-}
-
-/* ==========================================
-   Sub-menu dropdowns for وارد / صادر tabs
-   ========================================== */
-.tab-dropdown-wrapper {
-  position: relative;
-  display: block;
-}
-
-.tab-sub-menu {
-  display: none;
-  position: static;
-  z-index: 20;
-  background: rgba(255, 252, 248, 0.95);
-  border: 1px solid rgba(111, 70, 40, 0.15);
-  border-radius: 0.85rem;
-  box-shadow: 0 8px 20px rgba(77, 44, 25, 0.08);
-  padding: 0.4rem;
-  margin-top: 0.35rem;
-  min-width: 8rem;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.tab-dropdown-wrapper:hover .tab-sub-menu,
-.tab-dropdown-wrapper.open .tab-sub-menu {
-  display: flex;
-}
-
-.tab-sub-item {
-  border: 0;
+  gap: 0.3rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 0.38rem;
+  border: none;
   background: transparent;
-  color: #5c3d2e;
-  padding: 0.4rem 0.65rem;
-  border-radius: 0.35rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  white-space: nowrap;
-  transition: background 0.15s;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
   cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.fb-scope-btn:hover {
+  color: var(--neutral-text);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.fb-scope-btn.active {
+  background: #fff;
+  color: var(--theme-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.fb-scope-btn i { font-size: 0.85rem; }
+
+/* — status pills — */
+.fb-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.32rem;
+}
+
+.fb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.fb-pill i { font-size: 0.85rem; }
+
+.fb-pill .fb-pill-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.7rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+  margin-inline-start: 0.15rem;
+}
+
+.fb-pill:hover {
+  border-color: var(--theme-accent);
+  color: var(--theme-text);
+}
+
+.fb-pill.active {
+  border-color: var(--theme-primary);
+  background: var(--theme-primary);
+  color: #fff;
+}
+.fb-pill.active .fb-pill-count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+/* — أزرار الـ pills الخاصة — */
+.fb-pill.fb-pill-overdue.active { background: #dc2626; border-color: #dc2626; }
+.fb-pill.fb-pill-today.active   { background: #d97706; border-color: #d97706; }
+.fb-pill.fb-pill-upcoming.active{ background: #2563eb; border-color: #2563eb; }
+.fb-pill.fb-pill-done.active    { background: #16a34a; border-color: #16a34a; }
+.fb-pill.fb-pill-archived.active{ background: #475569; border-color: #475569; }
+
+/* — فاصل عمودي — */
+.fb-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 0.1rem 0.05rem;
+}
+
+/* — زر فلتر متقدم — */
+.fb-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  margin-inline-start: auto;
+}
+
+.fb-advanced-toggle:hover {
+  border-color: var(--theme-accent);
+  color: var(--theme-text);
+}
+
+.fb-advanced-toggle .fb-active-count {
+  background: var(--theme-primary);
+  color: #fff;
+  font-size: 0.68rem;
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+  font-weight: 800;
+}
+
+/* — لوح فلتر متقدم (مطوي) — */
+.fb-advanced-panel {
   width: 100%;
-  text-align: right;
+  display: none;
+  padding: 0.7rem 0.4rem 0;
+  border-top: 1px dashed var(--border);
+  margin-top: 0.45rem;
 }
 
-.tab-sub-item:hover {
-  background: rgba(255, 146, 51, 0.10);
-  color: #3b2a1f;
+.fb-advanced-panel.open { display: block; animation: fadeIn 0.2s ease; }
+
+.fb-advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 0.5rem;
 }
 
-.tab-sub-item.active {
-  background: rgba(255, 146, 51, 0.18);
-  color: #b45309;
+.fb-advanced-item label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 0.18rem;
 }
 
-.tab-sub-item i {
-  font-size: 0.85rem;
-  opacity: 0.7;
+.fb-advanced-item input,
+.fb-advanced-item select {
+  width: 100%;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  font-size: 0.83rem;
+  background: #f8fafc;
 }
 
-.tab-chevron {
-  transition: transform 0.2s;
-  margin-right: 0.15rem;
+.fb-advanced-item input:focus,
+.fb-advanced-item select:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+  background: #fff;
+  box-shadow: 0 0 0 2px var(--theme-glow);
 }
 
-.tab-dropdown-wrapper:hover .tab-chevron,
-.tab-dropdown-wrapper.open .tab-chevron {
-  transform: rotate(180deg);
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
+
+/* تخفي الـ scope/pills عند ضيق الشاشة وتُجمع على سطر آخر */
+@media (max-width: 768px) {
+  .fb-divider { display: none; }
+  .fb-search { flex: 1 1 100%; max-width: none; }
+  .fb-scope, .fb-pills { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ▼ DESIGN REVIEW · BATCH 2 — TAB HEIGHT TIGHTENING
+   تقليل ارتفاع التبويبَين من ~80px إلى ~52px مع الحفاظ التام
+   على ثيم الأزرق الملكي (وارد) والذهبي المزجج (صادر).
+   هذه الكتلة override للقيم أعلاه. للتراجع: احذفها فقط.
+═════════════════════════════════════════════════════════════════ */
+
+.tab-main {
+  padding: 0.55rem 1rem;
+  gap: 0.6rem;
+}
+.tab-main .tab-icon  { font-size: 1.25rem; }
+.tab-main .tab-text  { line-height: 1.1; }
+.tab-main .tab-label { font-size: 1.02rem; }
+.tab-main .tab-count { font-size: 0.74rem; margin-top: 0.05rem; }
+.tab-main::after     { height: 2.5px; }
+.tab-main:hover .tab-icon { transform: scale(1.06); }
+
+@media (max-width: 600px) {
+  .tab-main { padding: 0.5rem 0.6rem; gap: 0.45rem; }
+  .tab-main .tab-icon  { font-size: 1.1rem; }
+  .tab-main .tab-label { font-size: 0.95rem; }
+  .tab-main .tab-count { font-size: 0.7rem; }
+}
+
+/* ▲ END DESIGN REVIEW · BATCH 2 */
