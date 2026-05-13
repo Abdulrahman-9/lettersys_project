@@ -401,3 +401,45 @@
 }
 
 /* ▲ END DESIGN REVIEW · BATCH 2 */
+
+/* ════════════════════════════════════════════════════════════════
+   ▼ DESIGN REVIEW · BATCH 3 — FILTER BAR CLEANUP
+   ١. حذف فواصل عمودية (fb-divider) لتقليل الضوضاء البصرية
+   ٢. تهدئة الـ pills النشطة: بدل خلفية ملوّنة صلبة لكل حالة،
+      تأخذ خلفية فاتحة دلالية + نص بلون الحالة + شريط سفلي رفيع.
+      نتيجة: ٥ ألوان pills لا تتصارع مع ثيم الصفحة (أزرق/ذهبي).
+   ٣. زرّ "الكل" يتبع ثيم التبويب (أزرق للوارد، ذهبي للصادر).
+   للتراجع: احذف هذه الكتلة فقط.
+═════════════════════════════════════════════════════════════════ */
+
+/* (١) حذف الفواصل + توسيع الفراغ بين العناصر */
+.fb-divider { display: none; }
+.filter-bar { gap: 0.7rem; }
+
+/* (٢) إعادة تعريف الحالة النشطة الافتراضية */
+.fb-pill.active {
+  background: #fff;
+  border-color: transparent;
+  color: #1f2937;
+  font-weight: 800;
+  box-shadow: inset 0 -2px 0 currentColor, 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.fb-pill.active .fb-pill-count {
+  background: rgba(0, 0, 0, 0.06);
+  color: inherit;
+}
+
+/* (٣) لون كل pill دلالي عند التفعيل */
+.fb-pill.fb-pill-overdue.active   { color: #b91c1c; background: #fef2f2; }
+.fb-pill.fb-pill-today.active     { color: #b45309; background: #fffbeb; }
+.fb-pill.fb-pill-upcoming.active  { color: #1e40af; background: #eff6ff; }
+.fb-pill.fb-pill-done.active      { color: #166534; background: #f0fdf4; }
+.fb-pill.fb-pill-archived.active  { color: #475569; background: #f1f5f9; }
+
+/* (٤) "الكل" يتبع ثيم التبويب */
+.fb-pill[data-filter="all"].active {
+  color: var(--theme-text);
+  background: var(--theme-tint);
+}
+
+/* ▲ END DESIGN REVIEW · BATCH 3 */
