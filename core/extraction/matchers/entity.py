@@ -5,12 +5,16 @@ core.extraction.matchers.entity
 Entity Matching & NER Service — مطابقة الجهات والكشف عن الكيانات المسماة
 """
 
+import time
+
 from fuzzywuzzy import fuzz, process
 from typing import Dict, List, Tuple, Optional
 from core.models import Entity
 import logging
 
 logger = logging.getLogger('lettersys')
+
+_ENTITY_CACHE_TTL = 300  # 5 دقائق
 
 
 class EntityMatcher:
@@ -25,16 +29,21 @@ class EntityMatcher:
         """
         self.threshold = threshold
         self.entities_cache = None
+        self._cache_loaded_at: float = 0.0
 
     def get_entities_list(self) -> List[Dict]:
-        """الحصول على قائمة الجهات من قاعدة البيانات"""
-        if self.entities_cache is None:
+        """الحصول على قائمة الجهات من قاعدة البيانات مع TTL 5 دقائق."""
+        now = time.monotonic()
+        if self.entities_cache is None or (now - self._cache_loaded_at) > _ENTITY_CACHE_TTL:
             try:
                 entities = Entity.objects.filter(is_active=True).values('id', 'name', 'code', 'etype')
                 self.entities_cache = list(entities)
+                self._cache_loaded_at = now
+                logger.debug('[EntityMatcher] cache refreshed — %d entities', len(self.entities_cache))
             except Exception as e:
-                logger.error(f"خطأ في جلب الجهات: {str(e)}")
-                self.entities_cache = []
+                logger.error('خطأ في جلب الجهات: %s', e)
+                if self.entities_cache is None:
+                    self.entities_cache = []
 
         return self.entities_cache
 
@@ -108,8 +117,9 @@ class EntityMatcher:
         return [self.match_entity(entity) for entity in entities_list]
 
     def clear_cache(self):
-        """تطهير الذاكرة المؤقتة"""
+        """تطهير الذاكرة المؤقتة (يُعيد التحميل عند الطلب التالي)"""
         self.entities_cache = None
+        self._cache_loaded_at = 0.0
 
 
 class NERService:

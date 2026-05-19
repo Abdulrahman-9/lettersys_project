@@ -9,7 +9,7 @@ Covers:
 """
 
 import json
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.auth.models import User
 from django.test import TestCase, Client
@@ -51,17 +51,18 @@ class BookViewsBase(TestCase):
             title='كتاب تجريبي',
             date=date(2024, 1, 15),
             kind='incoming_internal',
-            final_status='pending',
+            due_date=date.today() + timedelta(days=5),  # قيد المتابعة
+            is_archived=False,
             created_by=self.user,
         )
 
-        # A second book owned by `other`
+        # A second book owned by `other` — مؤرشف (بلا due_date)
         self.other_book = Book.objects.create(
             our_number='2024-999',
             title='كتاب المستخدم الآخر',
             date=date(2024, 1, 20),
             kind='outgoing_internal',
-            final_status='archived',
+            is_archived=True,
             created_by=self.other,
         )
 
@@ -307,24 +308,26 @@ class BulkUpdateStatusTests(BookViewsBase):
         self.assertEqual(resp.status_code, 400)
 
     def test_valid_status_update(self):
+        """أرشفة الكتاب (إنهاء المتابعة)."""
         self._login()
-        resp = self._post([self.book.pk], 'done')
+        resp = self._post([self.book.pk], 'archived')
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertTrue(data['success'])
         self.assertEqual(data['updated_count'], 1)
         self.book.refresh_from_db()
-        self.assertEqual(self.book.final_status, 'done')
+        self.assertTrue(self.book.is_archived)
+        self.assertEqual(self.book.followup_state, 'archived')
 
     def test_non_integer_ids_returns_400(self):
         self._login()
-        resp = self._post(['notanint'], 'done')
+        resp = self._post(['notanint'], 'archived')
         self.assertEqual(resp.status_code, 400)
 
     def test_same_status_not_counted_as_update(self):
+        """الكتاب الافتراضي قيد المتابعة (is_archived=False)؛ 'reopen' لا يغيّر شيئاً."""
         self._login()
-        # book is already 'pending'
-        resp = self._post([self.book.pk], 'pending')
+        resp = self._post([self.book.pk], 'reopen')
         data = resp.json()
         self.assertEqual(data['updated_count'], 0)
 
@@ -405,7 +408,8 @@ class BookDetailJSONTests(BookViewsBase):
         resp = self.client.get(self._url(self.book.pk))
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        for field in ['id', 'our_number', 'title', 'kind', 'date', 'final_status',
+        for field in ['id', 'our_number', 'title', 'kind', 'date', 'followup_state',
+                      'is_archived', 'followup_label',
                       'issuing_entities', 'receiving_entities', 'attachments',
                       'edit_url', 'detail_url']:
             self.assertIn(field, data, f"Missing field: {field}")
@@ -444,22 +448,23 @@ class InlineStatusTests(BookViewsBase):
         self.assertEqual(resp.status_code, 400)
 
     def test_unauthorized_returns_403(self):
-        resp = self._post(self.book.pk, 'done', user=self.other)
+        resp = self._post(self.book.pk, 'archived', user=self.other)
         self.assertEqual(resp.status_code, 403)
 
     def test_valid_update_returns_success(self):
-        resp = self._post(self.book.pk, 'done')
+        """أرشفة الكتاب القائم (قيد المتابعة) — يصبح مؤرشفاً."""
+        resp = self._post(self.book.pk, 'archived')
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertTrue(data['success'])
-        self.assertEqual(data['status'], 'done')
+        self.assertEqual(data['followup_state'], 'archived')
         self.book.refresh_from_db()
-        self.assertEqual(self.book.final_status, 'done')
+        self.assertTrue(self.book.is_archived)
 
     def test_same_status_no_history_created(self):
-        # book is 'pending', update to 'pending' → no history entry
+        """الكتاب قيد المتابعة بالفعل؛ 'reopen' لا يضيف سجل تاريخ."""
         before = BookHistory.objects.filter(book=self.book, action='status').count()
-        self._post(self.book.pk, 'pending')
+        self._post(self.book.pk, 'reopen')
         after = BookHistory.objects.filter(book=self.book, action='status').count()
         self.assertEqual(before, after)
 
@@ -497,7 +502,7 @@ class BookUnifiedTests(BookViewsBase):
 
     def test_superuser_sees_all_books(self):
         self._login(self.superuser)
-        resp = self.client.get(reverse(self.URL))
+        resp = self.client.get(reverse(self.URL), {'tab': 'all'})
         books = resp.context['books']
         ids = [b.id for b in books]
         self.assertIn(self.book.pk, ids)
@@ -554,6 +559,54 @@ class ApiUnifiedDataTests(BookViewsBase):
             book = books[0]
             for field in ['id', 'our_number', 'title', 'kind', 'status', 'urls']:
                 self.assertIn(field, book)
+
+    def test_attachment_url_in_response_without_attachment(self):
+        """Test that attachment_url is present in response (None when no attachment)"""
+        self._login()
+        resp = self.client.get(reverse(self.URL))
+        books = resp.json()['books']
+        if books:
+            book = books[0]
+            self.assertIn('attachment_url', book)
+            self.assertIsNone(book['attachment_url'])
+
+    def test_attachment_url_in_response_with_attachment(self):
+        """Test that attachment_url contains proper file URL when attachment exists"""
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        # Create an attachment for the book
+        pdf_content = b'%PDF-1.4\n%%EOF'
+        pdf_file = SimpleUploadedFile('test.pdf', pdf_content, content_type='application/pdf')
+        attachment = Attachment.objects.create(book=self.book, file=pdf_file)
+        
+        self._login()
+        resp = self.client.get(reverse(self.URL))
+        books = resp.json()['books']
+        
+        # Find our book in the response
+        our_book = None
+        for b in books:
+            if b['id'] == self.book.id:
+                our_book = b
+                break
+        
+        self.assertIsNotNone(our_book, "Book not found in response")
+        self.assertIn('attachment_url', our_book, "attachment_url field missing from response")
+        
+        # Debug output
+        print(f"\n--- DEBUG: Attachment URL Test ---")
+        print(f"Book ID: {self.book.id}")
+        print(f"Response Book ID: {our_book['id']}")
+        print(f"Attachment URL: {our_book['attachment_url']}")
+        print(f"All book fields: {list(our_book.keys())}")
+        print(f"--- END DEBUG ---\n")
+        
+        self.assertIsNotNone(our_book['attachment_url'], "attachment_url should not be None when attachment exists")
+        self.assertTrue(
+            our_book['attachment_url'].endswith('.pdf'),
+            f"Expected PDF URL, got: {our_book['attachment_url']}"
+        )
 
 
 # ===========================================================================
@@ -657,54 +710,64 @@ class BookEditTests(BookViewsBase):
     def _url(self, pk):
         return reverse('book_edit', args=[pk])
 
+    def _update_url(self):
+        return reverse('update-book-api')
+
     def test_login_required(self):
         resp = self.client.get(self._url(self.book.pk))
         self.assertEqual(resp.status_code, 302)
 
-    def test_owner_gets_form(self):
+    def test_owner_get_redirects_to_smart_desktop(self):
+        """book_edit GET يُعيد توجيهاً للواجهة الذكية مع edit_pk."""
         self._login()
-        # book_form.html has a pre-existing TemplateSyntaxError (missing {% load static %}).
-        # We disable exception propagation so the test verifies view logic (not template).
-        self.client.raise_request_exception = False
         resp = self.client.get(self._url(self.book.pk))
-        self.client.raise_request_exception = True
-        # View ran without permission error (not 403/404) — template bug causes 500, not view bug
-        self.assertNotIn(resp.status_code, [403, 404])
+        self.assertEqual(resp.status_code, 302)
+        location = resp['Location']
+        self.assertIn('smart-desktop', location)
+        self.assertIn(f'edit_pk={self.book.pk}', location)
 
     def test_unauthorized_gets_403(self):
         self._login(self.other)
         resp = self.client.get(self._url(self.book.pk))
         self.assertEqual(resp.status_code, 403)
 
-    def test_valid_post_updates_book(self):
+    def _entity_payload(self):
+        """إنشاء جهة مستقبلة للاستخدام في اختبارات update_book_api."""
+        from core.models import Entity
+        receiver = Entity.objects.get_or_create(
+            name='جهة مستقبلة', defaults={'code': 'RCV', 'etype': 'receiver', 'is_active': True}
+        )[0]
+        return {
+            'issuing_entity_ids[]': [self.entity.pk],
+            'receiving_entity_ids[]': [receiver.pk],
+        }
+
+    def test_update_api_updates_book(self):
+        """update_book_api يحدّث بيانات الكتاب."""
         self._login()
-        resp = self.client.post(self._url(self.book.pk), {
-            'our_number': '2024-001',
-            'title': 'عنوان معدّل',
-            'date': '2024-01-15',
-            'kind': 'incoming_internal',
-            'final_status': 'pending',
-            'secret_level': 'normal',
-        })
-        # On success the view redirects to book_detail (302).
-        # We don't follow the redirect to avoid template rendering issues in book_form.html.
-        self.assertEqual(resp.status_code, 302)
+        payload = {'edit_pk': self.book.pk, 'title': 'عنوان معدّل', 'date': '2024-01-15', 'secret_level': 'normal'}
+        payload.update(self._entity_payload())
+        resp = self.client.post(self._update_url(), payload)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
         self.book.refresh_from_db()
         self.assertEqual(self.book.title, 'عنوان معدّل')
 
-    def test_edit_creates_history(self):
+    def test_update_api_creates_history(self):
+        """update_book_api يسجّل تاريخ التعديل."""
         self._login()
-        self.client.post(self._url(self.book.pk), {
-            'our_number': '2024-001',
-            'title': 'عنوان معدّل 2',
-            'date': '2024-01-15',
-            'kind': 'incoming_internal',
-            'final_status': 'pending',
-            'secret_level': 'normal',
+        payload = {'edit_pk': self.book.pk, 'title': 'عنوان معدّل 2', 'date': '2024-01-15', 'secret_level': 'normal'}
+        payload.update(self._entity_payload())
+        self.client.post(self._update_url(), payload)
+        self.assertTrue(BookHistory.objects.filter(book=self.book, action='edit').exists())
+
+    def test_update_api_unauthorized_returns_403(self):
+        """update_book_api يرفض الطلب غير المُخوَّل."""
+        self._login(self.other)
+        resp = self.client.post(self._update_url(), {
+            'edit_pk': self.book.pk, 'title': 'محاولة اختراق', 'date': '2024-01-15', 'secret_level': 'normal',
         })
-        self.assertTrue(
-            BookHistory.objects.filter(book=self.book, action='edit').exists()
-        )
+        self.assertEqual(resp.status_code, 403)
 
 
 # ===========================================================================
@@ -717,33 +780,33 @@ class BookChangeStatusTests(BookViewsBase):
         return reverse('book_change_status', args=[pk])
 
     def test_login_required(self):
-        resp = self.client.post(self._url(self.book.pk), {'final_status': 'done'})
+        resp = self.client.post(self._url(self.book.pk), {'action': 'archived'})
         self.assertEqual(resp.status_code, 302)  # redirect to login
 
     def test_unauthorized_redirects_with_error(self):
         self._login(self.other)
-        resp = self.client.post(self._url(self.book.pk), {'final_status': 'done'}, follow=True)
-        # Should redirect back and show error message
+        self.client.post(self._url(self.book.pk), {'action': 'archived'}, follow=True)
         self.book.refresh_from_db()
-        self.assertNotEqual(self.book.final_status, 'done')
+        self.assertFalse(self.book.is_archived)  # لم يتغيّر
 
-    def test_valid_status_change(self):
+    def test_valid_archive_action(self):
+        """أرشفة الكتاب (قيد المتابعة → مؤرشف)."""
         self._login()
-        resp = self.client.post(self._url(self.book.pk), {'final_status': 'done'})
+        resp = self.client.post(self._url(self.book.pk), {'action': 'archived'})
         self.assertRedirects(resp, reverse('book_detail', args=[self.book.pk]))
         self.book.refresh_from_db()
-        self.assertEqual(self.book.final_status, 'done')
+        self.assertTrue(self.book.is_archived)
 
-    def test_invalid_status_not_applied(self):
+    def test_invalid_action_not_applied(self):
         self._login()
-        old_status = self.book.final_status
-        self.client.post(self._url(self.book.pk), {'final_status': 'invalid_xyz'})
+        old = self.book.is_archived
+        self.client.post(self._url(self.book.pk), {'action': 'invalid_xyz'})
         self.book.refresh_from_db()
-        self.assertEqual(self.book.final_status, old_status)
+        self.assertEqual(self.book.is_archived, old)
 
     def test_status_change_creates_history(self):
         self._login()
-        self.client.post(self._url(self.book.pk), {'final_status': 'hold'})
+        self.client.post(self._url(self.book.pk), {'action': 'archived'})
         self.assertTrue(
             BookHistory.objects.filter(book=self.book, action='status').exists()
         )

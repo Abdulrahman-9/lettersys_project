@@ -195,6 +195,7 @@ class ExtractionWorkflow:
             sender_date = QuickFillAssistant.normalize_date(book_data.get('sender_date'))
             due_date = QuickFillAssistant.normalize_date(book_data.get('due_date'))
             needs_followup = bool(book_data.get('needs_followup'))
+            effective_due = due_date if needs_followup else None
 
             # دمج بيانات الاستخراج مع البيانات المقدمة من المستخدم
             merged_data = {
@@ -205,9 +206,8 @@ class ExtractionWorkflow:
                 'secret_level': _normalize_secret_level(book_data.get('secret_level') or self.extraction.secret_level),
                 'date': book_date,
                 'sender_date': sender_date,
-                'due_date': due_date if needs_followup else None,
-                'needs_followup': needs_followup,
-                'final_status': 'pending' if needs_followup else 'archived',
+                'due_date': effective_due,
+                'is_archived': (effective_due is None),
                 'margin': book_data.get('margin') or book_data.get('margin_text') or self.extraction.margin_text or '',
                 'created_by': self.user,
             }

@@ -49,6 +49,19 @@ class ImageProcessor:
         if self.image is None:
             raise ValueError("فشل تحميل الصورة")
 
+        # تصغير الصور الكبيرة قبل OCR (CPU EasyOCR بطيء على صور > 2000px)
+        # الحد 2000px على الجانب الأطول كافٍ لـ OCR الطباعي العربي/الإنجليزي.
+        h, w = self.image.shape[:2]
+        max_dim = max(h, w)
+        MAX_OCR_DIM = 2000
+        if max_dim > MAX_OCR_DIM:
+            scale = MAX_OCR_DIM / max_dim
+            new_w, new_h = int(w * scale), int(h * scale)
+            logger.info('[ImageProcessor] downscale %dx%d → %dx%d (OCR speed)',
+                        w, h, new_w, new_h)
+            self.image = cv2.resize(self.image, (new_w, new_h),
+                                    interpolation=cv2.INTER_AREA)
+
         self.original_image = None  # لا نحتفظ بنسخة لتوفير الذاكرة
 
     def _convert_pdf_to_image(self, pdf_path: str) -> np.ndarray:

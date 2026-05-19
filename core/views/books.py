@@ -10,8 +10,8 @@ This file re-exports everything for backwards compatibility
 from .books_helpers import (
     _normalize_secret_level_value,
     _resolve_entities,
-    annotate_time_state,
-    compute_time_state,
+    annotate_followup_state,
+    compute_followup_state,
     validate_sort_parameters,
 )
 from .books_sequence import (
@@ -20,6 +20,7 @@ from .books_sequence import (
 )
 from .books_api import (
     save_book_api,
+    update_book_api,
     api_delete_book,
     api_bulk_delete_books,
     api_bulk_update_status_books,
@@ -30,6 +31,7 @@ from .books_api import (
 from .books_list import (
     book_unified,
     api_unified_data,
+    api_export_csv,
     trash_list,
     _KIND_DISPLAY,
     _STATUS_DISPLAY,
@@ -49,14 +51,15 @@ __all__ = [
     # helpers
     '_normalize_secret_level_value',
     '_resolve_entities',
-    'annotate_time_state',
-    'compute_time_state',
+    'annotate_followup_state',
+    'compute_followup_state',
     'validate_sort_parameters',
     # sequence
     'next_number_api',
     'sequence_settings',
     # API mutations
     'save_book_api',
+    'update_book_api',
     'api_delete_book',
     'api_bulk_delete_books',
     'api_bulk_update_status_books',
@@ -66,6 +69,7 @@ __all__ = [
     # list/unified
     'book_unified',
     'api_unified_data',
+    'api_export_csv',
     'trash_list',
     # forms/create
     'book_create_incoming',

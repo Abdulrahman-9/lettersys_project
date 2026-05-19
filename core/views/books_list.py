@@ -3,20 +3,20 @@
 Book list/unified/trash views.
 """
 
+import csv
+import io
 import json
 import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.urls import reverse
-from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from ..models import Attachment, Book, Entity
-from .books_helpers import annotate_time_state
 
 logger = logging.getLogger(__name__)
 
@@ -27,39 +27,92 @@ _KIND_DISPLAY = {
     'incoming_external': ('وارد خارجي', 'purple-dark'),
 }
 
+# حالات المتابعة الأربع الموحَّدة: state → (label, color-token)
 _STATUS_DISPLAY = {
-    'pending':  ('قيد الإجراء', 'warning'),
-    'hold':     ('معلّق',       'secondary'),
-    'done':     ('منجز',        'success'),
-    'archived': ('مؤرشف',       'info'),
+    'pending':   ('قيد المتابعة', 'pending'),
+    'due_today': ('مستحق اليوم',  'due_today'),
+    'overdue':   ('متأخر',         'overdue'),
+    'archived':  ('مؤرشف',         'archived'),
 }
+
+# توافق رجعي مع URLs قديمة (bookmarks خارجية، CSV exports قديم، إلخ)
+_LEGACY_FOLLOWUP_MAP = {
+    'today':    'due_today',
+    'upcoming': 'pending',
+    'done':     'archived',
+    'hold':     'archived',
+}
+
+
+def _resolve_followup_param(request):
+    """يستخرج معامل حالة المتابعة من الطلب مع دعم الأسماء القديمة."""
+    raw = (
+        request.GET.get('followup')
+        or request.GET.get('status')
+        or request.GET.get('due_status')
+        or ''
+    ).strip()
+    return _LEGACY_FOLLOWUP_MAP.get(raw, raw)
 
 
 def _serialize_book(book):
     """تحويل كائن Book إلى dict مناسب لإعادة JSON في AJAX endpoint."""
     kind_label, kind_color = _KIND_DISPLAY.get(book.kind, (book.kind, 'secondary'))
-    status_label, status_color = _STATUS_DISPLAY.get(book.final_status, (book.final_status, 'secondary'))
+    state = book.followup_state
+    status_label, status_color = _STATUS_DISPLAY.get(state, (state, 'secondary'))
 
     issuing = [{'id': e.id, 'name': e.name} for e in book.issuing_entities.all()]
     receiving = [{'id': e.id, 'name': e.name} for e in book.receiving_entities.all()]
 
+    att = book.attachment
+    try:
+        attachment_url = att.file.url if att and att.file else None
+    except Exception:
+        attachment_url = None
+
+    created_by_name = ''
+    if book.created_by_id:
+        created_by_name = book.created_by.get_full_name() or book.created_by.username
+
     return {
         'id': book.id,
         'our_number': book.our_number or '',
+        'our_number_year': book.our_number_year,
+        'our_number_sequence': book.our_number_sequence,
+        'our_number_is_compound': book.our_number_is_compound,
+        'our_number_is_numberless': book.our_number_is_numberless,
+        'series_no': book.series_no,
+        'version': book.version,
+        'legacy_number': book.legacy_number or '',
+        'sender_number': book.sender_number or '',
+        'date_display': book.date.strftime('%d/%m/%Y') if book.date else '—',
+        'sender_date_display': book.sender_date.strftime('%d/%m/%Y') if book.sender_date else '',
         'title': book.title,
         'kind': book.kind,
         'kind_label': kind_label,
         'kind_color': kind_color,
         'date': book.date.isoformat() if book.date else '',
-        'status': book.final_status,
+        'status': state,
         'status_label': status_label,
         'status_color': status_color,
+        'is_archived': book.is_archived,
+        'followup_state': state,
+        'followup_label': status_label,
         'issuing_entities': issuing,
         'receiving_entities': receiving,
-        'needs_followup': book.needs_followup,
         'due_date': book.due_date.isoformat() if book.due_date else None,
-        'delay_days': getattr(book, 'delay_days', 0),
-        'time_state': getattr(book, 'time_state', 'normal'),
+        'due_date_display': book.due_date.strftime('%d/%m/%Y') if book.due_date else '',
+        'delay_days': book.delay_days,
+        'attachment_url': attachment_url,
+        # ─── expansion panel data ───
+        'margin': book.margin or '',
+        'sender_date': book.sender_date.strftime('%d/%m/%Y') if book.sender_date else '',
+        'document_type': book.document_type or '',
+        'secret_level': book.secret_level,
+        'secret_label': book.get_secret_level_display(),
+        'created_by_name': created_by_name,
+        'created_at': book.created_at.strftime('%d/%m/%Y %H:%M') if book.created_at else '',
+        'updated_at': book.updated_at.strftime('%d/%m/%Y %H:%M') if book.updated_at else '',
         'urls': {
             'detail': reverse('book_detail', args=[book.id]),
             'edit':   reverse('book_edit',   args=[book.id]),
@@ -77,16 +130,16 @@ def book_unified(request):
 
     base_qs = (
         Book.objects.filter(is_deleted=False)
-        if request.user.is_superuser
+        if request.user.is_superuser or request.user.is_staff
         else Book.objects.filter(created_by=request.user, is_deleted=False)
-    ).select_related("created_by").prefetch_related("issuing_entities", "receiving_entities")
+    ).select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
 
-    tab = (request.GET.get("tab") or "all").strip()
+    tab = (request.GET.get("tab") or "incoming").strip()
     search_text = (request.GET.get("q") or "").strip()
     date_from_str = (request.GET.get("date_from") or "").strip()
     date_to_str = (request.GET.get("date_to") or "").strip()
     entity_id = (request.GET.get("entity_id") or "").strip()
-    status = (request.GET.get("status") or "").strip()
+    followup = _resolve_followup_param(request)
     sort = (request.GET.get("sort") or "-date").strip()
 
     date_from = None
@@ -112,7 +165,7 @@ def book_unified(request):
         date_from=date_from,
         date_to=date_to,
         entity_id=entity_id,
-        status=status
+        followup=followup,
     )
     qs = BookSortEngine.apply_sort(qs, sort)
 
@@ -124,13 +177,7 @@ def book_unified(request):
     except (PageNotAnInteger, EmptyPage):
         page_obj = paginator.page(1)
 
-    books = list(annotate_time_state(page_obj.object_list))
-    today = timezone.localdate()
-    for book in books:
-        if book.due_date:
-            book.delay_days = abs((book.due_date - today).days)
-        else:
-            book.delay_days = 0
+    books = list(page_obj.object_list)
 
     counter_badges = BookFilterEngine.get_counter_badges(base_qs)
 
@@ -149,7 +196,7 @@ def book_unified(request):
         pagination_to = pagination_from + len(books) - 1
 
     active_filters_count = sum(
-        1 for v in [search_text, date_from, date_to, entity_id, status] if v
+        1 for v in [search_text, date_from, date_to, entity_id, followup] if v
     )
 
     query_copy = request.GET.copy()
@@ -172,7 +219,8 @@ def book_unified(request):
         "date_to": date_to_str,
         "entity_id": entity_id,
         "selected_entity_id": entity_id,
-        "status": status,
+        "followup": followup,
+        "current_filter": followup,
         "sort_by": sort,
         "show_filters": active_filters_count > 0,
         "has_active_filters": active_filters_count > 0,
@@ -180,10 +228,10 @@ def book_unified(request):
         "total_books": counter_badges['all'],
         "incoming_count": counter_badges['incoming'],
         "outgoing_count": counter_badges['outgoing'],
-        "done_count": counter_badges['done'],
+        "pending_count": counter_badges['pending'],
+        "due_today_count": counter_badges['due_today'],
         "overdue_count": counter_badges['overdue'],
-        "today_count": counter_badges['today'],
-        "upcoming_count": counter_badges['upcoming'],
+        "archived_count": counter_badges['archived'],
         "entities": entities,
         "book_list_api_url": "/api/books/",
         "filters": json.dumps({
@@ -192,7 +240,7 @@ def book_unified(request):
             "date_from": date_from_str,
             "date_to": date_to_str,
             "entity_id": entity_id,
-            "status": status,
+            "followup": followup,
             "sort": sort,
         }),
     }
@@ -210,16 +258,16 @@ def api_unified_data(request):
 
     base_qs = (
         Book.objects.filter(is_deleted=False)
-        if request.user.is_superuser
+        if request.user.is_superuser or request.user.is_staff
         else Book.objects.filter(created_by=request.user, is_deleted=False)
-    ).select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities')
+    ).select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
 
-    tab = (request.GET.get('tab') or 'all').strip()
+    tab = (request.GET.get('tab') or 'incoming').strip()
     search_text = (request.GET.get('q') or '').strip()
     date_from_s = (request.GET.get('date_from') or '').strip()
     date_to_s = (request.GET.get('date_to') or '').strip()
     entity_id = (request.GET.get('entity_id') or '').strip()
-    status = (request.GET.get('status') or '').strip()
+    followup = _resolve_followup_param(request)
     sort = (request.GET.get('sort') or '-date').strip()
     per_page = 12
 
@@ -237,7 +285,7 @@ def api_unified_data(request):
         base_qs,
         tab=tab, search_text=search_text,
         date_from=date_from, date_to=date_to,
-        entity_id=entity_id, status=status,
+        entity_id=entity_id, followup=followup,
     )
     qs = BookSortEngine.apply_sort(qs, sort)
 
@@ -247,18 +295,16 @@ def api_unified_data(request):
     except (PageNotAnInteger, EmptyPage):
         page_obj = paginator.page(1)
 
-    books_qs = list(annotate_time_state(page_obj.object_list))
-    today = timezone.localdate()
-    for b in books_qs:
-        b.delay_days = abs((b.due_date - today).days) if b.due_date else 0
-
+    books_qs = list(page_obj.object_list)
     books_data = [_serialize_book(b) for b in books_qs]
 
     active_filters = BookFilterEngine.active_filters_summary(
         tab=tab, search_text=search_text,
         date_from=date_from_s, date_to=date_to_s,
-        entity_id=entity_id, status=status,
+        entity_id=entity_id, followup=followup,
     )
+
+    counter_badges = BookFilterEngine.get_counter_badges(base_qs)
 
     return JsonResponse({
         'books': books_data,
@@ -271,6 +317,7 @@ def api_unified_data(request):
             'has_prev': page_obj.has_previous(),
         },
         'active_filters': active_filters,
+        'badges': counter_badges,
     })
 
 
@@ -292,9 +339,75 @@ def trash_list(request):
     return render(request, "core/trash.html", context)
 
 
+@login_required
+def api_export_csv(request):
+    """تصدير الكتب المفلترة كـ CSV — يستخدم نفس فلاتر api_unified_data."""
+    from .filter_helpers import BookFilterEngine, BookSortEngine
+
+    base_qs = (
+        Book.objects.filter(is_deleted=False)
+        if request.user.is_superuser or request.user.is_staff
+        else Book.objects.filter(created_by=request.user, is_deleted=False)
+    ).prefetch_related("issuing_entities", "receiving_entities")
+
+    from datetime import datetime as _dt
+    tab = (request.GET.get("tab") or "all").strip()
+    search_text = (request.GET.get("q") or "").strip()
+    entity_id = (request.GET.get("entity_id") or "").strip()
+    followup = _resolve_followup_param(request)
+    sort = (request.GET.get("sort") or "-date").strip()
+    date_from = date_to = None
+    try:
+        if request.GET.get("date_from"):
+            date_from = _dt.strptime(request.GET["date_from"], "%Y-%m-%d").date()
+        if request.GET.get("date_to"):
+            date_to = _dt.strptime(request.GET["date_to"], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        pass
+
+    qs = BookFilterEngine.apply_all_filters(
+        base_qs,
+        tab=tab, search_text=search_text,
+        date_from=date_from, date_to=date_to,
+        entity_id=entity_id, followup=followup,
+    )
+    qs = BookSortEngine.apply_sort(qs, sort)
+
+    HEADERS = ["رقم الكتاب", "التاريخ", "الموضوع", "النوع", "الحالة", "الجهات", "تاريخ الاستحقاق"]
+
+    def _rows():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(HEADERS)
+        yield buf.getvalue()
+        for book in qs.iterator(chunk_size=500):
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            kind_label = _KIND_DISPLAY.get(book.kind, (book.kind,))[0]
+            status_label = _STATUS_DISPLAY.get(book.followup_state, (book.followup_state,))[0]
+            entities = ", ".join(
+                e.name for e in list(book.issuing_entities.all()) + list(book.receiving_entities.all())
+            )
+            writer.writerow([
+                book.our_number or "",
+                book.date.isoformat() if book.date else "",
+                book.title,
+                kind_label,
+                status_label,
+                entities,
+                book.due_date.isoformat() if book.due_date else "",
+            ])
+            yield buf.getvalue()
+
+    response = StreamingHttpResponse(_rows(), content_type="text/csv; charset=utf-8-sig")
+    response["Content-Disposition"] = 'attachment; filename="books_export.csv"'
+    return response
+
+
 __all__ = [
     'book_unified',
     'api_unified_data',
+    'api_export_csv',
     'trash_list',
     '_serialize_book',
     '_KIND_DISPLAY',

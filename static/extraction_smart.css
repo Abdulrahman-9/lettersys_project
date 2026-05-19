@@ -1186,3 +1186,179 @@ body.app-shell-body .app-main .extraction-container { flex: 1 1 auto; min-height
 .ta-wrapper input:not(:focus) ~ .ta-tab-hint {
     opacity: 0 !important;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   زر تبديل معاينة المستند — Preview Toggle (Hamburger)
+   ════════════════════════════════════════════════════════════════ */
+
+.preview-toggle-btn {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border: 1.5px solid rgba(255,255,255,0.22);
+    border-radius: 11px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s ease, transform 0.18s ease, box-shadow 0.22s ease, border-color 0.2s ease;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    position: relative;
+    overflow: hidden;
+}
+.preview-toggle-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at center, rgba(255,255,255,0.35) 0%, transparent 70%);
+    opacity: 0;
+    transform: scale(0.3);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    pointer-events: none;
+}
+.preview-toggle-btn:hover {
+    background: rgba(255,255,255,0.22);
+    transform: scale(1.07);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+.preview-toggle-btn:active {
+    transform: scale(0.93);
+}
+.preview-toggle-btn:active::after {
+    opacity: 1;
+    transform: scale(1.8);
+}
+.preview-toggle-btn.is-active {
+    background: rgba(255,255,255,0.26);
+    border-color: rgba(255,255,255,0.45);
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.18), 0 4px 14px rgba(0,0,0,0.18);
+}
+
+/* الخطوط الثلاث وتحويلها إلى X */
+.ham-line {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: #fff;
+    border-radius: 2px;
+    transition: transform 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity   0.24s ease,
+                width     0.36s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+    pointer-events: none;
+}
+.preview-toggle-btn.is-active .ham-line:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.preview-toggle-btn.is-active .ham-line:nth-child(2) { opacity: 0; width: 0; }
+.preview-toggle-btn.is-active .ham-line:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* تلميح نصي صغير تحت الزر */
+.preview-toggle-btn[data-tooltip]::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15,23,42,0.92);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 4px 9px;
+    border-radius: 7px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    z-index: 999;
+    letter-spacing: 0.2px;
+}
+.preview-toggle-btn:hover[data-tooltip]::before { opacity: 1; }
+
+/* ════════════════════════════════════════════════════════════════
+   انتقالات لوحة المعاينة (تلاشي + انزلاق)
+   ════════════════════════════════════════════════════════════════ */
+
+.extraction-preview-modal {
+    transition: opacity 0.34s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.36s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(0);
+    transform-origin: left center;
+}
+
+/* مرحلة التلاشي (قبل الإخفاء الكامل) */
+.extraction-preview-modal.is-hiding {
+    opacity: 0 !important;
+    transform: translateX(28px) scale(0.97) !important;
+    pointer-events: none;
+}
+
+/* الإخفاء الكامل */
+.extraction-preview-modal.is-hidden {
+    display: none !important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   الوضع الموسَّع — حين تختفي المعاينة
+   ════════════════════════════════════════════════════════════════ */
+
+/* تغيير الشبكة لتشغيل عمود واحد */
+body.app-shell-body .app-main .extraction-container.preview-collapsed {
+    grid-template-columns: 1fr !important;
+}
+
+/* توسيع حقل عرض المحتوى الداخلي */
+body.app-shell-body .app-main .extraction-container.preview-collapsed .desktop-workbench {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr) !important;
+    gap: 18px !important;
+}
+
+/* تكبير الحقول — انتقال ناعم */
+body.app-shell-body .app-main .extraction-container.preview-collapsed .form-control-smart {
+    padding: 10px 15px !important;
+    font-size: 0.97rem !important;
+    transition: padding 0.32s ease, font-size 0.32s ease;
+}
+body.app-shell-body .app-main .extraction-container.preview-collapsed .field-label {
+    font-size: 0.91rem !important;
+    transition: font-size 0.32s ease;
+}
+body.app-shell-body .app-main .extraction-container.preview-collapsed textarea.form-control-smart {
+    min-height: 95px !important;
+}
+body.app-shell-body .app-main .extraction-container.preview-collapsed .input-hint {
+    font-size: 0.78rem !important;
+}
+body.app-shell-body .app-main .extraction-container.preview-collapsed .kind-tab {
+    padding: 9px 10px !important;
+    font-size: 0.85rem !important;
+}
+body.app-shell-body .app-main .extraction-container.preview-collapsed .form-section {
+    padding: 14px 18px !important;
+}
+
+/* شريط الإجراءات في الوضع الموسَّع */
+body.app-shell-body .app-main .extraction-container.preview-collapsed .action-bar {
+    border-radius: 12px !important;
+}
+body.app-shell-body .app-main .extraction-container.preview-collapsed .btn-action-primary,
+body.app-shell-body .app-main .extraction-container.preview-collapsed .btn-action-secondary {
+    padding: 11px 22px !important;
+    font-size: 0.95rem !important;
+}
+
+/* لا تُطبَّق تغييرات الوضع الموسَّع على شاشات صغيرة */
+@media (max-width: 1100px) {
+    body.app-shell-body .app-main .extraction-container.preview-collapsed {
+        grid-template-columns: 1fr !important;
+    }
+    body.app-shell-body .app-main .extraction-container.preview-collapsed .form-control-smart {
+        font-size: 0.9rem !important;
+        padding: 7px 10px !important;
+    }
+}

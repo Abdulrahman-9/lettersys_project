@@ -5,7 +5,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db import models
 from django.utils import timezone
 
-from .extraction_kinds import BOOK_KIND_CHOICES, EXTRACTION_KIND_CHOICES
+from .extraction.kinds import BOOK_KIND_CHOICES, EXTRACTION_KIND_CHOICES
 
 
 # النماذج الأساسية: Entity (الجهات)، Book (الكتب)، Attachment (المرفقات)، BookHistory (السجل الزمني)
@@ -120,20 +120,57 @@ class Book(models.Model):
         ("topsecret", "سري للغاية"),
     )
     KIND_CHOICES = BOOK_KIND_CHOICES
-    FINAL_CHOICES = (
-        ("archived", "مؤرشف"),
-        ("pending", "قيد المتابعة"),
-        ("done", "منجزة"),
-        ("hold", "معلقة"),
+
+    # ── حالات المتابعة الأربع الموحّدة (حصرية متبادلة، محسوبة من due_date + is_archived) ──
+    # archived : ابتدائياً عند الإدخال بدون فترة متابعة، أو يدوياً عند إنهاء المتابعة
+    # pending  : due_date > today  — قيد المتابعة (المهلة في المستقبل)
+    # due_today: due_date == today — مستحق اليوم
+    # overdue  : due_date <  today — متأخر
+    FOLLOWUP_STATE_CHOICES = (
+        ("pending",   "قيد المتابعة"),
+        ("due_today", "مستحق اليوم"),
+        ("overdue",   "متأخر"),
+        ("archived",  "مؤرشف"),
     )
+    FOLLOWUP_COLOR = {
+        "pending":   "#2563eb",  # أزرق
+        "due_today": "#d97706",  # برتقالي
+        "overdue":   "#dc2626",  # أحمر
+        "archived":  "#64748b",  # رمادي
+    }
 
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, default="incoming_internal")
 
     # ── أرقام الكتاب ──
     # الصادر: our_number = رقم الصادر الخاص بنا
     # الوارد: our_number = رقم الوارد الخاص بنا، sender_number = رقم صادر الجهة المرسلة
-    our_number = models.CharField("رقمنا (صادر/وارد)", max_length=50, default="")
+    # بعد التطبيع: our_number بصيغة YYYYNNNN (مثل 20251304)
+    our_number = models.CharField("رقمنا (صادر/وارد)", max_length=50, default="", db_index=True)
     sender_number = models.CharField("رقم صادر الجهة", max_length=50, blank=True, default="")
+    # ── حقول التطبيع ──
+    legacy_number = models.CharField(
+        "الرقم الأصلي قبل التطبيع",
+        max_length=80, blank=True, default="",
+        help_text="يحفظ النص الأصلي للرقم قبل عملية التطبيع — للتوافق التاريخي",
+    )
+    # هوية السجل في قاعدة المصدر — للدمج/التحديث عند إعادة الاستعادة (مثل "IIMAIL_2025#1234")
+    # فارغ = كتاب أُضيف داخل التطبيق ولا يُلمَس أثناء الاستعادة
+    source_ref = models.CharField(
+        "هوية المصدر",
+        max_length=40, blank=True, default="", db_index=True,
+        help_text='"{TABLE}#{ID}" في قاعدة المصدر — يربط الكتاب بصفّه الأصلي للدمج المستقبلي',
+    )
+    # للأرقام المركّبة قديم-X-Y: series_no = X (السلسلة)، version = Y (الرقم الفرعي)
+    series_no = models.PositiveIntegerField(
+        "رقم السلسلة",
+        null=True, blank=True, db_index=True,
+        help_text="الجزء الأول من الرقم المركّب (X في X-Y)",
+    )
+    version = models.PositiveSmallIntegerField(
+        "الرقم الفرعي",
+        null=True, blank=True,
+        help_text="الجزء الثاني من الرقم المركّب (Y في X-Y)",
+    )
 
     title = models.CharField("العنوان", max_length=300)
     document_type = models.CharField("تصنيف المستند", max_length=100, blank=True, default="")
@@ -168,11 +205,11 @@ class Book(models.Model):
         Tag, related_name="books", blank=True, verbose_name="الوُسوم"
     )
 
-    # ── المتابعة ──
-    needs_followup = models.BooleanField("يحتاج متابعة", default=False)
+    # ── المتابعة (موحّدة) ──
+    # تاريخ المتابعة: فارغ = لا متابعة (الكتاب مؤرشف ابتداءً)
     due_date = models.DateField("تاريخ المتابعة", blank=True, null=True)
-    final_status = models.CharField(max_length=10, choices=FINAL_CHOICES, default="archived")
-    is_overdue = models.BooleanField(default=False)
+    # علم الأرشفة اليدوية: True عند إنهاء المتابعة أو الإدخال بلا due_date
+    is_archived = models.BooleanField("مؤرشف", default=True)
 
     # ── التدقيق ──
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
@@ -183,12 +220,37 @@ class Book(models.Model):
     deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="deleted_books")
 
     def save(self, *args, **kwargs):
-        # حساب التأخر فقط للكتب التي تحتاج متابعة
-        if self.needs_followup and self.due_date:
-            self.is_overdue = self.final_status not in ("done", "archived") and timezone.localdate() > self.due_date
-        else:
-            self.is_overdue = False
+        # القاعدة الذهبية: لا due_date ⇒ مؤرشف تلقائياً
+        if not self.due_date:
+            self.is_archived = True
         super().save(*args, **kwargs)
+
+    @property
+    def followup_state(self):
+        """
+        حالة المتابعة المحسوبة (مصدر الحقيقة الوحيد).
+        Returns one of: 'pending', 'due_today', 'overdue', 'archived'.
+        """
+        if self.is_archived or not self.due_date:
+            return "archived"
+        today = timezone.localdate()
+        if self.due_date < today:
+            return "overdue"
+        if self.due_date == today:
+            return "due_today"
+        return "pending"
+
+    @property
+    def followup_label(self):
+        """التسمية العربية لحالة المتابعة الحالية."""
+        return dict(self.FOLLOWUP_STATE_CHOICES).get(self.followup_state, "")
+
+    @property
+    def delay_days(self):
+        """عدد الأيام منذ/حتى تاريخ الاستحقاق (موجب دائماً)."""
+        if not self.due_date or self.is_archived:
+            return 0
+        return abs((timezone.localdate() - self.due_date).days)
 
     @property
     def is_incoming(self):
@@ -219,6 +281,18 @@ class Book(models.Model):
         return labels.get(self.kind, self.kind)
 
     @property
+    def attachment(self):
+        """Latest non-deleted attachment — uses prefetch cache when available."""
+        try:
+            cache = self._prefetched_objects_cache.get('attachments')
+            if cache is not None:
+                active = [a for a in cache if not a.is_deleted]
+                return active[0] if active else None
+        except AttributeError:
+            pass
+        return self.attachments.filter(is_deleted=False).first()
+
+    @property
     def first_issuing_entity(self):
         """First issuing entity for template display."""
         entities = self.issuing_entities.all()
@@ -230,11 +304,58 @@ class Book(models.Model):
         entities = self.receiving_entities.all()
         return entities[0] if entities else None
 
+
+    # خريطة بادئة السجل → تسمية
+    _REGISTER_LABELS = {'0': 'بلا رقم', '1': 'وارد داخلي', '2': 'وارد خارجي', '3': 'صادر داخلي', '4': 'صادر خارجي'}
+
+    def _parse_year_prefix(self):
+        """يُعيد (year_str, register_char_or_None, rest_string) أو (None, None, our_number)."""
+        s = self.our_number or ''
+        if len(s) >= 4 and s[:4].isdigit() and 2020 <= int(s[:4]) <= 2099:
+            year = s[:4]
+            rest = s[4:]
+            # الصيغة الجديدة: الخانة الخامسة بادئة سجل (1-4) والطول ≥ 9
+            if len(s) >= 9 and rest and rest[0] in '1234':
+                return (year, rest[0], rest[1:])
+            return (year, None, rest)
+        return (None, None, s)
+
     @property
-    def status_label(self):
-        """Arabic label for final_status."""
-        labels = dict(self.FINAL_CHOICES)
-        return labels.get(self.final_status, self.final_status)
+    def our_number_year(self):
+        """السنة (أول 4 خانات إن كانت 2020-2099)، وإلا ''."""
+        return self._parse_year_prefix()[0] or ''
+
+    @property
+    def our_number_register_label(self):
+        """تسمية السجل (وارد داخلي / صادر خارجي ...) من بادئة الرقم، أو ''."""
+        reg = self._parse_year_prefix()[1]
+        return self._REGISTER_LABELS.get(reg, '') if reg else ''
+
+    @property
+    def our_number_sequence(self):
+        """
+        العرض المختصر بدون السنة وبادئة السجل:
+        - مركّب (series_no + version) → 'X-Y'  (للأرقام المكررة في السجل نفسه)
+        - عادي → 'NNNN'
+        - خام → النص كما هو
+        """
+        if self.series_no is not None and self.version is not None:
+            return f"{self.series_no}-{self.version}"
+        year, reg, rest = self._parse_year_prefix()
+        if year is None:
+            return rest  # خام
+        if not rest:
+            return '0'
+        return (rest.lstrip('0') or '0') if rest.isdigit() else rest
+
+    @property
+    def our_number_is_compound(self):
+        return self.series_no is not None and self.version is not None
+
+    @property
+    def our_number_is_numberless(self):
+        """كتاب داخلي بلا رقم رسمي (بادئة السجل = 0)."""
+        return self._parse_year_prefix()[1] == '0'
 
     def __str__(self):
         return f"{self.our_number} - {self.title}"
@@ -245,17 +366,20 @@ class Book(models.Model):
         ordering = ['-date']
         indexes = [
             models.Index(fields=['is_deleted', 'created_by', '-date'], name='book_list_main_idx'),
-            models.Index(fields=['is_deleted', 'kind', 'final_status'], name='book_filters_idx'),
+            models.Index(fields=['is_deleted', 'kind', 'is_archived'], name='book_filters_idx'),
             models.Index(fields=['our_number'], name='our_number_idx'),
+            models.Index(fields=['legacy_number'], name='legacy_number_idx'),
             models.Index(fields=['sender_number'], name='sender_number_idx'),
             models.Index(fields=['title'], name='title_idx'),
-            models.Index(fields=['due_date', 'final_status'], name='due_date_idx'),
+            models.Index(fields=['due_date', 'is_archived'], name='due_date_idx'),
             models.Index(fields=['created_by', 'is_deleted'], name='user_deleted_idx'),
-            models.Index(fields=['needs_followup', 'is_overdue'], name='followup_idx'),
+            models.Index(fields=['is_archived', 'due_date'], name='followup_idx'),
+            # فهرس مركّب لتسريع الفلترة بحالة المتابعة + النوع (للجداول الكبيرة >50k)
+            models.Index(fields=['is_archived', 'due_date', 'kind'], name='followup_kind_idx'),
             # ─ فهارس جديدة (Phase 2) ─
             models.Index(fields=['is_deleted'], name='book_is_deleted_idx'),
             models.Index(fields=['kind'], name='book_kind_idx'),
-            models.Index(fields=['is_deleted', 'created_by', 'final_status'], name='book_user_status_idx'),
+            models.Index(fields=['is_deleted', 'created_by', 'is_archived'], name='book_user_status_idx'),
         ]
 
 
@@ -1004,26 +1128,32 @@ class OCRModelVersion(models.Model):
 # =============================
 class BookSequence(models.Model):
     """
-    عدّاد تسلسلي لكل نوع كتاب.
-    يُستخدم لتوليد رقم تلقائي فريد عند إنشاء كتاب جديد.
+    عدّاد تسلسلي لكل نوع كتاب — يتصفّر سنوياً.
+    الصيغة الموحّدة: YYYY{R}{NNNN} حيث R = بادئة السجل (1 وارد داخلي، 2 وارد خارجي،
+    3 صادر داخلي، 4 صادر خارجي، 0 = بلا رقم).
     """
+    # بادئة السجل لكل نوع كتاب
+    REGISTER_CODES = {
+        'incoming_internal': '1',
+        'incoming_external': '2',
+        'outgoing_internal': '3',
+        'outgoing_external': '4',
+    }
+    NUMBERLESS_CODE = '0'   # كتاب داخلي بلا رقم رسمي (استثناء يدعمه النظام)
+
     kind = models.CharField(
-        max_length=20,
-        choices=BOOK_KIND_CHOICES,
-        unique=True,
-        verbose_name='نوع الكتاب'
+        max_length=20, choices=BOOK_KIND_CHOICES, unique=True, verbose_name='نوع الكتاب'
     )
     prefix = models.CharField(
-        max_length=20,
-        blank=True,
-        default='',
-        verbose_name='البادئة',
-        help_text='بادئة اختيارية تُضاف قبل الرقم (مثال: و/, ص/)'
+        max_length=20, blank=True, default='', verbose_name='البادئة (مهملة)',
+        help_text='غير مستخدمة بعد التطبيع — يُحتفظ بها للتوافق'
+    )
+    year = models.PositiveSmallIntegerField(
+        default=2026, verbose_name='سنة العدّاد',
+        help_text='السنة التي يعدّ لها next_number — يتصفّر تلقائياً عند تغيّر السنة'
     )
     next_number = models.PositiveIntegerField(
-        default=1,
-        verbose_name='الرقم التالي',
-        help_text='الرقم التسلسلي التالي الذي سيُستخدم'
+        default=1, verbose_name='الرقم التالي'
     )
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1033,30 +1163,61 @@ class BookSequence(models.Model):
 
     def __str__(self):
         label = dict(BOOK_KIND_CHOICES).get(self.kind, self.kind)
-        return f"{label}: {self.prefix}{self.next_number}"
+        return f"{label}: {self.format_number(self.kind, self.next_number, self.year)}"
+
+    @classmethod
+    def register_code(cls, kind):
+        return cls.REGISTER_CODES.get(kind, '9')
+
+    @classmethod
+    def format_number(cls, kind, number, year=None, numberless=False):
+        """صيغة موحّدة: YYYY{R}{NNNN}."""
+        if year is None:
+            year = timezone.now().year
+        reg = cls.NUMBERLESS_CODE if numberless else cls.register_code(kind)
+        return f"{year}{reg}{number:04d}"
+
+    def _maybe_roll_year(self):
+        """إن تغيّرت السنة، صفّر العدّاد (لا يحفظ — المتصل مسؤول عن الحفظ)."""
+        cur_year = timezone.now().year
+        if self.year != cur_year:
+            self.year = cur_year
+            self.next_number = 1
+            return True
+        return False
 
     @classmethod
     def get_next(cls, kind):
         """إرجاع الرقم التالي دون استهلاكه."""
-        obj, _ = cls.objects.get_or_create(kind=kind, defaults={'next_number': 1})
-        return {'prefix': obj.prefix, 'number': obj.next_number, 'formatted': f"{obj.prefix}{obj.next_number}"}
+        obj, _ = cls.objects.get_or_create(
+            kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
+        )
+        year = timezone.now().year
+        n = 1 if obj.year != year else obj.next_number
+        return {
+            'kind': kind, 'number': n, 'year': year,
+            'register': cls.register_code(kind),
+            'formatted': cls.format_number(kind, n, year),
+        }
 
     @classmethod
-    def consume_next(cls, kind):
-        """
-        استهلاك الرقم الحالي والتقدم إلى التالي — آمن من race conditions.
-        يستخدم SELECT FOR UPDATE داخل transaction.atomic() تماماً كـ reserve().
-        """
+    def consume_next(cls, kind, numberless=False):
+        """استهلاك الرقم الحالي — آمن من race conditions (SELECT FOR UPDATE)."""
         from django.db import transaction
         with transaction.atomic():
             obj = cls.objects.select_for_update().get_or_create(
-                kind=kind, defaults={'next_number': 1}
+                kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
             )[0]
+            obj._maybe_roll_year()
             current = obj.next_number
-            prefix  = obj.prefix
+            year = obj.year
             obj.next_number += 1
-            obj.save(update_fields=['next_number', 'updated_at'])
-        return {'prefix': prefix, 'number': current, 'formatted': f"{prefix}{current}"}
+            obj.save(update_fields=['next_number', 'year', 'updated_at'])
+        return {
+            'kind': kind, 'number': current, 'year': year,
+            'register': cls.NUMBERLESS_CODE if numberless else cls.register_code(kind),
+            'formatted': cls.format_number(kind, current, year, numberless=numberless),
+        }
 
 
 # =============================
@@ -1193,15 +1354,16 @@ class BookNumberReservation(models.Model):
         from django.db import transaction
         with transaction.atomic():
             seq = BookSequence.objects.select_for_update().get_or_create(
-                kind=kind, defaults={'next_number': 1}
+                kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
             )[0]
+            seq._maybe_roll_year()
             number  = seq.next_number
             prefix  = seq.prefix
-            year    = timezone.now().year
+            year    = seq.year
             seq.next_number += 1
-            seq.save(update_fields=['next_number', 'updated_at'])
+            seq.save(update_fields=['next_number', 'year', 'updated_at'])
 
-            formatted = f"{prefix}{number}"
+            formatted = BookSequence.format_number(kind, number, year)
             reservation = cls.objects.create(
                 user=user,
                 kind=kind,
@@ -1385,6 +1547,66 @@ class EmailSettings(models.Model):
         """أحضر السجل الوحيد أو أنشئه بالقيم الافتراضية."""
         obj, _ = cls.objects.get_or_create(singleton=1)
         return obj
+
+
+# ══════════════════════════════════════════════════════════════════
+#  إعدادات الماسح الضوئي (Singleton)
+# ══════════════════════════════════════════════════════════════════
+class ScanSettings(models.Model):
+    """
+    إعدادات الماسح الضوئي — سجل وحيد (Singleton).
+    يُستخدَم بواسطة Hot Folder Watcher وزر "ابدأ المسح" وسكريبت scan_manager.
+    """
+
+    # ─── CaptureOnTouch ────────────────────────────────────────────
+    capture_exe_path = models.CharField(
+        "مسار CaptureOnTouch.exe", max_length=500, blank=True, default="",
+        help_text=r"مثال: C:\Program Files\Canon\CaptureOnTouch\CaptureOnTouch.exe",
+    )
+    watch_folder = models.CharField(
+        "مجلد المسح الضوئي", max_length=500, blank=True, default="",
+        help_text="المجلد الذي يحفظ فيه CaptureOnTouch الملفات الممسوحة",
+    )
+
+    # ─── سلوك التطبيق ──────────────────────────────────────────────
+    auto_open_browser = models.BooleanField(
+        "فتح المتصفح تلقائياً بعد كل مسح", default=True,
+    )
+    server_url = models.CharField(
+        "عنوان الخادم المحلي", max_length=200, default="http://localhost:8000",
+        help_text="يُستخدم لفتح صفحة الاستخراج بعد انتهاء المسح",
+    )
+    window_topmost = models.BooleanField(
+        "نافذة CaptureOnTouch فوق التطبيق", default=True,
+        help_text="تُبقي نافذة المسح عائمة فوق المتصفح أثناء المسح",
+    )
+
+    # ─── Singleton guard ────────────────────────────────────────────
+    singleton  = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'إعدادات الماسح الضوئي'
+        verbose_name_plural = 'إعدادات الماسح الضوئي'
+
+    def __str__(self):
+        return f"إعدادات الماسح ({self.watch_folder or 'غير مكوّن'})"
+
+    @classmethod
+    def get(cls) -> 'ScanSettings':
+        """أحضر السجل الوحيد أو أنشئه بالقيم الافتراضية."""
+        obj, _ = cls.objects.get_or_create(singleton=1)
+        return obj
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.watch_folder and self.capture_exe_path)
+
+    @property
+    def watcher_status(self) -> str:
+        """الحالة الحالية للـ watcher (تُحدَّث بواسطة الخيط الخلفي)."""
+        from django.core.cache import cache
+        return cache.get('scan_watcher_status', 'stopped')
 
 
 # ══════════════════════════════════════════════════════════════════

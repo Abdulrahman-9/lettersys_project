@@ -1,0 +1,131 @@
+{% load static %}
+{% comment %}
+============================================
+شريط فلترة موحّد ومضغوط
+- بحث + scope + status pills في صف واحد
+- لوح فلترة متقدم (مطوي، اختياري)
+============================================
+{% endcomment %}
+
+<div class="filter-bar" id="filterBar">
+
+  {# ── البحث الفوري ── #}
+  <div class="fb-search">
+    <input type="text"
+           id="liveSearchInput"
+           class="fb-search-input"
+           placeholder="ابحث برقم القيد أو العنوان أو الجهة..."
+           autocomplete="off"
+           value="{{ search_query|default:'' }}"
+           data-live-search="true">
+    <i class="bi bi-search fb-search-icon"></i>
+    <button type="button"
+            class="fb-search-clear"
+            id="clearSearchBtn"
+            style="display: {% if search_query %}block{% else %}none{% endif %};"
+            title="مسح (Esc)">
+      <i class="bi bi-x"></i>
+    </button>
+  </div>
+
+  <span class="fb-divider"></span>
+
+  {# ── scope: داخلي / خارجي / الكل ── #}
+  <div class="fb-scope" role="group" aria-label="نطاق الكتاب">
+    <button type="button"
+            class="fb-scope-btn {% if current_tab == 'incoming' or current_tab == 'outgoing' %}active{% endif %}"
+            data-scope="all" title="الكل">
+      <i class="bi bi-collection"></i> الكل
+    </button>
+    <button type="button"
+            class="fb-scope-btn {% if current_tab|slice:'-9:' == '_internal' %}active{% endif %}"
+            data-scope="internal" title="داخلي">
+      <i class="bi bi-building"></i> داخلي
+    </button>
+    <button type="button"
+            class="fb-scope-btn {% if current_tab|slice:'-9:' == '_external' %}active{% endif %}"
+            data-scope="external" title="خارجي">
+      <i class="bi bi-globe2"></i> خارجي
+    </button>
+  </div>
+
+  <span class="fb-divider"></span>
+
+  {# ── pills حالة المتابعة الأربع الموحَّدة ── #}
+  <div class="fb-pills" role="group" aria-label="فلترة حالة المتابعة">
+    <button type="button"
+            class="fb-pill {% if not current_filter %}active{% endif %}"
+            data-filter="all" title="كل الحالات">
+      <i class="bi bi-list-ul"></i> الكل
+    </button>
+    <button type="button"
+            class="fb-pill fb-pill-pending {% if current_filter == 'pending' %}active{% endif %}"
+            data-filter="pending" title="قيد المتابعة">
+      <i class="bi bi-clock-history"></i> قيد المتابعة
+      <span class="fb-pill-count" id="pill-count-pending">{{ pending_count|default:0 }}</span>
+    </button>
+    <button type="button"
+            class="fb-pill fb-pill-due-today {% if current_filter == 'due_today' %}active{% endif %}"
+            data-filter="due_today" title="مستحق اليوم">
+      <i class="bi bi-calendar-event"></i> مستحق اليوم
+      <span class="fb-pill-count" id="pill-count-due-today">{{ due_today_count|default:0 }}</span>
+    </button>
+    <button type="button"
+            class="fb-pill fb-pill-overdue {% if current_filter == 'overdue' %}active{% endif %}"
+            data-filter="overdue" title="متأخر">
+      <i class="bi bi-exclamation-triangle"></i> متأخر
+      <span class="fb-pill-count" id="pill-count-overdue">{{ overdue_count|default:0 }}</span>
+    </button>
+    <button type="button"
+            class="fb-pill fb-pill-archived {% if current_filter == 'archived' %}active{% endif %}"
+            data-filter="archived" title="مؤرشف">
+      <i class="bi bi-archive"></i> مؤرشف
+      <span class="fb-pill-count" id="pill-count-archived">{{ archived_count|default:0 }}</span>
+    </button>
+  </div>
+
+  {# ── زر فلترة متقدم ── #}
+  <button type="button" class="fb-advanced-toggle" id="filterToggleBtn" aria-expanded="false">
+    <i class="bi bi-sliders"></i>
+    <span>متقدم</span>
+    {% if active_filters_count and active_filters_count > 0 %}
+      <span class="fb-active-count">{{ active_filters_count }}</span>
+    {% endif %}
+  </button>
+
+  {# ── لوح متقدم ── #}
+  <div class="fb-advanced-panel" id="advancedFilters">
+    <form method="get" id="advancedFiltersForm">
+      <div class="fb-advanced-grid">
+        <div class="fb-advanced-item">
+          <label for="filterDateFrom">من تاريخ</label>
+          <input type="date" id="filterDateFrom" name="date_from" value="{{ date_from|default:'' }}">
+        </div>
+        <div class="fb-advanced-item">
+          <label for="filterDateTo">إلى تاريخ</label>
+          <input type="date" id="filterDateTo" name="date_to" value="{{ date_to|default:'' }}">
+        </div>
+        <div class="fb-advanced-item">
+          <label for="filterEntity">الجهة</label>
+          <select id="filterEntity" name="entity_id">
+            <option value="">جميع الجهات</option>
+            {% for entity in entities %}
+              <option value="{{ entity.id }}" {% if selected_entity_id|stringformat:"s" == entity.id|stringformat:"s" %}selected{% endif %}>{{ entity.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="fb-advanced-item">
+          <label for="filterSort">الترتيب</label>
+          <select id="filterSort" name="sort">
+            <option value="-date" {% if sort_by == '-date' %}selected{% endif %}>الأحدث أولاً</option>
+            <option value="date" {% if sort_by == 'date' %}selected{% endif %}>الأقدم أولاً</option>
+            <option value="-our_number" {% if sort_by == '-our_number' %}selected{% endif %}>رقم القيد (تنازلي)</option>
+            <option value="our_number" {% if sort_by == 'our_number' %}selected{% endif %}>رقم القيد (تصاعدي)</option>
+            <option value="title" {% if sort_by == 'title' %}selected{% endif %}>العنوان (أ-ي)</option>
+          </select>
+        </div>
+      </div>
+    </form>
+  </div>
+
+</div>

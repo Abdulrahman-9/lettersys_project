@@ -130,14 +130,34 @@
 .tag-dropdown-item .entity-code { font-size: 0.75rem; color: #94a3b8; margin-right: 4px; }
 .tag-dropdown-item.new-option { color: #059669; font-weight: 500; }
 
-/* ── Followup Toggle ── */
+/* ── Followup Mode Selector — اختيار موحَّد لحالة المتابعة ── */
 .followup-toggle {
   background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px;
   padding: 1rem; transition: all 0.3s;
 }
-.followup-toggle.active { border-color: #f59e0b; background: #fffbeb; }
-.followup-fields { max-height: 0; overflow: hidden; transition: max-height 0.4s ease, opacity 0.3s; opacity: 0; }
-.followup-fields.show { max-height: 300px; opacity: 1; padding-top: 0.75rem; }
+.followup-mode-selector {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;
+}
+.followup-mode-card {
+  display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+  padding: 0.7rem 0.4rem; border: 2px solid #e2e8f0; border-radius: 10px;
+  background: #fff; cursor: pointer; transition: all 0.2s;
+  text-align: center; user-select: none;
+}
+.followup-mode-card:hover { border-color: #94a3b8; transform: translateY(-1px); }
+.followup-mode-card.active {
+  border-color: var(--mode-color, #3b82f6);
+  background: var(--mode-bg, #eff6ff);
+  box-shadow: 0 0 0 3px var(--mode-ring, rgba(59,130,246,0.15));
+}
+.followup-mode-card[data-mode="none"]   { --mode-color: #64748b; --mode-bg: #f1f5f9; --mode-ring: rgba(100,116,139,0.15); }
+.followup-mode-card[data-mode="active"] { --mode-color: #2563eb; --mode-bg: #eff6ff; --mode-ring: rgba(37,99,235,0.18); }
+.followup-mode-card[data-mode="ended"]  { --mode-color: #475569; --mode-bg: #f8fafc; --mode-ring: rgba(71,85,105,0.15); }
+.followup-mode-icon { font-size: 1.4rem; }
+.followup-mode-title { font-weight: 700; font-size: 0.88rem; color: #1e293b; }
+.followup-mode-desc  { font-size: 0.72rem; color: #64748b; line-height: 1.3; }
+.followup-date-wrap { animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ── Form Controls ── */
 .form-control-modern {
@@ -369,28 +389,39 @@
     {# ══════════════════════════════════════════════ #}
     <div class="form-section">
       <div class="followup-toggle" id="followupSection">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="form-section-title mb-0"><i class="bi bi-bell"></i> المتابعة</div>
-            <div class="small text-muted">هل يحتاج هذا الكتاب لمتابعة وموعد إنجاز؟</div>
-          </div>
-          <div class="form-check form-switch">
-            {{ form.needs_followup }}
-            <label class="form-check-label visually-hidden" for="id_needs_followup">يحتاج متابعة</label>
-          </div>
+        <div class="form-section-title mb-2"><i class="bi bi-bell"></i> المتابعة</div>
+
+        {# ── خيار موحَّد: ثلاثة أوضاع مترابطة ── #}
+        <div class="followup-mode-selector" id="followupModeSelector">
+          <label class="followup-mode-card" data-mode="none">
+            <input type="radio" name="followup_mode" value="none" class="visually-hidden">
+            <span class="followup-mode-icon" style="color:#64748b;"><i class="bi bi-archive-fill"></i></span>
+            <span class="followup-mode-title">بلا متابعة</span>
+            <span class="followup-mode-desc">مؤرشف ابتداءً — لا حاجة لمتابعة</span>
+          </label>
+          <label class="followup-mode-card" data-mode="active">
+            <input type="radio" name="followup_mode" value="active" class="visually-hidden">
+            <span class="followup-mode-icon" style="color:#2563eb;"><i class="bi bi-clock-history"></i></span>
+            <span class="followup-mode-title">قيد المتابعة</span>
+            <span class="followup-mode-desc">حدّد تاريخ استحقاق للمتابعة</span>
+          </label>
+          <label class="followup-mode-card" data-mode="ended">
+            <input type="radio" name="followup_mode" value="ended" class="visually-hidden">
+            <span class="followup-mode-icon" style="color:#475569;"><i class="bi bi-check2-circle"></i></span>
+            <span class="followup-mode-title">منتهية</span>
+            <span class="followup-mode-desc">كان لها متابعة وأُنهيت (مؤرشف)</span>
+          </label>
         </div>
-        <div class="followup-fields" id="followupFields">
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label for="id_due_date" class="form-label small fw-semibold">تاريخ المتابعة</label>
-              {{ form.due_date }}
-            </div>
-            <div class="col-md-6">
-              <label for="id_final_status" class="form-label small fw-semibold">الحالة</label>
-              {{ form.final_status }}
-            </div>
-          </div>
+
+        {# تاريخ المتابعة — يُعرض فقط عند active/ended #}
+        <div class="followup-date-wrap mt-3" id="followupDateWrap" style="display:none;">
+          <label for="id_due_date" class="form-label small fw-semibold">تاريخ الاستحقاق</label>
+          {{ form.due_date }}
+          <div class="form-text small">حالة الكتاب ستُحسَب تلقائياً: قيد المتابعة / مستحق اليوم / متأخر</div>
         </div>
+
+        {# الحقول الحقيقية مخفيّة — يضبطها JS بناءً على الوضع المختار #}
+        <div class="visually-hidden">{{ form.is_archived }}</div>
       </div>
     </div>
 
@@ -531,26 +562,61 @@
     });
   }
 
-  // ══════════════════════════════════════
-  // FOLLOWUP TOGGLE
-  // ══════════════════════════════════════
-  const followupCheckbox = document.getElementById('id_needs_followup');
-  const followupSection = document.getElementById('followupSection');
-  const followupFields = document.getElementById('followupFields');
-  const dueInput = document.getElementById('id_due_date');
+  // ══════════════════════════════════════════════════════════════════
+  // FOLLOWUP MODE: 3 أوضاع مترابطة (none / active / ended)
+  //   none   ⇒ due_date فارغ + is_archived=true
+  //   active ⇒ due_date موجود + is_archived=false
+  //   ended  ⇒ due_date موجود + is_archived=true (متابعة سابقة، انتهت)
+  // ══════════════════════════════════════════════════════════════════
+  const modeSelector = document.getElementById('followupModeSelector');
+  const dateWrap     = document.getElementById('followupDateWrap');
+  const dueInput     = document.getElementById('id_due_date');
+  const archivedCB   = document.getElementById('id_is_archived');
 
-  function updateFollowup() {
-    const on = followupCheckbox?.checked;
-    followupSection?.classList.toggle('active', on);
-    followupFields?.classList.toggle('show', on);
-    if (on && dueInput && !dueInput.value && dateInput?.value) {
-      const d = new Date(dateInput.value);
-      if (!isNaN(d)) { d.setDate(d.getDate() + 7); dueInput.value = d.toISOString().slice(0, 10); }
+  function inferInitialMode() {
+    const hasDate    = !!(dueInput && dueInput.value);
+    const isArchived = !!(archivedCB && archivedCB.checked);
+    if (!hasDate) return 'none';
+    return isArchived ? 'ended' : 'active';
+  }
+
+  function applyMode(mode) {
+    if (!modeSelector) return;
+    // تحديث الـ radio + الـ active class
+    modeSelector.querySelectorAll('.followup-mode-card').forEach(card => {
+      const isActive = card.dataset.mode === mode;
+      card.classList.toggle('active', isActive);
+      const radio = card.querySelector('input[type="radio"]');
+      if (radio) radio.checked = isActive;
+    });
+    // إظهار/إخفاء حقل التاريخ
+    if (dateWrap) dateWrap.style.display = (mode === 'none') ? 'none' : 'block';
+    // ضبط القيم الفعلية في الحقول المخفيّة
+    if (mode === 'none') {
+      if (dueInput) dueInput.value = '';
+      if (archivedCB) archivedCB.checked = true;
+    } else if (mode === 'active') {
+      if (archivedCB) archivedCB.checked = false;
+      // اقترح تاريخ بعد 7 أيام لو فارغ
+      if (dueInput && !dueInput.value) {
+        const dateInputEl = document.getElementById('id_date');
+        const base = (dateInputEl?.value) ? new Date(dateInputEl.value) : new Date();
+        if (!isNaN(base)) {
+          base.setDate(base.getDate() + 7);
+          dueInput.value = base.toISOString().slice(0, 10);
+        }
+      }
+    } else { // ended
+      if (archivedCB) archivedCB.checked = true;
     }
   }
-  if (followupCheckbox) {
-    followupCheckbox.addEventListener('change', updateFollowup);
-    updateFollowup();
+
+  if (modeSelector) {
+    modeSelector.addEventListener('click', (e) => {
+      const card = e.target.closest('.followup-mode-card');
+      if (card && card.dataset.mode) applyMode(card.dataset.mode);
+    });
+    applyMode(inferInitialMode());
   }
 
   // ══════════════════════════════════════
@@ -940,72 +1006,105 @@
   const scanBtn = document.getElementById('scanCaptureBtn');
 
   if (scanBtn) {
-    let cancelScan = false, controller = null;
-    const removeWaitOverlay = () => { const o = document.getElementById('scanWaitOverlay'); if (o) o.remove(); };
     const cleanupBackdrops = () => { document.querySelectorAll('.modal-backdrop').forEach(b => b.remove()); document.body.classList.remove('modal-open'); document.body.style.removeProperty('padding-right'); };
 
     scanBtn.addEventListener('click', async function() {
       const now = Date.now();
       if (now - lastScanTime < SCAN_COOLDOWN) {
-        notify(`يرجى الانتظار ${Math.ceil((SCAN_COOLDOWN - (now - lastScanTime))/1000)} ثانية قبل إعادة المحاولة.`, 'warning', {
-          title: 'تم تفعيل مهلة قصيرة بين محاولات المسح'
-        });
+        notify(`يرجى الانتظار ${Math.ceil((SCAN_COOLDOWN - (now - lastScanTime))/1000)} ثانية`, 'warning');
         return;
       }
       lastScanTime = now;
       scanBtn.disabled = true;
-      cancelScan = false;
       lastScanJobId = null;
       if (scanJobInput) scanJobInput.value = '';
 
-      removeWaitOverlay();
-      const waitModal = document.createElement('div');
-      waitModal.id = 'scanWaitOverlay';
-      waitModal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.3);z-index:9999;';
-      waitModal.innerHTML = `
-        <div style="background:#fff;max-width:400px;margin:10vh auto;padding:2rem;border-radius:16px;box-shadow:0 8px 32px #0002;text-align:center;">
-          <div class="spinner-border text-info mb-3"></div>
-          <h5 class="mb-2">جاري تشغيل السكانر...</h5>
-          <div class="mb-2">يرجى إجراء المسح من السكانر.<br>يمكنك الإلغاء في أي وقت.</div>
-          <button id="cancelScanBtn" class="btn btn-outline-danger mt-2">إلغاء</button>
-        </div>`;
-      document.body.appendChild(waitModal);
-      document.getElementById('cancelScanBtn').onclick = () => { cancelScan = true; if (controller) controller.abort(); removeWaitOverlay(); };
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+      if (!csrfToken) { notify('رمز الأمان غير موجود، أعد تحميل الصفحة', 'error'); scanBtn.disabled = false; return; }
+
+      // إطلاق البروتوكول عبر <a>.click() — لا تُغادر الصفحة للبروتوكولات المخصصة
+      function launchProtocol(protoUrl) {
+        const a = document.createElement('a');
+        a.href = protoUrl;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => a.remove(), 500);
+      }
+
+      // مراقبة watcher حتى يظهر ملف جديد ثم الانتقال لصفحة الاستخراج
+      function pollForFile(baseCount) {
+        const start = Date.now();
+        const poll = async () => {
+          if (Date.now() - start > 180000) {
+            notify('انتهت مهلة انتظار الماسح — يمكنك رفع الملف يدوياً', 'warning');
+            scanBtn.disabled = false; return;
+          }
+          try {
+            const r = await fetch('/books/api/scan/watcher-status/', { credentials: 'same-origin' });
+            const d = await r.json();
+            if ((d.file_count || 0) > baseCount) {
+              if (d.last_token) { window.location.href = '/books/extract/smart-desktop/?scan_token=' + d.last_token; return; }
+              notify(`✓ تم اكتشاف الملف: ${d.last_file || ''}`, 'success');
+              scanBtn.disabled = false; return;
+            }
+          } catch (_) {}
+          setTimeout(poll, 2500);
+        };
+        setTimeout(poll, 2500);
+      }
 
       try {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-        if (!csrfToken) throw new Error('رمز الأمان غير موجود. أعد تحميل الصفحة.');
+        // 0) فحص البروتوكول — تثبيت تلقائي إذا لم يكن مسجّلاً
+        let installed = true;
+        try {
+          const pr = await fetch('/books/api/scan/check-protocol/', { credentials: 'same-origin' });
+          installed = (await pr.json()).installed;
+        } catch (_) {}
 
-        controller = new AbortController();
-        const resp = await Promise.race([
-          fetch('/books/api/scan-capture/', { method: 'POST', headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' }, body: '{}', signal: controller.signal }),
-          new Promise((_, rej) => { const c = () => { if (cancelScan) rej('cancelled'); else setTimeout(c, 300); }; c(); })
-        ]);
-
-        if (!resp.ok) { let msg = 'تعذر تنفيذ الالتقاط'; try { msg = (await resp.json()).message || msg; } catch(e) {} throw new Error(msg); }
-        const data = await resp.json();
-
-        if (data.status === 'ok' && data.file_url) {
-          lastScanJobId = data.scan_job_id || null;
-          const fileResp = await fetch(data.file_url);
-          if (!fileResp.ok) throw new Error('تعذر تحميل الملف');
-          const blob = await fileResp.blob();
-          const file = new File([blob], data.file_name, {type: blob.type});
-          removeWaitOverlay();
-          showScanPreview(file);
-        } else {
-          notify(data.message || 'لم يتم العثور على ملف جديد.', 'warning', { title: 'لم يصل ملف من الماسح' });
+        if (!installed) {
+          notify('جارٍ تثبيت بروتوكول الماسح...', 'info');
+          const ir = await fetch('/books/api/scan/install-protocol/', {
+            method: 'POST', headers: { 'X-CSRFToken': csrfToken }, credentials: 'same-origin',
+          });
+          const id = await ir.json();
+          if (!id.ok) {
+            notify(id.error || 'فشل تثبيت البروتوكول — راجع إعدادات الماسح', 'error');
+            scanBtn.disabled = false; return;
+          }
+          notify('✓ تم تثبيت البروتوكول', 'success');
         }
-      } catch(e) {
-        notify(cancelScan ? 'تم إلغاء عملية المسح.' : `تعذر إكمال عملية المسح: ${e}`, cancelScan ? 'info' : 'error', {
-          title: cancelScan ? 'تم الإلغاء' : 'خطأ في المسح الضوئي',
-          delay: cancelScan ? 3800 : 6500,
+
+        // 1) اطلب رابط البروتوكول
+        const resp = await fetch('/books/api/scan/launch/', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
         });
-      } finally {
+        const data = await resp.json();
+        if (!data.ok || !data.scan_url) {
+          const errMsg = (data.error || 'تعذّر تشغيل الماسح') + (data.fix_url ? ' — افتح صفحة إعدادات الماسح' : '');
+          notify(errMsg, 'error', { delay: 8000 });
+          scanBtn.disabled = false; return;
+        }
+
+        // 2) احفظ عدد الملفات الحالي
+        let baseCount = 0;
+        try {
+          const sr = await fetch('/books/api/scan/watcher-status/', { credentials: 'same-origin' });
+          baseCount = (await sr.json()).file_count || 0;
+        } catch (_) {}
+
+        // 3) أطلق البروتوكول عبر iframe (لا يُبعد المستخدم عن الصفحة)
+        launchProtocol(data.scan_url);
+        notify('الماسح يعمل — اضغط Finish عند الانتهاء من المسح', 'info', { delay: 7000 });
+
+        // 4) راقب حتى يظهر الملف
+        pollForFile(baseCount);
+
+      } catch(e) {
+        notify(`خطأ في الاتصال: ${e}`, 'error');
         scanBtn.disabled = false;
-        scanBtn.innerHTML = '<i class="bi bi-camera me-1"></i>التقاط من السكانر';
-        removeWaitOverlay();
-        cleanupBackdrops();
       }
     });
 

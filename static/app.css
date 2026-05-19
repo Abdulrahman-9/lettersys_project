@@ -25,7 +25,38 @@
   --animation-duration: 0.3s;
   --animation-timing: cubic-bezier(0.4, 0, 0.2, 1);
   --hover-scale: 1.02;
+
+  /* ═══════════════════════════════════════════════════════════════════
+     ألوان حالات المتابعة الأربع — مصدر حقيقة واحد (Single Source of Truth)
+     استخدامها في كل CSS/HTML/JS بدلاً من تكرار قيم hex
+     ═══════════════════════════════════════════════════════════════════ */
+  --followup-pending: #2563eb;       /* 🔵 قيد المتابعة */
+  --followup-pending-bg: rgba(37, 99, 235, 0.15);
+  --followup-pending-text: #1e40af;
+
+  --followup-due-today: #d97706;     /* 🟠 مستحق اليوم */
+  --followup-due-today-bg: rgba(217, 119, 6, 0.18);
+  --followup-due-today-text: #b45309;
+
+  --followup-overdue: #dc2626;       /* 🔴 متأخر */
+  --followup-overdue-bg: rgba(220, 38, 38, 0.18);
+  --followup-overdue-text: #b91c1c;
+
+  --followup-archived: #64748b;      /* ⚪ مؤرشف */
+  --followup-archived-bg: rgba(100, 116, 139, 0.18);
+  --followup-archived-text: #475569;
 }
+
+/* ─── Utility classes موحَّدة لحالات المتابعة ─── */
+.badge-status-pending   { background: var(--followup-pending-bg);   color: var(--followup-pending-text); }
+.badge-status-due_today { background: var(--followup-due-today-bg); color: var(--followup-due-today-text); }
+.badge-status-overdue   { background: var(--followup-overdue-bg);   color: var(--followup-overdue-text); }
+.badge-status-archived  { background: var(--followup-archived-bg);  color: var(--followup-archived-text); }
+
+.book-row-pending   { border-inline-start-color: var(--followup-pending) !important; }
+.book-row-due_today { border-inline-start-color: var(--followup-due-today) !important; }
+.book-row-overdue   { border-inline-start-color: var(--followup-overdue) !important; }
+.book-row-archived  { border-inline-start-color: var(--followup-archived) !important; opacity: 0.82; }
 
 body {
   font-family: 'Tajawal', 'Cairo', sans-serif;
@@ -147,9 +178,6 @@ body {
 }
 
 .app-sidebar-section-title {
-  font-size: 0.9rem;
-  font-weight: 800;
-  color: var(--deep-brown);
   margin-bottom: 0.6rem;
 }
 
@@ -304,6 +332,76 @@ body {
 .app-context-chip.is-success {
   background: rgba(34, 197, 94, 0.16);
   color: #166534;
+}
+
+/* ══════════════════════════════════════════════
+   Mini Sidebar Toggle
+   ══════════════════════════════════════════════ */
+
+/* عنوان القسم: صف flex يضم الزر + النص */
+.app-sidebar-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sidebar-title-text {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--deep-brown);
+}
+
+/* زر التبديل — مرئي دائماً داخل السايد بار */
+.app-sidebar-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 0.5rem;
+  background: rgba(255, 146, 51, 0.18);
+  border: 1.5px solid rgba(111, 70, 40, 0.28);
+  cursor: pointer;
+  padding: 0;
+  color: var(--deep-brown, #4a2a12);
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: background 0.18s;
+}
+.app-sidebar-toggle-btn:hover {
+  background: rgba(255, 146, 51, 0.4);
+}
+
+/* انتقال سلس عند التقليص */
+.app-sidebar {
+  transition: flex-basis 0.3s ease, min-width 0.3s ease, width 0.3s ease;
+}
+
+/* وضع Mini: 52px أيقونات فقط */
+.app-shell.sidebar-mini .app-sidebar {
+  flex: 0 0 52px !important;
+  width: 52px !important;
+  min-width: 52px !important;
+  overflow: hidden;
+}
+.app-shell.sidebar-mini .sidebar-title-text,
+.app-shell.sidebar-mini .app-sidebar-link span,
+.app-shell.sidebar-mini .app-sidebar-link-badge,
+.app-shell.sidebar-mini .app-sidebar-section-copy,
+.app-shell.sidebar-mini .app-sidebar-logout span {
+  display: none;
+}
+.app-shell.sidebar-mini .app-sidebar-link {
+  justify-content: center;
+  padding: 0.75rem 0;
+  gap: 0;
+}
+.app-shell.sidebar-mini .app-sidebar-panel {
+  padding: 0.75rem 0.4rem;
+}
+.app-shell.sidebar-mini .app-sidebar-section-title {
+  justify-content: center;
+  margin-bottom: 0.5rem;
 }
 
 @media (max-width: 1199.98px) {

@@ -241,59 +241,25 @@
       <h5 class="fw-bold mb-3"><i class="bi bi-lightning-charge-fill text-warning me-2"></i>إجراءات سريعة</h5>
     </div>
 
-    <!-- إضافة كتاب وارد -->
-    <div class="col-lg-4 col-md-6">
+    <!-- إدخال ذكي -->
+    <div class="col-lg-3 col-md-6">
       <a href="{% url 'extraction-smart-desktop' %}" class="text-decoration-none">
         <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
           <div class="card-body">
             <div class="mb-3">
               <div class="stat-icon mx-auto" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05));">
-                <i class="bi bi-inbox-fill text-primary"></i>
+                <i class="bi bi-magic text-primary"></i>
               </div>
             </div>
-            <h6 class="fw-bold mb-2">إدخال كتاب جديد</h6>
-            <p class="text-muted small mb-0">اختر بين وارد/صادر داخلي أو خارجي</p>
-          </div>
-        </div>
-      </a>
-    </div>
-
-    <!-- إضافة كتاب صادر -->
-    <div class="col-lg-4 col-md-6">
-      <a href="{% url 'extraction-smart-desktop' %}" class="text-decoration-none">
-        <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
-          <div class="card-body">
-            <div class="mb-3">
-              <div class="stat-icon mx-auto" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));">
-                <i class="bi bi-send-fill text-warning"></i>
-              </div>
-            </div>
-            <h6 class="fw-bold mb-2">الإدخال الذكي والسكانر</h6>
-            <p class="text-muted small mb-0">ابدأ من الملف أو السكانر ثم حدد النوع المناسب</p>
-          </div>
-        </div>
-      </a>
-    </div>
-
-    <!-- وصول سريع -->
-    <div class="col-lg-4 col-md-6">
-      <a href="{% url 'book_unified' %}?tab=overdue" class="text-decoration-none">
-        <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
-          <div class="card-body">
-            <div class="mb-3">
-              <div class="stat-icon mx-auto" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.05));">
-                <i class="bi bi-lightning-charge-fill" style="color: #6366f1;"></i>
-              </div>
-            </div>
-            <h6 class="fw-bold mb-2">الوصول السريع</h6>
-            <p class="text-muted small mb-0">تحديث سريع للحالات</p>
+            <h6 class="fw-bold mb-2">إدخال ذكي</h6>
+            <p class="text-muted small mb-0">إدخال الكتب من ملف أو سكانر</p>
           </div>
         </div>
       </a>
     </div>
 
     <!-- قائمة الكتب -->
-    <div class="col-lg-4 col-md-6">
+    <div class="col-lg-3 col-md-6">
       <a href="{% url 'book_unified' %}" class="text-decoration-none">
         <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
           <div class="card-body">
@@ -303,14 +269,14 @@
               </div>
             </div>
             <h6 class="fw-bold mb-2">قائمة الكتب</h6>
-            <p class="text-muted small mb-0">عرض وبحث جميع الكتب</p>
+            <p class="text-muted small mb-0">عرض وبحث وإدارة جميع الكتب</p>
           </div>
         </div>
       </a>
     </div>
 
     <!-- التقارير -->
-    <div class="col-lg-4 col-md-6">
+    <div class="col-lg-3 col-md-6">
       <a href="{% url 'reports' %}" class="text-decoration-none">
         <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
           <div class="card-body">
@@ -327,7 +293,7 @@
     </div>
 
     <!-- الجهات -->
-    <div class="col-lg-4 col-md-6">
+    <div class="col-lg-3 col-md-6">
       <a href="{% url 'entity_list' %}" class="text-decoration-none">
         <div class="quick-action-card card h-100 text-center py-4 hover-shadow">
           <div class="card-body">
@@ -341,14 +307,6 @@
           </div>
         </div>
       </a>
-    </div>
-  </div>
-        </div>
-        <div class="d-flex gap-2 flex-wrap">
-          <a class="btn btn-primary" href="{% url 'extraction-smart-desktop' %}"><i class="bi bi-plus-circle me-1"></i>إضافة كتاب جديد</a>
-          <a class="btn btn-soft" href="{% url 'book_unified' %}?tab=incoming"><i class="bi bi-list-check me-1"></i>متابعة الواردة</a>
-        </div>
-      </div>
     </div>
   </div>
 </div>

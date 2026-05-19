@@ -72,13 +72,8 @@ class LegacyImportEngine:
 
     # ── خرائط التحويل ────────────────────────────────────────
 
-    STATUS_MAP = {
-        'pending': 'pending', 'قيد المتابعة': 'pending',
-        'done': 'done', 'منجزة': 'done', 'مكتملة': 'done', 'completed': 'done',
-        'archived': 'archived', 'مؤرشف': 'archived',
-        'hold': 'hold', 'معلقة': 'hold', 'موقوف': 'hold',
-        '0': 'pending', '1': 'done', '2': 'archived', '3': 'hold',
-    }
+    # STATUS_MAP لم يعد مستخدماً (المتابعة موحَّدة الآن).
+    # تُرحَّل الحالات القديمة عبر is_archived في import_one.
 
     KIND_MAP = {
         'incoming': 'incoming_external', 'وارد': 'incoming_external',
@@ -156,11 +151,11 @@ class LegacyImportEngine:
         raw_date = self._get(row, 'date', None)
         raw_sender_date = self._get(row, 'sender_date', None)
         raw_kind = self._get(row, 'kind', 'incoming_external')
-        raw_status = self._get(row, 'final_status', 'archived')
         raw_secret = self._get(row, 'secret_level', 'normal')
         margin = self._get(row, 'margin', '')
         sender_number = self._get(row, 'sender_number', '')
         raw_due_date = self._get(row, 'due_date', None)
+        raw_archived = self._get(row, 'is_archived', None)  # عَلَم أرشفة صريح من المصدر
         issuing_name = self._get(row, 'issuing_entity', '')
         receiving_name = self._get(row, 'receiving_entity', '')
 
@@ -186,9 +181,15 @@ class LegacyImportEngine:
         sender_date = self._parse_date(raw_sender_date)
         due_date = self._parse_date(raw_due_date)
         kind = self.KIND_MAP.get(str(raw_kind).strip().lower(), 'incoming_external')
-        final_status = self.STATUS_MAP.get(str(raw_status).strip().lower(), 'archived')
         secret_level = self.SECRET_MAP.get(str(raw_secret).strip().lower(), 'normal')
-        needs_followup = bool(due_date)
+        # المنطق الموحَّد:
+        #   - لو المصدر يحدّد is_archived صراحةً ⇒ نأخذه
+        #   - وإلا: وجود due_date يعني نشط، فارغ يعني مؤرشف ابتداءً
+        if raw_archived is not None:
+            archived_str = str(raw_archived).strip().lower()
+            is_archived_value = archived_str in ('1', 'true', 'yes', 'on', 'مؤرشف', 'منتهي', 'منتهية')
+        else:
+            is_archived_value = (due_date is None)
 
         if self.dry_run:
             return ImportResult(
@@ -210,10 +211,9 @@ class LegacyImportEngine:
             date=book_date,
             sender_date=sender_date,
             kind=kind,
-            final_status=final_status,
             secret_level=secret_level,
             margin=(margin or '').strip(),
-            needs_followup=needs_followup,
+            is_archived=is_archived_value,
             due_date=due_date,
             created_by=self.import_user,
         )

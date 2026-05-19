@@ -269,7 +269,7 @@ class ContinuousLearningService:
             معلومات الاستخراج
         """
         import fitz  # PyMuPDF
-        from .ai_ocr_service import OCRService
+        from .extraction.ocr.service import OCRService
         
         logger.info(f"[ContinuousLearning] بدء الاستخراج من الأرشيف: {archive_path}")
         

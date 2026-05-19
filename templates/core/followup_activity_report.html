@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}تطوّر حالة المتابعة{% endblock %}
+
+{% block content %}
+<style>
+.activity-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.activity-card h6 { font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.5rem; }
+.activity-card .card-meta { font-size: 0.78rem; color: #64748b; margin-top: 0.15rem; }
+.activity-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
+.stat-tile {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+  padding: 1rem; text-align: center;
+}
+.stat-tile .tile-value { font-size: 1.8rem; font-weight: 800; }
+.stat-tile .tile-label { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+.tile-overdue { border-top: 3px solid var(--followup-overdue); }
+.tile-overdue .tile-value { color: var(--followup-overdue-text); }
+.tile-archived { border-top: 3px solid var(--followup-archived); }
+.tile-archived .tile-value { color: var(--followup-archived-text); }
+.tile-reopened { border-top: 3px solid var(--followup-pending); }
+.tile-reopened .tile-value { color: var(--followup-pending-text); }
+
+.event-row {
+  display: flex; gap: 0.75rem; align-items: center;
+  padding: 0.6rem 0; border-bottom: 1px solid #f1f5f9;
+}
+.event-row:last-child { border-bottom: none; }
+.event-row .event-time { font-size: 0.72rem; color: #94a3b8; min-width: 110px; }
+.event-row .event-book { flex: 1; }
+.event-row .event-book a { font-weight: 700; color: #1e293b; text-decoration: none; }
+.event-row .event-book a:hover { color: #2563eb; }
+.event-row .event-by { font-size: 0.72rem; color: #64748b; }
+.event-empty { text-align: center; color: #94a3b8; padding: 1.5rem; font-size: 0.85rem; }
+
+.window-selector {
+  display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem;
+}
+.window-btn {
+  padding: 0.35rem 0.85rem; border-radius: 999px;
+  border: 1.5px solid #e2e8f0; background: #fff; color: #475569;
+  text-decoration: none; font-size: 0.82rem; font-weight: 600;
+  transition: all 0.18s;
+}
+.window-btn:hover { border-color: #94a3b8; }
+.window-btn.active { background: #1e293b; border-color: #1e293b; color: #fff; }
+</style>
+
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h4 class="mb-1 fw-bold"><i class="bi bi-graph-up-arrow text-primary"></i> تطوّر حالة المتابعة</h4>
+      <div class="small text-muted">
+        نشاط حالة المتابعة خلال آخر {{ days }} يوم —
+        من {{ window_start|date:"Y-m-d H:i" }}
+      </div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'reports' %}">
+      <i class="bi bi-arrow-right"></i> العودة للتقارير
+    </a>
+  </div>
+
+  {# نافذة الفترة #}
+  <div class="window-selector">
+    <a class="window-btn {% if days == 1 %}active{% endif %}" href="?days=1">اليوم</a>
+    <a class="window-btn {% if days == 7 %}active{% endif %}" href="?days=7">أسبوع</a>
+    <a class="window-btn {% if days == 14 %}active{% endif %}" href="?days=14">أسبوعان</a>
+    <a class="window-btn {% if days == 30 %}active{% endif %}" href="?days=30">شهر</a>
+    <a class="window-btn {% if days == 90 %}active{% endif %}" href="?days=90">3 شهور</a>
+  </div>
+
+  {# بطاقات الإحصائيات #}
+  <div class="activity-stats">
+    <div class="stat-tile tile-overdue">
+      <div class="tile-value">{{ stats.became_overdue }}</div>
+      <div class="tile-label">انتقلت إلى متأخر</div>
+    </div>
+    <div class="stat-tile tile-archived">
+      <div class="tile-value">{{ stats.manually_archived }}</div>
+      <div class="tile-label">أُرشفت يدوياً (إنهاء متابعة)</div>
+    </div>
+    <div class="stat-tile tile-reopened">
+      <div class="tile-value">{{ stats.reopened }}</div>
+      <div class="tile-label">أُعيد فتح متابعتها</div>
+    </div>
+  </div>
+
+  {# قائمة 1: انتقلت إلى متأخر #}
+  <div class="activity-card">
+    <h6 style="color: var(--followup-overdue-text);">
+      <i class="bi bi-exclamation-triangle-fill"></i> الكتب التي انتقلت إلى "متأخر"
+    </h6>
+    <div class="card-meta">يُسجَّل تلقائياً عند تشغيل أمر <code>notify_overdue_books</code></div>
+    <div class="mt-2">
+      {% for h in became_overdue %}
+        <div class="event-row">
+          <div class="event-time">{{ h.created_at|date:"d/m/Y H:i" }}</div>
+          <div class="event-book">
+            <a href="{% url 'book_detail' h.book_id %}">{{ h.book.our_number|default:'(بلا رقم)' }} — {{ h.book.title|truncatechars:60 }}</a>
+            <div class="event-by">{{ h.notes }}</div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="event-empty">لا توجد كتب انتقلت إلى متأخر خلال هذه الفترة.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# قائمة 2: أُرشفت يدوياً #}
+  <div class="activity-card">
+    <h6 style="color: var(--followup-archived-text);">
+      <i class="bi bi-archive-fill"></i> الكتب التي أُرشفت يدوياً (إنهاء متابعة)
+    </h6>
+    <div class="card-meta">المستخدم أنهى المتابعة قبل/بعد تاريخ الاستحقاق</div>
+    <div class="mt-2">
+      {% for h in manually_archived %}
+        <div class="event-row">
+          <div class="event-time">{{ h.created_at|date:"d/m/Y H:i" }}</div>
+          <div class="event-book">
+            <a href="{% url 'book_detail' h.book_id %}">{{ h.book.our_number|default:'(بلا رقم)' }} — {{ h.book.title|truncatechars:60 }}</a>
+            <div class="event-by">
+              {% if h.by %}بواسطة: {{ h.by.get_full_name|default:h.by.username }}{% endif %}
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="event-empty">لا توجد عمليات أرشفة يدوية خلال هذه الفترة.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# قائمة 3: أُعيد فتح المتابعة #}
+  <div class="activity-card">
+    <h6 style="color: var(--followup-pending-text);">
+      <i class="bi bi-arrow-clockwise"></i> الكتب التي أُعيد فتح متابعتها
+    </h6>
+    <div class="card-meta">المستخدم استأنف المتابعة لكتاب كان مؤرشفاً</div>
+    <div class="mt-2">
+      {% for h in reopened %}
+        <div class="event-row">
+          <div class="event-time">{{ h.created_at|date:"d/m/Y H:i" }}</div>
+          <div class="event-book">
+            <a href="{% url 'book_detail' h.book_id %}">{{ h.book.our_number|default:'(بلا رقم)' }} — {{ h.book.title|truncatechars:60 }}</a>
+            <div class="event-by">
+              {% if h.by %}بواسطة: {{ h.by.get_full_name|default:h.by.username }}{% endif %}
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="event-empty">لا توجد عمليات إعادة فتح خلال هذه الفترة.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -15,13 +15,13 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Case, CharField, Count, Q, Value, When
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from ..extraction_kinds import get_kind_label
+from ..extraction.kinds import get_kind_label
 from ..models import Attachment, AttachmentVersion, Book, BookHistory, Entity
 from .helpers import staff_required
 
@@ -70,10 +70,8 @@ def dashboard(request):
     books = Book.objects.filter(is_deleted=False) if request.user.is_superuser else Book.objects.filter(created_by=request.user, is_deleted=False)
     today = timezone.localdate()
 
-    # استعلام واحد بدلاً من 6 استعلامات منفصلة
-    overdue_books = books.filter(
-        due_date__lt=today
-    ).exclude(final_status__in=["done", "hold"]).count()
+    # المنطق الموحَّد: نشط = is_archived=False AND due_date IS NOT NULL
+    active_q = Q(is_archived=False, due_date__isnull=False)
 
     stats = books.aggregate(
         total=Count('id'),
@@ -81,17 +79,79 @@ def dashboard(request):
         week_count=Count('id', filter=Q(date__gte=today - timedelta(days=7))),
         incoming_total=Count('id', filter=Q(kind__startswith='incoming')),
         outgoing_total=Count('id', filter=Q(kind__startswith='outgoing')),
+        incoming_active=Count('id', filter=Q(kind__startswith='incoming') & active_q),
+        incoming_archived=Count('id', filter=Q(kind__startswith='incoming') & ~active_q),
+        outgoing_active=Count('id', filter=Q(kind__startswith='outgoing') & active_q),
+        outgoing_archived=Count('id', filter=Q(kind__startswith='outgoing') & ~active_q),
+        overdue=Count('id', filter=active_q & Q(due_date__lt=today)),
+        due_today=Count('id', filter=active_q & Q(due_date=today)),
+        pending=Count('id', filter=active_q & Q(due_date__gt=today)),
     )
 
     ctx = {
-        "total":          stats['total'],
-        "today_count":    stats['today_count'],
-        "week_count":     stats['week_count'],
-        "overdue":        overdue_books,
-        "incoming_total": stats['incoming_total'],
-        "outgoing_total": stats['outgoing_total'],
+        "total":            stats['total'],
+        "today_count":      stats['today_count'],
+        "week_count":       stats['week_count'],
+        "overdue":          stats['overdue'],
+        "due_today":        stats['due_today'],
+        "pending":          stats['pending'],
+        "incoming_total":   stats['incoming_total'],
+        "outgoing_total":   stats['outgoing_total'],
+        "incoming_pending": stats['incoming_active'],
+        "incoming_done":    stats['incoming_archived'],
+        "outgoing_pending": stats['outgoing_active'],
+        "outgoing_done":    stats['outgoing_archived'],
     }
     return render(request, "core/dashboard.html", ctx)
+
+
+@login_required
+def followup_activity_report(request):
+    """
+    تقرير تطوّر حالة المتابعة — يعتمد على BookHistory لمعرفة:
+      - الكتب التي انتقلت إلى "متأخر" خلال الفترة
+      - الكتب التي أُرشفت يدوياً (إنهاء متابعة)
+      - الكتب التي أُعيد فتح متابعتها
+    """
+    from ..models import BookHistory
+
+    try:
+        days = int(request.GET.get('days', '7'))
+        days = max(1, min(days, 90))
+    except (ValueError, TypeError):
+        days = 7
+
+    cutoff = timezone.now() - timedelta(days=days)
+    base_history = BookHistory.objects.filter(created_at__gte=cutoff).select_related('book', 'by')
+
+    if not (request.user.is_superuser or request.user.is_staff):
+        base_history = base_history.filter(book__created_by=request.user)
+
+    became_overdue = list(
+        base_history.filter(action='overdue').order_by('-created_at')[:50]
+    )
+    manually_archived = list(
+        base_history.filter(action='status', notes__icontains='أُرشف').order_by('-created_at')[:50]
+    )
+    reopened = list(
+        base_history.filter(action='status', notes__icontains='أُعيد فتح').order_by('-created_at')[:50]
+    )
+
+    stats = {
+        'days': days,
+        'became_overdue': len(became_overdue),
+        'manually_archived': len(manually_archived),
+        'reopened': len(reopened),
+    }
+
+    return render(request, 'core/followup_activity_report.html', {
+        'stats': stats,
+        'became_overdue': became_overdue,
+        'manually_archived': manually_archived,
+        'reopened': reopened,
+        'days': days,
+        'window_start': cutoff,
+    })
 
 
 @login_required
@@ -113,6 +173,7 @@ def reports(request):
     """
     qs = Book.objects.filter(is_deleted=False) if request.user.is_superuser else Book.objects.filter(created_by=request.user, is_deleted=False)
     qs = qs.select_related("created_by").prefetch_related("issuing_entities", "receiving_entities")
+    kind = request.GET.get("kind", "all")
     if kind == "incoming":
         qs = qs.filter(kind__startswith="incoming")
     elif kind == "outgoing":
@@ -156,53 +217,39 @@ def reports(request):
         qs = qs.filter(due_date__lte=end_date)
 
     bucket = request.GET.get("bucket", "") or "today_overdue"
-    
-    # المعالجة حسب التصفية الزمنية
-    if bucket == "today":
-        qs = qs.filter(due_date=today).exclude(final_status__in=["done", "hold"])
-    elif bucket == "overdue":
-        qs = qs.filter(due_date__lt=today).exclude(final_status__in=["done", "hold"])
-    elif bucket == "upcoming":
-        qs = qs.filter(due_date__gt=today).exclude(final_status__in=["done", "hold"])
-    elif bucket == "completed":
-        qs = qs.filter(final_status="done")
-    elif bucket == "today_overdue":
-        qs = qs.filter(due_date__lte=today).exclude(final_status__in=["done", "hold"])
-    else:  # bucket == "all"
-        pass  # بدون استثناء أي حالة
 
-    # Annotate time_state at DB level instead of Python loop
-    qs = qs.annotate(
-        time_state=Case(
-            When(final_status__in=("done", "hold"), then=Value("normal")),
-            When(due_date__isnull=True, then=Value("normal")),
-            When(due_date=today, then=Value("today")),
-            When(due_date__gt=today, then=Value("future")),
-            When(due_date__lt=today, then=Value("danger")),
-            default=Value("normal"),
-            output_field=CharField(),
-        )
-    )
+    # حالة المتابعة الموحَّدة: نشط = is_archived=False AND due_date IS NOT NULL
+    active_qs = qs.filter(is_archived=False, due_date__isnull=False)
+    archived_qs = qs.filter(Q(is_archived=True) | Q(due_date__isnull=True))
+
+    if bucket == "today":
+        qs = active_qs.filter(due_date=today)
+    elif bucket == "overdue":
+        qs = active_qs.filter(due_date__lt=today)
+    elif bucket == "upcoming":
+        qs = active_qs.filter(due_date__gt=today)
+    elif bucket == "completed":
+        qs = archived_qs
+    elif bucket == "today_overdue":
+        qs = active_qs.filter(due_date__lte=today)
+    # else: bucket == "all" — لا فلتر إضافي
 
     filtered = list(qs.order_by("due_date", "-date", "-id"))
-    # Compute display phrases and stats in a single pass
-    time_stats = {"overdue": 0, "today": 0, "future": 0, "normal": 0}
-    stats = {"total": 0, "incoming": 0, "outgoing": 0, "pending": 0, "done": 0, "hold": 0}
+    time_stats = {"overdue": 0, "due_today": 0, "pending": 0, "archived": 0}
+    stats = {"total": 0, "incoming": 0, "outgoing": 0, "pending": 0, "due_today": 0, "overdue": 0, "archived": 0}
     incoming = []
     outgoing = []
-    ts_map = {"danger": "overdue", "today": "today", "future": "future", "normal": "normal"}
     for b in filtered:
+        state = b.followup_state
         if b.due_date:
             diff = (b.due_date - today).days
             b.due_phrase = "مستحق اليوم" if diff == 0 else (f"مستحق بعد {diff} يوم" if diff > 0 else f"متأخر منذ {abs(diff)} يوم")
-            b.delay_days = abs(diff)
         else:
             b.due_phrase = "-"
-            b.delay_days = 0
-        time_stats[ts_map.get(b.time_state, "normal")] += 1
+        b.followup_state_value = state
+        time_stats[state] = time_stats.get(state, 0) + 1
         stats["total"] += 1
-        if b.final_status in stats:
-            stats[b.final_status] += 1
+        stats[state] = stats.get(state, 0) + 1
         if b.is_incoming:
             stats["incoming"] += 1
             incoming.append(b)
@@ -425,6 +472,207 @@ def backup_database(request):
             "existing_backups": backups,
         },
     )
+
+
+# ══════════════════════════════════════════════════════════════════
+#  استعادة البيانات من قاعدة قديمة (SQL Server نوع ARCHMDOC)
+# ══════════════════════════════════════════════════════════════════
+
+@staff_required
+def data_restore(request):
+    """
+    استعادة البيانات من قاعدة بريد قديمة عبر اتصال SQL Server.
+    GET: نموذج الإدخال.
+    POST action=discover: يتصل ويعرض جداول البريد وأعدادها.
+    POST action=import:   ينفّذ الاستعادة الكاملة (كتب + جهات + مرفقات) بالتطبيع الصحيح.
+    """
+    from ..legacy_restore import LegacyRestoreEngine
+
+    ctx = {
+        'form': {
+            'server': request.POST.get('server', 'localhost'),
+            'database': request.POST.get('database', ''),
+            'username': request.POST.get('username', 'sa'),
+        },
+        'book_count': Book.objects.count(),
+    }
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        # ── طريقة 2: استعادة من ملف باكاب (.bak أو مضغوط) ──
+        if action == 'restore_from_bak':
+            bak_path = (request.POST.get('bak_path') or '').strip()
+            bak_server = (request.POST.get('bak_server') or 'localhost').strip()
+            bak_user = (request.POST.get('bak_user') or 'sa').strip()
+            bak_pass = request.POST.get('bak_password') or ''
+            restore_files = request.POST.get('restore_files') == 'on'
+            mode = request.POST.get('merge_mode') or 'skip_existing'
+            if mode not in ('fresh', 'skip_existing', 'update_existing'):
+                mode = 'skip_existing'
+            ctx['form']['bak_path'] = bak_path
+            ctx['form']['bak_server'] = bak_server
+            ctx['form']['bak_user'] = bak_user
+            if not bak_path:
+                messages.error(request, 'مسار ملف الباكاب مطلوب.')
+                return render(request, 'core/data_restore.html', ctx)
+            try:
+                summary = LegacyRestoreEngine.restore_from_bak(
+                    bak_path, sql_server=bak_server, admin_user=bak_user, admin_password=bak_pass,
+                    created_by=request.user, restore_files=restore_files, mode=mode,
+                )
+                if summary.get('aborted'):
+                    messages.warning(request, summary.get('reason', 'تم الإيقاف.'))
+                else:
+                    ctx['summary'] = summary
+                    parts = []
+                    if summary.get('books'):   parts.append(f"{summary['books']:,} كتاب جديد")
+                    if summary.get('updated'): parts.append(f"{summary['updated']:,} مُحدَّث")
+                    if summary.get('skipped'): parts.append(f"{summary['skipped']:,} متخطّى")
+                    if restore_files and summary.get('files'): parts.append(f"{summary['files']:,} مرفق")
+                    if summary.get('dedup_fixed'): parts.append(f"فُكّ {summary['dedup_fixed']} تكرار")
+                    messages.success(request, "تمت الاستعادة من الملف: " + ("، ".join(parts) if parts else "لا تغييرات"))
+                    _reseed_book_sequences()
+            except Exception as e:
+                logger.exception('restore_from_bak failed')
+                messages.error(request, f'فشل أثناء الاستعادة من الملف: {e}')
+            ctx['book_count'] = Book.objects.count()
+            return render(request, 'core/data_restore.html', ctx)
+
+        # ── طريقة 1: اتصال مباشر بقاعدة حية ──
+        server = (request.POST.get('server') or 'localhost').strip()
+        database = (request.POST.get('database') or '').strip()
+        username = (request.POST.get('username') or 'sa').strip()
+        password = request.POST.get('password') or ''
+
+        if not database:
+            messages.error(request, 'اسم قاعدة البيانات مطلوب.')
+            return render(request, 'core/data_restore.html', ctx)
+
+        engine = LegacyRestoreEngine(server, database, username, password)
+
+        if action == 'discover':
+            try:
+                info = engine.discover()
+                ctx['discovery'] = info
+                if not info['tables']:
+                    messages.warning(request, 'لم يُعثر على جداول بريد (IIMAIL_YYYY ...) في هذه القاعدة.')
+                else:
+                    total = sum(t['rows'] for t in info['tables'])
+                    messages.success(request, f"اتصال ناجح — {len(info['tables'])} جدول، {total:,} سجل، السنوات: {', '.join(info['years'])}")
+            except Exception as e:
+                logger.exception('data_restore discover failed')
+                messages.error(request, f'فشل الاتصال أو الاكتشاف: {e}')
+            return render(request, 'core/data_restore.html', ctx)
+
+        if action == 'import':
+            restore_files = request.POST.get('restore_files') == 'on'
+            mode = request.POST.get('merge_mode') or 'skip_existing'
+            if mode not in ('fresh', 'skip_existing', 'update_existing'):
+                mode = 'skip_existing'
+            try:
+                summary = engine.run(
+                    created_by=request.user,
+                    restore_files=restore_files,
+                    mode=mode,
+                )
+                if summary.get('aborted'):
+                    messages.warning(request, summary.get('reason', 'تم الإيقاف.'))
+                else:
+                    ctx['summary'] = summary
+                    parts = []
+                    if summary.get('books'):   parts.append(f"{summary['books']:,} كتاب جديد")
+                    if summary.get('updated'): parts.append(f"{summary['updated']:,} مُحدَّث")
+                    if summary.get('skipped'): parts.append(f"{summary['skipped']:,} متخطّى")
+                    if restore_files and summary.get('files'): parts.append(f"{summary['files']:,} مرفق")
+                    if summary.get('dedup_fixed'): parts.append(f"فُكّ {summary['dedup_fixed']} تكرار")
+                    messages.success(request, "تمت الاستعادة: " + ("، ".join(parts) if parts else "لا تغييرات"))
+                    _reseed_book_sequences()
+            except Exception as e:
+                logger.exception('data_restore import failed')
+                messages.error(request, f'فشل أثناء الاستعادة: {e}')
+            ctx['book_count'] = Book.objects.count()
+            return render(request, 'core/data_restore.html', ctx)
+
+    return render(request, 'core/data_restore.html', ctx)
+
+
+@staff_required
+def bak_browse(request):
+    """
+    متصفّح ملفات على جهاز الخادم لاختيار ملف باكاب — للقراءة فقط، يعرض المجلدات
+    وملفات النسخ الاحتياطي فقط (.bak / .zip / .7z / .tar.gz). يُستخدَم من صفحة الاستعادة.
+    """
+    import os
+    BACKUP_EXTS = ('.bak', '.zip', '.7z', '.tar.gz', '.tgz', '.gz')
+    raw = (request.GET.get('path') or '').strip()
+
+    # المستوى الأعلى: الأقراص + مجلدات سريعة
+    if not raw or raw in ('/', '\\'):
+        roots = []
+        for letter in 'CDEFGHIJ':
+            d = f"{letter}:\\"
+            if os.path.isdir(d):
+                roots.append(d)
+        quick = []
+        for q in ('D:\\Abdulrhman Backup', 'D:\\trackbackup', 'D:\\backups',
+                  str(settings.BASE_DIR / 'backups'), os.path.expanduser('~\\Desktop'),
+                  os.path.expanduser('~\\Downloads')):
+            if os.path.isdir(q):
+                quick.append(q)
+        return JsonResponse({'is_root': True, 'path': '', 'parent': None, 'dirs': roots, 'quick': quick, 'files': []})
+
+    path = os.path.abspath(raw)
+    if not os.path.isdir(path):
+        return JsonResponse({'error': 'المسار ليس مجلداً موجوداً.'}, status=400)
+    try:
+        entries = list(os.scandir(path))
+    except PermissionError:
+        return JsonResponse({'error': 'لا صلاحية وصول لهذا المجلد.'}, status=403)
+    except OSError as e:
+        return JsonResponse({'error': f'تعذّر الوصول: {e}'}, status=400)
+
+    dirs, files = [], []
+    for e in entries:
+        try:
+            if e.is_dir():
+                dirs.append(e.name)
+            elif e.is_file() and e.name.lower().endswith(BACKUP_EXTS):
+                files.append({'name': e.name, 'size_mb': round(e.stat().st_size / (1024 * 1024), 1)})
+        except OSError:
+            continue
+    dirs.sort(key=str.lower)
+    files.sort(key=lambda x: x['name'].lower())
+
+    # الأب: لو كنا في جذر قرص (مثل D:\) فالأب هو قائمة الأقراص
+    norm = path.rstrip('\\/')
+    if len(norm) == 2 and norm[1] == ':':       # "D:" → جذر القرص
+        parent = ''
+    else:
+        parent = os.path.dirname(norm)
+        if len(parent) == 2 and parent[1] == ':':
+            parent = parent + '\\'
+    return JsonResponse({'is_root': False, 'path': path, 'parent': parent, 'dirs': dirs, 'files': files})
+
+
+def _reseed_book_sequences():
+    """يضبط BookSequence.next_number لكل سجل على (أكبر تسلسل مُستورَد للسنة الحالية + 1)."""
+    import re as _re
+    from ..models import BookSequence
+    cur_year = timezone.now().year
+    for kind, reg in BookSequence.REGISTER_CODES.items():
+        prefix = f"{cur_year}{reg}"
+        max_seq = 0
+        for onum in Book.objects.filter(kind=kind, our_number__startswith=prefix).values_list('our_number', flat=True):
+            rest = onum[len(prefix):]
+            m = _re.match(r'^(\d+)', rest)
+            if m:
+                base = int(rest[:4]) if len(rest) >= 5 and rest[:4].isdigit() else int(m.group(1))
+                max_seq = max(max_seq, base)
+        obj, _c = BookSequence.objects.get_or_create(kind=kind, defaults={'next_number': 1, 'year': cur_year})
+        obj.year = cur_year
+        obj.next_number = max_seq + 1 if max_seq else 1
+        obj.save(update_fields=['year', 'next_number', 'updated_at'])
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -23,9 +23,9 @@ from .models import (
     ExtractionFeedback, ExtractionStatistics, ExtractionCache,
     BookNumberReservation,
 )
-from .ai_processing_service import AIExtractionService
-from .extraction_helpers import ExtractionWorkflow, ConfidenceAnalyzer, QuickFillAssistant
-from .extraction_learning import ExtractionLearningSystem
+from .extraction.pipeline import AIExtractionService
+from .extraction.helpers import ExtractionWorkflow, ConfidenceAnalyzer, QuickFillAssistant
+from .extraction.learning import ExtractionLearningSystem
 
 
 class ModelTests(TestCase):
@@ -395,10 +395,10 @@ class ExtractionLearningTests(TestCase):
 class AIProcessingServiceTests(TestCase):
     """اختبارات خدمة المعالجة الذكية"""
 
-    @mock.patch('core.ai_processing_service.build_online_provider_from_settings')
-    @mock.patch('core.ai_processing_service.AIIntegrationSettings.get_active_settings')
-    @mock.patch('core.ai_processing_service.EasyOCROfflineProvider')
-    @mock.patch('core.ai_processing_service.OCRService')
+    @mock.patch('core.extraction.pipeline.build_online_provider_from_settings')
+    @mock.patch('core.extraction.pipeline.AIIntegrationSettings.get_active_settings')
+    @mock.patch('core.extraction.pipeline.EasyOCROfflineProvider')
+    @mock.patch('core.extraction.pipeline.OCRService')
     @mock.patch('core.extraction.pipeline.ImageProcessor')
     def test_invalid_image_does_not_bootstrap_ocr_stack(
         self,
@@ -541,13 +541,10 @@ class APITests(TestCase):
             reverse('extraction-smart-desktop') + '?kind=outgoing_external',
         )
 
-    def test_extraction_quick_start_page_loads(self):
-        """اختبار أن صفحة البداية السريعة ما زالت حية بعد التنظيف."""
+    def test_extraction_quick_start_redirects_to_smart_desktop(self):
+        """extraction_quick_start يُعيد توجيهاً للواجهة الذكية الجديدة."""
         response = self.client.get(reverse('extraction-quick-start'))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'مرحباً بك')
-        self.assertContains(response, reverse('book_list'))
+        self.assertRedirects(response, reverse('extraction-smart-desktop'), fetch_redirect_response=False)
 
     def test_submit_feedback_accepts_notes_alias(self):
         """اختبار التوافق الخلفي مع العملاء الذين يرسلون notes بدلاً من reason."""
@@ -700,7 +697,7 @@ class APITests(TestCase):
         self.assertEqual(reservation.status, BookNumberReservation.STATUS_ACTIVE)
         self.assertIsNone(reservation.book_id)
 
-    @mock.patch('core.extraction_views.AIExtractionService')
+    @mock.patch('core.extraction.api.endpoints.AIExtractionService')
     def test_smart_extract_returns_error_when_mock_fallback_disabled(self, service_cls):
         """اختبار أن الإخفاق لا يعود بنجاح وهمي إلا إذا فُعّل ذلك صراحة."""
         service_cls.return_value.process_image.side_effect = ValueError('bad image')
@@ -716,7 +713,7 @@ class APITests(TestCase):
         self.assertFalse(payload['success'])
         self.assertEqual(payload['error_code'], 'EXTRACTION_FAILED')
 
-    @mock.patch('core.extraction_views.AIExtractionService')
+    @mock.patch('core.extraction.api.endpoints.AIExtractionService')
     def test_smart_extract_can_use_mock_when_explicitly_enabled(self, service_cls):
         """اختبار أن mock fallback يبقى متاحاً فقط عند تفعيله بإعداد واضح."""
         service_cls.return_value.process_image.side_effect = ValueError('bad image')
@@ -732,7 +729,7 @@ class APITests(TestCase):
         self.assertTrue(payload['success'])
         self.assertTrue(payload['details']['fallback'])
 
-    @mock.patch('core.extraction_views.AIExtractionService')
+    @mock.patch('core.extraction.api.endpoints.AIExtractionService')
     def test_smart_extract_failed_result_returns_error_when_mock_disabled(self, service_cls):
         """اختبار أن نتيجة failed من خدمة الذكاء تُعامل كفشل فعلي."""
         service_cls.return_value.process_image.return_value = SimpleNamespace(
@@ -751,7 +748,7 @@ class APITests(TestCase):
         self.assertFalse(payload['success'])
         self.assertEqual(payload['error_code'], 'EXTRACTION_FAILED')
 
-    @mock.patch('core.extraction_views.AIExtractionService')
+    @mock.patch('core.extraction.api.endpoints.AIExtractionService')
     def test_smart_extract_failed_result_can_use_mock_when_enabled(self, service_cls):
         """اختبار أن نتيجة failed يمكن تحويلها إلى mock فقط عند التفعيل الصريح."""
         service_cls.return_value.process_image.return_value = SimpleNamespace(

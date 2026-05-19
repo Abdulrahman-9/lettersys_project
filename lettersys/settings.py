@@ -180,7 +180,15 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# MEDIA_ROOT يمكن نقله خارج المشروع عبر متغير البيئة MEDIA_ROOT
+_media_root_env = os.environ.get('MEDIA_ROOT', '')
+MEDIA_ROOT = _media_root_env if _media_root_env else (BASE_DIR / 'media')
+
+# ─── حدود رفع الملفات (منع ابتلاع RAM بملفات PDF كبيرة) ─────────────────────
+# ملفات أكبر من 5 MB تُكتب على القرص مؤقتاً بدل بقائها في الذاكرة
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024    # 5 MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000
 
 # ─── نوع المفتاح الافتراضي ────────────────────────────────────────────────────
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -239,9 +247,23 @@ AI_ALLOW_MOCK_EXTRACTION = os.environ.get(
 AI_AZURE_ENDPOINT = os.environ.get('AI_AZURE_ENDPOINT', '')
 AI_AZURE_KEY = os.environ.get('AI_AZURE_KEY', '')
 
-# ─── الماسح الضوئي ────────────────────────────────────────────────────────────
+# ─── إعدادات OCR والاستخراج ──────────────────────────────────────────────────
+# تحميل نموذج EasyOCR مسبقاً عند بدء Django (يمنع التأخير في أول طلب)
+AI_PRELOAD_OCR = os.environ.get('AI_PRELOAD_OCR', 'False').lower() in ('true', '1')
+# الحد الزمني الأقصى لعملية الاستخراج الكاملة (ثوانٍ)
+AI_EXTRACTION_TIMEOUT = int(os.environ.get('AI_EXTRACTION_TIMEOUT', '120'))
+
+# ─── Hot Folder Watcher (مراقب مجلد المسح الضوئي) ────────────────────────────
+# المجلد الذي يحفظ فيه CaptureOnTouch الملفات الممسوحة
+SCAN_WATCH_FOLDER = os.environ.get('SCAN_WATCH_FOLDER', '')
+# عنوان Django المحلي — يُستخدم لفتح المتصفح بعد المعالجة
+SCAN_API_URL = os.environ.get('SCAN_API_URL', 'http://localhost:8000')
+
+# ─── الماسح الضوئي (simulator) ────────────────────────────────────────────────
 SCAN_SIMULATOR_MODE = os.environ.get('SCAN_SIMULATOR_MODE', 'False').lower() in ('true', '1')
 SCAN_SIMULATOR_DELAY = int(os.environ.get('SCAN_SIMULATOR_DELAY', '3'))
+
+X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 # ─── الأمان في الإنتاج (DEBUG=False) ─────────────────────────────────────────
 if not DEBUG:
@@ -251,7 +273,6 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
-    X_FRAME_OPTIONS = 'DENY'
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 

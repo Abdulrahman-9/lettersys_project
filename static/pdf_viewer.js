@@ -281,76 +281,28 @@
         return;
       }
       
-      console.log('All checks passed, starting scan...');
+      console.log('Starting scan via Protocol Handler...');
       this.setScanLoading(true);
-      this.setActionStatus('⏳ جارٍ تشغيل الماسح الضوئي... يرجى الانتظار', 'info');
+      this.setActionStatus('⏳ جارٍ تشغيل الماسح الضوئي...', 'info');
 
       try {
-        console.log('=== Preparing API Request ===');
-        const payload = {
-          book_id: this.currentBookId,
-          attachment_id: this.currentAttachmentId
-        };
-        console.log('Payload to send:', payload);
-        console.log('Payload JSON:', JSON.stringify(payload));
-        
         const csrfToken = this.getCsrfToken();
-        console.log('CSRF Token found:', !!csrfToken);
-        console.log('CSRF Token value:', csrfToken);
-        
-        console.log('Sending POST to /books/api/scan-capture/');
-        const response = await fetch('/books/api/scan-capture/', {
+        const resp = await fetch('/books/api/scan/launch/', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken
-          },
-          body: JSON.stringify(payload)
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          credentials: 'same-origin',
         });
-
-        console.log('Response received:');
-        console.log('  Status:', response.status);
-        console.log('  Status Text:', response.statusText);
-        console.log('  OK:', response.ok);
-        
-        let data;
-        try {
-          data = await response.json();
-        } catch (parseErr) {
-          console.error('Failed to parse JSON response:', parseErr);
-          throw new Error('API returned invalid JSON');
+        const data = await resp.json();
+        if (!data.ok || !data.scan_url) {
+          throw new Error(data.error || 'تعذّر تشغيل الماسح — راجع إعدادات الماسح');
         }
-        
-        console.log('Response data:', data);
-        
-        if (!response.ok) {
-          console.error('API Error - Status:', response.status);
-          console.error('Error message:', data.message || 'Unknown error');
-          throw new Error(data.message || `API returned ${response.status}`);
-        }
-        
-        if (data.status === 'success') {
-          console.log('✓ Scan successful!');
-          const nextUrl = data.file_url || this.currentUrl;
-          this.currentUrl = this.withCacheBuster(nextUrl);
-          this.setActionStatus('✓ ' + (data.message || 'تم الإلحاق بنجاح'), 'success');
-          this.loadContent();
-          if (window.ToastCenter) {
-            ToastCenter.show('success', data.message || 'تم الإلحاق بنجاح');
-          }
-        } else {
-          throw new Error(data.message || 'فشل المسح');
-        }
+        window.location.href = data.scan_url;
+        this.setActionStatus('✓ الماسح يعمل — بعد الانتهاء سيفتح النظام صفحة الاستخراج تلقائياً', 'success');
+        if (window.ToastCenter) ToastCenter.show('info', 'الماسح يعمل — اضغط Finish عند الانتهاء');
       } catch (err) {
-        console.error('=== Scan Error ===');
-        console.error('Error message:', err.message);
-        console.error('Full error:', err);
         this.setActionStatus('✗ ' + (err.message || 'تعذر إتمام المسح'), 'error');
-        if (window.ToastCenter) {
-          ToastCenter.show('error', err.message || 'تعذر إتمام المسح');
-        }
+        if (window.ToastCenter) ToastCenter.show('error', err.message || 'تعذر إتمام المسح');
       } finally {
-        console.log('=== handleScanAndAppend END ===');
         this.setScanLoading(false);
       }
     },

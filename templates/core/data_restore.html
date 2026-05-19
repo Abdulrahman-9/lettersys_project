@@ -1,0 +1,322 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}استعادة البيانات من قاعدة قديمة{% endblock %}
+
+{% block content %}
+<div class="container py-3" style="max-width: 920px;">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0"><i class="bi bi-arrow-counterclockwise me-2"></i>استعادة البيانات من قاعدة قديمة</h4>
+    <a href="{% url 'backup_database' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-shield-lock me-1"></i>النسخ الاحتياطي
+    </a>
+  </div>
+
+  {% if messages %}
+    {% for m in messages %}
+      <div class="alert alert-{% if m.tags == 'error' %}danger{% elif m.tags == 'warning' %}warning{% else %}{{ m.tags|default:'info' }}{% endif %} py-2">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="alert alert-info py-2 small">
+    <i class="bi bi-info-circle me-1"></i>
+    تستعيد من قاعدة بريد قديمة (<code>ARCHMDOC</code> على SQL Server) بالتطبيع الصحيح:
+    قيدنا = العدد التسلسلي الفريد، رقم الجهة من النص الأصلي، ارتباط الكتاب → الجهة المستلمة، التصنيف، والمرفقات.
+    <br><strong>الدمج آمن:</strong> لا يحذف أي كتاب أبداً — يُحدّث/يتخطّى الموجود ويُضيف الجديد. الكتب المُضافة داخل التطبيق (غير الموجودة في المصدر) <strong>لا تُلمَس</strong>.
+    {% if book_count %}<br><span class="text-muted">يوجد حالياً <strong>{{ book_count }}</strong> كتاب في النظام.</span>{% endif %}
+  </div>
+
+  {# ════ الطريقة (ب): استعادة من ملف باكاب ════ #}
+  <form method="post" class="card mb-4 border-success"
+        onsubmit="return confirm('تأكيد الاستعادة من الملف؟ سيُفَكّ الضغط تلقائياً (إن لزم)، ثم يُستعاد إلى قاعدة مؤقتة، ثم يُستورَد. قد يستغرق دقائق حسب الحجم.');">
+    {% csrf_token %}
+    <div class="card-header bg-success text-white"><strong>الطريقة (ب) — استعادة من ملف باكاب (.bak أو مضغوط)</strong> · بلا اتصال بالقاعدة الأصلية</div>
+    <div class="card-body">
+      <p class="small text-muted mb-2">
+        زوّد مسار ملف <code>.bak</code> أو أرشيف يحويه (<code>.zip</code> / <code>.7z</code> / <code>.tar.gz</code>) — يُفَكّ الضغط تلقائياً ويُبحَث عن أول <code>.bak</code>،
+        ثم يُستعاد إلى قاعدة <strong>مؤقتة محلية</strong> (تُحذف بعد الانتهاء)، ثم يُستورَد بالتطبيع الصحيح. (ملفات <code>.rar</code> غير مدعومة آلياً — استخرجها يدوياً.)
+      </p>
+      <div class="row g-2">
+        <div class="col-12">
+          <label class="form-label small">مسار ملف الباكاب <span class="text-danger">*</span></label>
+          <div class="input-group input-group-sm">
+            <input type="text" name="bak_path" id="bakPathInput" class="form-control" value="{{ form.bak_path }}" placeholder="D:\Backups\قسم-المتابعة.bak  أو  D:\Backups\archive.zip">
+            <button type="button" class="btn btn-outline-secondary" id="browseBakBtn" data-bs-toggle="modal" data-bs-target="#bakBrowseModal">
+              <i class="bi bi-folder2-open me-1"></i>تصفّح
+            </button>
+          </div>
+        </div>
+        <div class="col-12">
+          <div class="alert alert-secondary py-2 small mb-2">
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>لماذا نحتاج بيانات SQL Server؟</strong> ملف <code>.bak</code> صيغة نسخ احتياطي خاصة بـ SQL Server —
+            لا يُمكن قراءته إلا باستعادته داخل خادم SQL Server <em>محلي</em>. الأداة تستعيده إلى قاعدة
+            <strong>مؤقتة تُحذف تلقائياً بعد الاستيراد</strong>؛ البيانات محلية بالكامل ولا تُرسَل لأي جهة.
+            غالباً تكفي القيم الافتراضية (<code>localhost</code> / <code>sa</code>) — يكفي كتابة كلمة السر.
+          </div>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label small mb-0">الخادم</label>
+              <input type="text" name="bak_server" class="form-control form-control-sm" value="{{ form.bak_server|default:'localhost' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small mb-0">مستخدم الأدمن</label>
+              <input type="text" name="bak_user" class="form-control form-control-sm" value="{{ form.bak_user|default:'sa' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small mb-0">كلمة سر الأدمن <span class="text-danger">*</span></label>
+              <input type="text" name="bak_password" class="form-control form-control-sm" value="Migrate@2026!" required>
+              <div class="form-text" style="font-size:0.7rem;">القيمة الافتراضية لبيئتك — غيّرها إن لزم.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-3 mb-2">
+        <label class="form-label small fw-bold">وضع الدمج</label>
+        <div class="form-check">
+          <input type="radio" class="form-check-input" name="merge_mode" id="bakModeSkip" value="skip_existing" checked>
+          <label class="form-check-label small" for="bakModeSkip"><strong>تخطّي الموجود</strong> — جديد فقط + ملء الناقص (الأكثر أماناً)</label>
+        </div>
+        <div class="form-check">
+          <input type="radio" class="form-check-input" name="merge_mode" id="bakModeUpdate" value="update_existing">
+          <label class="form-check-label small" for="bakModeUpdate"><strong>تحديث الموجود</strong> — جديد + تحديث القديم من المصدر (الملاحظات تُدمَج)</label>
+        </div>
+        <div class="form-check">
+          <input type="radio" class="form-check-input" name="merge_mode" id="bakModeFresh" value="fresh">
+          <label class="form-check-label small" for="bakModeFresh"><strong>نظام جديد</strong> — يستورد كل شيء (فقط إن كان النظام فارغاً)</label>
+        </div>
+      </div>
+      <div class="form-check">
+        <input type="checkbox" class="form-check-input" name="restore_files" id="bakRestoreFiles" checked>
+        <label class="form-check-label small" for="bakRestoreFiles">استعادة المرفقات (PDF من العمود {P}FILE) — لا يُستبدَل مرفق موجود</label>
+      </div>
+      <div class="small text-muted mt-1"><i class="bi bi-shield-check me-1"></i>لا يُحذف أي كتاب أبداً — الكتب المُضافة داخل التطبيق تبقى سليمة.</div>
+
+      <div class="mt-3">
+        <button type="submit" name="action" value="restore_from_bak" class="btn btn-success btn-sm">
+          <i class="bi bi-file-earmark-zip me-1"></i>استعادة من الملف الآن
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <hr class="my-4">
+  <div class="text-muted small mb-2"><strong>أو</strong> — الطريقة (أ): اتصال مباشر بقاعدة SQL Server حية:</div>
+
+  {# ════ الطريقة (أ): اتصال مباشر بقاعدة حية ════ #}
+  <form method="post" class="card mb-3">
+    {% csrf_token %}
+    <div class="card-header bg-light"><strong>الطريقة (أ) — اتصال مباشر بقاعدة المصدر الحية</strong></div>
+    <div class="card-body">
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label small">الخادم (Server)</label>
+          <input type="text" name="server" class="form-control form-control-sm" value="{{ form.server|default:'localhost' }}" placeholder="localhost أو IP\\Instance">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">قاعدة البيانات <span class="text-danger">*</span></label>
+          <input type="text" name="database" class="form-control form-control-sm" value="{{ form.database }}" placeholder="ARCHMDOC" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">المستخدم</label>
+          <input type="text" name="username" class="form-control form-control-sm" value="{{ form.username|default:'sa' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">كلمة السر</label>
+          <input type="text" name="password" class="form-control form-control-sm" value="Migrate@2026!">
+        </div>
+      </div>
+      <div class="mt-3 d-flex gap-2">
+        <button type="submit" name="action" value="discover" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-search me-1"></i>اكتشاف الجداول
+        </button>
+      </div>
+    </div>
+  </form>
+
+  {# ── نتيجة الاكتشاف ── #}
+  {% if discovery %}
+  <div class="card mb-3">
+    <div class="card-header bg-light"><strong>2) ما سيُستورَد</strong> — السنوات: {{ discovery.years|join:", " }}</div>
+    <div class="card-body p-0">
+      <table class="table table-sm mb-0">
+        <thead><tr><th>الجدول</th><th>النوع</th><th>السنة</th><th>الصفوف</th><th>بملف</th></tr></thead>
+        <tbody>
+          {% for t in discovery.tables %}
+          <tr>
+            <td><code>{{ t.table }}</code></td>
+            <td>{% if t.kind == 'incoming_internal' %}وارد داخلي{% elif t.kind == 'incoming_external' %}وارد خارجي{% elif t.kind == 'outgoing_internal' %}صادر داخلي{% else %}صادر خارجي{% endif %}</td>
+            <td>{{ t.year }}</td>
+            <td class="fw-bold">{{ t.rows }}</td>
+            <td>{{ t.with_file }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── تنفيذ الاستيراد ── #}
+  <form method="post" class="card mb-3" onsubmit="return confirm('تأكيد بدء الاستعادة؟ قد تستغرق دقائق حسب حجم البيانات والمرفقات.');">
+    {% csrf_token %}
+    <input type="hidden" name="server" value="{{ form.server }}">
+    <input type="hidden" name="database" value="{{ form.database }}">
+    <input type="hidden" name="username" value="{{ form.username }}">
+    <div class="card-header bg-light"><strong>3) تنفيذ الاستعادة</strong></div>
+    <div class="card-body">
+      <div class="mb-2">
+        <label class="form-label small">كلمة السر</label>
+        <input type="text" name="password" class="form-control form-control-sm" style="max-width:240px;" value="Migrate@2026!" required>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small fw-bold">وضع الدمج</label>
+        <div class="form-check">
+          <input type="radio" class="form-check-input" name="merge_mode" id="modeSkip" value="skip_existing" checked>
+          <label class="form-check-label small" for="modeSkip">
+            <strong>تخطّي الموجود</strong> — يُضيف الكتب الجديدة فقط، يترك الموجود كما هو (يملأ الناقص فقط). الأكثر أماناً.
+          </label>
+        </div>
+        <div class="form-check">
+          <input type="radio" class="form-check-input" name="merge_mode" id="modeUpdate" value="update_existing">
+          <label class="form-check-label small" for="modeUpdate">
+            <strong>تحديث الموجود</strong> — يُضيف الجديد <em>ويُحدّث</em> حقول الكتب الموجودة من المصدر (الرقم، الحالة، الجهات، التصنيف، التواريخ). الملاحظات تُدمَج لا تُطمَس.
+          </label>
+        </div>
+        <div class="form-check">
+          <input type="radio" class="form-check-input" name="merge_mode" id="modeFresh" value="fresh">
+          <label class="form-check-label small" for="modeFresh">
+            <strong>نظام جديد</strong> — يستورد كل شيء (يعمل فقط إن كان النظام فارغاً).
+          </label>
+        </div>
+        <div class="small text-muted mt-1"><i class="bi bi-shield-check me-1"></i>في كل الأوضاع: <strong>لا يُحذف أي كتاب</strong>، والكتب التي أُضيفت داخل التطبيق ولا توجد في المصدر تبقى سليمة.</div>
+      </div>
+      <div class="form-check">
+        <input type="checkbox" class="form-check-input" name="restore_files" id="restoreFiles" checked>
+        <label class="form-check-label small" for="restoreFiles">استعادة المرفقات (ملفات PDF من العمود <code>{P}FILE</code>) — أبطأ لكن مكتمل. لا يُستبدَل مرفق موجود.</label>
+      </div>
+      <div class="mt-3">
+        <button type="submit" name="action" value="import" class="btn btn-danger btn-sm">
+          <i class="bi bi-cloud-download me-1"></i>بدء الاستعادة الآن
+        </button>
+      </div>
+    </div>
+  </form>
+  {% endif %}
+
+  {# ── ملخص النتائج ── #}
+  {% if summary %}
+  <div class="card border-success">
+    <div class="card-header bg-success text-white"><strong>ملخص الاستعادة</strong></div>
+    <div class="card-body">
+      <ul class="mb-0 small">
+        <li>كتب جديدة أُنشئت: <strong>{{ summary.books|default:0 }}</strong></li>
+        <li>كتب مُحدَّثة: <strong>{{ summary.updated|default:0 }}</strong></li>
+        <li>كتب متخطّاة (موجودة مسبقاً): <strong>{{ summary.skipped|default:0 }}</strong></li>
+        <li>مرفقات مُضافة: <strong>{{ summary.files|default:0 }}</strong></li>
+        {% if summary.dedup_fixed %}<li>تكرارات داخل السجل فُكّت: <strong>{{ summary.dedup_fixed }}</strong></li>{% endif %}
+        <li class="text-muted">جديد بالنوع — وارد داخلي: {{ summary.books_incoming_internal|default:0 }} · وارد خارجي: {{ summary.books_incoming_external|default:0 }} · صادر داخلي: {{ summary.books_outgoing_internal|default:0 }} · صادر خارجي: {{ summary.books_outgoing_external|default:0 }}</li>
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{# ── مودال تصفّح ملفات الخادم لاختيار الباكاب ── #}
+<div class="modal fade" id="bakBrowseModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-folder2-open me-2"></i>اختيار ملف باكاب من جهاز الخادم</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="bakUpBtn" title="للأعلى"><i class="bi bi-arrow-up"></i></button>
+          <input type="text" id="bakCurPath" class="form-control form-control-sm" placeholder="(الأقراص)" readonly>
+        </div>
+        <div id="bakQuick" class="mb-2"></div>
+        <div id="bakBrowseList" class="border rounded" style="max-height:340px; overflow-y:auto;">
+          <div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>جارٍ التحميل...</div>
+        </div>
+        <div class="form-text mt-2">تُعرَض المجلدات وملفات النسخ الاحتياطي فقط (<code>.bak</code> / <code>.zip</code> / <code>.7z</code> / <code>.tar.gz</code>). اضغط ملفاً لاختياره.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const browseUrl = "{% url 'bak_browse' %}";
+  const listEl = document.getElementById('bakBrowseList');
+  const curPathEl = document.getElementById('bakCurPath');
+  const quickEl = document.getElementById('bakQuick');
+  const upBtn = document.getElementById('bakUpBtn');
+  const pathInput = document.getElementById('bakPathInput');
+  let parentPath = null;
+
+  function fmtSize(mb) {
+    if (mb >= 1024) return (mb/1024).toFixed(1) + ' GB';
+    return mb.toFixed(1) + ' MB';
+  }
+
+  async function load(path) {
+    listEl.innerHTML = '<div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>جارٍ التحميل...</div>';
+    quickEl.innerHTML = '';
+    try {
+      const res = await fetch(browseUrl + '?path=' + encodeURIComponent(path || ''), {headers:{'X-Requested-With':'XMLHttpRequest'}});
+      const data = await res.json();
+      if (data.error) { listEl.innerHTML = '<div class="text-danger p-3 small">'+data.error+'</div>'; return; }
+      curPathEl.value = data.path || '';
+      parentPath = data.parent;
+      upBtn.disabled = (data.parent === null || data.parent === undefined);
+      if (data.quick && data.quick.length) {
+        quickEl.innerHTML = '<div class="small text-muted mb-1">وصول سريع:</div>' + data.quick.map(q =>
+          '<button type="button" class="btn btn-sm btn-light border me-1 mb-1 bak-nav" data-path="'+q.replace(/"/g,'&quot;')+'"><i class="bi bi-star me-1 text-warning"></i>'+q+'</button>'
+        ).join('');
+      }
+      let html = '';
+      (data.dirs||[]).forEach(d => {
+        const full = (data.is_root ? d : (data.path.replace(/[\\/]$/,'') + '\\' + d));
+        html += '<div class="d-flex align-items-center px-3 py-1 border-bottom bak-nav" style="cursor:pointer;" data-path="'+full.replace(/"/g,'&quot;')+'"><i class="bi bi-folder-fill text-warning me-2"></i><span>'+d+'</span></div>';
+      });
+      (data.files||[]).forEach(f => {
+        const full = data.path.replace(/[\\/]$/,'') + '\\' + f.name;
+        html += '<div class="d-flex align-items-center justify-content-between px-3 py-1 border-bottom bak-pick" style="cursor:pointer;" data-path="'+full.replace(/"/g,'&quot;')+'"><span><i class="bi bi-file-earmark-zip text-success me-2"></i>'+f.name+'</span><span class="text-muted small">'+fmtSize(f.size_mb)+'</span></div>';
+      });
+      if (!html) html = '<div class="text-muted p-3 small">لا توجد مجلدات فرعية ولا ملفات باكاب هنا.</div>';
+      listEl.innerHTML = html;
+    } catch(e) {
+      listEl.innerHTML = '<div class="text-danger p-3 small">تعذّر التحميل.</div>';
+    }
+  }
+
+  listEl.addEventListener('click', e => {
+    const navEl = e.target.closest('.bak-nav');
+    if (navEl) { load(navEl.dataset.path); return; }
+    const pickEl = e.target.closest('.bak-pick');
+    if (pickEl) {
+      pathInput.value = pickEl.dataset.path;
+      bootstrap.Modal.getInstance(document.getElementById('bakBrowseModal'))?.hide();
+    }
+  });
+  quickEl.addEventListener('click', e => {
+    const navEl = e.target.closest('.bak-nav');
+    if (navEl) load(navEl.dataset.path);
+  });
+  upBtn.addEventListener('click', () => { if (parentPath !== null && parentPath !== undefined) load(parentPath); });
+
+  document.getElementById('bakBrowseModal').addEventListener('shown.bs.modal', () => {
+    // ابدأ من مجلد المسار الحالي إن كان موجوداً، وإلا من الأقراص
+    const cur = pathInput.value.trim();
+    if (cur) {
+      const dir = cur.replace(/[\\/][^\\/]*$/, '');
+      load(dir || '');
+    } else {
+      load('');
+    }
+  });
+})();
+</script>
+{% endblock %}

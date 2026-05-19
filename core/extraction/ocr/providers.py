@@ -119,14 +119,30 @@ class AzureOCRProvider(BaseOCRProvider):
             logger.error("[AzureOCR] Missing Operation-Location header")
             return {'raw_text': '', 'avg_confidence': 0.0, 'details': None, 'num_lines': 0, 'processing_time': time.time() - start}
 
-        # Poll for result
-        poll_interval = 0.8
-        max_tries = int(30 / poll_interval)
-        for _ in range(max_tries):
+        # Poll for result — exponential backoff: 1s → 1.5s → 2.25s → … max 5s
+        poll_interval = 1.0
+        max_wait = self.timeout  # نفس timeout الكلي للـ POST
+        elapsed_poll = 0.0
+        attempt = 0
+        while elapsed_poll < max_wait:
             time.sleep(poll_interval)
-            pr = requests.get(op_location, headers={'Ocp-Apim-Subscription-Key': self.api_key}, timeout=self.timeout)
-            if pr.status_code != 200:
+            elapsed_poll += poll_interval
+            attempt += 1
+            try:
+                pr = requests.get(
+                    op_location,
+                    headers={'Ocp-Apim-Subscription-Key': self.api_key},
+                    timeout=min(self.timeout, 10),
+                )
+            except requests.RequestException as req_exc:
+                logger.warning('[AzureOCR] Poll request error (attempt %d): %s', attempt, req_exc)
+                poll_interval = min(poll_interval * 1.5, 5.0)
                 continue
+
+            if pr.status_code != 200:
+                poll_interval = min(poll_interval * 1.5, 5.0)
+                continue
+
             data = pr.json()
             status = data.get('status') or data.get('statusCode')
             if status == 'succeeded':
@@ -137,10 +153,11 @@ class AzureOCRProvider(BaseOCRProvider):
                         lines.append(line.get('text', ''))
                         conf = line.get('appearance', {}).get('style', {}).get('confidence')
                         if conf is None:
-                            conf = 1.0  # Azure often omits per-line confidence; assume high if detected
+                            conf = 1.0
                         confidences.append(float(conf))
                 raw_text = '\n'.join(lines)
                 avg_conf = float(np.mean(confidences)) if confidences else (1.0 if lines else 0.0)
+                logger.info('[AzureOCR] Succeeded after %d polls, %d lines', attempt, len(lines))
                 return {
                     'raw_text': raw_text,
                     'avg_confidence': avg_conf,
@@ -149,9 +166,12 @@ class AzureOCRProvider(BaseOCRProvider):
                     'processing_time': time.time() - start,
                 }
             elif status in ('failed', 'error'):
-                logger.error(f"[AzureOCR] Read operation failed: {data}")
+                logger.error('[AzureOCR] Read operation failed: %s', data)
                 break
+            # 'running' or 'notStarted' → زيادة الفترة تدريجياً
+            poll_interval = min(poll_interval * 1.5, 5.0)
 
+        logger.warning('[AzureOCR] Exhausted polling budget (%ds)', max_wait)
         return {'raw_text': '', 'avg_confidence': 0.0, 'details': None, 'num_lines': 0, 'processing_time': time.time() - start}
 
 

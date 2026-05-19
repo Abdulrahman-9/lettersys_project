@@ -57,9 +57,8 @@ class BookForm(forms.ModelForm):
             "date",
             "sender_date",
             "margin",
-            "needs_followup",
             "due_date",
-            "final_status",
+            "is_archived",
         ]
         labels = {
             "kind": "نوع الكتاب",
@@ -71,9 +70,8 @@ class BookForm(forms.ModelForm):
             "date": "تاريخنا",
             "sender_date": "تاريخ الجهة المصدرة",
             "margin": "ملاحظات",
-            "needs_followup": "يحتاج متابعة",
-            "due_date": "تاريخ المتابعة",
-            "final_status": "الحالة النهائية",
+            "due_date": "تاريخ المتابعة (اتركه فارغاً للأرشفة المباشرة)",
+            "is_archived": "إنهاء المتابعة (أرشفة)",
         }
         widgets = {
             "our_number": forms.TextInput(attrs={
@@ -96,7 +94,7 @@ class BookForm(forms.ModelForm):
             "sender_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "due_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "margin": forms.TextInput(attrs={"class": "form-control"}),
-            "needs_followup": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_archived": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     def __init__(self, *args, **kwargs):

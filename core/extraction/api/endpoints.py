@@ -301,12 +301,15 @@ def smart_extract_direct(request):
             service = AIExtractionService()
             result = service.process_image(temp_path)
             if getattr(result, 'status', '') == 'failed':
-                raise ValueError(getattr(result, 'error_message', '') or 'ai_service_unavailable')
-            logger.info(f"[smart_extract_direct] AI processing complete. Confidence: {result.overall_confidence}")
+                # رسالة خطأ مفهومة للمستخدم من pipeline
+                user_msg = getattr(result, 'user_message', '') or 'تعذر معالجة الملف'
+                raise ValueError(user_msg)
+            logger.info("[smart_extract_direct] AI processing complete. Confidence: %s", result.overall_confidence)
             payload = {
                 'success': True,
-                'message': 'extraction completed',
+                'message': getattr(result, 'user_message', 'تم الاستخراج بنجاح'),
                 'request_id': _request_id(),
+                'progress_stage': getattr(result, 'progress_stage', 'completed'),
                 'book_number': result.book_number,
                 'book_number_confidence': result.book_number_confidence,
                 'book_date': result.book_date,
@@ -323,16 +326,19 @@ def smart_extract_direct(request):
                 'book_kind_confidence': result.book_kind_confidence,
                 'overall_confidence': result.overall_confidence,
                 'cached': result.cached,
+                'needs_review': getattr(result, 'status', '') == 'manual_review',
             }
         except Exception as exc:
             logger.exception("Smart extract processing failed")
             if not getattr(settings, 'AI_ALLOW_MOCK_EXTRACTION', False):
+                # تحديد رسالة مفهومة من نوع الخطأ
+                err_str = str(exc)
                 return _api_response(
                     False,
-                    'تعذر استخراج البيانات من الملف المرفوع',
+                    err_str or 'تعذر استخراج البيانات من الملف المرفوع',
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     error_code='EXTRACTION_FAILED',
-                    details={'detail': str(exc) or 'ai_service_unavailable'},
+                    details={'detail': err_str},
                 )
 
             logger.warning("Smart extract mock fallback enabled")
@@ -373,6 +379,25 @@ def smart_extract_direct(request):
                 os.remove(temp_path)
             except OSError:
                 pass
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def scan_token_retrieve(request, token: str):
+    """
+    استرجاع بيانات مسح مُعالَج مسبقاً عبر رمز مؤقت.
+    يستخدمه Hot Folder Watcher لتمرير النتائج إلى الواجهة.
+    صلاحية الرمز: 30 دقيقة.
+    """
+    from django.core.cache import cache
+    data = cache.get(f'scan_token:{token}')
+    if data is None:
+        return _api_response(
+            False, 'رمز المسح منتهي الصلاحية أو غير موجود',
+            status_code=status.HTTP_404_NOT_FOUND,
+            error_code='TOKEN_NOT_FOUND',
+        )
+    return Response({'success': True, 'data': data}, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])

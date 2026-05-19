@@ -1,49 +1,33 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}إدارة الكتب الموحدة{% endblock %}
+{% block title %}قائمة الكتب{% endblock %}
 
 {% block extra_css %}
-<!-- Book Unified Styles -->
 <link rel="stylesheet" href="{% static 'css/book_unified.css' %}">
 <link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}">
 <link rel="stylesheet" href="{% static 'css/book_unified_table.css' %}">
 <link rel="stylesheet" href="{% static 'css/book_unified_mobile.css' %}">
 {% endblock %}
 
-{% block page_sidebar %}
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">أقسام الكتب</div>
-  <p class="app-sidebar-section-copy">اختر القسم التشغيلي المطلوب ثم تابع البحث والإجراءات من مساحة العمل.</p>
-  {% include 'core/partials/book_unified_tabs.html' %}
-</div>
-{% endblock %}
+{# الـ sidebar مُلغى لهذه الصفحة #}
 
 {% block content %}
 <div class="book-unified-page" id="bookUnifiedPage"
-  data-bulk-delete-url="{% url 'api_bulk_delete_books' %}"
-  data-bulk-status-url="{% url 'api_bulk_update_status_books' %}"
-  data-ajax-data-url="{% url 'api_unified_data' %}">
-  <div class="visually-hidden" aria-live="polite" aria-atomic="true" id="bookUnifiedLiveRegion"></div>
-  
-  {# ============================================ #}
-  {# HEADER SECTION: عنوان الصفحة + إحصائيات #}
-  {# ============================================ #}
-  {% include 'core/partials/book_unified_header.html' %}
-  
-  {# ============================================ #}
-  {# SEARCH & FILTERS: بحث فوري + فلاتر متقدمة #}
-  {# ============================================ #}
-  {% include 'core/partials/book_unified_search.html' %}
-  
-  {# ============================================ #}
-  {# QUICK PILLS: فلترة سريعة بأزرار ملونة #}
-  {# ============================================ #}
-  {% include 'core/partials/book_unified_quick_pills.html' %}
-  
-  {# ============================================ #}
-  {# BULK ACTIONS BAR: إجراءات متعددة #}
-  {# ============================================ #}
+     data-theme="{% if current_tab|slice:':8' == 'outgoing' %}outgoing{% else %}incoming{% endif %}"
+     data-bulk-delete-url="{% url 'api_bulk_delete_books' %}"
+     data-bulk-status-url="{% url 'api_bulk_update_status_books' %}"
+     data-ajax-data-url="{% url 'api_unified_data' %}">
+
+  <div class="visually-hidden" aria-live="polite" id="bookUnifiedLiveRegion"></div>
+
+  {# تبويبان رئيسيان كاملان عرض الصفحة #}
+  {% include 'core/partials/book_unified_tabs.html' %}
+
+  {# شريط فلترة موحّد: بحث + scope + status pills + متقدم #}
+  {% include 'core/partials/book_unified_filter_bar.html' %}
+
+  {# شريط الإجراءات الجماعية (يظهر عند تحديد صفوف) #}
   <div class="bulk-actions-bar" id="bulkActionsBar" style="display: none;">
     <div class="bulk-actions-content">
       <span class="bulk-selected-count">
@@ -51,108 +35,69 @@
         <span id="bulkSelectedCount">0</span> محدد
       </span>
       <div class="bulk-actions-buttons">
-        <button class="btn btn-sm btn-outline-danger" id="bulkDeleteBtn">
-          <i class="bi bi-trash"></i> حذف المحدد
-        </button>
-        <button class="btn btn-sm btn-outline-primary" id="bulkUpdateStatusBtn">
-          <i class="bi bi-arrow-repeat"></i> تحديث الحالة
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" id="bulkExportBtn">
-          <i class="bi bi-download"></i> تصدير المحدد
-        </button>
+        <button class="btn btn-sm" id="bulkDeleteBtn"><i class="bi bi-trash"></i> حذف</button>
+        <button class="btn btn-sm" id="bulkUpdateStatusBtn"><i class="bi bi-arrow-repeat"></i> تحديث الحالة</button>
       </div>
-      <button class="btn btn-sm btn-text" id="bulkClearBtn">
-        إلغاء التحديد
-      </button>
+      <button class="btn btn-sm" id="bulkClearBtn">إلغاء</button>
     </div>
   </div>
-  
-  {# ============================================ #}
-  {# TABLE SECTION: جدول 5 أعمدة (Desktop) #}
-  {# Cards (Mobile) #}
-  {# ============================================ #}
+
+  {# منطقة الجدول #}
   <div class="table-section" id="tableSection">
-    
-    {# Loading State #}
     <div class="loading-overlay" id="loadingOverlay" style="display: none;">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">جارٍ التحميل...</span>
-      </div>
-      <p class="loading-text">جارٍ تحميل البيانات...</p>
+      <div class="spinner-border" role="status" style="color: var(--theme-primary);"></div>
+      <p class="loading-text">جارٍ التحميل...</p>
     </div>
-    
-    {# Desktop Table View #}
+
     <div class="desktop-table-container" id="desktopTableContainer">
       {% include 'core/partials/book_unified_table.html' %}
     </div>
-    
-    {# Mobile Cards View #}
+
     <div class="mobile-cards-container" id="mobileCardsContainer">
-      {% if books %}
-        {% for book in books %}
-          {% include 'core/partials/book_unified_card_mobile.html' with book=book only %}
-        {% endfor %}
-      {% endif %}
+      {% if books %}{% for book in books %}
+        {% include 'core/partials/book_unified_card_mobile.html' with book=book only %}
+      {% endfor %}{% endif %}
     </div>
-    
-    {# Empty State #}
+
     <div class="empty-state" id="emptyState" style="display: none;">
-      <div class="empty-state-icon">
-        <i class="bi bi-inbox"></i>
-      </div>
+      <i class="bi bi-inbox empty-state-icon"></i>
       <h3 class="empty-state-title">لا توجد كتب</h3>
-      <p class="empty-state-text">لم يتم العثور على أي كتب تطابق معايير البحث والفلترة الحالية.</p>
-      <button class="btn btn-primary" id="resetFiltersFromEmpty">
-        <i class="bi bi-arrow-counterclockwise me-2"></i>
+      <p class="empty-state-text">لم تُعثر على كتب تطابق المعايير الحالية.</p>
+      <button class="btn btn-primary" id="resetFiltersFromEmpty"
+              onclick="window.bookAjaxManager && window.bookAjaxManager.clearAllFilters();">
         إعادة تعيين الفلاتر
       </button>
     </div>
-    
   </div>
-  
-  {# ============================================ #}
-  {# PAGINATION: ترقيم الصفحات #}
-  {# ============================================ #}
+
+  {# الـ pagination #}
   <div class="pagination-container" id="paginationContainer">
     <div class="pagination-info">
-      <span>
-        عرض <strong id="paginationFrom">{{ pagination_from }}</strong>-<strong id="paginationTo">{{ pagination_to }}</strong>
-        من إجمالي <strong id="paginationTotal">{{ total_count }}</strong>
-      </span>
-      <span class="ms-2 small text-muted d-none d-md-inline">اختصارات: <kbd>/</kbd> بحث, <kbd>Esc</kbd> إلغاء التحديد</span>
+      عرض <strong id="paginationFrom">{{ pagination_from }}</strong>-<strong id="paginationTo">{{ pagination_to }}</strong>
+      من <strong id="paginationTotal">{{ total_count }}</strong>
     </div>
     {% if page_obj.has_other_pages %}
-    <nav aria-label="pagination">
-      <ul class="pagination pagination-sm mb-0" id="paginationList">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
-          <a class="page-link" href="?{% if base_querystring %}{{ base_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">السابق</a>
-        </li>
-        {% else %}
-        <li class="page-item disabled"><span class="page-link">السابق</span></li>
-        {% endif %}
-
-        <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
-
-        {% if page_obj.has_next %}
-        <li class="page-item">
-          <a class="page-link" href="?{% if base_querystring %}{{ base_querystring }}&{% endif %}page={{ page_obj.next_page_number }}">التالي</a>
-        </li>
-        {% else %}
-        <li class="page-item disabled"><span class="page-link">التالي</span></li>
-        {% endif %}
-      </ul>
-    </nav>
+      <nav aria-label="ترقيم الصفحات">
+        <ul class="pagination pagination-sm mb-0" id="paginationList">
+          {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?{% if base_querystring %}{{ base_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">السابق</a></li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">السابق</span></li>
+          {% endif %}
+          <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+          {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?{% if base_querystring %}{{ base_querystring }}&{% endif %}page={{ page_obj.next_page_number }}">التالي</a></li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">التالي</span></li>
+          {% endif %}
+        </ul>
+      </nav>
     {% endif %}
   </div>
-  
+
 </div>
 
-{# ============================================ #}
-{# MODALS: نوافذ منبثقة #}
-{# ============================================ #}
-
-{# Modal: Preview Document #}
+{# المودالات #}
 <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content">
@@ -160,68 +105,33 @@
         <h5 class="modal-title" id="previewModalLabel">معاينة المستند</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
       </div>
-      <div class="modal-body" id="previewModalBody">
-        {# سيتم تحميل المستند هنا #}
-      </div>
+      <div class="modal-body" id="previewModalBody"></div>
     </div>
   </div>
 </div>
 
-{# Modal: Bulk Update Status #}
-<div class="modal fade" id="bulkUpdateModal" tabindex="-1" aria-labelledby="bulkUpdateModalLabel" aria-hidden="true">
+<div class="modal fade" id="bulkUpdateModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="bulkUpdateModalLabel">تحديث حالة متعددة</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+        <h5 class="modal-title">تحديث حالة متعددة</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <form id="bulkUpdateForm">
-          <div class="mb-3">
-            <label for="bulkStatusSelect" class="form-label">الحالة الجديدة</label>
-            <select class="form-select" id="bulkStatusSelect" required>
-              <option value="">اختر الحالة...</option>
-              <option value="pending">⏳ قيد المتابعة/الإرسال</option>
-              <option value="hold">⏸ معلق/بالحفظ</option>
-              <option value="done">✅ منجز/مجاب</option>
-            </select>
-          </div>
-          <div class="alert alert-info">
-            <i class="bi bi-info-circle me-2"></i>
-            سيتم تطبيق هذه الحالة على <strong id="bulkUpdateCount">0</strong> كتاب محدد.
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-        <button type="button" class="btn btn-primary" id="confirmBulkUpdateBtn">تحديث الآن</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-{# Modal: Confirm Delete #}
-<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header bg-danger text-white">
-        <h5 class="modal-title" id="confirmDeleteModalLabel">
-          <i class="bi bi-exclamation-triangle me-2"></i>تأكيد الحذف
-        </h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-      </div>
-      <div class="modal-body">
-        <p class="mb-3">هل أنت متأكد من حذف <strong id="deleteCount">0</strong> كتاب؟</p>
-        <div class="alert alert-warning">
+        <select class="form-select" id="bulkStatusSelect" required>
+          <option value="">اختر الحالة...</option>
+          <option value="pending">قيد المتابعة/الإرسال</option>
+          <option value="hold">معلق/بالحفظ</option>
+          <option value="done">منجز/مجاب</option>
+        </select>
+        <div class="alert alert-info mt-3">
           <i class="bi bi-info-circle me-2"></i>
-          سيتم نقل الكتب إلى سلة المهملات ويمكنك استعادتها لاحقاً.
+          ستُطبَّق على <strong id="bulkUpdateCount">0</strong> كتاب.
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
-          <i class="bi bi-trash me-2"></i>حذف الآن
-        </button>
+        <button type="button" class="btn btn-primary" id="confirmBulkUpdateBtn">تحديث</button>
       </div>
     </div>
   </div>
@@ -230,35 +140,13 @@
 {% endblock %}
 
 {% block extra_js %}
-{# ===== JavaScript Libraries (Phases 1-5 Optimized) ===== #}
-
-{# Core App Manager - Handles AJAX tab switching & filtering #}
 <script src="{% static 'js/book_unified_ajax_manager.js' %}"></script>
-
-{# Legacy modules (keep for backward compatibility) #}
-<script src="{% static 'js/book_unified_core.js' %}"></script>
-<script src="{% static 'js/book_unified_table.js' %}"></script>
 <script src="{% static 'js/book_unified_actions.js' %}"></script>
 <script src="{% static 'js/book_unified_api.js' %}"></script>
-
-{# PDF Viewer #}
 <script src="{% static 'pdf_viewer.js' %}"></script>
-
-{# Initialize Page #}
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    console.log('📚 Book Unified Page Initializing...');
-    
-    // ✅ New AJAX Manager (replaces old BookUnifiedApp)
-    // Handles: tabs, pills, search, filters, sorting
     window.bookAjaxManager = new BookUnifiedAjaxManager();
-    
-    // ✅ Initialize bulk actions (Phase 5)
-    if (window.BulkActionsManager) {
-      window.bulkActionsManager = new BulkActionsManager();
-    }
-    
-    console.log('✅ Book Unified Page Ready');
   });
 </script>
 {% endblock %}

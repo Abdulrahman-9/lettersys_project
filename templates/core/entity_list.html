@@ -318,24 +318,34 @@
     <div class="card-body p-4">
       <div class="row g-3 align-items-center">
         <div class="col-md-6">
-          <div class="position-relative">
-            <i class="bi bi-search position-absolute" style="right: 1rem; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
-            <input type="text" class="form-control search-box-modern" id="entitySearch" placeholder="ابحث عن جهة بالاسم أو الرمز أو النوع..." style="padding-right: 3rem;">
-          </div>
+          {# بحث server-side في الاسم/الرمز — يبحث في كل الجهات (ليس الصفحة الحالية فقط) #}
+          <form method="get" class="position-relative" style="display:flex; gap:0.4rem;">
+            {% if lang_filter and lang_filter != 'all' %}<input type="hidden" name="lang" value="{{ lang_filter }}">{% endif %}
+            <div class="position-relative" style="flex:1;">
+              <i class="bi bi-search position-absolute" style="right: 1rem; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
+              <input type="text" name="q" class="form-control search-box-modern" id="entitySearch"
+                     placeholder="ابحث في كل الجهات بالاسم أو الرمز (مثل: ش4، شؤون التراخيص)..."
+                     value="{{ search_q|default:'' }}" style="padding-right: 3rem;">
+            </div>
+            <button type="submit" class="btn btn-primary">بحث</button>
+            {% if search_q %}<a href="?{% if lang_filter and lang_filter != 'all' %}lang={{ lang_filter }}{% endif %}" class="btn btn-outline-secondary">مسح</a>{% endif %}
+          </form>
+          {% if search_q %}<div class="small text-muted mt-1">نتائج البحث عن "<strong>{{ search_q }}</strong>": {{ entities.paginator.count }} جهة</div>{% endif %}
         </div>
         <div class="col-md-4 d-flex align-items-center gap-2 flex-wrap">
-          <button class="filter-chip active" data-filter="all">
-            <i class="bi bi-grid-3x3-gap me-1"></i>الكل
-          </button>
-          <button class="filter-chip" data-filter="receiver">
-            <i class="bi bi-arrow-down me-1"></i>مستلمة
-          </button>
-          <button class="filter-chip" data-filter="issuer">
-            <i class="bi bi-arrow-up me-1"></i>مصدِّرة
-          </button>
-          <button class="filter-chip" data-filter="both">
-            <i class="bi bi-arrows-collapse me-1"></i>كلاهما
-          </button>
+          {# فلتر اللغة (server-side) — يحافظ على البحث #}
+          <a href="?{% if search_q %}q={{ search_q|urlencode }}{% endif %}"
+             class="filter-chip {% if not lang_filter or lang_filter == 'all' %}active{% endif %}">
+            <i class="bi bi-translate me-1"></i>الكل ({{ totals.all|default:0 }})
+          </a>
+          <a href="?lang=ar{% if search_q %}&q={{ search_q|urlencode }}{% endif %}"
+             class="filter-chip {% if lang_filter == 'ar' %}active{% endif %}">
+            🇮🇶 عربي ({{ totals.arabic|default:0 }})
+          </a>
+          <a href="?lang=en{% if search_q %}&q={{ search_q|urlencode }}{% endif %}"
+             class="filter-chip {% if lang_filter == 'en' %}active{% endif %}">
+            🇬🇧 إنجليزي ({{ totals.english|default:0 }})
+          </a>
         </div>
         <div class="col-md-2 d-flex justify-content-md-end">
           <div class="view-toggle" role="group" aria-label="تبديل العرض">

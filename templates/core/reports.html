@@ -142,7 +142,7 @@
         <option value="overdue" {% if bucket == 'overdue' %}selected{% endif %}>المتأخرة فقط</option>
         <option value="today" {% if bucket == 'today' %}selected{% endif %}>مستحقة اليوم</option>
         <option value="upcoming" {% if bucket == 'upcoming' %}selected{% endif %}>مستحقة للفترة القادمة</option>
-        <option value="completed" {% if bucket == 'completed' %}selected{% endif %}>منجزة ومكتملة</option>
+        <option value="completed" {% if bucket == 'completed' %}selected{% endif %}>المؤرشفة (انتهت المتابعة)</option>
       </select>
     </div>
     <div class="col-sm-3 col-6">
@@ -168,23 +168,27 @@
   </div>
 </form>
 
-<!-- Quick Stats Summary -->
+<!-- Quick Stats Summary — حالات المتابعة الأربع الموحَّدة -->
 <div class="stats-summary no-print mb-4">
   <div class="stat-item animate-fade-in" style="animation-delay: 0.1s;">
     <div class="stat-value" id="totalBooks">{{ books|length }}</div>
     <div class="text-muted small fw-semibold">إجمالي النتائج</div>
   </div>
   <div class="stat-item animate-fade-in" style="animation-delay: 0.2s;">
-    <div class="stat-value text-info" id="incomingCount">0</div>
-    <div class="text-muted small fw-semibold">كتب واردة</div>
+    <div class="stat-value" style="color: #2563eb;" id="pendingCount">{{ stats.pending|default:0 }}</div>
+    <div class="text-muted small fw-semibold">قيد المتابعة</div>
   </div>
   <div class="stat-item animate-fade-in" style="animation-delay: 0.3s;">
-    <div class="stat-value text-warning" id="outgoingCount">0</div>
-    <div class="text-muted small fw-semibold">كتب صادرة</div>
+    <div class="stat-value" style="color: #d97706;" id="dueTodayCount">{{ stats.due_today|default:0 }}</div>
+    <div class="text-muted small fw-semibold">مستحق اليوم</div>
   </div>
   <div class="stat-item animate-fade-in" style="animation-delay: 0.4s;">
-    <div class="stat-value text-danger" id="overdueCount">0</div>
-    <div class="text-muted small fw-semibold">متأخرة</div>
+    <div class="stat-value" style="color: #dc2626;" id="overdueCount">{{ stats.overdue|default:0 }}</div>
+    <div class="text-muted small fw-semibold">متأخر</div>
+  </div>
+  <div class="stat-item animate-fade-in" style="animation-delay: 0.5s;">
+    <div class="stat-value" style="color: #64748b;" id="archivedCount">{{ stats.archived|default:0 }}</div>
+    <div class="text-muted small fw-semibold">مؤرشف</div>
   </div>
 </div>
 
@@ -254,26 +258,23 @@
             <td>{% if b.is_outgoing %}<span class="kind-badge kind-outgoing">{{ b.kind_label }}</span>{% else %}<span class="kind-badge kind-incoming">{{ b.kind_label }}</span>{% endif %}</td>
             <td>{{ b.first_issuing_entity|default:"-" }} / {{ b.first_receiving_entity|default:"-" }}</td>
             <td>
-              {% if b.time_state == 'danger' %}
+              {% if b.followup_state == 'overdue' %}
                 <span class="due-badge due-danger">{{ b.due_phrase }}</span>
-              {% elif b.time_state == 'future' %}
+              {% elif b.followup_state == 'pending' %}
                 <span class="due-badge due-future">{{ b.due_phrase }}</span>
-              {% elif b.time_state == 'today' %}
+              {% elif b.followup_state == 'due_today' %}
                 <span class="due-badge due-today">{{ b.due_phrase }}</span>
               {% else %}
                 <span class="due-badge due-normal">{{ b.due_phrase }}</span>
               {% endif %}
             </td>
             <td>
-              {% if b.is_outgoing %}
-                {% if b.final_status == 'pending' %}<span class="status-badge status-pending">قيد الإرسال</span>
-                {% elif b.final_status == 'done' %}<span class="status-badge status-done">مجاب</span>
-                {% else %}<span class="status-badge status-hold">معلقة</span>{% endif %}
-              {% else %}
-                {% if b.final_status == 'pending' %}<span class="status-badge status-pending">قيد المتابعة</span>
-                {% elif b.final_status == 'done' %}<span class="status-badge status-done">منجزة</span>
-                {% else %}<span class="status-badge status-hold">بالحفظ</span>{% endif %}
-              {% endif %}
+              <span class="status-badge badge-status-{{ b.followup_state }}">
+                {% if b.followup_state == 'pending' %}<i class="bi bi-clock-history me-1"></i>قيد المتابعة
+                {% elif b.followup_state == 'due_today' %}<i class="bi bi-calendar-event-fill me-1"></i>مستحق اليوم
+                {% elif b.followup_state == 'overdue' %}<i class="bi bi-exclamation-triangle-fill me-1"></i>متأخر
+                {% else %}<i class="bi bi-archive-fill me-1"></i>مؤرشف{% endif %}
+              </span>
             </td>
             <td style="word-wrap: break-word; white-space: normal; min-width: 80px;">{{ b.margin|default:"-" }}</td>
           </tr>
@@ -290,31 +291,13 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (function() {
-  // Count statistics from table rows
-  const rows = document.querySelectorAll('tbody tr:not(:empty)');
-  let incomingCount = 0, outgoingCount = 0, overdueCount = 0;
-  let pendingCount = 0, doneCount = 0, holdCount = 0;
-  
-  rows.forEach(row => {
-    const kindBadge = row.querySelector('.kind-badge');
-    const dueBadge = row.querySelector('.due-badge');
-    const statusBadge = row.querySelector('.status-badge');
-    
-    if (kindBadge) {
-      if (kindBadge.classList.contains('kind-incoming')) incomingCount++;
-      if (kindBadge.classList.contains('kind-outgoing')) outgoingCount++;
-    }
-    
-    if (dueBadge && dueBadge.classList.contains('due-danger')) {
-      overdueCount++;
-    }
-    
-    if (statusBadge) {
-      if (statusBadge.classList.contains('status-pending')) pendingCount++;
-      if (statusBadge.classList.contains('status-done')) doneCount++;
-      if (statusBadge.classList.contains('status-hold')) holdCount++;
-    }
-  });
+  // إحصائيات من الـ view مباشرة (server-rendered) — مصدر حقيقة واحد
+  const incomingCount = {{ stats.incoming|default:0 }};
+  const outgoingCount = {{ stats.outgoing|default:0 }};
+  const pendingCount  = {{ stats.pending|default:0 }};   // قيد المتابعة
+  const dueTodayCount = {{ stats.due_today|default:0 }}; // مستحق اليوم
+  const overdueCount  = {{ stats.overdue|default:0 }};   // متأخر
+  const archivedCount = {{ stats.archived|default:0 }};  // مؤرشف
   
   // Update stat counters with animation
   function animateCounter(id, target) {
@@ -396,25 +379,27 @@
     });
   }
   
-  // Status Chart (Bar)
+  // Status Chart (Bar) — حالات المتابعة الأربع الموحَّدة بألوانها المعيارية
   const statusCtx = document.getElementById('statusChart');
   if (statusCtx) {
     new Chart(statusCtx, {
       type: 'bar',
       data: {
-        labels: ['قيد المتابعة', 'منجزة', 'معلقة/بالحفظ'],
+        labels: ['قيد المتابعة', 'مستحق اليوم', 'متأخر', 'مؤرشف'],
         datasets: [{
           label: 'عدد الكتب',
-          data: [pendingCount, doneCount, holdCount],
+          data: [pendingCount, dueTodayCount, overdueCount, archivedCount],
           backgroundColor: [
-            'rgba(59, 130, 246, 0.7)',
-            'rgba(34, 197, 94, 0.7)',
-            'rgba(156, 163, 175, 0.7)'
+            'rgba(37, 99, 235, 0.7)',    /* أزرق — قيد المتابعة */
+            'rgba(217, 119, 6, 0.7)',    /* برتقالي — مستحق اليوم */
+            'rgba(220, 38, 38, 0.7)',    /* أحمر — متأخر */
+            'rgba(100, 116, 139, 0.7)'   /* رمادي — مؤرشف */
           ],
           borderColor: [
-            'rgba(59, 130, 246, 1)',
-            'rgba(34, 197, 94, 1)',
-            'rgba(156, 163, 175, 1)'
+            'rgba(37, 99, 235, 1)',
+            'rgba(217, 119, 6, 1)',
+            'rgba(220, 38, 38, 1)',
+            'rgba(100, 116, 139, 1)'
           ],
           borderWidth: 2,
           borderRadius: 8

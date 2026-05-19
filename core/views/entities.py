@@ -83,6 +83,10 @@ def entity_list(request):
     Returns:
         Rendered template with entities list
     """
+    # فلتر اللغة (ar/en/all) + بحث server-side في الاسم أو الرمز
+    lang_filter = (request.GET.get('lang') or 'all').strip()
+    search_q = (request.GET.get('q') or '').strip()
+
     entities_qs = (
         Entity.objects
         .filter(is_active=True)
@@ -98,8 +102,26 @@ def entity_list(request):
                 distinct=True,
             ),
         )
-        .order_by("name")
     )
+
+    if lang_filter == 'ar':
+        entities_qs = entities_qs.filter(name__regex=r'^[؀-ۿ]')
+    elif lang_filter == 'en':
+        entities_qs = entities_qs.filter(name__regex=r'^[A-Za-z0-9]')
+
+    # ── بحث: name أو code ──
+    if search_q:
+        entities_qs = entities_qs.filter(
+            Q(name__icontains=search_q) | Q(code__icontains=search_q)
+        )
+
+    # ترتيب: الجهات المرمّزة أولاً، ثم العربية، ثم الإنجليزية، كل قسم بالاسم
+    entities_qs = entities_qs.extra(
+        select={
+            'has_code': "CASE WHEN COALESCE(code, '') <> '' THEN 1 ELSE 0 END",
+            'is_arabic': "name ~ '^[؀-ۿ]'",
+        },
+    ).order_by('-has_code', '-is_arabic', 'name')
     if request.method == "POST":
         # ── حذف مفرد عبر النموذج المحلّي للجدول/البطاقة ──
         if "delete_single" in request.POST:
@@ -143,9 +165,9 @@ def entity_list(request):
             list(request.POST.keys()),
         )
 
-    # Pagination
+    # Pagination — 100 لكل صفحة (كان 50 صغيراً وضيّعت العربية بعد الإنجليزية)
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-    paginator = Paginator(entities_qs, 50)
+    paginator = Paginator(entities_qs, 100)
     page = request.GET.get("page")
     try:
         entities = paginator.page(page)
@@ -154,12 +176,15 @@ def entity_list(request):
     except EmptyPage:
         entities = paginator.page(paginator.num_pages)
 
-    # إجماليات بسيطة (تشمل كل الصفحات لا الصفحة الحالية فقط)
+    # إجماليات بسيطة (تحسب على القاعدة الكاملة قبل فلتر اللغة)
+    base_qs = Entity.objects.filter(is_active=True)
     totals = {
-        'all': entities_qs.count(),
-        'issuer': entities_qs.filter(etype='issuer').count(),
-        'receiver': entities_qs.filter(etype='receiver').count(),
-        'both': entities_qs.filter(etype='both').count(),
+        'all': base_qs.count(),
+        'issuer': base_qs.filter(etype='issuer').count(),
+        'receiver': base_qs.filter(etype='receiver').count(),
+        'both': base_qs.filter(etype='both').count(),
+        'arabic': base_qs.filter(name__regex=r'^[؀-ۿ]').count(),
+        'english': base_qs.filter(name__regex=r'^[A-Za-z0-9]').count(),
     }
 
     return render(
@@ -169,6 +194,8 @@ def entity_list(request):
             "entities": entities,
             "paginator": paginator,
             "totals": totals,
+            "lang_filter": lang_filter,
+            "search_q": search_q,
         },
     )
 

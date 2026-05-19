@@ -82,7 +82,7 @@ def export_books_to_excel(books, filename="books_export.xlsx"):
             book.number or '',
             book.title or '',
             book.entity.name if book.entity else '',
-            {'pending': 'قيد المتابعة', 'done': 'منجز', 'hold': 'معلق'}.get(book.final_status, ''),
+            book.followup_label,
             book.due_date.strftime('%Y-%m-%d') if book.due_date else '',
             book.description or '',
             book.created_by.get_full_name() or book.created_by.username if book.created_by else '',
@@ -198,11 +198,7 @@ def get_export_data(books):
             'number': book.number or '',
             'title': book.title or '',
             'entity': book.entity.name if book.entity else '',
-            'status': {
-                'pending': 'قيد المتابعة',
-                'done': 'منجز',
-                'hold': 'معلق'
-            }.get(book.final_status, ''),
+            'status': book.followup_label,
             'due_date': book.due_date,
             'description': book.description or '',
             'created_by': book.created_by.get_full_name() or book.created_by.username if book.created_by else '',

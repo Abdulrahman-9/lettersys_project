@@ -9,7 +9,6 @@ Views Package - معالجات التطبيق الرئيسية
 from .helpers import (
     apply_search_filters,
     validate_sort_parameters,
-    compute_time_state,
     is_ajax,
     staff_required,
 )
@@ -17,10 +16,12 @@ from .helpers import (
 # استيراد معالجات الكتب (Phase 8)
 from .books import (
     save_book_api,
+    update_book_api,
     next_number_api,
     sequence_settings,
     book_unified,
     api_unified_data,
+    api_export_csv,
     trash_list,
     book_create_incoming,
     book_create_outgoing,
@@ -63,11 +64,14 @@ from .entities import (
 from .dashboard import (
     dashboard,
     reports,
+    followup_activity_report,
     restore_book,
     purge_book,
     restore_attachment,
     purge_attachment,
     backup_database,
+    data_restore,
+    bak_browse,
     legacy_import_page,
     legacy_import_run,
     legacy_import_status,
@@ -81,11 +85,6 @@ from .attachments import (
     attachment_remove_pages,
 )
 
-# استيراد معالجات المسح الضوئي (Phase 9)
-from .scanner import (
-    scan_capture_api,
-    _validate_scanned_file,
-)
 
 # استيراد معالجات المستخدمين (Phase 9)
 from .users import (
@@ -101,4 +100,18 @@ from .api import (
     record_ocr_feedback,
     ocr_training_statistics,
     trigger_ocr_training,
+)
+
+# إعدادات الماسح الضوئي
+from .scan_settings import (
+    scan_settings_page,
+    scan_watcher_status_api,
+    scan_watcher_diagnostics,
+    scan_test_capture,
+    scan_launch_api,
+    scan_check_protocol,
+    scan_download_installer,
+    scan_install_protocol,
+    scan_file_serve,
+    scan_process_local_file,
 )

@@ -1,32 +1,418 @@
-/* Table and row styling for Book Unified page */
-
-.table-wrapper {
-  padding: 0;
-}
+/* ═════════════════════════════════════════════════════════════
+   جدول الكتب — تصميم مضغوط بصف واحد للأزرار
+   - بدون صف توسّع
+   - بدون toggle حالة سفلي
+   - بصمة theme على الـ header والـ hover
+═════════════════════════════════════════════════════════════ */
 
 .book-unified-table {
-  margin: 0;
   width: 100%;
-  --bu-cell-pad-y: 0.7rem;
-  --bu-cell-pad-x: 0.65rem;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
 }
 
-.book-unified-table > :not(caption) > * > * {
-  padding: var(--bu-cell-pad-y) var(--bu-cell-pad-x);
-  vertical-align: top;
-  border-bottom: 1px solid rgba(111, 70, 40, 0.14);
-}
-
-.table-header th {
+.book-unified-table thead th {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: linear-gradient(180deg, #fff, #fef6eb);
-  color: #65412d;
-  font-size: 0.82rem;
-  text-transform: none;
+  background: linear-gradient(180deg, var(--theme-tint) 0%, #fff 100%);
+  color: var(--theme-text);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.55rem 0.55rem;
+  border-bottom: 1.5px solid var(--theme-glow);
+  text-align: start;
+  white-space: nowrap;
+  transition: background 0.4s ease, color 0.4s ease, border-color 0.4s ease;
 }
 
+.book-unified-table tbody td {
+  padding: 0.45rem 0.55rem;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.18s ease;
+}
+
+.book-unified-table tbody tr.book-row {
+  position: relative;
+  background: #fff;
+}
+
+.book-unified-table tbody tr.book-row:hover {
+  background: var(--row-hover);
+}
+
+/* ═══ السمات اللونية الموحَّدة لحالات المتابعة الأربع ═══
+   الألوان معرَّفة في app.css كـ CSS custom properties — تعريف موحَّد لكل التطبيق.
+   انظر: .badge-status-{state} و .book-row-{state} في app.css */
+.book-row {
+  border-inline-start: 3px solid transparent;
+}
+
+/* ── العمود: Checkbox ── */
+.col-select { width: 36px; text-align: center; }
+.row-checkbox, .select-all-checkbox {
+  cursor: pointer;
+  accent-color: var(--theme-primary);
+}
+
+/* ── العمود: رقم القيد ── */
+.col-our-number { width: 130px; }
+
+.our-number-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.our-number-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+}
+
+.kind-icon {
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+.kind-icon-incoming { color: #2563eb; }
+.kind-icon-outgoing { color: #ca8a04; }
+
+.book-number-text {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: var(--neutral-text);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.05rem;
+}
+
+.num-sequence {
+  font-size: 0.96rem;
+  color: #111827;
+}
+
+.num-year {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.book-number-missing {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px dashed #fca5a5;
+  border-radius: 0.3rem;
+  padding: 0 0.4rem;
+}
+
+.book-number-numberless {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 0.3rem;
+  padding: 0 0.4rem;
+}
+
+/* وسم "قيدنا" / "الجهة" / "نسخة" */
+.num-tag {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 800;
+  border-radius: 0.25rem;
+  padding: 0.05rem 0.32rem;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+.num-tag-ours    { background: rgba(34, 102, 50, 0.11); color: #166534; border: 1px solid rgba(34, 102, 50, 0.18); }
+.num-tag-sender  { background: rgba(14, 165, 233, 0.11); color: #075985; border: 1px solid rgba(14, 165, 233, 0.18); }
+.num-tag-version { background: rgba(124, 58, 237, 0.11); color: #5b21b6; border: 1px solid rgba(124, 58, 237, 0.20); margin-inline-start: 0.2rem; }
+
+.sender-number-line {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+.sender-number-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #075985;
+}
+.sender-number-empty {
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-style: italic;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  border-radius: 0.25rem;
+  padding: 0 0.3rem;
+}
+
+/* ── العمود: التاريخ (مزدوج للوارد، مفرد للصادر) ── */
+.col-date { width: 118px; white-space: nowrap; }
+
+.date-val {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.date-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  align-items: flex-start;
+}
+
+.date-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.date-val-sm {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+/* ── العمود: العنوان ── */
+.col-title { min-width: 220px; }
+
+.book-title-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.book-title-text {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--neutral-text);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.title-meta-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.kind-mini-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+.badge-kind-incoming { background: rgba(37, 99, 235, 0.12); color: #1e40af; }
+.badge-kind-outgoing { background: rgba(202, 138, 4, 0.14); color: #92400e; }
+
+.title-attach-badge {
+  color: var(--theme-accent);
+  font-size: 0.78rem;
+}
+
+/* ── العمود: الجهات ── */
+.col-entity { width: 165px; }
+
+.book-entity-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.78rem;
+}
+
+.entity-primary,
+.entity-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  line-height: 1.3;
+}
+
+.entity-primary {
+  color: var(--neutral-text);
+  font-weight: 700;
+}
+
+.entity-secondary {
+  color: var(--muted);
+}
+
+.entity-icon { color: var(--theme-accent); font-size: 0.85rem; }
+
+.entity-name,
+.entity-name-secondary {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+/* ── العمود: الحالة ── */
+.col-status { width: 130px; }
+
+.status-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-badge-btn {
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: filter 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+}
+
+.status-badge-btn:hover {
+  filter: brightness(0.96);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+}
+
+.status-badge-caret {
+  font-size: 0.62rem;
+  opacity: 0.7;
+  margin-inline-start: 0.1rem;
+}
+
+/* ألوان الـ badges معرَّفة في app.css كـ utility classes (.badge-status-*) */
+
+.due-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.due-overdue  { color: var(--followup-overdue-text); }
+.due-today    { color: var(--followup-due-today-text); }
+.due-pending  { color: var(--followup-pending-text); }
+.due-followup { color: var(--followup-pending-text); }
+
+/* ── العمود: الإجراءات (صف واحد) ── */
+.col-actions { width: 130px; }
+
+.action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.act-btn {
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-size: 0.92rem;
+}
+
+.act-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.act-btn:active { transform: translateY(0); }
+
+.act-btn.act-preview { color: #0369a1; }
+.act-btn.act-preview:hover { background: #f0f9ff; color: #0284c7; }
+
+.act-btn.act-view { color: #1e40af; }
+.act-btn.act-view:hover { background: #eff6ff; color: #2563eb; }
+
+.act-btn.act-edit { color: #b45309; }
+.act-btn.act-edit:hover { background: #fffbeb; color: #d97706; }
+
+.act-btn.act-delete { color: #b91c1c; }
+.act-btn.act-delete:hover { background: #fef2f2; color: #dc2626; }
+
+.act-btn.act-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── popover تغيير الحالة ── */
+.status-popover {
+  position: absolute;
+  z-index: 1080;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 0.55rem;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  padding: 0.32rem;
+  min-width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  animation: popIn 0.14s ease;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+.status-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.35rem;
+  border: none;
+  background: transparent;
+  text-align: start;
+  font-size: 0.83rem;
+  cursor: pointer;
+  color: var(--neutral-text);
+  width: 100%;
+  font-family: inherit;
+  transition: background 0.12s ease;
+}
+
+.status-popover-item:hover { background: rgba(0, 0, 0, 0.04); }
+.status-popover-item.active { background: var(--theme-tint); color: var(--theme-text); font-weight: 700; }
+.status-popover-item i { font-size: 0.95rem; }
+
+/* ── فرز Header ── */
 .th-content {
   display: inline-flex;
   align-items: center;
@@ -36,262 +422,62 @@
 
 .th-content.sortable {
   cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease;
 }
+
+.th-content.sortable:hover { color: var(--theme-accent); }
 
 .sort-icon {
-  color: #9a765f;
-  font-size: 0.78rem;
-}
-
-.col-select {
-  text-align: center;
-}
-
-.book-row {
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-
-.book-row:hover {
-  transform: translateY(-1px);
-  box-shadow: inset 0 0 0 9999px rgba(255, 255, 255, 0.2);
-}
-
-.book-row-normal {
-  background: #fff;
-}
-
-.book-row-overdue {
-  background: linear-gradient(90deg, #fff1f1 0%, #ffe4e4 100%);
-}
-
-.book-row-today {
-  background: linear-gradient(90deg, #fffaf0 0%, #fff3d8 100%);
-}
-
-.book-row-upcoming {
-  background: linear-gradient(90deg, #f2f9ff 0%, #e7f4ff 100%);
-}
-
-.book-row-done {
-  background: linear-gradient(90deg, #f6f7f8 0%, #edf0f2 100%);
-  opacity: 0.88;
-}
-
-.book-number-cell,
-.book-title-cell,
-.book-entity-cell,
-.book-actions-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.book-number-link {
-  color: #1f2937;
-  text-decoration: none;
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.book-number-link:hover {
-  color: #0b62d6;
-}
-
-.kind-icon-incoming {
-  color: #0ea5e9;
-}
-
-.kind-icon-outgoing {
-  color: #f97316;
-}
-
-.secondary-number-badge {
-  border-radius: 999px;
-  padding: 0.08rem 0.5rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.badge-incoming {
-  background: rgba(14, 165, 233, 0.15);
-  color: #075985;
-}
-
-.badge-outgoing {
-  background: rgba(249, 115, 22, 0.16);
-  color: #9a3412;
-}
-
-.due-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.76rem;
-  font-weight: 700;
-}
-
-.due-overdue { color: #b42318; }
-.due-today { color: #b54708; }
-.due-soon { color: #0369a1; }
-
-.book-date-registered {
-  color: #8a6751;
-  font-size: 0.72rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-}
-
-.book-title-text {
-  color: #2f221b;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-.book-status-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.28rem;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  border-radius: 999px;
+  color: var(--muted);
   font-size: 0.7rem;
-  padding: 0.14rem 0.45rem;
-  font-weight: 700;
+  opacity: 0.6;
 }
 
-.badge-kind-incoming {
-  background: rgba(14, 165, 233, 0.14);
-  color: #075985;
+.th-info {
+  color: var(--muted);
+  font-size: 0.72rem;
+  opacity: 0.55;
+  cursor: help;
+  transition: opacity 0.15s ease;
 }
+.th-info:hover { opacity: 1; color: var(--theme-accent); }
 
-.badge-kind-outgoing {
-  background: rgba(249, 115, 22, 0.15);
-  color: #9a3412;
-}
-
-.badge-status-pending {
-  background: rgba(251, 191, 36, 0.18);
-  color: #854d0e;
-}
-
-.badge-status-hold {
-  background: rgba(148, 163, 184, 0.24);
-  color: #334155;
-}
-
-.badge-status-done {
-  background: rgba(34, 197, 94, 0.2);
-  color: #166534;
-}
-
-.badge-has-attachment {
-  background: rgba(59, 130, 246, 0.18);
-  color: #1d4ed8;
-}
-
-.entity-primary,
-.entity-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.entity-primary {
-  color: #3f2d22;
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.entity-secondary {
-  color: #8a6751;
-  font-size: 0.74rem;
-}
-
-.action-icons-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.28rem;
-}
-
-.action-icon-btn {
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 0.45rem;
-  border: 1px solid rgba(111, 70, 40, 0.22);
-  background: #fff;
-  color: #65412d;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-  padding: 0;
-  transition: all 0.18s ease;
-}
-
-.action-icon-btn:hover {
-  transform: translateY(-1px);
-  background: #fff7ef;
-}
-
-.btn-preview { color: #0369a1; }
-.btn-view { color: #2563eb; }
-.btn-edit { color: #ca8a04; }
-.btn-delete { color: #dc2626; }
-.btn-preview-disabled { opacity: 0.45; }
-
-.status-toggle-row {
-  margin-top: 0.2rem;
-}
-
-.status-toggle-group .btn-toggle-status {
-  border-color: rgba(111, 70, 40, 0.2);
-  background: #fff;
-  color: #7b5942;
-  padding: 0.12rem 0.35rem;
-}
-
-.status-toggle-group .btn-toggle-status.active[data-status="pending"] {
-  background: rgba(245, 158, 11, 0.2);
-  color: #92400e;
-}
-
-.status-toggle-group .btn-toggle-status.active[data-status="hold"] {
-  background: rgba(148, 163, 184, 0.24);
-  color: #334155;
-}
-
-.status-toggle-group .btn-toggle-status.active[data-status="done"] {
-  background: rgba(34, 197, 94, 0.23);
-  color: #166534;
+/* ── حالة فارغة داخل الجدول ── */
+.empty-row td {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--muted);
 }
 
 .empty-table-message {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .empty-icon {
   font-size: 1.9rem;
-  color: #a98063;
+  color: rgba(0, 0, 0, 0.18);
 }
 
-@media (max-width: 1200px) {
-  .book-unified-table {
-    --bu-cell-pad-y: 0.62rem;
-    --bu-cell-pad-x: 0.48rem;
-  }
+/* ── animation: stagger fade-in للصفوف الجديدة ── */
+.book-row {
+  animation: rowFadeIn 0.28s ease both;
+}
 
-  .book-title-text {
-    font-size: 0.9rem;
-  }
+@keyframes rowFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 1100px) {
+  .col-entity { width: 130px; }
+  .col-our-number { width: 110px; }
+}
+
+@media (max-width: 900px) {
+  .book-unified-table { font-size: 0.82rem; }
+  .col-entity { display: none; }
 }

@@ -18,8 +18,8 @@ class AttachmentInline(admin.TabularInline):
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
-    list_display = ('our_number','sender_number','document_type','kind','date','final_status','needs_followup','is_overdue')
-    list_filter = ('kind','final_status','secret_level','date','is_overdue','needs_followup')
+    list_display = ('our_number','sender_number','document_type','kind','date','due_date','is_archived')
+    list_filter = ('kind','is_archived','secret_level','date')
     search_fields = ('our_number','sender_number','title','document_type')
     inlines = [AttachmentInline]
 

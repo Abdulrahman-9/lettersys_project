@@ -274,12 +274,11 @@
   color: #fff;
 }
 
-/* — أزرار الـ pills الخاصة — */
-.fb-pill.fb-pill-overdue.active { background: #dc2626; border-color: #dc2626; }
-.fb-pill.fb-pill-today.active   { background: #d97706; border-color: #d97706; }
-.fb-pill.fb-pill-upcoming.active{ background: #2563eb; border-color: #2563eb; }
-.fb-pill.fb-pill-done.active    { background: #16a34a; border-color: #16a34a; }
-.fb-pill.fb-pill-archived.active{ background: #475569; border-color: #475569; }
+/* — السمات اللونية الموحَّدة لـ pills حالة المتابعة (من custom properties في app.css) — */
+.fb-pill.fb-pill-pending.active   { background: var(--followup-pending);   border-color: var(--followup-pending);   color: #fff; }
+.fb-pill.fb-pill-due-today.active { background: var(--followup-due-today); border-color: var(--followup-due-today); color: #fff; }
+.fb-pill.fb-pill-overdue.active   { background: var(--followup-overdue);   border-color: var(--followup-overdue);   color: #fff; }
+.fb-pill.fb-pill-archived.active  { background: var(--followup-archived);  border-color: var(--followup-archived);  color: #fff; }
 
 /* — فاصل عمودي — */
 .fb-divider {
@@ -429,12 +428,11 @@
   color: inherit;
 }
 
-/* (٣) لون كل pill دلالي عند التفعيل */
-.fb-pill.fb-pill-overdue.active   { color: #b91c1c; background: #fef2f2; }
-.fb-pill.fb-pill-today.active     { color: #b45309; background: #fffbeb; }
-.fb-pill.fb-pill-upcoming.active  { color: #1e40af; background: #eff6ff; }
-.fb-pill.fb-pill-done.active      { color: #166534; background: #f0fdf4; }
-.fb-pill.fb-pill-archived.active  { color: #475569; background: #f1f5f9; }
+/* (٣) لون كل pill دلالي عند التفعيل — من custom properties */
+.fb-pill.fb-pill-pending.active   { color: var(--followup-pending-text);   background: var(--followup-pending-bg); }
+.fb-pill.fb-pill-due-today.active { color: var(--followup-due-today-text); background: var(--followup-due-today-bg); }
+.fb-pill.fb-pill-overdue.active   { color: var(--followup-overdue-text);   background: var(--followup-overdue-bg); }
+.fb-pill.fb-pill-archived.active  { color: var(--followup-archived-text);  background: var(--followup-archived-bg); }
 
 /* (٤) "الكل" يتبع ثيم التبويب */
 .fb-pill[data-filter="all"].active {

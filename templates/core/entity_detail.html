@@ -139,7 +139,7 @@
                   </td>
                   <td>{{ book.title|truncatechars:60 }}</td>
                   <td><span class="badge bg-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}-subtle text-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}">{{ book.kind_label }}</span></td>
-                  <td class="text-muted">{{ book.date|date:"Y/m/d" }}</td>
+                  <td class="text-muted">{{ book.date|date:"d/m/Y" }}</td>
                   <td>
                     {% for e in book.receiving_entities.all %}
                       <span class="badge bg-light text-dark">{{ e.name }}</span>
@@ -148,10 +148,10 @@
                     {% endfor %}
                   </td>
                   <td>
-                    {% if book.final_status == 'pending' %}<span class="badge bg-warning-subtle text-warning">قيد المتابعة</span>
-                    {% elif book.final_status == 'done' %}<span class="badge bg-success-subtle text-success">منجزة</span>
-                    {% elif book.final_status == 'hold' %}<span class="badge bg-secondary-subtle text-secondary">معلقة</span>
-                    {% else %}<span class="badge bg-info-subtle text-info">مؤرشف</span>{% endif %}
+                    {% if book.followup_state == 'pending' %}<span class="badge" style="background:rgba(37,99,235,0.15);color:#1e40af;">قيد المتابعة</span>
+                    {% elif book.followup_state == 'due_today' %}<span class="badge" style="background:rgba(217,119,6,0.18);color:#b45309;">مستحق اليوم</span>
+                    {% elif book.followup_state == 'overdue' %}<span class="badge" style="background:rgba(220,38,38,0.18);color:#b91c1c;">متأخر</span>
+                    {% else %}<span class="badge" style="background:rgba(100,116,139,0.18);color:#475569;">مؤرشف</span>{% endif %}
                   </td>
                 </tr>
                 {% endfor %}
@@ -210,7 +210,7 @@
                   </td>
                   <td>{{ book.title|truncatechars:60 }}</td>
                   <td><span class="badge bg-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}-subtle text-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}">{{ book.kind_label }}</span></td>
-                  <td class="text-muted">{{ book.date|date:"Y/m/d" }}</td>
+                  <td class="text-muted">{{ book.date|date:"d/m/Y" }}</td>
                   <td>
                     {% for e in book.issuing_entities.all %}
                       <span class="badge bg-light text-dark">{{ e.name }}</span>
@@ -219,10 +219,10 @@
                     {% endfor %}
                   </td>
                   <td>
-                    {% if book.final_status == 'pending' %}<span class="badge bg-warning-subtle text-warning">قيد المتابعة</span>
-                    {% elif book.final_status == 'done' %}<span class="badge bg-success-subtle text-success">منجزة</span>
-                    {% elif book.final_status == 'hold' %}<span class="badge bg-secondary-subtle text-secondary">معلقة</span>
-                    {% else %}<span class="badge bg-info-subtle text-info">مؤرشف</span>{% endif %}
+                    {% if book.followup_state == 'pending' %}<span class="badge" style="background:rgba(37,99,235,0.15);color:#1e40af;">قيد المتابعة</span>
+                    {% elif book.followup_state == 'due_today' %}<span class="badge" style="background:rgba(217,119,6,0.18);color:#b45309;">مستحق اليوم</span>
+                    {% elif book.followup_state == 'overdue' %}<span class="badge" style="background:rgba(220,38,38,0.18);color:#b91c1c;">متأخر</span>
+                    {% else %}<span class="badge" style="background:rgba(100,116,139,0.18);color:#475569;">مؤرشف</span>{% endif %}
                   </td>
                 </tr>
                 {% endfor %}

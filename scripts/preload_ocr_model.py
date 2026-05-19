@@ -10,7 +10,7 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lettersys.settings')
 django.setup()
 
-from core.ai_ocr_service import OCRService
+from core.extraction.ocr.service import OCRService
 
 print("🔄 تحميل نموذج EasyOCR مسبقاً...")
 print("⏳ قد يستغرق هذا عدة دقائق في المرة الأولى...")

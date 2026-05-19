@@ -6,16 +6,14 @@ BOOK UNIFIED CARD (Mobile View)
 ============================================
 {% endcomment %}
 
-{% with book.time_state as time_state %}
+{% with book.followup_state as state %}
 {% with book.delay_days as delay_days %}
 
-<div class="book-card
-           {% if book.final_status == 'done' %}book-card-done
-           {% elif time_state == 'danger' %}book-card-overdue
-           {% elif time_state == 'today' %}book-card-today
-           {% elif time_state == 'future' %}book-card-upcoming
-           {% else %}book-card-normal{% endif %}"
-     data-book-id="{{ book.id }}">
+<div class="book-card book-card-{{ state }}"
+     data-book-id="{{ book.id }}"
+     data-followup-state="{{ state }}"
+     data-status="{{ state }}"
+     data-kind="{{ book.kind }}">
   
   {# Card Header #}
   <div class="book-card-header">
@@ -54,19 +52,22 @@ BOOK UNIFIED CARD (Mobile View)
     </div>
   </div>
   
-  {# Due Indicator Banner (إذا كان متأخر أو اليوم) #}
-  {% if book.final_status != 'done' %}
-    {% if time_state == 'danger' %}
-    <div class="card-due-banner banner-overdue">
-      <i class="bi bi-exclamation-triangle-fill"></i>
-      <span>متأخر {{ delay_days }} يوم</span>
-    </div>
-    {% elif time_state == 'today' %}
-    <div class="card-due-banner banner-today">
-      <i class="bi bi-calendar-event-fill"></i>
-      <span>مستحق اليوم</span>
-    </div>
-    {% endif %}
+  {# Due Indicator Banner — على أساس حالة المتابعة #}
+  {% if state == 'overdue' %}
+  <div class="card-due-banner banner-overdue">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <span>متأخر {{ delay_days }} يوم</span>
+  </div>
+  {% elif state == 'due_today' %}
+  <div class="card-due-banner banner-today">
+    <i class="bi bi-calendar-event-fill"></i>
+    <span>مستحق اليوم</span>
+  </div>
+  {% elif state == 'pending' and delay_days <= 3 %}
+  <div class="card-due-banner banner-pending">
+    <i class="bi bi-clock-fill"></i>
+    <span>قيد المتابعة (بعد {{ delay_days }} يوم)</span>
+  </div>
   {% endif %}
   
   {# Card Body #}
@@ -89,23 +90,18 @@ BOOK UNIFIED CARD (Mobile View)
         </span>
       {% endif %}
       
-      {# حالة الإنجاز #}
-      {% if book.final_status == 'pending' %}
-        <span class="badge badge-status-pending-mobile">
-          <i class="bi bi-hourglass-split"></i>
-          {% if book.is_outgoing %}قيد الإرسال{% else %}قيد المتابعة{% endif %}
-        </span>
-      {% elif book.final_status == 'hold' %}
-        <span class="badge badge-status-hold-mobile">
-          <i class="bi bi-pause-circle"></i>
-          {% if book.is_outgoing %}معلق{% else %}بالحفظ{% endif %}
-        </span>
-      {% elif book.final_status == 'done' %}
-        <span class="badge badge-status-done-mobile">
-          <i class="bi bi-check-circle-fill"></i>
-          {% if book.is_outgoing %}مجاب{% else %}منجزة{% endif %}
-        </span>
-      {% endif %}
+      {# حالة المتابعة — الحالات الأربع الموحَّدة #}
+      <span class="badge badge-status-{{ state }}-mobile">
+        {% if state == 'pending' %}
+          <i class="bi bi-clock-history"></i> قيد المتابعة
+        {% elif state == 'due_today' %}
+          <i class="bi bi-calendar-event-fill"></i> مستحق اليوم
+        {% elif state == 'overdue' %}
+          <i class="bi bi-exclamation-triangle-fill"></i> متأخر
+        {% else %}
+          <i class="bi bi-archive-fill"></i> مؤرشف
+        {% endif %}
+      </span>
       
       {# مرفق #}
       {% if book.attachment %}
@@ -128,7 +124,7 @@ BOOK UNIFIED CARD (Mobile View)
     {# التاريخ #}
     <div class="card-date">
       <i class="bi bi-calendar3"></i>
-      <span>{{ book.date|date:"Y-m-d" }}</span>
+      <span>{{ book.date|date:"d/m/Y" }}</span>
     </div>
   </div>
   
@@ -137,11 +133,11 @@ BOOK UNIFIED CARD (Mobile View)
     {# أيقونات الإجراءات #}
     <div class="card-action-icons">
       {# معاينة #}
-      {% if book.attachment %}
-      <button 
-        class="card-action-btn btn-preview-mobile" 
+      {% if book.attachment and book.attachment.file %}
+      <button
+        class="card-action-btn btn-preview-mobile"
         data-book-id="{{ book.id }}"
-        data-book-attachment="{{ book.attachment.url }}"
+        data-book-attachment="{{ book.attachment.file.url }}"
         data-book-title="{{ book.title|default:'بدون عنوان' }}"
         aria-label="معاينة"
       >
@@ -183,37 +179,23 @@ BOOK UNIFIED CARD (Mobile View)
       </button>
     </div>
     
-    {# Toggle الحالة #}
+    {# زر الأرشفة / إعادة الفتح #}
     <div class="card-status-toggle">
-      <div class="btn-group btn-group-sm w-100" role="group">
-        <button 
-          type="button" 
-          class="btn btn-toggle-status-mobile {% if book.final_status == 'pending' %}active{% endif %}"
-          data-book-id="{{ book.id }}"
-          data-status="pending"
-          data-status-url="{% url 'api_book_inline_status' book.id %}"
-        >
-          <i class="bi bi-hourglass-split"></i>
-        </button>
-        <button 
-          type="button" 
-          class="btn btn-toggle-status-mobile {% if book.final_status == 'hold' %}active{% endif %}"
-          data-book-id="{{ book.id }}"
-          data-status="hold"
-          data-status-url="{% url 'api_book_inline_status' book.id %}"
-        >
-          <i class="bi bi-pause-circle"></i>
-        </button>
-        <button 
-          type="button" 
-          class="btn btn-toggle-status-mobile {% if book.final_status == 'done' %}active{% endif %}"
-          data-book-id="{{ book.id }}"
-          data-status="done"
-          data-status-url="{% url 'api_book_inline_status' book.id %}"
-        >
-          <i class="bi bi-check-circle"></i>
-        </button>
-      </div>
+      <button
+        type="button"
+        class="status-badge status-badge-btn badge-status-{{ state }} w-100"
+        data-book-id="{{ book.id }}"
+        data-current-status="{{ state }}"
+        data-has-due-date="{% if book.due_date %}1{% else %}0{% endif %}"
+        data-status-url="{% url 'api_book_inline_status' book.id %}"
+        title="انقر لإنهاء/إعادة فتح المتابعة"
+      >
+        {% if state == 'archived' %}
+          <i class="bi bi-arrow-counterclockwise"></i> إعادة الفتح
+        {% else %}
+          <i class="bi bi-archive-fill"></i> إنهاء المتابعة
+        {% endif %}
+      </button>
     </div>
   </div>
   

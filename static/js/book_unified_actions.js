@@ -99,27 +99,30 @@
       });
     }
 
+    // الحالات الأربع الموحَّدة
+    const FOLLOWUP_STATES = ["pending", "due_today", "overdue", "archived"];
+
+    function readState(el) {
+      return el.getAttribute("data-followup-state") || el.getAttribute("data-status") || "";
+    }
+
     function updateCountersAfterBulkDelete(bookIds) {
-      const statDelta = {
-        done: 0,
-        overdue: 0,
-        today: 0,
-      };
+      const statDelta = { pending: 0, due_today: 0, overdue: 0, archived: 0 };
 
       bookIds.forEach(function (id) {
         const row = document.querySelector(`tr.book-row[data-book-id="${id}"]`);
         if (!row) return;
-        if (row.classList.contains("book-row-done")) statDelta.done += 1;
-        if (row.classList.contains("book-row-overdue")) statDelta.overdue += 1;
-        if (row.classList.contains("book-row-today")) statDelta.today += 1;
+        const state = readState(row);
+        if (statDelta.hasOwnProperty(state)) statDelta[state] += 1;
       });
 
       const deletedCount = bookIds.length;
       setCount("statTotal", parseCount("statTotal") - deletedCount);
       setCount("paginationTotal", parseCount("paginationTotal") - deletedCount);
-      setCount("statDone", parseCount("statDone") - statDelta.done);
-      setCount("statOverdue", parseCount("statOverdue") - statDelta.overdue);
-      setCount("statToday", parseCount("statToday") - statDelta.today);
+      setCount("statPending",  parseCount("statPending")  - statDelta.pending);
+      setCount("statDueToday", parseCount("statDueToday") - statDelta.due_today);
+      setCount("statOverdue",  parseCount("statOverdue")  - statDelta.overdue);
+      setCount("statArchived", parseCount("statArchived") - statDelta.archived);
 
       const newTo = Math.max(0, parseCount("paginationTo") - deletedCount);
       setCount("paginationTo", newTo);
@@ -130,47 +133,32 @@
       }
     }
 
-    function applyStatusToBookInDom(bookId, status) {
+    function applyStatusToBookInDom(bookId, action) {
+      // action ∈ {'archived', 'reopen'} — لا تعرف الحالة الزمنية الجديدة بدون استدعاء الخادم.
+      // نضع 'archived' أو نعتمد على re-render لاحقاً للحالات الزمنية.
+      const newState = action === "archived" ? "archived" : null;
       const row = document.querySelector(`tr.book-row[data-book-id="${bookId}"]`);
       const card = document.querySelector(`.book-card[data-book-id="${bookId}"]`);
 
-      if (row) {
-        row.setAttribute("data-status", status);
-        const wasDone = row.classList.contains("book-row-done");
-        const wasOverdue = row.classList.contains("book-row-overdue");
-        const wasToday = row.classList.contains("book-row-today");
-
-        if (status === "done") {
-          row.classList.remove("book-row-overdue", "book-row-today", "book-row-upcoming", "book-row-normal");
-          row.classList.add("book-row-done");
-
-          if (!wasDone) {
-            setCount("statDone", parseCount("statDone") + 1);
-          }
-          if (wasOverdue) {
-            setCount("statOverdue", parseCount("statOverdue") - 1);
-          }
-          if (wasToday) {
-            setCount("statToday", parseCount("statToday") - 1);
+      function applyTo(el, prefix) {
+        if (!el) return;
+        const prevState = readState(el);
+        if (newState) {
+          el.setAttribute("data-status", newState);
+          el.setAttribute("data-followup-state", newState);
+          FOLLOWUP_STATES.forEach(function (s) { el.classList.remove(prefix + s); });
+          el.classList.add(prefix + newState);
+          // عدّادات: −previous, +archived
+          if (prevState && prevState !== newState && FOLLOWUP_STATES.includes(prevState)) {
+            const map = { pending: "statPending", due_today: "statDueToday", overdue: "statOverdue", archived: "statArchived" };
+            setCount(map[prevState], parseCount(map[prevState]) - 1);
+            setCount(map[newState],  parseCount(map[newState])  + 1);
           }
         }
-
-        row.querySelectorAll(".btn-toggle-status").forEach(function (btn) {
-          btn.classList.toggle("active", btn.getAttribute("data-status") === status);
-          btn.disabled = false;
-        });
       }
 
-      if (card) {
-        if (status === "done") {
-          card.classList.remove("book-card-overdue", "book-card-today", "book-card-upcoming", "book-card-normal");
-          card.classList.add("book-card-done");
-        }
-        card.querySelectorAll(".btn-toggle-status-mobile").forEach(function (btn) {
-          btn.classList.toggle("active", btn.getAttribute("data-status") === status);
-          btn.disabled = false;
-        });
-      }
+      applyTo(row,  "book-row-");
+      applyTo(card, "book-card-");
     }
 
     function announceMessage(message) {
@@ -313,17 +301,6 @@
             throw new Error(payload.error || "فشل التحديث المتعدد");
           }
 
-          if (status !== "done") {
-            announceMessage(payload.message || "تم تحديث الحالة المتعدد بنجاح");
-            if (bulkUpdateModalEl && window.bootstrap && window.bootstrap.Modal) {
-              const modal = window.bootstrap.Modal.getOrCreateInstance(bulkUpdateModalEl);
-              modal.hide();
-            }
-            confirmBulkUpdateBtn.disabled = false;
-            window.location.reload();
-            return;
-          }
-
           selectedIds.forEach(function (id) {
             applyStatusToBookInDom(id, status);
           });
@@ -359,5 +336,34 @@
     });
 
     refreshSelection();
+
+    // ── طباعة ──────────────────────────────────────────────────────────────
+    const printBtn = document.getElementById('printTableBtn');
+    if (printBtn) {
+      printBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        window.print();
+      });
+    }
+
+    // ── تصدير CSV ──────────────────────────────────────────────────────────
+    const csvBtn = document.getElementById('exportCsvBtn');
+    if (csvBtn) {
+      csvBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const params = new URLSearchParams(window.location.search);
+        window.location.href = '/books/api/unified/export/csv/?' + params.toString();
+      });
+    }
+
+    // ── تبديل رؤية الأعمدة ─────────────────────────────────────────────────
+    document.querySelectorAll('.column-toggle').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        const col = this.dataset.column;
+        document.querySelectorAll('.col-' + col).forEach(function (el) {
+          el.classList.toggle('d-none', !cb.checked);
+        });
+      });
+    });
   });
 })();

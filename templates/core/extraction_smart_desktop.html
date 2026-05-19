@@ -37,7 +37,6 @@
 <div
     class="extraction-container"
     data-initial-kind="{{ initial_kind }}"
-    data-scan-capture-endpoint="{% url 'scan_capture_api' %}"
     data-smart-extract-endpoint="{% url 'ai_smart_extract' %}"
     data-entity-list-endpoint="{% url 'entity-list-api' %}"
     data-suggestions-endpoint="{% url 'ai_suggestions' %}"
@@ -52,6 +51,7 @@
     <div class="extraction-form-panel">
         <!-- input file مخفي -->
         <input type="file" id="fileInput" style="display: none;" accept="image/*,.pdf">
+
         <!-- شارة الملف القديمة منقولة لرأس المعاينة (modal-header) — يُبقى فقط fileName/fileSize/scanPagesCount مخفية للتوافق -->
         <div id="filePreview" style="display: none;">
             <span id="fileIcon">📄</span>
@@ -117,6 +117,7 @@
                         بيانات الكتاب الأساسية
                     </div>
 
+                    <!-- الصف 1: رقمنا + تاريخنا -->
                     <div class="field-grid-two">
                         <div class="form-group-smart">
                             <div class="label-with-confidence">
@@ -130,6 +131,10 @@
                                 </span>
                             </div>
                             <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
+                            <label class="numberless-toggle" id="numberlessToggle" style="display:none; align-items:center; gap:0.4rem; margin-top:0.3rem; font-size:0.82rem; cursor:pointer; color:#7b5942;">
+                                <input type="checkbox" id="numberlessCheckbox" style="margin:0;">
+                                <span>بلا رقم — كتاب داخلي بلا رقم رسمي (استثناء)</span>
+                            </label>
                             <div class="input-hint" id="bookNumberHint">
                                 رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.
                                 <span class="network-lock-chip" title="الحجز الشبكي للأرقام الفريدة مفعل">
@@ -138,13 +143,44 @@
                             </div>
                         </div>
 
+                        <div class="form-group-smart">
+                            <div class="label-with-confidence">
+                                <label class="field-label" id="dateLabel">
+                                    تاريخنا
+                                    <span class="field-required">*</span>
+                                </label>
+                                <span class="confidence-badge medium" id="dateConfidence" style="display: none;">
+                                    <span class="confidence-indicator" style="background: #d97706;"></span>
+                                    <span id="dateConfidenceValue">78%</span>
+                                </span>
+                            </div>
+                            <div class="date-input-row">
+                                <input type="date" class="form-control-smart" id="date" disabled tabindex="-1">
+                                <label class="date-edit-toggle" title="تفعيل تعديل التاريخ">
+                                    <input type="checkbox" id="dateEditToggle" tabindex="-1">
+                                    <span class="toggle-icon">✏️</span>
+                                </label>
+                            </div>
+                            <div class="input-hint" id="dateHint">تاريخ القيد — اضغط على أيقونة التعديل لتغييره.</div>
+                        </div>
+                    </div>
+
+                    <!-- الصف 2: رقم الجهة المرسلة + تاريخ الجهة المرسلة -->
+                    <div class="field-grid-two">
                         <div class="form-group-smart" id="senderNumberGroup">
                             <label class="field-label" id="senderNumberLabel">رقم الجهة المرسلة</label>
                             <input type="text" class="form-control-smart" id="senderNumber" placeholder="مثال: 241/و">
                             <div class="input-hint" id="senderNumberHint">يظهر هذا الحقل في الوارد لتوثيق رقم الجهة الخارجية أو الداخلية.</div>
                         </div>
+
+                        <div class="form-group-smart" id="senderDateGroup">
+                            <label class="field-label" id="senderDateLabel">تاريخ الجهة المرسلة</label>
+                            <input type="date" class="form-control-smart" id="senderDate">
+                            <div class="input-hint" id="senderDateHint">لتوثيق تاريخ الكتاب لدى الجهة التي أرسلته.</div>
+                        </div>
                     </div>
 
+                    <!-- الصف 3: العنوان -->
                     <div class="form-group-smart">
                         <div class="label-with-confidence">
                             <label class="field-label">
@@ -160,47 +196,24 @@
                         <div class="input-hint">اكتب عنواناً واضحاً يسهل البحث عنه لاحقاً في الأرشيف.</div>
                     </div>
 
-                    <div class="field-grid-two">
-                        <div class="form-group-smart">
-                            <div class="label-with-confidence">
-                                <label class="field-label" id="dateLabel">
-                                    تاريخنا
-                                    <span class="field-required">*</span>
-                                </label>
-                                <span class="confidence-badge medium" id="dateConfidence" style="display: none;">
-                                    <span class="confidence-indicator" style="background: #d97706;"></span>
-                                    <span id="dateConfidenceValue">78%</span>
-                                </span>
-                            </div>
-                            <div class="date-input-row">
-                                <input type="date" class="form-control-smart" id="date" disabled tabindex="-1">
-                                <label class="date-edit-toggle" title="تفعيل تعديل التاريخ">
-                                    <input type="checkbox" id="dateEditToggle">
-                                    <span class="toggle-icon">✏️</span>
-                                </label>
-                            </div>
-                            <div class="input-hint" id="dateHint">تاريخ القيد — اضغط على أيقونة التعديل لتغييره.</div>
-                        </div>
-
-                        <div class="form-group-smart" id="senderDateGroup">
-                            <label class="field-label" id="senderDateLabel">تاريخ الجهة المرسلة</label>
-                            <input type="date" class="form-control-smart" id="senderDate">
-                            <div class="input-hint" id="senderDateHint">لتوثيق تاريخ الكتاب لدى الجهة التي أرسلته.</div>
-                        </div>
-                    </div>
-
+                    <!-- الصف 4: المتابعة الزمنية -->
                     <div class="followup-card" id="followupCard">
                         <div class="followup-card-header">
                             <div>
-                                <div class="followup-card-title">المتابعة والإنجاز</div>
-                                <p class="followup-card-copy">فعّل المتابعة إذا كان الكتاب يحتاج موعد إنجاز أو مراجعة لاحقة.</p>
+                                <div class="followup-card-title">المتابعة الزمنية</div>
+                                <p class="followup-card-copy">
+                                    حدّد تاريخ استحقاق لمتابعة الكتاب — اتركه فارغاً ليُؤرشَف ابتداءً.
+                                </p>
                             </div>
                             <input type="checkbox" id="needsFollowup" class="followup-switch">
                         </div>
                         <div class="form-group-smart is-hidden" id="dueDateGroup" style="margin-bottom: 0;">
-                            <label class="field-label">تاريخ المتابعة</label>
+                            <label class="field-label">تاريخ الاستحقاق</label>
                             <input type="date" class="form-control-smart" id="dueDate">
-                            <div class="input-hint" id="dueDateHint">إذا تُرك فارغاً سيتم اقتراح موعد بعد 7 أيام من تاريخنا.</div>
+                            <div class="input-hint" id="dueDateHint">
+                                إذا تُرك فارغاً سيتم اقتراح موعد بعد 7 أيام من تاريخنا.
+                                الحالة تُحسَب تلقائياً: 🔵 قيد المتابعة · 🟠 مستحق اليوم · 🔴 متأخر.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -355,7 +368,7 @@
 <script id="documentTypeCatalogData" type="application/json">{{ document_type_catalog_json|safe }}</script>
 <script id="documentTypeDefaultsData" type="application/json">{{ document_type_defaults_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260505"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260517b"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
 
@@ -820,31 +833,9 @@
   document.addEventListener('DOMContentLoaded', function() {
     // Initialize keyboard navigation
     const formContainer = document.querySelector('.extraction-form-panel');
-    
-    if (formContainer) {
-      window.keyboardNavigator = new AdvancedKeyboardNavigator({
-        formSelector: '.extraction-form-panel',
-        selectorsMap: {
-          'book_number': '#bookNumber',
-                    'sender_number': '#senderNumber',
-          'title': '#title',
-          'date': '#date',
-                    'sender_date': '#senderDate',
-          'due_date': '#dueDate',
-          'issuing_entity': '#issuingEntity',
-          'receiving_entity': '#receivingEntity',
-          'secret_level': '#secretLevel',
-                    'document_type': '#documentTypeSelect',
-                    'document_type_custom': '#documentTypeCustom',
-          'book_kind': '#bookKind',
-          'margin': '#margin'
-        },
-        submitCallback: function() {
-          document.getElementById('saveButton')?.click();
-        }
-      });
-    }
-    
+
+    // AdvancedKeyboardNavigator removed — class was never implemented
+
     // Add validation listeners
     const validationFields = ['bookNumber', 'title', 'date', 'issuingEntity', 'receivingEntity'];
     validationFields.forEach(id => {
@@ -854,13 +845,13 @@
         el.addEventListener('input', updateValidationIndicator);
       }
     });
-    
+
     // Character counter
     const textarea = document.getElementById('margin');
     if (textarea) {
       textarea.addEventListener('input', updateCharCount);
     }
-    
+
     // File display
     const fileInput = document.getElementById('fileInput');
     if (fileInput) {
@@ -870,7 +861,7 @@
         }
       });
     }
-    
+
     // Initial validation check
     updateValidationIndicator();
 
@@ -904,4 +895,224 @@
 
     console.log('[Extraction Form] Enhanced initialization complete');
   });
+</script>
+
+{# ── وضع التعديل: يُملأ النموذج ببيانات كتاب قائم عند وجود edit_pk ── #}
+{% if edit_book_json != 'null' %}
+<script>
+(function () {
+  'use strict';
+
+  const EDIT_DATA = {{ edit_book_json|safe }};
+  if (!EDIT_DATA || !EDIT_DATA.pk) return;
+
+  // ── تفعيل وضع التعديل على ExtractionSmartSystem ──
+  if (typeof ExtractionSmartSystem !== 'undefined') {
+
+    // 1) منع جلب رقم القيد الجديد (الرقم محدد مسبقاً ولا يتغيّر)
+    ExtractionSmartSystem.prototype.ensureReservation = async function() { return null; };
+
+    // 2) تعديل saveBook ليُرسل لـ update_book_api
+    const _origSaveBook = ExtractionSmartSystem.prototype.saveBook;
+    ExtractionSmartSystem.prototype.saveBook = async function() {
+      // التحقق من الحقول المطلوبة (بدون bookNumber — هو ثابت)
+      const requiredFields = ['title', 'date', 'issuingEntity', 'receivingEntity'];
+      let isValid = true;
+      requiredFields.forEach(id => {
+        if (!this.validateField(id)) isValid = false;
+      });
+      if (!isValid) {
+        this.showToast('يرجى ملء جميع الحقول المطلوبة', 'error', 5000);
+        return;
+      }
+
+      const kindValue = this.getCurrentKind();
+      const documentTypeValue = this.getResolvedDocumentTypeValue(kindValue);
+      const formData = new FormData();
+      formData.append('edit_pk', String(EDIT_DATA.pk));
+      formData.append('title', document.getElementById('title').value);
+      formData.append('date', document.getElementById('date').value);
+      formData.append('sender_number', document.getElementById('senderNumber')?.value || '');
+      formData.append('sender_date', document.getElementById('senderDate')?.value || '');
+      // due_date موجود ⇒ متابعة نشطة (is_archived=false). فارغ ⇒ مؤرشف ابتداءً.
+      // needs_followup يُحتفظ به للتوافق الرجعي مع الـ API (مشتق من وجود التاريخ).
+      const dueDateValue = document.getElementById('dueDate')?.value || '';
+      formData.append('due_date', dueDateValue);
+      formData.append('needs_followup', dueDateValue ? 'true' : 'false');
+      formData.append('secret_level', document.getElementById('secretLevel')?.value || 'normal');
+      formData.append('document_type', documentTypeValue || '');
+      formData.append('margin', document.getElementById('margin')?.value || '');
+      if (this.currentFile) formData.append('file', this.currentFile);
+
+      // إضافة الجهات من EntityTagInput
+      const mgrI = window.entityTagManagers?.issuing;
+      const mgrR = window.entityTagManagers?.receiving;
+      (mgrI?.getIds() || []).forEach(id => formData.append('issuing_entity_ids[]', id));
+      (mgrI?.getNames() || []).forEach(n => formData.append('issuing_entity_new[]', n));
+      (mgrR?.getIds() || []).forEach(id => formData.append('receiving_entity_ids[]', id));
+      (mgrR?.getNames() || []).forEach(n => formData.append('receiving_entity_new[]', n));
+
+      const saveBtn = document.getElementById('saveButton');
+      const originalText = saveBtn.innerHTML;
+      saveBtn.innerHTML = '<span class="spinner"></span> جاري الحفظ...';
+      saveBtn.disabled = true;
+
+      try {
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+        const resp = await fetch('{% url "update-book-api" %}', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin',
+          body: formData,
+        });
+        const result = await resp.json();
+        if (result.success) {
+          this.showToast('تم حفظ التعديلات بنجاح ✓', 'success', 3000);
+          setTimeout(() => {
+            if (result.redirect_url) window.location.href = result.redirect_url;
+          }, 1200);
+        } else {
+          this.showToast(result.message || 'فشل الحفظ', 'error', 6000);
+          saveBtn.innerHTML = originalText;
+          saveBtn.disabled = false;
+        }
+      } catch(e) {
+        this.showToast('خطأ في الاتصال — حاول مجدداً', 'error', 5000);
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
+      }
+    };
+  }
+
+  // ── ملء حقول النموذج بعد اكتمال تهيئة ExtractionSmartSystem ──
+  function _applyEditData() {
+    // الكيند
+    const kindTab = document.querySelector(`.kind-tab[data-kind="${EDIT_DATA.kind}"]`);
+    if (kindTab && !kindTab.classList.contains('active')) kindTab.click();
+    const kindSel = document.getElementById('bookKind');
+    if (kindSel) kindSel.value = EDIT_DATA.kind;
+
+    // رقمنا (للعرض فقط)
+    const numEl = document.getElementById('bookNumber');
+    if (numEl) numEl.value = EDIT_DATA.our_number;
+
+    // حقول النص
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    set('title', EDIT_DATA.title);
+    set('senderNumber', EDIT_DATA.sender_number);
+    set('margin', EDIT_DATA.margin);
+
+    // التواريخ — نُفعّل حقل التاريخ مؤقتاً ثم نعيد إغلاقه
+    const dateEl = document.getElementById('date');
+    const dateToggle = document.getElementById('dateEditToggle');
+    if (dateEl && EDIT_DATA.date) {
+      dateEl.disabled = false;
+      dateEl.value = EDIT_DATA.date;
+      dateEl.disabled = true;
+    }
+    set('senderDate', EDIT_DATA.sender_date);
+    set('dueDate', EDIT_DATA.due_date);
+
+    // متابعة — مُشتقّة من وجود due_date (التوافق الرجعي مع needs_followup مدعوم)
+    const hasFollowup = !!(EDIT_DATA.due_date) && (EDIT_DATA.needs_followup !== false);
+    const followupCb = document.getElementById('needsFollowup');
+    if (followupCb && hasFollowup) {
+      followupCb.checked = true;
+      followupCb.dispatchEvent(new Event('change'));
+    }
+
+    // مستوى السرية
+    const slEl = document.getElementById('secretLevel');
+    if (slEl && EDIT_DATA.secret_level) slEl.value = EDIT_DATA.secret_level;
+
+    // الجهات عبر EntityTagInput
+    const loadEntities = () => {
+      const mgrI = window.entityTagManagers?.issuing;
+      const mgrR = window.entityTagManagers?.receiving;
+      if (mgrI && EDIT_DATA.issuing_entities?.length) mgrI.loadTags(EDIT_DATA.issuing_entities);
+      if (mgrR && EDIT_DATA.receiving_entities?.length) mgrR.loadTags(EDIT_DATA.receiving_entities);
+      if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+    };
+    // EntityTagInput قد يكون جاهزاً أو يحتاج انتظاراً
+    if (window.entityTagManagers?.issuing) {
+      loadEntities();
+    } else {
+      setTimeout(loadEntities, 300);
+    }
+
+    // تحديث شريط الإجراءات
+    const saveBtn = document.getElementById('saveButton');
+    if (saveBtn) saveBtn.textContent = '✓ حفظ التعديلات';
+    const extractBtn = document.getElementById('extractButton');
+    if (extractBtn) extractBtn.style.display = 'none';
+
+    // شارة وضع التعديل في رأس الصفحة
+    const header = document.querySelector('.extraction-form-panel .kind-tabs-wrapper');
+    if (header && !document.getElementById('editModeBadge')) {
+      const badge = document.createElement('div');
+      badge.id = 'editModeBadge';
+      badge.style.cssText = 'background:#fef3c7;color:#92400e;border-radius:8px;padding:.3rem .9rem;font-size:.8rem;font-weight:700;margin-bottom:.5rem;';
+      badge.innerHTML = `<i class="bi bi-pencil-square me-1"></i>وضع التعديل — الكتاب #${EDIT_DATA.our_number}`;
+      header.parentNode.insertBefore(badge, header);
+    }
+  }
+
+  // ننتظر حتى تكتمل التهيئة
+  if (document.readyState !== 'loading') {
+    setTimeout(_applyEditData, 100);
+  } else {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(_applyEditData, 100));
+  }
+
+})();
+</script>
+{% endif %}
+
+{# ── راديو "بلا رقم": يظهر فقط للكتب الداخلية ── #}
+<script>
+(function() {
+  const toggle = document.getElementById('numberlessToggle');
+  const cb = document.getElementById('numberlessCheckbox');
+  const bookNumField = document.getElementById('bookNumber');
+  const hint = document.getElementById('bookNumberHint');
+  if (!toggle || !cb || !bookNumField) return;
+
+  function currentKind() {
+    const active = document.querySelector('.kind-tab.active');
+    if (active && active.dataset.kind) return active.dataset.kind;
+    const sel = document.getElementById('kindSelectMobile') || document.querySelector('select[name="kind"], #kindSelect');
+    return sel ? sel.value : (document.querySelector('.extraction-container')?.dataset?.initialKind || 'incoming_internal');
+  }
+
+  function refreshToggleVisibility() {
+    const k = currentKind();
+    const isInternal = (k === 'incoming_internal' || k === 'outgoing_internal');
+    toggle.style.display = isInternal ? 'inline-flex' : 'none';
+    if (!isInternal && cb.checked) { cb.checked = false; applyNumberless(false); }
+  }
+
+  function applyNumberless(on) {
+    if (on) {
+      bookNumField.dataset.prevValue = bookNumField.value || '';
+      bookNumField.value = 'بلا رقم';
+      bookNumField.classList.add('is-numberless');
+      if (hint) hint.textContent = 'سيُحفظ الكتاب بلا رقم رسمي (يأخذ معرّفاً تقنياً داخلياً).';
+    } else {
+      bookNumField.value = bookNumField.dataset.prevValue || bookNumField.value;
+      bookNumField.classList.remove('is-numberless');
+      if (hint) hint.textContent = 'رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.';
+    }
+  }
+
+  cb.addEventListener('change', function() { applyNumberless(this.checked); });
+
+  // راقب تغيّر التبويب
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.kind-tab')) setTimeout(refreshToggleVisibility, 50);
+  });
+  const sel = document.querySelector('select[name="kind"], #kindSelect, #kindSelectMobile');
+  if (sel) sel.addEventListener('change', () => setTimeout(refreshToggleVisibility, 50));
+
+  refreshToggleVisibility();
+})();
 </script>{% endblock %}

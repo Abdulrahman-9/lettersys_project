@@ -95,7 +95,7 @@
 
     const fileUrl = trigger.getAttribute("data-book-attachment");
     const title = trigger.getAttribute("data-book-title") || "معاينة المستند";
-    if (!fileUrl) return true;
+    if (!fileUrl) { showToast("لا يوجد ملف مرفق لهذا الكتاب", "warning"); return true; }
 
     const modalEl = document.getElementById("previewModal");
     const bodyEl = document.getElementById("previewModalBody");
@@ -227,24 +227,73 @@
     return true;
   }
 
-  async function handleStatusClick(target) {
-    const trigger = target.closest(".btn-toggle-status, .btn-toggle-status-mobile");
-    if (!trigger) return false;
+  // الحالات الأربع الموحَّدة (مصدر واحد) — تطابق Book.FOLLOWUP_STATE_CHOICES
+  const STATE_DISPLAY = {
+    pending:   { label: "قيد المتابعة", icon: "bi-clock-history" },
+    due_today: { label: "مستحق اليوم",  icon: "bi-calendar-event-fill" },
+    overdue:   { label: "متأخر",         icon: "bi-exclamation-triangle-fill" },
+    archived:  { label: "مؤرشف",         icon: "bi-archive-fill" },
+  };
 
-    const statusUrl = trigger.getAttribute("data-status-url");
-    const status = trigger.getAttribute("data-status");
-    if (!statusUrl || !status) return true;
+  function closeStatusPopover() {
+    document.querySelectorAll(".status-popover").forEach(function (p) { p.remove(); });
+  }
 
-    if (trigger.classList.contains("active")) {
-      return true;
+  function openStatusPopover(badge) {
+    closeStatusPopover();
+    const current = badge.getAttribute("data-current-status");
+    const hasDueDate = badge.getAttribute("data-has-due-date") === "1";
+
+    // إجراءان فقط: أرشفة أو إعادة فتح (الحالات الزمنية الثلاث محسوبة من due_date)
+    const actions = [];
+    if (current !== "archived") {
+      actions.push({ value: "archived", label: "إنهاء المتابعة (أرشفة)", icon: "bi-archive-fill" });
+    } else if (hasDueDate) {
+      actions.push({ value: "reopen", label: "إعادة فتح المتابعة", icon: "bi-arrow-counterclockwise" });
+    } else {
+      actions.push({
+        value: "_disabled",
+        label: "حدّد تاريخاً للمتابعة من صفحة التعديل",
+        icon: "bi-info-circle",
+        disabled: true,
+      });
     }
 
-    trigger.disabled = true;
+    const popover = document.createElement("div");
+    popover.className = "status-popover";
+    actions.forEach(function (opt) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "status-popover-item";
+      if (opt.disabled) {
+        btn.classList.add("disabled");
+        btn.disabled = true;
+      }
+      btn.setAttribute("data-status", opt.value);
+      btn.innerHTML = `<i class="bi ${opt.icon}"></i><span>${opt.label}</span>`;
+      if (!opt.disabled) {
+        btn.addEventListener("click", function () {
+          applyStatusChange(badge, opt.value);
+          closeStatusPopover();
+        });
+      }
+      popover.appendChild(btn);
+    });
 
+    document.body.appendChild(popover);
+    const rect = badge.getBoundingClientRect();
+    popover.style.top = (rect.bottom + window.scrollY + 4) + "px";
+    popover.style.left = (rect.left + window.scrollX) + "px";
+  }
+
+  async function applyStatusChange(badge, action) {
+    const statusUrl = badge.getAttribute("data-status-url");
+    if (!statusUrl || !action || action === "_disabled") return;
+
+    badge.disabled = true;
     try {
       const body = new URLSearchParams();
-      body.append("status", status);
-
+      body.append("status", action);   // 'archived' أو 'reopen'
       const response = await fetch(statusUrl, {
         method: "POST",
         headers: {
@@ -254,68 +303,54 @@
         },
         body: body.toString(),
       });
-
       const payload = await response.json();
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || "فشل تحديث الحالة");
       }
 
-      // ✅ Smart update: Update button states immediately without reload
-      const group = trigger.closest(".btn-group");
-      if (group) {
-        group.querySelectorAll(".btn-toggle-status, .btn-toggle-status-mobile").forEach(function (btn) {
-          btn.classList.remove("active");
-          btn.disabled = false;
-        });
-      }
-      trigger.classList.add("active");
-      trigger.disabled = false;
+      const newState = payload.followup_state;
+      const display = STATE_DISPLAY[newState] || STATE_DISPLAY.archived;
 
-      // ✅ Smart update: Update row class for visual feedback only
-      // (Status is updated on server, but visual feedback happens immediately)
-      const bookRow = trigger.closest("tr, .book-card");
-      if (bookRow && status === "done") {
-        // If marking as done, store current state before changing classes
-        const wasOverdue = bookRow.classList.contains("book-row-overdue");
-        const wasToday = bookRow.classList.contains("book-row-today");
-        
-        // Update the row styling
-        bookRow.classList.remove("book-row-overdue", "book-row-today", "book-row-upcoming", "book-row-normal");
-        bookRow.classList.add("book-row-done");
-        
-        // Increment done count
-        const doneEl = document.getElementById("statDone");
-        if (doneEl && doneEl.textContent) {
-          doneEl.textContent = parseInt(doneEl.textContent, 10) + 1;
-        }
-        
-        // Decrement others based on previous state
-        if (wasOverdue) {
-          const overdueEl = document.getElementById("statOverdue");
-          if (overdueEl && overdueEl.textContent) {
-            overdueEl.textContent = Math.max(0, parseInt(overdueEl.textContent, 10) - 1);
-          }
-        }
-        if (wasToday) {
-          const todayEl = document.getElementById("statToday");
-          if (todayEl && todayEl.textContent) {
-            todayEl.textContent = Math.max(0, parseInt(todayEl.textContent, 10) - 1);
-          }
-        }
+      badge.className = "status-badge status-badge-btn badge-status-" + newState;
+      badge.setAttribute("data-current-status", newState);
+      badge.innerHTML = `<i class="bi ${display.icon}"></i>${display.label}<i class="bi bi-chevron-down status-badge-caret"></i>`;
+
+      const row = badge.closest("tr, .book-card");
+      if (row) {
+        row.setAttribute("data-status", newState);
+        row.setAttribute("data-followup-state", newState);
+        ["pending", "due_today", "overdue", "archived"].forEach(function (s) {
+          row.classList.remove("book-row-" + s, "book-card-" + s);
+        });
+        const prefix = row.tagName === "TR" ? "book-row-" : "book-card-";
+        row.classList.add(prefix + newState);
       }
 
       showToast(payload.message || "تم تحديث الحالة", "success");
     } catch (error) {
       showToast(error.message || "حدث خطأ أثناء تحديث الحالة", "error");
-      trigger.disabled = false;
+    } finally {
+      badge.disabled = false;
     }
+  }
 
+  function handleStatusBadgeClick(target) {
+    const badge = target.closest(".status-badge-btn");
+    if (!badge) return false;
+    openStatusPopover(badge);
     return true;
   }
 
   document.addEventListener("click", function (event) {
     if (handlePreviewClick(event.target)) return;
     if (handleDeleteClick(event.target)) return;
-    handleStatusClick(event.target);
+    if (handleStatusBadgeClick(event.target)) return;
+    if (!event.target.closest(".status-popover")) {
+      closeStatusPopover();
+    }
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") closeStatusPopover();
   });
 })();

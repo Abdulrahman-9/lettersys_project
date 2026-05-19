@@ -50,5 +50,6 @@ redis>=5.0.0
 # Additional
 requests>=2.31.0
 
+
 # HTML Sanitization (حماية XSS في عرض محتوى البريد الخارجي)
 bleach>=6.1.0

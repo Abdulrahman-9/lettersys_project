@@ -51,8 +51,9 @@ def _confidence_state(value):
 
 @login_required
 def extraction_quick_start(request):
-    """صفحة البداية السريعة للاستخراج"""
-    return render(request, 'core/extraction_quick_start.html')
+    """تحويل من المسار القديم للواجهة الذكية الجديدة."""
+    from django.shortcuts import redirect
+    return redirect(reverse('extraction-smart-desktop'))
 
 
 @login_required
@@ -67,13 +68,60 @@ def extraction_wizard(request):
 
 @login_required
 def extraction_smart_desktop(request):
-    """نظام الاستخراج الذكي المحسّن للـ Desktop"""
-    kind = normalize_book_kind(request.GET.get('kind'), DEFAULT_BOOK_KIND)
+    """نظام الاستخراج الذكي المحسّن للـ Desktop — يدعم وضع التعديل عبر edit_pk"""
+    from django.core.exceptions import PermissionDenied
+    from core.models import Book
+
+    edit_pk = request.GET.get('edit_pk', '').strip()
+    edit_book_json = 'null'
+
+    if edit_pk:
+        try:
+            book = Book.objects.prefetch_related('issuing_entities', 'receiving_entities').get(
+                pk=edit_pk, is_deleted=False
+            )
+        except (Book.DoesNotExist, ValueError):
+            book = None
+
+        if book is not None:
+            has_permission = (
+                request.user.is_superuser or
+                request.user.is_staff or
+                book.created_by == request.user
+            )
+            if not has_permission:
+                raise PermissionDenied
+
+            edit_book_json = json.dumps({
+                'pk': book.pk,
+                'kind': book.kind,
+                'our_number': book.our_number or '',
+                'sender_number': book.sender_number or '',
+                'title': book.title or '',
+                'date': str(book.date) if book.date else '',
+                'sender_date': str(book.sender_date) if book.sender_date else '',
+                'due_date': str(book.due_date) if book.due_date else '',
+                'needs_followup': bool(book.due_date) and not book.is_archived,
+                'secret_level': book.secret_level or 'normal',
+                'margin': book.margin or '',
+                'document_type': book.document_type or '',
+                'issuing_entities': [{'id': e.id, 'name': e.name, 'code': e.code or ''} for e in book.issuing_entities.all()],
+                'receiving_entities': [{'id': e.id, 'name': e.name, 'code': e.code or ''} for e in book.receiving_entities.all()],
+            }, ensure_ascii=False)
+
+    kind_raw = normalize_book_kind(request.GET.get('kind'), DEFAULT_BOOK_KIND)
+    if edit_pk and edit_book_json != 'null':
+        # في وضع التعديل نستخدم نوع الكتاب القائم
+        import json as _json
+        _d = _json.loads(edit_book_json)
+        kind = normalize_book_kind(_d.get('kind'), kind_raw)
+    else:
+        kind = kind_raw
+
     kind_label = get_kind_label(kind)
     kind_direction = get_kind_direction(kind)
     kind_scope = get_kind_scope(kind)
 
-    # جلب أرقام العدادات لجميع الأنواع مرة واحدة
     all_kinds = [k for k, _ in BOOK_KIND_CHOICES]
     seq_map = {}
     for k in all_kinds:
@@ -91,6 +139,7 @@ def extraction_smart_desktop(request):
             'document_type_catalog_json': json.dumps(DOCUMENT_TYPE_OPTIONS_BY_KIND, ensure_ascii=False),
             'document_type_defaults_json': json.dumps(DEFAULT_DOCUMENT_TYPE_BY_KIND, ensure_ascii=False),
             'seq_map': seq_map,
+            'edit_book_json': edit_book_json,
         },
     )
 

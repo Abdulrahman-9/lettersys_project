@@ -35,6 +35,20 @@
 {% endblock %}
 
 {% block content %}
+
+{# ── بطاقة: استعادة البيانات من قاعدة قديمة ── #}
+<div class="card shadow-sm border-0 mb-4 border-start border-4 border-primary">
+  <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+      <h5 class="mb-1"><i class="bi bi-arrow-counterclockwise me-2 text-primary"></i>استعادة البيانات</h5>
+      <p class="text-muted mb-0 small">استعادة البيانات من قاعدة بريد قديمة (SQL Server نوع ARCHMDOC) — كتب، جهات، ارتباطات، مرفقات — بالتطبيع الصحيح.</p>
+    </div>
+    <a href="{% url 'data_restore' %}" class="btn btn-primary">
+      <i class="bi bi-cloud-download me-1"></i>فتح أداة الاستعادة
+    </a>
+  </div>
+</div>
+
 <div class="card shadow-sm border-0">
   <div class="card-header bg-white">
     <h5 class="mb-0">إنشاء نسخة احتياطية لقاعدة البيانات</h5>

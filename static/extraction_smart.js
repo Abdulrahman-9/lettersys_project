@@ -59,7 +59,6 @@ class ExtractionSmartSystem {
         const dataset = container ? container.dataset : {};
 
         return {
-            scanCapture: dataset.scanCaptureEndpoint || '/books/api/scan-capture/',
             smartExtract: dataset.smartExtractEndpoint || '/books/api/extract/smart/',
             entityList: dataset.entityListEndpoint || '/books/api/entity-list/',
             suggestions: dataset.suggestionsEndpoint || '/books/api/suggestions/',
@@ -377,6 +376,101 @@ class ExtractionSmartSystem {
         this.setupDueDateAutoCalculation();
         this.applyInitialContext();
         this.enhanceUIFeedback();
+        this.checkScanToken();
+    }
+
+    /**
+     * إذا وُجد scan_token في URL (يُضاف بواسطة Hot Folder Watcher)،
+     * يجلب البيانات المستخرجة مسبقاً ويملأ الحقول تلقائياً.
+     */
+    checkScanToken() {
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('scan_token');
+        if (!token) return;
+
+        const tokenUrl = `/books/api/extract/scan-token/${encodeURIComponent(token)}/`;
+        this._showProgressBanner('جاري تحميل بيانات المسح...');
+
+        fetch(tokenUrl, { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(resp => {
+                if (!resp.success || !resp.data) {
+                    this._showProgressBanner('رمز المسح منتهي الصلاحية — يمكنك الرفع يدوياً', 'warning');
+                    return;
+                }
+                const data = resp.data;
+                this.extractedData = data;
+                this._fillExtractionFields(data);
+                this._showProgressBanner(
+                    `تم تحميل بيانات المسح تلقائياً — ثقة ${Math.round((data.overall_confidence || 0) * 100)}%`,
+                    data.needs_review ? 'warning' : 'success'
+                );
+                // تحميل وعرض الملف الممسوح في منطقة المعاينة (بدون إعادة OCR)
+                if (data.processed_path) {
+                    const fileUrl = `/books/api/scan/serve/${encodeURIComponent(token)}/`;
+                    const fileName = data.source_file || 'scanned-document';
+                    this.loadScannedFile(fileUrl, fileName, { noAutoExtract: true });
+                }
+                // مسح الرمز من URL بدون إعادة تحميل الصفحة
+                const cleanUrl = window.location.pathname;
+                window.history.replaceState({}, '', cleanUrl);
+            })
+            .catch(err => {
+                console.warn('[ScanToken] fetch error:', err);
+                this._showProgressBanner('تعذّر تحميل بيانات المسح — يمكنك الرفع يدوياً', 'warning');
+            });
+    }
+
+    _showProgressBanner(message, type = 'info') {
+        let banner = document.getElementById('scanProgressBanner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'scanProgressBanner';
+            banner.style.cssText = [
+                'position:fixed;top:0;left:0;right:0;z-index:9999',
+                'padding:10px 20px;text-align:center;font-weight:600',
+                'transition:opacity 0.4s;direction:rtl',
+            ].join(';');
+            document.body.prepend(banner);
+        }
+        const colors = {
+            info: '#1d4ed8',
+            success: '#15803d',
+            warning: '#b45309',
+            error: '#dc2626',
+        };
+        banner.style.background = colors[type] || colors.info;
+        banner.style.color = '#fff';
+        banner.style.opacity = '1';
+        banner.textContent = message;
+        if (type !== 'info') {
+            setTimeout(() => { banner.style.opacity = '0'; }, 5000);
+        }
+    }
+
+    _fillExtractionFields(data) {
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el && val != null && val !== '') el.value = val;
+        };
+        setVal('bookNumber', data.book_number);
+        setVal('bookDate', data.book_date);
+        setVal('bookTitle', data.title);
+        setVal('secretLevel', data.secret_level);
+        if (data.book_kind) {
+            setVal('bookKind', data.book_kind);
+        }
+        if (data.issuing_entity) {
+            const issuingInput = document.querySelector('[data-field="issuingEntity"] input, #issuingEntity');
+            if (issuingInput) issuingInput.value = data.issuing_entity;
+        }
+        if (data.receiving_entity) {
+            const receivingInput = document.querySelector('[data-field="receivingEntity"] input, #receivingEntity');
+            if (receivingInput) receivingInput.value = data.receiving_entity;
+        }
+        if (data.needs_review) {
+            console.info('[ScanToken] manual review recommended — confidence below threshold');
+        }
     }
 
     getKindConfig(kind) {
@@ -799,6 +893,15 @@ class ExtractionSmartSystem {
             modalBody.addEventListener('dragleave', (e) => this.handleDragLeave(e));
             modalBody.addEventListener('drop', (e) => this.handleDrop(e));
             fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+
+        // ربط مباشر على uploadFileButton — event delegation يحجب file dialog في بعض المتصفحات
+        const uploadBtn = document.getElementById('uploadFileButton');
+        if (uploadBtn) {
+            uploadBtn.addEventListener('click', () => {
+                console.log('[ExtractionSmart] Triggering file picker');
+                fileInput.click();
+            });
+        }
             console.log('[ExtractionSmart] ✓ Drop zone (modalBody) and file input bound');
         } else {
             console.error('[ExtractionSmart] ✗ modalBody or file input not found!');
@@ -837,11 +940,6 @@ class ExtractionSmartSystem {
                 e.preventDefault();
                 console.log('[ExtractionSmart] Calling clearScannedFile()');
                 this.clearScannedFile();
-            } else if (btnId === 'uploadFileButton') {
-                e.preventDefault();
-                console.log('[ExtractionSmart] Triggering file picker');
-                const fi = document.getElementById('fileInput');
-                if (fi) fi.click();
             }
         });
         
@@ -1198,265 +1296,234 @@ class ExtractionSmartSystem {
         }
     }
 
-    // ===== مسح ضوئي من السكانر - محسّن ومتقدم =====
-    startScan(options = {}) {
+    // ===== مسح ضوئي — النظام الجديد (Hot Folder Watcher + Protocol Handler) =====
+
+    // تُطلق البروتوكول عبر <a>.click() — الطريقة الأكثر موثوقية عبر المتصفحات
+    // لا تُغادر الصفحة لأن روابط البروتوكول المخصص تُطلق التطبيق وتبقى على الصفحة الحالية
+    _launchProtocol(protoUrl) {
+        const a = document.createElement('a');
+        a.href = protoUrl;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => a.remove(), 500);
+    }
+
+    _showProtocolInstallModal() {
+        const modalId = 'protocolInstallModal';
+        document.getElementById(modalId)?.remove();
+        const html = `
+<div class="modal fade" id="${modalId}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title"><i class="bi bi-shield-lock me-2"></i>تثبيت بروتوكول الماسح</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="protocolModalBody">
+        <p>يحتاج النظام تسجيل بروتوكول الاتصال مع برنامج المسح الضوئي على هذا الجهاز (مرة واحدة فقط).</p>
+        <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>يُكتب في سجل المستخدم (HKCU) — لا يحتاج صلاحيات مسؤول.</p>
+      </div>
+      <div class="modal-footer" id="protocolModalFooter">
+        <button type="button" class="btn btn-primary" id="protocolInstallBtn">
+          <i class="bi bi-gear-fill me-1"></i>ثبّت تلقائياً
+        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>`;
+        document.body.insertAdjacentHTML('beforeend', html);
+        const el    = document.getElementById(modalId);
+        const modal = (typeof bootstrap !== 'undefined' && bootstrap.Modal)
+            ? new bootstrap.Modal(el) : null;
+        if (modal) modal.show(); else { el.style.display = 'block'; el.classList.add('show'); }
+
+        document.getElementById('protocolInstallBtn').addEventListener('click', async () => {
+            const installBtn = document.getElementById('protocolInstallBtn');
+            const body       = document.getElementById('protocolModalBody');
+            installBtn.disabled = true;
+            installBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جارٍ التثبيت...';
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+            try {
+                const r = await fetch('/books/api/scan/install-protocol/', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrf },
+                    credentials: 'same-origin',
+                });
+                const d = await r.json();
+                if (d.ok) {
+                    body.innerHTML = '<div class="alert alert-success mb-0"><i class="bi bi-check-circle-fill me-2"></i>تم التثبيت بنجاح — جارٍ تشغيل الماسح...</div>';
+                    document.getElementById('protocolModalFooter').style.display = 'none';
+                    setTimeout(() => {
+                        if (modal) modal.hide(); else el.remove();
+                        this.startScan();
+                    }, 1200);
+                } else {
+                    body.innerHTML = `<div class="alert alert-danger mb-2"><i class="bi bi-x-circle me-1"></i>${d.error}</div><a href="/books/api/scan/download-installer/" download class="btn btn-sm btn-outline-secondary">تحميل يدوي</a>`;
+                    installBtn.style.display = 'none';
+                }
+            } catch (_) {
+                body.innerHTML = '<div class="alert alert-danger mb-0">فشل الاتصال بالخادم</div>';
+                installBtn.style.display = 'none';
+            }
+        });
+    }
+
+    async startScan(options = {}) {
         const append = !!options.append;
-        console.log('[ExtractionSmart] 🚀 startScan() called', { append });
-        // احفظ النية الحالية حتى يستخدمها callback النجاح
         this._scanAppendMode = append;
+        this._scanCancelled  = false;
 
-        // إن طُلب الإلحاق ولم يكن هناك ملف سابق، أضِف الملف الحالي (إن وُجد) إلى المصفوفة
-        if (append && this.scannedFiles.length === 0 && this.currentFile && (this.currentFile.type || '').startsWith('image/')) {
-            this.scannedFiles = [this.currentFile];
-        }
-
+        const btn          = document.getElementById('startScanButton');
         const scanProgress = document.getElementById('scanProgress');
-        const startScanButton = document.getElementById('startScanButton');
-        const scanMoreButton = document.getElementById('scanMoreButton');
-        const clearScannedButton = document.getElementById('clearScannedButton');
+        if (!btn) return;
 
-        if (!scanProgress || !startScanButton) {
-            console.error('[ExtractionSmart] ❌ Scan UI elements not found');
-            return;
-        }
-        
-        // Create AbortController for cancellation
-        this.scanAbortController = new AbortController();
-        
-        // Save original button content
-        const originalButtonContent = startScanButton.innerHTML;
-        
-        // إظهار حالة المسح مع زر إلغاء
-        scanProgress.style.display = 'flex';
-        startScanButton.disabled = true;
-        startScanButton.style.position = 'relative';
-        if (scanMoreButton) scanMoreButton.disabled = true;
-        if (clearScannedButton) clearScannedButton.disabled = true;
-        
-        // إنشاء زر إلغاء
+        const origHTML = btn.innerHTML;
+        btn.disabled   = true;
+        if (scanProgress) scanProgress.style.display = 'flex';
+
+        // زر إلغاء
         const cancelBtn = document.createElement('button');
         cancelBtn.className = 'btn btn-sm btn-outline-danger';
         cancelBtn.innerHTML = '<i class="bi bi-x-circle"></i> إلغاء';
-        cancelBtn.style.cssText = 'margin-right: 10px;';
-        cancelBtn.onclick = (e) => {
-            e.stopPropagation();
-            this.cancelScan(startScanButton, originalButtonContent, scanProgress);
+        cancelBtn.style.marginRight = '10px';
+        cancelBtn.onclick = () => {
+            this._scanCancelled = true;
+            this._restoreScanButton(btn, origHTML, scanProgress);
+            cancelBtn.remove();
+            this.showToast('تم إلغاء المسح', 'info');
         };
-        
-        // إضافة زر الإلغاء بجانب progress
-        const progressParent = scanProgress.parentElement;
-        if (progressParent) {
-            progressParent.appendChild(cancelBtn);
+        if (scanProgress?.parentElement) {
+            scanProgress.parentElement.appendChild(cancelBtn);
             this.scanCancelButton = cancelBtn;
         }
-        
-        console.log('[ExtractionSmart] ✅ Scan progress indicator shown with cancel button');
-        
-        // رسائل التقدم
-        const progressMessages = [
-            { ar: '🚀 جارٍ تشغيل الماسح الضوئي...', time: 0 },
-            { ar: '📄 يرجى وضع المستند في الماسح', time: 3000 },
-            { ar: '👆 انقر زر المسح في برنامج Canon', time: 6000 },
-            { ar: '⏳ جارٍ انتظار الملف الممسوح...', time: 12000 },
-            { ar: '⏱️ لا تزال العملية جارية...', time: 30000 },
-            { ar: '🕐 يرجى الانتظار قليلاً...', time: 50000 }
-        ];
-        
-        let currentMessageIndex = 0;
-        const startTime = Date.now();
-        const progressText = scanProgress.querySelector('.progress-message') || scanProgress;
-        
-        const updateProgressMessage = () => {
-            const elapsed = Date.now() - startTime;
-            const nextMessage = progressMessages.find((msg, idx) => 
-                idx > currentMessageIndex && msg.time <= elapsed
-            );
-            
-            if (nextMessage) {
-                currentMessageIndex = progressMessages.indexOf(nextMessage);
-                const elapsedSec = Math.floor(elapsed / 1000);
-                progressText.textContent = `${nextMessage.ar} (${elapsedSec}s)`;
-                console.log(`[ExtractionSmart] 📝 Progress: ${nextMessage.ar}`);
-            }
-        };
-        
-        // تحديث الرسالة الأولية
-        progressText.textContent = progressMessages[0].ar;
-        
-        // تحديث دوري للرسائل
-        const progressInterval = setInterval(updateProgressMessage, 1000);
-        this.scanProgressInterval = progressInterval;
-        
-        // استدعاء API المسح
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-        if (!csrfToken) {
-            console.error('[ExtractionSmart] ❌ CSRF token not found');
-            this.showToast('خطأ أمني: رمز CSRF غير موجود', 'error');
-            this.cleanupScan(startScanButton, originalButtonContent, scanProgress);
+
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+        if (!csrf) {
+            this.showToast('خطأ: رمز CSRF غير موجود', 'error');
+            this._restoreScanButton(btn, origHTML, scanProgress);
             return;
         }
-        
-        console.log('[ExtractionSmart] 📡 Sending scan request to API...');
-        
-        fetch(this.apiEndpoints.scanCapture, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({}),
-            signal: this.scanAbortController.signal  // للسماح بالإلغاء
-        })
-        .then(response => {
-            console.log('[ExtractionSmart] 📬 Scan API responded:', response.status, response.ok);
-            return response.json();
-        })
-        .then(data => {
-            console.log('[ExtractionSmart] 📦 Scan API data:', data);
-            this.cleanupScan(startScanButton, originalButtonContent, scanProgress);
-            
-            // Success check: both HTTP status and JSON status
-            if (data.status === 'ok' || data.status === 'success') {
-                if (data.file_url) {
-                    console.log('[ExtractionSmart] ✅ Scan successful! File URL:', data.file_url);
-                    console.log('[ExtractionSmart] 📄 File name:', data.file_name);
-                    console.log('[ExtractionSmart] 🔧 Operation:', data.operation);
-                    
-                    // تحميل الملف من السيرفر وعرضه
-                    this.loadScannedFile(data.file_url, data.file_name);
-                    this.showToast('✅ تم المسح الضوئي بنجاح', 'success');
-                } else {
-                    console.warn('[ExtractionSmart] ⚠️ Success but no file_url in response');
-                    this.showToast('⚠️ تم المسح لكن لا يوجد رابط للملف', 'warning');
-                }
-            } else {
-                console.error('[ExtractionSmart] ❌ Scan failed:', {
-                    status: data.status,
-                    error_code: data.error_code,
-                    message: data.message,
-                    fullData: data
-                });
-                
-                // رسائل خطأ محسّنة مع الحلول
-                let errorMessage = data.message || 'حدث خطأ في المسح';
-                let troubleshootingTips = [];
-                
-                if (data.troubleshooting && data.troubleshooting.ar) {
-                    troubleshootingTips = data.troubleshooting.ar;
-                } else {
-                    // Fallback troubleshooting based on error code
-                    if (data.error_code === 'SCANNER_NOT_FOUND') {
-                        errorMessage = '❌ برنامج Canon CaptureOnTouch غير موجود';
-                        troubleshootingTips = [
-                            'ثبّت برنامج Canon CaptureOnTouch',
-                            'أو فعّل وضع المحاكاة: SCAN_SIMULATOR_MODE=True',
-                            'تأكد من مسار البرنامج في الإعدادات'
-                        ];
-                    } else if (data.error_code === 'SCAN_TIMEOUT') {
-                        errorMessage = '⏱️ انتهت مهلة المسح (60 ثانية)';
-                        troubleshootingTips = [
-                            'تأكد من تشغيل برنامج Canon',
-                            'انقر زر المسح في البرنامج',
-                            'تحقق من مسار الحفظ في إعدادات Canon',
-                            'جرب المسح مرة أخرى'
-                        ];
-                    } else if (data.error_code === 'NO_ACCESSIBLE_FOLDERS') {
-                        errorMessage = '📁 لا يمكن الوصول لمجلدات الحفظ';
-                        troubleshootingTips = [
-                            'تحقق من صلاحيات الوصول للمجلدات',
-                            'غيّر مسار الحفظ في Canon إلى مجلد متاح',
-                            'شغّل البرنامج بصلاحيات المدير'
-                        ];
-                    } else if (data.error_code === 'FILE_VALIDATION_FAILED') {
-                        errorMessage = '❌ الملف الممسوح تالف أو فارغ';
-                        troubleshootingTips = [
-                            'تأكد من اكتمال عملية المسح',
-                            'جرب مسح المستند مرة أخرى',
-                            'تحقق من إعدادات الجودة في Canon',
-                            'تأكد من وضع المستند بشكل صحيح'
-                        ];
-                    }
-                }
-                
-                // عرض الخطأ مع النصائح
-                let fullErrorMsg = errorMessage;
-                if (troubleshootingTips.length > 0) {
-                    fullErrorMsg += '\n\n💡 حلول مقترحة:\n' + 
-                        troubleshootingTips.map((tip, i) => `${i + 1}. ${tip}`).join('\n');
-                }
-                
-                console.error('[ExtractionSmart] 📋 Error details:', fullErrorMsg);
-                this.showToast(errorMessage, 'error');
-                
-                // عرض النصائح في console للمطور
-                if (troubleshootingTips.length > 0) {
-                    console.info('[ExtractionSmart] 💡 Troubleshooting tips:', troubleshootingTips);
-                }
+
+        // 0) فحص تسجيل البروتوكول أولاً
+        try {
+            const pr = await fetch('/books/api/scan/check-protocol/', { credentials: 'same-origin' });
+            const pd = await pr.json();
+            if (!pd.installed) {
+                this._restoreScanButton(btn, origHTML, scanProgress);
+                cancelBtn.remove();
+                this._showProtocolInstallModal();
+                return;
             }
-        })
-        .catch(error => {
-            // تحقق من الإلغاء
-            if (error.name === 'AbortError') {
-                console.log('[ExtractionSmart] 🚫 Scan request aborted by user');
-                return; // Already handled by cancelScan
-            }
-            
-            console.error('[ExtractionSmart] ❌ Scan error:', error);
-            console.error('[ExtractionSmart] 📋 Error details:', {
-                name: error.name,
-                message: error.message,
-                stack: error.stack
-            });
-            
-            this.cleanupScan(startScanButton, originalButtonContent, scanProgress);
-            this.showToast(`خطأ في الاتصال: ${error.message}`, 'error');
-        });
-    }
-    
-    // إلغاء المسح
-    cancelScan(button, originalContent, progressElement) {
-        console.log('[ExtractionSmart] 🚫 cancelScan() called - User cancelled scan');
-        
-        if (this.scanAbortController) {
-            this.scanAbortController.abort();
-            this.scanAbortController = null;
+        } catch (err) {
+            console.warn('[scan] protocol check failed (continuing anyway):', err);
         }
-        
-        this.cleanupScan(button, originalContent, progressElement);
+
+        // 1) اطلب رابط البروتوكول من السيرفر
+        try {
+            const r = await fetch('/books/api/scan/launch/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+            });
+            const data = await r.json();
+            if (this._scanCancelled) return;
+            if (!data.ok || !data.scan_url) {
+                const msg = data.error || 'تعذّر تشغيل الماسح';
+                this.showToast(data.fix_url ? `${msg} — <a href="${data.fix_url}">إعدادات الماسح</a>` : msg, 'error');
+                this._restoreScanButton(btn, origHTML, scanProgress);
+                cancelBtn.remove();
+                return;
+            }
+            // 2) خذ baseline قبل الإطلاق لتجنب race condition
+            let baseline = 0;
+            try {
+                const sr = await fetch('/books/api/scan/watcher-status/', { credentials: 'same-origin' });
+                baseline = (await sr.json()).file_count || 0;
+            } catch (err) {
+                console.warn('[scan] baseline fetch failed:', err);
+            }
+            // 3) أطلق Protocol Handler عبر iframe مخفي (لا يُبعد المستخدم عن الصفحة)
+            this._launchProtocol(data.scan_url);
+            // 4) راقب watcher بـ baseline دقيق
+            this._pollWatcherForFile(btn, origHTML, scanProgress, cancelBtn, baseline);
+        } catch (err) {
+            console.warn('[scan] launch failed:', err);
+            if (!this._scanCancelled) {
+                this.showToast('خطأ في الاتصال بالماسح', 'error');
+                this._restoreScanButton(btn, origHTML, scanProgress);
+                cancelBtn.remove();
+            }
+        }
+    }
+
+    _pollWatcherForFile(btn, origHTML, scanProgress, cancelBtn, baseline = 0) {
+        const start    = Date.now();
+        const MAX_MS   = 180000;  // 3 دقائق
+        const INTERVAL = 2500;
+        const progEl   = scanProgress?.querySelector('.progress-message') || scanProgress;
+        if (progEl) progEl.textContent = 'الماسح يعمل — اضغط Finish عند الانتهاء';
+
+        const poll = async () => {
+            if (this._scanCancelled) return;
+            if (Date.now() - start > MAX_MS) {
+                this.showToast('انتهت مهلة انتظار الماسح — يمكنك رفع الملف يدوياً', 'warning');
+                this._restoreScanButton(btn, origHTML, scanProgress);
+                cancelBtn?.remove();
+                return;
+            }
+            try {
+                const r = await fetch('/books/api/scan/watcher-status/', { credentials: 'same-origin' });
+                const d = await r.json();
+                if ((d.file_count || 0) > baseline) {
+                    this.showToast(`✓ تم اكتشاف الملف: ${d.last_file || ''}`, 'success');
+                    if (d.last_token) {
+                        window.location.href = '/books/extract/smart-desktop/?scan_token=' + d.last_token;
+                        return;
+                    }
+                    this._restoreScanButton(btn, origHTML, scanProgress);
+                    cancelBtn?.remove();
+                    return;
+                }
+            } catch (err) {
+                console.warn('[scan] watcher poll failed:', err);
+            }
+            setTimeout(poll, INTERVAL);
+        };
+        setTimeout(poll, INTERVAL);
+    }
+
+    _restoreScanButton(btn, origHTML, scanProgress) {
+        if (btn) {
+            btn.disabled = false;
+            btn.style.position = '';
+            const hasScan = this.scannedFiles?.length > 0;
+            btn.innerHTML = hasScan
+                ? '<i class="bi bi-arrow-repeat me-1"></i>مسح جديد'
+                : (origHTML || '<i class="bi bi-upc-scan me-1"></i>مسح من السكانر');
+        }
+        if (scanProgress) scanProgress.style.display = 'none';
+        if (this.scanCancelButton) { this.scanCancelButton.remove(); this.scanCancelButton = null; }
+        const scanMoreBtn   = document.getElementById('scanMoreButton');
+        const clearScanned  = document.getElementById('clearScannedButton');
+        if (scanMoreBtn)  scanMoreBtn.disabled  = false;
+        if (clearScanned) clearScanned.disabled = false;
+    }
+
+    cancelScan(button, originalContent, progressElement) {
+        this._scanCancelled = true;
+        this._restoreScanButton(button, originalContent, progressElement);
         this.showToast('تم إلغاء المسح', 'info');
     }
-    
-    // تنظيف واجهة المسح
-    cleanupScan(button, originalContent, progressElement) {
-        console.log('[ExtractionSmart] 🧹 cleanupScan() - Cleaning up UI');
-        
-        // إيقاف interval
-        if (this.scanProgressInterval) {
-            clearInterval(this.scanProgressInterval);
-            this.scanProgressInterval = null;
-        }
-        
-        // إزالة زر الإلغاء
-        if (this.scanCancelButton) {
-            this.scanCancelButton.remove();
-            this.scanCancelButton = null;
-        }
-        
-        // إعادة الزر لحالته
-        progressElement.style.display = 'none';
-        button.disabled = false;
-        button.style.position = '';
-        button.innerHTML = originalContent;
 
-        // إعادة تفعيل أزرار "مسح المزيد" و "حذف الممسوح" إن كانت موجودة
-        const scanMoreBtn = document.getElementById('scanMoreButton');
-        const clearScannedBtn = document.getElementById('clearScannedButton');
-        if (scanMoreBtn) scanMoreBtn.disabled = false;
-        if (clearScannedBtn) clearScannedBtn.disabled = false;
+    cleanupScan(button, originalContent, progressElement) {
+        this._restoreScanButton(button, originalContent, progressElement);
     }
 
     // تحميل الملف الممسوح من السيرفر وعرضه
-    loadScannedFile(fileUrl, fileName) {
+    // noAutoExtract: true → عرض فقط بدون إعادة تشغيل OCR (عند التحميل من scan_token)
+    loadScannedFile(fileUrl, fileName, { noAutoExtract = false } = {}) {
         console.log('[ExtractionSmart] loadScannedFile():', fileName, 'from URL:', fileUrl);
         const append = !!this._scanAppendMode;
 
@@ -1537,9 +1604,11 @@ class ExtractionSmartSystem {
                 this.displayBlobPreview(finalBlob, fileName);
                 this.displayFileName(fileName);
                 this._updateScanState();
-                this.showToast('✓ تم المسح — جاري الاستخراج...', 'info');
-                // استخراج تلقائي بعد المسح الضوئي
-                setTimeout(() => this.extractData(), 400);
+                if (!noAutoExtract) {
+                    this.showToast('✓ تم المسح — جاري الاستخراج...', 'info');
+                    // استخراج تلقائي بعد المسح الضوئي
+                    setTimeout(() => this.extractData(), 400);
+                }
             })
             .catch(error => {
                 console.error('[ExtractionSmart] ✗ Failed to load scanned file:', error);
@@ -2711,8 +2780,15 @@ class ExtractionSmartSystem {
 
     // ===== Save Book =====
     async saveBook() {
-        // Validate required fields
-        const requiredFields = ['bookNumber', 'title', 'date', 'issuingEntity', 'receivingEntity'];
+        // "بلا رقم": استثناء للكتب الداخلية فقط
+        const _kind0 = this.getCurrentKind();
+        const numberlessChecked = !!document.getElementById('numberlessCheckbox')?.checked
+            && (_kind0 === 'incoming_internal' || _kind0 === 'outgoing_internal');
+
+        // Validate required fields (نتخطى bookNumber عند "بلا رقم")
+        const requiredFields = numberlessChecked
+            ? ['title', 'date', 'issuingEntity', 'receivingEntity']
+            : ['bookNumber', 'title', 'date', 'issuingEntity', 'receivingEntity'];
         let isValid = true;
         let firstInvalid = null;
 
@@ -2783,12 +2859,21 @@ class ExtractionSmartSystem {
         formData.append('kind', kindValue);
         formData.append('margin', document.getElementById('margin').value || '');
 
-        // Prefer the active reservation; fall back to auto_number generation server-side.
-        const activeReservation = this.reservations[kindValue];
-        if (activeReservation && activeReservation.id) {
-            formData.append('reservation_id', activeReservation.id);
+        if (numberlessChecked) {
+            // كتاب داخلي بلا رقم — يتجاهل الحجز والترقيم التلقائي
+            formData.set('numberless', '1');
+            formData.delete('reservation_id');
+            formData.delete('auto_number');
+            formData.set('our_number', '');
+            formData.set('book_number', '');
         } else {
-            formData.append('auto_number', this.autoNumberEnabled ? 'true' : 'false');
+            // Prefer the active reservation; fall back to auto_number generation server-side.
+            const activeReservation = this.reservations[kindValue];
+            if (activeReservation && activeReservation.id) {
+                formData.append('reservation_id', activeReservation.id);
+            } else {
+                formData.append('auto_number', this.autoNumberEnabled ? 'true' : 'false');
+            }
         }
 
         if (this.currentFile) {

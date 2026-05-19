@@ -43,9 +43,15 @@ class Command(BaseCommand):
 
         today = timezone.localdate()
 
-        def make_book(kind: str, days_ago: int, final_status: str, numtag: str):
+        def make_book(kind: str, days_ago: int, due_offset, archived: bool, numtag: str):
+            """
+            due_offset: None ⇒ بلا متابعة (مؤرشف ابتداءً) | int ⇒ أيام من اليوم (سالب=متأخر، 0=اليوم، موجب=قيد المتابعة)
+            archived:   True يفرض الأرشفة حتى لو كان due_offset موجباً (محاكاة إنهاء المتابعة يدوياً)
+            """
             date = today - timedelta(days=days_ago)
-            bn = f"DEMO-{kind}-{final_status}-{days_ago}-{numtag}"
+            due_date = (today + timedelta(days=due_offset)) if due_offset is not None else None
+            tag = "ARCH" if archived else (f"DUE{due_offset}" if due_offset is not None else "NODUE")
+            bn = f"DEMO-{kind}-{tag}-{days_ago}-{numtag}"
             b, created = Book.objects.get_or_create(
                 our_number=bn,
                 defaults={
@@ -54,7 +60,8 @@ class Command(BaseCommand):
                     'secret_level': 'normal',
                     'date': date,
                     'margin': '',
-                    'final_status': final_status,
+                    'due_date': due_date,
+                    'is_archived': archived or due_date is None,
                     'created_by': user,
                     'kind': kind,
                 }
@@ -68,24 +75,25 @@ class Command(BaseCommand):
                     b.receiving_entities.add(receiver)
             else:
                 b.date = date
-                b.final_status = final_status
+                b.due_date = due_date
+                b.is_archived = archived or due_date is None
                 b.kind = kind
                 b.title = f"سجل تجريبي ({'صادر' if kind=='outgoing' else 'وارد'})"
                 b.save()
             return b
 
-        # Incoming: pending/done/hold (recent + overdue)
-        make_book('incoming', 0, 'pending', 'A')      # قيد المتابعة حديث
-        make_book('incoming', 2, 'hold', 'B')         # الحفظ حديث
-        make_book('incoming', 1, 'done', 'C')         # منجز حديث
-        make_book('incoming', 9, 'pending', 'D')      # قيد المتابعة متأخر (>7)
-        make_book('incoming', 10, 'hold', 'E')        # الحفظ متأخر (>7)
+        # وارد: 4 حالات
+        make_book('incoming', 0, 5,    False, 'A')   # قيد المتابعة (5 أيام بعد)
+        make_book('incoming', 2, 0,    False, 'B')   # مستحق اليوم
+        make_book('incoming', 9, -3,   False, 'D')   # متأخر (3 أيام)
+        make_book('incoming', 1, None, True,  'C')   # مؤرشف (بلا متابعة)
+        make_book('incoming', 10, 7,   True,  'E')   # مؤرشف يدوياً مع وجود due_date سابق
 
-        # Outgoing: stages based on date (pending = قيد الإرسال/معلق/متأخر), done = مجاب
-        make_book('outgoing', 0, 'pending', 'O1')     # قيد الإرسال (≤ 4)
-        make_book('outgoing', 5, 'pending', 'O2')     # معلق (5–7)
-        make_book('outgoing', 9, 'pending', 'O3')     # متأخر (>7)
-        make_book('outgoing', 3, 'done', 'O4')        # مجاب
+        # صادر: 4 حالات
+        make_book('outgoing', 0, 7,    False, 'O1')  # قيد المتابعة
+        make_book('outgoing', 5, 0,    False, 'O2')  # مستحق اليوم
+        make_book('outgoing', 9, -5,   False, 'O3')  # متأخر
+        make_book('outgoing', 3, None, True,  'O4')  # مؤرشف
 
         self.stdout.write(self.style.SUCCESS("Seeded demo books successfully. افتح /books/ وشاهد جميع الحالات."))
 

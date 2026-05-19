@@ -13,7 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
-from ..extraction_kinds import BOOK_KIND_CHOICES, normalize_book_kind
+from ..extraction.kinds import BOOK_KIND_CHOICES, normalize_book_kind
 from ..models import BookSequence
 
 logger = logging.getLogger(__name__)

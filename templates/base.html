@@ -77,69 +77,73 @@
     <div class="app-shell">
       <aside class="app-sidebar">
         <div class="app-sidebar-panel">
-          <div class="app-sidebar-section-title">التنقل الرئيسي</div>
+          <div class="app-sidebar-section-title">
+            <button type="button" class="app-sidebar-toggle-btn" id="sidebarToggleBtn" title="طي القائمة">
+              <i class="bi bi-layout-sidebar-reverse"></i>
+            </button>
+            <span class="sidebar-title-text">التنقل الرئيسي</span>
+          </div>
           <nav class="app-sidebar-nav">
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" href="{% url 'dashboard' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" href="{% url 'dashboard' %}" title="لوحة التحكم">
               <i class="bi bi-grid-1x2-fill"></i>
               <span>لوحة التحكم</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'extraction-smart-desktop' or request.resolver_match.url_name == 'extraction-results-ui' or request.resolver_match.url_name == 'extraction-quick-start' %} active{% endif %}" href="{% url 'extraction-smart-desktop' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'extraction-smart-desktop' or request.resolver_match.url_name == 'extraction-results-ui' %} active{% endif %}" href="{% url 'extraction-smart-desktop' %}" title="الإدخال الذكي">
               <i class="bi bi-upc-scan"></i>
               <span>الإدخال الذكي</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' and request.GET.tab != 'overdue' %} active{% endif %}" href="{% url 'book_unified' %}">
-              <i class="bi bi-journal-text"></i>
-              <span>الكتب الموحدة</span>
-            </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' %} active{% endif %}" href="{% url 'book_unified' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' %} active{% endif %}" href="{% url 'book_unified' %}" title="قائمة الكتب">
               <i class="bi bi-list-ul"></i>
               <span>قائمة الكتب</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' and request.GET.tab == 'overdue' %} active{% endif %}" href="{% url 'book_unified' %}?tab=overdue">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' and request.GET.tab == 'overdue' %} active{% endif %}" href="{% url 'book_unified' %}?tab=overdue" title="الوصول السريع">
               <i class="bi bi-lightning-charge-fill"></i>
               <span>الوصول السريع</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'notifications' %} active{% endif %}" href="{% url 'notifications' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'notifications' %} active{% endif %}" href="{% url 'notifications' %}" title="التنبيهات">
               <i class="bi bi-bell-fill"></i>
               <span>التنبيهات</span>
               {% if navbar_unread_notifications %}
               <span class="app-sidebar-link-badge">{{ navbar_unread_notifications }}</span>
               {% endif %}
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name in 'mail_hub,mail_sent,mail_inbox,mail_compose,mail_thread,mail_settings,mail_templates,mail_template_new,mail_template_edit' %} active{% endif %}" href="{% url 'mail_sent' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name in 'mail_hub,mail_sent,mail_inbox,mail_compose,mail_thread,mail_settings,mail_templates,mail_template_new,mail_template_edit' %} active{% endif %}" href="{% url 'mail_sent' %}" title="البريد">
               <i class="bi bi-envelope-fill"></i>
               <span>البريد</span>
-              {% comment %} unread badge — injected by context processor {% endcomment %}
               {% if mail_inbox_unread %}<span class="app-sidebar-link-badge" style="background:#dc3545">{{ mail_inbox_unread }}</span>{% endif %}
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'reports' %} active{% endif %}" href="{% url 'reports' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'reports' %} active{% endif %}" href="{% url 'reports' %}" title="التقارير">
               <i class="bi bi-graph-up-arrow"></i>
               <span>التقارير</span>
             </a>
             {% if request.user.is_staff %}
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'trash_list' %} active{% endif %}" href="{% url 'trash_list' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'trash_list' %} active{% endif %}" href="{% url 'trash_list' %}" title="سلة المهملات">
               <i class="bi bi-trash3"></i>
               <span>سلة المهملات</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'entity_list' or request.resolver_match.url_name == 'entity_detail' or request.resolver_match.url_name == 'entity_create' or request.resolver_match.url_name == 'entity_edit' %} active{% endif %}" href="{% url 'entity_list' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'entity_list' or request.resolver_match.url_name == 'entity_detail' or request.resolver_match.url_name == 'entity_create' or request.resolver_match.url_name == 'entity_edit' %} active{% endif %}" href="{% url 'entity_list' %}" title="الجهات">
               <i class="bi bi-buildings"></i>
               <span>الجهات</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'user_roles' %} active{% endif %}" href="{% url 'user_roles' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'user_roles' %} active{% endif %}" href="{% url 'user_roles' %}" title="المستخدمون">
               <i class="bi bi-person-gear"></i>
               <span>المستخدمون</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'backup_database' %} active{% endif %}" href="{% url 'backup_database' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'backup_database' %} active{% endif %}" href="{% url 'backup_database' %}" title="النسخ الاحتياطي">
               <i class="bi bi-cloud-arrow-down-fill"></i>
               <span>النسخ الاحتياطي</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'sequence_settings' %} active{% endif %}" href="{% url 'sequence_settings' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'sequence_settings' %} active{% endif %}" href="{% url 'sequence_settings' %}" title="العدّادات التسلسلية">
               <i class="bi bi-gear"></i>
               <span>العدّادات التسلسلية</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'network_settings' %} active{% endif %}" href="{% url 'network_settings' %}">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'network_settings' %} active{% endif %}" href="{% url 'network_settings' %}" title="الربط الشبكي">
               <i class="bi bi-diagram-3"></i>
               <span>الربط الشبكي</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'scan_settings' %} active{% endif %}" href="{% url 'scan_settings' %}" title="إعدادات الماسح">
+              <i class="bi bi-printer"></i>
+              <span>إعدادات الماسح</span>
             </a>
             {% endif %}
           </nav>
@@ -224,6 +228,31 @@
     <script src="{% static 'pdf_viewer.js' %}"></script>
     <script src="{% static 'smart_merge_ui.js' %}"></script>
     
+    <!-- Sidebar Mini Toggle -->
+    <script>
+    (function () {
+      'use strict';
+      var PREF  = 'app_sidebar_mini';
+      var btn   = document.getElementById('sidebarToggleBtn');
+      var shell = document.querySelector('.app-shell');
+      if (!btn || !shell) return;
+      var icon = btn.querySelector('i');
+
+      function setMini(mini) {
+        shell.classList.toggle('sidebar-mini', mini);
+        btn.title = mini ? 'توسيع القائمة' : 'طي القائمة';
+        if (icon) icon.className = mini ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-reverse';
+        localStorage.setItem(PREF, mini ? '1' : '0');
+      }
+
+      if (localStorage.getItem(PREF) === '1') setMini(true);
+
+      btn.addEventListener('click', function () {
+        setMini(!shell.classList.contains('sidebar-mini'));
+      });
+    })();
+    </script>
+
     <!-- Additional Page Scripts -->
     {% block extra_js %}{% endblock %}
   </body>

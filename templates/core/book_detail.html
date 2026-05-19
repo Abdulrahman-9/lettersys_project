@@ -27,10 +27,16 @@
     </div>
     <div class="app-context-item">
       <div>
-        <div class="app-context-meta">الحالة</div>
-        <strong>{{ book.status_label }}</strong>
+        <div class="app-context-meta">حالة المتابعة</div>
+        <strong>{{ book.followup_label }}</strong>
       </div>
-      <span class="app-context-chip {% if book.time_state == 'danger' %}is-danger{% elif book.final_status == 'done' %}is-success{% endif %}"><i class="bi bi-activity"></i> متابعة</span>
+      <span class="app-context-chip
+            {% if book.followup_state == 'overdue' %}is-danger
+            {% elif book.followup_state == 'due_today' %}is-warning
+            {% elif book.followup_state == 'pending' %}is-info
+            {% else %}is-muted{% endif %}">
+        <i class="bi bi-activity"></i> متابعة
+      </span>
     </div>
   </div>
 </div>
@@ -67,14 +73,14 @@
             {% else %}
               <span class="kind-badge kind-outgoing" role="status" aria-label="نوع المراسلة: {{ book.kind_label }}"><i class="bi bi-arrow-up-right me-1" aria-hidden="true"></i>{{ book.kind_label }}</span>
             {% endif %}
-            {% if book.time_state == 'danger' %}
+            {% if book.followup_state == 'overdue' %}
               <span class="due-badge due-danger" role="alert" aria-label="تحذير: متأخر {{ book.delay_days }} يوم"><i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>متأخر {{ book.delay_days }} يوم</span>
-            {% elif book.time_state == 'today' %}
+            {% elif book.followup_state == 'due_today' %}
               <span class="due-badge due-today" role="status" aria-label="مستحق اليوم"><i class="bi bi-clock me-1" aria-hidden="true"></i>مستحق اليوم</span>
-            {% elif book.time_state == 'future' %}
+            {% elif book.followup_state == 'pending' %}
               <span class="due-badge due-future" role="status" aria-label="مستحق بعد {{ book.delay_days }} يوم"><i class="bi bi-calendar-check me-1" aria-hidden="true"></i>مستحق بعد {{ book.delay_days }} يوم</span>
             {% else %}
-              <span class="due-badge due-normal" role="status" aria-label="مكتمل"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>مكتمل</span>
+              <span class="due-badge due-normal" role="status" aria-label="مؤرشف"><i class="bi bi-archive-fill me-1" aria-hidden="true"></i>مؤرشف</span>
             {% endif %}
           </div>
           <h4 class="fw-bold mb-1">{{ book.title }}</h4>
@@ -217,25 +223,19 @@
             </div>
             <div class="col-md-6">
               <div class="detail-field">
-                <label class="detail-label">الحالة</label>
+                <label class="detail-label">حالة المتابعة</label>
                 <div class="detail-value">
-                  {% if book.is_outgoing %}
-                    {% if book.final_status == 'pending' %}
-                      <span class="status-badge status-pending"><i class="bi bi-hourglass-split me-1"></i>قيد الإرسال</span>
-                    {% elif book.final_status == 'done' %}
-                      <span class="status-badge status-done"><i class="bi bi-check-circle me-1"></i>مجاب</span>
+                  <span class="status-badge badge-status-{{ book.followup_state }}">
+                    {% if book.followup_state == 'pending' %}
+                      <i class="bi bi-clock-history me-1"></i>قيد المتابعة
+                    {% elif book.followup_state == 'due_today' %}
+                      <i class="bi bi-calendar-event-fill me-1"></i>مستحق اليوم
+                    {% elif book.followup_state == 'overdue' %}
+                      <i class="bi bi-exclamation-triangle-fill me-1"></i>متأخر {{ book.delay_days }} يوم
                     {% else %}
-                      <span class="status-badge status-hold"><i class="bi bi-pause-circle me-1"></i>معلق</span>
+                      <i class="bi bi-archive-fill me-1"></i>مؤرشف
                     {% endif %}
-                  {% else %}
-                    {% if book.final_status == 'pending' %}
-                      <span class="status-badge status-pending"><i class="bi bi-hourglass-split me-1"></i>قيد المتابعة</span>
-                    {% elif book.final_status == 'done' %}
-                      <span class="status-badge status-done"><i class="bi bi-check-circle me-1"></i>منجزة</span>
-                    {% else %}
-                      <span class="status-badge status-hold"><i class="bi bi-pause-circle me-1"></i>بالحفظ</span>
-                    {% endif %}
-                  {% endif %}
+                  </span>
                 </div>
               </div>
             </div>
@@ -439,11 +439,16 @@
                   <i class="bi bi-file-earmark fs-5"></i>
                 </div>
                 <div class="flex-grow-1 min-w-0">
-                  <a href="{{ att.file.url }}" target="_blank" class="fw-semibold text-dark text-truncate d-block">{{ att.file.name|default:"مرفق" }}</a>
+                  {% if att.file %}
+                    <a href="{{ att.file.url }}" target="_blank" class="fw-semibold text-dark text-truncate d-block">{{ att.file.name|default:"مرفق" }}</a>
+                  {% else %}
+                    <span class="fw-semibold text-muted d-block">مرفق بدون ملف</span>
+                  {% endif %}
                   <small class="text-muted d-block">{{ att.uploaded_at|date:"d/m/Y H:i" }}</small>
                 </div>
                 <div class="ms-auto">
                   <div class="btn-toolbar attachment-toolbar" role="toolbar" aria-label="شريط إجراءات المرفق">
+                  {% if att.file %}
                     <div class="btn-group btn-group-sm me-2" role="group" aria-label="معاينة وتحميل">
                       <button class="btn btn-gradient-primary preview-btn" data-file-url="{{ request.scheme }}://{{ request.META.HTTP_HOST }}{{ att.file.url }}" data-file-name="{{ att.file.name }}" data-att-id="{{ att.id }}" type="button" title="معاينة الملف">
                         <i class="bi bi-eye-fill me-1"></i><span class="btn-text">معاينة</span>
@@ -453,13 +458,16 @@
                       </a>
                     </div>
                     <div class="btn-group btn-group-sm" role="group" aria-label="إدارة وحذف">
-                      <button class="btn btn-gradient-info smart-manage-btn" 
+                      <button class="btn btn-gradient-info smart-manage-btn"
                           data-att-id="{{ att.id }}"
                           data-file-url="{{ att.file.url }}"
                           data-file-name="{{ att.file.name }}"
                           title="إدارة متقدمة">
                         <i class="bi bi-gear-fill me-1"></i><span class="btn-text">إدارة</span>
                       </button>
+                  {% else %}
+                    <div class="btn-group btn-group-sm" role="group">
+                  {% endif %}
                       <form method="post" action="{% url 'attachment_delete' att.id %}" class="d-inline mb-0">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-delete" title="نقل إلى سلة المهملات" onclick="return confirm('⚠️ نقل هذا المرفق إلى سلة المهملات؟');">
@@ -478,7 +486,14 @@
                 <span class="text-muted small">نسخ سابقة:</span>
                 <ul class="small mb-0 mt-1">
                   {% for v in att.versions.all %}
-                    <li><a href="{{ v.file.url }}" target="_blank">إصدار {{ v.version_number }}</a> <span class="text-muted">({{ v.created_at|date:"d/m/Y H:i" }})</span></li>
+                    <li>
+                      {% if v.file %}
+                        <a href="{{ v.file.url }}" target="_blank">إصدار {{ v.version_number }}</a>
+                      {% else %}
+                        <span class="text-muted">إصدار {{ v.version_number }} (بدون ملف)</span>
+                      {% endif %}
+                      <span class="text-muted">({{ v.created_at|date:"d/m/Y H:i" }})</span>
+                    </li>
                   {% endfor %}
                 </ul>
               </div>

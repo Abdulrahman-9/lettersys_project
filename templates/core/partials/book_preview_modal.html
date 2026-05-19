@@ -157,11 +157,12 @@
     'incoming_external': { bg: '#f5f3ff', text: '#6d28d9', label: 'وارد خارجي' },
   };
 
-  const STATUS_COLORS = {
-    'archived': 'bg-secondary-subtle text-secondary',
-    'pending': 'bg-warning-subtle text-warning',
-    'done': 'bg-success-subtle text-success',
-    'hold': 'bg-info-subtle text-info',
+  // الحالات الأربع الموحَّدة + ألوانها الدلالية
+  const STATUS_STYLES = {
+    pending:   { bg: 'rgba(37, 99, 235, 0.15)',  color: '#1e40af', label: 'قيد المتابعة' },
+    due_today: { bg: 'rgba(217, 119, 6, 0.18)',  color: '#b45309', label: 'مستحق اليوم' },
+    overdue:   { bg: 'rgba(220, 38, 38, 0.18)',  color: '#b91c1c', label: 'متأخر' },
+    archived:  { bg: 'rgba(100, 116, 139, 0.18)', color: '#475569', label: 'مؤرشف' },
   };
 
   function show(id) { document.getElementById(id)?.classList.remove('d-none'); }
@@ -217,18 +218,22 @@
         kindBadge.style.cssText = `background:${kc.bg};color:${kc.text};`;
       }
 
-      // Status badge
+      // Status badge — مبني على followup_state (الحالات الأربع الموحَّدة)
       const statusBadge = document.getElementById('bpStatusBadge');
       if (statusBadge) {
-        statusBadge.className = `badge ${STATUS_COLORS[d.final_status] || 'bg-secondary'}`;
-        statusBadge.textContent = d.status_label;
+        const s = STATUS_STYLES[d.followup_state] || STATUS_STYLES.archived;
+        statusBadge.className = 'badge';
+        statusBadge.style.cssText = `background:${s.bg};color:${s.color};`;
+        statusBadge.textContent = d.followup_label || s.label;
       }
 
       // Conditional fields
       if (d.is_incoming && d.sender_number) { show('bpSenderNumGroup'); text('bpSenderNumber', d.sender_number); } else { hide('bpSenderNumGroup'); }
       if (d.is_incoming && d.sender_date) { show('bpSenderDateGroup'); text('bpSenderDate', d.sender_date); } else { hide('bpSenderDateGroup'); }
-      if (d.needs_followup) { show('bpFollowupBadge'); show('bpDueDateGroup'); text('bpDueDate', d.due_date); } else { hide('bpFollowupBadge'); hide('bpDueDateGroup'); }
-      if (d.is_overdue) { show('bpOverdueBadge'); } else { hide('bpOverdueBadge'); }
+      // عرض شريحة المتابعة وموعد الاستحقاق فقط عندما يكون الكتاب نشطاً (ليس مؤرشفاً وله due_date)
+      const isActive = d.followup_state && d.followup_state !== 'archived';
+      if (isActive) { show('bpFollowupBadge'); show('bpDueDateGroup'); text('bpDueDate', d.due_date); } else { hide('bpFollowupBadge'); hide('bpDueDateGroup'); }
+      if (d.followup_state === 'overdue') { show('bpOverdueBadge'); } else { hide('bpOverdueBadge'); }
 
       // Entities
       html('bpIssuingEntities', entityBadges(d.issuing_entities));

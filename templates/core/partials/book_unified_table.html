@@ -1,91 +1,65 @@
 {% load static %}
 {% comment %}
 ============================================
-BOOK UNIFIED TABLE (Desktop View)
-جدول مدمج بـ 5 أعمدة:
-1. Checkbox
-2. رقم الكتاب + إيضاحات
-3. العنوان + الحالة
-4. الجهة
-5. إجراءات
+الجدول الرئيسي — 7 أعمدة، بدون توسّع
 ============================================
 {% endcomment %}
 
-<div class="table-wrapper">
-  <table class="table table-hover book-unified-table" id="bookUnifiedTable">
-    <thead class="table-header">
-      <tr>
-        {# Column 1: Select All #}
-        <th class="col-select" width="50">
-          <div class="form-check">
-            <input 
-              class="form-check-input select-all-checkbox" 
-              type="checkbox" 
-              id="selectAllBooks"
-              aria-label="تحديد جميع الكتب"
-            >
-          </div>
-        </th>
-        
-        {# Column 2: رقم الكتاب #}
-        <th class="col-number" width="200">
-          <div class="th-content sortable" data-sort="our_number">
-            <span>رقم الكتاب</span>
-           <i class="bi bi-arrow-down-up sort-icon"></i>
-          </div>
-        </th>
-        
-        {# Column 3: العنوان #}
-        <th class="col-title">
-          <div class="th-content sortable" data-sort="title">
-            <span>العنوان والتفاصيل</span>
-            <i class="bi bi-arrow-down-up sort-icon"></i>
-          </div>
-        </th>
-        
-        {# Column 4: الجهة #}
-        <th class="col-entity" width="220">
-          <div class="th-content">
-            <span>الجهة</span>
-          </div>
-        </th>
-        
-        {# Column 5: الإجراءات #}
-        <th class="col-actions" width="180">
-          <div class="th-content">
-            <span>الإجراءات</span>
-          </div>
-        </th>
-      </tr>
-    </thead>
-    
-    <tbody class="table-body" id="bookTableBody">
-      {% if books %}
-        {% for book in books %}
-          {% include 'core/partials/book_unified_row.html' with book=book only %}
-        {% endfor %}
-      {% else %}
-        <tr class="empty-row">
-          <td colspan="5" class="text-center py-5">
-            <div class="empty-table-message">
-              <i class="bi bi-inbox empty-icon"></i>
-              <p class="empty-text">لا توجد كتب مطابقة</p>
-              <button class="btn btn-sm btn-outline-primary" onclick="window.bookUnifiedApp.resetAllFilters();">
-                إعادة تعيين الفلاتر
-              </button>
-            </div>
-          </td>
-        </tr>
-      {% endif %}
-    </tbody>
-  </table>
-</div>
+<table class="book-unified-table" id="bookUnifiedTable">
+  <thead>
+    <tr>
+      <th class="col-select">
+        <input type="checkbox" class="select-all-checkbox" id="selectAllBooks" aria-label="تحديد الكل">
+      </th>
+      <th class="col-our-number">
+        <div class="th-content sortable" data-sort="our_number">
+          <span>رقم القيد</span>
+          <i class="bi bi-info-circle th-info" title="السطر العلوي: قيدنا (رقمنا الفريد). السطر السفلي للوارد: رقم الكتاب لدى الجهة المرسلة."></i>
+          <i class="bi bi-arrow-down-up sort-icon"></i>
+        </div>
+      </th>
+      <th class="col-date">
+        <div class="th-content sortable" data-sort="date">
+          <span>التاريخ</span>
+          <i class="bi bi-info-circle th-info" title="للوارد: تاريخ الاستلام (الأعلى) + تاريخ إرسال الجهة (الأسفل). للصادر: تاريخ الإصدار."></i>
+          <i class="bi bi-arrow-down-up sort-icon"></i>
+        </div>
+      </th>
+      <th class="col-title">
+        <div class="th-content sortable" data-sort="title">
+          <span>العنوان</span><i class="bi bi-arrow-down-up sort-icon"></i>
+        </div>
+      </th>
+      <th class="col-entity">
+        <div class="th-content"><span>الجهات</span></div>
+      </th>
+      <th class="col-status">
+        <div class="th-content"><span>الحالة</span></div>
+      </th>
+      <th class="col-actions">
+        <div class="th-content"><span>الإجراءات</span></div>
+      </th>
+    </tr>
+  </thead>
 
-{# Table Loading Skeleton #}
-<div class="table-skeleton" id="tableSkeleton" style="display: none;">
-  <div class="skeleton-row"></div>
-  <div class="skeleton-row"></div>
-  <div class="skeleton-row"></div>
-  <div class="skeleton-row"></div>
-  <div class="skeleton-row"></div>
-</div>
+  <tbody id="bookTableBody">
+    {% if books %}
+      {% for book in books %}
+        {% include 'core/partials/book_unified_row.html' with book=book only %}
+      {% endfor %}
+    {% else %}
+      <tr class="empty-row">
+        <td colspan="7">
+          <div class="empty-table-message">
+            <i class="bi bi-inbox empty-icon"></i>
+            <p>لا توجد كتب مطابقة</p>
+            <button class="btn btn-sm btn-outline-primary"
+                    onclick="window.bookAjaxManager && window.bookAjaxManager.clearAllFilters();">
+              إعادة تعيين الفلاتر
+            </button>
+          </div>
+        </td>
+      </tr>
+    {% endif %}
+  </tbody>
+</table>

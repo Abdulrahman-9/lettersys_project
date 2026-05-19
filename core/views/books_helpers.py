@@ -80,59 +80,43 @@ def _normalize_secret_level_value(value):
     return aliases.get(normalized, 'normal')
 
 
-def annotate_time_state(queryset):
+def annotate_followup_state(queryset):
     """
-    Annotate QuerySet with time_state using ORM.
+    يلحق بكل صف حقل followup_state بإحدى القيم الأربع:
+        'archived' | 'overdue' | 'due_today' | 'pending'
+    منطق محسوب بالكامل على مستوى DB — مصدر حقيقة واحد للفلترة والعرض.
     """
     today = timezone.localdate()
     return queryset.annotate(
-        time_state=Case(
-            When(final_status__in=("done", "hold"), then=Value("normal")),
-            When(due_date__isnull=True, then=Value("normal")),
-            When(due_date=today, then=Value("today")),
-            When(due_date__gt=today, then=Value("future")),
-            When(due_date__lt=today, then=Value("danger")),
-            default=Value("normal"),
+        followup_state=Case(
+            When(is_archived=True, then=Value("archived")),
+            When(due_date__isnull=True, then=Value("archived")),
+            When(due_date__lt=today, then=Value("overdue")),
+            When(due_date=today, then=Value("due_today")),
+            When(due_date__gt=today, then=Value("pending")),
+            default=Value("archived"),
             output_field=CharField(),
         )
     )
 
 
-def compute_time_state(book):
+def compute_followup_state(book):
     """
-    Calculate due-date state and delay days.
+    حالة المتابعة + عدد الأيام (موجب دائماً).
+    يفوّض إلى الـ properties في الـ Model — مصدر حقيقة واحد.
+    Returns: (state, delay_days)
     """
-    state = "normal"
-    delay_days = 0
-
-    if book.final_status in ("done", "hold"):
-        return state, delay_days
-
-    if not book.due_date:
-        return state, delay_days
-
-    today = timezone.localdate()
-    delay_days = (today - book.due_date).days
-
-    if delay_days == 0:
-        return "today", delay_days
-    if delay_days < 0:
-        return "future", abs(delay_days)
-
-    return "danger", delay_days
+    return book.followup_state, book.delay_days
 
 
 def validate_sort_parameters(sort_by, sort_dir):
-    """
-    Validate sorting parameters to avoid invalid fields.
-    """
+    """التحقق من معاملات الفرز لمنع SQL injection."""
     valid_sorts = {
         'id': 'id',
         'book_number': 'our_number',
         'our_number': 'our_number',
         'title': 'title',
         'date': 'date',
-        'final_status': 'final_status',
         'kind': 'kind',
     }
 

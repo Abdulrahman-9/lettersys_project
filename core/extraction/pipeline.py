@@ -26,10 +26,11 @@ import os
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, Callable
 from pathlib import Path
 import hashlib
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 from django.db import transaction
 from django.utils import timezone
@@ -46,6 +47,28 @@ from core.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ─── ثوابت ─────────────────────────────────────────────────────────────────────
+_MANUAL_REVIEW_THRESHOLD = 0.70
+
+_FRIENDLY_ERRORS = {
+    'list index out of range': 'فشل تحليل الصورة — تأكد من وضوح المستند وجودته',
+    'image is None': 'تعذّر قراءة الصورة — قد يكون الملف تالفاً أو بصيغة غير مدعومة',
+    'No module named': 'مكتبة OCR غير مثبّتة في الخادم — تواصل مع المسؤول',
+    'out of memory': 'حجم الصورة كبير جداً — حاول بدقة أقل أو ملف أصغر',
+    'timeout': 'استغرقت المعالجة وقتاً طويلاً — حاول مرة أخرى',
+    'Connection': 'تعذّر الاتصال بخدمة OCR السحابية — يتم استخدام المعالجة المحلية',
+    'MemoryError': 'حجم الصورة كبير جداً — حاول بدقة أقل أو ملف أصغر',
+}
+
+
+def _user_friendly_error(exc: Exception) -> str:
+    """تحويل استثناء تقني إلى رسالة مفهومة للمستخدم."""
+    raw = str(exc)
+    for key, friendly in _FRIENDLY_ERRORS.items():
+        if key.lower() in raw.lower():
+            return friendly
+    return 'حدث خطأ أثناء معالجة المستند — حاول مرة أخرى أو تواصل مع الدعم الفني'
 
 
 class AIExtractionResult:
@@ -104,6 +127,8 @@ class AIExtractionResult:
         # Processing metadata
         self.status: str = "pending"  # pending, completed, failed, manual_review
         self.error_message: Optional[str] = None
+        self.user_message: str = ""   # رسالة مفهومة للمستخدم
+        self.progress_stage: str = ""  # المرحلة الحالية للعرض في الواجهة
         self.processing_time: float = 0.0
         self.timestamp: datetime = timezone.now()
 
@@ -140,6 +165,8 @@ class AIExtractionResult:
             'overall_confidence': self.overall_confidence,
             'field_confidences': self.field_confidences,
             'status': self.status,
+            'user_message': self.user_message,
+            'progress_stage': self.progress_stage,
             'processing_time': self.processing_time,
             'timestamp': self.timestamp.isoformat(),
         }
@@ -310,116 +337,163 @@ class AIExtractionService:
             logger.error(f"Cache save error: {str(e)}")
             return False
 
-    def process_image(self, image_path: str, skip_ocr: bool = False) -> AIExtractionResult:
+    def process_image(
+        self,
+        image_path: str,
+        skip_ocr: bool = False,
+        on_progress: Optional[Callable[[str], None]] = None,
+    ) -> AIExtractionResult:
         """
-        Process single image through complete extraction pipeline
+        Process single image through complete extraction pipeline.
 
         Args:
-            image_path: Path to image file
-            skip_ocr: Whether to skip OCR (for testing)
+            image_path:   Path to image file
+            skip_ocr:     Skip OCR step (for testing)
+            on_progress:  Optional callback(stage_label) called at each stage
 
         Returns:
             AIExtractionResult with all extracted data
         """
+        from django.conf import settings as django_settings
+        timeout_sec = getattr(django_settings, 'AI_EXTRACTION_TIMEOUT', 60)
+
+        # تنفيذ المعالجة الداخلية مع حد زمني
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                self._process_image_internal, image_path, skip_ocr, on_progress
+            )
+            try:
+                return future.result(timeout=timeout_sec)
+            except FuturesTimeout:
+                result = AIExtractionResult()
+                result.image_path = image_path
+                result.status = 'failed'
+                result.error_message = f'timeout after {timeout_sec}s'
+                result.user_message = _FRIENDLY_ERRORS['timeout']
+                result.progress_stage = 'timeout'
+                logger.error('[pipeline] process_image timed out after %ds', timeout_sec)
+                return result
+
+    def _process_image_internal(
+        self,
+        image_path: str,
+        skip_ocr: bool = False,
+        on_progress: Optional[Callable[[str], None]] = None,
+    ) -> AIExtractionResult:
+        """المعالجة الداخلية — تُستدعى داخل thread منفصل."""
+
+        def _progress(stage: str) -> None:
+            if on_progress:
+                try:
+                    on_progress(stage)
+                except Exception as cb_exc:
+                    logger.debug('[pipeline] progress callback failed: %s', cb_exc)
+
         start_time = time.time()
         result = AIExtractionResult()
         result.image_path = image_path
+        enhanced_image_path: Optional[str] = None
 
         try:
-            # Step 1: Compute image hash and check cache
+            # Step 1: فحص الكاش
+            _progress('cache_check')
             result.image_hash = self.compute_image_hash(image_path)
-
             cached_result = self.check_cache(result.image_hash)
             if cached_result:
                 cached_result.processing_time = time.time() - start_time
+                cached_result.progress_stage = 'cached'
                 return cached_result
 
-            # Step 2: Image Enhancement
-            logger.info(f"Processing image: {image_path}")
+            # Step 2: تحسين الصورة
+            _progress('image_enhancement')
+            result.progress_stage = 'تحسين الصورة'
+            logger.info('Processing image: %s', image_path)
             image_processor = ImageProcessor(image_path)
             image_processor.full_pipeline()
             enhanced_image = image_processor.get_image()
             enhanced_image_path = image_path.replace('.jpg', '_enhanced.jpg').replace('.png', '_enhanced.png')
             image_processor.save(enhanced_image_path)
-            # تفريغ ذاكرة معالج الصور فوراً
             del image_processor, enhanced_image
-            logger.info(f"Image enhanced and saved to {enhanced_image_path}")
 
-            # Step 3: OCR Processing
+            # Step 3: OCR
             if not skip_ocr:
+                _progress('ocr')
+                result.progress_stage = 'قراءة النص'
                 self._ensure_ocr_stack()
 
-                # First try offline provider
                 offline_res = self._offline_provider.extract(enhanced_image_path)
                 result.raw_text = offline_res.get('raw_text', '')
                 result.cleaned_text = self.ocr_service.clean_text(result.raw_text)
-                # Map avg_confidence to pipeline
                 result.ocr_confidence = float(offline_res.get('avg_confidence', 0.0))
                 result.detected_language = 'ar'
                 ocr_engine_used = 'easyocr'
-                logger.info(f"OCR (offline) confidence {result.ocr_confidence:.2f}")
+                logger.info('OCR (offline) confidence %.2f', result.ocr_confidence)
 
-                # Fallback to online if enabled and low confidence
+                # Fallback إلى Azure عند ثقة منخفضة
                 if self._settings.get('AI_FALLBACK_ON_LOW_CONFIDENCE', True) and self._online_provider:
                     threshold = float(self._settings.get('AI_LOW_CONFIDENCE_THRESHOLD', 0.4))
                     if result.ocr_confidence < threshold:
-                        logger.info(f"OCR below threshold {threshold:.2f}; trying online provider...")
-                        online_res = self._online_provider.extract(enhanced_image_path)
-                        online_conf = float(online_res.get('avg_confidence', 0.0))
-                        if online_conf > result.ocr_confidence and online_res.get('raw_text'):
-                            result.raw_text = online_res.get('raw_text', '')
-                            result.cleaned_text = self.ocr_service.clean_text(result.raw_text)
-                            result.ocr_confidence = online_conf
-                            ocr_engine_used = 'azure'
-                            logger.info(f"Online OCR improved confidence to {online_conf:.2f}")
-                # store engine in result for DB save
+                        _progress('ocr_azure_fallback')
+                        result.progress_stage = 'تحسين القراءة (سحابة)'
+                        logger.info('OCR below threshold %.2f; trying online provider...', threshold)
+                        try:
+                            online_res = self._online_provider.extract(enhanced_image_path)
+                            online_conf = float(online_res.get('avg_confidence', 0.0))
+                            if online_conf > result.ocr_confidence and online_res.get('raw_text'):
+                                result.raw_text = online_res.get('raw_text', '')
+                                result.cleaned_text = self.ocr_service.clean_text(result.raw_text)
+                                result.ocr_confidence = online_conf
+                                ocr_engine_used = 'azure'
+                                logger.info('Online OCR improved confidence to %.2f', online_conf)
+                        except Exception as azure_exc:
+                            logger.warning('[pipeline] Azure fallback failed: %s', azure_exc, exc_info=True)
+
                 result.ocr_engine = ocr_engine_used
             else:
-                result.raw_text = ""
-                result.cleaned_text = ""
+                result.raw_text = ''
+                result.cleaned_text = ''
                 result.ocr_confidence = 0.0
 
-            # Step 4: Pattern Matching (Structured Data Extraction)
+            # Step 4: Pattern Matching
+            _progress('pattern_matching')
+            result.progress_stage = 'تحليل البيانات'
             if result.cleaned_text:
                 patterns = self.pattern_matcher.extract_all_data(result.cleaned_text)
-
                 result.book_number, result.book_number_confidence = patterns.get('book_number', ('', 0.0))
                 result.book_date, result.book_date_confidence = patterns.get('book_date', (None, 0.0))
                 result.title, result.title_confidence = patterns.get('title', ('', 0.0))
                 result.margin_text, result.margin_confidence = patterns.get('margin_text', ('', 0.0))
                 result.secret_level, result.secret_level_confidence = patterns.get('secret_level', ('', 0.0))
                 result.book_kind, result.book_kind_confidence = patterns.get('book_kind', ('', 0.0))
-
-                logger.info(f"Pattern matching completed: book_number={result.book_number}")
+                logger.info('Pattern matching done: book_number=%s', result.book_number)
 
             # Step 5: Entity Matching
+            _progress('entity_matching')
+            result.progress_stage = 'مطابقة الجهات'
             entities = self.pattern_matcher.extract_entities(result.cleaned_text)
             if entities:
-                # Match issuing entity
                 for entity_text in entities.get('issuing_entities', []):
                     matches = self.entity_matcher.match_issuing_entity(entity_text)
                     if matches:
                         best_match = matches[0]
-                        result.issuing_entity_matches = matches[:3]  # Top 3 matches
+                        result.issuing_entity_matches = matches[:3]
                         result.issuing_entity_id = best_match.get('entity_id')
                         result.issuing_entity_name = best_match.get('entity_name', '')
                         result.issuing_entity_confidence = best_match.get('score', 0.0) / 100.0
                         break
 
-                # Match receiving entity
                 for entity_text in entities.get('receiving_entities', []):
                     matches = self.entity_matcher.match_receiving_entity(entity_text)
                     if matches:
                         best_match = matches[0]
-                        result.receiving_entity_matches = matches[:3]  # Top 3 matches
+                        result.receiving_entity_matches = matches[:3]
                         result.receiving_entity_id = best_match.get('entity_id')
                         result.receiving_entity_name = best_match.get('entity_name', '')
                         result.receiving_entity_confidence = best_match.get('score', 0.0) / 100.0
                         break
 
-                logger.info(f"Entity matching completed")
-
-            # Step 6: Calculate Overall Confidence
+            # Step 6: حساب الثقة الإجمالية
+            _progress('confidence')
             result.field_confidences = {
                 'book_number': result.book_number_confidence,
                 'book_date': result.book_date_confidence,
@@ -430,39 +504,40 @@ class AIExtractionService:
                 'receiving_entity': result.receiving_entity_confidence,
                 'ocr': result.ocr_confidence,
             }
-
-            # Overall confidence: weighted average
             confidence_values = [v for v in result.field_confidences.values() if v > 0]
-            if confidence_values:
-                result.overall_confidence = sum(confidence_values) / len(confidence_values)
-            else:
-                result.overall_confidence = result.ocr_confidence
+            result.overall_confidence = (
+                sum(confidence_values) / len(confidence_values) if confidence_values
+                else result.ocr_confidence
+            )
 
-            # Step 7: Determine if manual review is needed
-            if result.overall_confidence < 0.70:
+            # Step 7: تحديد الحالة
+            if result.overall_confidence < _MANUAL_REVIEW_THRESHOLD:
                 result.status = 'manual_review'
-                logger.warning(f"Low confidence detected: {result.overall_confidence}")
+                result.user_message = 'الثقة منخفضة — يُنصح بمراجعة الحقول يدوياً'
+                logger.warning('Low confidence: %.2f', result.overall_confidence)
             else:
                 result.status = 'completed'
+                result.user_message = 'تم الاستخراج بنجاح'
 
-            # Step 8: Save to cache
+            # Step 8: حفظ في الكاش
             self.save_to_cache(result.image_hash, result)
-
+            result.progress_stage = 'completed'
             result.processing_time = time.time() - start_time
-            logger.info(f"Image processing completed in {result.processing_time:.2f}s with confidence {result.overall_confidence:.2%}")
-
+            logger.info('Image processing done in %.2fs, confidence %.2f%%',
+                        result.processing_time, result.overall_confidence * 100)
             return result
 
         except Exception as e:
-            logger.error(f"Error processing image: {str(e)}", exc_info=True)
+            logger.error('Error processing image: %s', e, exc_info=True)
             result.status = 'failed'
             result.error_message = str(e)
+            result.user_message = _user_friendly_error(e)
+            result.progress_stage = 'error'
             result.processing_time = time.time() - start_time
             return result
         finally:
-            # تنظيف ملف الصورة المحسّنة من القرص
             try:
-                if 'enhanced_image_path' in locals() and os.path.exists(enhanced_image_path):
+                if enhanced_image_path and os.path.exists(enhanced_image_path):
                     os.remove(enhanced_image_path)
             except OSError:
                 pass
