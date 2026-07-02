@@ -126,10 +126,12 @@
 }
 
 .card-action-icons {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: 0.35rem;
   margin-bottom: 0.5rem;
+}
+.card-action-icons > * {
+  flex: 1 1 0;
 }
 
 .card-action-btn {
@@ -152,7 +154,6 @@
 .btn-view-mobile { color: #2563eb; }
 .btn-edit-mobile { color: #ca8a04; }
 .btn-delete-mobile { color: #dc2626; }
-.btn-preview-mobile-disabled { opacity: 0.4; }
 
 .card-status-toggle .btn-toggle-status-mobile {
   border-color: rgba(111, 70, 40, 0.2);

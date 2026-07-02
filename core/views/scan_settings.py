@@ -2,516 +2,40 @@
 """
 core.views.scan_settings
 =========================
-صفحة إعدادات الماسح الضوئي — CaptureOnTouch + Hot Folder Watcher.
+المسح الضوئي عبر وكيل NAPS2 المحلي (التدفّق الوحيد المدعوم).
+
+استُبدل الإعداد القديم بالكامل (CaptureOnTouch + بروتوكول lettersys-scan + مراقب
+المجلد): كل حالة الوكيل/الأجهزة تُجلب عميلياً من وكيل المسح المحلي عبر JS، والمسح
+يمرّ بـ process-upload (رفع PDF من الوكيل) ثم يُعرض عبر serve/preview بالـtoken.
 """
-import json
 import logging
 import os
-import re
-import sys
-from urllib.parse import quote
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.shortcuts import render, redirect
+from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
-
-from core.models import ScanSettings
 
 logger = logging.getLogger('lettersys')
 
-# المسارات الشائعة لتثبيت CaptureOnTouch على Windows
-_COT_SEARCH_PATHS = [
-    r"C:\Program Files\Canon\CaptureOnTouch\CaptureOnTouch.exe",
-    r"C:\Program Files (x86)\Canon\CaptureOnTouch\CaptureOnTouch.exe",
-    r"C:\Program Files\Canon\My Image Garden\CaptureOnTouch.exe",
-    r"C:\Program Files (x86)\Canon\My Image Garden\CaptureOnTouch.exe",
-    r"C:\Program Files\Canon\IJ Scan Utility\CaptureOnTouch.exe",
-    r"C:\Program Files (x86)\Canon\IJ Scan Utility\CaptureOnTouch.exe",
-]
 
-
-def _detect_capture_exe() -> str:
-    """يبحث عن CaptureOnTouch.exe في المسارات الشائعة وفي Registry."""
-    # 1) فحص المسارات الشائعة
-    for path in _COT_SEARCH_PATHS:
-        if os.path.isfile(path):
-            return path
-
-    # 2) البحث في Registry (HKCU + HKLM)
-    if sys.platform == 'win32':
-        try:
-            import winreg
-            for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
-                for reg_path in (
-                    r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-                    r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
-                ):
-                    try:
-                        with winreg.OpenKey(hive, reg_path) as base:
-                            for i in range(winreg.QueryInfoKey(base)[0]):
-                                try:
-                                    with winreg.OpenKey(base, winreg.EnumKey(base, i)) as sub:
-                                        name = winreg.QueryValueEx(sub, 'DisplayName')[0]
-                                        if 'CaptureOnTouch' in name or 'Canon' in name:
-                                            loc = winreg.QueryValueEx(sub, 'InstallLocation')[0]
-                                            candidate = os.path.join(loc, 'CaptureOnTouch.exe')
-                                            if os.path.isfile(candidate):
-                                                return candidate
-                                except (OSError, FileNotFoundError):
-                                    continue
-                    except OSError:
-                        continue
-        except Exception:
-            pass
-
-    return ''
-
-
-def _detect_watch_folder() -> str:
-    """يكتشف مجلد المسح الضوئي — يفحص OneDrive + Pictures + Documents بالترتيب."""
-    from django.conf import settings as dj_settings
-    # 1) من settings.py / .env
-    folder = getattr(dj_settings, 'SCAN_WATCH_FOLDER', '').strip()
-    if folder and os.path.isdir(folder):
-        return folder
-
-    home     = os.path.expanduser('~')
-    onedrive = os.environ.get('OneDrive', os.path.join(home, 'OneDrive'))
-
-    # المرشّحون مرتَّبون تنازلياً حسب الأولوية
-    candidates = [
-        os.path.join(onedrive, 'Pictures', 'Scans'),   # OneDrive\Pictures\Scans (Canon/CaptureOnTouch)
-        os.path.join(onedrive, 'Pictures', 'Scan'),
-        os.path.join(onedrive, 'Documents', 'Scans'),
-        os.path.join(home,     'Pictures', 'Scans'),
-        os.path.join(home,     'Pictures', 'Scan'),
-        os.path.join(home,     'Documents', 'Scans'),
-    ]
-    for c in candidates:
-        if os.path.isdir(c):
-            return c
-
-    # Fallback: أنشئ المجلد عند الحاجة (لا يُنشأ هنا — فقط اقتراح)
-    return os.path.join(home, 'Documents', 'Scans')
-
-
-def _get_system_info() -> dict:
-    """معلومات النظام لعرضها في صفحة الإعدادات."""
-    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    scan_manager_path = os.path.join(base, 'scan_manager', 'scan_manager.py')
-    register_script   = os.path.join(base, 'scan_manager', 'register_scan_protocol.py')
-
-    pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
-    if not os.path.isfile(pythonw):
-        pythonw = sys.executable
-
-    return {
-        'scan_manager_path': scan_manager_path,
-        'register_script':   register_script,
-        'python_exe':        sys.executable,
-        'pythonw_exe':       pythonw,
-        'platform':          sys.platform,
-        'scan_manager_exists': os.path.isfile(scan_manager_path),
-        'register_exists':     os.path.isfile(register_script),
-    }
+def _token_owner_ok(data, user):
+    """صاحب رمز المسح فقط (أو superuser) — يسدّ IDOR على الرموز المُسرَّبة.
+    الرموز القديمة بلا user_id تُقبل (توافق رجعي)."""
+    uid = (data or {}).get('user_id')
+    return uid is None or uid == user.id or user.is_superuser
 
 
 @login_required
 def scan_settings_page(request):
-    """عرض وحفظ إعدادات الماسح الضوئي."""
-    cfg = ScanSettings.get()
-
-    if request.method == 'POST':
-        cfg.capture_exe_path  = request.POST.get('capture_exe_path', '').strip()
-        cfg.watch_folder      = request.POST.get('watch_folder', '').strip()
-        cfg.server_url        = request.POST.get('server_url', 'http://localhost:8000').strip()
-        cfg.auto_open_browser = request.POST.get('auto_open_browser') == 'on'
-        cfg.window_topmost    = request.POST.get('window_topmost') == 'on'
-        cfg.save()
-        logger.info('[ScanSettings] updated by %s', request.user)
-
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({'ok': True, 'message': 'تم حفظ الإعدادات بنجاح'})
-        return redirect('scan_settings')
-
-    # اكتشاف تلقائي للمسارات إذا كانت الحقول فارغة
-    suggested_exe    = '' if cfg.capture_exe_path else _detect_capture_exe()
-    suggested_folder = '' if cfg.watch_folder     else _detect_watch_folder()
-
-    auto_saved = False
-    update_fields = []
-
-    # حفظ مسار CaptureOnTouch تلقائياً عند الاكتشاف
-    if suggested_exe and not cfg.capture_exe_path:
-        cfg.capture_exe_path = suggested_exe
-        update_fields.append('capture_exe_path')
-        auto_saved = True
-        logger.info('[ScanSettings] auto-detected CaptureOnTouch: %s', suggested_exe)
-
-    # حفظ مجلد المراقبة تلقائياً عند الاكتشاف (يُشغّل الـ watcher تلقائياً)
-    if suggested_folder and not cfg.watch_folder and os.path.isdir(suggested_folder):
-        cfg.watch_folder = suggested_folder
-        update_fields.append('watch_folder')
-        auto_saved = True
-        logger.info('[ScanSettings] auto-detected watch folder: %s', suggested_folder)
-
-    if update_fields:
-        cfg.save(update_fields=update_fields)
-
-    ctx = {
-        'cfg':              cfg,
-        'watcher_status':   cfg.watcher_status,
-        'suggested_exe':    suggested_exe,
-        'suggested_folder': suggested_folder,
-        'auto_saved':       auto_saved,
-        'sys_info':         _get_system_info(),
-    }
-    return render(request, 'core/scan_settings.html', ctx)
-
-
-@login_required
-@require_http_methods(['GET'])
-def scan_watcher_status_api(request):
-    """حالة الـ watcher الخلفي — تُستدعى بـ AJAX من الصفحة."""
-    from django.core.cache import cache
-    status     = cache.get('scan_watcher_status', 'stopped')
-    last       = cache.get('scan_watcher_last_file', '')
-    count      = cache.get('scan_watcher_file_count', 0)
-    last_token = cache.get('scan_watcher_last_token', '')
-    return JsonResponse({'status': status, 'last_file': last, 'file_count': count, 'last_token': last_token})
-
-
-@login_required
-@require_http_methods(['GET'])
-def scan_watcher_diagnostics(request):
-    """
-    تشخيص شامل لـ Hot Folder Watcher — يُستدعى من لوحة التشخيص في صفحة الإعدادات.
-    يجمع كل المؤشرات لصورة كاملة عن صحة المنظومة:
-      • حالة الـ thread (running/stopped/error + آخر دورة)
-      • المجلد (موجود؟ قابل للقراءة؟ كم ملفاً فيه الآن؟)
-      • الإحصائيات التراكمية (rأى/تخطّى/عالج)
-      • إعدادات CaptureOnTouch
-    """
-    import time as _time
-    from pathlib import Path
-    from django.core.cache import cache
-
-    cfg = ScanSettings.get()
-    folder = (cfg.watch_folder or '').strip()
-
-    # ─ معلومات الـ watcher ────────────────────────────────────────────────────
-    status         = cache.get('scan_watcher_status', 'stopped')
-    last_cycle_at  = cache.get('scan_watcher_last_cycle_at')
-    last_error     = cache.get('scan_watcher_last_error', '')
-    pid            = cache.get('scan_watcher_pid')
-    seconds_since  = (_time.time() - last_cycle_at) if last_cycle_at else None
-
-    watcher_info = {
-        'status':                    status,
-        'pid':                       pid,
-        'last_cycle_at':             last_cycle_at,
-        'seconds_since_last_cycle':  round(seconds_since, 1) if seconds_since is not None else None,
-        'last_error':                last_error or '',
-        # الـ thread يفترض أن يدور كل 2s، فإذا تجاوز 10s فهناك مشكلة
-        'is_alive':                  bool(last_cycle_at and seconds_since is not None and seconds_since < 10),
-    }
-
-    # ─ معلومات المجلد ─────────────────────────────────────────────────────────
-    folder_info = {
-        'configured':    folder,
-        'exists':        False,
-        'readable':      False,
-        'is_dir':        False,
-        'file_count_now': 0,
-        'files_preview': [],
-    }
-    if folder:
-        p = Path(folder)
-        folder_info['exists'] = p.exists()
-        folder_info['is_dir'] = p.is_dir() if p.exists() else False
-        if folder_info['is_dir']:
-            try:
-                EXTS = {'.pdf', '.jpg', '.jpeg', '.png', '.tif', '.tiff'}
-                files = sorted(
-                    (f for f in p.iterdir() if f.is_file() and f.suffix.lower() in EXTS),
-                    key=lambda f: f.stat().st_mtime,
-                    reverse=True,
-                )
-                folder_info['readable']       = True
-                folder_info['file_count_now'] = len(files)
-                folder_info['files_preview']  = [
-                    {
-                        'name':    f.name,
-                        'size':    f.stat().st_size,
-                        'age_sec': round(_time.time() - f.stat().st_mtime, 1),
-                    }
-                    for f in files[:5]
-                ]
-            except (PermissionError, OSError) as exc:
-                folder_info['readable'] = False
-                folder_info['error']    = str(exc)
-
-    # ─ الإحصائيات التراكمية ───────────────────────────────────────────────────
-    stats = {
-        'files_seen_total':      cache.get('scan_watcher_files_seen', 0),
-        'files_skipped_total':   cache.get('scan_watcher_files_skipped', 0),
-        'files_processed_total': cache.get('scan_watcher_file_count', 0),
-        'last_file':             cache.get('scan_watcher_last_file', ''),
-        'last_token':            cache.get('scan_watcher_last_token', ''),
-    }
-
-    # ─ إعدادات CaptureOnTouch ─────────────────────────────────────────────────
-    settings_info = {
-        'capture_exe_path':   cfg.capture_exe_path,
-        'capture_exe_exists': bool(cfg.capture_exe_path and os.path.isfile(cfg.capture_exe_path)),
-        'auto_open_browser':  cfg.auto_open_browser,
-        'window_topmost':     cfg.window_topmost,
-        'server_url':         cfg.server_url,
-    }
-
-    return JsonResponse({
-        'watcher':  watcher_info,
-        'folder':   folder_info,
-        'stats':    stats,
-        'settings': settings_info,
-    })
-
-
-# بايتات PNG صغيرة صالحة (1x1 أبيض) — تُستخدم كـ fallback لاختبار الالتقاط
-# إذا لم يوجد ملف اختبار حقيقي في static/test_assets/
-_PNG_1X1_WHITE = bytes.fromhex(
-    '89504e470d0a1a0a'  # PNG signature
-    '0000000d49484452000000010000000108060000001f15c489'  # IHDR
-    '0000000d49444154789c63f8cfc0c000000003000100182d0e8a0000000049454e44ae426082'  # IDAT + IEND
-)
-
-
-@login_required
-@require_http_methods(['POST'])
-def scan_test_capture(request):
-    """
-    اختبار end-to-end للـ Watcher:
-      1. يلتقط عدّاد files_seen الحالي
-      2. ينسخ ملف اختبار إلى المجلد المُراقَب (sample_scan.pdf أو PNG اصطناعي)
-      3. ينتظر حتى 15 ثانية، يتحقق ما إذا التقطه الـ Watcher (زاد العدّاد)
-      4. يُعيد نتيجة واضحة مع تفاصيل التشخيص
-    """
-    import time as _time
-    import shutil
-    from pathlib import Path
-    from django.core.cache import cache
-    from django.conf import settings as dj_settings
-
-    cfg = ScanSettings.get()
-    folder = (cfg.watch_folder or '').strip()
-
-    if not folder:
-        return JsonResponse({
-            'ok': False, 'stage': 'config',
-            'error': 'مجلد المراقبة غير مكوّن في الإعدادات',
-        }, status=400)
-
-    watch_path = Path(folder)
-    if not watch_path.exists() or not watch_path.is_dir():
-        return JsonResponse({
-            'ok': False, 'stage': 'folder',
-            'error': f'المجلد غير موجود: {folder}',
-        }, status=400)
-
-    # ابحث عن ملف اختبار حقيقي في static/test_assets/
-    base = Path(dj_settings.BASE_DIR) if hasattr(dj_settings, 'BASE_DIR') else Path(__file__).resolve().parent.parent.parent
-    sample_candidates = [
-        base / 'static' / 'test_assets' / 'sample_scan.pdf',
-        base / 'static' / 'test_assets' / 'sample_scan.png',
-        base / 'static' / 'test_assets' / 'sample_scan.jpg',
-    ]
-    sample_src = next((c for c in sample_candidates if c.is_file()), None)
-
-    test_name = f'_watcher_test_{int(_time.time())}'
-    if sample_src:
-        ext = sample_src.suffix.lower()
-        test_file = watch_path / f'{test_name}{ext}'
-        try:
-            shutil.copy2(str(sample_src), str(test_file))
-        except OSError as exc:
-            return JsonResponse({
-                'ok': False, 'stage': 'copy',
-                'error': f'فشل نسخ ملف الاختبار: {exc}',
-            }, status=500)
-        used_real_sample = True
-    else:
-        test_file = watch_path / f'{test_name}.png'
-        try:
-            with open(test_file, 'wb') as f:
-                f.write(_PNG_1X1_WHITE)
-        except OSError as exc:
-            return JsonResponse({
-                'ok': False, 'stage': 'write',
-                'error': f'فشل كتابة ملف الاختبار: {exc}',
-            }, status=500)
-        used_real_sample = False
-
-    # استطلاع الـ Watcher
-    seen_before = cache.get('scan_watcher_files_seen', 0) or 0
-    proc_before = cache.get('scan_watcher_file_count', 0) or 0
-    deadline = _time.time() + 15.0
-    detected = False
-    processed = False
-    while _time.time() < deadline:
-        _time.sleep(0.7)
-        seen_now = cache.get('scan_watcher_files_seen', 0) or 0
-        proc_now = cache.get('scan_watcher_file_count', 0) or 0
-        if seen_now > seen_before:
-            detected = True
-            if proc_now > proc_before:
-                processed = True
-                break
-            # ربما لا يزال يعالج OCR — انتظر قليلاً للاكتمال
-            if processed:
-                break
-
-    # تنظيف: إذا الملف لم يُلتَقَط فلن يُنقَل، نحذفه يدوياً
-    if test_file.exists():
-        try:
-            test_file.unlink()
-        except OSError:
-            pass
-
-    last_file  = cache.get('scan_watcher_last_file', '')
-    last_token = cache.get('scan_watcher_last_token', '')
-    last_error = cache.get('scan_watcher_last_error', '')
-
-    if detected and processed:
-        return JsonResponse({
-            'ok':         True,
-            'stage':      'done',
-            'message':    'نجح الاختبار: الـ Watcher التقط الملف ومعالجه بنجاح',
-            'last_file':  last_file,
-            'last_token': last_token,
-            'used_real_sample': used_real_sample,
-        })
-    if detected:
-        return JsonResponse({
-            'ok':         True,
-            'stage':      'detected_only',
-            'message':    'الـ Watcher التقط الملف لكن المعالجة لم تكتمل خلال 15 ثانية (قد يكون OCR بطيء)',
-            'last_file':  last_file,
-            'last_error': last_error,
-            'used_real_sample': used_real_sample,
-        })
-    return JsonResponse({
-        'ok':         False,
-        'stage':      'not_detected',
-        'error':      'الـ Watcher لم يلتقط ملف الاختبار خلال 15 ثانية',
-        'hint':       'تحقق من حالة الـ Watcher في لوحة التشخيص (هل يدور؟)، وأن المجلد صحيح',
-        'last_error': last_error,
-    }, status=504)
-
-
-@login_required
-@require_http_methods(['GET'])
-def scan_check_protocol(request):
-    """
-    يفحص وجود بروتوكول lettersys-scan:// في Registry (Windows فقط).
-    يتحقق أيضاً أن scan_manager.py في الأمر المسجَّل فعلاً موجود على القرص.
-    """
-    if sys.platform != 'win32':
-        return JsonResponse({'installed': False, 'platform': sys.platform})
-    try:
-        import winreg
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            r'Software\Classes\lettersys-scan\shell\open\command',
-        )
-        cmd, _ = winreg.QueryValueEx(key, '')
-        winreg.CloseKey(key)
-        # تحقق أن scan_manager.py في الأمر موجود فعلاً (يحمي من تثبيت يدوي بمسار خاطئ)
-        m = re.search(r'"([^"]+scan_manager\.py)"', cmd, re.IGNORECASE)
-        if m and not os.path.isfile(m.group(1)):
-            return JsonResponse({'installed': False, 'reason': 'script_missing', 'command': cmd})
-        return JsonResponse({'installed': True, 'command': cmd})
-    except FileNotFoundError:
-        return JsonResponse({'installed': False})
-    except Exception as exc:
-        return JsonResponse({'installed': False, 'error': str(exc)})
-
-
-@login_required
-@require_http_methods(['GET'])
-def scan_download_installer(request):
-    """تحميل سكريبت تثبيت البروتوكول كملف .py."""
-    from django.http import FileResponse, Http404
-    script_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        'scan_manager', 'register_scan_protocol.py',
-    )
-    if not os.path.isfile(script_path):
-        raise Http404
-    return FileResponse(
-        open(script_path, 'rb'),
-        as_attachment=True,
-        filename='register_scan_protocol.py',
-    )
-
-
-@login_required
-@require_http_methods(['POST'])
-def scan_install_protocol(request):
-    """
-    يُسجّل بروتوكول lettersys-scan:// مباشرة في HKCU.
-    يعمل بنفس صلاحيات مستخدم Django — لا يحتاج Run as Administrator.
-    """
-    if sys.platform != 'win32':
-        return JsonResponse({'ok': False, 'error': 'هذه الميزة تعمل على Windows فقط'})
-    try:
-        import winreg
-
-        base              = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        scan_manager_path = os.path.join(base, 'scan_manager', 'scan_manager.py')
-
-        if not os.path.isfile(scan_manager_path):
-            return JsonResponse({
-                'ok': False,
-                'error': f'لم يُعثر على scan_manager.py في: {scan_manager_path}',
-            })
-
-        pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
-        if not os.path.isfile(pythonw):
-            pythonw = sys.executable
-
-        command  = f'"{pythonw}" "{scan_manager_path}" "%1"'
-        protocol = 'lettersys-scan'
-        root     = winreg.HKEY_CURRENT_USER
-        base_key = rf'Software\Classes\{protocol}'
-
-        key = winreg.CreateKey(root, base_key)
-        winreg.SetValueEx(key, '',             0, winreg.REG_SZ, 'URL:LetterSys Scan Protocol')
-        winreg.SetValueEx(key, 'URL Protocol', 0, winreg.REG_SZ, '')
-        winreg.CloseKey(key)
-
-        icon_key = winreg.CreateKey(root, rf'{base_key}\DefaultIcon')
-        winreg.SetValueEx(icon_key, '', 0, winreg.REG_SZ, f'"{pythonw}",0')
-        winreg.CloseKey(icon_key)
-
-        cmd_key = winreg.CreateKey(root, rf'{base_key}\shell\open\command')
-        winreg.SetValueEx(cmd_key, '', 0, winreg.REG_SZ, command)
-        winreg.CloseKey(cmd_key)
-
-        logger.info('[ScanProtocol] installed by %s: %s', request.user, command)
-        return JsonResponse({'ok': True, 'command': command})
-    except Exception as exc:
-        logger.error('[ScanProtocol] install failed: %s', exc)
-        return JsonResponse({'ok': False, 'error': str(exc)})
+    """صفحة حالة الماسح (وكيل NAPS2 المحلي) — الحالة تُجلب عميلياً عبر JS."""
+    return render(request, 'core/scan_settings.html', {})
 
 
 @login_required
 @require_http_methods(['GET'])
 def scan_file_serve(request, token: str):
-    """
-    يخدم ملف المسح المرتبط بـ scan_token للعرض في الواجهة.
-    processed_path يأتي من الكاش الداخلي — ليس من مدخلات المستخدم.
-    """
+    """يخدم ملف المسح المرتبط بـ scan_token للعرض. processed_path من الكاش لا المستخدم."""
     import mimetypes
     from django.http import FileResponse, Http404
     from django.core.cache import cache
@@ -520,6 +44,8 @@ def scan_file_serve(request, token: str):
     if not data:
         logger.warning('[ScanServe] token not in cache: %s', token[:8])
         raise Http404('token expired')
+    if not _token_owner_ok(data, request.user):
+        raise Http404('token not yours')
 
     file_path = data.get('processed_path', '')
     if not file_path:
@@ -538,202 +64,477 @@ def scan_file_serve(request, token: str):
 
 @login_required
 @require_http_methods(['GET'])
-def scan_list_files(request):
+def scan_preview_page(request, token: str):
+    """يعرض صفحةً من PDF الممسوح كصورة PNG (عبر PyMuPDF).
+
+    المستند الممسوح صورة بلا نص؛ تحويله إلى PNG يجعل المعاينة <img> تلائم اللوحة
+    دائماً (object-fit) بدل عارض PDF المدمج غير الموثوق. المسار من الكاش لا المستخدم.
     """
-    قائمة بآخر الملفات الممسوحة في المجلد المُكوَّن (أو OneDrive\\Pictures\\Scans افتراضياً).
-    تُرتَّب تنازلياً حسب آخر تعديل. الحد الأقصى 20 ملفاً.
-    """
-    import time as _time
-    from pathlib import Path
-
-    ALLOWED_EXTS = {'.pdf', '.jpg', '.jpeg', '.png', '.tif', '.tiff'}
-    cfg = ScanSettings.get()
-
-    # اختر المجلد: مكوَّن → مُكتشَف → اقتراح
-    folder = (cfg.watch_folder or '').strip() or _detect_watch_folder()
-    folder_path = Path(folder)
-
-    if not folder_path.exists() or not folder_path.is_dir():
-        return JsonResponse({
-            'ok': True,
-            'folder': str(folder),
-            'folder_exists': False,
-            'files': [],
-            'message': 'المجلد غير موجود — راجع إعدادات الماسح',
-        })
-
-    files = []
-    try:
-        for entry in folder_path.iterdir():
-            if not entry.is_file() or entry.suffix.lower() not in ALLOWED_EXTS:
-                continue
-            try:
-                stat = entry.stat()
-                files.append({
-                    'name':  entry.name,
-                    'path':  str(entry),
-                    'size':  stat.st_size,
-                    'mtime': stat.st_mtime,
-                    'ext':   entry.suffix.lower().lstrip('.'),
-                    'age_sec': _time.time() - stat.st_mtime,
-                })
-            except OSError:
-                continue
-    except (PermissionError, OSError) as exc:
-        return JsonResponse({
-            'ok': False,
-            'folder': str(folder),
-            'error': f'تعذّر قراءة المجلد: {exc}',
-        }, status=500)
-
-    files.sort(key=lambda f: f['mtime'], reverse=True)
-    files = files[:20]
-
-    return JsonResponse({
-        'ok': True,
-        'folder': str(folder),
-        'folder_exists': True,
-        'count': len(files),
-        'files': files,
-    })
-
-
-@login_required
-@require_http_methods(['POST'])
-def scan_process_local_file(request):
-    """
-    يعالج ملفاً موجوداً على القرص بمسار محلي (Django والمستخدم على نفس الجهاز).
-    يشغّل OCR ويُعيد scan_token لعرض الوثيقة في الواجهة.
-
-    الأمان: يتحقق أن المسار ضمن المجلدات المسموحة (watch_folder + OneDrive Scans).
-    """
-    import uuid
-    import mimetypes
+    from django.http import HttpResponse, FileResponse, Http404
     from django.core.cache import cache
 
-    body       = json.loads(request.body or b'{}')
-    file_path  = body.get('path', '').strip()
+    data = cache.get(f'scan_token:{token}')
+    if not data:
+        raise Http404('token expired')
+    if not _token_owner_ok(data, request.user):
+        raise Http404('token not yours')
+    file_path = data.get('processed_path', '')
+    if not file_path or not os.path.isfile(file_path):
+        raise Http404('file missing')
 
-    if not file_path:
-        return JsonResponse({'ok': False, 'error': 'path مطلوب'}, status=400)
+    # ملف صورة مخزّن بـtoken (لا PDF): أعِده كما هو
+    if os.path.splitext(file_path)[1].lower() != '.pdf':
+        return FileResponse(open(file_path, 'rb'))
 
-    # ─ التحقق من المسار ──────────────────────────────────────────────────────
-    ALLOWED_EXTS = {'.pdf', '.jpg', '.jpeg', '.png', '.tif', '.tiff'}
-    if not os.path.splitext(file_path)[1].lower() in ALLOWED_EXTS:
-        return JsonResponse({'ok': False, 'error': 'نوع الملف غير مدعوم'}, status=400)
-
-    if not os.path.isfile(file_path):
-        return JsonResponse({'ok': False, 'error': f'الملف غير موجود: {file_path}'}, status=404)
-
-    # ─ حدود الحجم ────────────────────────────────────────────────────────────
-    MAX_BYTES = 50 * 1024 * 1024  # 50 MB
-    if os.path.getsize(file_path) > MAX_BYTES:
-        return JsonResponse({'ok': False, 'error': 'حجم الملف يتجاوز 50 MB'}, status=400)
-
-    # ─ التحقق من أن المسار ضمن المجلدات المسموحة ────────────────────────────
-    import pathlib
-    allowed_roots = set()
-    cfg = ScanSettings.get()
-    if cfg.watch_folder:
-        allowed_roots.add(str(pathlib.Path(cfg.watch_folder).resolve()))
-
-    home     = os.path.expanduser('~')
-    onedrive = os.environ.get('OneDrive', os.path.join(home, 'OneDrive'))
-    for candidate in [
-        os.path.join(onedrive, 'Pictures', 'Scans'),
-        os.path.join(onedrive, 'Pictures', 'Scan'),
-        os.path.join(onedrive, 'Documents', 'Scans'),
-        os.path.join(home, 'Pictures', 'Scans'),
-        os.path.join(home, 'Pictures', 'Scan'),
-        os.path.join(home, 'Documents', 'Scans'),
-        os.path.join(home, 'Pictures'),
-        os.path.join(home, 'Documents'),
-        os.path.join(home, 'Downloads'),
-        os.path.join(home, 'Desktop'),
-    ]:
-        allowed_roots.add(str(pathlib.Path(candidate).resolve()))
-
-    resolved = str(pathlib.Path(file_path).resolve())
-    if not any(resolved.startswith(root) for root in allowed_roots):
-        logger.warning('[ScanLocal] rejected path outside allowed roots: %s', file_path)
-        return JsonResponse({'ok': False, 'error': 'المسار خارج المجلدات المسموحة'}, status=403)
-
-    # ─ تشغيل OCR ─────────────────────────────────────────────────────────────
-    logger.info('[ScanLocal] processing local file: %s (user=%s)', file_path, request.user)
     try:
-        from core.extraction.pipeline import AIExtractionService
-        service = AIExtractionService()
-        result  = service.process_image(file_path)
-        data = {
-            'book_number':               result.book_number,
-            'book_number_confidence':    result.book_number_confidence,
-            'book_date':                 result.book_date,
-            'book_date_confidence':      result.book_date_confidence,
-            'title':                     result.title,
-            'title_confidence':          result.title_confidence,
-            'issuing_entity':            result.issuing_entity_name,
-            'issuing_entity_confidence': result.issuing_entity_confidence,
-            'receiving_entity':          result.receiving_entity_name,
-            'receiving_entity_confidence': result.receiving_entity_confidence,
-            'secret_level':              result.secret_level,
-            'secret_level_confidence':   result.secret_level_confidence,
-            'book_kind':                 result.book_kind,
-            'book_kind_confidence':      result.book_kind_confidence,
-            'overall_confidence':        result.overall_confidence,
-            'needs_review':              result.status == 'manual_review',
-            'source_file':               os.path.basename(file_path),
-            'processed_path':            resolved,   # الملف لم يُنقل — يُعرض من مكانه
-            'user_message':              result.user_message,
-        }
+        page = int(request.GET.get('page', '1'))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        dpi = int(request.GET.get('dpi', '130'))
+    except (TypeError, ValueError):
+        dpi = 130
+    dpi = min(max(dpi, 72), 220)               # سقف صارم لحماية ذاكرة الخادم (8GB)
+
+    try:
+        import fitz
+        doc = fitz.open(file_path)
+        try:
+            count = doc.page_count
+            if page < 1 or page > count:
+                raise Http404('page out of range')
+            mat = fitz.Matrix(dpi / 72, dpi / 72)
+            pix = doc[page - 1].get_pixmap(matrix=mat, alpha=False)
+            # WebP أصغر حجماً وأسرع فكَّ ترميز؛ سقوط إلى PNG إن لم يدعمه إصدار PyMuPDF
+            try:
+                body, ctype = pix.tobytes('webp'), 'image/webp'
+            except Exception:
+                body, ctype = pix.tobytes('png'), 'image/png'
+            del pix
+        finally:
+            doc.close()                        # تحرير الذاكرة فوراً
+    except Http404:
+        raise
     except Exception as exc:
-        logger.error('[ScanLocal] OCR failed: %s', exc)
-        return JsonResponse({'ok': False, 'error': f'فشل الاستخراج: {exc}'}, status=500)
+        logger.error('[ScanPreview] render failed token=%s page=%s: %s', token[:8], page, exc)
+        raise Http404('render failed')
 
-    # ─ حفظ في الكاش وإعادة token ─────────────────────────────────────────────
+    resp = HttpResponse(body, content_type=ctype)
+    resp['X-Scan-Pages'] = str(count)
+    # بلا immutable — نُبقي إمكانية إعادة التحقّق مع تبديل _v بعد تعديل الصفحات
+    resp['Cache-Control'] = 'private, max-age=86400'
+    return resp
+
+
+@login_required
+@require_http_methods(['GET'])
+def scan_manifest(request, token: str):
+    """هندسة كل صفحة (عرض/ارتفاع/دوران) لرسم هيكل عظمي بأبعاد صحيحة (صفر قفزة تخطيط).
+    لا يرسم بكسلات — رخيص حتى لـ PDF كبير. نفس بوابة الملكية (IDOR) ونفس مصدر المسار."""
+    from django.http import Http404
+    from django.core.cache import cache
+
+    data = cache.get(f'scan_token:{token}')
+    if not data:
+        raise Http404('token expired')
+    if not _token_owner_ok(data, request.user):
+        raise Http404('token not yours')
+    file_path = data.get('processed_path', '')
+    if not file_path or not os.path.isfile(file_path):
+        raise Http404('file missing')
+
+    pages = []
+    if os.path.splitext(file_path)[1].lower() == '.pdf':
+        try:
+            import fitz
+            doc = fitz.open(file_path)
+            try:
+                for i in range(doc.page_count):
+                    p = doc[i]
+                    r = p.rect
+                    pages.append({'n': i + 1, 'w': round(r.width), 'h': round(r.height), 'rot': p.rotation})
+            finally:
+                doc.close()
+        except Exception as exc:
+            logger.warning('[ScanManifest] pdf geometry failed token=%s: %s', token[:8], exc)
+            pages = []
+    else:
+        try:
+            from PIL import Image
+            with Image.open(file_path) as im:
+                pages = [{'n': 1, 'w': im.width, 'h': im.height, 'rot': 0}]
+        except Exception:
+            pages = [{'n': 1, 'w': 827, 'h': 1169, 'rot': 0}]  # A4 افتراضي
+    if not pages:
+        pages = [{'n': 1, 'w': 827, 'h': 1169, 'rot': 0}]
+    return JsonResponse({'ok': True, 'page_count': len(pages), 'pages': pages, 'version': data.get('_v', 0)})
+
+
+@login_required
+@require_http_methods(['POST'])
+def scan_edit_page(request, token: str):
+    """يعدّل PDF المسح المؤقت **قبل الحفظ**: تدوير/حذف/إعادة ترتيب الصفحات.
+
+    يعمل على الملف المؤقت المرتبط بـ scan_token (المسار من الكاش لا المستخدم،
+    اتساقاً مع serve/preview). يحدّث page_count في الكاش ويعيده للواجهة لتعيد الرسم.
+
+    body (JSON):
+      {op:'rotate', page:N|'all', angle:90|180|270}
+      {op:'delete', page:N}
+      {op:'reorder', order:[ترتيب أرقام الصفحات 1-based يغطّي كل الصفحات]}
+    """
+    import json
+    from django.core.cache import cache
+
+    data = cache.get(f'scan_token:{token}')
+    if not data:
+        return JsonResponse({'ok': False, 'error': 'انتهت صلاحية الجلسة'}, status=404)
+    if not _token_owner_ok(data, request.user):
+        return JsonResponse({'ok': False, 'error': 'غير مصرح'}, status=403)
+    file_path = data.get('processed_path', '')
+    if (not file_path or not os.path.isfile(file_path)
+            or os.path.splitext(file_path)[1].lower() != '.pdf'):
+        return JsonResponse({'ok': False, 'error': 'الملف غير متاح'}, status=404)
+
+    try:
+        body = json.loads((request.body or b'{}').decode('utf-8'))
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'ok': False, 'error': 'طلب غير صالح'}, status=400)
+    op = body.get('op')
+
+    try:
+        import fitz
+        doc = fitz.open(file_path)
+        try:
+            count = doc.page_count
+            inserted_at = None    # (op=insert) موضع أول صفحة مُلحقة (0-based)
+            inserted_count = 0
+
+            if op == 'rotate':
+                try:
+                    angle = int(body.get('angle', 90))
+                except (TypeError, ValueError):
+                    return JsonResponse({'ok': False, 'error': 'زاوية غير صالحة'}, status=400)
+                if angle % 90 != 0:
+                    return JsonResponse({'ok': False, 'error': 'الزاوية يجب أن تكون من مضاعفات 90'}, status=400)
+                page = body.get('page')
+                if page in (None, 'all'):
+                    targets = range(count)
+                else:
+                    try:
+                        targets = [int(page) - 1]
+                    except (TypeError, ValueError):
+                        return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
+                for i in targets:
+                    if i < 0 or i >= count:
+                        return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
+                    doc[i].set_rotation((doc[i].rotation + angle) % 360)
+
+            elif op == 'delete':
+                if count <= 1:
+                    return JsonResponse({'ok': False, 'error': 'لا يمكن حذف الصفحة الوحيدة'}, status=400)
+                try:
+                    i = int(body.get('page')) - 1
+                except (TypeError, ValueError):
+                    return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
+                if i < 0 or i >= count:
+                    return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
+                doc.delete_page(i)
+
+            elif op == 'reorder':
+                order = body.get('order') or []
+                try:
+                    idx = [int(p) - 1 for p in order]
+                except (TypeError, ValueError):
+                    return JsonResponse({'ok': False, 'error': 'ترتيب غير صالح'}, status=400)
+                if sorted(idx) != list(range(count)):
+                    return JsonResponse({'ok': False, 'error': 'الترتيب يجب أن يغطّي كل الصفحات دون حذف'}, status=400)
+                doc.select(idx)
+
+            elif op == 'insert':
+                # إلحاق/إدراج مستند مصدر (ممسوح أو مرفوع، مُهيَّأ عبر process-upload) في الملف المؤقّت.
+                # المصدر يُمرَّر كـ source_token (يعيد استخدام تجهيز process-upload: تحويل صورة→PDF + قصّ فراغات).
+                # at اختياري (0-based): None = النهاية (إلحاق مباشر) — وهو الحالة الأشيع.
+                src_token = body.get('source_token', '')
+                src = cache.get(f'scan_token:{src_token}') if src_token else None
+                if not src or not _token_owner_ok(src, request.user):
+                    return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير متاح أو انتهت صلاحيته'}, status=404)
+                src_path = src.get('processed_path', '')
+                if (not src_path or not os.path.isfile(src_path)
+                        or os.path.splitext(src_path)[1].lower() != '.pdf'):
+                    return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير صالح'}, status=404)
+                at = body.get('at')
+                if at is None:
+                    inserted_at = count
+                else:
+                    try:
+                        inserted_at = max(0, min(int(at), count))
+                    except (TypeError, ValueError):
+                        return JsonResponse({'ok': False, 'error': 'موضع إدراج غير صالح'}, status=400)
+                try:
+                    src_doc = fitz.open(src_path)
+                except Exception:
+                    return JsonResponse({'ok': False, 'error': 'تعذّر فتح مصدر الإلحاق'}, status=400)
+                try:
+                    inserted_count = src_doc.page_count
+                    if inserted_count == 0:
+                        return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق فارغ'}, status=400)
+                    doc.insert_pdf(src_doc, start_at=inserted_at)
+                finally:
+                    src_doc.close()
+
+            else:
+                return JsonResponse({'ok': False, 'error': 'عملية غير معروفة'}, status=400)
+
+            out_bytes = doc.tobytes(garbage=3, deflate=True)
+            new_count = doc.page_count
+        finally:
+            doc.close()
+
+        with open(file_path, 'wb') as fh:
+            fh.write(out_bytes)
+    except Exception as exc:
+        logger.error('[ScanEdit] failed token=%s op=%s: %s', token[:8], op, exc)
+        return JsonResponse({'ok': False, 'error': 'تعذّر تعديل المستند'}, status=500)
+
+    data['page_count'] = new_count
+    cache.set(f'scan_token:{token}', data, timeout=86400)
+    logger.info('[ScanEdit] token=%s op=%s pages=%s', token[:8], op, new_count)
+    resp = {'ok': True, 'page_count': new_count}
+    if op == 'insert':
+        resp['inserted_from'] = (inserted_at or 0) + 1   # 1-based: أول صفحة مُلحقة (للتمييز البصري)
+        resp['inserted_count'] = inserted_count
+    return JsonResponse(resp)
+
+
+@login_required
+@require_http_methods(['GET'])
+def scan_stage_attachment(request, attachment_id: int):
+    """يُهيّئ مرفقاً محفوظاً لعرضه في معاينة الصفحات (وضع التعديل).
+
+    ينسخ ملف المرفق إلى ملف مسح مؤقت ويعيد token كي تعمل نفس معاينة الصفحات
+    (وأدوات التحرير) دون المساس بالأصل المحفوظ. الصلاحيات: مالك الكتاب أو موظف.
+    """
+    import shutil
+    import tempfile
+    import uuid
+    from pathlib import Path
+    from django.core.cache import cache
+    from django.shortcuts import get_object_or_404
+    from core.models import Attachment
+
+    att = get_object_or_404(Attachment, id=attachment_id, is_deleted=False)
+    book = att.book
+    if not (request.user.is_superuser or request.user.is_staff or book.created_by == request.user):
+        return JsonResponse({'ok': False, 'error': 'غير مصرح'}, status=403)
+    if not att.file:
+        return JsonResponse({'ok': False, 'error': 'لا يوجد ملف لهذا المرفق'}, status=404)
+
+    scan_dir = Path(tempfile.gettempdir()) / 'lettersys_scan'
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    ext = os.path.splitext(att.file.name)[1].lower() or '.pdf'
+    tmp_path = str(scan_dir / f'scan_{uuid.uuid4().hex}{ext}')
+    try:
+        with att.file.open('rb') as src, open(tmp_path, 'wb') as dst:
+            shutil.copyfileobj(src, dst)
+    except Exception as exc:
+        logger.error('[ScanStage] copy failed att=%s: %s', attachment_id, exc)
+        return JsonResponse({'ok': False, 'error': 'تعذّر تجهيز الملف للعرض'}, status=500)
+
+    page_count = 1
+    if ext == '.pdf':
+        try:
+            import fitz
+            with fitz.open(tmp_path) as _doc:
+                page_count = _doc.page_count
+        except Exception:
+            page_count = 1
+
     token = uuid.uuid4().hex
-    cache.set(f'scan_token:{token}', data, timeout=1800)
-    logger.info('[ScanLocal] done, token=%s confidence=%.0f%%', token[:8], (data['overall_confidence'] or 0) * 100)
-
+    cache.set(f'scan_token:{token}', {
+        'processed_path': tmp_path,
+        'source_file': os.path.basename(att.file.name),
+        'page_count': page_count,
+        'user_id': request.user.id,
+    }, timeout=86400)
     return JsonResponse({
-        'ok':        True,
-        'token':     token,
-        'redirect':  f'/books/extract/smart-desktop/?scan_token={token}',
-        'source_file': data['source_file'],
-        'overall_confidence': data['overall_confidence'],
+        'ok': True, 'token': token, 'page_count': page_count,
+        'source_file': os.path.basename(att.file.name),
+    })
+
+
+# ════════════ وكيل المسح المحلي (NAPS2) ════════════
+_AGENT_TOKEN_FILE = os.path.join(
+    os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'LetterSys', 'agent_token.txt'
+)
+_AGENT_PORT = int(os.environ.get('LETTERSYS_AGENT_PORT', '17865'))  # نفس متغيّر بيئة الوكيل
+
+
+def _agent_is_alive(port, timeout=0.35):
+    """اختبار حياة الوكيل فعلياً: اتصال socket خاطف بالمنفذ المحلي (رفض الاتصال فوريّ على
+    localhost فلا تأخير عند التوقّف). يمنع «available=true» الكاذب من ملف token قديم بقي
+    بعد إغلاق الوكيل — فتصير رسالة الواجهة صادقة (شغّل الوكيل) بدل «تعذّر الاتصال رغم تشغيله»."""
+    import socket
+    try:
+        with socket.create_connection(('127.0.0.1', port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+@login_required
+@require_http_methods(['GET'])
+def scan_agent_token(request):
+    """يقرأ token وكيل المسح المحلي (نفس الملف الذي يكتبه الوكيل) ويتحقّق من أنه حيّ فعلاً.
+
+    Django والوكيل على نفس الجهاز، فنقرأ الملف مباشرةً + نفحص حياة المنفذ — بلا إعداد يدوي،
+    وبلا تضليل عند بقاء ملف token بعد توقّف الوكيل.
+    """
+    try:
+        with open(_AGENT_TOKEN_FILE, 'r', encoding='utf-8') as f:
+            token = f.read().strip()
+    except OSError:
+        token = ''
+    alive = bool(token) and _agent_is_alive(_AGENT_PORT)
+    return JsonResponse({
+        'available': alive,
+        'token': token if alive else '',
+        'agent_url': f'http://127.0.0.1:{_AGENT_PORT}',
     })
 
 
 @login_required
 @require_http_methods(['POST'])
-def scan_launch_api(request):
-    """
-    يُطلق CaptureOnTouch ويضبطه عائماً فوق النافذة.
-    يُستدعى بـ AJAX من زر "ابدأ المسح" في الواجهة.
-    يعمل على Windows فقط عبر سكريبت scan_manager المثبَّت كـ Protocol Handler.
-    """
-    cfg = ScanSettings.get()
-    fix_url = '/books/settings/scan/'
+def scan_process_upload(request):
+    """يستقبل مستنداً مرفوعاً (PDF من وكيل المسح، أو PDF/صورة من زر الرفع)،
+    يوحّده إلى PDF ويحفظه مؤقتاً ويعيد scan_token. الصور تُحوَّل إلى PDF كي تمرّ
+    بنفس مسار المعاينة/التحرير/الحفظ. الاستخراج (OCR) مؤجَّل خلف SCAN_AUTO_OCR."""
+    import uuid
+    import time as _time
+    import tempfile
+    from pathlib import Path
+    from django.core.cache import cache
 
-    if not cfg.capture_exe_path:
+    up = request.FILES.get('file')
+    if not up:
+        return JsonResponse({'ok': False, 'error': 'file مطلوب'}, status=400)
+    ext = os.path.splitext(up.name)[1].lower()
+    ALLOWED_EXTS = {'.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tif', '.tiff'}
+    if ext not in ALLOWED_EXTS:
+        return JsonResponse({'ok': False, 'error': 'نوع الملف غير مدعوم (PDF أو صورة)'}, status=400)
+
+    MAX_BYTES = 50 * 1024 * 1024
+    if up.size > MAX_BYTES:
+        return JsonResponse({'ok': False, 'error': 'حجم الملف يتجاوز 50 MB'}, status=400)
+
+    # مجلد مُدار خارج MEDIA (كي لا يُكشف عبر /media) + تنظيف تلقائي للأقدم من 24 ساعة
+    # (= عمر الكاش) — يمنع تسرّب ملفات المسح المؤقتة على القرص.
+    scan_dir = Path(tempfile.gettempdir()) / 'lettersys_scan'
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    cutoff = _time.time() - 86400
+    # 'scan_*' (لا 'scan_*.pdf') كي يشمل الكنسُ ملفات stage-attachment غير الـPDF أيضاً
+    for old in scan_dir.glob('scan_*'):
+        try:
+            if old.is_file() and old.stat().st_mtime < cutoff:
+                old.unlink()
+        except OSError:
+            pass
+
+    tmp_path = str(scan_dir / f'scan_{uuid.uuid4().hex}.pdf')
+    try:
+        if ext == '.pdf':
+            with open(tmp_path, 'wb') as out:
+                for chunk in up.chunks():
+                    out.write(chunk)
+            # تحقّق من توقيع PDF الفعلي لا الامتداد فقط (الاسم يضبطه العميل)
+            with open(tmp_path, 'rb') as fh:
+                if fh.read(5) != b'%PDF-':
+                    os.unlink(tmp_path)
+                    return JsonResponse({'ok': False, 'error': 'الملف ليس PDF صالحاً'}, status=400)
+        else:
+            # صورة مرفوعة → تُحوَّل إلى PDF لتوحيد المعاينة والتحرير والحفظ
+            from core.attachment_service import ensure_pdf_bytes
+            try:
+                pdf_bytes, _, _ = ensure_pdf_bytes(up.read(), up.name)
+            except ValueError:
+                return JsonResponse({'ok': False, 'error': 'تعذّر تحويل الصورة إلى PDF'}, status=400)
+            with open(tmp_path, 'wb') as out:
+                out.write(pdf_bytes)
+
+        from django.conf import settings as dj_settings
+
+        # إزالة الصفحات الفارغة تلقائياً (مسح مزدوج لمستند أحادي → ظهور فارغة تُحذف).
+        # يطلبها مسار المسح فقط (trim_blanks=1)، لا الرفع اليدوي. قابلة للتعطيل والضبط
+        # عبر الإعدادات، وعتبتها محافِظة جداً كي لا تُحذف صفحات قليلة المحتوى.
+        trimmed_pages = 0
+        if (request.POST.get('trim_blanks') in ('1', 'true', 'True')
+                and getattr(dj_settings, 'SCAN_TRIM_BLANK_PAGES', True)):
+            try:
+                from core.attachment_service import remove_blank_pages
+                max_dark = int(getattr(dj_settings, 'SCAN_BLANK_PAGE_MAX_DARK_PX', 10))
+                with open(tmp_path, 'rb') as fh:
+                    _orig = fh.read()
+                _out, trimmed_pages = remove_blank_pages(_orig, max_dark_px=max_dark)
+                if trimmed_pages:
+                    with open(tmp_path, 'wb') as out:
+                        out.write(_out)
+                    logger.info('[ScanUpload] أُزيلت %d صفحة فارغة تلقائياً', trimmed_pages)
+            except Exception as exc:
+                logger.warning('[ScanUpload] تخطّي إزالة الفراغات: %s', exc)
+        # الاستخراج التلقائي (OCR) مؤجَّل افتراضياً: محرّك EasyOCR ثقيل وقد يتعطّل أصلياً
+        # على الأجهزة محدودة الذاكرة. حتى يجهز عامل OCR المقيم، نلتقط المستند ونترك
+        # الإدخال يدوياً. يُعاد تفعيله بضبط SCAN_AUTO_OCR=True.
+        if getattr(dj_settings, 'SCAN_AUTO_OCR', False):
+            # Tesseract يعمل كبرنامج خارجي (لا segfault) فنشغّله داخل العملية: أسرع
+            # بكثير (بلا إعادة إقلاع Django ~5-11ث). EasyOCR/PyTorch يحتاج عزل عملية فرعية.
+            if getattr(dj_settings, 'AI_OFFLINE_ENGINE', 'tesseract') == 'tesseract':
+                from core.extraction.pipeline import run_ocr_inprocess
+                data = run_ocr_inprocess(tmp_path)
+            else:
+                from core.extraction.pipeline import run_ocr_isolated
+                data = run_ocr_isolated(tmp_path)  # OCR معزول (segfault لا يُسقط الخادم)
+            # فشل OCR لا يُهدر المسح: نحتفظ بالـPDF ونتابع لإدخال يدوي.
+            if data.get('_error'):
+                logger.warning('[ScanUpload] فشل OCR — نتابع لإدخال يدوي: %s', data['_error'])
+                data['needs_review'] = True
+                warning = 'تعذّر استخراج النص تلقائياً — حُفِظ المستند الممسوح، يُرجى إدخال البيانات يدوياً.'
+            else:
+                warning = ''
+        else:
+            data = {'needs_review': True}
+            warning = 'حُفِظ المستند الممسوح — أدخل البيانات يدوياً (الاستخراج التلقائي مؤجَّل حالياً).'
+
+        source_name = (request.POST.get('source_name') or up.name or 'scan.pdf').strip()
+        data['source_file'] = os.path.basename(source_name)
+        data['processed_path'] = tmp_path          # scan_file_serve يخدمه من هنا (عبر عرض مُصادَق لا /media)
+        data['user_id'] = request.user.id          # ربط الرمز بصاحبه (يسدّ IDOR)
+
+        # عدد الصفحات (لمعاينة متعددة الصفحات في duplex) — best-effort
+        try:
+            import fitz
+            with fitz.open(tmp_path) as _doc:
+                data['page_count'] = _doc.page_count
+        except Exception:
+            data['page_count'] = 1
+
+        token = uuid.uuid4().hex
+        cache.set(f'scan_token:{token}', data, timeout=86400)
+        logger.info('[ScanUpload] done token=%s user=%s conf=%.0f%% pages=%s auto_ocr=%s',
+                    token[:8], request.user,
+                    (data.get('overall_confidence') or 0) * 100, data['page_count'],
+                    getattr(dj_settings, 'SCAN_AUTO_OCR', False))
         return JsonResponse({
-            'ok': False,
-            'error': 'مسار CaptureOnTouch غير مكوّن في الإعدادات',
-            'reason': 'not_configured',
-            'fix_url': fix_url,
-        }, status=400)
-
-    if not os.path.isfile(cfg.capture_exe_path):
-        return JsonResponse({
-            'ok': False,
-            'error': f'ملف CaptureOnTouch غير موجود: {cfg.capture_exe_path}',
-            'reason': 'file_not_found',
-            'fix_url': fix_url,
-        }, status=400)
-
-    scan_url = (
-        f"lettersys-scan://start"
-        f"?exe={quote(cfg.capture_exe_path, safe='')}"
-        f"&topmost={'1' if cfg.window_topmost else '0'}"
-        f"&server={quote(cfg.server_url, safe=':/.')}"
-    )
-    return JsonResponse({'ok': True, 'scan_url': scan_url})
+            'ok': True,
+            'token': token,
+            'redirect': f'/books/extract/smart-desktop/?scan_token={token}',
+            'source_file': data['source_file'],
+            'overall_confidence': data.get('overall_confidence'),
+            'page_count': data.get('page_count', 1),
+            'trimmed_pages': trimmed_pages,
+            'warning': warning,
+        })
+    except Exception as exc:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        logger.error('[ScanUpload] failed: %s', exc)
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=500)

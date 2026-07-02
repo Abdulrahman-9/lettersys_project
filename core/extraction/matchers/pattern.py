@@ -14,6 +14,38 @@ import logging
 logger = logging.getLogger('lettersys')
 
 
+def _is_plausible_date(d) -> bool:
+    """رفض التواريخ غير المعقولة (قبل 1900 أو في مستقبل بعيد) — غالباً أثر ضوضاء OCR."""
+    return 1900 <= d.year <= datetime.now().year + 1
+
+
+# تحويل الأرقام العربية-الهندية إلى غربية (للترويسة العراقية ٠-٩)
+_AR_DIGITS = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+
+# علامات اتجاه/عرض-صفري خفيّة يُدخلها OCR وتُفسِد مطابقة النصّ (مثل «مواظبة‎»)
+_INVISIBLE_MARKS = {ord(c): None for c in '‎‏​‌‍﻿'}
+
+# رقم صادر الجهة المُرسِلة: يُلتقط بعد «العدد/الرقم/ref/rf/ro/id». ثلاث صيغ:
+#   1) كودٌ مركّب بحروف: NK-20260237 ، KHL/25/32 ، emdoc-2025-043
+#   2) كودٌ مركّب بأرقام: 25/32 ، 2025-043
+#   3) رقمٌ مجرّد (بعد علامة صريحة فقط): 20260237
+# يوضَع كما هو في الحقل ليقبله المستخدم أو يعدّله (يحذف البادئة إن شاء).
+_SENDER_NUM_CODE = (r'([A-Za-z؀-ۿ]{1,7} ?[/\-] ?[0-9][0-9/\-]{1,18}'
+                    r'|[0-9]{2,6} ?[/\-] ?[0-9][0-9/\-]{1,18}'
+                    r'|[0-9]{4,12})')
+_SENDER_NUM_RE = re.compile(r'(?:العدد|الرقم|ref|rf|ro|ri|id)\b\s*[:.#=\-]?\s*' + _SENDER_NUM_CODE, re.I)
+_SENDER_NUM_BAD = ('fax', 'tel', 'phone', 'هاتف', 'فاكس', 'ص.ب', 'mobile', 'موبايل', 'جوال')
+
+# تاريخ الجهة المُرسِلة: بعد «التاريخ» (عربي) أو «Date/Dated» (إنجليزي، شائع بالإيميلات).
+# ثلاث صيغ للتاريخ: اسم شهر إنجليزي (June 20, 2026 / 20 June 2026) أو رقمي (20/6/2026).
+_SENDER_DATE_RE = re.compile(
+    r'(?:الت[أا]ريخ|\bdated\b|\bdate\b)\s*[:/=.\-]?\s*('
+    r'[A-Za-z]{3,9}\.?\s+\d{1,2}\s*,?\s*\d{2,4}'
+    r'|\d{1,2}\s+[A-Za-z]{3,9}\.?\,?\s*\d{2,4}'
+    r'|[\d٠-٩]{1,4}\s*[/\-.]\s*[\d٠-٩]{1,2}\s*[/\-.]\s*[\d٠-٩]{1,4}'
+    r')', re.I)
+
+
 class PatternMatcher:
     """
     استخراج البيانات باستخدام Pattern Matching
@@ -64,8 +96,10 @@ class PatternMatcher:
         for pattern in self.PATTERNS['book_number']:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                number = match.group(1) if '(' in pattern else match.group(0)
-                confidence = 0.95 if 'رقم الكتاب' in pattern else 0.80
+                has_group = '(' in pattern
+                number = match.group(1) if has_group else match.group(0)
+                # الأنماط المعنونة (لها مجموعة التقاط) أوثق من «رقم مجرّد»
+                confidence = 0.95 if has_group else 0.80
                 return (number, confidence)
 
         return (None, 0.0)
@@ -87,28 +121,31 @@ class PatternMatcher:
                         if month_name in self.ARABIC_MONTHS:
                             month = self.ARABIC_MONTHS[month_name]
                             date_obj = datetime(int(year), int(month), int(day))
-                            return (date_obj, 0.95)
+                            if _is_plausible_date(date_obj):
+                                return (date_obj, 0.95)
                     else:
                         day, month, year = match.groups()
                         date_obj = datetime(int(year), int(month), int(day))
-                        return (date_obj, 0.92)
+                        if _is_plausible_date(date_obj):
+                            return (date_obj, 0.92)
                 except (ValueError, AttributeError):
                     pass
 
         # محاولة استخراج أي تاريخ
         try:
-            # البحث عن أرقام يمكن أن تكون تاريخ
+            # البحث عن أرقام يمكن أن تكون تاريخاً — كل نمط بخياراته الصحيحة:
+            #   DD-MM-YYYY → dayfirst=True | YYYY-MM-DD → yearfirst (لا dayfirst وإلا قُلب الشهر/اليوم)
             date_patterns = [
-                r'\d{1,2}[-/]\d{1,2}[-/]\d{4}',
-                r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',
+                (r'\d{1,2}[-/]\d{1,2}[-/]\d{4}', {'dayfirst': True}),
+                (r'\d{4}[-/]\d{1,2}[-/]\d{1,2}', {'yearfirst': True, 'dayfirst': False}),
             ]
 
-            for pattern in date_patterns:
+            for pattern, opts in date_patterns:
                 match = re.search(pattern, text)
                 if match:
-                    date_str = match.group(0)
-                    date_obj = date_parser.parse(date_str, dayfirst=True)
-                    return (date_obj, 0.85)
+                    date_obj = date_parser.parse(match.group(0), **opts)
+                    if _is_plausible_date(date_obj):
+                        return (date_obj, 0.85)
         except (ValueError, TypeError, OverflowError):
             pass
 
@@ -153,22 +190,105 @@ class PatternMatcher:
 
     def extract_title_keywords(self, text: str, num_words: int = 10) -> str:
         """
-        استخراج كلمات العنوان الرئيسية من النص
+        استخراج عنوان/موضوع المستند:
+        1) يفضّل مؤشّر موضوع صريح (الموضوع / بعنوان / بخصوص / م-).
+        2) وإلا يتخطّى الترويسة (سطور لاتينية الغالب أو أسماء جهات رسمية) ويأخذ
+           أوّل سطر عربي جوهري.
+        3) احتياطياً: أوّل الأسطر (السلوك القديم).
         """
-        # إزالة الكلمات الشائعة
+        # علاماتٌ مدعومة بالبيانات (قيست على مستندات حقيقية: 38%→40% بلا تراجع).
+        # «م/» تُكتب بأخطاء OCR (م، م. م,) فوسّعنا فاصلها؛ و«بشأن/حول» علامتا موضوع
+        # عراقيّتان شائعتان كانتا غائبتين. وأُضيفت «Subject/Subj/سبجكت» للإيميلات
+        # الإنجليزية (العنوان بعدها إنجليزيّ — لا يُصفّى كترويسة).
+        subject_markers = (
+            r'الموضوع\s*[:/\-]?\s*([^\n]{3,80})',
+            r'بعنوان\s*\(?\s*([^)\n]{3,80})',   # حتى القوس المغلق أو نهاية السطر
+            r'بخصوص\s*[:/\-]?\s*([^\n]{3,80})',
+            r'بشأن\s*[:/\-]?\s*([^\n]{3,80})',
+            r'(?:^|\s)حول\s*[:/\-.،]?\s*([^\n]{3,80})',
+            r'(?:^|\s)م\s*[/:\-.,،]\s*([^\n]{3,80})',
+            r'(?i:subject|subj)\s*[:.\-]\s*([^\n]{3,80})',
+            r'سبجكت\s*[:/\-]?\s*([^\n]{3,80})',
+        )
+        letterhead_hints = ('جمهورية', 'وزارة', 'الشركة العامة', 'محطة', 'مديرية', 'هيئة',
+                            'republic', 'ministry', 'company', 'station', 'division', 'general')
+        # سطرٌ يبدأ باسم جهة/قسم = ترويسة لا موضوع (نطابق البداية لا مجرّد الاحتواء،
+        # كي لا نُسقط عنواناً يذكر «قسم» في وسطه). يعالج التقاط اسم القسم من الترويسة.
+        org_prefixes = ('قسم', 'دائرة', 'شعبة', 'مكتب', 'شركة', 'مديرية', 'هيئة',
+                        'وزارة', 'جمهورية', 'نظام الإدارة', 'نظام الاداره')
         stop_words = {'من', 'إلى', 'هذا', 'ذلك', 'كل', 'بعض', 'أي', 'التي', 'الذي',
-                     'أن', 'إن', 'كان', 'كانت', 'هو', 'هي', 'هم', 'أنت', 'نحن'}
+                      'أن', 'إن', 'كان', 'كانت', 'هو', 'هي', 'هم', 'أنت', 'نحن'}
 
-        # تقسيم إلى كلمات
-        lines = text.split('\n')
-        first_lines = '\n'.join(lines[:3])  # أول 3 أسطر فقط
+        def _words(s: str) -> str:
+            s = s.translate(_INVISIBLE_MARKS)               # أسقِط علامات LTR/RTL الخفيّة
+            ws = [w.strip(' /:؛،.-') for w in s.split()]    # لواحق ترقيم عالقة
+            ws = [w for w in ws if w and w not in stop_words]
+            return ' '.join(ws[:num_words])
 
-        words = [w.strip() for w in first_lines.split() if w.strip() and w.strip() not in stop_words]
+        lines = [ln.strip() for ln in (text or '').split('\n') if ln.strip()]
+        if not lines:
+            return ''
 
-        # أخذ أول عدد من الكلمات
-        title_words = words[:num_words]
+        # 1) مؤشّر موضوع صريح
+        for line in lines:
+            for pat in subject_markers:
+                m = re.search(pat, line)
+                if m and len(m.group(1).strip()) > 3:
+                    return _words(m.group(1).strip())
 
-        return ' '.join(title_words)
+        # 2) تخطّي الترويسة → أوّل سطر عربي جوهري
+        for line in lines:
+            letters = [c for c in line if c.isalpha()]
+            if letters and sum(1 for c in letters if ord(c) < 128) / len(letters) > 0.5:
+                continue  # سطر لاتيني الغالب (ترويسة)
+            if any(h in line.lower() for h in letterhead_hints):
+                continue  # سطر يحمل اسم جهة رسمية (ترويسة)
+            if any(line.startswith(p) for p in org_prefixes):
+                continue  # سطرٌ يبدأ باسم قسم/جهة = ترويسة لا موضوع
+            if line.lstrip().startswith(('(', '﴾', '«', ')')):
+                continue  # شعار/علامة مائية بين قوسين (مثل شعارات وطنية) — لا موضوع
+            if sum(1 for c in line if '؀' <= c <= 'ۿ') >= 8:
+                return _words(line)
+
+        # 3) احتياطي
+        return _words(' '.join(lines[:3]))
+
+    def extract_sender_date(self, text: str) -> Tuple[Optional[datetime], float]:
+        """تاريخ رسالة الجهة المُرسِلة — من علامة «التاريخ» (عربي) أو «Date/Dated»
+        (إنجليزي، شائع بالإيميلات). يفهم أسماء الأشهر الإنجليزية (June 20, 2026)
+        والصيغ الرقمية. المطبوع فقط؛ المكتوب يدوياً لا يُقرأ (يبقى None)."""
+        m = _SENDER_DATE_RE.search(text or '')
+        if not m:
+            return (None, 0.0)
+        cand = m.group(1).translate(_AR_DIGITS)
+        # رقمي أولاً (extract_date يعالج ترتيب اليوم/الشهر/السنة بدقّة)
+        date_obj, _c = self.extract_date(cand)
+        if date_obj and _is_plausible_date(date_obj):
+            return (date_obj, 0.80)
+        # اسم شهر إنجليزي → dateutil يفهمه (June 20, 2026)
+        try:
+            date_obj = date_parser.parse(cand, dayfirst=True)
+            if _is_plausible_date(date_obj):
+                return (date_obj, 0.80)
+        except (ValueError, TypeError, OverflowError):
+            pass
+        return (None, 0.0)
+
+    def extract_sender_number(self, text: str) -> Tuple[Optional[str], float]:
+        """رقم صادر الجهة المُرسِلة — مطبوعٌ في المستندات المكتوبة/الإيميلات ككودٍ
+        مركّب بعد «العدد/ref/rf/ro/id» (مثل KHL/25/32). يتجاهل الفاكس/الهاتف.
+
+        المكتوب بخطّ اليد لا يُقرأ (يبقى None) — الميزة للمطبوع الواضح فقط.
+        """
+        t = (text or '').translate(_AR_DIGITS)
+        for m in _SENDER_NUM_RE.finditer(t):
+            code = re.sub(r'\s+', '', m.group(1)).strip('/-. ')
+            pre = t[max(0, m.start() - 14):m.start()].lower()
+            if any(b in pre for b in _SENDER_NUM_BAD):
+                continue                              # سياق فاكس/هاتف → ليس رقم صادر
+            if len(re.sub(r'\D', '', code)) >= 2:     # أرقامٌ كافية (ليس ضجيجاً)
+                return code, 0.70
+        return None, 0.0
 
     def extract_all_data(self, text: str) -> Dict:
         """
@@ -176,6 +296,8 @@ class PatternMatcher:
         """
         book_number, book_number_conf = self.extract_book_number(text)
         date, date_conf = self.extract_date(text)
+        sender_date, sender_date_conf = self.extract_sender_date(text)
+        sender_number, sender_number_conf = self.extract_sender_number(text)
         secret_level, secret_conf = self.extract_secret_level(text)
         book_kind, kind_conf = self.extract_book_kind(text)
         entities = self.extract_entities(text)
@@ -186,6 +308,10 @@ class PatternMatcher:
             'book_number_confidence': book_number_conf,
             'date': date.isoformat() if date else None,
             'date_confidence': date_conf,
+            'sender_date': sender_date.isoformat() if sender_date else None,
+            'sender_date_confidence': sender_date_conf,
+            'sender_number': sender_number,
+            'sender_number_confidence': sender_number_conf,
             'secret_level': secret_level,
             'secret_level_confidence': secret_conf,
             'book_kind': book_kind,

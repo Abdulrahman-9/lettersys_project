@@ -237,7 +237,7 @@ def mail_settings(request):
 def _update_email_settings(cfg, data):
     """Update EmailSettings fields from POST data."""
     str_fields  = [
-        'org_name', 'org_email', 'reply_to', 'email_signature',
+        'org_name', 'org_section', 'org_unit', 'org_email', 'reply_to', 'email_signature',
         'smtp_host', 'smtp_user', 'smtp_password',
         'imap_host', 'imap_user', 'imap_password', 'imap_folder',
     ]

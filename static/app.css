@@ -1035,14 +1035,10 @@ body {
 .book-detail-shell { display:flex; flex-direction:column; gap:1.25rem; }
 .book-detail-hero { background: linear-gradient(140deg, rgba(255,247,237,.95), rgba(254,224,199,.9)); }
 .detail-field {
-  background: rgba(255,255,255,.85);
-  border-radius: 1rem;
-  padding: 1rem;
-  border: 1px solid rgba(120,72,30,.1);
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:1rem;
+  /* مسطّحة: تسمية فوق قيمة، بلا صندوق/حد/رفعة — تكدّس أكثف للحقول */
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
 }
 .detail-field .label { color: var(--muted-brown); font-size:.85rem; }
 .timeline { list-style:none; padding:0; margin:0; position:relative; }
@@ -2161,22 +2157,13 @@ tr.search-no-results strong {
    تحسينات صفحة تفاصيل الكتاب
    ============================================ */
 
-.detail-field {
-  transition: all 0.3s ease;
-}
-
-.detail-field:hover {
-  transform: translateY(-2px);
-}
-
 .detail-label {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--bs-muted-color);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.15rem;
 }
 
 .detail-value {
@@ -2186,13 +2173,7 @@ tr.search-no-results strong {
 }
 
 .details-card {
-  transition: all 0.3s ease;
   animation: slideInUp 0.5s ease;
-}
-
-.details-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1) !important;
 }
 
 /* Timeline Styles */
@@ -2802,3 +2783,226 @@ select.keyboard-focus:not(:focus) {
 .keyboard-focus[data-keyboard-hint]::after {
   opacity: 1;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   ▼ DESIGN SYSTEM · COMPONENT POLISH
+   نمط الأزرار "الورق المطبوع" + حقول الإدخال المزجّجة — مقتبس من
+   بطاقات معاينة نظام تصميم LetterSys (buttons.html / form-fields.html).
+   كتلة override مُلحقة. للتراجع: احذف هذه الكتلة كاملةً.
+═══════════════════════════════════════════════════════════════════ */
+
+/* لا حلقة موجة (ripple) على الأزرار المُعاد تنسيقها — لا تناسب الورق المطبوع */
+.btn-brand::before,
+.btn-primary::before,
+.btn-success::before,
+.btn-danger::before,
+.btn-secondary::before,
+.btn-info::before { display: none; }
+
+/* القاعدة المشتركة: خلفية كريمية موحّدة، حواف ناعمة، حركة هادئة */
+.btn-brand,
+.btn-primary,
+.btn-success,
+.btn-danger,
+.btn-secondary,
+.btn-info {
+  border: 0;
+  background: #fffdf7;
+  font-weight: 700;
+  border-radius: 9px;
+  transition: transform .15s var(--ease-out), box-shadow .2s ease, background .2s ease;
+}
+.btn-brand:hover,
+.btn-primary:hover,
+.btn-success:hover,
+.btn-danger:hover,
+.btn-secondary:hover,
+.btn-info:hover {
+  transform: translateY(-1px);
+  background: #fffaef;
+}
+.btn-brand:active,
+.btn-primary:active,
+.btn-success:active,
+.btn-danger:active,
+.btn-secondary:active,
+.btn-info:active { transform: translateY(1px); }
+
+/* الأنواع الستّة — لون النص + خط سفلي رفيع + حلقة داخلية + ظل خفيف.
+   السيلكتور يشمل :hover ليثبت اللون والظل عند المرور. */
+.btn-brand,   .btn-brand:hover,
+.btn-primary, .btn-primary:hover {
+  color: #c96e12;
+  box-shadow: inset 0 -2px 0 #ffb56b,
+              inset 0 0 0 1px rgba(217, 122, 26, .28),
+              0 1px 2px rgba(217, 122, 26, .10);
+}
+.btn-success, .btn-success:hover {
+  color: #18895f;
+  box-shadow: inset 0 -2px 0 #7ad6ae,
+              inset 0 0 0 1px rgba(29, 148, 104, .25),
+              0 1px 2px rgba(29, 148, 104, .10);
+}
+.btn-danger, .btn-danger:hover {
+  color: #b9304a;
+  box-shadow: inset 0 -2px 0 #f5a6b2,
+              inset 0 0 0 1px rgba(198, 59, 83, .25),
+              0 1px 2px rgba(198, 59, 83, .10);
+}
+.btn-secondary, .btn-secondary:hover {
+  color: #5f3b28;
+  box-shadow: inset 0 -2px 0 #d8b88a,
+              inset 0 0 0 1px rgba(111, 70, 49, .22),
+              0 1px 2px rgba(111, 70, 49, .08);
+}
+.btn-info, .btn-info:hover {
+  color: #3570b5;
+  box-shadow: inset 0 -2px 0 #a8c8ef,
+              inset 0 0 0 1px rgba(61, 123, 196, .25),
+              0 1px 2px rgba(61, 123, 196, .10);
+}
+
+/* حقول الإدخال — تركيز دافئ هادئ (بلا قفزة عمودية) */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--warm-amber);
+  box-shadow: 0 0 0 3px rgba(249, 168, 38, .18);
+  transform: none;
+}
+
+/* حالة صحيحة — إطار أخضر زمردي مزجّج */
+.form-control.is-valid,
+.form-select.is-valid,
+.was-validated .form-control:valid,
+.was-validated .form-select:valid {
+  border-color: #1ea968;
+  background-image: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9),
+              inset 0 -1px 0 rgba(12, 122, 74, .12);
+}
+.form-control.is-valid:focus,
+.form-select.is-valid:focus,
+.was-validated .form-control:valid:focus,
+.was-validated .form-select:valid:focus {
+  border-color: #1ea968;
+  box-shadow: 0 0 0 3px rgba(30, 169, 104, .20),
+              0 6px 14px -6px rgba(12, 122, 74, .30);
+}
+
+/* حالة خطأ — إطار أحمر قرمزي مزجّج */
+.form-control.is-invalid,
+.form-select.is-invalid,
+.was-validated .form-control:invalid,
+.was-validated .form-select:invalid {
+  border-color: #d51e3b;
+  background-image: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9),
+              inset 0 -1px 0 rgba(156, 10, 35, .12);
+}
+.form-control.is-invalid:focus,
+.form-select.is-invalid:focus,
+.was-validated .form-control:invalid:focus,
+.was-validated .form-select:invalid:focus {
+  border-color: #d51e3b;
+  box-shadow: 0 0 0 3px rgba(213, 30, 59, .20),
+              0 6px 14px -6px rgba(156, 10, 35, .35);
+}
+
+/* ===== Book preview dialog — inline document pane (Phase 1) ===== */
+.bp-doc-viewer {
+  border: 1px solid var(--card-border, rgba(111, 70, 40, .18));
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f1ece6;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bp-doc-frame {
+  width: 100%;
+  height: 58vh;
+  border: 0;
+  display: block;
+}
+.bp-doc-img {
+  max-width: 100%;
+  max-height: 58vh;
+  height: auto;
+  display: block;
+  margin: auto;
+}
+.bp-doc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .375rem;
+  margin-top: .5rem;
+}
+.bp-doc-chip {
+  border: 1px solid var(--card-border, rgba(111, 70, 40, .18));
+  background: #fff;
+  color: var(--soft-brown, #6f4631);
+  border-radius: 999px;
+  padding: .2rem .7rem;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.bp-doc-chip:hover { background: var(--warm-bg-top, #fff4e4); }
+.bp-doc-chip.active {
+  background: var(--accent, #ff9233);
+  border-color: var(--accent, #ff9233);
+  color: #fff;
+}
+@media (max-width: 991.98px) {
+  .bp-doc-frame { height: 70vh; }
+  .bp-doc-img { max-height: 70vh; }
+}
+
+/* النص المستخرج (OCR) بجانب المسح — قابل للتحديد والبحث */
+.bp-ocr-panel {
+  margin-top: .5rem;
+  border: 1px solid var(--card-border, rgba(111, 70, 40, .18));
+  border-radius: 10px;
+  background: #fffdf9;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.bp-ocr-text {
+  margin: 0;
+  padding: .75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Cairo', system-ui, sans-serif;
+  font-size: .9rem;
+  line-height: 1.9;
+  color: var(--deep-brown, #362014);
+  direction: rtl;
+}
+#bookOcrToggle.active {
+  background: var(--accent, #ff9233);
+  border-color: var(--accent, #ff9233);
+  color: #fff;
+}
+
+/* حوار معاينة المستند المنبثق — عرض كبير ومركّز */
+.doc-preview-frame {
+  width: 100%;
+  height: 82vh;
+  border: 0;
+  display: block;
+  background: #f1ece6;
+}
+.doc-preview-img {
+  display: block;
+  max-width: 100%;
+  max-height: 82vh;
+  margin: auto;
+}
+@media (max-width: 991.98px) {
+  .doc-preview-frame { height: 100vh; }
+  .doc-preview-img { max-height: 100vh; }
+}
+
+/* ▲ END DESIGN SYSTEM · COMPONENT POLISH */

@@ -72,11 +72,8 @@
           {% endif %}
 
           {% if is_edit and editing_entity %}
-          <div class="alert alert-info d-flex justify-content-between align-items-center">
-            <div>
-              <strong>{{ editing_entity.name }}</strong>{% if editing_entity.code %} ({{ editing_entity.code }}){% endif %}
-            </div>
-            <span class="badge bg-secondary">{{ editing_entity.get_etype_display }}</span>
+          <div class="alert alert-info">
+            <strong>{{ editing_entity.name }}</strong>{% if editing_entity.code %} ({{ editing_entity.code }}){% endif %}
           </div>
           {% endif %}
 
@@ -92,11 +89,6 @@
               {{ form.code }}
               {% if form.code.errors %}<div class="text-danger small mt-1">{{ form.code.errors|striptags }}</div>{% endif %}
               <div class="form-text">أحرف أو أرقام أو نقط (مثال: م.ك.ح أو ش4)</div>
-            </div>
-            <div class="col-md-6 col-sm-12">
-              <label class="form-label fw-semibold" for="{{ form.etype.id_for_label }}">{{ form.etype.label }}</label>
-              {{ form.etype }}
-              {% if form.etype.errors %}<div class="text-danger small mt-1">{{ form.etype.errors|striptags }}</div>{% endif %}
             </div>
             <div class="col-md-6 col-sm-12 d-flex align-items-center gap-3 pt-4">
               <div class="form-check">

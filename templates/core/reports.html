@@ -24,7 +24,7 @@
     <div class="app-context-item">
       <div>
         <div class="app-context-meta">عدد النتائج</div>
-        <strong>{{ books|length }}</strong>
+        <strong>{{ total }}</strong>
       </div>
       <span class="app-context-chip is-success"><i class="bi bi-table"></i> نتائج</span>
     </div>
@@ -171,7 +171,7 @@
 <!-- Quick Stats Summary — حالات المتابعة الأربع الموحَّدة -->
 <div class="stats-summary no-print mb-4">
   <div class="stat-item animate-fade-in" style="animation-delay: 0.1s;">
-    <div class="stat-value" id="totalBooks">{{ books|length }}</div>
+    <div class="stat-value" id="totalBooks">{{ total }}</div>
     <div class="text-muted small fw-semibold">إجمالي النتائج</div>
   </div>
   <div class="stat-item animate-fade-in" style="animation-delay: 0.2s;">
@@ -283,6 +283,23 @@
           {% endfor %}
         </tbody>
       </table>
+      {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="d-flex justify-content-between align-items-center mt-3 no-print" aria-label="ترقيم الصفحات">
+        <span class="text-muted small">صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }} — {{ total }} كتاب</span>
+        <div class="btn-group">
+          {% if page_obj.has_previous %}
+          <a class="btn btn-sm btn-outline-secondary" href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">السابق</a>
+          {% else %}
+          <span class="btn btn-sm btn-outline-secondary disabled">السابق</span>
+          {% endif %}
+          {% if page_obj.has_next %}
+          <a class="btn btn-sm btn-outline-secondary" href="?{{ querystring }}&page={{ page_obj.next_page_number }}">التالي</a>
+          {% else %}
+          <span class="btn btn-sm btn-outline-secondary disabled">التالي</span>
+          {% endif %}
+        </div>
+      </nav>
+      {% endif %}
     </div>
   </div>
 </div>

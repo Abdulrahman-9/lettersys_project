@@ -35,12 +35,31 @@ class Command(BaseCommand):
             is_deleted=False,
         ).select_related('created_by')
 
-        # استثناء الكتب التي صُدر لها إشعار overdue من قبل (مهما كان تاريخه)
-        already_notified = set(
-            BookHistory.objects.filter(action='overdue').values_list('book_id', flat=True)
-        )
+        # تفادي تكرار التنبيه ضمن نفس دورة المتابعة — لكن السماح به في دورة جديدة:
+        # الكتاب «متأخّر جديد» إذا لم يُسجَّل له تأخّر قط، أو أُعيد فتح متابعته بعد آخر تأخّر مُسجَّل
+        # (هكذا يُحسب «كم مرة تأخّر» بدقّة عبر الدورات، ولا يُحرَم الكتاب المُعاد فتحه من التنبيه).
+        overdue_ids = [b.id for b in overdue_qs]
+        last_overdue = {}
+        for bid, ts in BookHistory.objects.filter(
+            action='overdue', book_id__in=overdue_ids
+        ).values_list('book_id', 'created_at'):
+            if bid not in last_overdue or ts > last_overdue[bid]:
+                last_overdue[bid] = ts
+        last_reopen = {}
+        for bid, ts in BookHistory.objects.filter(
+            action='status', book_id__in=overdue_ids, notes__icontains='فتح'
+        ).values_list('book_id', 'created_at'):
+            if bid not in last_reopen or ts > last_reopen[bid]:
+                last_reopen[bid] = ts
 
-        new_overdue = [b for b in overdue_qs if b.id not in already_notified]
+        def _is_new_overdue(b):
+            lo = last_overdue.get(b.id)
+            if lo is None:
+                return True  # لم يُسجَّل تأخّر قط
+            lr = last_reopen.get(b.id)
+            return lr is not None and lr > lo  # أُعيد الفتح بعد آخر تأخّر ⇒ دورة جديدة
+
+        new_overdue = [b for b in overdue_qs if _is_new_overdue(b)]
 
         if not new_overdue:
             self.stdout.write(self.style.SUCCESS("لا توجد كتب متأخرة جديدة."))

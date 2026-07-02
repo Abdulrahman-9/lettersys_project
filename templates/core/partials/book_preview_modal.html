@@ -1,6 +1,6 @@
 {# مودال معاينة الكتاب الموحد — يُضمن في base.html ليعمل من أي صفحة #}
 <div class="modal fade" id="bookPreviewModal" tabindex="-1" aria-labelledby="bookPreviewTitle" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable modal-fullscreen-lg-down">
     <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
 
       {# Header #}
@@ -41,6 +41,12 @@
           {# Title #}
           <div class="px-3 pt-2">
             <h5 class="fw-bold mb-0" id="bpTitle"></h5>
+          </div>
+
+          {# Document pane — معاينة المستند المضمّنة #}
+          <div class="px-3 pt-3 d-none" id="bpDocPane">
+            <div class="bp-doc-viewer" id="bpDocViewer"></div>
+            <div class="bp-doc-chips d-none" id="bpDocChips"></div>
           </div>
 
           {# Info Grid #}
@@ -123,6 +129,7 @@
 
       {# Footer #}
       <div class="modal-footer py-2 px-3">
+        <button type="button" class="btn btn-sm d-none me-auto" id="bpStatusToggle"></button>
         <a href="#" class="btn btn-sm btn-outline-primary" id="bpEditLink"><i class="bi bi-pencil me-1"></i>تعديل</a>
         <a href="#" class="btn btn-sm btn-primary" id="bpDetailLink"><i class="bi bi-eye me-1"></i>عرض كامل</a>
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">إغلاق</button>
@@ -141,11 +148,24 @@
   'use strict';
 
   let modalInstance = null;
+  let currentBook = null;
+
+  function getCsrf() {
+    const m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? m[1] : '';
+  }
 
   function getModal() {
     if (!modalInstance) {
       const el = document.getElementById('bookPreviewModal');
-      if (el) modalInstance = new bootstrap.Modal(el);
+      if (el) {
+        modalInstance = new bootstrap.Modal(el);
+        // تفريغ عارض المستند عند الإغلاق حتى لا يبقى PDF محمّلاً في الخلفية
+        el.addEventListener('hidden.bs.modal', function() {
+          const viewer = document.getElementById('bpDocViewer');
+          if (viewer) viewer.innerHTML = '';
+        });
+      }
     }
     return modalInstance;
   }
@@ -178,12 +198,149 @@
     }).join('');
   }
 
+  // بناء عنصر عرض المستند — يفوّض للمصدر الموحّد DocView (static/js/doc_view.js)
+  function buildDocNode(att, title) {
+    return window.DocView.buildNode({
+      url: att.url,
+      name: title || att.name,
+      kind: att.is_pdf ? 'pdf' : (att.is_image ? 'image' : 'other'),
+    });
+  }
+
+  // عرض المستند الأساسي مع شرائح تبديل عند تعدّد المرفقات
+  function renderDocPane(d) {
+    const pane = document.getElementById('bpDocPane');
+    const viewer = document.getElementById('bpDocViewer');
+    const chips = document.getElementById('bpDocChips');
+    if (!pane || !viewer || !chips) return;
+
+    viewer.innerHTML = '';
+    chips.innerHTML = '';
+    chips.classList.add('d-none');
+
+    const atts = (d.attachments || []).filter(a => a.url);
+    if (!atts.length) { pane.classList.add('d-none'); return; }
+    pane.classList.remove('d-none');
+
+    function select(att) {
+      viewer.innerHTML = '';
+      viewer.appendChild(buildDocNode(att, d.title));
+      chips.querySelectorAll('.bp-doc-chip').forEach(c => {
+        c.classList.toggle('active', c.dataset.attId === String(att.id));
+      });
+    }
+
+    if (atts.length > 1) {
+      chips.classList.remove('d-none');
+      atts.forEach(att => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'bp-doc-chip';
+        chip.dataset.attId = String(att.id);
+        const icon = document.createElement('i');
+        icon.className = att.is_pdf ? 'bi bi-file-earmark-pdf' : (att.is_image ? 'bi bi-image' : 'bi bi-file-earmark');
+        chip.appendChild(icon);
+        chip.appendChild(document.createTextNode(' ' + (att.name || 'ملف')));
+        chip.addEventListener('click', () => select(att));
+        chips.appendChild(chip);
+      });
+    }
+
+    const primary = atts.find(a => a.is_primary) || atts[0];
+    select(primary);
+  }
+
+  // رسم شارة الحالة + شرائح المتابعة + زر الإنهاء/إعادة الفتح (يُعاد استخدامه بعد التبديل)
+  function paintStatus(d) {
+    const statusBadge = document.getElementById('bpStatusBadge');
+    if (statusBadge) {
+      const s = STATUS_STYLES[d.followup_state] || STATUS_STYLES.archived;
+      statusBadge.className = 'badge';
+      statusBadge.style.cssText = `background:${s.bg};color:${s.color};`;
+      statusBadge.textContent = d.followup_label || s.label;
+    }
+
+    const isActive = d.followup_state && d.followup_state !== 'archived';
+    if (isActive) { show('bpFollowupBadge'); show('bpDueDateGroup'); text('bpDueDate', d.due_date); }
+    else { hide('bpFollowupBadge'); hide('bpDueDateGroup'); }
+    if (d.followup_state === 'overdue') { show('bpOverdueBadge'); } else { hide('bpOverdueBadge'); }
+
+    const toggle = document.getElementById('bpStatusToggle');
+    if (toggle) {
+      if (d.followup_state === 'archived') {
+        // إعادة الفتح ممكنة فقط عند وجود تاريخ متابعة
+        if (d.due_date) {
+          toggle.className = 'btn btn-sm btn-outline-success me-auto';
+          toggle.dataset.action = 'reopen';
+          toggle.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>إعادة فتح المتابعة';
+        } else {
+          toggle.className = 'btn btn-sm d-none me-auto';
+          toggle.dataset.action = '';
+        }
+      } else {
+        toggle.className = 'btn btn-sm btn-outline-warning me-auto';
+        toggle.dataset.action = 'archived';
+        toggle.innerHTML = '<i class="bi bi-archive me-1"></i>إنهاء المتابعة';
+      }
+    }
+  }
+
+  async function toggleStatus() {
+    const toggle = document.getElementById('bpStatusToggle');
+    if (!toggle || !currentBook || !currentBook.inline_status_url) return;
+    const action = toggle.dataset.action;
+    if (!action) return;
+
+    toggle.disabled = true;
+    try {
+      const resp = await fetch(currentBook.inline_status_url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'X-CSRFToken': getCsrf(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: 'status=' + encodeURIComponent(action),
+      });
+      const payload = await resp.json();
+      if (!resp.ok || !payload.success) throw new Error(payload.error || 'فشل تحديث الحالة');
+
+      currentBook.followup_state = payload.followup_state;
+      currentBook.followup_label = payload.followup_label;
+      currentBook.is_archived = payload.is_archived;
+      paintStatus(currentBook);
+
+      // مزامنة صف القائمة (إن وُجد على الصفحة)
+      document.dispatchEvent(new CustomEvent('book:status-changed', {
+        detail: {
+          bookId: currentBook.id,
+          followup_state: payload.followup_state,
+          followup_label: payload.followup_label,
+          is_archived: payload.is_archived,
+        },
+      }));
+
+      if (window.ToastCenter?.show) window.ToastCenter.show('success', payload.message || 'تم تحديث الحالة');
+    } catch (err) {
+      if (window.ToastCenter?.show) window.ToastCenter.show('error', err.message || 'تعذّر تحديث الحالة');
+    } finally {
+      toggle.disabled = false;
+    }
+  }
+
   async function openBookPreview(bookId) {
     const modal = getModal();
     if (!modal) return;
 
-    // Reset states
+    // Reset states — حيّد التذييل حتى تصل بيانات الكتاب الجديد (لئلا يبقى مربوطاً بالكتاب السابق)
     show('bpLoading'); hide('bpContent'); hide('bpError');
+    currentBook = null;
+    const _toggle = document.getElementById('bpStatusToggle');
+    if (_toggle) { _toggle.className = 'btn btn-sm d-none me-auto'; _toggle.dataset.action = ''; }
+    const _edit = document.getElementById('bpEditLink');
+    const _detail = document.getElementById('bpDetailLink');
+    if (_edit) _edit.href = '#';
+    if (_detail) _detail.href = '#';
     modal.show();
 
     try {
@@ -197,6 +354,7 @@
       }
 
       const d = await resp.json();
+      currentBook = d;
 
       // Header color by kind
       const kc = KIND_COLORS[d.kind] || KIND_COLORS['incoming_internal'];
@@ -218,22 +376,15 @@
         kindBadge.style.cssText = `background:${kc.bg};color:${kc.text};`;
       }
 
-      // Status badge — مبني على followup_state (الحالات الأربع الموحَّدة)
-      const statusBadge = document.getElementById('bpStatusBadge');
-      if (statusBadge) {
-        const s = STATUS_STYLES[d.followup_state] || STATUS_STYLES.archived;
-        statusBadge.className = 'badge';
-        statusBadge.style.cssText = `background:${s.bg};color:${s.color};`;
-        statusBadge.textContent = d.followup_label || s.label;
-      }
-
       // Conditional fields
       if (d.is_incoming && d.sender_number) { show('bpSenderNumGroup'); text('bpSenderNumber', d.sender_number); } else { hide('bpSenderNumGroup'); }
       if (d.is_incoming && d.sender_date) { show('bpSenderDateGroup'); text('bpSenderDate', d.sender_date); } else { hide('bpSenderDateGroup'); }
-      // عرض شريحة المتابعة وموعد الاستحقاق فقط عندما يكون الكتاب نشطاً (ليس مؤرشفاً وله due_date)
-      const isActive = d.followup_state && d.followup_state !== 'archived';
-      if (isActive) { show('bpFollowupBadge'); show('bpDueDateGroup'); text('bpDueDate', d.due_date); } else { hide('bpFollowupBadge'); hide('bpDueDateGroup'); }
-      if (d.followup_state === 'overdue') { show('bpOverdueBadge'); } else { hide('bpOverdueBadge'); }
+
+      // الحالة + شرائح المتابعة + زر الإنهاء/إعادة الفتح
+      paintStatus(d);
+
+      // Document pane (المستند المضمّن)
+      renderDocPane(d);
 
       // Entities
       html('bpIssuingEntities', entityBadges(d.issuing_entities));
@@ -242,25 +393,47 @@
       // Margin
       if (d.margin) { show('bpMarginGroup'); text('bpMargin', d.margin); } else { hide('bpMarginGroup'); }
 
-      // Attachments
-      if (d.attachments?.length) {
+      // Attachments — بناء آمن عبر DOM (نفس تحصين buildDocNode: فحص المخطّط + textContent)
+      const attBox = document.getElementById('bpAttachments');
+      if (d.attachments?.length && attBox) {
         show('bpAttachmentsGroup');
-        html('bpAttachments', d.attachments.map(a => {
-          const safeName = (a.name || 'ملف').replace(/</g, '&lt;');
-          const sizeKB = a.size ? `(${(a.size/1024).toFixed(0)} KB)` : '';
-          return `<a href="${a.url}" target="_blank" class="d-flex align-items-center gap-2 text-decoration-none p-2 bg-light rounded small">
-            <i class="bi bi-file-earmark text-primary"></i>
-            <span>${safeName} <span class="text-muted">${sizeKB}</span></span>
-            <i class="bi bi-box-arrow-up-right ms-auto text-muted"></i>
-          </a>`;
-        }).join(''));
+        attBox.innerHTML = '';
+        d.attachments.forEach(a => {
+          const safeUrl = /^(https?:\/\/|\/)/i.test(a.url || '') ? a.url : '';
+          const sizeKB = a.size ? ` (${(a.size / 1024).toFixed(0)} KB)` : '';
+          const link = document.createElement(safeUrl ? 'a' : 'span');
+          link.className = 'd-flex align-items-center gap-2 text-decoration-none p-2 bg-light rounded small';
+          if (safeUrl) { link.href = safeUrl; link.target = '_blank'; link.rel = 'noopener'; }
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-file-earmark text-primary';
+          const label = document.createElement('span');
+          label.textContent = (a.name || 'ملف') + sizeKB;
+          link.appendChild(icon);
+          link.appendChild(label);
+          if (safeUrl) {
+            const ext = document.createElement('i');
+            ext.className = 'bi bi-box-arrow-up-right ms-auto text-muted';
+            link.appendChild(ext);
+          }
+          attBox.appendChild(link);
+        });
       } else { hide('bpAttachmentsGroup'); }
 
       // Links
       const editLink = document.getElementById('bpEditLink');
       const detailLink = document.getElementById('bpDetailLink');
-      if (editLink) editLink.href = d.edit_url;
-      if (detailLink) detailLink.href = d.detail_url;
+      // التعديل يمرّر وجهة العودة = هذه الصفحة مع ?preview=<id> ليُعاد فتح الحوار عند الإلغاء/الحفظ
+      if (editLink) {
+        const ret = new URL(window.location.href);
+        ret.searchParams.set('preview', d.id);
+        const nextParam = encodeURIComponent(ret.pathname + ret.search);
+        editLink.href = d.edit_url + (d.edit_url.indexOf('?') >= 0 ? '&' : '?') + 'next=' + nextParam;
+      }
+      // العرض الكامل يمرّر وجهة العودة = هذه الصفحة بحالتها (تبويب/فلتر/صفحة) ليعود إليها زر «عودة»
+      if (detailLink) {
+        const nextParam = encodeURIComponent(window.location.pathname + window.location.search);
+        detailLink.href = d.detail_url + (d.detail_url.indexOf('?') >= 0 ? '&' : '?') + 'next=' + nextParam;
+      }
 
       hide('bpLoading'); show('bpContent');
 
@@ -273,14 +446,29 @@
   // Global click handler: any element with data-book-preview="<id>"
   document.addEventListener('click', function(e) {
     const trigger = e.target.closest('[data-book-preview]');
-    if (trigger) {
-      e.preventDefault();
-      const bookId = trigger.dataset.bookPreview;
-      if (bookId) openBookPreview(bookId);
-    }
+    if (!trigger) return;
+    // احترام «فتح في تبويب»: Ctrl/Cmd/Shift أو نقرة غير يسرى تترك المتصفح ينتقل عبر href
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    const bookId = trigger.dataset.bookPreview;
+    if (bookId) openBookPreview(bookId);
   });
+
+  // زر إنهاء/إعادة فتح المتابعة داخل المودال
+  document.getElementById('bpStatusToggle')?.addEventListener('click', toggleStatus);
 
   // Expose globally for programmatic use
   window.openBookPreview = openBookPreview;
+
+  // إعادة فتح الحوار تلقائياً عند العودة عبر ?preview=<id> (بعد إلغاء/حفظ التعديل مثلاً)
+  function deepLinkPreview() {
+    const pv = new URLSearchParams(window.location.search).get('preview');
+    if (pv) openBookPreview(pv);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', deepLinkPreview);
+  } else {
+    deepLinkPreview();
+  }
 })();
 </script>

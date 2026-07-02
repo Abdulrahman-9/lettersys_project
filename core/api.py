@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Case, Count, When, Value, IntegerField, FloatField
+from django.db.models import Q, Case, Count, When, Value, IntegerField, FloatField, OuterRef, Subquery
 from django.db.models.functions import Coalesce, Greatest
 from django.contrib.postgres.search import TrigramSimilarity
 from django.core.cache import cache
@@ -340,6 +340,7 @@ def title_words_api(request):
     }
     cache.set(cache_key, result, 3600)
     return JsonResponse(result)
+@login_required
 @require_http_methods(["POST"])
 @rate_limit('add_entity', max_attempts=30, window_seconds=60, by='user')
 def add_new_entity(request):
@@ -437,6 +438,17 @@ def get_entity_stats(request):
     مفيدة للتحليل والتحسين
     """
     
+    # عدّ كتب كل جهة عبر استعلامين فرعيين مستقلّين — يتجنّب الضرب الديكارتي
+    # الناتج عن ضمّ علاقتَي M2M (issued/received) في استعلام واحد.
+    _issued_sq = (
+        Book.objects.filter(issuing_entities=OuterRef('pk'), is_deleted=False)
+        .order_by().values('issuing_entities').annotate(c=Count('id')).values('c')
+    )
+    _received_sq = (
+        Book.objects.filter(receiving_entities=OuterRef('pk'), is_deleted=False)
+        .order_by().values('receiving_entities').annotate(c=Count('id')).values('c')
+    )
+
     stats = {
         'total_entities': Entity.objects.count(),
         'active_entities': Entity.objects.filter(is_active=True).count(),
@@ -444,7 +456,10 @@ def get_entity_stats(request):
         'total_books': Book.objects.filter(is_deleted=False).count(),
         'most_used_entities': list(
             Entity.objects.annotate(
-                book_count=Count('issued_books', distinct=True) + Count('received_books', distinct=True)
+                book_count=(
+                    Coalesce(Subquery(_issued_sq, output_field=IntegerField()), 0)
+                    + Coalesce(Subquery(_received_sq, output_field=IntegerField()), 0)
+                )
             ).order_by('-book_count').values('id', 'name', 'book_count')[:5]
         ),
         'most_used_titles': list(

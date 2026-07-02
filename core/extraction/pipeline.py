@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional, Any, Callable
 from pathlib import Path
 import hashlib
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
@@ -37,10 +38,13 @@ from django.utils import timezone
 
 from core.extraction.ocr.image import ImageProcessor, BatchImageProcessor
 from core.extraction.ocr.service import OCRService, ArabicOCROptimizer
-from core.extraction.ocr.providers import EasyOCROfflineProvider, build_online_provider_from_settings
+from core.extraction.ocr.providers import (
+    build_offline_provider_from_settings,
+    build_online_provider_from_settings,
+)
 from core.models import AIIntegrationSettings
 from core.extraction.matchers.pattern import PatternMatcher, DateParser
-from core.extraction.matchers.entity import EntityMatcher, EnhancedEntityMatcher
+from core.extraction.matchers.entity import EntityMatcher
 from core.models import (
     OCRResult, DataExtractionResult, ExtractionFeedback,
     ExtractionStatistics, ExtractionCache, Attachment, Book, Entity
@@ -96,6 +100,12 @@ class AIExtractionResult:
 
         self.book_date: Optional[str] = None
         self.book_date_confidence: float = 0.0
+
+        self.sender_date: Optional[str] = None
+        self.sender_date_confidence: float = 0.0
+
+        self.sender_number: Optional[str] = None
+        self.sender_number_confidence: float = 0.0
 
         self.title: str = ""
         self.title_confidence: float = 0.0
@@ -201,7 +211,6 @@ class AIExtractionService:
         self.arabic_ocr = None
         self.pattern_matcher = PatternMatcher()
         self.entity_matcher = EntityMatcher()
-        self.enhanced_entity_matcher = EnhancedEntityMatcher()
 
         # OCR providers are initialized lazily after the document is confirmed loadable.
         self._offline_provider = None
@@ -219,7 +228,7 @@ class AIExtractionService:
             self._settings = AIIntegrationSettings.get_active_settings()
 
         if self._offline_provider is None:
-            self._offline_provider = EasyOCROfflineProvider()
+            self._offline_provider = build_offline_provider_from_settings(self._settings)
 
         if self._online_provider is None and self._settings.get('AI_PROVIDER') != 'offline':
             self._online_provider = build_online_provider_from_settings(self._settings)
@@ -408,10 +417,26 @@ class AIExtractionService:
             _progress('image_enhancement')
             result.progress_stage = 'تحسين الصورة'
             logger.info('Processing image: %s', image_path)
-            image_processor = ImageProcessor(image_path)
-            image_processor.full_pipeline()
+            from django.conf import settings as dj_settings
+            ocr_engine = getattr(dj_settings, 'AI_OFFLINE_ENGINE', 'tesseract')
+            if ocr_engine == 'tesseract':
+                # Tesseract يطبّق تحسينه داخلياً؛ صورة رمادية نظيفة أدقّ من المعالجة
+                # الثقيلة (التي تخفض جودته). max_ocr_dim=2600 (≈223DPI): مقيسٌ كافياً
+                # للاستخراج (عنوان/رقم/جهة) وأسرع ~2× من 3500 — يقصّ زمن الإيميلات.
+                image_processor = ImageProcessor(image_path, preprocess_pdf=False, max_ocr_dim=2600)
+                image_processor.light_pipeline()
+            else:
+                image_processor = ImageProcessor(image_path)
+                image_processor.full_pipeline()
             enhanced_image = image_processor.get_image()
-            enhanced_image_path = image_path.replace('.jpg', '_enhanced.jpg').replace('.png', '_enhanced.png')
+            # الصورة المُحسَّنة تُكتَب في مجلد النظام المؤقّت — لا بجوار الأصل.
+            # الكتابة بجوار الأصل تجعل مراقب المجلد (ScanWatcher) يلتقطها
+            # كملفّ ممسوح جديد ويُعالجها في حلقة.
+            _ext = os.path.splitext(image_path)[1].lower()
+            if _ext not in ('.jpg', '.jpeg', '.png'):
+                _ext = '.png'
+            _fd, enhanced_image_path = tempfile.mkstemp(suffix=_ext, prefix='lettersys_ocr_')
+            os.close(_fd)
             image_processor.save(enhanced_image_path)
             del image_processor, enhanced_image
 
@@ -426,7 +451,7 @@ class AIExtractionService:
                 result.cleaned_text = self.ocr_service.clean_text(result.raw_text)
                 result.ocr_confidence = float(offline_res.get('avg_confidence', 0.0))
                 result.detected_language = 'ar'
-                ocr_engine_used = 'easyocr'
+                ocr_engine_used = self._offline_provider.name  # 'tesseract' أو 'easyocr'
                 logger.info('OCR (offline) confidence %.2f', result.ocr_confidence)
 
                 # Fallback إلى Azure عند ثقة منخفضة
@@ -459,38 +484,80 @@ class AIExtractionService:
             result.progress_stage = 'تحليل البيانات'
             if result.cleaned_text:
                 patterns = self.pattern_matcher.extract_all_data(result.cleaned_text)
-                result.book_number, result.book_number_confidence = patterns.get('book_number', ('', 0.0))
-                result.book_date, result.book_date_confidence = patterns.get('book_date', (None, 0.0))
-                result.title, result.title_confidence = patterns.get('title', ('', 0.0))
-                result.margin_text, result.margin_confidence = patterns.get('margin_text', ('', 0.0))
-                result.secret_level, result.secret_level_confidence = patterns.get('secret_level', ('', 0.0))
-                result.book_kind, result.book_kind_confidence = patterns.get('book_kind', ('', 0.0))
+                # `extract_all_data` يُعيد قاموساً مسطّحاً: القيمة و«*_confidence» مفتاحان
+                # منفصلان (لا tuple واحد)، ومفتاح التاريخ اسمه 'date'. نقرأ المفاتيح
+                # الفعلية، و«or default» يحمي من قيمة None لمفتاح موجود.
+                result.book_number = patterns.get('book_number') or ''
+                result.book_number_confidence = patterns.get('book_number_confidence') or 0.0
+                # قاعدة المالك: أيُّ تاريخ يُستخرَج من المستند = تاريخ الجهة المُرسِلة
+                # دائماً. تاريخنا (book_date) = تاريخ الإدخال (اليوم) في الواجهة — لا
+                # يُستخرَج إطلاقاً. لذا: sender_date = علامة «التاريخ/Date» وإلا أيُّ
+                # تاريخ في المستند؛ و book_date يبقى فارغاً (تحفظه الواجهة على اليوم).
+                result.book_date = None
+                result.book_date_confidence = 0.0
+                if patterns.get('sender_date'):
+                    result.sender_date = patterns.get('sender_date')
+                    result.sender_date_confidence = patterns.get('sender_date_confidence') or 0.0
+                else:
+                    result.sender_date = patterns.get('date')
+                    result.sender_date_confidence = patterns.get('date_confidence') or 0.0
+                result.sender_number = patterns.get('sender_number')
+                result.sender_number_confidence = patterns.get('sender_number_confidence') or 0.0
+                result.title = patterns.get('title') or ''
+                result.secret_level = patterns.get('secret_level') or ''
+                result.secret_level_confidence = patterns.get('secret_level_confidence') or 0.0
+                result.book_kind = patterns.get('book_kind') or ''
+                result.book_kind_confidence = patterns.get('book_kind_confidence') or 0.0
                 logger.info('Pattern matching done: book_number=%s', result.book_number)
 
             # Step 5: Entity Matching
             _progress('entity_matching')
             result.progress_stage = 'مطابقة الجهات'
-            entities = self.pattern_matcher.extract_entities(result.cleaned_text)
-            if entities:
-                for entity_text in entities.get('issuing_entities', []):
-                    matches = self.entity_matcher.match_issuing_entity(entity_text)
-                    if matches:
-                        best_match = matches[0]
-                        result.issuing_entity_matches = matches[:3]
-                        result.issuing_entity_id = best_match.get('entity_id')
-                        result.issuing_entity_name = best_match.get('entity_name', '')
-                        result.issuing_entity_confidence = best_match.get('score', 0.0) / 100.0
-                        break
+            # `extract_entities` يُعيد List[Tuple[str, float]] — مرشّحات «من/الجهة».
+            entity_candidates = [
+                text for (text, _conf) in self.pattern_matcher.extract_entities(result.cleaned_text or '')
+            ]
 
-                for entity_text in entities.get('receiving_entities', []):
-                    matches = self.entity_matcher.match_receiving_entity(entity_text)
-                    if matches:
-                        best_match = matches[0]
-                        result.receiving_entity_matches = matches[:3]
-                        result.receiving_entity_id = best_match.get('entity_id')
-                        result.receiving_entity_name = best_match.get('entity_name', '')
-                        result.receiving_entity_confidence = best_match.get('score', 0.0) / 100.0
+            def _resolve_entity(etype: str):
+                """ترتيب المصادر بحسب دقّتها المقيسة على بيانات حقيقية:
+                  1) ذاكرة الترويسة (تعلّمٌ من مستندات سابقة مؤكَّدة) — hit@3 ≈ 85%،
+                  2) مطابقة اسم الجهة في الترويسة — hit@3 ≈ 18-27%،
+                  3) أنماط «من/إلى X» — hit@3 ≈ 0-3%.
+                كلٌّ يملأ ما نقص عن أفضل-3 دون إزاحة الأعلى أو تكرار."""
+                cleaned = result.cleaned_text or ''
+                ranked = list(self.entity_matcher.match_from_memory(cleaned, entity_type=etype, top_k=3))
+                seen = {m['entity_id'] for m in ranked}
+                if len(ranked) < 3:
+                    for m in self.entity_matcher.match_from_letterhead(cleaned, entity_type=etype, top_k=3):
+                        if m['entity_id'] not in seen:
+                            ranked.append(m); seen.add(m['entity_id'])
+                pattern_match = (self.entity_matcher.match_issuing_entity if etype == 'issuer'
+                                 else self.entity_matcher.match_receiving_entity)
+                for entity_text in entity_candidates:
+                    for m in pattern_match(entity_text):
+                        if m['entity_id'] not in seen:
+                            ranked.append(m); seen.add(m['entity_id'])
+                    if len(ranked) > 3:
                         break
+                return ranked[:3]
+
+            def _assign_entity(matches, id_attr, name_attr, conf_attr, matches_attr):
+                if not matches:
+                    return
+                best = matches[0]
+                setattr(result, matches_attr, matches)
+                setattr(result, id_attr, best.get('entity_id'))
+                setattr(result, name_attr, best.get('entity_name', ''))
+                score = best.get('score', 0.0) / 100.0
+                # سقوف الثقة بحسب موثوقية المصدر المقيسة (كلّها اقتراحيّة للمراجعة):
+                #   ذاكرة (hit@1 ≈ 62%) → 0.85، ترويسة (≈ 11%) → 0.5، نمط صريح → كاملة.
+                cap = {'memory': 0.85, 'letterhead': 0.5}.get(best.get('match_type'))
+                setattr(result, conf_attr, min(score, cap) if cap else score)
+
+            _assign_entity(_resolve_entity('issuer'), 'issuing_entity_id',
+                           'issuing_entity_name', 'issuing_entity_confidence', 'issuing_entity_matches')
+            _assign_entity(_resolve_entity('receiver'), 'receiving_entity_id',
+                           'receiving_entity_name', 'receiving_entity_confidence', 'receiving_entity_matches')
 
             # Step 6: حساب الثقة الإجمالية
             _progress('confidence')
@@ -667,6 +734,99 @@ class AIExtractionService:
             'field_stats': latest.field_stats,
             'date': latest.date.isoformat(),
         }
+
+
+def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
+    """يحوّل نتيجة الاستخراج إلى dict مفاتيح المسح/الواجهة (المُشكِّل القانوني الموحّد).
+
+    raw_text/cleaned_text/ocr_engine تُمرَّر أيضاً لحلقة التقاط التدريب (تُحفَظ في
+    OCRResult عند الحفظ) — الواجهة تتجاهل المفاتيح الزائدة.
+    """
+    return {
+        'raw_text': result.raw_text,
+        'cleaned_text': result.cleaned_text,
+        'ocr_engine': getattr(result, 'ocr_engine', ''),
+        'book_number': result.book_number,
+        'book_number_confidence': result.book_number_confidence,
+        'book_date': result.book_date,
+        'book_date_confidence': result.book_date_confidence,
+        'sender_date': result.sender_date,
+        'sender_date_confidence': result.sender_date_confidence,
+        'sender_number': result.sender_number,
+        'sender_number_confidence': result.sender_number_confidence,
+        'title': result.title,
+        'title_confidence': result.title_confidence,
+        'issuing_entity': result.issuing_entity_name,
+        'issuing_entity_confidence': result.issuing_entity_confidence,
+        'receiving_entity': result.receiving_entity_name,
+        'receiving_entity_confidence': result.receiving_entity_confidence,
+        'secret_level': result.secret_level,
+        'secret_level_confidence': result.secret_level_confidence,
+        'book_kind': result.book_kind,
+        'book_kind_confidence': result.book_kind_confidence,
+        'overall_confidence': result.overall_confidence,
+        'needs_review': result.status == 'manual_review',
+        'user_message': result.user_message,
+    }
+
+
+def run_ocr_inprocess(image_path: str) -> Dict[str, Any]:
+    """يشغّل الاستخراج داخل عملية الخادم مباشرةً — آمن مع Tesseract (برنامج خارجي،
+    لا يُسقِط Django بـ segfault مثل EasyOCR/PyTorch) وأسرع من run_ocr_isolated
+    (بلا إعادة إقلاع Django ~5-11ث). الأخطاء تُعاد كـ needs_review بلا رفع استثناء."""
+    try:
+        result = AIExtractionService().process_image(image_path)
+        return result_to_scan_data(result)
+    except Exception as exc:  # noqa: BLE001 — فشل OCR لا يُهدر المسح
+        logger.error('[OCR-inprocess] خطأ: %s', exc, exc_info=True)
+        return {'needs_review': True, '_error': str(exc)}
+
+
+def run_ocr_isolated(image_path: str, timeout: int = 150) -> Dict[str, Any]:
+    """
+    يشغّل الاستخراج في عملية فرعية معزولة عبر `manage.py ocr_process`.
+
+    محرّك OCR (EasyOCR/PyTorch) قد يُحدث segfault لا يُلتقَط بـ try/except —
+    وتشغيله داخل خادم الويب يُسقطه. هذه الدالة تعزله في عملية فرعية،
+    فيبقى أيّ تعطّل محصوراً فيها والخادم سليم.
+
+    تُعيد dict نتيجة الاستخراج (نفس مفاتيح ScanWatcher)؛ وعند الفشل
+    تُعيد {'needs_review': True, '_error': '...'} بدل أن ترمي استثناءً.
+    """
+    import subprocess
+    import sys
+    from django.conf import settings as dj_settings
+
+    manage_py = os.path.join(str(dj_settings.BASE_DIR), 'manage.py')
+    out_fd, out_path = tempfile.mkstemp(suffix='.json', prefix='ocr_result_')
+    os.close(out_fd)
+
+    env = dict(os.environ)
+    env['PYTHONIOENCODING'] = 'utf-8'
+
+    try:
+        proc = subprocess.run(
+            [sys.executable, manage_py, 'ocr_process', image_path, out_path],
+            capture_output=True, text=True, timeout=timeout, env=env,
+        )
+        if proc.returncode != 0:
+            tail = (proc.stderr or '').strip()[-300:]
+            logger.error('[OCR-isolated] تعطّلت العملية الفرعية rc=%s: %s', proc.returncode, tail)
+            return {'needs_review': True, '_error': f'تعذّرت المعالجة (كود الخروج {proc.returncode})'}
+        with open(out_path, encoding='utf-8') as f:
+            payload = json.load(f)
+        return payload.get('data') or {'needs_review': True, '_error': 'لا توجد بيانات ناتجة'}
+    except subprocess.TimeoutExpired:
+        logger.error('[OCR-isolated] انتهت المهلة بعد %ss', timeout)
+        return {'needs_review': True, '_error': f'انتهت مهلة المعالجة ({timeout} ثانية)'}
+    except Exception as exc:
+        logger.error('[OCR-isolated] خطأ غير متوقّع: %s', exc, exc_info=True)
+        return {'needs_review': True, '_error': str(exc)}
+    finally:
+        try:
+            os.remove(out_path)
+        except OSError:
+            pass
 
 
 def process_extraction_task(image_path: str, attachment_id: Optional[int] = None) -> Dict[str, Any]:

@@ -6,8 +6,8 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/book_unified.css' %}">
 <link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}">
-<link rel="stylesheet" href="{% static 'css/book_unified_table.css' %}">
-<link rel="stylesheet" href="{% static 'css/book_unified_mobile.css' %}">
+<link rel="stylesheet" href="{% static 'css/book_unified_table.css' %}?v=20260701a">
+<link rel="stylesheet" href="{% static 'css/book_unified_mobile.css' %}?v=20260629-preview">
 {% endblock %}
 
 {# الـ sidebar مُلغى لهذه الصفحة #}
@@ -98,18 +98,6 @@
 </div>
 
 {# المودالات #}
-<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="previewModalLabel">معاينة المستند</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-      </div>
-      <div class="modal-body" id="previewModalBody"></div>
-    </div>
-  </div>
-</div>
-
 <div class="modal fade" id="bulkUpdateModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -140,13 +128,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/book_unified_ajax_manager.js' %}"></script>
-<script src="{% static 'js/book_unified_actions.js' %}"></script>
-<script src="{% static 'js/book_unified_api.js' %}"></script>
-<script src="{% static 'pdf_viewer.js' %}"></script>
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    window.bookAjaxManager = new BookUnifiedAjaxManager();
-  });
-</script>
+<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20260701a"></script>
+<script src="{% static 'js/book_unified_actions.js' %}?v=20260629-b2"></script>
+<script src="{% static 'js/book_unified_api.js' %}?v=20260629-b2"></script>
+{# التهيئة تتم ذاتياً داخل book_unified_ajax_manager.js على DOMContentLoaded —
+   لا تُكرّرها هنا وإلا عمل مديران معاً فيُطلق كل إجراء طلبَي AJAX مزدوجين. #}
 {% endblock %}

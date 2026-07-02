@@ -21,7 +21,7 @@ from unittest import mock
 from .models import (
     Book, Attachment, Entity, OCRResult, DataExtractionResult,
     ExtractionFeedback, ExtractionStatistics, ExtractionCache,
-    BookNumberReservation,
+    BookNumberReservation, LetterheadMemory,
 )
 from .extraction.pipeline import AIExtractionService
 from .extraction.helpers import ExtractionWorkflow, ConfidenceAnalyzer, QuickFillAssistant
@@ -123,6 +123,172 @@ class ModelTests(TestCase):
         )
         
         self.assertEqual(feedback.feedback_type, 'incorrect')
+
+
+class ExtractionCaptureTests(TestCase):
+    """حلقة التقاط التدريب: persist_extraction_capture (الأساس لتدريب النماذج)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='cap', password='p')
+        self.book = Book.objects.create(
+            our_number='2025-1-0009', title='العنوان النهائي',
+            date=timezone.now().date(), created_by=self.user,
+        )
+        file = SimpleUploadedFile(name='c.jpg', content=b'x', content_type='image/jpeg')
+        self.attachment = Attachment.objects.create(book=self.book, file=file)
+
+    def test_capture_persists_ocr_extraction_and_clean_feedback(self):
+        from core.extraction.capture import persist_extraction_capture
+        suggested = {
+            'raw_text': 'نصّ ممسوح من المستند',
+            'ocr_engine': 'tesseract',
+            'book_number': '99',                # صيغة مختلفة عن our_number → لا feedback
+            'title': 'عنوان مُقترَح خاطئ',        # يختلف عن النهائي → feedback
+            'secret_level': 'normal',           # مطابق → لا feedback
+            'book_kind': 'incoming',
+            'overall_confidence': 0.8,
+        }
+        final = {'our_number': '2025-1-0009', 'title': 'العنوان النهائي',
+                 'secret_level': 'normal', 'kind': 'incoming_internal'}
+
+        extraction = persist_extraction_capture(
+            book=self.book, attachment=self.attachment,
+            suggested=suggested, final=final, user=self.user)
+
+        self.assertIsNotNone(extraction)
+        ocr = OCRResult.objects.get(attachment=self.attachment)
+        self.assertEqual(ocr.raw_text, 'نصّ ممسوح من المستند')
+        self.assertEqual(ocr.processed_by, 'tesseract')
+        self.assertEqual(extraction.book_id, self.book.id)
+        # تصحيح نظيف واحد فقط: title (secret_level مطابق، والرقم/النوع مستبعدان عمداً)
+        fb = {f.field_name for f in ExtractionFeedback.objects.filter(extraction=extraction)}
+        self.assertEqual(fb, {'title'})
+
+    def test_capture_without_text_returns_none(self):
+        from core.extraction.capture import persist_extraction_capture
+        out = persist_extraction_capture(
+            book=self.book, attachment=self.attachment,
+            suggested={'book_number': '1'}, final={}, user=self.user)
+        self.assertIsNone(out)
+        self.assertFalse(OCRResult.objects.filter(attachment=self.attachment).exists())
+
+    def test_capture_never_raises(self):
+        from core.extraction.capture import persist_extraction_capture
+        # attachment=None → يعيد None بهدوء بلا استثناء (الالتقاط لا يُفشل الحفظ)
+        self.assertIsNone(persist_extraction_capture(
+            book=self.book, attachment=None,
+            suggested={'raw_text': 'x'}, final={}, user=self.user))
+
+    def test_capture_populates_letterhead_memory(self):
+        """حفظ كتاب بجهة مؤكَّدة يُنشئ ذاكرة ترويسة (تعلّمٌ تراكمي لاقتراح الجهة)."""
+        from core.extraction.capture import persist_extraction_capture
+        ent = Entity.objects.create(name='قسم المتابعة', code='ش13',
+                                    etype='issuer', is_active=True)
+        self.book.issuing_entities.add(ent)
+        suggested = {'raw_text': 'جمهورية العراق\nشركة نفط الوسط\nالعدد\nم/ طلب',
+                     'ocr_engine': 'tesseract', 'overall_confidence': 0.7}
+        persist_extraction_capture(book=self.book, attachment=self.attachment,
+                                   suggested=suggested, final={'title': 'x'}, user=self.user)
+        mem = LetterheadMemory.objects.filter(book=self.book)
+        self.assertEqual(mem.count(), 1)
+        self.assertEqual(mem.first().issuing_entity_id, ent.id)
+        self.assertIn('نفط الوسط', mem.first().letterhead)
+
+
+class EntityMatcherTfidfTests(TestCase):
+    """رابط الجهات TF-IDF: يرتّب الجهة الصحيحة أولاً + تطبيع عربي + فلترة النوع."""
+
+    def setUp(self):
+        self.e1 = Entity.objects.create(name='وزارة الكهرباء', code='ELEC', etype='issuer', is_active=True)
+        self.e2 = Entity.objects.create(name='وزارة الصحة', code='HLTH', etype='issuer', is_active=True)
+        self.e3 = Entity.objects.create(name='شركة نفط الوسط', code='MDOC', etype='receiver', is_active=True)
+
+    def test_ranks_correct_entity_first(self):
+        from core.extraction.matchers.entity import EntityMatcher
+        matches = EntityMatcher().match_entity('وزارة الكهرباء')
+        self.assertTrue(matches)
+        self.assertEqual(matches[0]['entity_id'], self.e1.id)
+        self.assertEqual(matches[0]['match_type'], 'tfidf')
+
+    def test_arabic_normalization_tolerant(self):
+        from core.extraction.matchers.entity import EntityMatcher
+        # تاء مربوطة → هاء (اختلاف إملائي) يجب أن يطابق رغمه
+        matches = EntityMatcher().match_entity('وزاره الكهرباء')
+        self.assertTrue(matches)
+        self.assertEqual(matches[0]['entity_id'], self.e1.id)
+
+    def test_type_filter_excludes_wrong_type(self):
+        from core.extraction.matchers.entity import EntityMatcher
+        m = EntityMatcher()
+        rec = m.match_entity('شركة نفط الوسط', entity_type='receiver')
+        self.assertTrue(rec and rec[0]['entity_id'] == self.e3.id)
+        iss = m.match_entity('شركة نفط الوسط', entity_type='issuer')
+        self.assertFalse(any(x['entity_id'] == self.e3.id for x in iss))
+
+    def test_letterhead_suggests_issuer_from_top_lines(self):
+        """اسم الجهة في ترويسة المستند (لا في «من X») يجب أن يظهر ضمن أفضل-3."""
+        from core.extraction.matchers.entity import EntityMatcher
+        text = (
+            'جمهورية العراق\n'
+            'وزارة الكهرباء\n'          # الجهة المُرسِلة في الترويسة
+            'العدد: 12345\n'
+            'التاريخ: 2026/01/15\n'
+            'إلى / وزارة الصحة المحترمة\n'
+            'م/ طلب تزويد بالطاقة\n'
+            'نرجو تزويدنا بالمعلومات المطلوبة وتفضلوا بقبول الاحترام\n'
+        )
+        matches = EntityMatcher().match_from_letterhead(text, entity_type='issuer', top_k=3)
+        self.assertTrue(matches, 'يجب أن يُرجِع اقتراحات من الترويسة')
+        self.assertIn(self.e1.id, [m['entity_id'] for m in matches])
+        self.assertEqual(matches[0]['match_type'], 'letterhead')
+
+    def test_letterhead_empty_text_is_safe(self):
+        from core.extraction.matchers.entity import EntityMatcher
+        self.assertEqual(EntityMatcher().match_from_letterhead('', entity_type='issuer'), [])
+        self.assertEqual(EntityMatcher().match_from_letterhead('   ', entity_type='issuer'), [])
+
+
+class LetterheadMemoryMatchTests(TestCase):
+    """ذاكرة الترويسة: تكشف الوحدة الداخلية غير المطبوعة بتشابه ترويسة مستندٍ سابق."""
+
+    def setUp(self):
+        # وحدتان داخليّتان لا تُطبعان على ورق المُرسِلين الخارجيّين المختلفين
+        self.oil_dept = Entity.objects.create(name='قسم المتابعة', code='ش13',
+                                              etype='issuer', is_active=True)
+        self.edu_dept = Entity.objects.create(name='شعبة المناهج', code='ت5',
+                                              etype='issuer', is_active=True)
+        LetterheadMemory.objects.create(
+            letterhead='جمهورية العراق شركة نفط الوسط المحدودة حقل بدرة العدد التاريخ',
+            issuing_entity=self.oil_dept)
+        LetterheadMemory.objects.create(
+            letterhead='وزارة التربية المديرية العامة للمناهج والكتب المدرسية العدد',
+            issuing_entity=self.edu_dept)
+
+    def test_similar_letterhead_recovers_internal_unit(self):
+        from core.extraction.matchers.entity import EntityMatcher
+        # مستند جديد من نفس المُرسِل — الوحدة غير مذكورة نصّاً لكن الذاكرة تكشفها
+        text = ('جمهورية العراق\nشركة نفط الوسط المحدودة\nحقل بدرة\nالعدد: 512\n'
+                'التاريخ: 2026\nم/ طلب معلومات\nنرجو تزويدنا بالبيانات')
+        m = EntityMatcher().match_from_memory(text, entity_type='issuer', top_k=3)
+        self.assertTrue(m, 'يجب أن تُرجِع الذاكرة اقتراحاً لترويسة مشابهة')
+        self.assertEqual(m[0]['entity_id'], self.oil_dept.id)
+        self.assertEqual(m[0]['match_type'], 'memory')
+
+    def test_ranking_discriminates_between_senders(self):
+        """ترويسة تربية تُرتّب شعبة المناهج أولاً لا قسم المتابعة (تمييز صحيح)."""
+        from core.extraction.matchers.entity import EntityMatcher
+        text = ('وزارة التربية\nالمديرية العامة للمناهج والكتب المدرسية\n'
+                'العدد: 33\nبخصوص توزيع المناهج')
+        m = EntityMatcher().match_from_memory(text, entity_type='issuer', top_k=3)
+        self.assertTrue(m)
+        self.assertEqual(m[0]['entity_id'], self.edu_dept.id)
+
+    def test_empty_or_no_memory_is_safe(self):
+        from core.extraction.matchers.entity import EntityMatcher
+        self.assertEqual(EntityMatcher().match_from_memory('', entity_type='issuer'), [])
+        LetterheadMemory.objects.all().delete()
+        self.assertEqual(
+            EntityMatcher().match_from_memory('شركة نفط الوسط', entity_type='issuer'), [])
 
 
 class ExtractionWorkflowTests(TestCase):
@@ -397,14 +563,14 @@ class AIProcessingServiceTests(TestCase):
 
     @mock.patch('core.extraction.pipeline.build_online_provider_from_settings')
     @mock.patch('core.extraction.pipeline.AIIntegrationSettings.get_active_settings')
-    @mock.patch('core.extraction.pipeline.EasyOCROfflineProvider')
+    @mock.patch('core.extraction.pipeline.build_offline_provider_from_settings')
     @mock.patch('core.extraction.pipeline.OCRService')
     @mock.patch('core.extraction.pipeline.ImageProcessor')
     def test_invalid_image_does_not_bootstrap_ocr_stack(
         self,
         image_processor_cls,
         ocr_cls,
-        offline_provider_cls,
+        offline_factory,
         settings_getter,
         build_online_provider,
     ):
@@ -423,9 +589,125 @@ class AIProcessingServiceTests(TestCase):
         self.assertEqual(result.status, 'failed')
         self.assertEqual(result.error_message, 'bad image')
         ocr_cls.assert_not_called()
-        offline_provider_cls.assert_not_called()
+        offline_factory.assert_not_called()
         settings_getter.assert_not_called()
         build_online_provider.assert_not_called()
+
+    @mock.patch('core.extraction.pipeline.build_online_provider_from_settings')
+    @mock.patch('core.extraction.pipeline.AIIntegrationSettings.get_active_settings')
+    @mock.patch('core.extraction.pipeline.ArabicOCROptimizer')
+    @mock.patch('core.extraction.pipeline.build_offline_provider_from_settings')
+    @mock.patch('core.extraction.pipeline.OCRService')
+    @mock.patch('core.extraction.pipeline.ImageProcessor')
+    def test_pattern_and_entity_consumption_succeeds(
+        self,
+        image_processor_cls,
+        ocr_cls,
+        offline_factory,
+        arabic_cls,
+        settings_getter,
+        build_online_provider,
+    ):
+        """B1/B2: استهلاك الأنماط والجهات لا يفشل، ويملأ التاريخ والجهة المُصدِرة.
+
+        يحرس ضد خطأين كانا يُبتلَعان في except العام فتصير الحالة 'failed':
+        B1 = عدم تطابق عقد بيانات الأنماط (مفتاح 'date' + قيم مفردة لا tuples).
+        B2 = استهلاك extract_entities (List[Tuple]) كأنه dict عبر .get().
+        """
+        entity = Entity.objects.create(
+            name='جهة تجريبية', code='T1', etype='both', is_active=True,
+        )
+
+        ocr_cls.return_value.clean_text.side_effect = lambda t: t
+        offline_factory.return_value.extract.return_value = {
+            'raw_text': 'كتاب وارد سري من جهة تجريبية. رقم الكتاب: 99 بتاريخ 15-01-2024',
+            'avg_confidence': 0.9,
+        }
+        settings_getter.return_value = {'AI_PROVIDER': 'offline'}
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
+            tmp.write(b'\xff\xd8\xff\xe0fake')
+            temp_path = tmp.name
+        self.addCleanup(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+
+        service = AIExtractionService()
+        # نستدعي الدالة الداخلية مباشرة (لا process_image) لتفادي تشغيلها في thread
+        # منفصل: في TestCase تعمل المعاملة بلا commit، فاتصال الـ thread الآخر لا يرى
+        # الجهة المُنشأة. المنطق المُختبَر واحد — الغلاف الخارجي مجرّد مهلة زمنية.
+        result = service._process_image_internal(temp_path)
+
+        self.assertNotEqual(result.status, 'failed', msg=result.error_message)
+        # B1 + قاعدة المالك: التاريخ استُخرج فعلاً، ويُسنَد لتاريخ الجهة المُرسِلة
+        # (أيُّ تاريخ في المستند = تاريخ المُرسِل)؛ وتاريخنا = تاريخ الإدخال لا يُستخرَج.
+        self.assertTrue(result.sender_date and result.sender_date.startswith('2024-01-15'))
+        self.assertIsNone(result.book_date)
+        self.assertEqual(result.book_number, '99')
+        # B2: مطابقة الجهة المُصدِرة نجحت دون AttributeError
+        self.assertEqual(result.issuing_entity_id, entity.id)
+
+
+class TesseractOCRProviderTests(TestCase):
+    """اختبار محرّك Tesseract الجديد دون تشغيل tesseract فعلياً (يُحاكى pytesseract)."""
+
+    def test_extract_reconstructs_lines_and_confidence(self):
+        from core.extraction.ocr.providers import TesseractOCRProvider
+        provider = TesseractOCRProvider()  # آمن: لا يشغّل tesseract، فقط يضبط المسارات
+
+        fake_data = {
+            'text':      ['وزارة', 'الكهرباء', '', 'أمر', 'إداري'],
+            'conf':      ['96', '95', '-1', '90', '88'],  # ‑1 = لا نص، يُستثنى
+            'block_num': [1, 1, 1, 2, 2],
+            'par_num':   [1, 1, 1, 1, 1],
+            'line_num':  [1, 1, 1, 1, 1],
+        }
+        with mock.patch.object(provider._pytesseract, 'image_to_data', return_value=fake_data), \
+                mock.patch.object(provider, '_to_pil', return_value=object()):
+            res = provider.extract('/fake/path.png')
+
+        # إعادة بناء سطرين منفصلين (block مختلف) بترتيب الكلمات
+        self.assertIn('وزارة الكهرباء', res['raw_text'])
+        self.assertIn('أمر إداري', res['raw_text'])
+        self.assertEqual(res['num_lines'], 2)
+        # متوسّط الثقة = mean(96,95,90,88)/100 — مع استثناء ‑1 والنص الفارغ
+        self.assertAlmostEqual(res['avg_confidence'], (96 + 95 + 90 + 88) / 4 / 100.0, places=3)
+
+    def test_extract_escalates_to_binary_on_low_confidence(self):
+        """ثقة رمادية منخفضة → يُجرَّب التحويل الثنائي ويُحتفَظ بالأعلى ثقةً."""
+        from core.extraction.ocr.providers import TesseractOCRProvider
+        from PIL import Image
+        provider = TesseractOCRProvider()
+        provider.adaptive_threshold = 0.75
+
+        low = {'text': ['نص', 'ضعيف'], 'conf': ['40', '50'],
+               'block_num': [1, 1], 'par_num': [1, 1], 'line_num': [1, 1]}
+        high = {'text': ['نص', 'واضح'], 'conf': ['92', '94'],
+                'block_num': [1, 1], 'par_num': [1, 1], 'line_num': [1, 1]}
+        real_img = Image.new('L', (20, 20), 255)
+        with mock.patch.object(provider, '_to_pil', return_value=real_img), \
+                mock.patch.object(provider._pytesseract, 'image_to_data',
+                                  side_effect=[low, high]) as m:
+            res = provider.extract('/fake.png')
+        self.assertEqual(m.call_count, 2)              # رمادي ثم ثنائي
+        self.assertIn('نص واضح', res['raw_text'])      # احتُفظ بنتيجة الثنائي الأعلى
+        self.assertAlmostEqual(res['avg_confidence'], (92 + 94) / 2 / 100.0, places=3)
+
+    def test_extract_keeps_grayscale_when_binary_worse(self):
+        """إن كان الثنائي أسوأ ثقةً → يُرفَض ويبقى الرمادي (حماية من الذيل الكارثي)."""
+        from core.extraction.ocr.providers import TesseractOCRProvider
+        from PIL import Image
+        provider = TesseractOCRProvider()
+        provider.adaptive_threshold = 0.75
+
+        low = {'text': ['أصلي'], 'conf': ['60'],
+               'block_num': [1], 'par_num': [1], 'line_num': [1]}
+        worse = {'text': ['سيئ'], 'conf': ['20'],
+                 'block_num': [1], 'par_num': [1], 'line_num': [1]}
+        real_img = Image.new('L', (20, 20), 255)
+        with mock.patch.object(provider, '_to_pil', return_value=real_img), \
+                mock.patch.object(provider._pytesseract, 'image_to_data',
+                                  side_effect=[low, worse]):
+            res = provider.extract('/fake.png')
+        self.assertIn('أصلي', res['raw_text'])         # رُفض الثنائي الأسوأ
 
 
 class APITests(TestCase):
@@ -591,6 +873,56 @@ class APITests(TestCase):
         self.assertEqual(saved_book.document_type, 'مذكرة داخلية')
         self.assertEqual(saved_book.first_issuing_entity, self.entity)
         self.assertEqual(saved_book.first_receiving_entity, self.entity)
+
+    def test_save_book_api_captures_training_data_from_scan_token(self):
+        """حلقة التدريب: حفظ كتاب ممسوح يُثبّت OCRResult+DataExtractionResult+ExtractionFeedback."""
+        import io
+        from django.core.cache import cache
+        from PIL import Image
+
+        token = 'tok-capture-1'
+        cache.set(f'scan_token:{token}', {
+            'raw_text': 'نصّ ممسوح كامل من المستند الإداري',
+            'ocr_engine': 'tesseract',
+            'title': 'عنوان مُقترَح من OCR',   # يختلف عن النهائي → feedback
+            'secret_level': 'normal',          # مطابق → لا feedback
+            'book_number': '88',
+            'overall_confidence': 0.7,
+        }, timeout=300)
+
+        buf = io.BytesIO()
+        Image.new('RGB', (12, 12), 'white').save(buf, format='JPEG')
+        scan_file = SimpleUploadedFile('scan.jpg', buf.getvalue(), content_type='image/jpeg')
+
+        response = self.client.post(reverse('save-book-api'), {
+            'book_number': '2024-CAP-001',
+            'date': timezone.now().date().isoformat(),
+            'title': 'العنوان النهائي المؤكَّد',
+            'kind': 'incoming_internal',
+            'issuing_entity_id': str(self.entity.id),
+            'scan_token': token,
+            'file': scan_file,
+        })
+
+        self.assertEqual(response.status_code, 201, response.content)
+        book = Book.objects.get(pk=response.json()['book_id'])
+        extraction = DataExtractionResult.objects.get(book=book)
+        self.assertEqual(extraction.ocr_result.raw_text, 'نصّ ممسوح كامل من المستند الإداري')
+        self.assertTrue(ExtractionFeedback.objects.filter(
+            extraction=extraction, field_name='title').exists())
+
+    def test_save_book_api_without_scan_token_skips_capture(self):
+        """بلا scan_token: لا التقاط — والحفظ العادي غير متأثّر."""
+        before = OCRResult.objects.count()
+        response = self.client.post(reverse('save-book-api'), {
+            'book_number': '2024-CAP-002',
+            'date': timezone.now().date().isoformat(),
+            'title': 'بلا مسح',
+            'kind': 'incoming_internal',
+            'issuing_entity_id': str(self.entity.id),
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(OCRResult.objects.count(), before)
 
     def test_save_book_api_accepts_custom_document_type(self):
         """اختبار حفظ نوع مستند مخصص غير موجود ضمن القائمة القياسية."""

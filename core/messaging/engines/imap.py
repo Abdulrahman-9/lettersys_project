@@ -60,9 +60,9 @@ class IMAPEngine:
             return None
         try:
             if cfg.imap_use_ssl:
-                conn = imaplib.IMAP4_SSL(cfg.imap_host, cfg.imap_port)
+                conn = imaplib.IMAP4_SSL(cfg.imap_host, cfg.imap_port, timeout=20)
             else:
-                conn = imaplib.IMAP4(cfg.imap_host, cfg.imap_port)
+                conn = imaplib.IMAP4(cfg.imap_host, cfg.imap_port, timeout=20)
             conn.login(cfg.imap_user, cfg.imap_password)
             return conn
         except imaplib.IMAP4.error as e:

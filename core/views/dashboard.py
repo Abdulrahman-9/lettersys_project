@@ -15,6 +15,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -234,37 +235,46 @@ def reports(request):
         qs = active_qs.filter(due_date__lte=today)
     # else: bucket == "all" — لا فلتر إضافي
 
-    filtered = list(qs.order_by("due_date", "-date", "-id"))
-    time_stats = {"overdue": 0, "due_today": 0, "pending": 0, "archived": 0}
-    stats = {"total": 0, "incoming": 0, "outgoing": 0, "pending": 0, "due_today": 0, "overdue": 0, "archived": 0}
-    incoming = []
-    outgoing = []
-    for b in filtered:
-        state = b.followup_state
+    qs = qs.order_by("due_date", "-date", "-id")
+
+    # ── إحصاءات عبر تجميع DB (بلا تحميل كل الصفوف في الذاكرة) ──
+    active = Q(is_archived=False, due_date__isnull=False)
+    agg = qs.aggregate(
+        total=Count("id"),
+        incoming=Count("id", filter=Q(kind__startswith="incoming")),
+        outgoing=Count("id", filter=Q(kind__startswith="outgoing")),
+        overdue=Count("id", filter=active & Q(due_date__lt=today)),
+        due_today=Count("id", filter=active & Q(due_date=today)),
+        pending=Count("id", filter=active & Q(due_date__gt=today)),
+        archived=Count("id", filter=Q(is_archived=True) | Q(due_date__isnull=True)),
+    )
+    stats = {k: (v or 0) for k, v in agg.items()}
+    time_stats = {key: stats.get(key, 0) for key in ("overdue", "due_today", "pending", "archived")}
+
+    # ── ترقيم العرض: يمنع تحميل آلاف الكتب دفعةً (مهمّ على ذاكرة محدودة) ──
+    page_obj = Paginator(qs, 200).get_page(request.GET.get("page"))
+    books = list(page_obj.object_list)
+    for b in books:
         if b.due_date:
             diff = (b.due_date - today).days
             b.due_phrase = "مستحق اليوم" if diff == 0 else (f"مستحق بعد {diff} يوم" if diff > 0 else f"متأخر منذ {abs(diff)} يوم")
         else:
             b.due_phrase = "-"
-        b.followup_state_value = state
-        time_stats[state] = time_stats.get(state, 0) + 1
-        stats["total"] += 1
-        stats[state] = stats.get(state, 0) + 1
-        if b.is_incoming:
-            stats["incoming"] += 1
-            incoming.append(b)
-        elif b.is_outgoing:
-            stats["outgoing"] += 1
-            outgoing.append(b)
+
+    # الحفاظ على فلاتر الاستعلام عند تنقّل الصفحات
+    page_params = request.GET.copy()
+    page_params.pop("page", None)
+
     return render(
         request,
         "core/reports.html",
         {
             "stats": stats,
             "time_stats": time_stats,
-            "books": filtered,
-            "incoming": incoming,
-            "outgoing": outgoing,
+            "books": books,
+            "page_obj": page_obj,
+            "total": stats["total"],
+            "querystring": page_params.urlencode(),
             "entities": Entity.objects.filter(is_active=True).order_by("name"),
             "selected_kind": kind,
             "selected_kind_label": selected_kind_label,
@@ -277,9 +287,10 @@ def reports(request):
 
 
 @login_required
+@require_POST
 def restore_book(request, pk):
     """
-    استعادة كتاب محذوف من سلة المهملات
+    استعادة كتاب محذوف من سلة المهملات (POST فقط — يُعدّل الحالة فلا يُسمح بـ GET)
     
     Args:
         request: HTTP request
@@ -338,9 +349,10 @@ def purge_book(request, pk):
 
 
 @login_required
+@require_POST
 def restore_attachment(request, attachment_id):
     """
-    استعادة مرفق محذوف
+    استعادة مرفق محذوف (POST فقط — يُعدّل الحالة فلا يُسمح بـ GET)
     
     Args:
         request: HTTP request

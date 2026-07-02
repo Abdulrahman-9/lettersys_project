@@ -6,414 +6,122 @@
 {% block extra_css %}
 <style>
 .scan-settings-page { max-width: 760px; margin: 2rem auto; padding: 0 1rem; direction: rtl; }
-.settings-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.75rem; margin-bottom: 1.5rem; }
-.settings-card-title { font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 1.25rem; display: flex; align-items: center; gap: .5rem; }
-.settings-card-title i { color: #2563eb; }
-.form-label-sm { font-size: .85rem; font-weight: 600; color: #374151; margin-bottom: .3rem; }
-.form-hint { font-size: .75rem; color: #6b7280; margin-top: .25rem; }
-.status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.status-dot.running  { background: #16a34a; box-shadow: 0 0 0 3px #dcfce7; }
-.status-dot.stopped  { background: #9ca3af; }
-.status-dot.error    { background: #dc2626; box-shadow: 0 0 0 3px #fee2e2; }
-.status-row { display: flex; align-items: center; gap: .6rem; font-size: .85rem; color: #374151; }
-.save-btn { background: #2563eb; color: #fff; border: none; border-radius: 8px; padding: .6rem 1.75rem; font-weight: 600; cursor: pointer; transition: background .15s; }
-.save-btn:hover { background: #1d4ed8; }
-.setup-badge { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; background: #fef3c7; color: #92400e; border-radius: 20px; padding: .2rem .75rem; margin-bottom: 1rem; }
-.auto-badge  { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; background: #dcfce7; color: #166534; border-radius: 20px; padding: .2rem .75rem; margin-bottom: 1rem; }
-.protocol-install-btn { border: 1px solid #2563eb; color: #2563eb; background: transparent; border-radius: 8px; padding: .45rem 1.25rem; font-size: .85rem; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: .35rem; }
-.protocol-install-btn:hover { background: #eff6ff; color: #1d4ed8; }
-.sysinfo-table { width: 100%; font-size: .78rem; border-collapse: collapse; }
-.sysinfo-table td { padding: .35rem .5rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-.sysinfo-table td:first-child { color: #6b7280; white-space: nowrap; width: 35%; }
-.sysinfo-table td:last-child { color: #1e293b; font-family: monospace; word-break: break-all; }
-.copy-btn { background: none; border: 1px solid #d1d5db; border-radius: 4px; padding: .15rem .4rem; font-size: .7rem; color: #6b7280; cursor: pointer; margin-right: .35rem; }
-.copy-btn:hover { background: #f8fafc; color: #2563eb; }
-.suggest-btn { background: none; border: 1px dashed #2563eb; border-radius: 5px; padding: .2rem .6rem; font-size: .72rem; color: #2563eb; cursor: pointer; margin-top: .35rem; }
-.suggest-btn:hover { background: #eff6ff; }
-.protocol-status-ok  { color: #16a34a; font-weight: 600; }
-.protocol-status-no  { color: #dc2626; }
+.settings-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1.5rem; margin-bottom:1.25rem; }
+.settings-card-title { font-size:1rem; font-weight:700; color:#1e293b; margin-bottom:1rem; display:flex; align-items:center; gap:.5rem; }
+.settings-card-title i { color:#2563eb; }
+.health-row { display:flex; align-items:center; gap:.6rem; font-size:.9rem; color:#374151; padding:.4rem 0; }
+.health-dot { width:11px; height:11px; border-radius:50%; background:#9ca3af; flex:0 0 auto; }
+.health-dot.ok { background:#16a34a; box-shadow:0 0 0 3px #dcfce7; }
+.health-dot.bad { background:#dc2626; box-shadow:0 0 0 3px #fee2e2; }
+.device-list { list-style:none; padding:0; margin:.5rem 0 0; }
+.device-list li { padding:.5rem .75rem; border:1px solid #e5e7eb; border-radius:8px; margin-bottom:.4rem; font-size:.85rem; display:flex; align-items:center; gap:.5rem; }
+.muted { color:#6b7280; font-size:.82rem; }
+.btn-rescan { border:1px solid #2563eb; color:#2563eb; background:transparent; border-radius:8px; padding:.4rem 1rem; font-size:.85rem; font-weight:600; cursor:pointer; }
+.btn-rescan:hover { background:#eff6ff; }
+.code-inline { font-family:monospace; background:#f1f5f9; padding:.15rem .4rem; border-radius:4px; font-size:.82rem; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="scan-settings-page">
 
-  <div class="d-flex align-items-center gap-3 mb-4">
-    <div>
-      <h4 class="mb-0 fw-bold" style="color:#1e293b"><i class="bi bi-printer"></i> إعدادات الماسح الضوئي</h4>
-      <p class="text-muted mb-0" style="font-size:.85rem">تكوين CaptureOnTouch والمجلد الذي يراقبه النظام</p>
+  <div class="mb-4">
+    <h4 class="mb-0 fw-bold" style="color:#1e293b"><i class="bi bi-upc-scan"></i> إعدادات الماسح الضوئي</h4>
+    <p class="text-muted mb-0" style="font-size:.85rem">المسح يتم عبر <strong>وكيل المسح المحلي + NAPS2</strong> (يدعم TWAIN/WIA/ADF لأي ماسح).</p>
+  </div>
+
+  {# ─── حالة وكيل المسح ─── #}
+  <div class="settings-card">
+    <div class="settings-card-title"><i class="bi bi-hdd-network"></i> حالة وكيل المسح</div>
+    <div class="health-row"><span class="health-dot" id="dotAgent"></span><span id="lblAgent">جارٍ الفحص…</span></div>
+    <div class="health-row"><span class="health-dot" id="dotNaps2"></span><span id="lblNaps2">جارٍ الفحص…</span></div>
+    <div class="mt-3">
+      <button type="button" class="btn-rescan" id="btnRescan"><i class="bi bi-arrow-clockwise"></i> إعادة الفحص</button>
     </div>
   </div>
 
-  {# ─── شارات الحالة ─── #}
-  {% if auto_saved %}
-  <div class="auto-badge mb-3">
-    <i class="bi bi-magic"></i>
-    تم الاكتشاف والحفظ التلقائي
-    {% if cfg.capture_exe_path %} — CaptureOnTouch: {{ cfg.capture_exe_path }}{% endif %}
-    {% if cfg.watch_folder %} — مجلد المراقبة: {{ cfg.watch_folder }}{% endif %}
-  </div>
-  {% elif not cfg.is_configured %}
-  <div class="setup-badge">
-    <i class="bi bi-exclamation-circle"></i>
-    الماسح غير مكوّن — أدخل المسارات أدناه ثم ثبّت بروتوكول المسح
-  </div>
-  {% endif %}
-
-  {# ─── رابط الاستخراج الذكي ─── #}
-  <div class="mb-3 d-flex align-items-center gap-2" style="font-size:.83rem;color:#475569">
-    <i class="bi bi-arrow-left-circle text-primary"></i>
-    <a href="{% url 'extraction-smart-desktop' %}" style="color:#2563eb;font-weight:600;text-decoration:none;">
-      الانتقال لصفحة الاستخراج الذكي
-    </a>
-    <span class="text-muted">— لتحميل الملفات الممسوحة يدوياً أو عبر الـ Scanner</span>
+  {# ─── الماسحات المكتشفة ─── #}
+  <div class="settings-card">
+    <div class="settings-card-title"><i class="bi bi-printer"></i> الماسحات المكتشفة</div>
+    <ul class="device-list" id="deviceList"><li class="muted">جارٍ الفحص…</li></ul>
   </div>
 
-  <form id="scanSettingsForm" method="post">
-    {% csrf_token %}
-
-    {# ─── مسارات CaptureOnTouch ─── #}
-    <div class="settings-card">
-      <div class="settings-card-title">
-        <i class="bi bi-printer"></i> مسارات CaptureOnTouch
-      </div>
-
-      <div class="mb-3">
-        <label class="form-label-sm">مسار برنامج CaptureOnTouch.exe</label>
-        <input type="text" name="capture_exe_path" id="exePathInput" class="form-control form-control-sm"
-               value="{{ cfg.capture_exe_path }}"
-               placeholder="C:\Program Files\Canon\CaptureOnTouch\CaptureOnTouch.exe"
-               dir="ltr">
-        {% if suggested_exe and not cfg.capture_exe_path %}
-        <button type="button" class="suggest-btn" onclick="useSuggestion('exePathInput','{{ suggested_exe|escapejs }}')">
-          <i class="bi bi-magic"></i> استخدام المسار المكتشف: {{ suggested_exe }}
-        </button>
-        {% endif %}
-        <div class="form-hint">يُستخدَم لتشغيل الماسح بضغطة زر من النظام</div>
-      </div>
-
-      <div class="mb-0">
-        <label class="form-label-sm">مجلد المسح الضوئي (Watch Folder)</label>
-        <input type="text" name="watch_folder" id="folderInput" class="form-control form-control-sm"
-               value="{{ cfg.watch_folder }}"
-               placeholder="C:\Users\{{ request.user.username }}\Documents\Scans"
-               dir="ltr">
-        {% if suggested_folder and not cfg.watch_folder %}
-        <button type="button" class="suggest-btn" onclick="useSuggestion('folderInput','{{ suggested_folder|escapejs }}')">
-          <i class="bi bi-folder2-open"></i> استخدام المجلد المقترح: {{ suggested_folder }}
-        </button>
-        {% endif %}
-        <div class="form-hint">
-          المجلد الذي يحفظ فيه CaptureOnTouch الملفات — اضبطه أيضاً في إعدادات CaptureOnTouch كـ "Output Destination"
-        </div>
-      </div>
+  {# ─── تعليمات التشغيل ─── #}
+  <div class="settings-card">
+    <div class="settings-card-title"><i class="bi bi-info-circle"></i> التشغيل</div>
+    <ol class="muted" style="padding-inline-start:1.2rem;line-height:1.9">
+      <li>ثبّت <strong>NAPS2</strong> (مجاني) من <a href="https://www.naps2.com/" target="_blank" rel="noopener">naps2.com</a>.</li>
+      <li>شغّل وكيل المسح: <span class="code-inline">scan_agent\run_agent.bat</span> — أو ضع اختصاره في مجلد بدء التشغيل (<span class="code-inline">shell:startup</span>) ليعمل تلقائياً.</li>
+      <li>ضع الورق في الـADF واضغط «مسح من السكانر» في صفحة الإدخال الذكي.</li>
+    </ol>
+    <div class="mt-2">
+      <a href="{% url 'extraction-smart-desktop' %}" style="color:#2563eb;font-weight:600;text-decoration:none;font-size:.85rem">
+        <i class="bi bi-arrow-left-circle"></i> الانتقال لصفحة الإدخال الذكي
+      </a>
     </div>
+  </div>
 
-    {# ─── سلوك التطبيق ─── #}
-    <div class="settings-card">
-      <div class="settings-card-title">
-        <i class="bi bi-sliders"></i> سلوك التطبيق
-      </div>
-
-      <div class="mb-3">
-        <label class="form-label-sm">عنوان الخادم المحلي</label>
-        <input type="text" name="server_url" class="form-control form-control-sm"
-               value="{{ cfg.server_url }}" dir="ltr">
-        <div class="form-hint">يُستخدَم لفتح صفحة الاستخراج بعد اكتشاف ملف جديد</div>
-      </div>
-
-      <div class="form-check form-switch mb-2">
-        <input class="form-check-input" type="checkbox" name="auto_open_browser" id="autoBrowser"
-               {% if cfg.auto_open_browser %}checked{% endif %}>
-        <label class="form-check-label" for="autoBrowser">
-          فتح المتصفح تلقائياً بعد كل مسح
-        </label>
-      </div>
-
-      <div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" name="window_topmost" id="windowTopmost"
-               {% if cfg.window_topmost %}checked{% endif %}>
-        <label class="form-check-label" for="windowTopmost">
-          إبقاء نافذة CaptureOnTouch عائمة فوق المتصفح أثناء المسح
-        </label>
-      </div>
-    </div>
-
-    {# ─── تثبيت البروتوكول ─── #}
-    <div class="settings-card">
-      <div class="settings-card-title">
-        <i class="bi bi-terminal"></i> تثبيت بروتوكول المسح (مرة واحدة)
-      </div>
-      <p style="font-size:.85rem;color:#4b5563;margin-bottom:1rem">
-        لكي يعمل زر "ابدأ المسح" مباشرةً من المتصفح، يجب تثبيت بروتوكول
-        <code>lettersys-scan://</code> في Windows مرة واحدة فقط.
-      </p>
-
-      <div id="protocolStatusRow" class="mb-3" style="font-size:.85rem">
-        جاري فحص التثبيت...
-      </div>
-
-      <div class="d-flex gap-2 flex-wrap align-items-center">
-        {% if sys_info.register_exists %}
-        <button type="button" class="protocol-install-btn" id="runRegisterBtn" onclick="runRegisterScript()">
-          <i class="bi bi-shield-check"></i> تثبيت البروتوكول
-        </button>
-        {% endif %}
-        <a href="{% url 'scan_download_installer' %}" class="protocol-install-btn">
-          <i class="bi bi-download"></i> تحميل سكريبت التثبيت
-        </a>
-        <button type="button" class="protocol-install-btn" id="checkProtocolBtn" onclick="checkProtocol()">
-          <i class="bi bi-arrow-clockwise"></i> فحص التثبيت
-        </button>
-      </div>
-
-      <div id="protocolCheckResult" class="mt-2" style="font-size:.82rem"></div>
-    </div>
-
-    {# ─── معلومات النظام ─── #}
-    <div class="settings-card">
-      <div class="settings-card-title">
-        <i class="bi bi-info-circle"></i> معلومات النظام
-      </div>
-      <table class="sysinfo-table">
-        <tr>
-          <td>Python المستخدم</td>
-          <td>
-            <button class="copy-btn" onclick="copyText('{{ sys_info.python_exe|escapejs }}')" title="نسخ"><i class="bi bi-clipboard"></i></button>
-            {{ sys_info.python_exe }}
-          </td>
-        </tr>
-        <tr>
-          <td>pythonw.exe</td>
-          <td>
-            <button class="copy-btn" onclick="copyText('{{ sys_info.pythonw_exe|escapejs }}')" title="نسخ"><i class="bi bi-clipboard"></i></button>
-            {{ sys_info.pythonw_exe }}
-            {% if sys_info.pythonw_exe == sys_info.python_exe %}
-            <span class="text-warning" style="font-size:.7rem"> (سيُفتح بنافذة)</span>
-            {% endif %}
-          </td>
-        </tr>
-        <tr>
-          <td>scan_manager.py</td>
-          <td>
-            <button class="copy-btn" onclick="copyText('{{ sys_info.scan_manager_path|escapejs }}')" title="نسخ"><i class="bi bi-clipboard"></i></button>
-            {{ sys_info.scan_manager_path }}
-            {% if sys_info.scan_manager_exists %}
-            <span class="text-success" style="font-size:.7rem"> ✓</span>
-            {% else %}
-            <span class="text-danger" style="font-size:.7rem"> ✗ غير موجود</span>
-            {% endif %}
-          </td>
-        </tr>
-        <tr>
-          <td>register_scan_protocol.py</td>
-          <td>
-            <button class="copy-btn" onclick="copyText('{{ sys_info.register_script|escapejs }}')" title="نسخ"><i class="bi bi-clipboard"></i></button>
-            {{ sys_info.register_script }}
-            {% if sys_info.register_exists %}
-            <span class="text-success" style="font-size:.7rem"> ✓</span>
-            {% else %}
-            <span class="text-danger" style="font-size:.7rem"> ✗ غير موجود</span>
-            {% endif %}
-          </td>
-        </tr>
-        <tr>
-          <td>أمر التسجيل الكامل</td>
-          <td>
-            <button class="copy-btn" onclick="copyText('{{ sys_info.pythonw_exe|escapejs }} {{ sys_info.register_script|escapejs }}')" title="نسخ"><i class="bi bi-clipboard"></i></button>
-            <code style="font-size:.72rem">"{{ sys_info.pythonw_exe }}" "{{ sys_info.register_script }}"</code>
-          </td>
-        </tr>
-        <tr>
-          <td>النظام</td>
-          <td>{{ sys_info.platform }}</td>
-        </tr>
-      </table>
-    </div>
-
-    {# ─── حالة الـ Watcher ─── #}
-    <div class="settings-card">
-      <div class="settings-card-title">
-        <i class="bi bi-activity"></i> حالة مراقب المجلد
-      </div>
-      <div class="status-row" id="watcherStatusRow">
-        <span class="status-dot {% if watcher_status == 'running' %}running{% elif watcher_status == 'error' %}error{% else %}stopped{% endif %}"
-              id="statusDot"></span>
-        <span id="statusLabel">
-          {% if watcher_status == 'running' %}يعمل — يراقب {{ cfg.watch_folder }}
-          {% elif watcher_status == 'error' %}خطأ في المراقب
-          {% else %}متوقف{% endif %}
-        </span>
-      </div>
-      <div id="lastFileRow" class="mt-2" style="font-size:.8rem;color:#6b7280"></div>
-    </div>
-
-    <div class="d-flex justify-content-end gap-2">
-      <a href="{% url 'book_unified' %}" class="btn btn-sm btn-outline-secondary">رجوع</a>
-      <button type="submit" class="save-btn" id="saveBtn">
-        <i class="bi bi-check2"></i> حفظ الإعدادات
-      </button>
-    </div>
-  </form>
-
+  <div class="d-flex justify-content-end">
+    <a href="{% url 'book_unified' %}" class="btn btn-sm btn-outline-secondary">رجوع</a>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function () {
-
-  // ─── ملء حقل من مقترح ──────────────────────────────────────────────────────
-  window.useSuggestion = function(inputId, value) {
-    document.getElementById(inputId).value = value;
-    const btn = document.querySelector(`[onclick*="${inputId}"]`);
-    if (btn) btn.remove();
+  const set = (dotId, lblId, ok, text) => {
+    const dot = document.getElementById(dotId), lbl = document.getElementById(lblId);
+    if (dot) dot.className = 'health-dot ' + (ok ? 'ok' : 'bad');
+    if (lbl) lbl.textContent = text;
   };
 
-  // ─── نسخ نص ───────────────────────────────────────────────────────────────
-  window.copyText = function(text) {
-    navigator.clipboard.writeText(text).then(() => {
-      showToast('تم النسخ');
-    }).catch(() => {
-      const el = document.createElement('textarea');
-      el.value = text;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
-      showToast('تم النسخ');
-    });
-  };
+  async function check() {
+    const list = document.getElementById('deviceList');
+    set('dotAgent', 'lblAgent', false, 'جارٍ الفحص…');
+    set('dotNaps2', 'lblNaps2', false, 'جارٍ الفحص…');
+    list.innerHTML = '<li class="muted">جارٍ الفحص…</li>';
 
-  function showToast(msg) {
-    const t = document.createElement('div');
-    t.textContent = msg;
-    Object.assign(t.style, {
-      position:'fixed', bottom:'1.5rem', left:'50%', transform:'translateX(-50%)',
-      background:'#1e293b', color:'#fff', padding:'.4rem 1rem', borderRadius:'8px',
-      fontSize:'.82rem', zIndex:'9999', pointerEvents:'none',
-    });
-    document.body.appendChild(t);
-    setTimeout(() => t.remove(), 1800);
+    let td;
+    try {
+      td = await (await fetch('/books/api/scan/agent-token/', { credentials: 'same-origin' })).json();
+    } catch (e) { td = { available: false }; }
+
+    if (!td.available) {
+      set('dotAgent', 'lblAgent', false, 'وكيل المسح غير مشغّل — شغّل run_agent.bat');
+      set('dotNaps2', 'lblNaps2', false, 'NAPS2: غير معروف (الوكيل متوقف)');
+      list.innerHTML = '<li class="muted">شغّل وكيل المسح أولاً</li>';
+      return;
+    }
+
+    let hd;
+    try {
+      hd = await (await fetch(td.agent_url + '/agent/health')).json();
+    } catch (e) {
+      set('dotAgent', 'lblAgent', false, 'تعذّر الاتصال بالوكيل');
+      set('dotNaps2', 'lblNaps2', false, 'NAPS2: غير معروف');
+      list.innerHTML = '<li class="muted">تعذّر الاتصال</li>';
+      return;
+    }
+    set('dotAgent', 'lblAgent', true, 'وكيل المسح يعمل (إصدار ' + (hd.version || '?') + ')');
+    set('dotNaps2', 'lblNaps2', !!hd.naps2_available,
+        hd.naps2_available ? ('NAPS2 مثبّت: ' + hd.naps2_path) : 'NAPS2 غير مثبّت — ثبّته من naps2.com');
+
+    if (!hd.naps2_available) { list.innerHTML = '<li class="muted">ثبّت NAPS2 لعرض الماسحات</li>'; return; }
+
+    try {
+      const dd = await (await fetch(td.agent_url + '/agent/devices', { headers: { 'X-LetterSys-Token': td.token } })).json();
+      const devs = dd.devices || [];
+      list.innerHTML = devs.length
+        ? devs.map(d => `<li><i class="bi bi-printer-fill text-primary"></i> ${d.name} <span class="muted">(${d.driver})</span></li>`).join('')
+        : '<li class="muted">لا يوجد ماسح متصل — تأكّد من توصيله وتشغيله</li>';
+    } catch (e) {
+      list.innerHTML = '<li class="muted">تعذّر سرد الماسحات</li>';
+    }
   }
 
-  // ─── حفظ AJAX ───────────────────────────────────────────────────────────────
-  const form    = document.getElementById('scanSettingsForm');
-  const saveBtn = document.getElementById('saveBtn');
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    saveBtn.disabled = true;
-    saveBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحفظ...';
-    try {
-      const resp = await fetch(window.location.href, {
-        method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        body: new FormData(form),
-      });
-      const data = await resp.json();
-      if (data.ok) {
-        saveBtn.innerHTML = '<i class="bi bi-check-lg"></i> تم الحفظ';
-        saveBtn.style.background = '#16a34a';
-      } else {
-        saveBtn.innerHTML = 'خطأ!';
-        saveBtn.style.background = '#dc2626';
-      }
-      setTimeout(() => {
-        saveBtn.innerHTML = '<i class="bi bi-check2"></i> حفظ الإعدادات';
-        saveBtn.style.background = '';
-        saveBtn.disabled = false;
-      }, 2200);
-    } catch {
-      saveBtn.innerHTML = 'خطأ في الاتصال';
-      setTimeout(() => { saveBtn.innerHTML = '<i class="bi bi-check2"></i> حفظ الإعدادات'; saveBtn.disabled = false; }, 2000);
-    }
-  });
-
-  // ─── فحص البروتوكول ─────────────────────────────────────────────────────────
-  window.checkProtocol = async function() {
-    const result = document.getElementById('protocolCheckResult');
-    const status = document.getElementById('protocolStatusRow');
-    result.textContent = 'جاري الفحص...';
-    try {
-      const r = await fetch('{% url "scan_check_protocol" %}', { credentials: 'same-origin' });
-      const d = await r.json();
-      if (d.installed) {
-        status.innerHTML = '<span class="protocol-status-ok"><i class="bi bi-shield-check"></i> البروتوكول مثبّت ويعمل</span>';
-        result.innerHTML = `<span class="text-muted">الأمر المسجَّل: <code>${d.command}</code></span>`;
-      } else {
-        status.innerHTML = '<span class="protocol-status-no"><i class="bi bi-exclamation-triangle"></i> البروتوكول غير مثبّت</span>';
-        result.innerHTML = '<span class="text-muted">شغّل سكريبت التثبيت أو حمّله من الزر أعلاه</span>';
-      }
-    } catch {
-      result.textContent = 'تعذّر الاتصال بالخادم';
-    }
-  };
-
-  // ─── تثبيت البروتوكول عبر API مباشرةً (HKCU — لا يحتاج مسؤول) ──────────────
-  window.runRegisterScript = async function() {
-    const btn    = document.getElementById('runRegisterBtn');
-    const result = document.getElementById('protocolCheckResult');
-    const status = document.getElementById('protocolStatusRow');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري التثبيت...';
-    result.textContent = '';
-    try {
-      const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-      const r = await fetch('{% url "scan_install_protocol" %}', {
-        method: 'POST',
-        headers: { 'X-CSRFToken': csrf },
-        credentials: 'same-origin',
-      });
-      const d = await r.json();
-      if (d.ok) {
-        status.innerHTML = '<span class="protocol-status-ok"><i class="bi bi-shield-check"></i> تم تثبيت البروتوكول بنجاح</span>';
-        result.innerHTML = `<span class="text-muted">الأمر المسجَّل: <code>${d.command}</code></span>`;
-        btn.innerHTML = '<i class="bi bi-shield-check"></i> مثبَّت ✓';
-      } else {
-        status.innerHTML = '<span class="protocol-status-no"><i class="bi bi-x-circle"></i> فشل التثبيت</span>';
-        result.innerHTML = `
-          <div class="alert alert-warning p-2 mt-2" style="font-size:.82rem">
-            ${d.error || 'تعذّر التثبيت التلقائي'}<br>
-            <b>يمكنك التثبيت يدوياً:</b> افتح PowerShell وشغّل:<br>
-            <code style="word-break:break-all">"{{ sys_info.pythonw_exe|escapejs }}" "{{ sys_info.register_script|escapejs }}"</code>
-            <button class="copy-btn ms-1" onclick="copyText('&quot;{{ sys_info.pythonw_exe|escapejs }}&quot; &quot;{{ sys_info.register_script|escapejs }}&quot;')"><i class="bi bi-clipboard"></i> نسخ</button>
-          </div>`;
-        btn.innerHTML = '<i class="bi bi-shield-check"></i> تثبيت البروتوكول';
-        btn.disabled = false;
-      }
-    } catch(e) {
-      result.textContent = 'خطأ في الاتصال: ' + e.message;
-      btn.innerHTML = '<i class="bi bi-shield-check"></i> تثبيت البروتوكول';
-      btn.disabled = false;
-    }
-    setTimeout(checkProtocol, 1500);
-  };
-
-  // ─── تحديث حالة الـ Watcher كل 5 ثوانٍ ─────────────────────────────────────
-  async function refreshStatus() {
-    try {
-      const r = await fetch('{% url "scan_watcher_status" %}', { credentials: 'same-origin' });
-      const d = await r.json();
-      const dot   = document.getElementById('statusDot');
-      const label = document.getElementById('statusLabel');
-      const last  = document.getElementById('lastFileRow');
-
-      dot.className = 'status-dot ' + (d.status === 'running' ? 'running' : d.status === 'error' ? 'error' : 'stopped');
-      label.textContent =
-        d.status === 'running'  ? `يعمل — ملفات معالَجة: ${d.file_count}` :
-        d.status === 'error'    ? 'خطأ في المراقب — راجع سجلات الخادم'    :
-                                  'متوقف — شغّل الخادم لتفعيل المراقبة';
-
-      if (d.last_file) last.textContent = `آخر ملف: ${d.last_file}`;
-    } catch { /* صمت */ }
-  }
-
-  // تشغيل عند التحميل
-  checkProtocol();
-  refreshStatus();
-  setInterval(refreshStatus, 5000);
-
+  document.getElementById('btnRescan')?.addEventListener('click', check);
+  check();
 })();
 </script>
 {% endblock %}

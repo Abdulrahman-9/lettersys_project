@@ -45,6 +45,7 @@ from .books_detail import (
     book_detail,
     book_edit,
     book_change_status,
+    book_report,
 )
 
 __all__ = [
@@ -78,4 +79,5 @@ __all__ = [
     'book_detail',
     'book_edit',
     'book_change_status',
+    'book_report',
 ]

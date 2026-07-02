@@ -65,7 +65,10 @@
             <td>{{ book.first_issuing_entity|default:'—' }}</td>
             <td>{{ book.deleted_at|date:"Y-m-d H:i" }}</td>
             <td class="text-end">
-              <a class="btn btn-sm btn-outline-success" href="{% url 'restore_book' book.id %}">استعادة</a>
+              <form method="post" action="{% url 'restore_book' book.id %}" class="d-inline">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-success" type="submit">استعادة</button>
+              </form>
               <form method="post" action="{% url 'purge_book' book.id %}" class="d-inline">
                 {% csrf_token %}
                 <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('حذف نهائي للكتاب؟');">حذف نهائي</button>
@@ -103,7 +106,10 @@
             <td>{{ att.book.our_number|default:att.book.id }}</td>
             <td>{{ att.deleted_at|date:"Y-m-d H:i" }}</td>
             <td class="text-end">
-              <a class="btn btn-sm btn-outline-success" href="{% url 'restore_attachment' att.id %}">استعادة</a>
+              <form method="post" action="{% url 'restore_attachment' att.id %}" class="d-inline">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-success" type="submit">استعادة</button>
+              </form>
               <form method="post" action="{% url 'purge_attachment' att.id %}" class="d-inline">
                 {% csrf_token %}
                 <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('حذف نهائي للمرفق؟');">حذف نهائي</button>

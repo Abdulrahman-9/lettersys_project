@@ -288,7 +288,12 @@ class LegacyImportEngine:
         ]
         for fmt in formats:
             try:
-                return datetime.strptime(value[:len(fmt)], fmt).date()
+                return datetime.strptime(value, fmt).date()
             except ValueError:
                 continue
-        return None
+        # احتياط: التقط بادئة التاريخ ISO من سلاسل datetime غير المتوقّعة
+        # (microseconds/منطقة زمنية لا تطابق أي صيغة أعلاه)
+        try:
+            return datetime.strptime(value[:10], '%Y-%m-%d').date()
+        except ValueError:
+            return None

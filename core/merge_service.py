@@ -1,138 +1,65 @@
 """
 خدمة الدمج الذكية - Smart Merge Service
-تدعم دمج PDFs، الصور، والملفات المختلطة بطرق ذكية
+تُحوّل كل المدخلات إلى PDF ثم تدمجها، فالناتج موحّد بصيغة PDF دائماً.
 """
 
-import os
-import mimetypes
-from pathlib import Path
-from datetime import datetime
 from django.utils import timezone
 from io import BytesIO
 
-# استيراد المكتبات المطلوبة
-try:
-    from PyPDF2 import PdfMerger, PdfReader
-except ImportError:
-    PdfMerger = None
-    PdfReader = None
-
-try:
-    from PIL import Image
-except ImportError:
-    Image = None
+from pypdf import PdfReader, PdfWriter
 
 from django.core.files.base import ContentFile
-from django.conf import settings
+from .attachment_service import ensure_pdf_bytes, validate_attachment_file
 from .models import AttachmentVersion, MergeLog
+
+
+def _file_bytes(file_obj):
+    """قراءة كامل محتوى ملف (FieldFile أو ملف مرفوع) مع إعادة المؤشّر."""
+    try:
+        file_obj.open('rb')
+    except (AttributeError, ValueError):
+        pass
+    try:
+        file_obj.seek(0)
+    except (AttributeError, ValueError):
+        pass
+    data = file_obj.read()
+    try:
+        file_obj.seek(0)
+    except (AttributeError, ValueError):
+        pass
+    return data
 
 
 class SmartMergeService:
     """
-    خدمة دمج ذكية تدعم:
-    - PDF + PDF = دمج الصفحات
-    - Image + Image = دمج الصور (أفقياً أو رأسياً)
-    - PDF + Image = تحويل وتجميع
+    خدمة دمج ذكية: تُحوّل كل المدخلات إلى PDF ثم تدمجها، فالناتج PDF دائماً.
     """
-    
-    # أنواع الملفات المدعومة
-    PDF_TYPES = {'application/pdf', 'application/x-pdf'}
-    IMAGE_TYPES = {'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'}
-    
+
     def __init__(self, attachment, user):
         self.attachment = attachment
         self.user = user
         self.merge_log = None
-    
-    def get_file_type(self, file_obj):
-        """تحديد نوع الملف"""
-        if hasattr(file_obj, 'name'):
-            mime_type, _ = mimetypes.guess_type(file_obj.name)
-        else:
-            mime_type = None
-        
-        if mime_type in self.PDF_TYPES:
-            return 'pdf'
-        elif mime_type in self.IMAGE_TYPES:
-            return 'image'
-        else:
-            return 'unknown'
-    
+
     def merge_pdfs(self, source_file, target_file):
-        """دمج ملفات PDF"""
-        if not PdfMerger:
-            raise ImportError("PyPDF2 غير مثبت. تثبيت: pip install PyPDF2")
-        
+        """دمج ملفي PDF (الهدف أولاً ثم المصدر) عبر pypdf."""
         try:
-            merger = PdfMerger()
-            
-            # قراءة الملفات
-            source_file.seek(0)
             target_file.seek(0)
-            
-            # دمج الملفات
-            merger.append(PdfReader(target_file))
-            merger.append(PdfReader(source_file))
-            
-            # حفظ الملف المدمج
+            source_file.seek(0)
+
+            writer = PdfWriter()
+            writer.append(PdfReader(target_file))
+            writer.append(PdfReader(source_file))
+
             output = BytesIO()
-            merger.write(output)
-            merger.close()
-            
+            writer.write(output)
+            writer.close()
+
             output.seek(0)
             return output
-        
+
         except Exception as e:
             raise ValueError(f"خطأ في دمج ملفات PDF: {str(e)}")
-    
-    def merge_images(self, source_file, target_file, orientation='vertical'):
-        """
-        دمج الصور
-        orientation: 'vertical' أو 'horizontal'
-        """
-        if not Image:
-            raise ImportError("Pillow غير مثبت. تثبيت: pip install Pillow")
-        
-        try:
-            source_file.seek(0)
-            target_file.seek(0)
-            
-            # فتح الصور
-            img_source = Image.open(source_file)
-            img_target = Image.open(target_file)
-            
-            # تحويل إلى RGB إذا كانت PNG مع Alpha
-            if img_source.mode == 'RGBA':
-                img_source = img_source.convert('RGB')
-            if img_target.mode == 'RGBA':
-                img_target = img_target.convert('RGB')
-            
-            # دمج حسب الاتجاه
-            if orientation == 'vertical':
-                # دمج عمودي (الصورة الجديدة تحت القديمة)
-                max_width = max(img_target.width, img_source.width)
-                total_height = img_target.height + img_source.height
-                
-                merged = Image.new('RGB', (max_width, total_height), color='white')
-                merged.paste(img_target, (0, 0))
-                merged.paste(img_source, (0, img_target.height))
-            else:
-                # دمج أفقي (الصورة الجديدة بجانب القديمة)
-                max_height = max(img_target.height, img_source.height)
-                total_width = img_target.width + img_source.width
-                
-                merged = Image.new('RGB', (total_width, max_height), color='white')
-                merged.paste(img_target, (0, 0))
-                merged.paste(img_source, (img_target.width, 0))
-            
-            # حفظ الصورة المدمجة
-            output = BytesIO()
-            merged.save(output, format='PNG', quality=95)
-            output.seek(0)
-            return output
-        
-        except Exception as e:
-            raise ValueError(f"خطأ في دمج الصور: {str(e)}")
     
     def create_merge_log(self, action, source_version=None, target_version=None, status='pending', description=''):
         """إنشاء سجل دمج"""
@@ -156,28 +83,23 @@ class SmartMergeService:
     
     def merge_files(self, new_file, merge_type='smart'):
         """
-        دمج ملف جديد مع الملف الحالي
-        merge_type: 'smart' (تلقائي), 'pdf', 'image'
+        دمج ملف جديد مع الملف الحالي.
+
+        التوحيد: يُحوَّل كلا الملفين إلى PDF أولاً (الصور القديمة تُلَفّ في PDF
+        لحظة الدمج)، فيكون الناتج **PDF دائماً** ولا حالة «مختلط» ولا PNG.
         """
+        # تحقّق موحّد من الحجم والنوع قبل أي سجل دمج أو كتابة — #12
+        validate_attachment_file(new_file)
         try:
-            # الحصول على الإصدار الحالي
-            current_version = self.attachment.versions.latest('version_number')
-            current_file = current_version.file
-            
-            # تحديد نوع الملفات
-            source_type = self.get_file_type(new_file)
-            target_type = self.get_file_type(current_file)
-            
-            # تحديد نوع الدمج
-            if merge_type == 'smart':
-                if source_type == 'pdf' and target_type == 'pdf':
-                    merge_type = 'pdf'
-                elif source_type == 'image' and target_type == 'image':
-                    merge_type = 'image'
-                else:
-                    # حالة مختلطة - تحتاج معالجة خاصة
-                    merge_type = 'mixed'
-            
+            # مصدر الدمج هو الملف الحيّ للمرفق (يحوي آخر التعديلات)، لا أحدث نسخة —
+            # فالنسخ لقطاتٌ لِما قبل التعديل (والنسخة 1 قد تكون الأصل الصُّوري)، فاستخدامها
+            # كأساس يُسقط تعديلات المستخدم أو يدمج على الصورة الأصلية بدل الـPDF.
+            current_version = self.attachment.versions.order_by('-version_number').first()
+            live_file = self.attachment.file
+            current_file = live_file if getattr(live_file, 'name', None) else (
+                current_version.file if current_version else None)
+            next_version_number = (current_version.version_number + 1) if current_version else 1
+
             # إنشاء سجل الدمج
             self.create_merge_log(
                 action='merge',
@@ -185,30 +107,27 @@ class SmartMergeService:
                 target_version=current_version,
                 description=f"دمج ملف جديد: {new_file.name}"
             )
-            
-            # تنفيذ الدمج
-            if merge_type == 'pdf':
-                merged_file = self.merge_pdfs(new_file, current_file)
-                filename = f"merged_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-            elif merge_type == 'image':
-                merged_file = self.merge_images(new_file, current_file, orientation='vertical')
-                filename = f"merged_{timezone.now().strftime('%Y%m%d_%H%M%S')}.png"
-            else:
-                raise ValueError("نوع الملفات غير متوافق للدمج")
-            
+
+            # توحيد الصيغة: حوّل كلا المدخلين إلى PDF ثم ادمجهما كـ PDF
+            new_pdf_bytes, _, _ = ensure_pdf_bytes(_file_bytes(new_file), getattr(new_file, 'name', ''))
+            current_pdf_bytes, _, _ = ensure_pdf_bytes(_file_bytes(current_file), getattr(current_file, 'name', ''))
+
+            merged_file = self.merge_pdfs(BytesIO(new_pdf_bytes), BytesIO(current_pdf_bytes))
+            filename = f"merged_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+
             # حفظ النسخة الجديدة
             new_version = AttachmentVersion.objects.create(
                 attachment=self.attachment,
-                version_number=current_version.version_number + 1,
+                version_number=next_version_number,
                 created_by=self.user,
                 note=f"دمج الملف: {new_file.name}",
-                merge_type=merge_type,
+                merge_type='pdf',
                 merged_from_version=current_version,
                 is_merged=True,
                 merge_metadata={
                     'source_filename': str(new_file.name),
-                    'target_filename': str(current_file.name),
-                    'merge_type': merge_type,
+                    'target_filename': str(getattr(current_file, 'name', '')),
+                    'merge_type': 'pdf',
                     'merged_at': timezone.now().isoformat()
                 },
                 file_size=merged_file.getbuffer().nbytes
@@ -241,12 +160,12 @@ class SmartMergeService:
                 description=reason
             )
             
-            # تحديث الملف الأساسي
+            # حذف ناعم موحّد: نُبقي الملف على القرص (كي تعمل الاستعادة restore_attachment
+            # ولا يتيتّم الملف) — لا نُفرّغ FieldFile. #11
             self.attachment.is_deleted = True
             self.attachment.deleted_at = timezone.now()
             self.attachment.deleted_by = self.user
-            self.attachment.file = None
-            self.attachment.save()
+            self.attachment.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
             
             self.update_merge_log('success')
             return True
@@ -266,9 +185,15 @@ class SmartMergeService:
                 status='pending',
                 description=f"استعادة النسخة {version_number}"
             )
-            
-            # تحديث الملف الأساسي
-            self.attachment.file = version.file
+
+            # توحيد الصيغة عند الاستعادة: النسخة 1 قد تكون الأصل الصُّوري (PNG/JPG)،
+            # فنحوّل المُستعاد إلى PDF كي لا يُكسر ثبات «المرفق دائماً PDF».
+            from pathlib import Path
+            from .attachment_service import ensure_pdf_bytes
+            raw = _file_bytes(version.file)
+            pdf_bytes, _, _ = ensure_pdf_bytes(raw, getattr(version.file, 'name', ''))
+            base = Path(getattr(version.file, 'name', 'restored') or 'restored').stem or 'restored'
+            self.attachment.file.save(f"{base}.pdf", ContentFile(pdf_bytes), save=False)
             self.attachment.is_deleted = False
             self.attachment.deleted_at = None
             self.attachment.deleted_by = None

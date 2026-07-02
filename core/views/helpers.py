@@ -7,7 +7,7 @@ Helper Functions - دوال مساعدة للمعالجات
 
 import re
 
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.contrib.auth.decorators import user_passes_test
 
 
@@ -40,10 +40,12 @@ def apply_search_filters(queryset, search_text):
         q = Q()
 
         if n <= 4:
-            # البحث بالتسلسل: آخر 4 خانات من our_number هي NNNN (مكمّلة بأصفار)
-            # يطابق كلتا الصيغتين: YYYYNNNN (قديم) و YYYYRNNNN (جديد)
+            # التسلسل = آخر 4 خانات من رقم بصيغة YYYYNNNN (قديم، 8 خانات)
+            # أو YYYYRNNNN (جديد، 9 خانات). نمط مُرسّى بطول كلّي 8-9 خانات
+            # يستبعد الأرقام المركّبة (11 خانة) فلا تتسرّب كمطابقات زائفة
+            # عبر آخر 4 خاناتها العشوائية.
             padded = search_text.zfill(4)
-            q |= Q(our_number__endswith=padded)
+            q |= Q(our_number__regex=r'^[0-9]{4,5}' + padded + r'$')
 
             # الأرقام المركّبة (series_no)
             q |= Q(series_no=ival)
@@ -70,7 +72,21 @@ def apply_search_filters(queryset, search_text):
             q |= Q(title__icontains=search_text)
             q |= Q(margin__icontains=search_text)
 
-        return queryset.filter(q).distinct().order_by('-our_number', '-date')
+        # ترتيب: مطابقات حقول الأرقام أولاً (أولوية 0-1)، ثم مطابقات
+        # العنوان/الهامش النصية (أولوية 2) — كي لا تطغى الضوضاء النصية.
+        return (
+            queryset.filter(q)
+            .annotate(_num_pri=Case(
+                When(Q(our_number__icontains=search_text) | Q(series_no=ival),
+                     then=Value(0)),
+                When(Q(sender_number__icontains=search_text)
+                     | Q(legacy_number__icontains=search_text), then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            ))
+            .distinct()
+            .order_by('_num_pri', '-our_number', '-date')
+        )
 
     from django.db import connection
     if connection.vendor == 'postgresql':

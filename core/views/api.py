@@ -22,7 +22,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from ..models import Book, BookHistory
+from ..models import Attachment, Book, BookHistory
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +194,42 @@ def update_book_notes(request, book_id):
             "success": False,
             "message": "حدث خطأ في الخادم. يرجى المحاولة لاحقاً."
         }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def attachment_ocr_text(request, att_id):
+    """
+    إرجاع النص المستخرج (OCR) لمرفقٍ ما — للعرض بجانب المسح (وصولية + بحث).
+    يُحمَّل كسولاً عند الطلب. النص المنظّف مفضَّل على الخام.
+    """
+    att = get_object_or_404(
+        Attachment.objects.select_related('book', 'ocr_result'),
+        pk=att_id,
+        is_deleted=False,
+    )
+    book = att.book
+    has_permission = (
+        request.user.is_superuser
+        or request.user.is_staff
+        or (book and book.created_by_id == request.user.id)
+    )
+    if not has_permission:
+        return JsonResponse({"status": "error", "message": "ليس لديك صلاحية"}, status=403)
+
+    ocr = getattr(att, 'ocr_result', None)
+    text = ''
+    confidence = 0.0
+    if ocr is not None:
+        text = (ocr.cleaned_text or ocr.raw_text or '').strip()
+        confidence = round(ocr.confidence_score or 0.0, 1)
+
+    return JsonResponse({
+        "status": "ok",
+        "has_text": bool(text),
+        "text": text,
+        "confidence": confidence,
+    })
 
 
 # ==============================================================================

@@ -26,6 +26,13 @@ class Entity(models.Model):
     etype    = models.CharField(max_length=10, choices=TYPE_CHOICES, default="both")
     is_active = models.BooleanField(default=True)
 
+    # عند دمج جهة مكرّرة ضمن جهة أمّ: تشير إلى الأمّ وتُضبط is_active=False.
+    merged_into = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='merged_from', verbose_name='مدموجة في',
+        help_text='الجهة الأمّ التي استوعبت هذه الجهة عند إزالة التكرار',
+    )
+
     # ── بيانات الاتصال ──
     email          = models.EmailField("البريد الإلكتروني", blank=True, default="",
                                        help_text="بريد الجهة للمراسلات الرسمية (اختياري)")
@@ -67,8 +74,13 @@ class Entity(models.Model):
 
 
 def book_attachment_path(instance, filename):
-    y = instance.book.date.year if instance.book and instance.book.date else timezone.localdate().year
-    return f"books/{y}/{instance.book.our_number or 'no-num'}_{filename}"
+    # يدعم Attachment (instance.book) وAttachmentVersion (instance.attachment.book)
+    book = getattr(instance, 'book', None)
+    if book is None:
+        book = getattr(getattr(instance, 'attachment', None), 'book', None)
+    y = book.date.year if book and book.date else timezone.localdate().year
+    our_number = (book.our_number if book else '') or 'no-num'
+    return f"books/{y}/{our_number}_{filename}"
 
 
 class Tag(models.Model):
@@ -220,6 +232,10 @@ class Book(models.Model):
     deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="deleted_books")
 
     def save(self, *args, **kwargs):
+        # تطبيع نوع المستند بمصدر واحد (يغلق legacy_restore/Admin وأي مسار يتجاوز BookForm.clean_document_type)
+        if self.document_type:
+            from core.document_types import normalize_document_type_value
+            self.document_type = normalize_document_type_value(self.document_type)
         # القاعدة الذهبية: لا due_date ⇒ مؤرشف تلقائياً
         if not self.due_date:
             self.is_archived = True
@@ -380,6 +396,16 @@ class Book(models.Model):
             models.Index(fields=['is_deleted'], name='book_is_deleted_idx'),
             models.Index(fields=['kind'], name='book_kind_idx'),
             models.Index(fields=['is_deleted', 'created_by', 'is_archived'], name='book_user_status_idx'),
+            # فهرس التاريخ — يسرّع الفرز الافتراضي order_by('-date') في كل قوائم الكتب والأضابير
+            models.Index(fields=['-date', '-id'], name='book_date_idx'),
+        ]
+        constraints = [
+            # سلامة بيانات السجل الرسمي: لا رقمان متطابقان لنفس النوع (يستثني الفارغ).
+            models.UniqueConstraint(
+                fields=['our_number', 'kind'],
+                condition=~models.Q(our_number=''),
+                name='uniq_book_our_number_kind',
+            ),
         ]
 
 
@@ -403,6 +429,12 @@ class Attachment(models.Model):
 
     def __str__(self):
         return self.file.name
+
+    @property
+    def filename(self):
+        """اسم الملف المجرّد (دون مسار التخزين) للعرض."""
+        import os
+        return os.path.basename(self.file.name) if self.file else ""
 
 
 class AttachmentVersion(models.Model):
@@ -784,6 +816,33 @@ class DataExtractionResult(models.Model):
     
     def __str__(self):
         return f"Extraction - {self.book_number or 'N/A'} ({self.status})"
+
+
+class LetterheadMemory(models.Model):
+    """ذاكرة (ترويسة مستند → جهة مؤكَّدة) — تتعلّم من كلّ كتاب ممسوح يُحفَظ.
+
+    تكسر سقف «الوحدات الداخلية غير المطبوعة»: حتى لو لم يُطبع اسمُ القسم على الورقة،
+    فمستندات نفس المُرسِل تُسنَد دوماً لنفس الجهة؛ ومطابقة ترويسة مستندٍ جديد بترويسات
+    سابقة تكشف جهته المؤكَّدة. مقيسٌ بترك-واحد على بيانات حقيقية: hit@3 ≈ 85% مقابل
+    ≈16% لمطابقة اسم الجهة وحدها. تُملأ من حلقة الالتقاط عند الحفظ + أمر backfill.
+    """
+    letterhead = models.TextField(help_text='نصّ أعلى المستند (الترويسة) — مصدر التشابه')
+    issuing_entity = models.ForeignKey(
+        Entity, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='letterhead_as_issuer', verbose_name='الجهة المُصدِرة المؤكَّدة')
+    receiving_entity = models.ForeignKey(
+        Entity, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='letterhead_as_receiver', verbose_name='الجهة المستقبِلة المؤكَّدة')
+    book = models.ForeignKey(Book, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'ذاكرة ترويسة'
+        verbose_name_plural = 'ذاكرة الترويسات'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"LetterheadMemory#{self.pk} → issuer={self.issuing_entity_id}"
 
 
 class ExtractionFeedback(models.Model):
@@ -1453,8 +1512,12 @@ class EmailSettings(models.Model):
     يُفعَّل/يُعطَّل الإرسال من هنا دون تعديل settings.py.
     """
 
-    # ── هوية المؤسسة ──
-    org_name        = models.CharField("اسم المؤسسة", max_length=200, default="")
+    # ── هوية المؤسسة (تُستخدم في ترويسة التقارير المطبوعة + البريد) ──
+    org_name        = models.CharField("اسم الشركة/المؤسسة", max_length=200, default="")
+    org_section     = models.CharField("اسم القسم", max_length=200, blank=True, default="",
+                                       help_text="يظهر في ترويسة التقارير المطبوعة")
+    org_unit        = models.CharField("اسم الوحدة", max_length=200, blank=True, default="",
+                                       help_text="يظهر في ترويسة التقارير المطبوعة")
     org_email       = models.EmailField("بريد المؤسسة الرسمي", blank=True, default="",
                                         help_text="يُستخدم كـ From address في جميع الإيميلات")
     reply_to        = models.EmailField("الرد على", blank=True, default="",
@@ -1547,66 +1610,6 @@ class EmailSettings(models.Model):
         """أحضر السجل الوحيد أو أنشئه بالقيم الافتراضية."""
         obj, _ = cls.objects.get_or_create(singleton=1)
         return obj
-
-
-# ══════════════════════════════════════════════════════════════════
-#  إعدادات الماسح الضوئي (Singleton)
-# ══════════════════════════════════════════════════════════════════
-class ScanSettings(models.Model):
-    """
-    إعدادات الماسح الضوئي — سجل وحيد (Singleton).
-    يُستخدَم بواسطة Hot Folder Watcher وزر "ابدأ المسح" وسكريبت scan_manager.
-    """
-
-    # ─── CaptureOnTouch ────────────────────────────────────────────
-    capture_exe_path = models.CharField(
-        "مسار CaptureOnTouch.exe", max_length=500, blank=True, default="",
-        help_text=r"مثال: C:\Program Files\Canon\CaptureOnTouch\CaptureOnTouch.exe",
-    )
-    watch_folder = models.CharField(
-        "مجلد المسح الضوئي", max_length=500, blank=True, default="",
-        help_text="المجلد الذي يحفظ فيه CaptureOnTouch الملفات الممسوحة",
-    )
-
-    # ─── سلوك التطبيق ──────────────────────────────────────────────
-    auto_open_browser = models.BooleanField(
-        "فتح المتصفح تلقائياً بعد كل مسح", default=True,
-    )
-    server_url = models.CharField(
-        "عنوان الخادم المحلي", max_length=200, default="http://localhost:8000",
-        help_text="يُستخدم لفتح صفحة الاستخراج بعد انتهاء المسح",
-    )
-    window_topmost = models.BooleanField(
-        "نافذة CaptureOnTouch فوق التطبيق", default=True,
-        help_text="تُبقي نافذة المسح عائمة فوق المتصفح أثناء المسح",
-    )
-
-    # ─── Singleton guard ────────────────────────────────────────────
-    singleton  = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name        = 'إعدادات الماسح الضوئي'
-        verbose_name_plural = 'إعدادات الماسح الضوئي'
-
-    def __str__(self):
-        return f"إعدادات الماسح ({self.watch_folder or 'غير مكوّن'})"
-
-    @classmethod
-    def get(cls) -> 'ScanSettings':
-        """أحضر السجل الوحيد أو أنشئه بالقيم الافتراضية."""
-        obj, _ = cls.objects.get_or_create(singleton=1)
-        return obj
-
-    @property
-    def is_configured(self) -> bool:
-        return bool(self.watch_folder and self.capture_exe_path)
-
-    @property
-    def watcher_status(self) -> str:
-        """الحالة الحالية للـ watcher (تُحدَّث بواسطة الخيط الخلفي)."""
-        from django.core.cache import cache
-        return cache.get('scan_watcher_status', 'stopped')
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1769,6 +1772,7 @@ class EmailTemplate(models.Model):
         except Exception as exc:
             import logging
             logging.getLogger('lettersys').error('[EmailTemplate] render_body error: %s', exc)
+            return self.body_html or ''   # fallback للنص الخام بدل None (يمنع إرسال "None")
 
 
 # ══════════════════════════════════════════════════════════════════

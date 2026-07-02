@@ -1,5 +1,0 @@
-Requirement already satisfied: bleach in c:\users\fwz\downloads\lettersys_django_bootstrap_v4_scan\lettersys_django_bootstrap_v4_scan\lettersys_project\.venv\lib\site-packages (6.3.0)
-Requirement already satisfied: webencodings in c:\users\fwz\downloads\lettersys_django_bootstrap_v4_scan\lettersys_django_bootstrap_v4_scan\lettersys_project\.venv\lib\site-packages (from bleach) (0.5.1)
-
-[notice] A new release of pip is available: 25.2 -> 26.1
-[notice] To update, run: C:\Users\fwz\Downloads\lettersys_django_bootstrap_v4_scan\lettersys_django_bootstrap_v4_scan\lettersys_project\.venv\Scripts\python.exe -m pip install --upgrade pip

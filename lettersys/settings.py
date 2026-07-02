@@ -186,9 +186,12 @@ MEDIA_ROOT = _media_root_env if _media_root_env else (BASE_DIR / 'media')
 
 # ─── حدود رفع الملفات (منع ابتلاع RAM بملفات PDF كبيرة) ─────────────────────
 # ملفات أكبر من 5 MB تُكتب على القرص مؤقتاً بدل بقائها في الذاكرة
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10 MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024    # 5 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10 MB (لا يشمل ملفات multipart)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024    # 5 MB (عتبة التخزين المؤقت لا حدّ)
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000
+# الحدّ الأقصى الموحّد لحجم أي ملف مرفق (يطابق حدّ مسار المسح) —
+# يفرضه core.attachment_service.validate_attachment_file عبر كل مسارات الرفع.
+ATTACHMENT_MAX_UPLOAD_BYTES = int(os.environ.get('ATTACHMENT_MAX_UPLOAD_BYTES', str(50 * 1024 * 1024)))
 
 # ─── نوع المفتاح الافتراضي ────────────────────────────────────────────────────
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -247,21 +250,36 @@ AI_ALLOW_MOCK_EXTRACTION = os.environ.get(
 AI_AZURE_ENDPOINT = os.environ.get('AI_AZURE_ENDPOINT', '')
 AI_AZURE_KEY = os.environ.get('AI_AZURE_KEY', '')
 
+# محرّك OCR المحلّي: 'tesseract' (افتراضي — خفيف/سريع بلا PyTorch) أو 'easyocr' (احتياطي).
+AI_OFFLINE_ENGINE = os.environ.get('AI_OFFLINE_ENGINE', 'tesseract').lower()
+# إعداد Tesseract (يُقرأ عند AI_OFFLINE_ENGINE='tesseract'):
+#   TESSERACT_CMD          مسار tesseract.exe — فارغ = اكتشاف تلقائي (يشمل نسخة NAPS2).
+#   TESSERACT_TESSDATA_DIR مجلّد *.traineddata — لازم لتحميل العربية (ara). فارغ = افتراضي tesseract.
+#   TESSERACT_LANG         'ara+eng' إلزامي للمستندات المختلطة (ara وحده يُفسد الأرقام/الإنجليزي).
+TESSERACT_CMD = os.environ.get('TESSERACT_CMD', '')
+TESSERACT_TESSDATA_DIR = os.environ.get('TESSERACT_TESSDATA_DIR', '')
+TESSERACT_LANG = os.environ.get('TESSERACT_LANG', 'ara+eng')
+TESSERACT_PSM = os.environ.get('TESSERACT_PSM', '3')
+# تصعيد تكيّفي: عند ثقة OCR < العتبة، يُجرَّب تحويل ثنائي (adaptive) ويُحتفَظ بالأعلى
+# ثقةً. 0 = تعطيل. القيمة مُثبَتة على عيّنة قاعدة البيانات الحقيقية.
+TESSERACT_ADAPTIVE_THRESHOLD = float(os.environ.get('TESSERACT_ADAPTIVE_THRESHOLD', '0.75'))
+
 # ─── إعدادات OCR والاستخراج ──────────────────────────────────────────────────
 # تحميل نموذج EasyOCR مسبقاً عند بدء Django (يمنع التأخير في أول طلب)
 AI_PRELOAD_OCR = os.environ.get('AI_PRELOAD_OCR', 'False').lower() in ('true', '1')
 # الحد الزمني الأقصى لعملية الاستخراج الكاملة (ثوانٍ)
 AI_EXTRACTION_TIMEOUT = int(os.environ.get('AI_EXTRACTION_TIMEOUT', '120'))
+# تشغيل OCR تلقائياً عند رفع/مسح مستند. مؤجَّل افتراضياً: EasyOCR ثقيل وقد يتعطّل
+# أصلياً على الأجهزة محدودة الذاكرة — حتى يجهز عامل OCR المقيم نلتقط المستند فقط
+# ونترك الإدخال يدوياً. فعّله بـ SCAN_AUTO_OCR=True عند توفّر الموارد/العامل المقيم.
+SCAN_AUTO_OCR = os.environ.get('SCAN_AUTO_OCR', 'False').lower() in ('true', '1')
 
-# ─── Hot Folder Watcher (مراقب مجلد المسح الضوئي) ────────────────────────────
-# المجلد الذي يحفظ فيه CaptureOnTouch الملفات الممسوحة
-SCAN_WATCH_FOLDER = os.environ.get('SCAN_WATCH_FOLDER', '')
-# عنوان Django المحلي — يُستخدم لفتح المتصفح بعد المعالجة
-SCAN_API_URL = os.environ.get('SCAN_API_URL', 'http://localhost:8000')
-
-# ─── الماسح الضوئي (simulator) ────────────────────────────────────────────────
-SCAN_SIMULATOR_MODE = os.environ.get('SCAN_SIMULATOR_MODE', 'False').lower() in ('true', '1')
-SCAN_SIMULATOR_DELAY = int(os.environ.get('SCAN_SIMULATOR_DELAY', '3'))
+# إزالة الصفحات الفارغة تلقائياً بعد المسح (مسح مزدوج لمستند أحادي → ظهور فارغة).
+# المقياس عدد البكسلات الداكنة المطلق (لا نسبة المساحة): صفحة فيها أي محتوى حقيقي —
+# حتى رقم صفحة/ختم صغير — تُبقى؛ تُحذف فقط شبه الخالية تماماً (< 10 بكسل عند 72DPI).
+# ارفع القيمة لحذف أعنف، أو عطّل كلياً بـ SCAN_TRIM_BLANK_PAGES=False.
+SCAN_TRIM_BLANK_PAGES = os.environ.get('SCAN_TRIM_BLANK_PAGES', 'True').lower() in ('true', '1')
+SCAN_BLANK_PAGE_MAX_DARK_PX = int(os.environ.get('SCAN_BLANK_PAGE_MAX_DARK_PX', '10'))
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 
@@ -277,13 +295,17 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
 
 # ─── Content Security Policy (يطبّقها CSPMiddleware) ─────────────────────────
+# وكيل المسح المحلي يعمل على منفذ خاص (افتراضياً 17865) — يجب السماح للصفحة بالاتصال به.
+# نقرأ نفس متغيّر البيئة الذي يستخدمه الوكيل وعرض Django كي لا تنحرف القيم.
+_AGENT_PORT = os.environ.get('LETTERSYS_AGENT_PORT', '17865')
+_AGENT_ORIGINS = f"http://127.0.0.1:{_AGENT_PORT} http://localhost:{_AGENT_PORT}"
 SECURE_CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
     "img-src 'self' data: blob:; "
-    "connect-src 'self'; "
+    f"connect-src 'self' {_AGENT_ORIGINS}; "
     "worker-src 'self' blob:; "
     "manifest-src 'self';"
 )

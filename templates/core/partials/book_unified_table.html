@@ -1,7 +1,10 @@
 {% load static %}
 {% comment %}
 ============================================
-الجدول الرئيسي — 7 أعمدة، بدون توسّع
+الجدول الرئيسي — 9 أعمدة، خلايا مفصولة
+- رقم القيد / رقم الجهة عمودان منفصلان
+- تاريخ الاستلام / تاريخ الإرسال عمودان منفصلان
+- عمودا الجهة (رقم + تاريخ إرسال) يظهران للوارد فقط (إخفاء عبر data-theme)
 ============================================
 {% endcomment %}
 
@@ -14,15 +17,27 @@
       <th class="col-our-number">
         <div class="th-content sortable" data-sort="our_number">
           <span>رقم القيد</span>
-          <i class="bi bi-info-circle th-info" title="السطر العلوي: قيدنا (رقمنا الفريد). السطر السفلي للوارد: رقم الكتاب لدى الجهة المرسلة."></i>
+          <i class="bi bi-info-circle th-info" title="رقم القيد الفريد لدينا (قيدنا)."></i>
           <i class="bi bi-arrow-down-up sort-icon"></i>
+        </div>
+      </th>
+      <th class="col-sender-number">
+        <div class="th-content">
+          <span>رقم الجهة</span>
+          <i class="bi bi-info-circle th-info" title="رقم الكتاب لدى الجهة المرسلة (رقم صادرهم)."></i>
         </div>
       </th>
       <th class="col-date">
         <div class="th-content sortable" data-sort="date">
           <span>التاريخ</span>
-          <i class="bi bi-info-circle th-info" title="للوارد: تاريخ الاستلام (الأعلى) + تاريخ إرسال الجهة (الأسفل). للصادر: تاريخ الإصدار."></i>
+          <i class="bi bi-info-circle th-info" title="للوارد: تاريخ الاستلام. للصادر: تاريخ الإصدار."></i>
           <i class="bi bi-arrow-down-up sort-icon"></i>
+        </div>
+      </th>
+      <th class="col-sender-date">
+        <div class="th-content">
+          <span>تاريخ الإرسال</span>
+          <i class="bi bi-info-circle th-info" title="تاريخ إرسال الجهة المرسلة للكتاب."></i>
         </div>
       </th>
       <th class="col-title">
@@ -49,7 +64,7 @@
       {% endfor %}
     {% else %}
       <tr class="empty-row">
-        <td colspan="7">
+        <td colspan="9">
           <div class="empty-table-message">
             <i class="bi bi-inbox empty-icon"></i>
             <p>لا توجد كتب مطابقة</p>

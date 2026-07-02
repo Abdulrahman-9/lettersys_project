@@ -1,0 +1,51 @@
+{% comment %}
+نموذج عنقود دمج واحد — يستقبل المتغيّر `c` (dict: key / members / canonical).
+يُستخدَم للعناقيد المكتشفة آلياً والتحديد اليدوي معاً.
+{% endcomment %}
+<form method="post" class="merge-cluster mb-3 p-3">
+  {% csrf_token %}
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <span class="text-muted small">عنقود من {{ c.members|length }} جهات</span>
+    <span class="merge-key text-muted">المفتاح: {{ c.key }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr>
+          <th style="width:70px">الأمّ</th>
+          <th>اسم الجهة</th>
+          <th style="width:90px">الرمز</th>
+          <th style="width:80px">صادر</th>
+          <th style="width:80px">وارد</th>
+          <th style="width:80px">تُدمَج</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in c.members %}
+        <tr data-mid="{{ m.id }}">
+          <td>
+            <input class="form-check-input canon-radio" type="radio" name="canonical"
+                   value="{{ m.id }}" required {% if m.id == c.canonical.id %}checked{% endif %}>
+          </td>
+          <td>
+            {{ m.name }}
+            {% if m.id == c.canonical.id %}<span class="canon-star" title="مقترَحة كأمّ">★</span>{% endif %}
+          </td>
+          <td>
+            {% if m.code %}<code>{{ m.code }}</code>{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td>{{ m.issued_count }}</td>
+          <td>{{ m.received_count }}</td>
+          <td>
+            <input class="form-check-input victim-check" type="checkbox" name="victim" value="{{ m.id }}" checked>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <button type="submit" class="btn btn-sm btn-primary"
+          onclick="return confirm('دمج هذا العنقود؟ تنتقل روابط الكتب إلى الجهة الأمّ وتُعطَّل البقية.');">
+    <i class="bi bi-union me-1"></i>دمج هذا العنقود
+  </button>
+</form>

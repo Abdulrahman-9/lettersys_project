@@ -132,32 +132,30 @@ BOOK UNIFIED CARD (Mobile View)
   <div class="book-card-footer">
     {# أيقونات الإجراءات #}
     <div class="card-action-icons">
-      {# معاينة #}
       {% if book.attachment and book.attachment.file %}
+      {# عرض المستند: حوار منبثق أنيق #}
       <button
+        type="button"
         class="card-action-btn btn-preview-mobile"
-        data-book-id="{{ book.id }}"
-        data-book-attachment="{{ book.attachment.file.url }}"
-        data-book-title="{{ book.title|default:'بدون عنوان' }}"
-        aria-label="معاينة"
+        data-doc-preview
+        data-doc-url="{{ book.attachment.file.url }}"
+        data-doc-title="{{ book.title|default:'بدون عنوان' }}"
+        aria-label="عرض المستند"
       >
         <i class="bi bi-file-earmark-pdf"></i>
       </button>
-      {% else %}
-      <button class="card-action-btn btn-preview-mobile-disabled" disabled>
-        <i class="bi bi-file-earmark"></i>
-      </button>
       {% endif %}
-      
-      {# عرض #}
-      <a 
-        href="{% url 'book_detail' book.id %}" 
+      {# نظرة سريعة: نقرة تفتح الحوار (المستند + التفاصيل)؛ Ctrl/الزر الأوسط ينتقل للصفحة الكاملة #}
+      <a
+        href="{% url 'book_detail' book.id %}"
         class="card-action-btn btn-view-mobile"
-        aria-label="عرض"
+        data-book-preview="{{ book.id }}"
+        title="نظرة سريعة"
+        aria-label="نظرة سريعة"
       >
         <i class="bi bi-eye"></i>
       </a>
-      
+
       {# تعديل #}
       <a 
         href="{% url 'book_edit' book.id %}" 

@@ -1,0 +1,217 @@
+# -*- coding: utf-8 -*-
+"""اختبارات core/entity_dedup.py — كشف ودمج الجهات المكرّرة.
+
+يغطّي عملية الدمج المدمِّرة غير القابلة للتراجع (merge_entities) ومنطق
+الكشف والتطبيع. الهدف: ضمان سلامة إعادة توجيه الكتب، عدم ازدواج الروابط،
+نقل بيانات الاتصال بأمان، وتعطيل النسخ مع ضبط merged_into.
+"""
+from datetime import date
+
+from django.contrib.auth.models import User
+from django.test import TestCase
+
+from .models import Book, Entity
+from . import entity_dedup as dd
+
+
+def make_book(num, user, **kw):
+    return Book.objects.create(
+        our_number=num, title='كتاب', date=date(2024, 1, 1),
+        kind='incoming_internal', created_by=user, **kw,
+    )
+
+
+class NormKeyTests(TestCase):
+    """تطبيع الاسم: يوحّد الفروق الإملائية الشائعة فقط."""
+
+    def test_taa_marbuta_equiv(self):
+        self.assertEqual(dd.norm_key('مديرية'), dd.norm_key('مديريه'))
+
+    def test_hamza_alef_equiv(self):
+        self.assertEqual(dd.norm_key('أحمد'), dd.norm_key('احمد'))
+        self.assertEqual(dd.norm_key('إدارة'), dd.norm_key('ادارة'))
+        self.assertEqual(dd.norm_key('آمنة'), dd.norm_key('امنة'))
+
+    def test_alef_maqsura_equiv(self):
+        self.assertEqual(dd.norm_key('مستشفى'), dd.norm_key('مستشفي'))
+
+    def test_whitespace_collapse_and_strip(self):
+        self.assertEqual(dd.norm_key('  وزارة   التعليم  '), dd.norm_key('وزارة التعليم'))
+
+    def test_case_insensitive(self):
+        self.assertEqual(dd.norm_key('ABC Co'), dd.norm_key('abc co'))
+
+    def test_hamza_on_waw_yaa_equiv(self):
+        self.assertEqual(dd.norm_key('مسؤول'), dd.norm_key('مسوول'))
+
+    def test_distinct_names_stay_distinct(self):
+        self.assertNotEqual(dd.norm_key('وزارة الصحة'), dd.norm_key('وزارة المالية'))
+
+
+class CorrectnessScoreTests(TestCase):
+    """درجة صحّة الإملاء — تُستخدم لاختيار الجهة الأمّ الأصحّ."""
+
+    def test_taa_marbuta_scores_higher(self):
+        self.assertGreater(
+            dd.correctness_score(Entity(name='مديرية')),
+            dd.correctness_score(Entity(name='مديريه')),
+        )
+
+    def test_trailing_space_penalized(self):
+        self.assertGreater(
+            dd.correctness_score(Entity(name='وزارة')),
+            dd.correctness_score(Entity(name='وزارة ')),
+        )
+
+
+class ClusterDetectionTests(TestCase):
+    """find_duplicate_clusters: يجمع المتطابقين بعد التطبيع ويختار الأمّ."""
+
+    def test_finds_one_cluster_for_spelling_variants(self):
+        e1 = Entity.objects.create(name='مديرية التربية', etype='both')
+        e2 = Entity.objects.create(name='مديريه التربيه', etype='both')
+        clusters = dd.find_duplicate_clusters()
+        self.assertEqual(len(clusters), 1)
+        self.assertEqual({m.id for m in clusters[0]['members']}, {e1.id, e2.id})
+
+    def test_singleton_makes_no_cluster(self):
+        Entity.objects.create(name='جهة فريدة')
+        self.assertEqual(dd.find_duplicate_clusters(), [])
+
+    def test_inactive_member_excluded(self):
+        Entity.objects.create(name='مديرية التربية')
+        Entity.objects.create(name='مديريه التربيه', is_active=False)
+        self.assertEqual(dd.find_duplicate_clusters(), [])  # نشطة واحدة فقط
+
+    def test_canonical_prefers_entity_with_code(self):
+        no_code = Entity.objects.create(name='مديرية الماء')
+        with_code = Entity.objects.create(name='مديريه الماء', code='WATER')
+        self.assertEqual(dd.find_duplicate_clusters()[0]['canonical'].id, with_code.id)
+
+    def test_canonical_prefers_correct_spelling_when_no_code(self):
+        correct = Entity.objects.create(name='مديرية الكهرباء')   # ة سليمة
+        Entity.objects.create(name='مديريه الكهرباء')             # ه خاطئة
+        self.assertEqual(dd.find_duplicate_clusters()[0]['canonical'].id, correct.id)
+
+
+class ManualClusterTests(TestCase):
+    """build_manual_cluster: تجاوز يدوي للكشف الآلي."""
+
+    def test_returns_none_when_fewer_than_two_active(self):
+        e = Entity.objects.create(name='جهة')
+        self.assertIsNone(dd.build_manual_cluster([e.id]))
+        inactive = Entity.objects.create(name='جهة٢', is_active=False)
+        self.assertIsNone(dd.build_manual_cluster([e.id, inactive.id]))
+
+    def test_builds_cluster_from_semantically_related_names(self):
+        a = Entity.objects.create(name='هيئة الاستثمار', code='INV')
+        b = Entity.objects.create(name='الهيئة العامة للاستثمار')
+        cluster = dd.build_manual_cluster([a.id, b.id])
+        self.assertIsNotNone(cluster)
+        self.assertTrue(cluster['manual'])
+        self.assertEqual(cluster['canonical'].id, a.id)   # صاحبة الرمز
+
+
+class AnnotateBookCountsTests(TestCase):
+    """annotate_book_counts: عدّ الكتب المُصدَرة/المستلَمة بلا ضرب ديكارتي."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('u', password='p')
+
+    def test_counts_issued_and_received(self):
+        e = Entity.objects.create(name='جهة العدّ')
+        b1 = make_book('c-1', self.user); b1.issuing_entities.add(e)
+        b2 = make_book('c-2', self.user); b2.issuing_entities.add(e)
+        b3 = make_book('c-3', self.user); b3.receiving_entities.add(e)
+        got = dd.annotate_book_counts(Entity.objects.filter(id=e.id)).first()
+        self.assertEqual(got.issued_count, 2)
+        self.assertEqual(got.received_count, 1)
+        self.assertEqual(dd.book_count(got), 3)
+
+    def test_deleted_books_not_counted(self):
+        e = Entity.objects.create(name='جهة محذوفة')
+        b = make_book('c-4', self.user, is_deleted=True); b.issuing_entities.add(e)
+        got = dd.annotate_book_counts(Entity.objects.filter(id=e.id)).first()
+        self.assertEqual(got.issued_count, 0)
+
+
+class MergeEntitiesTests(TestCase):
+    """merge_entities: العملية المدمِّرة — إعادة التوجيه + النقل + التعطيل."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('u', password='p')
+        self.canon = Entity.objects.create(name='وزارة الصحة', etype='both')
+        self.victim = Entity.objects.create(name='وزاره الصحه', etype='both')
+
+    def test_repoints_issuing_and_receiving_books(self):
+        b1 = make_book('m-1', self.user); b1.issuing_entities.add(self.victim)
+        b2 = make_book('m-2', self.user); b2.receiving_entities.add(self.victim)
+        res = dd.merge_entities(self.canon.id, [self.victim.id])
+        self.assertIn(self.canon, b1.issuing_entities.all())
+        self.assertNotIn(self.victim, b1.issuing_entities.all())
+        self.assertIn(self.canon, b2.receiving_entities.all())
+        self.assertEqual(res['moved_books'], 2)
+
+    def test_dedupes_shared_book_link(self):
+        b = make_book('m-3', self.user)
+        b.issuing_entities.add(self.canon, self.victim)   # مربوط بالاثنين
+        dd.merge_entities(self.canon.id, [self.victim.id])
+        through = Book.issuing_entities.through
+        self.assertEqual(through.objects.filter(book_id=b.id, entity_id=self.canon.id).count(), 1)
+        self.assertEqual(through.objects.filter(book_id=b.id, entity_id=self.victim.id).count(), 0)
+
+    def test_deactivates_victim_and_sets_merged_into(self):
+        dd.merge_entities(self.canon.id, [self.victim.id])
+        self.victim.refresh_from_db()
+        self.assertFalse(self.victim.is_active)
+        self.assertEqual(self.victim.merged_into_id, self.canon.id)
+
+    def test_carries_contact_when_canonical_empty(self):
+        self.victim.email = 'v@x.com'
+        self.victim.phone = '07700000000'
+        self.victim.save()
+        dd.merge_entities(self.canon.id, [self.victim.id])
+        self.canon.refresh_from_db()
+        self.assertEqual(self.canon.email, 'v@x.com')
+        self.assertEqual(self.canon.phone, '07700000000')
+
+    def test_does_not_overwrite_existing_contact(self):
+        self.canon.email = 'canon@x.com'
+        self.canon.save()
+        self.victim.email = 'victim@x.com'
+        self.victim.save()
+        dd.merge_entities(self.canon.id, [self.victim.id])
+        self.canon.refresh_from_db()
+        self.assertEqual(self.canon.email, 'canon@x.com')   # محفوظ
+
+    def test_carries_code_and_frees_victim_code(self):
+        self.victim.code = 'HEALTH'
+        self.victim.save()
+        dd.merge_entities(self.canon.id, [self.victim.id])
+        self.canon.refresh_from_db()
+        self.victim.refresh_from_db()
+        self.assertEqual(self.canon.code, 'HEALTH')
+        self.assertIsNone(self.victim.code)   # حُرِّر لتفادي تعارض التفرّد
+
+    def test_ignores_canonical_listed_as_victim(self):
+        res = dd.merge_entities(self.canon.id, [self.canon.id])
+        self.assertEqual(res['merged'], 0)
+        self.canon.refresh_from_db()
+        self.assertTrue(self.canon.is_active)
+
+    def test_empty_victims_is_noop(self):
+        res = dd.merge_entities(self.canon.id, [])
+        self.assertEqual(res['merged'], 0)
+        self.assertEqual(res['moved_books'], 0)
+
+    def test_merged_victim_excluded_from_future_clusters(self):
+        dd.merge_entities(self.canon.id, [self.victim.id])
+        self.assertEqual(dd.find_duplicate_clusters(), [])   # النسخة عُطّلت
+
+    def test_summary_counts(self):
+        v2 = Entity.objects.create(name='وزارة الصحه')   # نسخة ثالثة
+        b = make_book('m-4', self.user); b.issuing_entities.add(self.victim)
+        res = dd.merge_entities(self.canon.id, [self.victim.id, v2.id])
+        self.assertEqual(res['merged'], 2)
+        self.assertEqual(res['moved_books'], 1)
+        self.assertEqual(res['canonical'].id, self.canon.id)

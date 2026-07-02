@@ -116,6 +116,7 @@ def _serialize_book(book):
         'urls': {
             'detail': reverse('book_detail', args=[book.id]),
             'edit':   reverse('book_edit',   args=[book.id]),
+            'delete': reverse('api_delete_book', args=[book.id]),
         },
     }
 
@@ -298,6 +299,14 @@ def api_unified_data(request):
     books_qs = list(page_obj.object_list)
     books_data = [_serialize_book(b) for b in books_qs]
 
+    # رسم صفوف الجدول من القالب نفسه المستخدَم في الرسم الأولي (book_unified_row.html) —
+    # مصدر حقيقة واحد للصف بدل إعادة بنائه في JS (buildRow)، فلا يتباعد المساران. #13
+    from django.template.loader import render_to_string
+    rows_html = ''.join(
+        render_to_string('core/partials/book_unified_row.html', {'book': b}, request=request)
+        for b in books_qs
+    )
+
     active_filters = BookFilterEngine.active_filters_summary(
         tab=tab, search_text=search_text,
         date_from=date_from_s, date_to=date_to_s,
@@ -308,6 +317,7 @@ def api_unified_data(request):
 
     return JsonResponse({
         'books': books_data,
+        'rows_html': rows_html,
         'pagination': {
             'current':  page_obj.number,
             'total':    paginator.num_pages,

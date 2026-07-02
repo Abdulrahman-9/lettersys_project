@@ -27,7 +27,7 @@ from core.extraction.kinds import (
     normalize_book_kind,
 )
 from core.document_types import DEFAULT_DOCUMENT_TYPE_BY_KIND, DOCUMENT_TYPE_OPTIONS_BY_KIND
-from core.models import BookSequence, DataExtractionResult
+from core.models import Book, BookSequence, DataExtractionResult
 
 
 def _confidence_percent(value):
@@ -92,8 +92,14 @@ def extraction_smart_desktop(request):
             if not has_permission:
                 raise PermissionDenied
 
+            # قاعدة موحّدة لاختيار الأساسي (تطابق لوحة الإدارة وشارة «أساسي»)
+            from core.attachment_service import pick_primary_attachment
+            _att = pick_primary_attachment(book.attachments.filter(is_deleted=False))
+            _att_info = ({'id': _att.id, 'name': (_att.file.name or '').rsplit('/', 1)[-1]}
+                         if _att and _att.file else None)
             edit_book_json = json.dumps({
                 'pk': book.pk,
+                'attachment': _att_info,
                 'kind': book.kind,
                 'our_number': book.our_number or '',
                 'sender_number': book.sender_number or '',
@@ -128,6 +134,23 @@ def extraction_smart_desktop(request):
         data = BookSequence.get_next(k)
         seq_map[k] = data.get('formatted') or str(data.get('number', ''))
 
+    # وجهة العودة (زر الإلغاء + بعد حفظ التعديل) — يُتحقَّق منها لتفادي open-redirect
+    from django.utils.http import url_has_allowed_host_and_scheme
+    _next = (request.GET.get('next') or '').strip()
+    back_url = _next if url_has_allowed_host_and_scheme(_next, allowed_hosts={request.get_host()}) else ''
+
+    # آخر الكتب المسجّلة (ودجة إغلاق الحلقة) — وضع الإدخال فقط، بترتيب حداثة التسجيل
+    # (created_at لا date)، وبنفس بوابة وصول القائمة (المشرف/الطاقم يرى الكل، وغيرهما كتبه فقط).
+    recent_books = []
+    if edit_book_json == 'null':
+        _rb = Book.objects.filter(is_deleted=False)
+        if not (request.user.is_superuser or request.user.is_staff):
+            _rb = _rb.filter(created_by=request.user)
+        recent_books = list(
+            _rb.order_by('-created_at', '-id').only('id', 'our_number', 'title', 'kind', 'created_at')[:4]
+        )
+        # ملاحظة: القالب يعرض rb.kind_label (خاصية Book جاهزة) — لا حاجة لتعيينها.
+
     return render(
         request,
         'core/extraction_smart_desktop.html',
@@ -140,6 +163,8 @@ def extraction_smart_desktop(request):
             'document_type_defaults_json': json.dumps(DEFAULT_DOCUMENT_TYPE_BY_KIND, ensure_ascii=False),
             'seq_map': seq_map,
             'edit_book_json': edit_book_json,
+            'back_url': back_url,
+            'recent_books': recent_books,
         },
     )
 

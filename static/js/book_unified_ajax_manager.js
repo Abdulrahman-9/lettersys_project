@@ -12,202 +12,19 @@
   const _pageEl = document.getElementById('bookUnifiedPage');
   const API_URL = (_pageEl && _pageEl.dataset.ajaxDataUrl) || '/books/api/unified/data/';
 
-  const KIND_ICONS = {
-    outgoing_internal: '<i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>',
-    outgoing_external: '<i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>',
-    incoming_internal: '<i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>',
-    incoming_external: '<i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>',
-  };
-
-  const STATUS_ICONS = {
-    pending:  '<i class="bi bi-hourglass-split"></i>',
-    hold:     '<i class="bi bi-pause-circle"></i>',
-    done:     '<i class="bi bi-check-circle-fill"></i>',
-    archived: '<i class="bi bi-archive"></i>',
-  };
-
-  // ─── Helper: XSS-safe ────────────────────────────────────────────────────────
-  function esc(str) {
-    const d = document.createElement('div');
-    d.appendChild(document.createTextNode(str == null ? '' : String(str)));
-    return d.innerHTML;
-  }
-
-  // ─── Helper: ISO date → dd-mm-yyyy ──────────────────────────────────────────
-  function fmtDate(iso) {
-    if (!iso) return '—';
-    const p = String(iso).split('-');
-    if (p.length !== 3) return esc(iso);
-    return esc(p[2] + '/' + p[1] + '/' + p[0]);
-  }
-
-  // ─── Build one table row from a book JSON object ─────────────────────────────
-  function buildRow(book) {
-    const ts = book.time_state || 'normal';
-    let rowCls = 'book-row ';
-    if (book.status === 'done' || book.status === 'archived') rowCls += 'book-row-done';
-    else if (ts === 'danger')  rowCls += 'book-row-overdue';
-    else if (ts === 'today')   rowCls += 'book-row-today';
-    else if (ts === 'future')  rowCls += 'book-row-upcoming';
-    else                       rowCls += 'book-row-normal';
-
-    const isIncoming = book.kind && book.kind.startsWith('incoming');
-    const kindIcon = KIND_ICONS[book.kind] || (isIncoming
-      ? '<i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>'
-      : '<i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>');
-
-    const senderInline = isIncoming
-      ? `<div class="sender-number-line" title="رقم الكتاب لدى الجهة المرسلة (رقم صادرهم)">
-           <span class="num-tag num-tag-sender">رقمهم</span>
-           ${book.sender_number
-             ? `<span class="sender-number-value">${esc(book.sender_number)}</span>`
-             : `<span class="sender-number-empty" title="لم يُستورد من النظام القديم — أضِفه عند التعديل">لم يُسجَّل</span>`}
-         </div>`
-      : '';
-
-    let ourNumHtml;
-    if (book.our_number_is_numberless) {
-      ourNumHtml = `<span class="book-number-numberless" title="كتاب داخلي بلا رقم رسمي (استثناء)">بلا رقم</span>`;
-    } else if (!book.our_number) {
-      ourNumHtml = `<span class="book-number-missing" title="لا يوجد رقم قيد — يحتاج تخصيص">غير مسجل</span>`;
-    } else if (book.our_number_year) {
-      ourNumHtml = `<span class="book-number-text"><span class="num-sequence">${esc(book.our_number_sequence)}</span><span class="num-year">/${esc(book.our_number_year)}</span></span>`;
-    } else {
-      ourNumHtml = `<span class="book-number-text">${esc(book.our_number)}</span>`;
-    }
-    const ourTitle = book.legacy_number
-      ? `رقم القيد لدينا: ${esc(book.our_number)} — الأصل: ${esc(book.legacy_number)}`
-      : `رقم القيد لدينا: ${esc(book.our_number)}`;
-
-    let dueHtml = '';
-    if (book.status === 'pending' || book.status === 'hold') {
-      if (ts === 'danger')
-        dueHtml = `<div class="due-indicator due-overdue"><i class="bi bi-exclamation-triangle-fill"></i><span>متأخر (${esc(book.delay_days)} يوم)</span></div>`;
-      else if (ts === 'today')
-        dueHtml = `<div class="due-indicator due-today"><i class="bi bi-calendar-event-fill"></i><span>مستحق اليوم</span></div>`;
-      else if (ts === 'future' && book.delay_days <= 3)
-        dueHtml = `<div class="due-indicator due-followup"><i class="bi bi-clock-fill"></i><span>بعد ${esc(book.delay_days)} يوم</span></div>`;
-    }
-
-    const statusIcon = STATUS_ICONS[book.status] || '';
-    const statusBadge = `<button type="button" class="status-badge status-badge-btn badge-status-${esc(book.status)}"
-      data-book-id="${book.id}"
-      data-current-status="${esc(book.status)}"
-      data-status-url="/books/api/book/${book.id}/status-inline/"
-      title="انقر لتغيير الحالة">${statusIcon}${esc(book.status_label)}<i class="bi bi-chevron-down status-badge-caret"></i></button>`;
-
-    const kindMiniBadge = isIncoming
-      ? `<span class="kind-mini-badge badge-kind-incoming">${esc(book.kind_label)}</span>`
-      : `<span class="kind-mini-badge badge-kind-outgoing">${esc(book.kind_label)}</span>`;
-
-    const attachBadge = book.attachment_url
-      ? `<span class="title-attach-badge" title="يوجد مرفق"><i class="bi bi-paperclip"></i></span>` : '';
-
-    const issuingHtml = (book.issuing_entities || []).map(e =>
-      `<span class="entity-name" title="${esc(e.name)}">${esc(e.name)}</span>`
-    ).join('<span class="text-muted mx-1">·</span>') || '<span class="entity-name text-muted">—</span>';
-
-    const recvHtml = (book.receiving_entities || []).length
-      ? `<div class="entity-secondary"><i class="bi bi-arrow-left-right"></i>${
-          book.receiving_entities.map(e =>
-            `<span class="entity-name-secondary" title="${esc(e.name)}">${esc(e.name)}</span>`
-          ).join('<span class="text-muted mx-1">·</span>')
-        }</div>` : '';
-
-    return `
-<tr class="${rowCls}"
-    data-book-id="${book.id}"
-    data-book-number="${esc(book.our_number)}"
-    data-status="${esc(book.status)}"
-    data-kind="${esc(book.kind)}">
-
-  <td class="col-select">
-    <input class="form-check-input row-checkbox" type="checkbox"
-           value="${book.id}" data-book-id="${book.id}"
-           aria-label="تحديد كتاب رقم ${esc(book.our_number)}">
-  </td>
-
-  <td class="col-our-number">
-    <div class="our-number-cell">
-      <div class="our-number-line" title="${esc(ourTitle)}">
-        ${kindIcon}
-        <span class="num-tag num-tag-ours">قيدنا</span>
-        ${ourNumHtml}
-      </div>
-      ${senderInline}
-    </div>
-  </td>
-
-  <td class="col-date">${
-    isIncoming
-      ? `<div class="date-stack">
-           <div class="date-line date-line-ours" title="تاريخ استلامنا للكتاب">
-             <span class="num-tag num-tag-ours">استلام</span>
-             <span class="date-val">${fmtDate(book.date)}</span>
-           </div>
-           ${book.sender_date_display
-             ? `<div class="date-line date-line-sender" title="تاريخ إرسال الجهة المرسلة">
-                  <span class="num-tag num-tag-sender">إرسال</span>
-                  <span class="date-val-sm">${esc(book.sender_date_display)}</span>
-                </div>`
-             : ''}
-         </div>`
-      : `<span class="date-val" title="تاريخ إصدار الكتاب">${fmtDate(book.date)}</span>`
-  }</td>
-
-  <td class="col-title">
-    <div class="book-title-cell">
-      <div class="book-title-text" title="${esc(book.title)}">${esc(book.title) || 'بدون عنوان'}</div>
-      <div class="title-meta-row">${kindMiniBadge}${attachBadge}</div>
-    </div>
-  </td>
-
-  <td class="col-entity">
-    <div class="book-entity-cell">
-      <div class="entity-primary"><i class="bi bi-building entity-icon"></i>${issuingHtml}</div>
-      ${recvHtml}
-    </div>
-  </td>
-
-  <td class="col-status">
-    <div class="status-cell">${statusBadge}${dueHtml}</div>
-  </td>
-
-  <td class="col-actions">
-    <div class="action-row">
-      ${book.attachment_url
-        ? `<button class="act-btn act-preview btn-preview"
-             data-book-id="${book.id}"
-             data-book-attachment="${esc(book.attachment_url)}"
-             data-book-title="${esc(book.title || 'بدون عنوان')}"
-             title="معاينة المستند">
-             <i class="bi bi-file-earmark-pdf"></i>
-           </button>`
-        : `<button class="act-btn act-disabled" disabled title="لا يوجد مرفق">
-             <i class="bi bi-file-earmark"></i>
-           </button>`
-      }
-      <a href="${book.urls.detail}" class="act-btn act-view" title="عرض التفاصيل"><i class="bi bi-eye"></i></a>
-      <a href="${book.urls.edit}" class="act-btn act-edit" title="تعديل"><i class="bi bi-pencil"></i></a>
-      <button class="act-btn act-delete btn-delete"
-        data-book-id="${book.id}" data-book-number="${esc(book.our_number)}"
-        data-delete-url="/books/api/book/${book.id}/delete/"
-        title="نقل إلى السلة">
-        <i class="bi bi-trash"></i>
-      </button>
-    </div>
-  </td>
-</tr>`;
-  }
+  // ملاحظة: رسم الصف (KIND_ICONS/STATUS_ICONS/esc/fmtDate/buildRow) أُزيل —
+  // الصفوف تُصيَّر خادمياً من book_unified_row.html وتصل عبر data.rows_html (#13).
 
   // ─── Render table body ────────────────────────────────────────────────────────
-  function renderTable(books) {
+  // الصفوف تُصيَّر خادمياً من نفس قالب الرسم الأولي (book_unified_row.html) وتُرسَل في
+  // rows_html — مصدر حقيقة واحد للصف بدل إعادة بنائه هنا، فلا يتباعد المساران (#13).
+  function renderTable(books, rowsHtml) {
     const tbody = document.getElementById('bookTableBody');
     if (!tbody) return;
 
     if (!books || books.length === 0) {
       tbody.innerHTML = `<tr class="empty-row">
-        <td colspan="7" class="text-center py-5">
+        <td colspan="9" class="text-center py-5">
           <div class="empty-table-message">
             <i class="bi bi-inbox empty-icon"></i>
             <p class="empty-text">لا توجد كتب مطابقة</p>
@@ -218,7 +35,7 @@
         </td>
       </tr>`;
     } else {
-      tbody.innerHTML = books.map(buildRow).join('');
+      tbody.innerHTML = rowsHtml || '';
       // Re-attach tooltips if Bootstrap is available
       if (window.bootstrap) {
         tbody.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el =>
@@ -227,6 +44,59 @@
       }
       // Status toggle + delete handlers are managed via delegated listeners in book_unified_api.js
     }
+  }
+
+  // ─── Search highlighting ──────────────────────────────────────────────────────
+  // يلفّ مطابقات نص البحث داخل خلايا الرقم/العنوان/الجهة بـ <mark> ويبرز الصف.
+  // يعمل على نصوص DOM الموجودة فعلاً (آمن من XSS — لا HTML من المستخدم).
+  const HL_CELL_SELECTOR = '.col-our-number, .col-sender-number, .col-title, .col-entity';
+
+  function _highlightTextNode(node, lowerTerm, termLen) {
+    const text = node.nodeValue;
+    const lowerText = text.toLowerCase();
+    let idx = lowerText.indexOf(lowerTerm);
+    if (idx === -1) return false;
+
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    while (idx !== -1) {
+      if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
+      const mark = document.createElement('mark');
+      mark.className = 'search-hl';
+      mark.textContent = text.slice(idx, idx + termLen);
+      frag.appendChild(mark);
+      last = idx + termLen;
+      idx = lowerText.indexOf(lowerTerm, last);
+    }
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+    return true;
+  }
+
+  function highlightMatches(term) {
+    const tbody = document.getElementById('bookTableBody');
+    if (!tbody) return;
+
+    // تنظيف إبراز الصفوف السابق (الـ <mark> يختفي تلقائياً عند إعادة بناء tbody)
+    tbody.querySelectorAll('tr.book-row--match').forEach(r => r.classList.remove('book-row--match'));
+
+    const clean = (term || '').trim();
+    if (!clean) return;
+    const lowerTerm = clean.toLowerCase();
+    const termLen = clean.length;
+
+    tbody.querySelectorAll('tr.book-row').forEach(row => {
+      let matched = false;
+      row.querySelectorAll(HL_CELL_SELECTOR).forEach(cell => {
+        const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        nodes.forEach(n => {
+          if (_highlightTextNode(n, lowerTerm, termLen)) matched = true;
+        });
+      });
+      if (matched) row.classList.add('book-row--match');
+    });
   }
 
   // ─── Render pagination ────────────────────────────────────────────────────────
@@ -291,21 +161,15 @@
   // ─── Render tab/pill badge counts from server response ───────────────────────
   function renderBadgeCounts(badges) {
     if (!badges) return;
+    // المعرّفات الحيّة فقط (book_unified_tabs.html + book_unified_filter_bar.html)
+    // ومفاتيح get_counter_badges: all/incoming/outgoing/pending/due_today/overdue/archived
     const MAP = {
-      'badge-all':      badges.all,
-      'badge-incoming': badges.incoming,
-      'badge-outgoing': badges.outgoing,
-      'badge-overdue':  badges.overdue,
-      'badge-today':    badges.today,
-      'badge-upcoming': badges.upcoming,
-      'badge-done':     badges.done,
-      'badge-archived': badges.archived,
-      'pill-count-overdue':  badges.overdue,
-      'pill-count-today':    badges.today,
-      'pill-count-upcoming': badges.upcoming,
-      'pill-count-done':     badges.done,
-      'pill-count-archived': badges.archived,
-      'quickStatsTotal':     badges.all,
+      'badge-incoming':       badges.incoming,
+      'badge-outgoing':       badges.outgoing,
+      'pill-count-pending':   badges.pending,
+      'pill-count-due-today': badges.due_today,
+      'pill-count-overdue':   badges.overdue,
+      'pill-count-archived':  badges.archived,
     };
     for (const [id, val] of Object.entries(MAP)) {
       const el = document.getElementById(id);
@@ -351,6 +215,12 @@
 
       // Update search results display on page load
       setTimeout(() => { this.updateSearchResultsDisplay(); }, 100);
+
+      // تظليل مطابقات البحث في صفوف الجدول المُحمَّلة من الخادم (SSR)
+      if (this.currentState.search) highlightMatches(this.currentState.search);
+
+      // تمرير وإبراز الكتاب المطلوب من ودجة «آخر الكتب» (?focus=<id>)
+      this._focusRequestedBook();
     }
 
     // ─── Theme switching: incoming → blue, outgoing → yellow ───────────────────
@@ -574,7 +444,6 @@
     // ─── 6. Core: fetch + re-render ────────────────────────────────────────────
     async updateUrlAndLoadData() {
       if (this.isLoading) return;
-      this.isLoading = true;
 
       const params = {};
       if (this.currentState.tab && this.currentState.tab !== 'incoming') params.tab = this.currentState.tab;
@@ -590,6 +459,15 @@
       // Update browser URL without reload
       const qs = new URLSearchParams(params).toString();
       const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+
+      // الجوال: بطاقات القائمة تُصيَّر خادمياً فقط (لا مسار AJAX لها) —
+      // فنعتمد تنقّلاً كاملاً ليُعاد بناؤها بدل بقاء القائمة قديمة.
+      if (window.matchMedia('(max-width: 991.98px)').matches) {
+        window.location.href = newUrl;
+        return;
+      }
+
+      this.isLoading = true;
       history.pushState(params, '', newUrl);
 
       // Show loading overlay
@@ -606,7 +484,8 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
-        renderTable(data.books);
+        renderTable(data.books, data.rows_html);
+        highlightMatches(this.currentState.search);
         renderPagination(data.pagination, params);
         renderFilterBadges(data.active_filters);
         renderBadgeCounts(data.badges);
@@ -656,6 +535,19 @@
       this.currentState.page       = parseInt(p.get('page')) || 1;
       this.currentState.sort       = p.get('sort')       || '-date';
       this.applyTheme();
+    }
+
+    // ─── تمرير + إبراز كتاب محدَّد قادم من ودجة «آخر الكتب» (?focus=<id>) ─────────
+    _focusRequestedBook() {
+      const raw = new URLSearchParams(window.location.search).get('focus');
+      const id = parseInt(raw, 10);
+      if (!id) return;
+      const tbody = document.getElementById('bookTableBody');
+      const row = tbody && tbody.querySelector(`tr.book-row[data-book-id="${id}"]`);
+      if (!row) return;
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      row.classList.add('book-row--focused');
+      setTimeout(() => { row.classList.remove('book-row--focused'); }, 2600);
     }
 
     clearAllFilters() {

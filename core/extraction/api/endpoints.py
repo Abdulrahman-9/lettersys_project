@@ -314,6 +314,10 @@ def smart_extract_direct(request):
                 'book_number_confidence': result.book_number_confidence,
                 'book_date': result.book_date,
                 'book_date_confidence': result.book_date_confidence,
+                'sender_date': result.sender_date,
+                'sender_date_confidence': result.sender_date_confidence,
+                'sender_number': result.sender_number,
+                'sender_number_confidence': result.sender_number_confidence,
                 'title': result.title,
                 'title_confidence': result.title_confidence,
                 'issuing_entity': result.issuing_entity_name,
@@ -397,7 +401,17 @@ def scan_token_retrieve(request, token: str):
             status_code=status.HTTP_404_NOT_FOUND,
             error_code='TOKEN_NOT_FOUND',
         )
-    return Response({'success': True, 'data': data}, status=status.HTTP_200_OK)
+    # ربط الرمز بصاحبه (يسدّ IDOR على رمز مُسرَّب)
+    uid = data.get('user_id')
+    if uid is not None and uid != request.user.id and not request.user.is_superuser:
+        return _api_response(
+            False, 'رمز المسح غير متاح',
+            status_code=status.HTTP_404_NOT_FOUND, error_code='TOKEN_NOT_FOUND',
+        )
+    # لا نُسرّب مسار الخادم المطلق ولا user_id للواجهة — نكشف has_file فقط
+    safe = {k: v for k, v in data.items() if k not in ('processed_path', 'user_id')}
+    safe['has_file'] = bool(data.get('processed_path'))
+    return Response({'success': True, 'data': safe}, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])

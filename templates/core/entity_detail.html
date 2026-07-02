@@ -61,12 +61,15 @@
           <div class="d-flex align-items-center gap-2 mb-2">
             <span class="badge bg-primary-subtle text-primary fs-6 px-3 py-2"><i class="bi bi-building me-1"></i>{{ entity.name }}</span>
             {% if entity.code %}<span class="badge bg-secondary-subtle text-secondary">{{ entity.code }}</span>{% endif %}
-            {% if entity.etype == 'issuer' %}
-              <span class="badge bg-info-subtle text-info">جهة مرسلة</span>
-            {% elif entity.etype == 'receiver' %}
-              <span class="badge bg-success-subtle text-success">جهة مستقبلة</span>
-            {% elif entity.etype == 'both' %}
-              <span class="badge bg-warning-subtle text-warning">مرسلة ومستقبلة</span>
+            {# النوع مُشتَقّ من روابط الكتب الفعلية، لا من حقل يدوي #}
+            {% if issued_count and received_count %}
+              <span class="badge bg-warning-subtle text-warning">مُصدِرة ومستلِمة</span>
+            {% elif issued_count %}
+              <span class="badge bg-info-subtle text-info">جهة مُصدِرة</span>
+            {% elif received_count %}
+              <span class="badge bg-success-subtle text-success">جهة مستلِمة</span>
+            {% else %}
+              <span class="badge bg-secondary-subtle text-secondary">بلا كتب</span>
             {% endif %}
           </div>
           {% if entity.notes %}
@@ -104,7 +107,7 @@
     <div class="col-6 col-md-3">
       <div class="card border-0 shadow-sm text-center p-3">
         <div class="fs-2 fw-bold text-info">
-          {% if entity.etype == 'issuer' %}مرسلة{% elif entity.etype == 'receiver' %}مستقبلة{% else %}كلاهما{% endif %}
+          {% if issued_count and received_count %}كلاهما{% elif issued_count %}مُصدِرة{% elif received_count %}مستلِمة{% else %}—{% endif %}
         </div>
         <small class="text-muted">نوع الجهة</small>
       </div>

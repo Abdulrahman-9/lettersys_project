@@ -25,7 +25,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
     <!-- Design System (موحد للألوان والمسافات) -->
     <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260419-shellfix">
-    <link rel="stylesheet" href="{% static 'app.css' %}?v=20260419-shellfix">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20260629-preview">
     
     <style>
       /* ضمان طباعة الألوان في جميع المتصفحات */
@@ -99,6 +99,10 @@
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' and request.GET.tab == 'overdue' %} active{% endif %}" href="{% url 'book_unified' %}?tab=overdue" title="الوصول السريع">
               <i class="bi bi-lightning-charge-fill"></i>
               <span>الوصول السريع</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dossier_list' or request.resolver_match.url_name == 'dossier_detail' %} active{% endif %}" href="{% url 'dossier_list' %}" title="الأضابير">
+              <i class="bi bi-folder2-open"></i>
+              <span>الأضابير</span>
             </a>
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'notifications' %} active{% endif %}" href="{% url 'notifications' %}" title="التنبيهات">
               <i class="bi bi-bell-fill"></i>
@@ -209,11 +213,17 @@
     <!-- Bootstrap Bundle with Popper -->
     <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
 
+    <!-- عرض المستندات الموحّد (مصدر واحد لبناء العنصر + الحوار المنبثق) -->
+    <script src="{% static 'js/doc_view.js' %}?v=20260629-preview2"></script>
+
     <!-- مودال معاينة الكتاب الموحد (يعمل من أي صفحة) -->
     {% include "core/partials/book_preview_modal.html" %}
+
+    <!-- مودال معاينة المستند المنبثق (يعمل من أي صفحة) -->
+    {% include "core/partials/document_preview_modal.html" %}
     
-    <!-- jQuery (مطلوب لـ Smart Merge UI) -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- jQuery (مطلوب لـ Smart Merge UI) — مُستضاف محلياً (يعمل دون إنترنت + يحترم CSP) -->
+    <script src="{% static 'vendor/jquery.min.js' %}"></script>
     
     <!-- نظام الأكواد الخطأ الموحد -->
     <script src="{% static 'error-codes.js' %}"></script>
@@ -223,11 +233,7 @@
     
     <!-- نظام إدارة الكتب - JavaScript الحديث -->
     <script src="{% static 'app.js' %}"></script>
-    
-    <!-- Smart Merge System -->
-    <script src="{% static 'pdf_viewer.js' %}"></script>
-    <script src="{% static 'smart_merge_ui.js' %}"></script>
-    
+
     <!-- Sidebar Mini Toggle -->
     <script>
     (function () {

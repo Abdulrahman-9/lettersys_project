@@ -33,6 +33,7 @@ from .books import (
     book_detail,
     book_edit,
     book_change_status,
+    book_report,
     api_book_inline_status,
 )
 
@@ -58,6 +59,16 @@ from .entities import (
     entity_edit,
     entity_delete,
     entity_bulk_delete,
+    entity_restore,
+    entity_bulk_restore,
+    entity_merge,
+)
+
+# الأضابير (مجلّدات مراسلات الأقسام)
+from .dossiers import (
+    dossier_list,
+    dossier_detail,
+    dossier_report,
 )
 
 # استيراد معالجات لوحة التحكم والتقارير
@@ -97,21 +108,20 @@ from .users import (
 from .api import (
     serve_service_worker,
     update_book_notes,
+    attachment_ocr_text,
     record_ocr_feedback,
     ocr_training_statistics,
     trigger_ocr_training,
 )
 
-# إعدادات الماسح الضوئي
+# إعدادات الماسح الضوئي (وكيل NAPS2 المحلي)
 from .scan_settings import (
     scan_settings_page,
-    scan_watcher_status_api,
-    scan_watcher_diagnostics,
-    scan_test_capture,
-    scan_launch_api,
-    scan_check_protocol,
-    scan_download_installer,
-    scan_install_protocol,
     scan_file_serve,
-    scan_process_local_file,
+    scan_preview_page,
+    scan_manifest,
+    scan_edit_page,
+    scan_stage_attachment,
+    scan_process_upload,
+    scan_agent_token,
 )

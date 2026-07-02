@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}إضبارة: {{ entity.name }}{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20260701c">{% endblock %}
+
+{% block content %}
+<div class="dossier-detail">
+
+  <div class="dd-head">
+    <div class="dd-crumb"><a href="{% url 'dossier_list' %}"><i class="bi bi-chevron-right"></i> كل الأضابير</a></div>
+    <div class="dd-titlerow">
+      <div class="dd-title">
+        <div class="ic"><i class="bi bi-folder2-open"></i></div>
+        <div>
+          <h4>{{ entity.name }}</h4>
+          {% if entity.code %}<span class="code">{{ entity.code }}</span>{% endif %}
+        </div>
+      </div>
+      <a class="btn-report" href="{% url 'dossier_report' entity.pk %}{% if querystring %}?{{ querystring }}{% endif %}" target="_blank" rel="noopener">
+        <i class="bi bi-printer-fill"></i> طباعة التقرير
+      </a>
+    </div>
+    <div class="dd-stats">
+      <span class="dd-stat t">الإجمالي: {{ total_count }}</span>
+      <span class="dd-stat o"><i class="bi bi-arrow-up-right"></i> صادر: {{ outgoing_count }}</span>
+      <span class="dd-stat i"><i class="bi bi-arrow-down-left"></i> وارد: {{ incoming_count }}</span>
+    </div>
+  </div>
+
+  {# ── شريط فلاتر بنمط «كل الكتب» (fb-*): بحث + رقائق حالة (أيقونة+عدّاد) + متقدّم ── #}
+  <form class="dossier-filters" method="get">
+    <div class="dd-fbar">
+      <div class="fb-search">
+        <input type="text" name="q" value="{{ filters.q }}" placeholder="ابحث برقم القيد أو العنوان أو الملاحظة..." aria-label="بحث في الإضبارة" autocomplete="off">
+        <i class="bi bi-search fb-search-icon"></i>
+      </div>
+
+      <span class="fb-divider"></span>
+
+      {# رقائق حالة المتابعة — روابط GET (تحترم التدهور الرشيق بلا JS) #}
+      <div class="fb-pills" role="group" aria-label="فلترة حالة المتابعة">
+        <a class="fb-pill{% if not filters.followup %} active{% endif %}" href="?{{ qs_no_followup }}"{% if not filters.followup %} aria-current="page"{% endif %}><i class="bi bi-list-ul"></i> الكل</a>
+        {% for c in counter_chips %}
+        <a class="fb-pill fb-pill-{{ c.css }}{% if c.active %} active{% endif %}" href="?{% if qs_no_followup %}{{ qs_no_followup }}&{% endif %}followup={{ c.key }}"{% if c.active %} aria-current="page"{% endif %}>
+          <i class="bi {{ c.icon }}"></i> {{ c.label }} <span class="fb-pill-count">{{ c.count }}</span>
+        </a>
+        {% endfor %}
+      </div>
+
+      {# فلترة متقدّمة (details بلا JS — تدهور رشيق) #}
+      <details class="dd-advanced"{% if active_filter_count %} open{% endif %}>
+        <summary class="fb-advanced-toggle">
+          <i class="bi bi-sliders"></i> متقدّم{% if active_filter_count %} <span class="fb-active-count">{{ active_filter_count }}</span>{% endif %}
+        </summary>
+        <div class="dd-advanced-panel filter-form">
+          <div class="ff-group">
+            <label for="f-type">نوع المستند</label>
+            <select id="f-type" name="document_type">
+              <option value="">كل الأنواع</option>
+              {% for t in available_types %}
+              <option value="{{ t.value }}"{% if filters.document_type == t.value %} selected{% endif %}>{{ t.value }} ({{ t.count }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="ff-group">
+            <label for="f-from">من تاريخ</label>
+            <input id="f-from" type="date" name="date_from" value="{{ filters.date_from|date:'Y-m-d' }}">
+          </div>
+          <div class="ff-group">
+            <label for="f-to">إلى تاريخ</label>
+            <input id="f-to" type="date" name="date_to" value="{{ filters.date_to|date:'Y-m-d' }}">
+          </div>
+          <div class="ff-group ff-periods">
+            <span id="f-period-lbl" class="ff-periods-lbl">فترة سريعة <small>(مؤرَّخة خلال…)</small></span>
+            <div class="period-chips" role="group" aria-labelledby="f-period-lbl">
+              {% for p in period_presets %}
+              <a class="pchip{% if p.active %} on{% endif %}"
+                 href="?{% if qs_no_period %}{{ qs_no_period }}&{% endif %}period={{ p.key }}"
+                 {% if p.active %}aria-current="page"{% endif %}>{{ p.label }}</a>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="ff-group">
+            <label for="f-secret">مستوى السرية</label>
+            <select id="f-secret" name="secret_level">
+              <option value="">الكل</option>
+              {% for key, lbl in secret_labels.items %}
+              <option value="{{ key }}"{% if filters.secret_level == key %} selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="ff-group">
+            <label for="f-sort">الترتيب</label>
+            <select id="f-sort" name="sort">
+              <option value="-date"{% if filters.sort == '-date' %} selected{% endif %}>الأحدث أولاً</option>
+              <option value="date"{% if filters.sort == 'date' %} selected{% endif %}>الأقدم أولاً</option>
+              <option value="-our_number"{% if filters.sort == '-our_number' %} selected{% endif %}>رقم الكتاب (تنازلي)</option>
+              <option value="our_number"{% if filters.sort == 'our_number' %} selected{% endif %}>رقم الكتاب (تصاعدي)</option>
+              <option value="title"{% if filters.sort == 'title' %} selected{% endif %}>العنوان (أ-ي)</option>
+            </select>
+          </div>
+          <div class="ff-actions">
+            <a class="clear" href="{% url 'dossier_detail' entity.pk %}">مسح الفلاتر</a>
+            <button type="submit" class="apply"><i class="bi bi-funnel"></i> تطبيق</button>
+          </div>
+        </div>
+      </details>
+    </div>
+  </form>
+
+  {% if filter_summary %}
+  <div class="active-chips">
+    {% for item in filter_summary %}<span class="chip">{{ item }}</span>{% endfor %}
+  </div>
+  {% endif %}
+
+  {# تبويبا الاتجاه (JS) — مع تدهور رشيق: بلا JS تظهر اللوحتان مع عناوين #}
+  <div class="dd-tabs" role="tablist" aria-label="اتجاه الكتب">
+    <button type="button" class="dd-tab out active" id="tab-out" role="tab" aria-selected="true" aria-controls="pane-out" data-pane="pane-out"><i class="bi bi-arrow-up-right"></i> صادر <span class="cnt">{{ outgoing_count }}</span></button>
+    <button type="button" class="dd-tab in" id="tab-in" role="tab" aria-selected="false" aria-controls="pane-in" data-pane="pane-in"><i class="bi bi-arrow-down-left"></i> وارد <span class="cnt">{{ incoming_count }}</span></button>
+  </div>
+
+  {# ── تبويب الصادر ── #}
+  <div class="dd-pane active" id="pane-out" role="tabpanel" aria-labelledby="tab-out" tabindex="0">
+    <div class="dd-pane-title"><i class="bi bi-arrow-up-right"></i> الكتب الصادرة ({{ outgoing_count }})</div>
+    {% if outgoing_groups %}
+      {% for g in outgoing_groups %}
+      <details class="type-group" open>
+        <summary><i class="bi bi-tag-fill" style="color:#b45309"></i> {{ g.type }} <span class="gcount">{{ g.count }}</span> <i class="bi bi-chevron-left chev"></i></summary>
+        <table class="dd-table">
+          <thead><tr><th>رقم الكتاب</th><th>العنوان</th><th>التاريخ</th><th>الجهة المستلمة</th><th>المتابعة</th><th>إجراءات</th></tr></thead>
+          <tbody>
+          {% for b in g.books %}{% include "core/partials/dossier_book_row.html" with b=b side="out" %}{% endfor %}
+          </tbody>
+        </table>
+        {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذا القسم ←</a></div>{% endif %}
+      </details>
+      {% endfor %}
+    {% else %}
+      <div class="dd-empty">لا كتب صادرة{% if active_filter_count %} تطابق الفلاتر{% endif %}.</div>
+    {% endif %}
+  </div>
+
+  {# ── تبويب الوارد ── #}
+  <div class="dd-pane" id="pane-in" role="tabpanel" aria-labelledby="tab-in" tabindex="0">
+    <div class="dd-pane-title"><i class="bi bi-arrow-down-left"></i> الكتب الواردة ({{ incoming_count }})</div>
+    {% if incoming_groups %}
+      {% for g in incoming_groups %}
+      <details class="type-group" open>
+        <summary><i class="bi bi-tag-fill" style="color:#1e5a9e"></i> {{ g.type }} <span class="gcount">{{ g.count }}</span> <i class="bi bi-chevron-left chev"></i></summary>
+        <table class="dd-table">
+          <thead><tr><th>رقم الكتاب</th><th>العنوان</th><th>التاريخ</th><th>الجهة المرسِلة</th><th>المتابعة</th><th>إجراءات</th></tr></thead>
+          <tbody>
+          {% for b in g.books %}{% include "core/partials/dossier_book_row.html" with b=b side="in" %}{% endfor %}
+          </tbody>
+        </table>
+        {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذا القسم ←</a></div>{% endif %}
+      </details>
+      {% endfor %}
+    {% else %}
+      <div class="dd-empty">لا كتب واردة{% if active_filter_count %} تطابق الفلاتر{% endif %}.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+(function(){
+  document.body.classList.add('dd-js');   // تفعيل وضع التبويبات (بدونه تظهر اللوحتان)
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.dd-tab'));
+  function activate(tab){
+    tabs.forEach(function(t){
+      var on = t === tab;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      var pane = document.getElementById(t.dataset.pane);
+      if (pane) pane.classList.toggle('active', on);
+    });
+  }
+  tabs.forEach(function(tab, i){
+    tab.addEventListener('click', function(){ activate(tab); });
+    tab.addEventListener('keydown', function(e){
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
+        e.preventDefault();
+        var dir = e.key === 'ArrowRight' ? 1 : -1;   // RTL: يمين=التالي
+        var next = tabs[(i + dir + tabs.length) % tabs.length];
+        next.focus(); activate(next);
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}
