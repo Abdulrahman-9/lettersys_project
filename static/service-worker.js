@@ -1,103 +1,114 @@
 /**
  * ============================================
- * Service Worker - PWA Support with Updates
+ * Service Worker - PWA (قشرة ثابتة فقط)
  * ============================================
- * Service worker with automatic update detection
+ * مبدأ الأمان: لا يُخزَّن أي محتوى مُصادَق (صفحات HTML أو API أو media) إطلاقاً،
+ * كي لا تتسرّب بيانات مستخدم إلى آخر على جهاز مشترك عند انقطاع الشبكة.
+ * يُخزَّن فقط app shell الثابت (CSS/JS/صفحة عدم الاتصال).
  */
 
-const CACHE_NAME = 'lettersys-v' + (Date.now() % 10000);
-const URLS_TO_CACHE = [
-  '/',
+// نسخة ثابتة — زِدها يدوياً عند تحديث الأصول الثابتة.
+// (لا تستخدم Date.now: يُبطل التخزين ويعيد بناء الكاش في كل تحميل.)
+const CACHE_VERSION = 'v31';
+const CACHE_NAME = 'lettersys-' + CACHE_VERSION;
+
+// قشرة التطبيق الثابتة فقط — لا '/' ولا أي صفحة مُصادَقة.
+const SHELL_URLS = [
   '/static/app.css',
   '/static/app.js',
   '/offline.html'
 ];
 
-// Install event
+// Install — تخزين القشرة الثابتة
 self.addEventListener('install', (event) => {
-  console.log('Service Worker: Installing...');
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('Service Worker: Caching app shell');
-      return cache.addAll(URLS_TO_CACHE).catch(() => {
-        console.warn('Some URLs could not be cached');
-      });
-    })
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(SHELL_URLS).catch(() => {
+        console.warn('SW: تعذّر تخزين بعض ملفات القشرة');
+      })
+    )
   );
   self.skipWaiting();
 });
 
-// Activate event with cache cleanup and update notification
+// Activate — تنظيف الكاش القديم وإخطار العملاء بالتحديث
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker: Activating...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Service Worker: Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => {
-      // Notify all clients about update availability
-      return self.clients.matchAll().then((clients) => {
-        clients.forEach((client) => {
-          client.postMessage({
-            type: 'UPDATE_AVAILABLE',
-            message: 'تحديث جديد متوفر للتطبيق'
-          });
-        });
-      });
-    })
+    caches.keys()
+      .then((names) => Promise.all(
+        names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))
+      ))
+      .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll())
+      .then((clients) => {
+        clients.forEach((client) => client.postMessage({
+          type: 'UPDATE_AVAILABLE',
+          message: 'تحديث جديد متوفر للتطبيق'
+        }));
+      })
   );
-  self.clients.claim();
 });
 
-// Fetch event - Network first, fallback to cache
+// Fetch
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  
-  // Skip non-GET requests
-  if (request.method !== 'GET') {
-    return;
-  }
-  
-  // Skip cross-origin requests
-  if (!request.url.startsWith(self.location.origin)) {
+
+  // GET فقط ونفس الأصل
+  if (request.method !== 'GET') return;
+  if (!request.url.startsWith(self.location.origin)) return;
+
+  const url = new URL(request.url);
+
+  // طلبات التنقّل (صفحات HTML مُصادَقة): الشبكة فقط، وعند الانقطاع صفحة عدم الاتصال.
+  // لا تخزين إطلاقاً — هذا هو إصلاح تسرّب البيانات بين المستخدمين.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).catch(() => caches.match('/offline.html'))
+    );
     return;
   }
 
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        // Cache successful responses
-        if (response && response.status === 200) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseClone);
-          });
-        }
-        return response;
+  // نقاط API و media قد تحمل محتوى مُصادَقاً → الشبكة فقط بلا تخزين.
+  if (
+    url.pathname.startsWith('/books/api/') ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/media/')
+  ) {
+    event.respondWith(
+      fetch(request).catch(() => new Response(
+        JSON.stringify({ error: 'Offline' }),
+        { status: 503, statusText: 'Service Unavailable', headers: { 'Content-Type': 'application/json' } }
+      ))
+    );
+    return;
+  }
+
+  // الأصول الثابتة فقط: cache-first مع تحديث بالخلفية (stale-while-revalidate).
+  if (url.pathname.startsWith('/static/')) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const network = fetch(request).then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        }).catch(() => cached);
+        return cached || network;
       })
-      .catch(() => {
-        // Fallback to cache on network error
-        return caches.match(request).then((response) => {
-          return response || new Response(
-            JSON.stringify({ error: 'Offline' }),
-            { status: 503, statusText: 'Service Unavailable' }
-          );
-        });
-      })
-  );
+    );
+    return;
+  }
+
+  // أي شيء آخر: الشبكة فقط (مع محاولة كاش كحلّ أخير للأصول فقط).
+  event.respondWith(fetch(request).catch(() => caches.match(request)));
 });
 
-// Message handler for skip waiting
+// تخطّي الانتظار عند طلب العميل
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });
 
-console.log('Service Worker: Loaded');
+console.log('Service Worker: Loaded (' + CACHE_NAME + ')');

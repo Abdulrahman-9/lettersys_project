@@ -5,10 +5,26 @@
  * ============================================
  */
 
+/**
+ * عتبات الثقة الموحَّدة لألوان شارات الحقول — مصدر الحقيقة الدلالي خادمياً هو
+ * ConfidenceAnalyzer (core/extraction/helpers.py): high ≥ 0.85، medium ≥ 0.65.
+ * (كان JS سابقاً يستخدم 0.70 للـ medium، فيظهر لون مختلف لنفس القيمة بين الواجهة
+ *  وتقرير المراجعة الخادمي — وحّدناه على 0.65.)
+ * TODO: إعادة معايرة هذه العتبات بعد استقرار محرّك Tesseract الجديد (مقياس ثقته
+ *       يختلف عن EasyOCR) — بالتنسيق مع نافذة تطوير المحرّك.
+ */
+const CONFIDENCE_THRESHOLDS = { high: 0.85, medium: 0.65 };
+
 class ExtractionSmartSystem {
     constructor() {
         this.currentFile = null;
         this.scannedFiles = [];   // مصفوفة الصفحات الممسوحة (للدمج مع "مسح المزيد")
+        // معاينة المستند الممسوح عبر صور الخادم (PyMuPDF) — تلائم اللوحة دائماً
+        this.previewToken = null;
+        this.pageCount = 1;
+        this.currentPage = 1;
+        this.zoom = 1;
+        this.previewDpi = 130;
         this.extractedData = {};
         this.confidenceScores = {};
         this.suggestions = {};
@@ -25,6 +41,10 @@ class ExtractionSmartSystem {
         this.documentTypeSelectionByKind = {};
         this.documentTypeStorageKey = 'lettersys.documentTypeCustomByKind';
         this.customDocumentTypeCatalog = this.readStoredDocumentTypes();
+        // وضع التعديل: مصدر واحد يُقرأ عند الإنشاء (قبل init) — وسم JSON للبيانات + سمة الجذر لوجهة العودة.
+        // يُغني عن monkey-patch القالب لكشف الوضع في saveBook/ensureReservation.
+        this._editData = this.readJsonScript('editBookData', null);
+        this.backUrl = (document.querySelector('.extraction-container')?.dataset.backUrl) || '';
         this.messages = {
             ar: {
                 uploadRequired: 'يرجى تحميل ملف أولاً',
@@ -63,6 +83,7 @@ class ExtractionSmartSystem {
             entityList: dataset.entityListEndpoint || '/books/api/entity-list/',
             suggestions: dataset.suggestionsEndpoint || '/books/api/suggestions/',
             saveBook: dataset.saveBookEndpoint || '/books/api/book/save/',
+            updateBook: dataset.updateBookEndpoint || '/books/api/book/update/',
             nextNumber: dataset.nextNumberEndpoint || '/books/api/next-number/',
             reservationReserve: dataset.reservationReserveEndpoint || '/books/api/reservation/reserve/',
             reservationVoid: dataset.reservationVoidEndpoint || '/books/api/reservation/void/',
@@ -369,6 +390,7 @@ class ExtractionSmartSystem {
     init() {
         this.setupEventListeners();
         this.setupKeyboardShortcuts();
+        this.setupTextUndo();
         this.loadSuggestions();
         this.loadEntityData();
         this.setupEntityCodeRecognition();
@@ -377,6 +399,127 @@ class ExtractionSmartSystem {
         this.applyInitialContext();
         this.enhanceUIFeedback();
         this.checkScanToken();
+        this._initScanAgent();
+    }
+
+    /** يحدّث مؤشّر حالة الوكيل (الحبّة الملوّنة) في شريط المسح. */
+    setScanStatus(state, text) {
+        const pill = document.getElementById('scanAgentStatus');
+        if (pill) { pill.dataset.state = state; if (text) pill.textContent = text; }
+    }
+
+    /** يعيد المؤشّر لحالة «جاهز: اسم الجهاز» إن كان هناك ماسح معروف. */
+    _resetScanPill() {
+        const devs = this._scanDevices || [];
+        if (!devs.length) return;
+        const sel = document.getElementById('scanDeviceSelect');
+        const chosen = (sel && sel.value) || devs[0].id;
+        const name = (devs.find(d => d.id === chosen) || devs[0]).name;
+        this.setScanStatus('ready', 'جاهز: ' + name);
+    }
+
+    /**
+     * يحدّد عنوان الوكيل العامل: يجرّب 127.0.0.1 ثم localhost (كلاهما مسموح في CSP
+     * وCORS). يحلّ حالة حجب توجيه/بروكسي المتصفح لأحد المضيفين دون الآخر (مثلاً
+     * التطبيق على localhost والبروكسي يحجب 127.0.0.1). يُخزَّن أوّل ناجح + استجابة health.
+     */
+    async _resolveAgentBase(td) {
+        if (this._agentBase) return this._agentBase;
+        let port = '17865';
+        try { port = new URL(td.agent_url).port || '17865'; } catch (_) {}
+        for (const base of [`http://127.0.0.1:${port}`, `http://localhost:${port}`]) {
+            try {
+                const r = await this._fetchWithTimeout(base + '/agent/health', {}, 5000);
+                if (r.ok) { this._agentBase = base; this._agentHealth = await r.json(); return base; }
+            } catch (_) { /* جرّب المضيف التالي */ }
+        }
+        return null;
+    }
+
+    // فحص جاهزية وكيل المسح المحلي وملء قائمة الأجهزة + المؤشّر (بلا مستمع نقر منافس).
+    async _initScanAgent() {
+        this._startAgentHealthMonitor();
+        const pill   = document.getElementById('scanAgentStatus');
+        const select = document.getElementById('scanDeviceSelect');
+        const setPill = (state, text) => { if (pill) { pill.dataset.state = state; pill.textContent = text; } };
+        const hideSelect = () => { if (select) select.style.display = 'none'; };
+        this._scanDevices = [];
+        try {
+            const td = await (await this._fetchWithTimeout('/books/api/scan/agent-token/', { credentials: 'same-origin' }, 8000)).json();
+            if (!td.available) { this._agentHealthy = false; setPill('unavailable', 'وكيل المسح غير مشغّل'); hideSelect(); return; }
+            const agentBase = await this._resolveAgentBase(td);
+            if (!agentBase) { this._agentHealthy = false; setPill('unavailable', 'تعذّر الاتصال بالوكيل'); hideSelect(); return; }
+            const hd = this._agentHealth || {};
+            if (!hd.naps2_available) { this._agentHealthy = false; setPill('no_naps2', 'NAPS2 غير مثبّت'); hideSelect(); return; }
+            const dd = await (await this._fetchWithTimeout(agentBase + '/agent/devices', { headers: { 'X-LetterSys-Token': td.token } }, 20000)).json();
+            this._scanDevices = dd.devices || [];
+            if (!this._scanDevices.length) { this._agentHealthy = true; setPill('no_device', 'لا يوجد ماسح متصل'); hideSelect(); return; }
+            if (select) {
+                select.innerHTML = '';
+                this._scanDevices.forEach(d => {
+                    const o = document.createElement('option');
+                    o.value = d.id; o.textContent = d.name;
+                    select.appendChild(o);
+                });
+                const last = localStorage.getItem('lettersys_scan_device');
+                if (last && this._scanDevices.some(d => d.id === last)) select.value = last;
+                select.style.display = this._scanDevices.length > 1 ? '' : 'none';
+                select.onchange = () => localStorage.setItem('lettersys_scan_device', select.value);
+            }
+            // المسح أوتوماتيكي بالكامل — لا خيارات جودة يدوية (وجهان/لون/تدوير).
+            const chosen = (select && select.value) || this._scanDevices[0].id;
+            const name = (this._scanDevices.find(d => d.id === chosen) || this._scanDevices[0]).name;
+            this._agentHealthy = true;
+            setPill('ready', 'جاهز: ' + name);
+        } catch (e) {
+            this._agentHealthy = false;
+            setPill('unavailable', 'وكيل المسح غير مشغّل');
+            hideSelect();
+        }
+    }
+
+    /** مراقبة دورية لحالة الوكيل — تُنبّه باحترافية عند توقّفه أو عدم استجابته (وعند عودته). */
+    _startAgentHealthMonitor() {
+        if (this._agentMonitorTimer) return;
+        this._agentMonitorTimer = setInterval(() => this._pollAgentHealth(), 25000);
+    }
+
+    async _pollAgentHealth() {
+        // لا تُزعج أثناء مسح جارٍ
+        const pill = document.getElementById('scanAgentStatus');
+        if (pill && pill.dataset.state === 'scanning') return;
+
+        let state = 'ready', title = '', msg = '';
+        try {
+            const td = await (await this._fetchWithTimeout('/books/api/scan/agent-token/', { credentials: 'same-origin' }, 5000)).json();
+            if (!td.available) {
+                state = 'unavailable'; title = 'توقّف وكيل المسح';
+                msg = 'توقّف وكيل المسح المحلي أو أُغلق. شغّله لاستئناف المسح.';
+            } else {
+                const hd = await (await this._fetchWithTimeout(td.agent_url + '/agent/health', {}, 4000)).json();
+                if (!hd.naps2_available) {
+                    state = 'no_naps2'; title = 'NAPS2 غير مثبّت';
+                    msg = 'برنامج المسح NAPS2 لم يعد متوفّراً على هذا الجهاز.';
+                }
+            }
+        } catch (_) {
+            state = 'unavailable'; title = 'وكيل المسح لا يستجيب';
+            msg = 'توقّف وكيل المسح أو لا يستجيب. أعد تشغيله لاستئناف المسح.';
+        }
+
+        const wasHealthy = this._agentHealthy !== false;   // غير معروف ⇒ نعدّه سليماً
+        const nowHealthy = state === 'ready';
+        this._agentHealthy = nowHealthy;
+
+        if (nowHealthy) {
+            if (!wasHealthy) {
+                this._resetScanPill();
+                this.showToast('عاد وكيل المسح للعمل — يمكنك المسح الآن.', 'success', 4000, 'الماسح جاهز');
+            }
+        } else {
+            this.setScanStatus(state, title);
+            if (wasHealthy) this.showToast(msg, 'warning', 6000, title);   // نبّه عند التحوّل فقط
+        }
     }
 
     /**
@@ -387,7 +530,24 @@ class ExtractionSmartSystem {
         const params = new URLSearchParams(window.location.search);
         const token = params.get('scan_token');
         if (!token) return;
+        // تنبيه مُخزَّن من مسار قديم كان يعيد التوجيه — إن وُجد
+        let notice = null;
+        try {
+            notice = sessionStorage.getItem('lettersys_scan_notice');
+            if (notice) sessionStorage.removeItem('lettersys_scan_notice');
+        } catch (_) {}
+        // نظّف الرمز من الـURL فوراً (بلا إعادة تحميل)
+        window.history.replaceState({}, '', window.location.pathname);
+        this._loadScanToken(token, { notice });
+    }
 
+    /**
+     * يجلب بيانات scan_token، يملأ الحقول، ويعرض الملف الممسوح — بلا إعادة تحميل للصفحة.
+     * يُستدعى من checkScanToken (رمز في الـURL) ومن startScan مباشرةً بعد المسح المحلي،
+     * فيحفظ ما أدخله المستخدم قبل المسح بدل محوه بإعادة التحميل.
+     */
+    _loadScanToken(token, { notice = null } = {}) {
+        this.scanToken = token;   // يُرسَل عند الحفظ لحلقة التقاط التدريب (نصّ OCR → الحقول)
         const tokenUrl = `/books/api/extract/scan-token/${encodeURIComponent(token)}/`;
         this._showProgressBanner('جاري تحميل بيانات المسح...');
 
@@ -401,19 +561,26 @@ class ExtractionSmartSystem {
                 const data = resp.data;
                 this.extractedData = data;
                 this._fillExtractionFields(data);
-                this._showProgressBanner(
-                    `تم تحميل بيانات المسح تلقائياً — ثقة ${Math.round((data.overall_confidence || 0) * 100)}%`,
-                    data.needs_review ? 'warning' : 'success'
-                );
+                // تنبيه (تأجيل الاستخراج/فشل OCR) له الأولوية على رسالة الثقة
+                if (notice) {
+                    this._showProgressBanner(notice, 'warning');
+                } else {
+                    this._showProgressBanner(
+                        `تم تحميل بيانات المسح تلقائياً — ثقة ${Math.round((data.overall_confidence || 0) * 100)}%`,
+                        data.needs_review ? 'warning' : 'success'
+                    );
+                }
                 // تحميل وعرض الملف الممسوح في منطقة المعاينة (بدون إعادة OCR)
-                if (data.processed_path) {
+                // (الخادم لم يعد يُسرّب processed_path — يكشف has_file فقط)
+                if (data.has_file || data.processed_path) {
+                    // المعاينة تُرسَم كصور خادم عبر هذا الـtoken (تلائم اللوحة دائماً)
+                    this.previewToken = token;
+                    this.pageCount = data.page_count || 1;
+                    this.currentPage = 1;
                     const fileUrl = `/books/api/scan/serve/${encodeURIComponent(token)}/`;
                     const fileName = data.source_file || 'scanned-document';
                     this.loadScannedFile(fileUrl, fileName, { noAutoExtract: true });
                 }
-                // مسح الرمز من URL بدون إعادة تحميل الصفحة
-                const cleanUrl = window.location.pathname;
-                window.history.replaceState({}, '', cleanUrl);
             })
             .catch(err => {
                 console.warn('[ScanToken] fetch error:', err);
@@ -449,13 +616,22 @@ class ExtractionSmartSystem {
     }
 
     _fillExtractionFields(data) {
+        this.beginTextUndoBatch?.();   // لقطة قبل التعبئة → يصير الاستخراج خطوة تراجع واحدة
         const setVal = (id, val) => {
             const el = document.getElementById(id);
             if (el && val != null && val !== '') el.value = val;
         };
+        // ملاحظة DRY: هذا التعيين يوازي applyExtractionResult (مسار الرفع المباشر).
+        // المعرّفات الصحيحة في القالب هي #date و #title (لا #bookDate/#bookTitle) —
+        // الخلل هنا كان يمنع ملء التاريخ والعنوان نهائياً في مسار scan_token.
+        // لم يُدمج المساران بعد لأن مُنتِج كاش scan_token قيد إعادة الكتابة في نافذة
+        // أخرى (عقد القيمة المُخزَّنة غير مُجمَّد) — يُوحَّدان حين يستقرّ العقد.
+        const dateOnly = (v) => (v ? String(v).slice(0, 10) : v);   // ISO بوقت → YYYY-MM-DD
         setVal('bookNumber', data.book_number);
-        setVal('bookDate', data.book_date);
-        setVal('bookTitle', data.title);
+        setVal('date', dateOnly(data.book_date));
+        setVal('senderDate', dateOnly(data.sender_date));
+        setVal('senderNumber', data.sender_number);
+        setVal('title', data.title);
         setVal('secretLevel', data.secret_level);
         if (data.book_kind) {
             setVal('bookKind', data.book_kind);
@@ -468,6 +644,24 @@ class ExtractionSmartSystem {
             const receivingInput = document.querySelector('[data-field="receivingEntity"] input, #receivingEntity');
             if (receivingInput) receivingInput.value = data.receiving_entity;
         }
+        // حافّة الثقة + بطاقتا P1 في مسار المسح أيضاً — البيانات مُصدَّرة في result_to_scan_data
+        const confMap = {
+            bookNumber: 'book_number_confidence',
+            date: 'book_date_confidence',
+            senderDate: 'sender_date_confidence',
+            senderNumber: 'sender_number_confidence',
+            title: 'title_confidence',
+            secretLevel: 'secret_level_confidence',
+            issuingEntity: 'issuing_entity_confidence',
+            receivingEntity: 'receiving_entity_confidence',
+        };
+        Object.keys(confMap).forEach(fid => {
+            const c = data[confMap[fid]];
+            if (typeof c === 'number') this.setFieldConfidence(fid, c);
+        });
+        this.updateQualitySummary(data);
+        this.endTextUndoBatch?.();
+
         if (data.needs_review) {
             console.info('[ScanToken] manual review recommended — confidence below threshold');
         }
@@ -666,6 +860,8 @@ class ExtractionSmartSystem {
      */
 
     ensureReservation(kind) {
+        // وضع التعديل: الرقم ثابت فلا حجز (كان override في القالب — نُقل للصنف لتوحيد كشف الوضع)
+        if (this._editData) return Promise.resolve(null);
         // Already have an active reservation cached for this kind → just paint
         if (this.reservations[kind] && this.reservations[kind].id) {
             this.applyReservationToUI(kind, this.reservations[kind]);
@@ -917,10 +1113,13 @@ class ExtractionSmartSystem {
 
             if (btnId === 'clearFile' || btnId === 'clearFileFromModal') {
                 e.preventDefault();
-                console.log('[ExtractionSmart] Calling clearFile() from:', btnId);
+                // حذف الملف/الصورة فقط — لا يمسّ الحقول (تفريغ الحقول فعلٌ منفصل صريح)
                 this.clearFile();
-                // مسح النموذج أيضاً عند مسح الملف
-                this.clearForm();            } else if (btnId === 'extractButton') {
+            } else if (btnId === 'clearFormButton') {
+                e.preventDefault();
+                console.log('[ExtractionSmart] Calling clearForm()');
+                this.clearForm();
+            } else if (btnId === 'extractButton') {
                 e.preventDefault();
                 console.log('[ExtractionSmart] Calling extractData()');
                 this.extractData();
@@ -931,11 +1130,7 @@ class ExtractionSmartSystem {
             } else if (btnId === 'startScanButton') {
                 e.preventDefault();
                 console.log('[ExtractionSmart] Calling startScan()');
-                this.startScan({ append: false });
-            } else if (btnId === 'scanMoreButton') {
-                e.preventDefault();
-                console.log('[ExtractionSmart] Calling startScan({append:true})');
-                this.startScan({ append: true });
+                this.startScan();
             } else if (btnId === 'clearScannedButton') {
                 e.preventDefault();
                 console.log('[ExtractionSmart] Calling clearScannedFile()');
@@ -1002,6 +1197,19 @@ class ExtractionSmartSystem {
                 e.preventDefault();
                 this.saveBook();
             }
+            // Ctrl/Cmd + Z: تراجع نصّي بسيط (الحقول النصية فقط)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+                const el = document.activeElement;
+                // داخل حقل قابل للتحرير غير مُتتبَّع (الجهات/التواريخ) → دع المتصفّح يتراجع محرفياً
+                const tracked = ['senderNumber', 'title', 'documentTypeCustom', 'margin'];
+                const editableUntracked = el
+                    && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+                    && !tracked.includes(el.id);
+                if (!editableUntracked) {
+                    e.preventDefault();
+                    this.performTextUndo();
+                }
+            }
             // Escape: Clear
             if (e.key === 'Escape') {
                 this.clearForm();
@@ -1014,6 +1222,69 @@ class ExtractionSmartSystem {
             }
             this.handleFormNavigationKeydown(e);
         });
+    }
+
+    // ── Ctrl+Z: تراجع بسيط للحقول النصية فقط ──
+    // يلتقط: الكتابة اليدوية (مُجمَّعة بمهلة) + التعبئة/التفريغ البرمجي (عبر begin/endTextUndoBatch).
+    // حقول التاريخ والجهات مُستثناة عمداً (تبسيط) — لها تراجع المتصفّح الأصلي.
+    setupTextUndo() {
+        const IDS = ['senderNumber', 'title', 'documentTypeCustom', 'margin'];
+        const MAX = 60;
+        const stack = [];      // [{id, value}] — أحدث تغيير في النهاية
+        const prev = {};       // آخر قيمة مُثبَّتة لكل حقل
+        const timers = {};
+        let batch = null;
+
+        const push = (id, value) => {
+            const top = stack[stack.length - 1];
+            if (top && top.id === id && top.value === value) return;   // تفادي تكرار متطابق
+            stack.push({ id, value });
+            if (stack.length > MAX) stack.shift();
+        };
+        const commit = (id) => {
+            const el = document.getElementById(id);
+            if (!el || el.value === prev[id]) return;
+            push(id, prev[id] != null ? prev[id] : '');
+            prev[id] = el.value;
+        };
+
+        IDS.forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            prev[id] = el.value || '';
+            el.addEventListener('input', () => {
+                clearTimeout(timers[id]);
+                timers[id] = setTimeout(() => commit(id), 350);   // تجميع الكتابة المتتابعة كخطوة واحدة
+            });
+            el.addEventListener('blur', () => { clearTimeout(timers[id]); commit(id); });
+        });
+
+        // دفعة تراجع واحدة حول تعبئة/تفريغ برمجي لا يُطلق حدث input (استخراج المسح، تفريغ الحقول)
+        this.beginTextUndoBatch = () => {
+            batch = {};
+            IDS.forEach((id) => { const el = document.getElementById(id); if (el) batch[id] = el.value; });
+        };
+        this.endTextUndoBatch = () => {
+            if (!batch) return;
+            IDS.forEach((id) => {
+                const el = document.getElementById(id);
+                if (el && batch[id] !== el.value) { push(id, batch[id]); prev[id] = el.value; }
+            });
+            batch = null;
+        };
+
+        this.performTextUndo = () => {
+            // ثبّت أي كتابة معلّقة قبل التراجع
+            IDS.forEach((id) => { clearTimeout(timers[id]); commit(id); });
+            const entry = stack.pop();
+            if (!entry) { this.showToast('لا يوجد ما يُتراجَع عنه', 'info'); return; }
+            const el = document.getElementById(entry.id);
+            if (!el) return;
+            el.value = entry.value;
+            prev[entry.id] = entry.value;   // كي لا يُلتقط الاسترجاع نفسه كتغيير جديد
+            el.focus();
+            try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+        };
     }
 
     handleFormNavigationKeydown(e) {
@@ -1117,15 +1388,15 @@ class ExtractionSmartSystem {
             'margin',
             'uploadFileButton',
             'startScanButton',
-            'scanMoreButton',
             'clearScannedButton',
+            'clearFormButton',
             'extractButton',
             'saveButton'
         ];
     }
 
     isActionButtonField(fieldId) {
-        return ['uploadFileButton', 'startScanButton', 'scanMoreButton', 'clearScannedButton', 'extractButton', 'saveButton'].includes(fieldId);
+        return ['uploadFileButton', 'startScanButton', 'clearScannedButton', 'clearFormButton', 'extractButton', 'saveButton'].includes(fieldId);
     }
 
     isElementNavigable(element) {
@@ -1296,202 +1567,186 @@ class ExtractionSmartSystem {
         }
     }
 
-    // ===== مسح ضوئي — النظام الجديد (Hot Folder Watcher + Protocol Handler) =====
+    // ===== مسح ضوئي — وكيل NAPS2 المحلي (TWAIN/WIA/ADF → PDF → رفع مباشر) =====
 
-    // تُطلق البروتوكول عبر <a>.click() — الطريقة الأكثر موثوقية عبر المتصفحات
-    // لا تُغادر الصفحة لأن روابط البروتوكول المخصص تُطلق التطبيق وتبقى على الصفحة الحالية
-    _launchProtocol(protoUrl) {
-        const a = document.createElement('a');
-        a.href = protoUrl;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => a.remove(), 500);
-    }
-
-    _showProtocolInstallModal() {
-        const modalId = 'protocolInstallModal';
-        document.getElementById(modalId)?.remove();
-        const html = `
-<div class="modal fade" id="${modalId}" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header bg-warning text-dark">
-        <h5 class="modal-title"><i class="bi bi-shield-lock me-2"></i>تثبيت بروتوكول الماسح</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body" id="protocolModalBody">
-        <p>يحتاج النظام تسجيل بروتوكول الاتصال مع برنامج المسح الضوئي على هذا الجهاز (مرة واحدة فقط).</p>
-        <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>يُكتب في سجل المستخدم (HKCU) — لا يحتاج صلاحيات مسؤول.</p>
-      </div>
-      <div class="modal-footer" id="protocolModalFooter">
-        <button type="button" class="btn btn-primary" id="protocolInstallBtn">
-          <i class="bi bi-gear-fill me-1"></i>ثبّت تلقائياً
-        </button>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-      </div>
-    </div>
-  </div>
-</div>`;
-        document.body.insertAdjacentHTML('beforeend', html);
-        const el    = document.getElementById(modalId);
-        const modal = (typeof bootstrap !== 'undefined' && bootstrap.Modal)
-            ? new bootstrap.Modal(el) : null;
-        if (modal) modal.show(); else { el.style.display = 'block'; el.classList.add('show'); }
-
-        document.getElementById('protocolInstallBtn').addEventListener('click', async () => {
-            const installBtn = document.getElementById('protocolInstallBtn');
-            const body       = document.getElementById('protocolModalBody');
-            installBtn.disabled = true;
-            installBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جارٍ التثبيت...';
-            const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-            try {
-                const r = await fetch('/books/api/scan/install-protocol/', {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': csrf },
-                    credentials: 'same-origin',
-                });
-                const d = await r.json();
-                if (d.ok) {
-                    body.innerHTML = '<div class="alert alert-success mb-0"><i class="bi bi-check-circle-fill me-2"></i>تم التثبيت بنجاح — جارٍ تشغيل الماسح...</div>';
-                    document.getElementById('protocolModalFooter').style.display = 'none';
-                    setTimeout(() => {
-                        if (modal) modal.hide(); else el.remove();
-                        this.startScan();
-                    }, 1200);
-                } else {
-                    body.innerHTML = `<div class="alert alert-danger mb-2"><i class="bi bi-x-circle me-1"></i>${d.error}</div><a href="/books/api/scan/download-installer/" download class="btn btn-sm btn-outline-secondary">تحميل يدوي</a>`;
-                    installBtn.style.display = 'none';
-                }
-            } catch (_) {
-                body.innerHTML = '<div class="alert alert-danger mb-0">فشل الاتصال بالخادم</div>';
-                installBtn.style.display = 'none';
-            }
-        });
-    }
-
-    async startScan(options = {}) {
-        const append = !!options.append;
-        this._scanAppendMode = append;
+    async startScan(opts = {}) {
+        if (this._scanInProgress) {   // امنع مسحاً متزامناً → يمنع تعاقب قفل الماسح وتكرار الحواريّات
+            this.showToast('هناك عملية مسح جارية — انتظر انتهاءها أو ألغِها أولاً.', 'warning', 5000);
+            return;
+        }
+        this._scanInProgress = true;
         this._scanCancelled  = false;
+        this._scanAbort      = new AbortController();          // لإجهاض طلب المسح فعلاً عند الإلغاء/المهلة
+        this._scanAppendMode = !!(opts && opts.appendMode);    // وضع التعديل: مسح وإلحاق بالمستند القائم
 
         const btn          = document.getElementById('startScanButton');
         const scanProgress = document.getElementById('scanProgress');
-        if (!btn) return;
-
-        const origHTML = btn.innerHTML;
-        btn.disabled   = true;
+        const origHTML     = btn ? btn.innerHTML : '';
+        if (btn) btn.disabled = true;
         if (scanProgress) scanProgress.style.display = 'flex';
 
-        // زر إلغاء
+        // إلغاء موحّد: يُجهض الطلب المعلّق فعلاً ويُحرّر كل الحالة (زر الشريط + زر الأوفرلاي كلاهما يستدعيه)
+        const doCancel = () => {
+            if (this._scanCancelled) return;
+            this._scanCancelled = true;
+            try { this._scanAbort && this._scanAbort.abort(); } catch (_) {}
+            this._endScan(btn, origHTML, scanProgress);
+            this.showToast('تم إلغاء المسح', 'info');
+        };
+
+        // زر إلغاء في شريط المسح (يظهر في وضع الإدخال)
         const cancelBtn = document.createElement('button');
         cancelBtn.className = 'btn btn-sm btn-outline-danger';
         cancelBtn.innerHTML = '<i class="bi bi-x-circle"></i> إلغاء';
         cancelBtn.style.marginRight = '10px';
-        cancelBtn.onclick = () => {
-            this._scanCancelled = true;
-            this._restoreScanButton(btn, origHTML, scanProgress);
-            cancelBtn.remove();
-            this.showToast('تم إلغاء المسح', 'info');
-        };
+        cancelBtn.onclick = doCancel;
         if (scanProgress?.parentElement) {
             scanProgress.parentElement.appendChild(cancelBtn);
             this.scanCancelButton = cancelBtn;
         }
 
+        // وضع التعديل: شريط المسح مخفيّ → التقدّم وزر الإلغاء داخل أوفرلاي المعاينة (لا يعلق المستخدم)
+        if (this._scanAppendMode) {
+            this._showExtractionOverlay('جارٍ المسح الضوئي…', 'التقاط الصفحات لإلحاقها بالمستند', doCancel);
+        }
+
+        if (!btn) { this._endScan(btn, origHTML, scanProgress); return; }
+
         const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
         if (!csrf) {
             this.showToast('خطأ: رمز CSRF غير موجود', 'error');
-            this._restoreScanButton(btn, origHTML, scanProgress);
+            this._endScan(btn, origHTML, scanProgress);
             return;
         }
 
-        // 0) فحص تسجيل البروتوكول أولاً
-        try {
-            const pr = await fetch('/books/api/scan/check-protocol/', { credentials: 'same-origin' });
-            const pd = await pr.json();
-            if (!pd.installed) {
-                this._restoreScanButton(btn, origHTML, scanProgress);
-                cancelBtn.remove();
-                this._showProtocolInstallModal();
-                return;
+        // ── المسح عبر وكيل NAPS2 المحلي — المسار الوحيد (TWAIN/WIA/ADF → PDF → رفع مباشر) ──
+        const setMsg = (m) => {
+            const e = scanProgress?.querySelector('.progress-message');
+            if (e) e.textContent = m;
+            if (this._scanAppendMode) {   // زامن نصّ التقدّم مع أوفرلاي المعاينة (وضع التعديل)
+                const ov = document.querySelector('#modalBody .extraction-loading-overlay .overlay-text');
+                if (ov) ov.textContent = m;
             }
-        } catch (err) {
-            console.warn('[scan] protocol check failed (continuing anyway):', err);
-        }
-
-        // 1) اطلب رابط البروتوكول من السيرفر
-        try {
-            const r = await fetch('/books/api/scan/launch/', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-            });
-            const data = await r.json();
-            if (this._scanCancelled) return;
-            if (!data.ok || !data.scan_url) {
-                const msg = data.error || 'تعذّر تشغيل الماسح';
-                this.showToast(data.fix_url ? `${msg} — <a href="${data.fix_url}">إعدادات الماسح</a>` : msg, 'error');
-                this._restoreScanButton(btn, origHTML, scanProgress);
-                cancelBtn.remove();
-                return;
-            }
-            // 2) خذ baseline قبل الإطلاق لتجنب race condition
-            let baseline = 0;
-            try {
-                const sr = await fetch('/books/api/scan/watcher-status/', { credentials: 'same-origin' });
-                baseline = (await sr.json()).file_count || 0;
-            } catch (err) {
-                console.warn('[scan] baseline fetch failed:', err);
-            }
-            // 3) أطلق Protocol Handler عبر iframe مخفي (لا يُبعد المستخدم عن الصفحة)
-            this._launchProtocol(data.scan_url);
-            // 4) راقب watcher بـ baseline دقيق
-            this._pollWatcherForFile(btn, origHTML, scanProgress, cancelBtn, baseline);
-        } catch (err) {
-            console.warn('[scan] launch failed:', err);
-            if (!this._scanCancelled) {
-                this.showToast('خطأ في الاتصال بالماسح', 'error');
-                this._restoreScanButton(btn, origHTML, scanProgress);
-                cancelBtn.remove();
-            }
-        }
-    }
-
-    _pollWatcherForFile(btn, origHTML, scanProgress, cancelBtn, baseline = 0) {
-        const start    = Date.now();
-        const MAX_MS   = 180000;  // 3 دقائق
-        const INTERVAL = 2500;
-        const progEl   = scanProgress?.querySelector('.progress-message') || scanProgress;
-        if (progEl) progEl.textContent = 'الماسح يعمل — اضغط Finish عند الانتهاء';
-
-        const poll = async () => {
-            if (this._scanCancelled) return;
-            if (Date.now() - start > MAX_MS) {
-                this.showToast('انتهت مهلة انتظار الماسح — يمكنك رفع الملف يدوياً', 'warning');
-                this._restoreScanButton(btn, origHTML, scanProgress);
-                cancelBtn?.remove();
-                return;
-            }
-            try {
-                const r = await fetch('/books/api/scan/watcher-status/', { credentials: 'same-origin' });
-                const d = await r.json();
-                if ((d.file_count || 0) > baseline) {
-                    this.showToast(`✓ تم اكتشاف الملف: ${d.last_file || ''}`, 'success');
-                    if (d.last_token) {
-                        window.location.href = '/books/extract/smart-desktop/?scan_token=' + d.last_token;
-                        return;
-                    }
-                    this._restoreScanButton(btn, origHTML, scanProgress);
-                    cancelBtn?.remove();
-                    return;
-                }
-            } catch (err) {
-                console.warn('[scan] watcher poll failed:', err);
-            }
-            setTimeout(poll, INTERVAL);
         };
-        setTimeout(poll, INTERVAL);
+        const fail = (msg, title = 'تعذّر المسح') => {
+            if (this._scanCancelled) return;
+            this.showToast(msg, 'error', 7000, title);
+            this._endScan(btn, origHTML, scanProgress);   // يحرّر الحارس + المؤشّر + الأوفرلاي + زر الإلغاء
+        };
+        try {
+            // 1) توكِن وعنوان الوكيل المحلي من Django (يقرأ ملف التوكِن على نفس الجهاز)
+            setMsg('التحقق من وكيل المسح...');
+            let td;
+            try {
+                td = await (await this._fetchWithTimeout('/books/api/scan/agent-token/', { credentials: 'same-origin' }, 8000)).json();
+            } catch (_) {
+                return fail('تعذّر الوصول إلى الخادم للتحقق من وكيل المسح. حدّث الصفحة وأعد المحاولة.', 'تعذّر الاتصال');
+            }
+            if (!td.available) {
+                return fail('لم يُعثر على وكيل المسح المحلي. شغّل تطبيق «LetterSys Scan Agent» على هذا الجهاز ثم أعد المحاولة.', 'وكيل المسح غير مشغّل');
+            }
+            const token = td.token;
+            if (this._scanCancelled) return;
+
+            // 2) حدّد عنوان الوكيل العامل (يجرّب 127.0.0.1 ثم localhost) + فحص NAPS2
+            const agentUrl = await this._resolveAgentBase(td);
+            if (!agentUrl) {
+                return fail(
+                    'تعذّر الاتصال بوكيل المسح المحلي رغم تشغيله. قد يحجب توجيه/بروكسي المتصفح المضيف المحلي '
+                    + '(127.0.0.1 وlocalhost) — استثنِ المضيف المحلي من البروكسي، أو افتح التطبيق عبر '
+                    + 'http://127.0.0.1:8000، ثم أعد المحاولة.',
+                    'تعذّر الاتصال بالوكيل');
+            }
+            const hd = this._agentHealth || {};
+            if (!hd.naps2_available) {
+                return fail('برنامج المسح NAPS2 غير مثبّت على هذا الجهاز. ثبّته من naps2.com ثم أعد المحاولة.', 'NAPS2 غير مثبّت');
+            }
+
+            // 3) اختيار الجهاز: من القائمة المنسدلة إن وُجدت، وإلا أول جهاز متاح
+            let dd;
+            try {
+                dd = await (await this._fetchWithTimeout(agentUrl + '/agent/devices', { headers: { 'X-LetterSys-Token': token } }, 20000)).json();
+            } catch (err) {
+                const noResp = err && err.name === 'AbortError';
+                return fail(
+                    noResp ? 'لم يستجب الماسح أثناء البحث عن الأجهزة. تأكّد أنه يعمل ولم يتوقّف.'
+                           : 'تعذّر الاتصال بوكيل المسح لقراءة الأجهزة.',
+                    noResp ? 'الماسح لا يستجيب' : 'تعذّر الاتصال بالوكيل');
+            }
+            const devices = dd.devices || [];
+            if (!devices.length) {
+                return fail('لم يُكتشف أي ماسح متصل. تأكّد من توصيل الماسح وتشغيله، ثم أعد المحاولة.', 'لا يوجد ماسح');
+            }
+            const sel = document.getElementById('scanDeviceSelect');
+            const chosenId = (sel && sel.value) || localStorage.getItem('lettersys_scan_device');
+            const device = devices.find(d => d.id === chosenId) || devices[0];
+            if (this._scanCancelled) return;
+
+            // 4) المسح الأوتوماتيكي بالكامل عبر NAPS2 (يُعيد PDF).
+            // الوكيل يكتشف المصدر تلقائياً (وجهان ADF → وجه → زجاج) ويحلّ خطأ «0 صفحات»،
+            // والخادم يزيل الصفحات الفارغة تلقائياً → اكتشاف الوجه/الوجهين بلا أي ضبط يدوي.
+            setMsg('جارٍ المسح التلقائي من ' + device.name + '...');
+            this.setScanStatus('scanning', 'جارٍ المسح…');
+            let sr;
+            // مهلة طويلة للمسح متعدد الصفحات (ADF)، لكن عبر AbortController نفسه كي يُجهضه زر الإلغاء فعلاً
+            const scanTO = setTimeout(() => { try { this._scanAbort && this._scanAbort.abort(); } catch (_) {} }, 180000);
+            try {
+                sr = await fetch(agentUrl + '/agent/scan', {
+                    method: 'POST',
+                    headers: { 'X-LetterSys-Token': token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_id: device.id, driver: device.driver, mode: 'auto' }),
+                    signal: this._scanAbort.signal,
+                });
+            } catch (err) {
+                clearTimeout(scanTO);
+                if (this._scanCancelled) return;   // الإلغاء نظّف الحالة بالفعل عبر doCancel
+                const noResp = err && err.name === 'AbortError';
+                return fail(
+                    noResp ? 'لم يكتمل المسح ضمن المهلة المحددة. قد يكون الماسح متوقّفاً أو في انتظار ورق — تحقّق منه وأعد المحاولة.'
+                           : 'انقطع الاتصال بالماسح أثناء المسح. تأكّد أنه متّصل ويعمل.',
+                    noResp ? 'الماسح لا يستجيب' : 'انقطع الاتصال بالماسح');
+            }
+            clearTimeout(scanTO);
+            if (!sr.ok) {
+                let e = {}; try { e = await sr.json(); } catch (_) {}
+                // رسالة الوكيل عند صفر صفحات صارت إرشادية (ضع الورق…) — نعرضها كما هي
+                return fail(e.error || ('فشل المسح (رمز ' + sr.status + '). تأكّد من الورق والجهاز ثم أعد المحاولة.'), 'تعذّر المسح');
+            }
+            const blob = await sr.blob();
+            if (this._scanCancelled) return;
+
+            // 4) رفع الـPDF إلى Django (جلسة + CSRF) — مع إزالة الصفحات الفارغة تلقائياً
+            setMsg('جارٍ تجهيز المستند...');
+            const fd = new FormData();
+            fd.append('file', blob, 'scan.pdf');
+            fd.append('trim_blanks', '1');           // إزالة ظهور الصفحات الفارغة (مسح مزدوج)
+            const ud = await (await fetch('/books/api/scan/process-upload/', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-CSRFToken': csrf },
+                body: fd,
+            })).json();
+            if (!ud.ok) return fail(ud.error || 'فشل رفع الملف الممسوح');
+            if (ud.trimmed_pages > 0) {
+                this.showToast('مسح تلقائي: أُزيلت ' + ud.trimmed_pages + ' صفحة فارغة — تبقّى ' + ud.page_count + ' صفحة.', 'info', 5000);
+            }
+            // استئناف محلي بلا إعادة تحميل — يحفظ ما أدخله المستخدم قبل المسح (كان يُفقَد
+            // سابقاً عند window.location.href = ud.redirect). نُحمّل بيانات الرمز في المكان.
+            this._scanInProgress = false;   // حرّر الحارس عند النجاح
+            this._scanAbort = null;
+            this._restoreScanButton(btn, origHTML, scanProgress);
+            if (cancelBtn) cancelBtn.remove();
+            this._resetScanPill();
+            if (this._scanAppendMode) {
+                await this.appendFromSourceToken(ud.token);   // مسح وإلحاق: يُدرج بنهاية المستند القائم
+                this._hideExtractionOverlay();
+            } else {
+                this._loadScanToken(ud.token, { notice: ud.warning || null });
+            }
+        } catch (err) {
+            console.warn('[scan] NAPS2 agent flow failed:', err);
+            fail('تعذّر الاتصال بوكيل المسح المحلي (تأكّد أنه يعمل على 127.0.0.1:17865)');
+        }
     }
 
     _restoreScanButton(btn, origHTML, scanProgress) {
@@ -1505,10 +1760,17 @@ class ExtractionSmartSystem {
         }
         if (scanProgress) scanProgress.style.display = 'none';
         if (this.scanCancelButton) { this.scanCancelButton.remove(); this.scanCancelButton = null; }
-        const scanMoreBtn   = document.getElementById('scanMoreButton');
         const clearScanned  = document.getElementById('clearScannedButton');
-        if (scanMoreBtn)  scanMoreBtn.disabled  = false;
         if (clearScanned) clearScanned.disabled = false;
+    }
+
+    /** إنهاء دورة مسح (فشل/إلغاء): يحرّر قفل التزامن + يوقف الإجهاض + ينظّف كل واجهات التقدّم. */
+    _endScan(btn, origHTML, scanProgress) {
+        this._scanInProgress = false;
+        this._scanAbort = null;
+        this._restoreScanButton(btn, origHTML, scanProgress);   // يعيد الزرّ ويزيل زر الإلغاء
+        this._resetScanPill();
+        this._hideExtractionOverlay();                          // يزيل أوفرلاي المعاينة (وضع الإلحاق)
     }
 
     cancelScan(button, originalContent, progressElement) {
@@ -1525,7 +1787,6 @@ class ExtractionSmartSystem {
     // noAutoExtract: true → عرض فقط بدون إعادة تشغيل OCR (عند التحميل من scan_token)
     loadScannedFile(fileUrl, fileName, { noAutoExtract = false } = {}) {
         console.log('[ExtractionSmart] loadScannedFile():', fileName, 'from URL:', fileUrl);
-        const append = !!this._scanAppendMode;
 
         fetch(fileUrl)
             .then(response => {
@@ -1537,8 +1798,7 @@ class ExtractionSmartSystem {
                 console.log('[ExtractionSmart] ✓ Blob received:', {
                     type: blob.type,
                     size: blob.size,
-                    fileName: fileName,
-                    append
+                    fileName: fileName
                 });
 
                 // إذا كان MIME type فارغ، حاول استنتاجه من اسم الملف
@@ -1559,44 +1819,8 @@ class ExtractionSmartSystem {
                 const safeName = fileName || 'scanned-document';
                 const fileObject = new File([finalBlob], safeName, { type: finalBlob.type || 'application/octet-stream' });
 
-                // ====== وضع "مسح المزيد" — دمج الصفحات ======
-                if (append) {
-                    // PDF لا يمكن دمجه على جانب العميل بدون مكتبة خارجية
-                    if ((fileObject.type || '').includes('pdf') || /\.pdf$/i.test(safeName)) {
-                        this.showToast('⚠️ لا يمكن دمج ملفات PDF تلقائياً — احتُفظ بالمسح الأخير فقط', 'warning', 6000);
-                        this.scannedFiles = [fileObject];
-                        this.currentFile = fileObject;
-                        this.displayBlobPreview(finalBlob, fileName);
-                        this.displayFileName(fileName);
-                        this._updateScanState();
-                        setTimeout(() => this.extractData(), 400);
-                        return;
-                    }
-                    // أضِف للمصفوفة ثم ادمج كل الصفحات في صورة واحدة
-                    this.scannedFiles.push(fileObject);
-                    this._mergeScannedImages()
-                        .then(merged => {
-                            this.currentFile = merged;
-                            this.displayBlobPreview(merged, merged.name);
-                            this.displayFileName(merged.name);
-                            this._updateScanState();
-                            this.showToast(`✅ تم دمج ${this.scannedFiles.length} صفحات — جاري الاستخراج...`, 'info');
-                            // استخراج تلقائي بعد دمج الصفحات
-                            setTimeout(() => this.extractData(), 400);
-                        })
-                        .catch(err => {
-                            console.error('[ExtractionSmart] merge error:', err);
-                            this.showToast('تعذّر دمج الصفحات — احتُفظ بالأخيرة فقط', 'error');
-                            this.scannedFiles = [fileObject];
-                            this.currentFile = fileObject;
-                            this.displayBlobPreview(finalBlob, fileName);
-                            this.displayFileName(fileName);
-                            this._updateScanState();
-                        });
-                    return;
-                }
-
-                // ====== وضع المسح الأول — استبدال ======
+                // مسح/تحميل جديد يستبدل الملف الحالي — دمج الصفحات المتعددة يقع خادمياً
+                // (NAPS2 يُخرج PDF واحداً؛ الرفع اليدوي يُوحَّد إلى PDF في process-upload).
                 this.scannedFiles = [fileObject];
                 this.currentFile = fileObject;
                 console.log('[ExtractionSmart] ✓ currentFile set from scanned blob');
@@ -1616,64 +1840,13 @@ class ExtractionSmartSystem {
             });
     }
 
-    /**
-     * دمج كل الصور الممسوحة في صورة JPEG واحدة عمودياً (سهل القراءة، يحفظ الترتيب).
-     * يُستخدم عند ضغط "مسح المزيد" — يحوّل عدة صفحات صور إلى ملف واحد.
-     */
-    _mergeScannedImages() {
-        const files = this.scannedFiles.filter(f => (f.type || '').startsWith('image/'));
-        if (files.length === 0) return Promise.reject(new Error('no images'));
-        if (files.length === 1) return Promise.resolve(files[0]);
-
-        // حمّل كل صورة كـ HTMLImageElement
-        const loadImg = (file) => new Promise((resolve, reject) => {
-            const img = new Image();
-            const url = URL.createObjectURL(file);
-            img.onload = () => { resolve(img); URL.revokeObjectURL(url); };
-            img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('img load failed: ' + file.name)); };
-            img.src = url;
-        });
-
-        return Promise.all(files.map(loadImg)).then(imgs => {
-            // عرض الـ canvas = أكبر عرض بين الصور (محدود بـ 2000 بكسل لأداء أفضل)
-            const maxW = Math.min(2000, Math.max(...imgs.map(i => i.naturalWidth)));
-            const scaled = imgs.map(img => {
-                const ratio = Math.min(1, maxW / img.naturalWidth);
-                return { img, w: Math.round(img.naturalWidth * ratio), h: Math.round(img.naturalHeight * ratio) };
-            });
-            const gap = 12;
-            const totalH = scaled.reduce((s, x) => s + x.h, 0) + gap * (scaled.length - 1);
-            const canvas = document.createElement('canvas');
-            canvas.width = maxW;
-            canvas.height = totalH;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            let y = 0;
-            scaled.forEach(({ img, w, h }, idx) => {
-                const xOff = Math.round((maxW - w) / 2);
-                ctx.drawImage(img, xOff, y, w, h);
-                y += h + gap;
-            });
-            return new Promise((resolve, reject) => {
-                canvas.toBlob(blob => {
-                    if (!blob) return reject(new Error('canvas.toBlob returned null'));
-                    const merged = new File([blob], `merged-scan-${files.length}p.jpg`, { type: 'image/jpeg' });
-                    resolve(merged);
-                }, 'image/jpeg', 0.92);
-            });
-        });
-    }
-
     /** تحديث حالة الأزرار + عدّاد الصفحات بناءً على scannedFiles. */
     _updateScanState() {
-        const scanMoreBtn = document.getElementById('scanMoreButton');
         const clearScannedBtn = document.getElementById('clearScannedButton');
         const startScanBtn = document.getElementById('startScanButton');
         const pagesCount = document.getElementById('scanPagesCount');
         const has = this.scannedFiles && this.scannedFiles.length > 0;
 
-        if (scanMoreBtn) scanMoreBtn.style.display = has ? 'inline-flex' : 'none';
         if (clearScannedBtn) clearScannedBtn.style.display = has ? 'inline-flex' : 'none';
 
         // عند وجود ملف ممسوح، نص الزر الأساسي يتحول إلى "مسح جديد"
@@ -1695,10 +1868,546 @@ class ExtractionSmartSystem {
         }
     }
 
+    // ===== معاينة المستند الممسوح كصور خادم (PyMuPDF) — تلائم اللوحة دائماً =====
+    renderPreviewPage(n) {
+        if (!this.previewToken) return;
+        this._ensureManifest();
+        const total = this.pageCount || 1;
+        n = Math.max(1, Math.min(total, n));
+        const modalBody = document.getElementById('modalBody');
+        if (!modalBody) return;
+
+        let stage = modalBody.querySelector('.preview-stage');
+        if (!stage) {
+            modalBody.innerHTML = '';
+            modalBody.classList.add('has-image');
+            stage = this._buildPreviewStage();
+            modalBody.appendChild(stage);
+            this._buildThumbs();
+            this._bindPager();
+            this._bindKeyboard();
+        }
+        const img     = stage.querySelector('.preview-img');
+        const spinner = stage.querySelector('.preview-spinner');
+        const errBox  = stage.querySelector('.preview-error');
+        let   skel    = stage.querySelector('.dc-skeleton');
+        if (!skel) {
+            skel = document.createElement('div');
+            skel.className = 'dc-skeleton';
+            stage.insertBefore(skel, img);
+        }
+
+        errBox.style.display = 'none';
+        // هيكل عظمي بأبعاد الصفحة (من المانيفست) ⇒ صفر قفزة تخطيط + إحساس فوري بالسرعة
+        skel.style.setProperty('--dc-ar', this._pageAspect(n));
+        skel.style.display = 'block';
+        img.classList.remove('dc-loaded');     // أخفِ الصورة القديمة أثناء التحميل (تلاشٍ)
+        this.zoom = 1;
+        this._applyZoom();
+
+        // مؤشّر بطيء: لا يظهر إلا إن تأخّر التحميل (تفادي وميض للصفحات المُخبّأة مسبقاً)
+        spinner.style.display = 'none';
+        clearTimeout(this._slowSpinnerTimer);
+        this._slowSpinnerTimer = setTimeout(() => { spinner.style.display = 'flex'; }, 300);
+
+        // التقط هوية الطلب؛ تجاهل onload/onerror متأخّراً إن تغيّر المستند/الإصدار (حارس قديم — يُحفظ حرفياً)
+        const reqTok = this.previewToken, reqVer = this._previewVersion || 0;
+        img.onload = () => {
+            if (this.previewToken !== reqTok || (this._previewVersion || 0) !== reqVer) return;
+            clearTimeout(this._slowSpinnerTimer);
+            spinner.style.display = 'none';
+            skel.style.display = 'none';
+            img.classList.add('dc-loaded');
+            this.currentPage = n;
+            this._updatePager();
+            this._updateThumbsActive();
+            this._prefetchNeighbors(n);
+        };
+        img.onerror = () => {
+            if (this.previewToken !== reqTok || (this._previewVersion || 0) !== reqVer) return;
+            clearTimeout(this._slowSpinnerTimer);
+            spinner.style.display = 'none';
+            skel.style.display = 'none';
+            errBox.style.display = 'flex';
+        };
+        img.src = `/books/api/scan/preview/${encodeURIComponent(this.previewToken)}/?page=${n}&dpi=${this.previewDpi}&_v=${this._previewVersion || 0}`;
+        this.currentPage = n;
+        this._updatePager();
+    }
+
+    /** نسبة أبعاد الصفحة (عرض/ارتفاع) من المانيفست — مع مراعاة الدوران 90/270؛ A4 افتراضاً. */
+    _pageAspect(n) {
+        const p = this._manifest && this._manifest.pages && this._manifest.pages[n - 1];
+        if (p && p.w && p.h) {
+            const rot90 = (((p.rot || 0) % 180) !== 0);
+            const w = rot90 ? p.h : p.w, h = rot90 ? p.w : p.h;
+            if (w > 0 && h > 0) return (w / h).toFixed(4);
+        }
+        return '0.707';   // A4 (1 / 1.414)
+    }
+
+    /** جلب هندسة الصفحات (مرة لكل token/إصدار) لرسم هيكل عظمي بأبعاد صحيحة. غير حاجب. */
+    _ensureManifest() {
+        const tok = this.previewToken, ver = this._previewVersion || 0;
+        if (!tok || (this._manifestTok === tok && this._manifestVer === ver)) return;
+        this._manifestTok = tok; this._manifestVer = ver; this._manifest = null;
+        fetch(`/books/api/scan/manifest/${encodeURIComponent(tok)}/`, { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : null)
+            .then(m => {
+                if (!m || this.previewToken !== tok || (this._previewVersion || 0) !== ver) return;
+                this._manifest = m;
+                const skel = document.querySelector('#modalBody .dc-skeleton');
+                if (skel && skel.style.display !== 'none') {
+                    skel.style.setProperty('--dc-ar', this._pageAspect(this.currentPage || 1));
+                }
+            })
+            .catch(() => {});
+    }
+
+    /** جلب مسبق للصفحتين المجاورتين (تنقّل فوري) — يعتمد على كاش المتصفح. */
+    _prefetchNeighbors(n) {
+        const total = this.pageCount || 1, tok = this.previewToken, ver = this._previewVersion || 0;
+        [n - 1, n + 1].forEach(p => {
+            if (p >= 1 && p <= total) {
+                const im = new Image();
+                im.src = `/books/api/scan/preview/${encodeURIComponent(tok)}/?page=${p}&dpi=${this.previewDpi}&_v=${ver}`;
+            }
+        });
+    }
+
+    /** تنقّل لوحة المفاتيح (RTL) — مع حارس: لا يسرق المفاتيح من حقول الإدخال. يُربط مرة واحدة. */
+    _bindKeyboard() {
+        if (this._kbBound) return;
+        this._kbBound = true;
+        document.addEventListener('keydown', (e) => {
+            if (!this.previewToken) return;
+            if (!document.querySelector('#modalBody .preview-stage')) return;
+            const ae = document.activeElement;
+            if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+            const total = this.pageCount || 1, cur = this.currentPage || 1;
+            switch (e.key) {
+                case 'ArrowLeft': case 'PageDown': e.preventDefault(); this.renderPreviewPage(cur + 1); break;   // RTL: يسار = التالي
+                case 'ArrowRight': case 'PageUp':  e.preventDefault(); this.renderPreviewPage(cur - 1); break;
+                case 'Home': e.preventDefault(); this.renderPreviewPage(1); break;
+                case 'End':  e.preventDefault(); this.renderPreviewPage(total); break;
+                case '+': case '=': e.preventDefault(); this._stepZoom(1); break;
+                case '-': e.preventDefault(); this._stepZoom(-1); break;
+                case '0': e.preventDefault(); this.zoom = 1; this._applyZoom(); break;
+            }
+        });
+    }
+
+    /** يُستدعى من لوحة إدارة المستندات بعد أي تعديل: أبطِل المعاينة وأعِد تحميل الأساسي الجديد. */
+    invalidatePreview(bookId) {
+        this.previewToken = null;
+        this._manifest = null; this._manifestTok = null;
+        this._pagesEditedInPreview = false;   // عملية DocManager تجبّ أي تعديلات صفحات معلّقة
+
+        if (!bookId) { if (this._resetPreviewState) this._resetPreviewState(); return; }
+        fetch(`/books/api/book/${bookId}/preview/`, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+                const atts = (d && d.attachments) || [];
+                const primary = atts.find(a => a.is_primary) || atts[0];
+                if (primary && this.loadSavedAttachment) this.loadSavedAttachment(primary.id);
+                else if (this._resetPreviewState) this._resetPreviewState();
+            })
+            .catch(() => {});
+    }
+
+    /**
+     * تحرير الصفحات على PDF المؤقّت قبل الحفظ (تدوير/حذف/إعادة ترتيب) عبر token.
+     * بعد النجاح: يعيد رسم الصفحة والمصغّرات (مع كسر الكاش) ويحدّث الملف للحفظ.
+     */
+    async _editPage(payload) {
+        if (!this.previewToken) return null;
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+        const stage = document.querySelector('#modalBody .preview-stage');
+        const spinner = stage && stage.querySelector('.preview-spinner');
+        if (spinner) spinner.style.display = 'flex';
+        try {
+            const resp = await fetch(`/books/api/scan/edit/${encodeURIComponent(this.previewToken)}/`, {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const r = await resp.json();
+            if (!r.ok) {
+                if (spinner) spinner.style.display = 'none';
+                this.showToast(r.error || 'تعذّر تعديل المستند', 'error');
+                return null;
+            }
+            this.pageCount = r.page_count;
+            // تتبّع الصفحات المُلحقة حديثاً للتمييز البصري (شارة «جديد»).
+            if (!this._insertedPages) this._insertedPages = new Set();
+            if (payload.op === 'insert' && r.inserted_count) {
+                for (let k = 0; k < r.inserted_count; k++) this._insertedPages.add(r.inserted_from + k);
+                this.currentPage = r.inserted_from;   // انتقل لأول صفحة مُلحقة ليراها المستخدم فوراً
+            } else if (payload.op === 'delete' || payload.op === 'reorder') {
+                this._insertedPages.clear();          // تغيّرت أرقام الصفحات — تبطل شارات «جديد»
+            }
+            if (this.currentPage > this.pageCount) this.currentPage = this.pageCount;
+            this._previewVersion = (this._previewVersion || 0) + 1;   // كسر كاش الصور
+            this._buildThumbs();
+            this.renderPreviewPage(this.currentPage);
+            this._refreshCurrentFileFromToken();
+            // علِّم أن صفحات المعاينة عُدِّلت فعلاً (تدوير/حذف/ترتيب/إلحاق) — يُستخدم في وضع
+            // التعديل لإرسال الملف المُعدَّل عند الحفظ فقط عند وجود تعديل حقيقي.
+            this._pagesEditedInPreview = true;
+            return r;
+        } catch (e) {
+            if (spinner) spinner.style.display = 'none';
+            this.showToast('تعذّر الاتصال — حاول مجدداً', 'error');
+            return null;
+        }
+    }
+
+    // ===== إلحاق صفحات (مسح/رفع) بالمستند القائم في وضع التعديل — تجهيز داخل المعاينة =====
+    /** يُهيّئ ملف مصدر (مرفوع/ممسوح) عبر process-upload ويعيد token جاهزاً للإلحاق. */
+    async _stageSourceForAppend(file, name) {
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+        const fd = new FormData();
+        fd.append('file', file, name || file.name || 'append.pdf');
+        fd.append('trim_blanks', '1');   // قصّ الفراغات كمسار المسح
+        try {
+            const resp = await fetch('/books/api/scan/process-upload/', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'X-CSRFToken': csrf }, body: fd,
+            });
+            const ud = await resp.json();
+            if (!ud.ok) { this.showToast(ud.error || 'تعذّر تجهيز المستند للإلحاق', 'error', 6000); return null; }
+            return ud.token;
+        } catch (e) {
+            this.showToast('تعذّر الاتصال أثناء تجهيز المستند — حاول مجدداً', 'error', 5000);
+            return null;
+        }
+    }
+
+    /** يُلحق مصدراً مُهيّأً (source_token) بنهاية المستند المُرحَّل في المعاينة + تنبيه واضح. */
+    async appendFromSourceToken(sourceToken) {
+        if (!this.previewToken) { this.showToast('افتح مستنداً في المعاينة أولاً', 'warning'); return; }
+        const r = await this._editPage({ op: 'insert', source_token: sourceToken });
+        if (r && r.ok) {
+            const n = r.inserted_count || 0;
+            this._showAppendNotice(n);
+            this.showToast(`✓ أُلحقت ${n} صفحة بنهاية المستند — احفظ التعديلات لتثبيت التحديث`, 'success', 5000, 'تمّ الإلحاق');
+        }
+        return r;
+    }
+
+    /** إلحاق ملف مرفوع (PDF/صورة) بنهاية المستند — يُستدعى من DocumentManager. */
+    async appendUploadedFile(file) {
+        if (!file) return;
+        this._showExtractionOverlay('جارٍ تجهيز المستند للإلحاق…', 'يتم رفعه ومعالجته على الخادم');
+        try {
+            const token = await this._stageSourceForAppend(file);
+            if (token) await this.appendFromSourceToken(token);
+        } finally {
+            this._hideExtractionOverlay();
+        }
+    }
+
+    /** مسح صفحات جديدة وإلحاقها بنهاية المستند — يُستدعى من DocumentManager (وضع التعديل). */
+    async scanAndAppend() {
+        return this.startScan({ appendMode: true });
+    }
+
+    /** شريط إشعار سطري داخل لوحة المعاينة يؤكّد الإلحاق ويتيح التراجع — وعيُ المستخدم. */
+    _showAppendNotice(count) {
+        const host = document.querySelector('.extraction-preview-modal') || document.body;
+        let bar = document.getElementById('appendNotice');
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'appendNotice';
+            bar.className = 'append-notice';
+            host.appendChild(bar);
+        }
+        bar.innerHTML =
+            `<span class="append-notice-msg"><i class="bi bi-check-circle-fill"></i> أُلحقت ${count} صفحة بنهاية المستند — راجعها ثم <strong>احفظ التعديلات</strong> لتثبيت التحديث.</span>`;
+        const undo = document.createElement('button');
+        undo.type = 'button';
+        undo.className = 'append-notice-undo';
+        undo.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i> تراجع';
+        undo.onclick = () => this._undoAppend();
+        bar.appendChild(undo);
+        bar.style.display = 'flex';
+    }
+
+    _hideAppendNotice() {
+        const b = document.getElementById('appendNotice');
+        if (b) b.style.display = 'none';
+    }
+
+    /** تراجع: يعيد المستند للأصل المحفوظ (يتجاهل تعديلات المعاينة غير المحفوظة). */
+    _undoAppend() {
+        if (this._insertedPages) this._insertedPages.clear();
+        this._pagesEditedInPreview = false;
+        this._hideAppendNotice();
+        const attId = this._editData && this._editData.attachment && this._editData.attachment.id;
+        if (attId && this.loadSavedAttachment) {
+            this.loadSavedAttachment(attId);
+            this.showToast('تم التراجع — عاد المستند إلى الأصل المحفوظ', 'info', 4000);
+        }
+    }
+
+    /** يعيد جلب الـPDF المُعدَّل من الخادم ليُحفظ مع الكتاب (يبقى الملف متّسقاً مع المعاينة). */
+    _refreshCurrentFileFromToken() {
+        if (!this.previewToken) return;
+        const url = `/books/api/scan/serve/${encodeURIComponent(this.previewToken)}/?_v=${this._previewVersion || 0}`;
+        fetch(url, { credentials: 'same-origin' })
+            .then(r => r.ok ? r.blob() : null)
+            .then(blob => {
+                if (!blob) return;
+                const base = ((this.currentFile && this.currentFile.name) || 'document.pdf').replace(/\.[^.]+$/, '');
+                this.currentFile = new File([blob], base + '.pdf', { type: 'application/pdf' });
+                this.scannedFiles = [this.currentFile];
+            })
+            .catch(() => {});
+    }
+
+    _buildPreviewStage() {
+        const stage = document.createElement('div');
+        stage.className = 'preview-stage';
+
+        const img = document.createElement('img');
+        img.className = 'preview-img';
+        img.alt = 'معاينة المستند';
+        stage.appendChild(img);
+
+        const zoom = document.createElement('div');
+        zoom.className = 'preview-zoom';
+        zoom.innerHTML =
+            '<button type="button" class="pz-btn" data-z="out" title="تصغير"><i class="bi bi-zoom-out"></i></button>' +
+            '<span class="pz-label">100%</span>' +
+            '<button type="button" class="pz-btn" data-z="in" title="تكبير"><i class="bi bi-zoom-in"></i></button>' +
+            '<button type="button" class="pz-btn" data-z="fit" title="ملاءمة الصفحة"><i class="bi bi-arrows-fullscreen"></i></button>';
+        zoom.querySelector('[data-z=out]').onclick = () => this._stepZoom(-1);
+        zoom.querySelector('[data-z=in]').onclick  = () => this._stepZoom(1);
+        zoom.querySelector('[data-z=fit]').onclick = () => { this.zoom = 1; this._applyZoom(); };
+        stage.appendChild(zoom);
+
+        // أدوات تحرير الصفحة الحالية (تدوير/حذف) — تعمل على PDF المؤقّت عبر token
+        const tools = document.createElement('div');
+        tools.className = 'preview-tools';
+        tools.innerHTML =
+            '<button type="button" class="pt-btn" data-op="rot-left" title="تدوير لليسار"><i class="bi bi-arrow-counterclockwise"></i></button>' +
+            '<button type="button" class="pt-btn" data-op="rot-right" title="تدوير لليمين"><i class="bi bi-arrow-clockwise"></i></button>' +
+            '<span class="pt-sep"></span>' +
+            '<button type="button" class="pt-btn pt-danger" data-op="del" title="حذف هذه الصفحة"><i class="bi bi-trash3"></i></button>';
+        tools.querySelector('[data-op=rot-left]').onclick  = () => this._editPage({ op: 'rotate', page: this.currentPage, angle: 270 });
+        tools.querySelector('[data-op=rot-right]').onclick = () => this._editPage({ op: 'rotate', page: this.currentPage, angle: 90 });
+        tools.querySelector('[data-op=del]').onclick = () => {
+            if ((this.pageCount || 1) <= 1) { this.showToast('لا يمكن حذف الصفحة الوحيدة', 'warning'); return; }
+            this._editPage({ op: 'delete', page: this.currentPage });
+        };
+        stage.appendChild(tools);
+
+        const spinner = document.createElement('div');
+        spinner.className = 'preview-spinner';
+        spinner.innerHTML = '<div class="spinner-border text-primary" role="status"></div>';
+        stage.appendChild(spinner);
+
+        const errBox = document.createElement('div');
+        errBox.className = 'preview-error';
+        errBox.style.display = 'none';
+        errBox.innerHTML = '<i class="bi bi-exclamation-triangle"></i><div>تعذّر عرض هذه الصفحة</div>';
+        const retry = document.createElement('button');
+        retry.type = 'button'; retry.className = 'btn btn-sm btn-outline-secondary';
+        retry.textContent = 'إعادة المحاولة';
+        retry.onclick = () => this.renderPreviewPage(this.currentPage);
+        const dl = document.createElement('a');
+        dl.className = 'pe-download'; dl.textContent = 'تنزيل الملف الأصلي';
+        dl.href = `/books/api/scan/serve/${encodeURIComponent(this.previewToken)}/`;
+        dl.setAttribute('download', '');
+        errBox.appendChild(retry); errBox.appendChild(dl);
+        stage.appendChild(errBox);
+
+        this._enablePan(stage, img);
+        return stage;
+    }
+
+    _stepZoom(dir) {
+        const steps = [1, 1.25, 1.5, 2, 3];
+        let i = steps.indexOf(this.zoom);
+        if (i === -1) i = 0;
+        i = Math.max(0, Math.min(steps.length - 1, i + dir));
+        this.zoom = steps[i];
+        const wantDpi = this.zoom > 1.5 ? 220 : 130;   // رفع كسول للدقّة عند التكبير
+        if (wantDpi !== this.previewDpi) { this.previewDpi = wantDpi; this.renderPreviewPage(this.currentPage); }
+        this._applyZoom();
+    }
+
+    _applyZoom() {
+        const modalBody = document.getElementById('modalBody');
+        const stage = modalBody && modalBody.querySelector('.preview-stage');
+        if (!stage) return;
+        const img = stage.querySelector('.preview-img');
+        const label = stage.querySelector('.pz-label');
+        if (img) {
+            img.style.transform = `scale(${this.zoom})`;
+            img.style.cursor = this.zoom > 1 ? 'grab' : 'default';
+        }
+        if (label) label.textContent = Math.round(this.zoom * 100) + '%';
+        stage.style.overflow = this.zoom > 1 ? 'auto' : 'hidden';
+    }
+
+    _enablePan(stage, img) {
+        let down = false, sx = 0, sy = 0, sl = 0, st = 0;
+        stage.addEventListener('mousedown', (e) => {
+            if (this.zoom <= 1) return;
+            down = true; sx = e.clientX; sy = e.clientY; sl = stage.scrollLeft; st = stage.scrollTop;
+            if (img) img.style.cursor = 'grabbing'; e.preventDefault();
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!down) return;
+            stage.scrollLeft = sl - (e.clientX - sx);
+            stage.scrollTop  = st - (e.clientY - sy);
+        });
+        window.addEventListener('mouseup', () => {
+            if (!down) return; down = false;
+            if (img) img.style.cursor = this.zoom > 1 ? 'grab' : 'default';
+        });
+    }
+
+    _bindPager() {
+        const prev = document.getElementById('pagerPrev');
+        const next = document.getElementById('pagerNext');
+        if (prev && !prev.dataset.bound) { prev.onclick = () => this.renderPreviewPage(this.currentPage - 1); prev.dataset.bound = '1'; }
+        if (next && !next.dataset.bound) { next.onclick = () => this.renderPreviewPage(this.currentPage + 1); next.dataset.bound = '1'; }
+    }
+
+    _updatePager() {
+        const pager = document.getElementById('previewPager');
+        if (!pager) return;
+        const total = this.pageCount || 1;
+        if (total <= 1) { pager.style.display = 'none'; return; }
+        pager.style.display = '';
+        const label = document.getElementById('pagerLabel');
+        const prev = document.getElementById('pagerPrev');
+        const next = document.getElementById('pagerNext');
+        if (label) label.textContent = `صفحة ${this.currentPage} / ${total}`;
+        if (prev) prev.disabled = this.currentPage <= 1;
+        if (next) next.disabled = this.currentPage >= total;
+    }
+
+    _buildThumbs() {
+        const wrap = document.getElementById('previewThumbs');
+        if (!wrap) return;
+        const total = this.pageCount || 1;
+        if (total <= 1 || !this.previewToken) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+        wrap.style.display = '';
+        wrap.innerHTML = '';
+        const v = this._previewVersion || 0;
+        for (let i = 1; i <= total; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'thumb-cell';
+            cell.draggable = true;
+            cell.dataset.page = i;
+            const t = document.createElement('img');
+            t.className = 'preview-thumb';
+            t.loading = 'lazy';
+            t.src = `/books/api/scan/preview/${encodeURIComponent(this.previewToken)}/?page=${i}&dpi=46&_v=${v}`;
+            t.alt = 'صفحة ' + i;
+            const num = document.createElement('span');
+            num.className = 'thumb-num';
+            num.textContent = i;
+            cell.appendChild(t);
+            cell.appendChild(num);
+            // تمييز الصفحات المُلحقة حديثاً (قبل الحفظ) بصرياً — وعيُ المستخدم بما أضافه
+            if (this._insertedPages && this._insertedPages.has(i)) {
+                cell.classList.add('thumb-cell--new');
+                const badge = document.createElement('span');
+                badge.className = 'thumb-new-badge';
+                badge.textContent = 'جديد';
+                cell.appendChild(badge);
+            }
+            cell.onclick = () => this.renderPreviewPage(parseInt(cell.dataset.page, 10));
+            this._bindThumbDnD(cell, wrap);
+            wrap.appendChild(cell);
+        }
+        this._updateThumbsActive();
+    }
+
+    /** سحب-وإفلات لإعادة ترتيب الصفحات في شريط المصغّرات. */
+    _bindThumbDnD(cell, wrap) {
+        cell.addEventListener('dragstart', (e) => {
+            cell.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', cell.dataset.page); } catch (_) {}
+        });
+        cell.addEventListener('dragend', () => {
+            cell.classList.remove('dragging');
+            this._commitThumbOrder(wrap);
+        });
+        cell.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const dragging = wrap.querySelector('.thumb-cell.dragging');
+            if (!dragging || dragging === cell) return;
+            const rect = cell.getBoundingClientRect();
+            // في RTL يُعكس المحور: النصف الأيمن من الخليّة يعني «قبل» لا «بعد»
+            const rtl = getComputedStyle(wrap).direction === 'rtl';
+            const pastHalf = (e.clientX - rect.left) > rect.width / 2;
+            const after = rtl ? !pastHalf : pastHalf;
+            wrap.insertBefore(dragging, after ? cell.nextSibling : cell);
+        });
+    }
+
+    /** يرسل الترتيب الجديد للخادم إن تغيّر فعلاً عن التسلسل الحالي. */
+    _commitThumbOrder(wrap) {
+        const order = [...wrap.querySelectorAll('.thumb-cell')].map(c => parseInt(c.dataset.page, 10));
+        if (order.length <= 1) return;
+        const unchanged = order.every((p, idx) => p === idx + 1);
+        if (unchanged) return;
+        this._editPage({ op: 'reorder', order });
+    }
+
+    _updateThumbsActive() {
+        const wrap = document.getElementById('previewThumbs');
+        if (!wrap) return;
+        [...wrap.querySelectorAll('.thumb-cell')].forEach((el) =>
+            el.classList.toggle('active', parseInt(el.dataset.page, 10) === this.currentPage));
+    }
+
+    _renderPdfFallback(blob, fileName) {
+        const modalBody = document.getElementById('modalBody');
+        if (!modalBody) return;
+        const url = URL.createObjectURL(blob);
+        this._trackPreviewUrl(url);
+        modalBody.classList.add('has-image');
+        const card = document.createElement('div');
+        card.className = 'preview-pdf-fallback';
+        card.innerHTML = '<i class="bi bi-file-earmark-pdf"></i><div class="pf-name"></div>';
+        card.querySelector('.pf-name').textContent = fileName || 'document.pdf';
+        const open = document.createElement('a');
+        open.href = url; open.target = '_blank'; open.rel = 'noopener';
+        open.className = 'btn btn-sm btn-outline-primary'; open.textContent = 'فتح في تبويب جديد';
+        const dl = document.createElement('a');
+        dl.href = url; dl.download = fileName || 'document.pdf';
+        dl.className = 'btn btn-sm btn-outline-secondary'; dl.textContent = 'تنزيل';
+        const row = document.createElement('div'); row.className = 'pf-actions';
+        row.appendChild(open); row.appendChild(dl);
+        card.appendChild(row);
+        modalBody.appendChild(card);
+    }
+
+    /** يعيد ضبط حالة المعاينة (صفحات/زوم) وإخفاء أدواتها. */
+    _resetPreviewState() {
+        this.previewToken = null;
+        this.pageCount = 1;
+        this.currentPage = 1;
+        this.zoom = 1;
+        this.previewDpi = 130;
+        const pager = document.getElementById('previewPager');
+        const thumbs = document.getElementById('previewThumbs');
+        if (pager) pager.style.display = 'none';
+        if (thumbs) { thumbs.style.display = 'none'; thumbs.innerHTML = ''; }
+    }
+
     /** حذف الملف الممسوح (للسماح بإعادة المسح من جديد). */
     clearScannedFile() {
         console.log('[ExtractionSmart] clearScannedFile() called');
         this.scannedFiles = [];
+        this._resetPreviewState();
         this.clearFile();
         this._updateScanState();
         this.showToast('تم حذف الملف الممسوح — يمكنك المسح من جديد', 'success');
@@ -1771,50 +2480,13 @@ class ExtractionSmartSystem {
                 modalBody.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 20px;">خطأ: ' + e.message + '</div>';
             }
         } else if (isPdf) {
-            // عرض PDF داخل المودال مباشرة
-            try {
-                const url = URL.createObjectURL(blob);
-                this._trackPreviewUrl(url);
-                const embed = document.createElement('embed');
-                embed.src = url;
-                embed.type = 'application/pdf';
-                embed.style.width = '100%';
-                embed.style.height = 'clamp(360px, 70vh, 760px)';
-                embed.style.border = 'none';
-                embed.onload = () => console.log('[ExtractionSmart] ✓ PDF embedded');
-                embed.onerror = (err) => console.error('[ExtractionSmart] ✗ PDF embed failed:', err);
-
-                modalBody.appendChild(embed);
-
-                // روابط التحكم (تحميل + فتح في تبويب جديد)
-                const controlsRow = document.createElement('div');
-                controlsRow.style.display = 'flex';
-                controlsRow.style.justifyContent = 'center';
-                controlsRow.style.gap = '10px';
-                controlsRow.style.marginTop = '12px';
-
-                const openBtn = document.createElement('a');
-                openBtn.href = url;
-                openBtn.target = '_blank';
-                openBtn.rel = 'noopener';
-                openBtn.className = 'btn btn-outline-primary btn-sm';
-                openBtn.textContent = 'فتح في تبويب جديد';
-
-                const dlBtn = document.createElement('a');
-                dlBtn.href = url;
-                dlBtn.download = fileName || 'document.pdf';
-                dlBtn.className = 'btn btn-outline-secondary btn-sm';
-                dlBtn.textContent = 'تحميل الملف';
-
-                controlsRow.appendChild(openBtn);
-                controlsRow.appendChild(dlBtn);
-                modalBody.appendChild(controlsRow);
-
+            // PDF: يُرسَم كصور خادم (PyMuPDF) عبر token — يلائم اللوحة دائماً (لا embed)
+            if (this.previewToken) {
                 modalBody.classList.add('has-image');
-                console.log('[ExtractionSmart] ✓ PDF preview embedded');
-            } catch (e) {
-                console.error('[ExtractionSmart] ✗ PDF preview error:', e);
-                modalBody.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 20px;">تعذر عرض ملف الـ PDF</div>';
+                this.renderPreviewPage(this.currentPage || 1);
+            } else {
+                // ملاذ: PDF محلي بلا token (نادر) — بطاقة فتح/تنزيل بدل عارض مدمج لا يلائم
+                this._renderPdfFallback(blob, fileName);
             }
         } else {
             // ملف غير معروف
@@ -1858,12 +2530,68 @@ class ExtractionSmartSystem {
             return;
         }
 
-        this.currentFile = file;
-        this.displayFilePreview(file);
         this.displayFileName(file.name);
-        this.showToast('تم تحميل الملف — جاري الاستخراج...', 'info');
-        // استخراج تلقائي بعد تحميل الملف
-        setTimeout(() => this.extractData(), 350);
+        // المسار الموحّد: نُجهّز الملف على الخادم (صورة→PDF) ونحصل على token كي تعمل
+        // معاينة الصفحات وأدوات التحرير (تدوير/حذف/إعادة ترتيب) على الرفع كما المسح.
+        this.stageAndPreview(file).catch(err => {
+            console.warn('[upload] staging failed — fallback to client preview:', err);
+            this._hideExtractionOverlay();   // لا تترك مؤشّر الرفع عالقاً عند فشل التجهيز
+            this.currentFile = file;
+            this.displayFilePreview(file);
+            this.showToast('تم تحميل الملف — جاري الاستخراج...', 'info');
+            setTimeout(() => this.extractData(), 350);
+        });
+    }
+
+    /**
+     * تجهيز ملف مرفوع على الخادم (process-upload) للحصول على token موحّد:
+     * الصور تُحوَّل إلى PDF، وتُفتح نفس معاينة الصفحات القابلة للتحرير كالمسح.
+     */
+    async stageAndPreview(file) {
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+        const fd = new FormData();
+        fd.append('file', file, file.name);
+        // مؤشّر تحميل احترافي داخل لوحة المعاينة (بدل التجمّد الصامت أثناء رفع/معالجة المستند).
+        // يبقى ظاهراً حتى تُرسَم المعاينة، ثم يعود أثناء الاستخراج — فلا يشعر المستخدم بجمود.
+        this._showExtractionOverlay('جارٍ رفع المستند…', 'يتم رفع المستند ومعالجته على الخادم');
+        const resp = await fetch('/books/api/scan/process-upload/', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'X-CSRFToken': csrf }, body: fd,
+        });
+        const ud = await resp.json();
+        if (!ud.ok) throw new Error(ud.error || 'فشل تجهيز الملف');
+
+        this.previewToken = ud.token;
+        this.pageCount = ud.page_count || 1;
+        this.currentPage = 1;
+        this.previewDpi = 130;
+        this._previewVersion = (this._previewVersion || 0) + 1;
+        const serveUrl = `/books/api/scan/serve/${encodeURIComponent(ud.token)}/`;
+        this.loadScannedFile(serveUrl, ud.source_file || file.name, { noAutoExtract: false });
+    }
+
+    /**
+     * يحمّل مرفقاً محفوظاً في معاينة الصفحات (وضع التعديل) — يعرض المستند المحفوظ.
+     * لا يضبط currentFile كي لا يُكرَّر المرفق عند الحفظ دون تعديل؛ أي تعديل صفحات
+     * لاحق (تدوير/حذف) سيضبطه عبر _refreshCurrentFileFromToken.
+     */
+    async loadSavedAttachment(attachmentId) {
+        try {
+            const r = await fetch(`/books/api/scan/stage-attachment/${attachmentId}/`, { credentials: 'same-origin' });
+            const d = await r.json();
+            if (!d.ok) { console.warn('[edit] stage-attachment failed:', d.error); return; }
+            this.previewToken = d.token;
+            this.pageCount = d.page_count || 1;
+            this.currentPage = 1;
+            this.previewDpi = 130;
+            this._previewVersion = (this._previewVersion || 0) + 1;
+            this.displayFileName(d.source_file || 'document.pdf');
+            const modalBody = document.getElementById('modalBody');
+            if (modalBody) modalBody.classList.add('has-image');
+            this.renderPreviewPage(1);
+        } catch (e) {
+            console.warn('[edit] loadSavedAttachment error:', e);
+        }
     }
 
     displayFilePreview(file) {
@@ -1973,6 +2701,9 @@ class ExtractionSmartSystem {
         if (extractBtn) extractBtn.innerHTML = '🔍 استخراج';
         // حرّر أي Object URLs عالقة
         this._revokeLastPreviewUrls();
+        // نظّف حالة المعاينة (شريط المصغّرات + المرقّم + الرمز) — كانت تبقى ظاهرة أسفل
+        // لوحة المعاينة بعد الحفظ لأن مسار الحفظ يستدعي clearFile لا clearScannedFile.
+        if (typeof this._resetPreviewState === 'function') this._resetPreviewState();
         const fileInput = document.getElementById('fileInput');
         const filePreview = document.getElementById('filePreview');
         const modalBody = document.getElementById('modalBody');
@@ -2002,7 +2733,7 @@ class ExtractionSmartSystem {
     }
 
     // ===== Data Extraction =====
-    _showExtractionOverlay(message) {
+    _showExtractionOverlay(message, sub, onCancel) {
         const modalBody = document.getElementById('modalBody');
         if (!modalBody) return;
         // Remove existing overlay
@@ -2013,8 +2744,18 @@ class ExtractionSmartSystem {
         overlay.innerHTML = `
             <div class="overlay-spinner"></div>
             <div class="overlay-text">${message || 'جاري الاستخراج الذكي...'}</div>
-            <div class="overlay-sub">يتم تحليل المستند واستخراج البيانات</div>
+            <div class="overlay-sub">${sub || 'يتم تحليل المستند واستخراج البيانات'}</div>
+            <div class="overlay-progress" role="progressbar" aria-label="جارٍ التحميل"><div class="overlay-progress-bar"></div></div>
         `;
+        // زر إلغاء داخل الأوفرلاي — لا يترك المستخدم عالقاً حين يهنغ المسح (وضع الإلحاق: شريط المسح مخفيّ)
+        if (typeof onCancel === 'function') {
+            const c = document.createElement('button');
+            c.type = 'button';
+            c.className = 'overlay-cancel';
+            c.innerHTML = '<i class="bi bi-x-circle"></i> إلغاء';
+            c.addEventListener('click', () => { try { onCancel(); } catch (_) {} });
+            overlay.appendChild(c);
+        }
         modalBody.style.position = 'relative';
         modalBody.appendChild(overlay);
     }
@@ -2153,6 +2894,8 @@ class ExtractionSmartSystem {
             { field: 'bookNumber', key: 'book_number', conf: 'book_number_confidence' },
             { field: 'title', key: 'title', conf: 'title_confidence' },
             { field: 'date', key: 'book_date', conf: 'book_date_confidence' },
+            { field: 'senderDate', key: 'sender_date', conf: 'sender_date_confidence' },
+            { field: 'senderNumber', key: 'sender_number', conf: 'sender_number_confidence' },
             { field: 'issuingEntity', key: 'issuing_entity', conf: 'issuing_entity_confidence' },
             { field: 'receivingEntity', key: 'receiving_entity', conf: 'receiving_entity_confidence' },
             { field: 'secretLevel', key: 'secret_level', conf: 'secret_level_confidence' },
@@ -2173,6 +2916,10 @@ class ExtractionSmartSystem {
                         }
                         input.value = resolvedKind;
                         this.syncKindUI(resolvedKind);
+                    } else if (field === 'date' || field === 'senderDate' || field === 'dueDate') {
+                        // حقول التاريخ (type=date) تقبل YYYY-MM-DD فقط — أسقِط جزء الوقت
+                        // من ISO («2026-06-20T00:00:00» → «2026-06-20») وإلا يرفضها المتصفّح.
+                        input.value = String(value).slice(0, 10);
                     } else {
                         input.value = value;
                     }
@@ -2180,6 +2927,7 @@ class ExtractionSmartSystem {
                     try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
                     try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
                     this.updateConfidenceBadge(field, data[conf] || 0);
+                    this.setFieldConfidence(field, data[conf] || 0);   // حافّة الثقة
                     this.validateField(field);
                 }
             }
@@ -2190,10 +2938,43 @@ class ExtractionSmartSystem {
             this.setDocumentTypeValue(extractedDocumentType, this.getCurrentKind());
         }
 
+        // ملخّص الثقة الكلي + تنبيه المراجعة (بطاقتا P1)
+        this.updateQualitySummary(data);
+
         // ضمان تحديث عام بعد الانتهاء من كل الحقول
         if (typeof updateValidationIndicator === 'function') {
             try { updateValidationIndicator(); } catch (e) {}
         }
+    }
+
+    // ملخّص الثقة الكلي (quality-hero) + تنبيه المراجعة (needs_review) — بطاقتا P1
+    updateQualitySummary(data) {
+        const overall = (typeof data.overall_confidence === 'number') ? data.overall_confidence : null;
+        const hero = document.getElementById('qualityHero');
+        if (hero && overall !== null) {
+            const p = Math.round(overall * 100);
+            const level = this.getConfidenceLevel(overall);
+            const ring = document.getElementById('qualityHeroRing');
+            const pct = document.getElementById('qualityHeroPct');
+            const title = document.getElementById('qualityHeroTitle');
+            const sub = document.getElementById('qualityHeroSub');
+            if (pct) pct.textContent = `${p}%`;
+            if (ring) {
+                ring.className = `quality-hero-ring quality-hero-ring--${level}`;
+                ring.style.setProperty('--pct', String(p));
+            }
+            if (title) {
+                title.textContent = level === 'high' ? 'جودة استخراج عالية'
+                    : level === 'medium' ? 'جودة استخراج متوسطة' : 'جودة استخراج منخفضة';
+            }
+            if (sub) {
+                sub.textContent = level === 'high' ? 'تحقّق سريع ثم احفظ.'
+                    : 'راجع الحقول المُبرزة قبل الحفظ.';
+            }
+            hero.style.display = '';
+        }
+        const nrc = document.getElementById('needsReviewCard');
+        if (nrc) nrc.style.display = data.needs_review ? '' : 'none';
     }
 
     updateConfidenceBadge(fieldId, confidence) {
@@ -2202,19 +2983,44 @@ class ExtractionSmartSystem {
 
         const level = this.getConfidenceLevel(confidence);
         confidenceElement.className = `confidence-badge ${level}`;
-        document.getElementById(`${fieldId}ConfidenceValue`).textContent = `${Math.round(confidence * 100)}%`;
+        // حارس: قد توجد حاوية الشارة دون عنصر القيمة الداخلي (مثلاً شارة أُضيفت لحقل
+        // جديد بلا span للقيمة) — نتجاهل تحديث النص بدل رمي TypeError.
+        const valueElement = document.getElementById(`${fieldId}ConfidenceValue`);
+        if (valueElement) valueElement.textContent = `${Math.round(confidence * 100)}%`;
         confidenceElement.style.display = 'inline-flex';
     }
 
     getConfidenceLevel(confidence) {
-        if (confidence >= 0.85) return 'high';
-        if (confidence >= 0.70) return 'medium';
+        if (confidence >= CONFIDENCE_THRESHOLDS.high) return 'high';
+        if (confidence >= CONFIDENCE_THRESHOLDS.medium) return 'medium';
         return 'low';
+    }
+
+    // ═══ حافّة الثقة (رؤية التصميم — الميزة الرائدة): الثقة خاصية فيزيائية للحقل ═══
+    // نقطة الربط الوحيدة، تُستدعى من مسارَي الملء (المسح + الرفع) فتعمل الثقة في كليهما.
+    setFieldConfidence(fieldId, score) {
+        const g = document.getElementById(fieldId)?.closest('.form-group-smart');
+        if (!g) return;
+        const s = Number(score) || 0;
+        g.dataset.conf = s >= CONFIDENCE_THRESHOLDS.high ? 'high'
+            : s >= CONFIDENCE_THRESHOLDS.medium ? 'medium' : 'low';
+        g.dataset.machineConf = String(s);
+        // نحفظ القيمة المُستخرَجة الأصلية لتتبّع التصحيح لاحقاً (أفكار التعلّم في الرؤية)
+        (this._origExtracted || (this._origExtracted = {}))[fieldId] = {
+            value: (document.getElementById(fieldId)?.value || '').trim(), extracted: true
+        };
+    }
+
+    // التلاشي بالّمس: تعديل حقل مُستخرَج يحوّل حافّته إلى «يقين بشري» تركوازي.
+    markHumanConfirmed(fieldId) {
+        const g = document.getElementById(fieldId)?.closest('.form-group-smart');
+        if (g && g.dataset.conf && g.dataset.conf !== 'human') g.dataset.conf = 'human';
     }
 
     // ===== Form Validation =====
     handleFieldInput(e) {
         const fieldId = e.target.id;
+        this.markHumanConfirmed(fieldId);   // التلاشي بالّمس → يقين بشري تركوازي
         this.validateField(fieldId);
         this.updateSuggestions(fieldId, e.target.value);
     }
@@ -2705,6 +3511,7 @@ class ExtractionSmartSystem {
         const fields = document.querySelectorAll('.form-control-smart');
         console.log('[ExtractionSmart] Found', fields.length, 'form fields');
 
+        this.beginTextUndoBatch?.();   // كي يستطيع Ctrl+Z استرجاع الحقول النصية بعد التفريغ (يشمل مسح Escape)
         fields.forEach(field => {
             if (field.id !== 'date' && field.id !== 'senderDate') {
                 field.value = '';
@@ -2714,6 +3521,7 @@ class ExtractionSmartSystem {
                 delete field.dataset.reservationId;
             }
         });
+        this.endTextUndoBatch?.();
 
         const badges = document.querySelectorAll('.confidence-badge');
         console.log('[ExtractionSmart] Found', badges.length, 'confidence badges');
@@ -2755,6 +3563,12 @@ class ExtractionSmartSystem {
         const badges = document.querySelectorAll('.confidence-badge');
         badges.forEach(badge => { badge.style.display = 'none'; });
 
+        // أخفِ ملخّص الجودة وبطاقة «تحتاج مراجعة» — كانا يبقيان فوق نموذج فارغ بعد الحفظ (تسريب حالة)
+        const qualityHero = document.getElementById('qualityHero');
+        if (qualityHero) qualityHero.style.display = 'none';
+        const needsReviewCard = document.getElementById('needsReviewCard');
+        if (needsReviewCard) needsReviewCard.style.display = 'none';
+
         const followupCheckbox = document.getElementById('needsFollowup');
         if (followupCheckbox) {
             followupCheckbox.checked = false;
@@ -2776,88 +3590,109 @@ class ExtractionSmartSystem {
         this.resetDateFields();
 
         if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+
+        // إعادة ضبط أساس تتبّع «تغييرات غير محفوظة» بعد التفريغ (حارس زر الإلغاء/beforeunload)
+        if (window.__setExtractionBaseline) window.__setExtractionBaseline();
     }
 
     // ===== Save Book =====
+    // مسار حفظ موحّد لوضعَي الإدخال والتعديل (كان وضع التعديل monkey-patch مكرَّراً في القالب).
+    // كشف الوضع بمصدر واحد: this._editData (يُقرأ من وسم editBookData عند الإنشاء).
     async saveBook() {
-        // "بلا رقم": استثناء للكتب الداخلية فقط
-        const _kind0 = this.getCurrentKind();
-        const numberlessChecked = !!document.getElementById('numberlessCheckbox')?.checked
-            && (_kind0 === 'incoming_internal' || _kind0 === 'outgoing_internal');
+        const isEdit = !!this._editData;
+        const kindValue = this.getCurrentKind();
 
-        // Validate required fields (نتخطى bookNumber عند "بلا رقم")
-        const requiredFields = numberlessChecked
+        // ── 1) التحقّق من الحقول المطلوبة (حسب الوضع) ──
+        // "بلا رقم": استثناء للكتب الداخلية فقط (وضع الإدخال فقط)
+        const numberlessChecked = !isEdit
+            && !!document.getElementById('numberlessCheckbox')?.checked
+            && (kindValue === 'incoming_internal' || kindValue === 'outgoing_internal');
+
+        // في التعديل الرقم ثابت فلا يُتحقَّق منه؛ في الإدخال نتخطّاه عند "بلا رقم".
+        const requiredFields = (isEdit || numberlessChecked)
             ? ['title', 'date', 'issuingEntity', 'receivingEntity']
             : ['bookNumber', 'title', 'date', 'issuingEntity', 'receivingEntity'];
         let isValid = true;
         let firstInvalid = null;
-
         requiredFields.forEach(fieldId => {
             if (!this.validateField(fieldId)) {
                 isValid = false;
-                if (!firstInvalid) {
-                    firstInvalid = document.getElementById(fieldId);
-                }
+                if (!firstInvalid) firstInvalid = document.getElementById(fieldId);
             }
         });
-
         if (!isValid) {
             this.showToast(this.t('invalidFields'), 'error', 6000);
-            if (firstInvalid) {
-                firstInvalid.focus();
-                firstInvalid.classList.add('has-error');
-            }
+            if (firstInvalid) { firstInvalid.focus(); firstInvalid.classList.add('has-error'); }
             return;
         }
 
-        const kindValue = this.getCurrentKind();
+        // ── 2) نوع المستند مطلوب في الإدخال فقط (التعديل لا يشترطه) ──
         const documentTypeValue = this.getResolvedDocumentTypeValue(kindValue);
-        if (!documentTypeValue) {
+        if (!isEdit && !documentTypeValue) {
             this.showToast('يرجى اختيار نوع المستند أو إدخال نوع جديد.', 'error', 6000);
             if (this.isCustomDocumentTypeSelected()) {
                 const customInput = document.getElementById('documentTypeCustom');
-                if (customInput) {
-                    customInput.focus();
-                    customInput.classList.add('has-error');
-                }
+                if (customInput) { customInput.focus(); customInput.classList.add('has-error'); }
             } else {
                 document.getElementById('documentTypeSelect')?.focus();
             }
             return;
         }
 
-        if (!this.hasAttachedFile()) {
+        // تأكيد الحفظ بلا ملف — وضع الإدخال فقط (التعديل يُرسل الملف حصراً عند تعديل الصفحات)
+        if (!isEdit && !this.hasAttachedFile()) {
             const proceedWithoutFile = await this.confirmSaveWithoutFile();
-            if (!proceedWithoutFile) {
-                return;
-            }
+            if (!proceedWithoutFile) return;
         }
 
+        // ── 3) تفريغ نصّ الجهة المُدخَل إلى وسم إن لم يُحوَّل (كلا الوضعين) ──
+        await this._flushPendingEntities();
+
+        // ── 4) بناء الحمولة المشتركة ──
         const formData = new FormData();
-        const bookNumber = document.getElementById('bookNumber').value;
         const senderNumber = document.getElementById('senderNumber')?.value || '';
         const senderDate = document.getElementById('senderDate')?.value || '';
+        formData.append('title', document.getElementById('title').value);
+        formData.append('date', document.getElementById('date').value);
+        formData.append('sender_number', senderNumber);
+        formData.append('sender_date', senderDate);
+        formData.append('secret_level', document.getElementById('secretLevel')?.value || 'normal');
+        formData.append('document_type', documentTypeValue || '');
+        formData.append('margin', document.getElementById('margin')?.value || '');
+        // الجهات كوسوم (معرّفات + أسماء جديدة) — مصدر موحّد لكلا الوضعين
+        this._appendEntityIds(formData);
+
+        // ── 5) وضع التعديل: حمولة خاصّة + إرسال إلى update-book-api ──
+        if (isEdit) {
+            formData.append('edit_pk', String(this._editData.pk));
+            const dueDateValue = document.getElementById('dueDate')?.value || '';
+            formData.append('due_date', dueDateValue);
+            formData.append('needs_followup', dueDateValue ? 'true' : 'false');
+            // المرفق يُرسَل حصراً إن عُدّلت صفحات المعاينة فعلاً (تفادي الاستبدال الصامت)،
+            // ويُستهدَف المرفق المُعدَّل وحده كي لا تُؤرشف بقية مرفقات الكتاب.
+            if (this._pagesEditedInPreview && this.currentFile) {
+                formData.append('file', this.currentFile);
+                if (this._editData.attachment && this._editData.attachment.id) {
+                    formData.append('attachment_id', String(this._editData.attachment.id));
+                }
+            }
+            return this._submitEdit(formData);
+        }
+
+        // ── 6) وضع الإدخال: حقول الترقيم/الحجز + إرسال إلى save-book-api ──
+        const bookNumber = document.getElementById('bookNumber').value;
         const dueDate = document.getElementById('dueDate').value;
         const needsFollowup = document.getElementById('needsFollowup')?.checked;
-
         // Keep both keys during the extraction transition layer.
         formData.append('our_number', bookNumber);
         formData.append('book_number', bookNumber);
-        formData.append('sender_number', senderNumber);
         formData.append('outgoing_incoming_number', senderNumber);
-        formData.append('title', document.getElementById('title').value);
-        formData.append('date', document.getElementById('date').value);
-        formData.append('sender_date', senderDate);
         formData.append('due_date', dueDate);
         formData.append('dueDate', dueDate);
         formData.append('needs_followup', needsFollowup ? 'true' : 'false');
-        formData.append('issuing_entity', document.getElementById('issuingEntity').value);
-        formData.append('receiving_entity', document.getElementById('receivingEntity').value);
-        formData.append('secret_level', document.getElementById('secretLevel').value || 'normal');
-        formData.append('document_type', documentTypeValue);
         formData.append('book_type_name', documentTypeValue);
         formData.append('kind', kindValue);
-        formData.append('margin', document.getElementById('margin').value || '');
+        if (this.scanToken) formData.append('scan_token', this.scanToken);  // حلقة التقاط التدريب
 
         if (numberlessChecked) {
             // كتاب داخلي بلا رقم — يتجاهل الحجز والترقيم التلقائي
@@ -2876,11 +3711,62 @@ class ExtractionSmartSystem {
             }
         }
 
-        if (this.currentFile) {
-            formData.append('file', this.currentFile);
-        }
+        if (this.currentFile) formData.append('file', this.currentFile);
 
         this.submitBookData(formData);
+    }
+
+    /** يحلّ أي نصّ جهة مُدخَل لم يُحوَّل لوسم بعد (قبل قراءة المعرّفات) — يمنع فقدان جهة جديدة. */
+    async _flushPendingEntities() {
+        const jobs = ['issuing', 'receiving'].map(k => {
+            const mgr = window.entityTagManagers?.[k];
+            if (mgr && mgr.input && mgr.input.value.trim()) {
+                return Promise.resolve(mgr._resolveOrCreate(mgr.input.value.trim(), true));
+            }
+            return Promise.resolve();
+        });
+        try { await Promise.all(jobs); } catch (e) { console.warn('Pending entity flush failed:', e); }
+    }
+
+    /** يُلحق معرّفات/أسماء الجهات (وسوم EntityTagInput) بالحمولة — مصدر موحّد. */
+    _appendEntityIds(formData) {
+        const mgrI = window.entityTagManagers?.issuing;
+        const mgrR = window.entityTagManagers?.receiving;
+        (mgrI?.getIds()   || []).forEach(id => formData.append('issuing_entity_ids[]',   id));
+        (mgrI?.getNames() || []).forEach(n  => formData.append('issuing_entity_new[]',   n));
+        (mgrR?.getIds()   || []).forEach(id => formData.append('receiving_entity_ids[]', id));
+        (mgrR?.getNames() || []).forEach(n  => formData.append('receiving_entity_new[]', n));
+    }
+
+    /** إرسال تعديل كتاب قائم إلى update-book-api ثم العودة لوجهة البدء. */
+    async _submitEdit(formData) {
+        const saveBtn = document.getElementById('saveButton');
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<span class="spinner"></span> جاري الحفظ...';
+        saveBtn.disabled = true;
+        try {
+            const resp = await fetch(this.apiEndpoints.updateBook, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': this.getCookie('csrftoken'), 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                body: formData,
+            });
+            const result = await resp.json();
+            if (result.success) {
+                this._pagesEditedInPreview = false;   // استُهلكت تعديلات الصفحات بالحفظ
+                if (window.__setExtractionBaseline) window.__setExtractionBaseline();  // لا يعترض beforeunload التوجيه
+                this.showToast('تم حفظ التعديلات بنجاح ✓', 'success', 3000);
+                setTimeout(() => { window.location.href = this.backUrl || result.redirect_url || '/'; }, 1200);
+            } else {
+                this.showToast(result.message || 'فشل الحفظ', 'error', 6000);
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
+        } catch (e) {
+            this.showToast('خطأ في الاتصال — حاول مجدداً', 'error', 5000);
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        }
     }
 
     async submitBookData(formData) {
@@ -2960,13 +3846,26 @@ class ExtractionSmartSystem {
     }
 
     // ===== Utilities =====
-    showToast(message, type = 'info', duration = 4000) {
+    showToast(message, type = 'info', duration = 4000, title = null) {
         // Delegate to global ToastCenter for consistent UX
         if (window.ToastCenter) {
-            window.ToastCenter.show(type, message, { delay: duration });
+            const opts = { delay: duration };
+            if (title) opts.title = title;
+            window.ToastCenter.show(type, message, opts);
         } else {
             // Fallback to alert if ToastCenter not available
-            alert(message);
+            alert((title ? title + ': ' : '') + message);
+        }
+    }
+
+    /** fetch مع مهلة (AbortController) لاكتشاف عدم استجابة الوكيل/الماسح. */
+    async _fetchWithTimeout(url, opts = {}, timeoutMs = 8000) {
+        const ctrl = new AbortController();
+        const id = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+            return await fetch(url, { ...opts, signal: ctrl.signal });
+        } finally {
+            clearTimeout(id);
         }
     }
 

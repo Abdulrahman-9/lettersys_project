@@ -4,7 +4,22 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260504">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260702h">
+<style>
+.scan-agent-status{font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap}
+.scan-agent-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+.scan-agent-status[data-state=checking]{color:#475569;background:#f1f5f9}
+.scan-agent-status[data-state=ready]{color:#166534;background:#dcfce7}
+.scan-agent-status[data-state=scanning]{color:#92400e;background:#fef3c7}
+.scan-agent-status[data-state=unavailable],.scan-agent-status[data-state=no_naps2],.scan-agent-status[data-state=no_device]{color:#991b1b;background:#fee2e2}
+/* أنماط معاينة المستند (DocCanvas) نُقلت إلى static/css/doc_canvas.css — نظافة + بديل مُحسَّن */
+
+/* ── شارة المسح التلقائي الذكي ── */
+.scan-auto-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.76rem;font-weight:700;color:#3730a3;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:999px;padding:.22rem .6rem;white-space:nowrap}
+.scan-auto-badge .bi{font-size:.85rem}
+</style>
+<link rel="stylesheet" href="{% static 'css/doc_canvas.css' %}?v=20260702a">
+<link rel="stylesheet" href="{% static 'css/document_manager.css' %}?v=20260702b">
 {% endblock %}
 {% block content %}
 <!-- CSRF Token (hidden but available for JS) -->
@@ -41,6 +56,8 @@
     data-entity-list-endpoint="{% url 'entity-list-api' %}"
     data-suggestions-endpoint="{% url 'ai_suggestions' %}"
     data-save-book-endpoint="{% url 'save-book-api' %}"
+    data-update-book-endpoint="{% url 'update-book-api' %}"
+    data-back-url="{{ back_url|default:'' }}"
     data-next-number-endpoint="{% url 'next-number-api' %}"
     data-reservation-reserve-endpoint="{% url 'reservation-reserve' %}"
     data-reservation-void-endpoint="{% url 'reservation-void' %}"
@@ -63,7 +80,7 @@
 
         <!-- 🚨 بانر تحذير: استخراج بيانات افتراضية (fallback) -->
         <div id="fallbackBanner" class="fallback-banner" style="display: none;" role="alert" aria-live="polite">
-            <span class="fallback-banner-icon">⚠️</span>
+            <span class="fallback-banner-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
             <div class="fallback-banner-content">
                 <div class="fallback-banner-title">بيانات افتراضية — راجعها يدوياً قبل الحفظ</div>
                 <div class="fallback-banner-sub" id="fallbackBannerReason">خدمة الذكاء الاصطناعي غير متاحة الآن</div>
@@ -103,17 +120,17 @@
             </div>
 
             <select class="form-control-smart" id="bookKind" style="display:none;">
-                <option value="incoming_internal" {% if initial_kind == 'incoming_internal' %}selected{% endif %}>📥 وارد داخلي</option>
-                <option value="incoming_external" {% if initial_kind == 'incoming_external' %}selected{% endif %}>📬 وارد خارجي</option>
-                <option value="outgoing_internal" {% if initial_kind == 'outgoing_internal' %}selected{% endif %}>📤 صادر داخلي</option>
-                <option value="outgoing_external" {% if initial_kind == 'outgoing_external' %}selected{% endif %}>🌍 صادر خارجي</option>
+                <option value="incoming_internal" {% if initial_kind == 'incoming_internal' %}selected{% endif %}>وارد داخلي</option>
+                <option value="incoming_external" {% if initial_kind == 'incoming_external' %}selected{% endif %}>وارد خارجي</option>
+                <option value="outgoing_internal" {% if initial_kind == 'outgoing_internal' %}selected{% endif %}>صادر داخلي</option>
+                <option value="outgoing_external" {% if initial_kind == 'outgoing_external' %}selected{% endif %}>صادر خارجي</option>
             </select>
 
             <div class="desktop-workbench">
                 <!-- قسم الكتاب الأساسي -->
                 <div class="form-section form-section-double">
                     <div class="form-section-title">
-                        <span class="form-section-icon">📚</span>
+                        <span class="form-section-icon"><i class="bi bi-card-list"></i></span>
                         بيانات الكتاب الأساسية
                     </div>
 
@@ -158,7 +175,7 @@
                                 <input type="date" class="form-control-smart" id="date" disabled tabindex="-1">
                                 <label class="date-edit-toggle" title="تفعيل تعديل التاريخ">
                                     <input type="checkbox" id="dateEditToggle" tabindex="-1">
-                                    <span class="toggle-icon">✏️</span>
+                                    <span class="toggle-icon"><i class="bi bi-pencil"></i></span>
                                 </label>
                             </div>
                             <div class="input-hint" id="dateHint">تاريخ القيد — اضغط على أيقونة التعديل لتغييره.</div>
@@ -192,7 +209,7 @@
                                 <span id="titleConfidenceValue">92%</span>
                             </span>
                         </div>
-                        <input type="text" class="form-control-smart" id="title" placeholder="موضوع الكتاب أو خلاصة المراسلة">
+                        <input type="text" class="form-control-smart" id="title" placeholder="موضوع الكتاب أو خلاصة المراسلة" dir="rtl">
                         <div class="input-hint">اكتب عنواناً واضحاً يسهل البحث عنه لاحقاً في الأرشيف.</div>
                     </div>
 
@@ -212,17 +229,60 @@
                             <input type="date" class="form-control-smart" id="dueDate">
                             <div class="input-hint" id="dueDateHint">
                                 إذا تُرك فارغاً سيتم اقتراح موعد بعد 7 أيام من تاريخنا.
-                                الحالة تُحسَب تلقائياً: 🔵 قيد المتابعة · 🟠 مستحق اليوم · 🔴 متأخر.
+                                الحالة تُحسَب تلقائياً:
+                                <i class="bi bi-circle-fill" style="color:#3b82f6"></i> قيد المتابعة ·
+                                <i class="bi bi-circle-fill" style="color:#f59e0b"></i> مستحق اليوم ·
+                                <i class="bi bi-circle-fill" style="color:#ef4444"></i> متأخر.
                             </div>
                         </div>
                     </div>
+
+                    {# ودجة «آخر الكتب المسجّلة» — تحت المتابعة الزمنية، تملأ الفراغ المرئي (وضع الإدخال فقط) #}
+                    {% if recent_books %}
+                    <div class="recent-books-widget">
+                        <div class="recent-books-heading"><i class="bi bi-clock-history"></i> آخر الكتب المسجّلة</div>
+                        <ul class="recent-books-list">
+                            {% for rb in recent_books %}
+                            <li class="recent-book-item">
+                                <a class="recent-book-link"
+                                   href="{% url 'book_unified' %}?tab=all&q={{ rb.our_number|urlencode }}&focus={{ rb.id }}"
+                                   title="{{ rb.title }}">
+                                    <span class="recent-book-kind recent-book-kind--{{ rb.kind }}">{{ rb.kind_label }}</span>
+                                    <span class="recent-book-number">{{ rb.our_number|default:'—' }}</span>
+                                    <span class="recent-book-title">{{ rb.title|default:'(بلا عنوان)' }}</span>
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
                 </div>
 
                 <div class="desktop-sidebar-stack">
+                    {# بطاقتا P1: ملخّص الثقة الكلي + تنبيه المراجعة — وضع الإدخال فقط، تظهران بعد الاستخراج عبر JS #}
+                    {% if edit_book_json == 'null' %}
+                    <div class="quality-hero" id="qualityHero" style="display:none;">
+                        <div class="quality-hero-ring" id="qualityHeroRing">
+                            <span class="quality-hero-pct" id="qualityHeroPct">0%</span>
+                        </div>
+                        <div class="quality-hero-body">
+                            <div class="quality-hero-title" id="qualityHeroTitle">جودة الاستخراج</div>
+                            <div class="quality-hero-sub" id="qualityHeroSub">راجع الحقول قبل الحفظ</div>
+                        </div>
+                    </div>
+                    <div class="needs-review-card" id="needsReviewCard" style="display:none;" role="status" aria-live="polite">
+                        <span class="needs-review-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                        <div class="needs-review-body">
+                            <div class="needs-review-title">بعض الحقول تحتاج مراجعة</div>
+                            <div class="needs-review-sub" id="needsReviewSub">الثقة منخفضة — تحقّق من الحقول المُبرزة قبل الحفظ.</div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <!-- قسم الجهات -->
                     <div class="form-section form-section-single">
                         <div class="form-section-title">
-                            <span class="form-section-icon">🏢</span>
+                            <span class="form-section-icon"><i class="bi bi-building"></i></span>
                             الجهات المرتبطة
                         </div>
 
@@ -272,21 +332,21 @@
                     <!-- قسم الخصائص -->
                     <div class="form-section form-section-single">
                         <div class="form-section-title">
-                            <span class="form-section-icon">⚙️</span>
+                            <span class="form-section-icon"><i class="bi bi-sliders2"></i></span>
                             الخصائص والأرشفة
                         </div>
 
                         <div class="form-group-smart">
-                            <label class="field-label">🔒 مستوى السرية</label>
+                            <label class="field-label"><i class="bi bi-shield-lock"></i> مستوى السرية</label>
                             <select class="form-control-smart" id="secretLevel" data-default="normal">
-                                <option value="normal" selected>🔓 اعتيادي</option>
-                                <option value="secret">🔒 سري</option>
-                                <option value="topsecret">🔐 سري للغاية</option>
+                                <option value="normal" selected>اعتيادي</option>
+                                <option value="secret">سري</option>
+                                <option value="topsecret">سري للغاية</option>
                             </select>
                         </div>
 
                         <div class="form-group-smart">
-                            <label class="field-label">📌 نوع المستند</label>
+                            <label class="field-label"><i class="bi bi-tag"></i> نوع المستند</label>
                             <select class="form-control-smart" id="documentTypeSelect" aria-label="نوع المستند"></select>
                             <input type="text" class="form-control-smart mt-2" id="documentTypeCustom"
                                    placeholder="أدخل نوعاً جديداً غير موجود في القائمة"
@@ -296,8 +356,8 @@
                         </div>
 
                         <div class="form-group-smart">
-                            <label class="field-label">📝 ملاحظات</label>
-                            <textarea class="form-control-smart" id="margin" placeholder="ملاحظات إضافية أو تعليمات أرشيفية" rows="6"></textarea>
+                            <label class="field-label"><i class="bi bi-card-text"></i> ملاحظات</label>
+                            <textarea class="form-control-smart" id="margin" placeholder="ملاحظات إضافية أو تعليمات أرشيفية" rows="3"></textarea>
                             <div class="input-hint"><span id="charCount">0</span> / 1000</div>
                         </div>
                     </div>
@@ -307,14 +367,21 @@
 
         <!-- شريط الإجراءات الثابت -->
         <div class="action-bar">
-            <div class="validation-indicator" id="validationIndicator">
+            <div class="validation-indicator" id="validationIndicator" style="margin-inline-end:auto;">
                 <span class="validation-dot"></span>
                 <span id="validationText">ملء الحقول المطلوبة...</span>
             </div>
-            <div style="flex-grow: 1;"></div>
+            <button type="button" class="btn-action-neutral" id="cancelEditButton" data-back-url="{{ back_url|default:'' }}" title="إلغاء والعودة لمكان البدء">
+                <i class="bi bi-x-lg" aria-hidden="true"></i> إلغاء
+            </button>
+            {% if edit_book_json == 'null' %}
+            <button type="button" class="btn-action-warn" id="clearFormButton" title="تفريغ كل الحقول المُدخَلة أو المستخرَجة (لا يحذف الصورة الممسوحة)">
+                🧹 تفريغ الحقول
+            </button>
             <button type="button" class="btn-action-secondary" id="extractButton" title="إعادة استخراج البيانات من الملف يدوياً">
                 🔍 استخراج
             </button>
+            {% endif %}
             <button type="button" class="btn-action-primary" id="saveButton" title="حفظ الكتاب في النظام">
                 ✓ حفظ الكتاب
             </button>
@@ -332,6 +399,11 @@
                 <span class="modal-header-filename" id="modalFileName" title=""></span>
                 <span class="modal-header-filemeta" id="modalFileMeta"></span>
             </div>
+            <div class="preview-pager" id="previewPager" style="display:none;">
+                <button type="button" class="pager-btn" id="pagerPrev" title="الصفحة السابقة" aria-label="الصفحة السابقة"><i class="bi bi-chevron-right"></i></button>
+                <span class="pager-label" id="pagerLabel">صفحة 1 / 1</span>
+                <button type="button" class="pager-btn" id="pagerNext" title="الصفحة التالية" aria-label="الصفحة التالية"><i class="bi bi-chevron-left"></i></button>
+            </div>
         </div>
         <div class="modal-body" id="modalBody">
             <div class="empty-state" id="dropZone" title="اضغط أو اسحب الملف هنا">
@@ -341,18 +413,26 @@
             </div>
         </div>
 
+        <!-- شريط مصغّرات الصفحات (يظهر فقط عند تعدّد الصفحات/duplex) -->
+        <div class="preview-thumbs" id="previewThumbs" style="display:none;"></div>
+
+        <!-- لوحة إدارة مستندات الكتاب (وضع التعديل فقط — تُملأ من document_manager.js) -->
+        <div id="docManagerMount" class="docman-mount" style="margin-top:.75rem;"></div>
+
         <!-- شريط أزرار المسح الضوئي (محاذٍ لشريط الإجراءات في اللوحة اليسرى) -->
-        <div class="scan-action-bar">
+        <div class="scan-action-bar"{% if edit_book_json != 'null' %} style="display:none"{% endif %}>
+            <span id="scanAgentStatus" class="scan-agent-status" data-state="checking" title="حالة وكيل المسح المحلي">جارٍ فحص وكيل المسح…</span>
+            <select id="scanDeviceSelect" class="form-select form-select-sm" style="display:none;max-width:220px" title="اختر الماسح الضوئي"></select>
+            <span class="scan-auto-badge" title="مسح تلقائي بالكامل: يكتشف الوجه/الوجهين، يقوّم الميل، ويزيل الصفحات الفارغة — بلا أي ضبط يدوي">
+                <i class="bi bi-magic"></i> تلقائي ذكي
+            </span>
             <div class="scan-progress-inline" id="scanProgress" style="display: none;">
                 <div class="spinner-border spinner-border-sm" role="status"></div>
                 <span class="progress-message">جاري المسح...</span>
             </div>
             <div class="scan-action-bar-buttons">
-                <button type="button" class="btn-scan-action btn-scan-action-danger" id="clearScannedButton" style="display: none;" title="حذف الملف الممسوح وإعادة المسح">
-                    <i class="bi bi-trash3 me-1"></i>حذف
-                </button>
-                <button type="button" class="btn-scan-action btn-scan-action-secondary" id="scanMoreButton" style="display: none;" title="مسح صفحات إضافية ودمجها">
-                    <i class="bi bi-plus-circle me-1"></i>مسح المزيد
+                <button type="button" class="btn-scan-action btn-scan-action-danger" id="clearScannedButton" style="display: none;" title="حذف الصورة/الملف الممسوح فقط — لا يمسّ الحقول (لتفريغها استخدم «تفريغ الحقول»)">
+                    <i class="bi bi-trash3 me-1"></i>حذف الصورة
                 </button>
                 <button type="button" class="btn-scan-action btn-scan-action-upload" id="uploadFileButton" title="رفع ملف من جهازك (PDF أو صورة)">
                     <i class="bi bi-cloud-arrow-up me-1"></i>رفع ملف
@@ -367,8 +447,11 @@
 
 <script id="documentTypeCatalogData" type="application/json">{{ document_type_catalog_json|safe }}</script>
 <script id="documentTypeDefaultsData" type="application/json">{{ document_type_defaults_json|safe }}</script>
+{# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
+<script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260517b"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260702h"></script>
+<script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
 
@@ -434,21 +517,26 @@
       });
 
       this.input.addEventListener('keydown', e => {
-                const advance = () => setTimeout(() => window.extractionSystem?.handleCompositeFieldAdvance?.(this.input.id), 0);
+        const advance = () => setTimeout(() => window.extractionSystem?.handleCompositeFieldAdvance?.(this.input.id), 0);
+        const hasText = !!this.input.value.trim();
         if (e.key === 'Enter') {
           e.preventDefault();
           if (this.highlightIdx >= 0) {
-            const items = this.dropdown.querySelectorAll('.entity-suggestion-item, .new-entity-option');
-            items[this.highlightIdx]?.click();
-                        advance();
-          } else if (this.input.value.trim()) {
-                        Promise.resolve(this._resolveOrCreate(this.input.value.trim())).finally(advance);
-                    } else {
-                        advance();
+            // Enter يؤكّد الاقتراح المُؤشَّر بالسهم (لا الحروف المكتوبة) ويبقى لجهة تالية
+            this._commitHighlighted();
+          } else if (hasText) {
+            // أكّد الرمز/الاسم المكتوب وابقَ في الحقل لتسجيل جهة أخرى
+            this._resolveOrCreate(this.input.value.trim());
+          } else {
+            // الحقل فارغ → انتقل للحقل التالي (تأكيد Enter الثاني)
+            advance();
           }
-                } else if (e.key === 'Tab' && !e.shiftKey && this.input.value.trim()) {
-                    e.preventDefault();
-                    Promise.resolve(this._resolveOrCreate(this.input.value.trim(), true)).finally(advance);
+        } else if (e.key === 'Tab' && !e.shiftKey && hasText) {
+          // Tab بعد رمزٍ صحيح: يستدعي الجهة ويبقى لتسجيل جهة جديدة (لا ينتقل)
+          e.preventDefault();
+          if (this.highlightIdx >= 0) this._commitHighlighted();
+          else this._resolveOrCreate(this.input.value.trim());
+          // Tab على حقلٍ فارغ يمرّ للمعالِج العام فينتقل للحقل التالي
         } else if (e.key === 'Backspace' && !this.input.value && this.tags.length) {
           this.removeTag(this.tags.length - 1);
         } else if (e.key === 'ArrowDown') {
@@ -500,6 +588,16 @@
           }
         })
                 .catch(() => this.addNewEntity(query));
+    }
+
+    // يؤكّد الاقتراح المُؤشَّر حالياً: كيان موجود أو خيار «➕ جهة جديدة» — ثم يبقى في الحقل لجهة تالية
+    _commitHighlighted() {
+      const results = this._lastResults || [];
+      if (this.highlightIdx >= 0 && this.highlightIdx < results.length) {
+        this.addEntity(results[this.highlightIdx]);
+      } else if (this.highlightIdx === results.length && this.input.value.trim()) {
+        this.addNewEntity(this.input.value.trim());
+      }
     }
 
     async _search(query) {
@@ -712,42 +810,10 @@
       }, 50);
     };
 
-    // 4) تعديل saveBook: إرسال arrays بدل قيم مفردة
-    const _origSaveBook = ExtractionSmartSystem.prototype.saveBook;
-    ExtractionSmartSystem.prototype.saveBook = async function() {
-      // قبل البدء: إن كان هناك نص مُدخل ولم يُحوَّل لوسم بعد — حوّله الآن وانتظره.
-      // هذا يمنع فقدان الجهات الجديدة عند ضغط حفظ مباشرة دون Tab/Enter.
-      const pendingResolutions = ['issuing','receiving'].map(k => {
-        const mgr = window.entityTagManagers?.[k];
-        if (mgr && mgr.input && mgr.input.value.trim()) {
-          return Promise.resolve(mgr._resolveOrCreate(mgr.input.value.trim(), true));
-        }
-        return Promise.resolve();
-      });
-      try { await Promise.all(pendingResolutions); } catch(e) { console.warn('Pending entity flush failed:', e); }
+    // (أُزيل تجاوز saveBook هنا: تفريغ الجهات وإلحاق معرّفاتها صار داخل الصنف
+    //  عبر _flushPendingEntities/_appendEntityIds — مسار حفظ موحّد بلا ترقيع.)
 
-      // اعترض submitBookData لإضافة arrays قبل الإرسال
-      const _origSubmit = this.submitBookData.bind(this);
-      this.submitBookData = (formData) => {
-        // أزل القيم المفردة القديمة
-        formData.delete('issuing_entity');
-        formData.delete('receiving_entity');
-        // أضف arrays
-        const mgrI = window.entityTagManagers?.issuing;
-        const mgrR = window.entityTagManagers?.receiving;
-        (mgrI?.getIds()   || []).forEach(id => formData.append('issuing_entity_ids[]',   id));
-        (mgrI?.getNames() || []).forEach(n  => formData.append('issuing_entity_new[]',   n));
-        (mgrR?.getIds()   || []).forEach(id => formData.append('receiving_entity_ids[]', id));
-        (mgrR?.getNames() || []).forEach(n  => formData.append('receiving_entity_new[]', n));
-        // إعادة المرجع الأصلي للمستخدم القادم
-        this.submitBookData = _origSubmit;
-        return _origSubmit(formData);
-      };
-
-      return _origSaveBook.call(this);
-    };
-
-    // 5) عند المسح الذكي للنموذج بعد الحفظ — امسح الوسوم أيضاً
+    // 4) عند المسح الذكي للنموذج بعد الحفظ — امسح الوسوم أيضاً
     const _origSmartClear = ExtractionSmartSystem.prototype.smartClearAndStay;
     if (_origSmartClear) {
       ExtractionSmartSystem.prototype.smartClearAndStay = function(kind) {
@@ -779,9 +845,24 @@
     const issuingOk   = !!(mgrI && mgrI.count() > 0);
     const receivingOk = !!(mgrR && mgrR.count() > 0);
 
+    // نوع المستند مطلوب في وضع الإدخال (يطابق تحقّق saveBook) — وإلا يُعلن «جاهز» ثم يُرفض الحفظ.
+    // تجاوز التعديل لا يشترط النوع (EDIT_DATA مُعرَّف في وضع التعديل فقط).
+    const requireDocType = (typeof EDIT_DATA === 'undefined');
+    let docTypeOk = true;
+    if (requireDocType) {
+      docTypeOk = false;
+      try {
+        const sys = window.extractionSystem;
+        if (sys && typeof sys.getResolvedDocumentTypeValue === 'function') {
+          docTypeOk = !!sys.getResolvedDocumentTypeValue(sys.getCurrentKind());
+        }
+      } catch (_) {}
+    }
+
     const filled = [bookNumber, title, date].filter(f => f).length
-                 + (issuingOk ? 1 : 0) + (receivingOk ? 1 : 0);
-    const totalRequired = 5;
+                 + (issuingOk ? 1 : 0) + (receivingOk ? 1 : 0)
+                 + (requireDocType && docTypeOk ? 1 : 0);
+    const totalRequired = requireDocType ? 6 : 5;
     const isFilled = filled === totalRequired;
     
     const indicator = document.getElementById('validationIndicator');
@@ -837,13 +918,21 @@
     // AdvancedKeyboardNavigator removed — class was never implemented
 
     // Add validation listeners
-    const validationFields = ['bookNumber', 'title', 'date', 'issuingEntity', 'receivingEntity'];
+    const validationFields = ['bookNumber', 'title', 'date', 'issuingEntity', 'receivingEntity',
+                              'documentTypeSelect', 'documentTypeCustom'];
     validationFields.forEach(id => {
       const el = document.getElementById(id);
       if (el) {
         el.addEventListener('change', updateValidationIndicator);
         el.addEventListener('input', updateValidationIndicator);
       }
+    });
+    // شبكة أمان: نوع المستند قد يُنشأ/يتبدّل ديناميكياً — استمع بالتفويض كي يعكس المؤشّر النوع دائماً
+    document.addEventListener('change', (e) => {
+      if (e.target && (e.target.id === 'documentTypeSelect' || e.target.id === 'documentTypeCustom')) updateValidationIndicator();
+    });
+    document.addEventListener('input', (e) => {
+      if (e.target && e.target.id === 'documentTypeCustom') updateValidationIndicator();
     });
 
     // Character counter
@@ -897,6 +986,63 @@
   });
 </script>
 
+{# ── زر الإلغاء/العودة + شبكة أمان ضدّ فقدان البيانات (يعمل في وضعَي الإنشاء والتعديل) ── #}
+<script>
+(function () {
+  'use strict';
+  var btn = document.getElementById('cancelEditButton');
+  if (!btn) return;
+
+  // تتبّع «تغييرات غير محفوظة» بمقارنة قِيَمية (baseline) — لا يعتمد على الأحداث
+  // كي لا يرفع العلم زوراً عند الملء البرمجي (applyExtractionResult / حقن EDIT_DATA).
+  var FIELDS = ['title', 'date', 'senderNumber', 'senderDate', 'issuingEntity',
+                'receivingEntity', 'dueDate', 'secretLevel', 'bookKind'];
+  var baseline = {};
+  var allowLeave = false;
+  function snapshot() {
+    var s = {};
+    FIELDS.forEach(function (id) { var el = document.getElementById(id); s[id] = el ? (el.value || '') : ''; });
+    return s;
+  }
+  function setBaseline() { baseline = snapshot(); }
+  window.__setExtractionBaseline = setBaseline;   // تستدعيها extraction_smart.js بعد الحفظ/التفريغ + بلوك التعديل
+  function isDirty() {
+    return FIELDS.some(function (id) {
+      var el = document.getElementById(id);
+      return el && (el.value || '') !== (baseline[id] || '');
+    });
+  }
+  // لقطة الأساس بعد استقرار النموذج (الافتراضات + الحجز + أي حقن أوّلي)
+  setTimeout(setBaseline, 500);
+
+  function backTarget() {
+    var back = btn.getAttribute('data-back-url') || '';
+    if (back) return back;                                  // مُتحقَّق خادمياً (url_has_allowed_host_and_scheme)
+    var ref = document.referrer || '';
+    try {
+      // مقارنة أصل حقيقية (تسدّ open-redirect عبر origin.evil.com و origin@evil.com)
+      if (ref && ref !== window.location.href && new URL(ref).origin === window.location.origin) {
+        if (new URL(ref).pathname.indexOf('/login') === 0) return '/';   // لا تُعِد المستخدم لصفحة المصادقة
+        return ref;
+      }
+    } catch (e) {}
+    return '/';
+  }
+
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (isDirty() && !confirm('لديك تغييرات غير محفوظة ستُفقد عند المغادرة. هل تريد المتابعة؟')) return;
+    allowLeave = true;                                      // لئلا يتراكب beforeunload فوق تأكيدنا
+    window.location.href = backTarget();
+  });
+
+  // شبكة أمان لإغلاق التبويب/رجوع المتصفح/تنقّل خارجي (لا يلتقطها زر الإلغاء)
+  window.addEventListener('beforeunload', function (e) {
+    if (isDirty() && !allowLeave) { e.preventDefault(); e.returnValue = ''; }
+  });
+})();
+</script>
+
 {# ── وضع التعديل: يُملأ النموذج ببيانات كتاب قائم عند وجود edit_pk ── #}
 {% if edit_book_json != 'null' %}
 <script>
@@ -906,83 +1052,9 @@
   const EDIT_DATA = {{ edit_book_json|safe }};
   if (!EDIT_DATA || !EDIT_DATA.pk) return;
 
-  // ── تفعيل وضع التعديل على ExtractionSmartSystem ──
-  if (typeof ExtractionSmartSystem !== 'undefined') {
-
-    // 1) منع جلب رقم القيد الجديد (الرقم محدد مسبقاً ولا يتغيّر)
-    ExtractionSmartSystem.prototype.ensureReservation = async function() { return null; };
-
-    // 2) تعديل saveBook ليُرسل لـ update_book_api
-    const _origSaveBook = ExtractionSmartSystem.prototype.saveBook;
-    ExtractionSmartSystem.prototype.saveBook = async function() {
-      // التحقق من الحقول المطلوبة (بدون bookNumber — هو ثابت)
-      const requiredFields = ['title', 'date', 'issuingEntity', 'receivingEntity'];
-      let isValid = true;
-      requiredFields.forEach(id => {
-        if (!this.validateField(id)) isValid = false;
-      });
-      if (!isValid) {
-        this.showToast('يرجى ملء جميع الحقول المطلوبة', 'error', 5000);
-        return;
-      }
-
-      const kindValue = this.getCurrentKind();
-      const documentTypeValue = this.getResolvedDocumentTypeValue(kindValue);
-      const formData = new FormData();
-      formData.append('edit_pk', String(EDIT_DATA.pk));
-      formData.append('title', document.getElementById('title').value);
-      formData.append('date', document.getElementById('date').value);
-      formData.append('sender_number', document.getElementById('senderNumber')?.value || '');
-      formData.append('sender_date', document.getElementById('senderDate')?.value || '');
-      // due_date موجود ⇒ متابعة نشطة (is_archived=false). فارغ ⇒ مؤرشف ابتداءً.
-      // needs_followup يُحتفظ به للتوافق الرجعي مع الـ API (مشتق من وجود التاريخ).
-      const dueDateValue = document.getElementById('dueDate')?.value || '';
-      formData.append('due_date', dueDateValue);
-      formData.append('needs_followup', dueDateValue ? 'true' : 'false');
-      formData.append('secret_level', document.getElementById('secretLevel')?.value || 'normal');
-      formData.append('document_type', documentTypeValue || '');
-      formData.append('margin', document.getElementById('margin')?.value || '');
-      if (this.currentFile) formData.append('file', this.currentFile);
-
-      // إضافة الجهات من EntityTagInput
-      const mgrI = window.entityTagManagers?.issuing;
-      const mgrR = window.entityTagManagers?.receiving;
-      (mgrI?.getIds() || []).forEach(id => formData.append('issuing_entity_ids[]', id));
-      (mgrI?.getNames() || []).forEach(n => formData.append('issuing_entity_new[]', n));
-      (mgrR?.getIds() || []).forEach(id => formData.append('receiving_entity_ids[]', id));
-      (mgrR?.getNames() || []).forEach(n => formData.append('receiving_entity_new[]', n));
-
-      const saveBtn = document.getElementById('saveButton');
-      const originalText = saveBtn.innerHTML;
-      saveBtn.innerHTML = '<span class="spinner"></span> جاري الحفظ...';
-      saveBtn.disabled = true;
-
-      try {
-        const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-        const resp = await fetch('{% url "update-book-api" %}', {
-          method: 'POST',
-          headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' },
-          credentials: 'same-origin',
-          body: formData,
-        });
-        const result = await resp.json();
-        if (result.success) {
-          this.showToast('تم حفظ التعديلات بنجاح ✓', 'success', 3000);
-          setTimeout(() => {
-            if (result.redirect_url) window.location.href = result.redirect_url;
-          }, 1200);
-        } else {
-          this.showToast(result.message || 'فشل الحفظ', 'error', 6000);
-          saveBtn.innerHTML = originalText;
-          saveBtn.disabled = false;
-        }
-      } catch(e) {
-        this.showToast('خطأ في الاتصال — حاول مجدداً', 'error', 5000);
-        saveBtn.innerHTML = originalText;
-        saveBtn.disabled = false;
-      }
-    };
-  }
+  // وضع التعديل مُفعَّل داخل ExtractionSmartSystem نفسه: يقرأ editBookData + data-back-url عند الإنشاء،
+  // فيتولّى كشف الوضع + منع الحجز (ensureReservation) + مسار الحفظ إلى update-book-api — بلا ترقيع
+  // prototype من القالب. دور هذا السكربت الآن: ملء الحقول ببيانات الكتاب القائم فقط.
 
   // ── ملء حقول النموذج بعد اكتمال تهيئة ExtractionSmartSystem ──
   function _applyEditData() {
@@ -1032,6 +1104,8 @@
       if (mgrI && EDIT_DATA.issuing_entities?.length) mgrI.loadTags(EDIT_DATA.issuing_entities);
       if (mgrR && EDIT_DATA.receiving_entities?.length) mgrR.loadTags(EDIT_DATA.receiving_entities);
       if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+      // الكتاب المحمَّل = الأساس؛ فلا يُحسب فتحُ التعديل نفسه «تغييراً غير محفوظ»
+      if (window.__setExtractionBaseline) window.__setExtractionBaseline();
     };
     // EntityTagInput قد يكون جاهزاً أو يحتاج انتظاراً
     if (window.entityTagManagers?.issuing) {
@@ -1040,11 +1114,22 @@
       setTimeout(loadEntities, 300);
     }
 
-    // تحديث شريط الإجراءات
+    // تحميل المستند المحفوظ في المعاينة (إن وُجد مرفق)
+    if (EDIT_DATA.attachment && EDIT_DATA.attachment.id) {
+      const _loadAtt = () => {
+        if (window.extractionSystem?.loadSavedAttachment) {
+          window.extractionSystem.loadSavedAttachment(EDIT_DATA.attachment.id);
+        } else {
+          setTimeout(_loadAtt, 200);
+        }
+      };
+      _loadAtt();
+    }
+
+    // تحديث شريط الإجراءات — زر «الاستخراج» غير مُصيَّر في التعديل، وشريط المسح مُخفى
+    // خادمياً بشرط القالب كي لا يومض ظاهراً ثم يُخفى بـ JS مؤجَّل. إدارة المرفقات عبر DocumentManager.
     const saveBtn = document.getElementById('saveButton');
     if (saveBtn) saveBtn.textContent = '✓ حفظ التعديلات';
-    const extractBtn = document.getElementById('extractButton');
-    if (extractBtn) extractBtn.style.display = 'none';
 
     // شارة وضع التعديل في رأس الصفحة
     const header = document.querySelector('.extraction-form-panel .kind-tabs-wrapper');
@@ -1062,6 +1147,38 @@
     setTimeout(_applyEditData, 100);
   } else {
     document.addEventListener('DOMContentLoaded', () => setTimeout(_applyEditData, 100));
+  }
+
+  // ── لوحة إدارة مستندات الكتاب (المكان الموحّد: استبدال/دمج/حذف صفحات/إرفاق/حذف) ──
+  function _initDocManager() {
+    const mount = document.getElementById('docManagerMount');
+    if (!mount || mount._docman || !window.DocumentManager || !(EDIT_DATA && EDIT_DATA.pk)) return;
+    const dm = new window.DocumentManager({
+      bookId: EDIT_DATA.pk,
+      mount: mount,
+      onPreview: function (att) {
+        // اعرض المرفق في عارض المستند الرئيسي نفسه (سطح معاينة واحد موحّد)
+        if (window.extractionSystem && window.extractionSystem.loadSavedAttachment) {
+          window.extractionSystem.loadSavedAttachment(att.id);
+        } else if (window.DocView && window.DocView.open) {
+          window.DocView.open(att.url, att.name);
+        }
+      },
+      onAfterMutate: function () {
+        // بعد أي عملية (استبدال/دمج/حذف صفحات/حذف/إرفاق): أبطِل المعاينة وأعِد تحميل الأساسي الجديد
+        if (window.extractionSystem && window.extractionSystem.invalidatePreview) {
+          window.extractionSystem.invalidatePreview(EDIT_DATA.pk);
+        }
+      },
+    });
+    mount._docman = dm;
+    window._docManager = dm;
+    dm.refresh();
+  }
+  if (document.readyState !== 'loading') {
+    setTimeout(_initDocManager, 120);
+  } else {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(_initDocManager, 120));
   }
 
 })();

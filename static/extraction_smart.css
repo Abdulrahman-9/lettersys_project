@@ -512,6 +512,79 @@ body.app-shell-body {
     color: #64748b;
     text-align: center;
 }
+/* شريط تقدّم غير محدَّد (cycle bar) — يطمئن المستخدم أن الرفع/الاستخراج جارٍ لا متجمّد */
+.extraction-loading-overlay .overlay-progress {
+    width: 220px;
+    max-width: 72%;
+    height: 6px;
+    margin-top: 4px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+}
+.extraction-loading-overlay .overlay-progress-bar {
+    width: 40%;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    animation: overlayProgressSlide 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes overlayProgressSlide {
+    0%   { margin-inline-start: -42%; }
+    100% { margin-inline-start: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .extraction-loading-overlay .overlay-progress-bar { animation-duration: 2.4s; }
+}
+/* زر إلغاء داخل أوفرلاي التحميل — يمنع علوق المستخدم حين يتعثّر/يهنغ المسح */
+.extraction-loading-overlay .overlay-cancel {
+    margin-top: 10px;
+    background: #fff;
+    border: 1.5px solid #cbd5e1;
+    color: #475569;
+    border-radius: 8px;
+    padding: 7px 16px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+.extraction-loading-overlay .overlay-cancel:hover { background: #fee2e2; border-color: #dc2626; color: #dc2626; }
+
+/* شريط تأكيد الإلحاق داخل لوحة المعاينة — يؤكّد الإضافة (وعي المستخدم) ويتيح التراجع */
+.append-notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 0.6rem;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: #ecfdf5;
+    border: 1.5px solid #a7f3d0;
+    color: #065f46;
+    font-size: 0.85rem;
+    font-weight: 600;
+    animation: slideIn 0.3s ease;
+}
+.append-notice .append-notice-msg { flex: 1; min-width: 180px; }
+.append-notice .append-notice-msg .bi { color: #10b981; margin-inline-end: 4px; }
+.append-notice-undo {
+    flex: 0 0 auto;
+    background: #fff;
+    border: 1.5px solid #cbd5e1;
+    color: #475569;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.append-notice-undo:hover { background: #f1f5f9; color: #1e293b; }
 
 /* ===== شريط أزرار المسح الضوئي ===== */
 .scan-action-bar {
@@ -534,7 +607,7 @@ body.app-shell-body {
 }
 .btn-scan-action {
     flex: 1 1 auto;
-    min-width: 0;
+    min-width: auto;   /* لا تنكمش تحت عرض النصّ (min-content) → تلتفّ بدل أن يفيض النصّ خارج الزرّ */
     padding: 10px 12px;
     border-radius: 10px;
     font-weight: 700;
@@ -855,35 +928,10 @@ body.app-shell-body {
 .date-edit-toggle:has(input:checked) { border-color: #667eea; background: #eef2ff; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15); }
 .date-edit-toggle:has(input:checked) .toggle-icon { opacity: 1; }
 
-.form-control-smart::placeholder { color: #cbd5e1; }
+.form-control-smart::placeholder { color: #9aa7ba; }   /* أوضح من الظل الباهت السابق (#cbd5e1) مع بقائه إرشاداً خفيفاً */
 
 .input-hint { font-size: 0.8rem; color: #94a3b8; margin-top: 6px; }
 
-.input-suggestions {
-    margin-top: 8px;
-    padding: 12px;
-    background: #f0f9ff;
-    border-radius: 8px;
-    border-left: 4px solid #3b82f6;
-    display: none;
-    max-height: 200px;
-    overflow-y: auto;
-}
-.input-suggestions.show { display: block; animation: slideInUp 0.3s ease; }
-@keyframes slideInUp {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-.suggestion-item { padding: 8px; cursor: pointer; border-radius: 6px; font-size: 0.85rem; transition: all 0.2s; color: #1e293b; }
-.suggestion-item:hover { background: #e0f2fe; padding-left: 12px; }
-
-/* ===== زر الاستخراج ===== */
-.extraction-button-group { display: flex; gap: 12px; margin-top: 20px; justify-content: center; }
-.btn-extraction { flex: 0 1 auto; min-width: 200px; padding: 14px 24px; border: none; border-radius: 8px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-.btn-extraction-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-.btn-extraction-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
-.btn-extraction-secondary { background: white; color: #667eea; border: 2px solid #667eea; }
-.btn-extraction-secondary:hover { background: #f0f9ff; }
 
 /* ===== شريط الإجراءات الثابت ===== */
 .action-bar {
@@ -895,9 +943,9 @@ body.app-shell-body {
     border-top: 2px solid #e2e8f0;
     box-shadow: 0 -8px 24px rgba(0,0,0,0.08);
     display: flex;
-    gap: 12px;
+    gap: 8px;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     z-index: 10;
     flex-wrap: wrap;
 }
@@ -920,8 +968,9 @@ body.app-shell-body {
 .validation-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulse 2s ease-in-out infinite; }
 
 .action-bar .btn-action-secondary {
-    flex: 1;
-    min-width: 140px;
+    flex: 0 0 auto;
+    min-width: 120px;
+    box-sizing: border-box;
     border: 2px solid #667eea;
     color: #667eea;
     background: white;
@@ -937,11 +986,12 @@ body.app-shell-body {
 .action-bar .btn-action-secondary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 .action-bar .btn-action-primary {
-    flex: 1;
-    min-width: 140px;
+    flex: 0 0 auto;
+    min-width: 150px;
+    box-sizing: border-box;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    border: none;
+    border: 2px solid transparent;
     padding: 12px 20px;
     border-radius: 10px;
     font-weight: 700;
@@ -954,30 +1004,50 @@ body.app-shell-body {
 .action-bar .btn-action-primary:active { transform: translateY(0); }
 .action-bar .btn-action-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2); }
 
-#clearFormButton {
-    border: 2px solid #dc2626;
-    color: #dc2626;
-    background: white;
+/* زر العودة/الإلغاء — محايد هادئ (رمادي): الأحمر التدميري محجوز للحذف الحقيقي فقط،
+   والحفظ (btn-action-primary) هو الفعل الأساسي الأبرز. لا يتمدّد (flex:0) كي يبقى ثانوياً. */
+.action-bar .btn-action-neutral {
+    flex: 0 0 auto;
+    min-width: 110px;
+    box-sizing: border-box;
+    color: #475569;
+    background: #f1f5f9;
+    border: 2px solid #cbd5e1;
     padding: 12px 20px;
     border-radius: 10px;
     font-weight: 700;
+    font-size: 0.95rem;
     cursor: pointer;
-    transition: all 0.3s;
+    box-shadow: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-#clearFormButton:hover { background: #fee2e2 !important; border-color: #dc2626 !important; color: #dc2626 !important; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25); }
-#clearFormButton:active { transform: translateY(0); }
+.action-bar .btn-action-neutral:hover { background: #e2e8f0; color: #1e293b; transform: translateY(-2px); }
+.action-bar .btn-action-neutral:active { transform: translateY(0); }
+.action-bar .btn-action-neutral:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.action-bar .btn-action-neutral .bi { font-size: 0.9em; opacity: .9; }
 
-/* ===== Drag & Drop Zone ===== */
-.drop-zone { border: 2.5px dashed #cbd5e1; border-radius: 14px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: white; position: relative; overflow: hidden; }
-.drop-zone::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 0%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-.drop-zone:hover { border-color: #667eea; background: linear-gradient(135deg, #f0f9ff 0%, #faf5ff 100%); box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15); border-width: 3px; transform: translateY(-2px); }
-.drop-zone.dragover { border-color: #667eea; background: rgba(102, 126, 234, 0.08); box-shadow: 0 12px 32px rgba(102, 126, 234, 0.25); border-width: 3px; transform: scale(1.02); }
-.drop-zone-icon { font-size: 3.5rem; color: #cbd5e1; margin-bottom: 16px; animation: bounce 2s ease-in-out infinite; }
-@keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-.drop-zone:hover .drop-zone-icon { color: #667eea; animation: bounceActive 2s ease-in-out infinite; }
-@keyframes bounceActive { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-10px) scale(1.1); } }
-.drop-zone-text { font-size: 1rem; color: #475569; font-weight: 600; margin-bottom: 8px; }
-.drop-zone-hint { font-size: 0.85rem; color: #94a3b8; }
+/* تفريغ الحقول — تحذيري كهرماني: يُفرّغ ما أُدخل، فمتمايزٌ عن البنفسجي (بناء: حفظ/استخراج)
+   وعن الأحمر (حذف حقيقي). الكهرماني متناسق مع النظام (مؤشّر «قيد الإكمال» + شارة التعديل). */
+.action-bar .btn-action-warn {
+    flex: 0 0 auto;
+    min-width: 110px;
+    box-sizing: border-box;
+    color: #b45309;
+    background: #fffbeb;
+    border: 2px solid #fcd34d;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    box-shadow: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.action-bar .btn-action-warn:hover { background: #fef3c7; border-color: #f59e0b; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(217,119,6,0.18); }
+.action-bar .btn-action-warn:active { transform: translateY(0); }
+.action-bar .btn-action-warn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.action-bar .btn-action-warn .bi { font-size: 0.9em; opacity: .9; }
+
 
 @keyframes slideIn {
     from { opacity: 0; transform: translateX(20px); }
@@ -1065,7 +1135,15 @@ body.app-shell-body .app-main .extraction-container { flex: 1 1 auto; min-height
 
 .extraction-form-panel .action-bar { position: relative !important; bottom: auto !important; flex-shrink: 0; padding: 10px 14px !important; border-radius: 10px; border: 1px solid #e2e8f0; border-top: 2px solid #e2e8f0; margin-top: 0; }
 .action-bar .btn-action-secondary,
-.action-bar .btn-action-primary { padding: 9px 16px !important; font-size: 0.9rem !important; min-width: 120px !important; }
+.action-bar .btn-action-primary,
+.action-bar .btn-action-neutral,
+.action-bar .btn-action-warn {
+    padding: 9px 14px !important;
+    font-size: 0.9rem !important;
+    min-width: 0 !important;
+    min-height: 42px !important;   /* ارتفاع موحّد مهما اختلف المحتوى (أيقونة/إيموجي/نص) */
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+}
 
 .extraction-preview-modal { height: 100% !important; max-height: 100% !important; position: relative !important; top: auto !important; border-radius: 12px; }
 .extraction-preview-modal .modal-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
@@ -1121,17 +1199,22 @@ body.app-shell-body .app-main .extraction-container { flex: 1 1 auto; min-height
     box-sizing: border-box;
 }
 
-/* لاحقة إكمال الكلمة الجزئية (مباشرة بعد الحرف الأخير) */
+/* لاحقة إكمال الكلمة الجزئية (مباشرة بعد الحرف الأخير) — ملحق مُظلَّل واضح يُثبَّت بـTab.
+   لا padding أفقي: يحافظ على محاذاة الشبح فوق موضع المؤشّر بالبكسل. */
 .ta-ghost-completion {
-    color: #7c6b52;
-    opacity: 0.72;
+    color: #4a3d2b;
+    background: rgba(212, 180, 131, 0.32);
+    border-radius: 2px;
+    opacity: 1;
     letter-spacing: inherit;
 }
 
 /* الكلمة التالية المقترحة (Bigram — بعد مسافة) */
 .ta-ghost-nextword {
-    color: #a0956a;
-    opacity: 0.65;
+    color: #5a4a35;
+    background: rgba(160, 149, 106, 0.22);
+    border-radius: 2px;
+    opacity: 1;
     font-style: italic;
 }
 
@@ -1188,99 +1271,6 @@ body.app-shell-body .app-main .extraction-container { flex: 1 1 auto; min-height
 }
 
 /* ════════════════════════════════════════════════════════════════
-   زر تبديل معاينة المستند — Preview Toggle (Hamburger)
-   ════════════════════════════════════════════════════════════════ */
-
-.preview-toggle-btn {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    width: 42px;
-    height: 42px;
-    padding: 0;
-    border: 1.5px solid rgba(255,255,255,0.22);
-    border-radius: 11px;
-    background: rgba(255,255,255,0.12);
-    color: #fff;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: background 0.2s ease, transform 0.18s ease, box-shadow 0.22s ease, border-color 0.2s ease;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    position: relative;
-    overflow: hidden;
-}
-.preview-toggle-btn::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: radial-gradient(circle at center, rgba(255,255,255,0.35) 0%, transparent 70%);
-    opacity: 0;
-    transform: scale(0.3);
-    transition: opacity 0.4s ease, transform 0.4s ease;
-    pointer-events: none;
-}
-.preview-toggle-btn:hover {
-    background: rgba(255,255,255,0.22);
-    transform: scale(1.07);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-}
-.preview-toggle-btn:active {
-    transform: scale(0.93);
-}
-.preview-toggle-btn:active::after {
-    opacity: 1;
-    transform: scale(1.8);
-}
-.preview-toggle-btn.is-active {
-    background: rgba(255,255,255,0.26);
-    border-color: rgba(255,255,255,0.45);
-    box-shadow: 0 0 0 3px rgba(255,255,255,0.18), 0 4px 14px rgba(0,0,0,0.18);
-}
-
-/* الخطوط الثلاث وتحويلها إلى X */
-.ham-line {
-    display: block;
-    width: 18px;
-    height: 2px;
-    background: #fff;
-    border-radius: 2px;
-    transition: transform 0.36s cubic-bezier(0.4, 0, 0.2, 1),
-                opacity   0.24s ease,
-                width     0.36s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-origin: center;
-    pointer-events: none;
-}
-.preview-toggle-btn.is-active .ham-line:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-.preview-toggle-btn.is-active .ham-line:nth-child(2) { opacity: 0; width: 0; }
-.preview-toggle-btn.is-active .ham-line:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-
-/* تلميح نصي صغير تحت الزر */
-.preview-toggle-btn[data-tooltip]::before {
-    content: attr(data-tooltip);
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(15,23,42,0.92);
-    color: #fff;
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 4px 9px;
-    border-radius: 7px;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.18s ease;
-    z-index: 999;
-    letter-spacing: 0.2px;
-}
-.preview-toggle-btn:hover[data-tooltip]::before { opacity: 1; }
-
-/* ════════════════════════════════════════════════════════════════
    انتقالات لوحة المعاينة (تلاشي + انزلاق)
    ════════════════════════════════════════════════════════════════ */
 
@@ -1291,74 +1281,157 @@ body.app-shell-body .app-main .extraction-container { flex: 1 1 auto; min-height
     transform-origin: left center;
 }
 
-/* مرحلة التلاشي (قبل الإخفاء الكامل) */
-.extraction-preview-modal.is-hiding {
-    opacity: 0 !important;
-    transform: translateX(28px) scale(0.97) !important;
+
+/* ============================================
+   ودجة «آخر الكتب المسجّلة» — كتلة مدمجة تحت المتابعة الزمنية (وضع الإدخال فقط)
+   ============================================ */
+.recent-books-widget {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #e2e8f0;
+}
+.recent-books-heading {
+    display: flex; align-items: center; gap: 6px;
+    font-size: .78rem; font-weight: 700; color: #0f766e;
+    margin-bottom: 7px;
+}
+.recent-books-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.recent-book-item { margin: 0; }
+.recent-book-link {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 9px;
+    border-radius: 7px;
+    background: #f8fafc;
+    border: 1px solid #eef2f7;
+    text-decoration: none;
+    color: #334155;
+    transition: background .15s, border-color .15s, transform .15s;
+}
+.recent-book-link:hover {
+    background: #f0fdfa;
+    border-color: #99f6e4;
+    transform: translateX(-2px);   /* RTL: انزلاق خفيف لليسار عند التحويم */
+}
+.recent-book-kind {
+    font-size: .66rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+    white-space: nowrap;
+}
+.recent-book-kind--incoming_internal,
+.recent-book-kind--incoming_external { background: #dbeafe; color: #1d4ed8; }
+.recent-book-kind--outgoing_internal,
+.recent-book-kind--outgoing_external { background: #fef3c7; color: #b45309; }
+.recent-book-number {
+    font-size: .76rem;
+    font-weight: 700;
+    color: #0f766e;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.recent-book-title {
+    font-size: .8rem;
+    color: #475569;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* ============================================
+   بطاقتا P1: ملخّص الثقة (quality-hero) + تنبيه المراجعة (needs-review)
+   تظهران بعد الاستخراج عبر JS — وضع الإدخال فقط
+   ============================================ */
+.quality-hero {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #f8fafc;
+    border: 1px solid #eef2f7;
+}
+.quality-hero-ring {
+    --pct: 0;
+    position: relative;
+    width: 54px; height: 54px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    background: conic-gradient(var(--ring-color, #0f766e) calc(var(--pct) * 1%), #e5e7eb 0);
+}
+.quality-hero-ring::after {
+    content: '';
+    position: absolute; inset: 5px;
+    border-radius: 50%;
+    background: #fff;
+}
+.quality-hero-pct {
+    position: relative; z-index: 1;
+    font-size: .8rem; font-weight: 800;
+    color: var(--ring-color, #0f766e);
+    font-variant-numeric: tabular-nums;
+}
+.quality-hero-ring--high { --ring-color: #16a34a; }
+.quality-hero-ring--medium { --ring-color: #d97706; }
+.quality-hero-ring--low { --ring-color: #dc2626; }
+.quality-hero-body { min-width: 0; }
+.quality-hero-title { font-size: .88rem; font-weight: 700; color: #1e293b; }
+.quality-hero-sub { font-size: .76rem; color: #64748b; margin-top: 2px; }
+
+.needs-review-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+}
+.needs-review-icon { font-size: 1.15rem; color: #d97706; flex-shrink: 0; }
+.needs-review-body { min-width: 0; }
+.needs-review-title { font-size: .85rem; font-weight: 700; }
+.needs-review-sub { font-size: .76rem; opacity: .9; margin-top: 1px; }
+
+/* ============================================
+   حافّة الثقة (رؤية التصميم — الميزة الرائدة): الثقة خاصية فيزيائية للحقل
+   لون OCR على حافّة كل حقل مُستخرَج، تتلاشى لتركوازي «يقين بشري» عند اللمس.
+   ============================================ */
+.form-group-smart { position: relative; }
+.form-group-smart::before {
+    content: ""; position: absolute;
+    inset-block: 32px 12px;          /* أسفل التسمية حتى قرب أسفل الحقل */
+    inset-inline-start: 0;           /* بداية القراءة في RTL = يمين */
+    inline-size: 3px; border-radius: 3px;
+    background: var(--edge, transparent);
+    transition: background .4s cubic-bezier(.4, 0, .2, 1);
     pointer-events: none;
 }
-
-/* الإخفاء الكامل */
-.extraction-preview-modal.is-hidden {
-    display: none !important;
+.form-group-smart[data-conf="high"]   { --edge: #16a34a; }
+.form-group-smart[data-conf="medium"] { --edge: #d97706; }
+.form-group-smart[data-conf="low"]    { --edge: #dc2626; }
+.form-group-smart[data-conf="low"] .form-control-smart { background: rgba(220, 38, 38, .03); }
+.form-group-smart[data-conf="human"]  { --edge: #0f766e; }   /* يقين بشري — تركوازي */
+.form-group-smart[data-conf="medium"]::before {
+    background: linear-gradient(#d97706, #f0b45e, #d97706);
+    background-size: 100% 200%;
+    animation: edgeShimmer 3s ease-in-out infinite;
 }
-
-/* ════════════════════════════════════════════════════════════════
-   الوضع الموسَّع — حين تختفي المعاينة
-   ════════════════════════════════════════════════════════════════ */
-
-/* تغيير الشبكة لتشغيل عمود واحد */
-body.app-shell-body .app-main .extraction-container.preview-collapsed {
-    grid-template-columns: 1fr !important;
-}
-
-/* توسيع حقل عرض المحتوى الداخلي */
-body.app-shell-body .app-main .extraction-container.preview-collapsed .desktop-workbench {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr) !important;
-    gap: 18px !important;
-}
-
-/* تكبير الحقول — انتقال ناعم */
-body.app-shell-body .app-main .extraction-container.preview-collapsed .form-control-smart {
-    padding: 10px 15px !important;
-    font-size: 0.97rem !important;
-    transition: padding 0.32s ease, font-size 0.32s ease;
-}
-body.app-shell-body .app-main .extraction-container.preview-collapsed .field-label {
-    font-size: 0.91rem !important;
-    transition: font-size 0.32s ease;
-}
-body.app-shell-body .app-main .extraction-container.preview-collapsed textarea.form-control-smart {
-    min-height: 95px !important;
-}
-body.app-shell-body .app-main .extraction-container.preview-collapsed .input-hint {
-    font-size: 0.78rem !important;
-}
-body.app-shell-body .app-main .extraction-container.preview-collapsed .kind-tab {
-    padding: 9px 10px !important;
-    font-size: 0.85rem !important;
-}
-body.app-shell-body .app-main .extraction-container.preview-collapsed .form-section {
-    padding: 14px 18px !important;
-}
-
-/* شريط الإجراءات في الوضع الموسَّع */
-body.app-shell-body .app-main .extraction-container.preview-collapsed .action-bar {
-    border-radius: 12px !important;
-}
-body.app-shell-body .app-main .extraction-container.preview-collapsed .btn-action-primary,
-body.app-shell-body .app-main .extraction-container.preview-collapsed .btn-action-secondary {
-    padding: 11px 22px !important;
-    font-size: 0.95rem !important;
-}
-
-/* لا تُطبَّق تغييرات الوضع الموسَّع على شاشات صغيرة */
-@media (max-width: 1100px) {
-    body.app-shell-body .app-main .extraction-container.preview-collapsed {
-        grid-template-columns: 1fr !important;
-    }
-    body.app-shell-body .app-main .extraction-container.preview-collapsed .form-control-smart {
-        font-size: 0.9rem !important;
-        padding: 7px 10px !important;
-    }
+@keyframes edgeShimmer { 0%, 100% { background-position: 0 0; } 50% { background-position: 0 100%; } }
+@media (prefers-reduced-motion: reduce) {
+    .form-group-smart::before { animation: none !important; transition: none; }
 }
