@@ -484,6 +484,18 @@ class AIExtractionService:
             # فقط للصور الممسوحة بلا طبقة نصّ غنيّة.
             pdf_text = None if skip_ocr else self._extract_pdf_text_layer(image_path)
             if pdf_text:
+                # «الطبقة تكسب مكانها»: بعض الطبقات متنُها إنكليزية سليمة (تعبر
+                # بوّابة الكثافة) لكن ترويستها خردة — فيضيع الرأس كله. نقبل الطبقة
+                # فقط إن أثمرت حقلَ رأسٍ واحداً على الأقل (رقم أو تاريخ الجهة)؛
+                # وإلا فالمسار البصري المُدرَّب أجدى.
+                self._ensure_ocr_stack()
+                probe = self.ocr_service.clean_text(pdf_text)
+                p_num, _ = self.pattern_matcher.extract_sender_number(probe)
+                p_date, _ = self.pattern_matcher.extract_sender_date(probe)
+                if not p_num and not p_date:
+                    logger.info('[pipeline] طبقة النصّ بلا حقول رأس (رقم/تاريخ) — OCR بديلاً')
+                    pdf_text = None
+            if pdf_text:
                 _progress('ocr')
                 result.progress_stage = 'قراءة النص'
                 self._ensure_ocr_stack()   # لأجل ocr_service.clean_text
@@ -604,20 +616,29 @@ class AIExtractionService:
                   1) ذاكرة الترويسة (تعلّمٌ من مستندات سابقة مؤكَّدة) — hit@3 ≈ 85%،
                   2) مطابقة اسم الجهة في الترويسة — hit@3 ≈ 18-27%،
                   3) أنماط «من/إلى X» — hit@3 ≈ 0-3%.
-                كلٌّ يملأ ما نقص عن أفضل-3 دون إزاحة الأعلى أو تكرار."""
+                كلٌّ يملأ ما نقص عن أفضل-3 دون إزاحة الأعلى أو تكرار، وفشلُ أي
+                مصدرٍ (MemoryError تحت ضغط 8GB مثلاً) يُسقطه وحده لا الخطوة كلها."""
                 cleaned = result.cleaned_text or ''
-                ranked = list(self.entity_matcher.match_from_memory(cleaned, entity_type=etype, top_k=3))
-                seen = {m['entity_id'] for m in ranked}
+                ranked, seen = [], set()
+
+                def _extend(fetch, label):
+                    try:
+                        for m in fetch():
+                            if m['entity_id'] not in seen:
+                                ranked.append(m); seen.add(m['entity_id'])
+                    except Exception as exc:
+                        logger.warning('[pipeline] مصدر الجهات %s فشل (%s) — تدهور رشيق',
+                                       label, type(exc).__name__)
+
+                _extend(lambda: self.entity_matcher.match_from_memory(cleaned, entity_type=etype, top_k=3),
+                        'memory')
                 if len(ranked) < 3:
-                    for m in self.entity_matcher.match_from_letterhead(cleaned, entity_type=etype, top_k=3):
-                        if m['entity_id'] not in seen:
-                            ranked.append(m); seen.add(m['entity_id'])
+                    _extend(lambda: self.entity_matcher.match_from_letterhead(cleaned, entity_type=etype, top_k=3),
+                            'letterhead')
                 pattern_match = (self.entity_matcher.match_issuing_entity if etype == 'issuer'
                                  else self.entity_matcher.match_receiving_entity)
                 for entity_text in entity_candidates:
-                    for m in pattern_match(entity_text):
-                        if m['entity_id'] not in seen:
-                            ranked.append(m); seen.add(m['entity_id'])
+                    _extend(lambda: pattern_match(entity_text), 'patterns')
                     if len(ranked) > 3:
                         break
                 return ranked[:3]

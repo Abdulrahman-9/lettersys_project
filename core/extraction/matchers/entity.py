@@ -246,7 +246,12 @@ class EntityMatcher:
         head = letterhead_region(text)
         if not head:
             return []
-        sims = (vec.transform([_normalize_ar(head)]) @ matrix.T).toarray().ravel()
+        try:
+            sims = (vec.transform([_normalize_ar(head)]) @ matrix.T).toarray().ravel()
+        except MemoryError:
+            # ضغط ذاكرة (جهاز 8GB): تدهورٌ رشيق — تسقط الذاكرة وتبقى الترويسة/الأنماط
+            logger.warning('[EntityMatcher] MemoryError في مطابقة الذاكرة — تخطٍّ رشيق')
+            return []
         cols = (1, 2, 3) if entity_type == 'issuer' else (4, 5, 6)   # (id, name, code)
         from datetime import date
         today = date.today()
