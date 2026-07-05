@@ -233,6 +233,28 @@ class AIExtractionService:
         if self._online_provider is None and self._settings.get('AI_PROVIDER') != 'offline':
             self._online_provider = build_online_provider_from_settings(self._settings)
 
+    def _extract_pdf_text_layer(self, path: str, min_chars: int = 120, min_words: int = 20):
+        """يُعيد نصّ طبقة PDF المضمّنة إن كانت غنيّة (مستند رقمي/مُصدَّر أو مُمسوح-ومُعالَج)،
+        وإلا None (صورة ممسوحة بلا نصّ → يلزم OCR).
+
+        للإيميلات المطبوعة وملفّات PDF الرقمية، النصّ المضمّن جاهزٌ ودقيق — أسرع وأخفّ
+        ذاكرة بكثير من إعادة الرسم + Tesseract، ويعالج كل الصفحات تلقائياً. عتبة الطول
+        والكلمات تحرس من طبقة نصّ ضئيلة (ختم/أثر OCR) فتسقط إلى OCR الكامل."""
+        if not str(path).lower().endswith('.pdf'):
+            return None
+        try:
+            import fitz
+            doc = fitz.open(path)
+            try:
+                text = '\n'.join(doc[i].get_text('text') for i in range(doc.page_count)).strip()
+            finally:
+                doc.close()
+        except Exception as exc:
+            logger.warning('[pipeline] فحص طبقة نصّ PDF فشل: %s', exc)
+            return None
+        words = [w for w in text.split() if len(w) >= 2]
+        return text if (len(text) >= min_chars and len(words) >= min_words) else None
+
     def compute_image_hash(self, image_path: str) -> str:
         """
         Compute MD5 hash of image file
@@ -413,71 +435,87 @@ class AIExtractionService:
                 cached_result.progress_stage = 'cached'
                 return cached_result
 
-            # Step 2: تحسين الصورة
-            _progress('image_enhancement')
-            result.progress_stage = 'تحسين الصورة'
-            logger.info('Processing image: %s', image_path)
-            from django.conf import settings as dj_settings
-            ocr_engine = getattr(dj_settings, 'AI_OFFLINE_ENGINE', 'tesseract')
-            if ocr_engine == 'tesseract':
-                # Tesseract يطبّق تحسينه داخلياً؛ صورة رمادية نظيفة أدقّ من المعالجة
-                # الثقيلة (التي تخفض جودته). max_ocr_dim=2600 (≈223DPI): مقيسٌ كافياً
-                # للاستخراج (عنوان/رقم/جهة) وأسرع ~2× من 3500 — يقصّ زمن الإيميلات.
-                image_processor = ImageProcessor(image_path, preprocess_pdf=False, max_ocr_dim=2600)
-                image_processor.light_pipeline()
-            else:
-                image_processor = ImageProcessor(image_path)
-                image_processor.full_pipeline()
-            enhanced_image = image_processor.get_image()
-            # الصورة المُحسَّنة تُكتَب في مجلد النظام المؤقّت — لا بجوار الأصل.
-            # الكتابة بجوار الأصل تجعل مراقب المجلد (ScanWatcher) يلتقطها
-            # كملفّ ممسوح جديد ويُعالجها في حلقة.
-            _ext = os.path.splitext(image_path)[1].lower()
-            if _ext not in ('.jpg', '.jpeg', '.png'):
-                _ext = '.png'
-            _fd, enhanced_image_path = tempfile.mkstemp(suffix=_ext, prefix='lettersys_ocr_')
-            os.close(_fd)
-            image_processor.save(enhanced_image_path)
-            del image_processor, enhanced_image
-
-            # Step 3: OCR
-            if not skip_ocr:
+            # Step 2/3: طبقة النصّ المضمّنة أولاً — للمستندات الرقمية (إيميلات مطبوعة،
+            # PDF مُصدَّر أو مُمسوح-ومُعالَج) نصٌّ جاهز أدقّ وأسرع وأخفّ ذاكرة من إعادة
+            # الرسم + Tesseract، ويعالج كل الصفحات تلقائياً. نسقط إلى تحسين الصورة + OCR
+            # فقط للصور الممسوحة بلا طبقة نصّ غنيّة.
+            pdf_text = None if skip_ocr else self._extract_pdf_text_layer(image_path)
+            if pdf_text:
                 _progress('ocr')
                 result.progress_stage = 'قراءة النص'
-                self._ensure_ocr_stack()
-
-                offline_res = self._offline_provider.extract(enhanced_image_path)
-                result.raw_text = offline_res.get('raw_text', '')
-                result.cleaned_text = self.ocr_service.clean_text(result.raw_text)
-                result.ocr_confidence = float(offline_res.get('avg_confidence', 0.0))
+                self._ensure_ocr_stack()   # لأجل ocr_service.clean_text
+                result.raw_text = pdf_text
+                result.cleaned_text = self.ocr_service.clean_text(pdf_text)
+                result.ocr_confidence = 0.9
                 result.detected_language = 'ar'
-                ocr_engine_used = self._offline_provider.name  # 'tesseract' أو 'easyocr'
-                logger.info('OCR (offline) confidence %.2f', result.ocr_confidence)
-
-                # Fallback إلى Azure عند ثقة منخفضة
-                if self._settings.get('AI_FALLBACK_ON_LOW_CONFIDENCE', True) and self._online_provider:
-                    threshold = float(self._settings.get('AI_LOW_CONFIDENCE_THRESHOLD', 0.4))
-                    if result.ocr_confidence < threshold:
-                        _progress('ocr_azure_fallback')
-                        result.progress_stage = 'تحسين القراءة (سحابة)'
-                        logger.info('OCR below threshold %.2f; trying online provider...', threshold)
-                        try:
-                            online_res = self._online_provider.extract(enhanced_image_path)
-                            online_conf = float(online_res.get('avg_confidence', 0.0))
-                            if online_conf > result.ocr_confidence and online_res.get('raw_text'):
-                                result.raw_text = online_res.get('raw_text', '')
-                                result.cleaned_text = self.ocr_service.clean_text(result.raw_text)
-                                result.ocr_confidence = online_conf
-                                ocr_engine_used = 'azure'
-                                logger.info('Online OCR improved confidence to %.2f', online_conf)
-                        except Exception as azure_exc:
-                            logger.warning('[pipeline] Azure fallback failed: %s', azure_exc, exc_info=True)
-
-                result.ocr_engine = ocr_engine_used
+                result.ocr_engine = 'pdf_text_layer'
+                logger.info('Used embedded PDF text layer (%d chars) — skipped image OCR', len(pdf_text))
             else:
-                result.raw_text = ''
-                result.cleaned_text = ''
-                result.ocr_confidence = 0.0
+                # Step 2: تحسين الصورة
+                _progress('image_enhancement')
+                result.progress_stage = 'تحسين الصورة'
+                logger.info('Processing image: %s', image_path)
+                from django.conf import settings as dj_settings
+                ocr_engine = getattr(dj_settings, 'AI_OFFLINE_ENGINE', 'tesseract')
+                if ocr_engine == 'tesseract':
+                    # Tesseract يطبّق تحسينه داخلياً؛ صورة رمادية نظيفة أدقّ من المعالجة
+                    # الثقيلة (التي تخفض جودته). max_ocr_dim=2600 (≈223DPI): مقيسٌ كافياً
+                    # للاستخراج (عنوان/رقم/جهة) وأسرع ~2× من 3500 — يقصّ زمن الإيميلات.
+                    image_processor = ImageProcessor(image_path, preprocess_pdf=False, max_ocr_dim=2600)
+                    image_processor.light_pipeline()
+                else:
+                    image_processor = ImageProcessor(image_path)
+                    image_processor.full_pipeline()
+                enhanced_image = image_processor.get_image()
+                # الصورة المُحسَّنة تُكتَب في مجلد النظام المؤقّت — لا بجوار الأصل.
+                # الكتابة بجوار الأصل تجعل مراقب المجلد (ScanWatcher) يلتقطها
+                # كملفّ ممسوح جديد ويُعالجها في حلقة.
+                _ext = os.path.splitext(image_path)[1].lower()
+                if _ext not in ('.jpg', '.jpeg', '.png'):
+                    _ext = '.png'
+                _fd, enhanced_image_path = tempfile.mkstemp(suffix=_ext, prefix='lettersys_ocr_')
+                os.close(_fd)
+                image_processor.save(enhanced_image_path)
+                del image_processor, enhanced_image
+
+                # Step 3: OCR
+                if not skip_ocr:
+                    _progress('ocr')
+                    result.progress_stage = 'قراءة النص'
+                    self._ensure_ocr_stack()
+
+                    offline_res = self._offline_provider.extract(enhanced_image_path)
+                    result.raw_text = offline_res.get('raw_text', '')
+                    result.cleaned_text = self.ocr_service.clean_text(result.raw_text)
+                    result.ocr_confidence = float(offline_res.get('avg_confidence', 0.0))
+                    result.detected_language = 'ar'
+                    ocr_engine_used = self._offline_provider.name  # 'tesseract' أو 'easyocr'
+                    logger.info('OCR (offline) confidence %.2f', result.ocr_confidence)
+
+                    # Fallback إلى Azure عند ثقة منخفضة
+                    if self._settings.get('AI_FALLBACK_ON_LOW_CONFIDENCE', True) and self._online_provider:
+                        threshold = float(self._settings.get('AI_LOW_CONFIDENCE_THRESHOLD', 0.4))
+                        if result.ocr_confidence < threshold:
+                            _progress('ocr_azure_fallback')
+                            result.progress_stage = 'تحسين القراءة (سحابة)'
+                            logger.info('OCR below threshold %.2f; trying online provider...', threshold)
+                            try:
+                                online_res = self._online_provider.extract(enhanced_image_path)
+                                online_conf = float(online_res.get('avg_confidence', 0.0))
+                                if online_conf > result.ocr_confidence and online_res.get('raw_text'):
+                                    result.raw_text = online_res.get('raw_text', '')
+                                    result.cleaned_text = self.ocr_service.clean_text(result.raw_text)
+                                    result.ocr_confidence = online_conf
+                                    ocr_engine_used = 'azure'
+                                    logger.info('Online OCR improved confidence to %.2f', online_conf)
+                            except Exception as azure_exc:
+                                logger.warning('[pipeline] Azure fallback failed: %s', azure_exc, exc_info=True)
+
+                    result.ocr_engine = ocr_engine_used
+                else:
+                    result.raw_text = ''
+                    result.cleaned_text = ''
+                    result.ocr_confidence = 0.0
 
             # Step 4: Pattern Matching
             _progress('pattern_matching')
