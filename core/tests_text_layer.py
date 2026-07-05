@@ -47,11 +47,17 @@ class TextLayerDetectionTests(TestCase):
         return p
 
     def test_rich_text_layer_returned(self):
-        # نصّ غنيّ (> العتبة) موزّع على أسطر → يُعاد كما هو ليُستخدَم بدل OCR
-        rich = '\n'.join('line %02d alpha beta gamma delta' % i for i in range(8))  # 48 كلمة
+        # نصّ غنيّ (> العتبة) موزّع على أسطر، بلغة حقيقية → يُعاد ليُستخدَم بدل OCR
+        rich = '\n'.join('the subject of this letter %02d alpha beta' % i for i in range(8))
         out = self.svc._extract_pdf_text_layer(self._pdf(rich))
         self.assertIsNotNone(out)
-        self.assertIn('gamma', out)
+        self.assertIn('alpha', out)
+
+    def test_garbage_scanner_layer_rejected(self):
+        # طبقة برنامج مسحٍ خردة (عربية قُرئت بمحرّك لاتيني: «.hiill;Jljo») — طويلة
+        # لكنها بلا كلمات لغةٍ حقيقية → تُرفض ويسقط المستند إلى OCR المُدرَّب
+        garbage = '\n'.join('hiill Jljo lrj asi %02d jJslt irSL Datc llc' % i for i in range(8))
+        self.assertIsNone(self.svc._extract_pdf_text_layer(self._pdf(garbage)))
 
     def test_sparse_text_layer_falls_back(self):
         # نصّ ضئيل (ختم/أثر) دون العتبة → None → يلزم OCR
@@ -66,3 +72,27 @@ class TextLayerDetectionTests(TestCase):
         os.close(fd)
         self._paths.append(path)
         self.assertIsNone(self.svc._extract_pdf_text_layer(path))
+
+
+class TextLayerReadabilityTests(TestCase):
+    """بوّابة المقروئية مباشرةً — تحمي المطابقة العربية من طبقات المسح الخردة."""
+
+    def test_real_arabic_accepted(self):
+        from core.extraction.pipeline import _text_layer_is_readable
+        self.assertTrue(_text_layer_is_readable(
+            'وزارة النفط\nالعدد: 1234\nالموضوع: طلب تزويد\nالسيد المدير المحترم'))
+
+    def test_real_english_accepted(self):
+        from core.extraction.pipeline import _text_layer_is_readable
+        self.assertTrue(_text_layer_is_readable(
+            'Date: June 20, 2026\nSubject: Coordination of the pipeline works'))
+
+    def test_latin_garbage_rejected(self):
+        from core.extraction.pipeline import _text_layer_is_readable
+        self.assertFalse(_text_layer_is_readable('.hiill;Jljo lrj asi jJslt irSL l)atc'))
+
+    def test_presentation_forms_rejected(self):
+        # أشكال العرض (ترتيب بصري مُشكَّل) تكسر المطابقة حتى لو بدت عربيةً
+        from core.extraction.pipeline import _text_layer_is_readable
+        shaped = 'ﻢﻜﻴﻠﻋ ﻡﻼﺴﻟﺍ ﻂﻔﻨﻟﺍ ﺓﺭﺍﺯﻭ ' * 6
+        self.assertFalse(_text_layer_is_readable(shaped))

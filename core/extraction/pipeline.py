@@ -25,6 +25,7 @@ Usage:
 import os
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional, Any, Callable
 from pathlib import Path
@@ -183,6 +184,27 @@ class AIExtractionResult:
         }
 
 
+# كلمات شائعة تكشف أن الطبقة لغةٌ حقيقية لا خردة (عيّنة صغيرة تكفي — المطلوب ≥2)
+_COMMON_EN = {'the', 'of', 'to', 'and', 'for', 'we', 'is', 'in', 'this', 'you',
+              'dear', 'subject', 'date', 'from', 'with', 'your', 'company', 'please'}
+_COMMON_AR = {'في', 'من', 'الى', 'إلى', 'على', 'عن', 'رقم', 'العدد', 'السيد', 'وزارة',
+              'شركة', 'قسم', 'الموضوع', 'التاريخ', 'بعد', 'تحية', 'المحترم', 'مدير', 'كتاب'}
+
+
+def _text_layer_is_readable(text: str) -> bool:
+    """بوّابة جودة لطبقة النصّ المضمّنة: بعض برامج المسح تُضمّن OCR خاصّاً بها —
+    عربيةً مقروءةً بمحرّك لاتيني («.hiill;Jljo» بدل «وزارة النفط») أو عربيةً
+    بأشكال العرض (ترتيب بصري) — طولُها يخدع لكن مطابقتنا العربية تنكسر عليها.
+    نقبل الطبقة فقط إن بدت لغةً حقيقية: كلمتان شائعتان على الأقل (عربي/إنكليزي)
+    وخلوّها من هيمنة أشكال العرض. الرفض غير مُكلف — يعني OCR كالسابق."""
+    presentation = sum(1 for c in text if 'ﭐ' <= c <= '﻿')
+    arabic = sum(1 for c in text if '؀' <= c <= 'ۿ') + presentation
+    if presentation > 0.10 * max(1, arabic):
+        return False
+    tokens = set(re.findall(r'[A-Za-z؀-ۿ]{2,}', text.lower()))
+    return len(tokens & _COMMON_EN) + len(tokens & _COMMON_AR) >= 2
+
+
 class AIExtractionService:
     """
     Main service orchestrating all AI extraction components.
@@ -241,7 +263,8 @@ class AIExtractionService:
 
         للإيميلات المطبوعة وملفّات PDF الرقمية، النصّ المضمّن جاهزٌ ودقيق — أسرع وأخفّ
         ذاكرة بكثير من إعادة الرسم + Tesseract، ويعالج كل الصفحات تلقائياً. عتبة الطول
-        والكلمات تحرس من طبقة نصّ ضئيلة (ختم/أثر OCR) فتسقط إلى OCR الكامل."""
+        والكلمات تحرس من طبقة ضئيلة (ختم/أثر)، وبوّابة المقروئية تحرس من طبقات
+        برامج المسح الخردة — فتسقط كلتاهما إلى OCR الكامل المُدرَّب."""
         if not str(path).lower().endswith('.pdf'):
             return None
         try:
@@ -255,7 +278,12 @@ class AIExtractionService:
             logger.warning('[pipeline] فحص طبقة نصّ PDF فشل: %s', exc)
             return None
         words = [w for w in text.split() if len(w) >= 2]
-        return text if (len(text) >= min_chars and len(words) >= min_words) else None
+        if len(text) < min_chars or len(words) < min_words:
+            return None
+        if not _text_layer_is_readable(text):
+            logger.info('[pipeline] طبقة النصّ المضمّنة غير مقروءة (خردة/تشكيل بصري) — OCR بديلاً')
+            return None
+        return text
 
     def compute_image_hash(self, image_path: str) -> str:
         """
