@@ -184,9 +184,14 @@ class AIExtractionResult:
         }
 
 
-# كلمات شائعة تكشف أن الطبقة لغةٌ حقيقية لا خردة (عيّنة صغيرة تكفي — المطلوب ≥2)
-_COMMON_EN = {'the', 'of', 'to', 'and', 'for', 'we', 'is', 'in', 'this', 'you',
-              'dear', 'subject', 'date', 'from', 'with', 'your', 'company', 'please'}
+# كلمات شائعة تكشف أن الطبقة لغةٌ حقيقية لا خردة — تُقاس كثافتُها لا عددُها:
+# طبقات الملفات القديمة الخردة تحوي إنكليزية حقيقية قليلة في الترويسة
+# («Ministry of Oil») تخدع العدّ المطلق، لكن كثافتها بين الرُّكام تفضحها.
+_COMMON_EN = {'the', 'of', 'to', 'and', 'for', 'we', 'is', 'in', 'on', 'at', 'as',
+              'are', 'this', 'that', 'you', 'your', 'our', 'be', 'by', 'from', 'with',
+              'it', 'or', 'has', 'have', 'will', 'was', 'were', 'not', 'dear',
+              'subject', 'date', 'no', 'company', 'oil', 'please', 'letter',
+              'request', 'kindly', 'regarding', 'reference', 'attached'}
 _COMMON_AR = {'في', 'من', 'الى', 'إلى', 'على', 'عن', 'رقم', 'العدد', 'السيد', 'وزارة',
               'شركة', 'قسم', 'الموضوع', 'التاريخ', 'بعد', 'تحية', 'المحترم', 'مدير', 'كتاب'}
 
@@ -195,14 +200,22 @@ def _text_layer_is_readable(text: str) -> bool:
     """بوّابة جودة لطبقة النصّ المضمّنة: بعض برامج المسح تُضمّن OCR خاصّاً بها —
     عربيةً مقروءةً بمحرّك لاتيني («.hiill;Jljo» بدل «وزارة النفط») أو عربيةً
     بأشكال العرض (ترتيب بصري) — طولُها يخدع لكن مطابقتنا العربية تنكسر عليها.
-    نقبل الطبقة فقط إن بدت لغةً حقيقية: كلمتان شائعتان على الأقل (عربي/إنكليزي)
-    وخلوّها من هيمنة أشكال العرض. الرفض غير مُكلف — يعني OCR كالسابق."""
+    القبول: عربيةٌ سليمة (كلمتان شائعتان + خلوّ من أشكال العرض) أو إنكليزيةٌ
+    حقيقية (كثافة كلمات شائعة ≥5% بين الرموز اللاتينية و≥3 إصابات — الخردة
+    المرصودة ≈1-2%). الرفض غير مُكلف — يعني OCR المُدرَّب كالسابق."""
     presentation = sum(1 for c in text if 'ﭐ' <= c <= '﻿')
     arabic = sum(1 for c in text if '؀' <= c <= 'ۿ') + presentation
     if presentation > 0.10 * max(1, arabic):
         return False
-    tokens = set(re.findall(r'[A-Za-z؀-ۿ]{2,}', text.lower()))
-    return len(tokens & _COMMON_EN) + len(tokens & _COMMON_AR) >= 2
+    lower = text.lower()
+    ar_tokens = set(re.findall(r'[؀-ۿ]{2,}', lower))
+    if len(ar_tokens & _COMMON_AR) >= 2:
+        return True
+    latin_tokens = re.findall(r'[a-z]{2,}', lower)
+    if not latin_tokens:
+        return False
+    hits = sum(1 for t in latin_tokens if t in _COMMON_EN)
+    return hits >= 3 and hits / len(latin_tokens) >= 0.05
 
 
 class AIExtractionService:

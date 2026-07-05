@@ -91,6 +91,14 @@ class TextLayerReadabilityTests(TestCase):
         from core.extraction.pipeline import _text_layer_is_readable
         self.assertFalse(_text_layer_is_readable('.hiill;Jljo lrj asi jJslt irSL l)atc'))
 
+    def test_mixed_legacy_garbage_rejected(self):
+        # ملفات قديمة: خردة عربية-كلاتيني + إنكليزية حقيقية قليلة في الترويسة
+        # («Ministry of Oil») — العدّ المطلق ينخدع، الكثافة (≈2%) تفضحها
+        from core.extraction.pipeline import _text_layer_is_readable
+        junk = 'LiiI 6Jtj Lij isi ljlt Jr Li isJi crIe uJt qj gAB dLl rL Jt ' * 12
+        self.assertFalse(_text_layer_is_readable(
+            junk + 'Republic of Iraq Ministry of Oil ' + junk))
+
     def test_presentation_forms_rejected(self):
         # أشكال العرض (ترتيب بصري مُشكَّل) تكسر المطابقة حتى لو بدت عربيةً
         from core.extraction.pipeline import _text_layer_is_readable
