@@ -96,6 +96,23 @@ class ExtractSenderDateTests(SimpleTestCase):
         self.assertIsNotNone(d)
         self.assertEqual((d.year, d.month, d.day), (2026, 6, 20))
 
+    def test_garbled_layer_date_recovered(self):
+        # طبقة مسح مشوَّهة: «Jul 2, 2026» → «lul 22026» (J→l + فاصلة ساقطة) —
+        # حالة حقيقية من إيميل QPC ممرَّر عبر ماسحة مكتب
+        d, _c = self.m.extract_sender_date('Ref. No. QPC-1\nDate: lul 22026\nSubject: x')
+        self.assertIsNotNone(d)
+        self.assertEqual((d.year, d.month, d.day), (2026, 7, 2))
+
+    def test_garbled_month_sibling(self):
+        d, _c = self.m.extract_sender_date('Date: Ian 5, 2026')   # Jan بحرف I
+        self.assertIsNotNone(d)
+        self.assertEqual((d.year, d.month, d.day), (2026, 1, 5))
+
+    def test_degarble_confined_to_date_zone(self):
+        # «lul» خارج نافذة التاريخ لا يُمَسّ — التصحيح محصور بعد العلامة
+        d, _c = self.m.extract_sender_date('lul 22026 بلا علامة تاريخ')
+        self.assertIsNone(d)
+
 
 class ExtractSenderNumberTests(SimpleTestCase):
     """رقم صادر الجهة المطبوع (إيميلات/مكتوب): كودٌ مركّب بعد العدد/ref، لا الفاكس."""

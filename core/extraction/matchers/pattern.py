@@ -49,6 +49,30 @@ _SENDER_DATE_RE = re.compile(
     r'|[\d٠-٩]{1,4}\s*[/\-.]\s*[\d٠-٩]{1,2}\s*[/\-.]\s*[\d٠-٩]{1,4}'
     r')', re.I)
 
+# إزالة تشويه OCR/طبقات المسح داخل نافذة التاريخ فقط (بعد العلامة):
+# «Date: lul 22026» = «Jul 2, 2026» بحرف J→l وفاصلة ساقطة — نمطٌ مرصود في
+# طبقات الإيميلات الممرَّرة عبر ماسحات المكاتب. النافذة الضيّقة تمنع العبث بالنصّ.
+_DATE_MARKER_RE = re.compile(r'(?:الت[أا]ريخ|\bdated\b|\bdate\b)\s*[:/=.\-]?\s*', re.I)
+_MONTH_GARBLE_RE = re.compile(r'\b[lI1](an|un|ul)\b', re.I)      # lul→Jul، Ian→Jan، 1un→Jun
+_FUSED_DAY_YEAR_RE = re.compile(r'\b(\d{1,2})(20\d{2})\b')       # 22026 → 2 2026
+
+
+def _degarble_date_zone(text: str) -> str:
+    """يُصحّح تشويهات الشهر/الأرقام في المقطع الذي يلي علامة التاريخ مباشرةً."""
+    def _fix(seg):
+        seg = _MONTH_GARBLE_RE.sub(lambda m: 'J' + m.group(1), seg)
+        return _FUSED_DAY_YEAR_RE.sub(r'\1 \2', seg)
+    out, last = [], 0
+    for m in _DATE_MARKER_RE.finditer(text):
+        if m.end() < last:
+            continue
+        end = min(len(text), m.end() + 22)
+        out.append(text[last:m.end()])
+        out.append(_fix(text[m.end():end]))
+        last = end
+    out.append(text[last:])
+    return ''.join(out)
+
 
 class PatternMatcher:
     """
@@ -260,8 +284,17 @@ class PatternMatcher:
     def extract_sender_date(self, text: str) -> Tuple[Optional[datetime], float]:
         """تاريخ رسالة الجهة المُرسِلة — من علامة «التاريخ» (عربي) أو «Date/Dated»
         (إنجليزي، شائع بالإيميلات). يفهم أسماء الأشهر الإنجليزية (June 20, 2026)
-        والصيغ الرقمية. المطبوع فقط؛ المكتوب يدوياً لا يُقرأ (يبقى None)."""
-        m = _SENDER_DATE_RE.search(text or '')
+        والصيغ الرقمية، ويعيد المحاولة بعد إزالة تشويه نافذة التاريخ
+        («lul 22026» → «Jul 2 2026»). المكتوب يدوياً لا يُقرأ (يبقى None)."""
+        result = self._sender_date_once(text or '')
+        if result[0] is None:
+            fixed = _degarble_date_zone(text or '')
+            if fixed != text:
+                result = self._sender_date_once(fixed)
+        return result
+
+    def _sender_date_once(self, text: str) -> Tuple[Optional[datetime], float]:
+        m = _SENDER_DATE_RE.search(text)
         if not m:
             return (None, 0.0)
         cand = m.group(1).translate(_AR_DIGITS)
