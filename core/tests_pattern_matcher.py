@@ -133,6 +133,16 @@ class ExtractSenderNumberTests(SimpleTestCase):
     def test_no_number(self):
         self.assertEqual(self.m.extract_sender_number('نصّ بلا رقم مرجعي'), (None, 0.0))
 
+    def test_arabic_digits_slash_letter(self):
+        # صيغة عربية شائعة: رقم ثم حرف سجلّ (و=وارد، ص=صادر) — «241/و»
+        self.assertEqual(self.m.extract_sender_number('العدد: 241/و')[0], '241/و')
+        self.assertEqual(self.m.extract_sender_number('الرقم 12/ص')[0], '12/ص')
+
+    def test_reference_number_marker(self):
+        # «Reference Number» علامة كاملة — لا «ref» فقط (الذي يفشل داخل «Reference»)
+        n, _c = self.m.extract_sender_number('Reference Number: MF-2026-195')
+        self.assertEqual(n, 'MF-2026-195')
+
 
 class ExtractSecretLevelTests(SimpleTestCase):
     def setUp(self):
