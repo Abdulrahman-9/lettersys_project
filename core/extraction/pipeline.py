@@ -45,6 +45,7 @@ from core.extraction.ocr.providers import (
 from core.models import AIIntegrationSettings
 from core.extraction.matchers.pattern import PatternMatcher, DateParser
 from core.extraction.matchers.entity import EntityMatcher
+from core.extraction.matchers.profile import SenderNumberProfiles
 from core.models import (
     OCRResult, DataExtractionResult, ExtractionFeedback,
     ExtractionStatistics, ExtractionCache, Attachment, Book, Entity
@@ -211,6 +212,7 @@ class AIExtractionService:
         self.arabic_ocr = None
         self.pattern_matcher = PatternMatcher()
         self.entity_matcher = EntityMatcher()
+        self.number_profiles = SenderNumberProfiles()
 
         # OCR providers are initialized lazily after the document is confirmed loadable.
         self._offline_provider = None
@@ -596,6 +598,18 @@ class AIExtractionService:
                            'issuing_entity_name', 'issuing_entity_confidence', 'issuing_entity_matches')
             _assign_entity(_resolve_entity('receiver'), 'receiving_entity_id',
                            'receiving_entity_name', 'receiving_entity_confidence', 'receiving_entity_matches')
+
+            # بصمة الجهة: بعد معرفة المُرسِل، ابحث عن رقمٍ بقالب أرقامه المُتعلَّم من
+            # كتبه المؤكَّدة — يلتقط ما فاتته العلامات العامة ويُصحّح الالتقاط الناقص
+            # (مثل «195» بدل «MF-2026-195»).
+            if getattr(result, 'issuing_entity_id', None) and result.cleaned_text:
+                hit = self.number_profiles.find(result.cleaned_text, result.issuing_entity_id)
+                if hit and hit.value != (result.sender_number or ''):
+                    if not result.sender_number or hit.confidence >= (result.sender_number_confidence or 0.0):
+                        logger.info('[profile] sender_number %r → %r (قالب %s)',
+                                    result.sender_number, hit.value, hit.template)
+                        result.sender_number = hit.value
+                        result.sender_number_confidence = hit.confidence
 
             # Step 6: حساب الثقة الإجمالية
             _progress('confidence')
