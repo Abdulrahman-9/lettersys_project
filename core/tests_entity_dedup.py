@@ -6,11 +6,13 @@
 نقل بيانات الاتصال بأمان، وتعطيل النسخ مع ضبط merged_into.
 """
 from datetime import date
+from io import StringIO
 
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.test import TestCase
 
-from .models import Book, Entity
+from .models import Book, Entity, LetterheadMemory
 from . import entity_dedup as dd
 
 
@@ -215,3 +217,52 @@ class MergeEntitiesTests(TestCase):
         self.assertEqual(res['merged'], 2)
         self.assertEqual(res['moved_books'], 1)
         self.assertEqual(res['canonical'].id, self.canon.id)
+
+
+class MemoryRepointOnMergeTests(TestCase):
+    """إصلاح الثغرة: merge_entities يُعيد توجيه LetterheadMemory أيضاً — وإلا تبقى
+    الإشارة مُشظّاة على النسخة المُعطّلة (فهرس match_from_memory يقرأ issuing_entity)."""
+
+    def test_merge_repoints_letterhead_memory(self):
+        canon = Entity.objects.create(name='مديرية التربية')
+        victim = Entity.objects.create(name='مديريه التربيه')
+        LetterheadMemory.objects.create(letterhead='ترويسة أ', issuing_entity=canon)
+        lm_iss = LetterheadMemory.objects.create(letterhead='ترويسة ب', issuing_entity=victim)
+        lm_rcv = LetterheadMemory.objects.create(letterhead='ترويسة ج', receiving_entity=victim)
+
+        res = dd.merge_entities(canon.id, [victim.id])
+
+        self.assertEqual(res['moved_memory'], 2)                 # صفّان أُعيد توجيههما
+        lm_iss.refresh_from_db(); lm_rcv.refresh_from_db()
+        self.assertEqual(lm_iss.issuing_entity_id, canon.id)     # المُصدِرة → الأمّ
+        self.assertEqual(lm_rcv.receiving_entity_id, canon.id)   # المستقبِلة → الأمّ
+        # لا فقد: الأمّ تجمع كل الذاكرة الآن، لا شيء على النسخة
+        self.assertEqual(LetterheadMemory.objects.filter(issuing_entity=canon).count(), 2)
+        self.assertEqual(LetterheadMemory.objects.filter(issuing_entity=victim).count(), 0)
+
+
+class PrepareEntitiesCommandTests(TestCase):
+    """أمر التهيئة prepare_entities — تهيئة قاعدة بيانات جديدة عند النشر."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('prep', password='p')
+
+    def test_apply_merges_and_repoints(self):
+        canon = Entity.objects.create(name='وزارة النفط')
+        dup = Entity.objects.create(name='وزاره النفط')          # نفس norm_key
+        lm = LetterheadMemory.objects.create(letterhead='ترويسة', issuing_entity=dup)
+
+        call_command('prepare_entities', '--apply', stdout=StringIO())
+
+        dup.refresh_from_db(); lm.refresh_from_db()
+        self.assertFalse(dup.is_active)
+        self.assertEqual(dup.merged_into_id, canon.id)
+        self.assertEqual(lm.issuing_entity_id, canon.id)         # الذاكرة تبعت الدمج
+
+    def test_dry_run_changes_nothing(self):
+        canon = Entity.objects.create(name='وزارة المالية')
+        dup = Entity.objects.create(name='وزاره الماليه')
+        call_command('prepare_entities', stdout=StringIO())      # بلا --apply
+        dup.refresh_from_db()
+        self.assertTrue(dup.is_active)
+        self.assertIsNone(dup.merged_into_id)
