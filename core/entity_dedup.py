@@ -14,7 +14,7 @@ from django.db import transaction
 from django.db.models import Count, IntegerField, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 
-from .models import Book, Entity
+from .models import Book, Entity, LetterheadMemory
 
 # الحركات (التشكيل) + تطويل الكشيدة
 _TASHKEEL = re.compile(r'[ً-ْٰـ]')
@@ -138,10 +138,15 @@ def merge_entities(canonical_id, victim_ids):
     issuing_through = Book.issuing_entities.through
     receiving_through = Book.receiving_entities.through
     moved = 0
+    moved_memory = 0
     carried = {}
     for v in victims:
         moved += _repoint_m2m(issuing_through, v.id, canonical.id)
         moved += _repoint_m2m(receiving_through, v.id, canonical.id)
+        # إعادة توجيه ذاكرة الترويسة أيضاً — وإلا تبقى الإشارة مُشظّاة على النسخة المُعطّلة
+        # (فهرس match_from_memory يقرأ issuing/receiving_entity مباشرةً).
+        moved_memory += LetterheadMemory.objects.filter(issuing_entity_id=v.id).update(issuing_entity=canonical)
+        moved_memory += LetterheadMemory.objects.filter(receiving_entity_id=v.id).update(receiving_entity=canonical)
         # نقل بيانات الاتصال الناقصة فقط — الأمّ لها الأولوية
         for fld in _CARRY_FIELDS:
             if str(getattr(canonical, fld) or '').strip():
@@ -158,4 +163,4 @@ def merge_entities(canonical_id, victim_ids):
     if carried:
         canonical.save(update_fields=list(carried.keys()))
     return {'canonical': canonical, 'merged': len(victims),
-            'moved_books': moved, 'carried': carried}
+            'moved_books': moved, 'moved_memory': moved_memory, 'carried': carried}

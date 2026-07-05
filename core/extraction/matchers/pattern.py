@@ -33,7 +33,10 @@ _INVISIBLE_MARKS = {ord(c): None for c in '‎‏​‌‍﻿'}
 _SENDER_NUM_CODE = (r'([A-Za-z؀-ۿ]{1,7} ?[/\-] ?[0-9][0-9/\-]{1,18}'
                     r'|[0-9]{2,6} ?[/\-] ?[0-9][0-9/\-]{1,18}'
                     r'|[0-9]{4,12})')
-_SENDER_NUM_RE = re.compile(r'(?:العدد|الرقم|ref|rf|ro|ri|id)\b\s*[:.#=\-]?\s*' + _SENDER_NUM_CODE, re.I)
+# «reference» (والاختصارات) + حشو اختياري «number/no» — يلتقط «Reference Number: MF-2026-195»
+_SENDER_NUM_RE = re.compile(
+    r'(?:العدد|الرقم|reference|ref|rf|ro|ri|id)\b(?:\s+(?:number|no)\.?)?\s*[:.#=\-]?\s*' + _SENDER_NUM_CODE,
+    re.I)
 _SENDER_NUM_BAD = ('fax', 'tel', 'phone', 'هاتف', 'فاكس', 'ص.ب', 'mobile', 'موبايل', 'جوال')
 
 # تاريخ الجهة المُرسِلة: بعد «التاريخ» (عربي) أو «Date/Dated» (إنجليزي، شائع بالإيميلات).
