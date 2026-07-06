@@ -179,6 +179,20 @@ class TitleWrapJoinTests(SimpleTestCase):
         self.assertNotIn('المقاولين', t)
         self.assertIn('تعليمات', t)
 
+    def test_bilingual_columns_arabic_wins_regardless_of_order(self):
+        # كتب بعمودين (عربي + ترجمة إنكليزية): OCR قد يُخرج Subject قبل م/ —
+        # العربية (الأصل المعتمد) تفوز دائماً (توجيه مالك)
+        text = ('Subject: Approval of the Operational Budget Instructions\n'
+                'م/ تعليمات الموازنة التشغيلية\nتحية طيبة')
+        t = self.m.extract_title_keywords(text)
+        self.assertIn('الموازنة', t)
+        self.assertNotIn('Approval', t)
+
+    def test_english_only_doc_still_uses_subject(self):
+        # مستند إنكليزي صرف (لا علامة عربية): Subject يعمل كما كان
+        t = self.m.extract_title_keywords('NK Petroleum\nSubject: Gas Pipeline Coordination\nDear Sir')
+        self.assertIn('Pipeline', t)
+
 
 class ExtractSenderNumberTests(SimpleTestCase):
     """رقم صادر الجهة المطبوع (إيميلات/مكتوب): كودٌ مركّب بعد العدد/ref، لا الفاكس."""

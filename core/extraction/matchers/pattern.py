@@ -256,15 +256,20 @@ class PatternMatcher:
         # «م/» تُكتب بأخطاء OCR (م، م. م,) فوسّعنا فاصلها؛ و«بشأن/حول» علامتا موضوع
         # عراقيّتان شائعتان كانتا غائبتين. وأُضيفت «Subject/Subj/سبجكت» للإيميلات
         # الإنجليزية (العنوان بعدها إنجليزيّ — لا يُصفّى كترويسة).
-        subject_markers = (
+        # مجموعتان بأولوية حتمية: الكتب ثنائية العمودين (عربي + ترجمة إنكليزية)
+        # يقلب OCR ترتيب أسطرها — فالعربية (النصّ الأصلي المعتمد) تُمسح أولاً
+        # دائماً، والإنكليزية لا تُجرَّب إلا عند غيابها (توجيه مالك).
+        arabic_markers = (
             r'الموضوع\s*[:/\-]?\s*([^\n]{3,80})',
             r'بعنوان\s*\(?\s*([^)\n]{3,80})',   # حتى القوس المغلق أو نهاية السطر
             r'بخصوص\s*[:/\-]?\s*([^\n]{3,80})',
             r'بشأن\s*[:/\-]?\s*([^\n]{3,80})',
             r'(?:^|\s)حول\s*[:/\-.،]?\s*([^\n]{3,80})',
             r'(?:^|\s)م\s*[/:\-.,،]\s*([^\n]{3,80})',
-            r'(?i:subject|subj)\s*[:.\-]\s*([^\n]{3,80})',
             r'سبجكت\s*[:/\-]?\s*([^\n]{3,80})',
+        )
+        english_markers = (
+            r'(?i:subject|subj)\s*[:.\-]\s*([^\n]{3,80})',
         )
         letterhead_hints = ('جمهورية', 'وزارة', 'الشركة العامة', 'محطة', 'مديرية', 'هيئة',
                             'republic', 'ministry', 'company', 'station', 'division', 'general')
@@ -323,12 +328,14 @@ class PatternMatcher:
                 return captured
             return captured + ' ' + nxt
 
-        # 1) مؤشّر موضوع صريح (سقف الكلمات 12 هنا — الموضوع الملتفّ أطول)
-        for idx, line in enumerate(lines):
-            for pat in subject_markers:
-                m = re.search(pat, line)
-                if m and len(m.group(1).strip()) > 3:
-                    return _words(_join_wrapped(m.group(1).strip(), idx), cap=12)
+        # 1) مؤشّر موضوع صريح (سقف الكلمات 12 هنا — الموضوع الملتفّ أطول):
+        #    مسحان بأولوية العربية (انظر تعليق المجموعتين أعلاه)
+        for markers in (arabic_markers, english_markers):
+            for idx, line in enumerate(lines):
+                for pat in markers:
+                    m = re.search(pat, line)
+                    if m and len(m.group(1).strip()) > 3:
+                        return _words(_join_wrapped(m.group(1).strip(), idx), cap=12)
 
         # 2) تخطّي الترويسة → أوّل سطر عربي جوهري
         for line in lines:
