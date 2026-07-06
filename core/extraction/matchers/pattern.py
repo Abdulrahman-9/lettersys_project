@@ -281,7 +281,11 @@ class PatternMatcher:
             ws = [w for w in ws if w and w not in stop_words]
             return ' '.join(ws[:cap])
 
-        lines = [ln.strip() for ln in (text or '').split('\n') if ln.strip()]
+        # أسقِط العلامات الخفية (LRM/RLM من طبقات النصّ) قبل مطابقة العلامات —
+        # «م‏/» كانت تُفشل علامة م/ فيسقط الموضوع لمسار الاحتياط (بلاغ مالك).
+        lines = [ln.translate(_INVISIBLE_MARKS).strip()
+                 for ln in (text or '').split('\n') if ln.strip()]
+        lines = [ln for ln in lines if ln]
         if not lines:
             return ''
 
@@ -335,6 +339,8 @@ class PatternMatcher:
                 continue  # سطر يحمل اسم جهة رسمية (ترويسة)
             if any(line.startswith(p) for p in org_prefixes):
                 continue  # سطرٌ يبدأ باسم قسم/جهة = ترويسة لا موضوع
+            if re.match(r'^(?:إلى|الى|السادة|السيد)\b|^(?:إلى|الى)\s*/', line):
+                continue  # سطر المُرسَل إليه («إلى/ الجهات…») ليس موضوعاً أبداً (بلاغ مالك)
             if line.lstrip().startswith(('(', '﴾', '«', ')')):
                 continue  # شعار/علامة مائية بين قوسين (مثل شعارات وطنية) — لا موضوع
             if sum(1 for c in line if '؀' <= c <= 'ۿ') >= 8:

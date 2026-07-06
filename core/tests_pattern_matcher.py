@@ -164,6 +164,21 @@ class TitleWrapJoinTests(SimpleTestCase):
         t = self.m.extract_title_keywords(text)
         self.assertIn('Estimate', t)
 
+    def test_m_marker_with_invisible_mark_beats_ila_line(self):
+        # بلاغ المالك: «م‏/» (بعلامة RTL خفية) كانت تفشل فيُلتقط سطر «إلى/» موضوعاً —
+        # م/ هي الدلالة الأقوى دائماً ويجب أن تفوز
+        text = ('وزارة النفط\nإلى/ الجهات كافة\nم‏/ ضوابط منح الإجازات الدراسية\nتحية طيبة')
+        t = self.m.extract_title_keywords(text)
+        self.assertIn('ضوابط', t)
+        self.assertNotIn('الجهات', t)
+
+    def test_ila_line_never_title_even_without_m(self):
+        # حتى بلا م/ إطلاقاً: سطر المُرسَل إليه يُتخطّى لأول سطر جوهري بعده
+        text = 'إلى / المقاولين المشغلين كافة\nتعليمات الصرف للموازنة التشغيلية المحدثة'
+        t = self.m.extract_title_keywords(text)
+        self.assertNotIn('المقاولين', t)
+        self.assertIn('تعليمات', t)
+
 
 class ExtractSenderNumberTests(SimpleTestCase):
     """رقم صادر الجهة المطبوع (إيميلات/مكتوب): كودٌ مركّب بعد العدد/ref، لا الفاكس."""
