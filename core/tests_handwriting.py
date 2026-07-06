@@ -61,6 +61,22 @@ class FindLabelTests(SimpleTestCase):
         t = tsv([('ترويسة', 100, 60, 90, 30)])
         self.assertIsNone(NumberStripLocator(priors).find_label(t, self.W, self.H, entity_id=5))
 
+    def test_label_slightly_below_zone_near_prior_admitted(self):
+        # حالة 9480 المقيسة: تسمية شرعية عند y≈0.38 وprior الجهة عند ȳ≈0.27 —
+        # القطر المُوسَّع (0.14) يقبلها، وجُمل المتن (y≥0.5) تبقى خارج أي قطر
+        priors = EntityLayoutPriors(os.devnull)
+        for _ in range(3):
+            priors.learn(11, 0.45, 0.27)
+        t = tsv([('العدد', 430, 532, 80, 30)])          # y=0.38, x=0.47 → dist≈0.11
+        lb = NumberStripLocator(priors).find_label(t, self.W, self.H, entity_id=11)
+        self.assertIsNotNone(lb)
+        self.assertEqual(lb.source, 'label')
+        # وجملة متن بعيدة عن الـprior (y=0.55) تُرفض رغم القطر المُوسَّع
+        t2 = tsv([('عدد', 400, 770, 60, 30)])
+        lb2 = NumberStripLocator(priors).find_label(t2, self.W, self.H, entity_id=11)
+        self.assertIsNotNone(lb2)                        # يسقط لمنطقة الـprior
+        self.assertEqual(lb2.source, 'prior')            # لا يلتقط نسخة المتن كتسمية
+
 
 class PriorsPersistenceTests(SimpleTestCase):
     def test_running_mean_and_roundtrip(self):
