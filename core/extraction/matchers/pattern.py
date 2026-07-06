@@ -271,22 +271,56 @@ class PatternMatcher:
         stop_words = {'من', 'إلى', 'هذا', 'ذلك', 'كل', 'بعض', 'أي', 'التي', 'الذي',
                       'أن', 'إن', 'كان', 'كانت', 'هو', 'هي', 'هم', 'أنت', 'نحن'}
 
-        def _words(s: str) -> str:
+        def _words(s: str, cap: int = num_words) -> str:
             s = s.translate(_INVISIBLE_MARKS)               # أسقِط علامات LTR/RTL الخفيّة
             ws = [w.strip(' /:؛،.-') for w in s.split()]    # لواحق ترقيم عالقة
             ws = [w for w in ws if w and w not in stop_words]
-            return ' '.join(ws[:num_words])
+            return ' '.join(ws[:cap])
 
         lines = [ln.strip() for ln in (text or '').split('\n') if ln.strip()]
         if not lines:
             return ''
 
-        # 1) مؤشّر موضوع صريح
-        for line in lines:
+        # ── ضمّ تتمّة الموضوع الملتفّ (توصية استشارية، حالة حقيقية #11222) ──
+        # الموضوع الطويل يلتفّ لسطرٍ ثانٍ («م/ تجهيز … من شركة» ⏎ «عمران التركية»).
+        # نضمّ سطراً واحداً فقط إذا أوحى المُلتقَط بالالتفاف وخلا التالي من بدايات
+        # الحقول/المتن. تاريخ/عدد بعده = حقل؛ «نرافق/نود/تحية…» = متن.
+        _connectors = ('من', 'إلى', 'الى', 'على', 'عن', 'في', 'مع', 'و', 'عبر', 'خلال')
+        _field_starts = ('إلى', 'الى', 'م/', 'م :', 'الموضوع', 'التاريخ', 'بتاريخ', 'بتأريخ',
+                         'العدد', 'الرقم', 'نسخة', 'ص.ب', 'هاتف', 'فاكس', 'المرفقات', 'المرفق',
+                         'to:', 'from:', 'subject', 'subj', 'date:', 'ref', 'cc:', 'attn', 'attachment')
+        _body_openers = ('نرافق', 'نود', 'نأمل', 'نرجو', 'يرجى', 'يُرجى', 'برجاء', 'تحية',
+                         'وبعد', 'السلام', 'إشارة', 'اشارة', 'بالإشارة', 'بالاشارة', 'استناداً',
+                         'استنادا', 'إلحاقاً', 'الحاقا', 'عطفاً', 'عطفا', 'بناءً', 'بناء',
+                         'نحيطكم', 'نعلمكم', 'نعرض', 'تفضلوا', 'أرجو', 'لديكم', 'طلبكم',
+                         # افتتاحيات المتن الإنجليزية (إيميلات) — تُقارَن على المُصغَّر
+                         'dear', 'greetings', 'attention', 'attn', 'we ', 'please', 'kindly',
+                         'with reference', 'reference is', 'this letter', 'warm')
+
+        def _join_wrapped(captured: str, idx: int) -> str:
+            wraps = (len(captured) >= 20 or len(captured) >= 78
+                     or captured.split()[-1] in _connectors)
+            if not wraps or idx + 1 >= len(lines):
+                return captured
+            nxt = lines[idx + 1]
+            low = nxt.lower()
+            if (sum(1 for c in nxt if '؀' <= c <= 'ۿ') < 4
+                    and sum(1 for c in low if 'a' <= c <= 'z') < 4):
+                return captured
+            if any(low.startswith(p) for p in _field_starts):
+                return captured
+            if any(low.startswith(p) for p in _body_openers):
+                return captured
+            if nxt.lstrip().startswith(('(', '﴾', '«', ')')):
+                return captured
+            return captured + ' ' + nxt
+
+        # 1) مؤشّر موضوع صريح (سقف الكلمات 12 هنا — الموضوع الملتفّ أطول)
+        for idx, line in enumerate(lines):
             for pat in subject_markers:
                 m = re.search(pat, line)
                 if m and len(m.group(1).strip()) > 3:
-                    return _words(m.group(1).strip())
+                    return _words(_join_wrapped(m.group(1).strip(), idx), cap=12)
 
         # 2) تخطّي الترويسة → أوّل سطر عربي جوهري
         for line in lines:

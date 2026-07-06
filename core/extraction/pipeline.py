@@ -514,9 +514,10 @@ class AIExtractionService:
                 ocr_engine = getattr(dj_settings, 'AI_OFFLINE_ENGINE', 'tesseract')
                 if ocr_engine == 'tesseract':
                     # Tesseract يطبّق تحسينه داخلياً؛ صورة رمادية نظيفة أدقّ من المعالجة
-                    # الثقيلة (التي تخفض جودته). max_ocr_dim=2600 (≈223DPI): مقيسٌ كافياً
-                    # للاستخراج (عنوان/رقم/جهة) وأسرع ~2× من 3500 — يقصّ زمن الإيميلات.
-                    image_processor = ImageProcessor(image_path, preprocess_pdf=False, max_ocr_dim=2600)
+                    # الثقيلة (التي تخفض جودته). max_ocr_dim=3500: يطابق مسح الوكيل
+                    # 300DPI لصفحة A4 (3508px) بلا تصغيرٍ مُهدِر — توجيه المالك: دقّة
+                    # المسح كاملةً أولوية على السرعة (كان 2600 ≈ 222DPI فعلية).
+                    image_processor = ImageProcessor(image_path, preprocess_pdf=False, max_ocr_dim=3500)
                     image_processor.light_pipeline()
                 else:
                     image_processor = ImageProcessor(image_path)

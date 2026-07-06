@@ -113,6 +113,57 @@ class ExtractSenderDateTests(SimpleTestCase):
         d, _c = self.m.extract_sender_date('lul 22026 بلا علامة تاريخ')
         self.assertIsNone(d)
 
+    def test_body_citation_date_ignored(self):
+        # حالة #11222 الحقيقية: تاريخ الكتاب فارغ (يدوي) وإحالة «بتأريخ» في المتن —
+        # يجب None لا تاريخ الإحالة (تاريخ خاطئ أسوأ من فراغ)
+        text = ('جمهورية العراق\nوزارة النفط\nالتاريخ: / /\nإلى / المقاولين كافة\n'
+                'م / تجهيز أنابيب النفط والغاز من شركة\nعمران التركية\n'
+                'نرافق لكم نسخة من كتاب الوزارة المرقم 11\nبتأريخ 2026/5/3 المتضمن الدراسة')
+        self.assertIsNone(self.m.extract_sender_date(text)[0])
+
+    def test_ba_prefixed_date_label_rejected(self):
+        # «بتأريخ/بالتاريخ» ظرف إحالة لا تسمية حقل — تُرفض حتى في الرأس
+        self.assertIsNone(self.m.extract_sender_date('العدد: 5\nبتأريخ 2026/5/3\nإلى فلان')[0])
+
+    def test_header_date_beyond_cap_ignored(self):
+        # علامة تاريخ بعد سقف منطقة الرأس (15 سطراً) لا تُلتقط
+        filler = '\n'.join(f'سطر حشو {i}' for i in range(16))
+        self.assertIsNone(self.m.extract_sender_date(filler + '\nالتاريخ: 2026/6/9')[0])
+
+
+class TitleWrapJoinTests(SimpleTestCase):
+    """ضمّ تتمّة الموضوع الملتفّ — حالة #11222 + الموانع (توصية استشارية)."""
+
+    def setUp(self):
+        self.m = PatternMatcher()
+
+    def test_wrapped_arabic_subject_joined(self):
+        text = ('وزارة النفط\nإلى / المقاولين كافة\n'
+                'م / تجهيز أنابيب النفط والغاز من شركة\nعمران التركية\nنرافق لكم نسخة')
+        t = self.m.extract_title_keywords(text)
+        self.assertIn('عمران', t)
+        self.assertIn('التركية', t)
+
+    def test_body_opener_never_joined(self):
+        text = 'م / تعميم ضوابط الدوام الرسمي للموظفين\nنرافق لكم نسخة من الضوابط'
+        self.assertNotIn('نرافق', self.m.extract_title_keywords(text))
+
+    def test_english_salutation_not_joined(self):
+        text = 'Subject: Coordination on Gas Pipeline Hot Tapping Activities\nDear Sir,'
+        self.assertNotIn('Dear', self.m.extract_title_keywords(text))
+
+    def test_short_complete_subject_not_joined(self):
+        # موضوع قصير مكتمل (<20 محرفاً، لا ينتهي بكلمة ربط) — لا ضمّ
+        self.assertEqual(self.m.extract_title_keywords('م / الإجازات\nكافة الأقسام مدعوة'),
+                         'الإجازات')
+
+    def test_wrapped_english_subject_joined(self):
+        # حالة 195 الحقيقية: Subject ملتفّ لسطر ثانٍ
+        text = ('Subject: Request Meeting with Ministerial Cost Team (MCT) to Discuss\n'
+                'Estimate for MF Drilling Project\nDear Mr. Hassan,')
+        t = self.m.extract_title_keywords(text)
+        self.assertIn('Estimate', t)
+
 
 class ExtractSenderNumberTests(SimpleTestCase):
     """رقم صادر الجهة المطبوع (إيميلات/مكتوب): كودٌ مركّب بعد العدد/ref، لا الفاكس."""
