@@ -89,3 +89,6 @@ logs/
 
 # Tesseract reference documentation (ليست كود التطبيق)
 tessdoc/
+
+# بصمات تخطيط خط اليد — مُشتقّة من قاعدة البيانات (تُبنى بأمر learn_number_layouts)
+var/handwriting_layout_priors.json
