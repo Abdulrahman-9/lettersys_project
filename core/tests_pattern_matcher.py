@@ -211,6 +211,20 @@ class ExtractSenderNumberTests(SimpleTestCase):
         n, _c = self.m.extract_sender_number('Reference Number: MF-2026-195')
         self.assertEqual(n, 'MF-2026-195')
 
+    def test_body_citation_number_ignored(self):
+        # 41/45 إيجابية كاذبة مقيسة: «العدد» في إحالة متن تحت سطر الموضوع — تُرفض
+        text = ('جمهورية العراق\nالعدد: \nالموضوع: متابعة\n'
+                'اشارة الى الامر الوزاري العدد 5978 في 2025/1/3 نرجو الاطلاع')
+        self.assertIsNone(self.m.extract_sender_number(text)[0])
+
+    def test_ba_prefixed_adad_rejected(self):
+        # «بالعدد» ظرف إحالة لا تسمية حقل — تُرفض حتى في الرأس
+        self.assertIsNone(self.m.extract_sender_number('كتاب الشركة بالعدد 26910 المؤرخ')[0])
+
+    def test_header_adad_beyond_cap_ignored(self):
+        filler = '\n'.join(f'سطر حشو {i}' for i in range(16))
+        self.assertIsNone(self.m.extract_sender_number(filler + '\nالعدد: 1234')[0])
+
 
 class ExtractSecretLevelTests(SimpleTestCase):
     def setUp(self):
