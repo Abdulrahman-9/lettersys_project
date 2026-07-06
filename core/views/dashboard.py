@@ -7,10 +7,9 @@ Dashboard & Reports Views - لوحة التحكم والتقارير
 import json
 import logging
 import os
-import shutil
-import subprocess
 from datetime import timedelta
 from pathlib import Path
+from subprocess import CalledProcessError
 
 from django.conf import settings
 from django.contrib import messages
@@ -22,33 +21,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from ..backup_service import create_encrypted_pg_backup, default_backup_dir
 from ..extraction.kinds import get_kind_label
 from ..models import Attachment, AttachmentVersion, Book, BookHistory, Entity
 from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
-
-
-def _build_pg_dump_command(db_config, output_path):
-    pg_dump_bin = os.environ.get("PG_DUMP_BIN") or shutil.which("pg_dump")
-    if not pg_dump_bin:
-        raise FileNotFoundError("pg_dump was not found. Install PostgreSQL client tools or set PG_DUMP_BIN.")
-
-    command = [
-        pg_dump_bin,
-        "--format=custom",
-        "--no-owner",
-        "--no-privileges",
-        f"--file={output_path}",
-    ]
-    if db_config.get("HOST"):
-        command.append(f"--host={db_config['HOST']}")
-    if db_config.get("PORT"):
-        command.append(f"--port={db_config['PORT']}")
-    if db_config.get("USER"):
-        command.append(f"--username={db_config['USER']}")
-    command.append(f"--dbname={db_config['NAME']}")
-    return command
 
 
 @login_required
@@ -155,23 +133,9 @@ def followup_activity_report(request):
     })
 
 
-@login_required
-def reports(request):
-    """
-    تقارير الكتب المستحقة مع فلاتر وتصدير/طباعة
-    
-    الفلاتر المتاحة:
-    - النوع (وارد/صادر)
-    - الجهة
-    - نطاق تاريخ الاستحقاق
-    - التصنيف الزمني (اليوم، متأخر، قادم، مكتمل)
-    
-    Args:
-        request: HTTP request with filter parameters
-    
-    Returns:
-        Rendered reports template with filtered books and statistics
-    """
+def _reports_qs(request):
+    """يبني queryset التقارير المفلتر والمرتّب حسب فلاتر الصفحة (kind/entity/date/bucket).
+    مصدر تصفية واحد مشترك بين عرض التقارير والتصدير (DRY). يُعيد (qs, meta)."""
     qs = Book.objects.filter(is_deleted=False) if request.user.is_superuser else Book.objects.filter(created_by=request.user, is_deleted=False)
     qs = qs.select_related("created_by").prefetch_related("issuing_entities", "receiving_entities")
     kind = request.GET.get("kind", "all")
@@ -183,13 +147,13 @@ def reports(request):
         qs = qs.filter(kind=kind)
 
     if kind == "all":
-        selected_kind_label = "كل الأنواع"
+        kind_label = "كل الأنواع"
     elif kind == "incoming":
-        selected_kind_label = "كل الوارد"
+        kind_label = "كل الوارد"
     elif kind == "outgoing":
-        selected_kind_label = "كل الصادر"
+        kind_label = "كل الصادر"
     else:
-        selected_kind_label = get_kind_label(kind)
+        kind_label = get_kind_label(kind)
 
     entity_id = request.GET.get("entity")
     if entity_id and entity_id.isdigit():
@@ -218,11 +182,8 @@ def reports(request):
         qs = qs.filter(due_date__lte=end_date)
 
     bucket = request.GET.get("bucket", "") or "today_overdue"
-
-    # حالة المتابعة الموحَّدة: نشط = is_archived=False AND due_date IS NOT NULL
     active_qs = qs.filter(is_archived=False, due_date__isnull=False)
     archived_qs = qs.filter(Q(is_archived=True) | Q(due_date__isnull=True))
-
     if bucket == "today":
         qs = active_qs.filter(due_date=today)
     elif bucket == "overdue":
@@ -236,6 +197,38 @@ def reports(request):
     # else: bucket == "all" — لا فلتر إضافي
 
     qs = qs.order_by("due_date", "-date", "-id")
+    return qs, {
+        "kind": kind, "kind_label": kind_label,
+        "entity_id": entity_id or "", "bucket": bucket,
+        "due_start": due_start or "", "due_end": due_end or "", "today": today,
+    }
+
+
+@login_required
+def reports(request):
+    """
+    تقارير الكتب المستحقة مع فلاتر وتصدير/طباعة
+    
+    الفلاتر المتاحة:
+    - النوع (وارد/صادر)
+    - الجهة
+    - نطاق تاريخ الاستحقاق
+    - التصنيف الزمني (اليوم، متأخر، قادم، مكتمل)
+    
+    Args:
+        request: HTTP request with filter parameters
+    
+    Returns:
+        Rendered reports template with filtered books and statistics
+    """
+    qs, _m = _reports_qs(request)
+    kind = _m["kind"]
+    selected_kind_label = _m["kind_label"]
+    entity_id = _m["entity_id"]
+    bucket = _m["bucket"]
+    due_start = _m["due_start"]
+    due_end = _m["due_end"]
+    today = _m["today"]
 
     # ── إحصاءات عبر تجميع DB (بلا تحميل كل الصفوف في الذاكرة) ──
     active = Q(is_archived=False, due_date__isnull=False)
@@ -265,6 +258,19 @@ def reports(request):
     page_params = request.GET.copy()
     page_params.pop("page", None)
 
+    # هوية المؤسسة + ملخّص الفلاتر لترويسة الطباعة الاحترافية
+    from ..models import EmailSettings
+    org = EmailSettings.get()
+    selected_entity_name = ""
+    if entity_id and entity_id.isdigit():
+        _e = Entity.objects.filter(pk=entity_id).only("name").first()
+        selected_entity_name = _e.name if _e else ""
+    bucket_labels = {
+        "all": "كل الحالات", "today_overdue": "المتأخرة والمستحقة اليوم",
+        "overdue": "المتأخرة فقط", "today": "مستحقة اليوم",
+        "upcoming": "مستحقة للفترة القادمة", "completed": "المؤرشفة (انتهت المتابعة)",
+    }
+
     return render(
         request,
         "core/reports.html",
@@ -279,11 +285,58 @@ def reports(request):
             "selected_kind": kind,
             "selected_kind_label": selected_kind_label,
             "selected_entity": entity_id or "",
+            "selected_entity_name": selected_entity_name,
             "bucket": bucket,
+            "bucket_label": bucket_labels.get(bucket, bucket),
             "due_start": due_start or "",
             "due_end": due_end or "",
+            "org": org,
         },
     )
+
+
+@login_required
+def reports_export(request):
+    """تصدير نتائج التقرير المفلترة كملف CSV (يفتح مباشرة في Excel) — نفس فلاتر صفحة التقارير.
+    يبثّ الصفوف تدريجياً فيبقى خفيفاً على الذاكرة مهما كبر العدد."""
+    import csv
+    import io
+    from django.http import StreamingHttpResponse
+
+    qs, meta = _reports_qs(request)
+    status_labels = {"pending": "قيد المتابعة", "due_today": "مستحق اليوم",
+                     "overdue": "متأخر", "archived": "مؤرشف"}
+    HEADERS = ["الرقم الفريد", "رقم الكتاب", "رقم الجهة المقابل", "تاريخ الإدخال",
+               "العنوان", "النوع", "الجهة المُصدِرة", "الجهة المستقبِلة",
+               "تاريخ الاستحقاق", "الحالة", "الملاحظات"]
+
+    def _rows():
+        buf = io.StringIO()
+        buf.write("﻿")  # BOM (يُكتب صراحةً) كي يعرض Excel العربية بلا تشويش
+        csv.writer(buf).writerow(HEADERS)
+        yield buf.getvalue()
+        for b in qs.iterator(chunk_size=500):
+            buf = io.StringIO()
+            issuing = "، ".join(e.name for e in b.issuing_entities.all())
+            receiving = "، ".join(e.name for e in b.receiving_entities.all())
+            csv.writer(buf).writerow([
+                b.id,
+                b.our_number or "",
+                b.sender_number or "",
+                b.created_at.date().isoformat() if b.created_at else "",
+                b.title or "",
+                b.kind_label,
+                issuing,
+                receiving,
+                b.due_date.isoformat() if b.due_date else "",
+                status_labels.get(b.followup_state, b.followup_state or ""),
+                b.margin or "",
+            ])
+            yield buf.getvalue()
+
+    resp = StreamingHttpResponse(_rows(), content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="report_%s.csv"' % meta["today"].isoformat()
+    return resp
 
 
 @login_required
@@ -426,39 +479,20 @@ def backup_database(request):
     Returns:
         Rendered backup template or redirect after backup creation
     """
-    from ..encryption import encrypt_file
-    
     db_config = settings.DATABASES["default"]
-    default_dir = Path("D:/trackbackup")
-    if not default_dir.exists():
-        default_dir = settings.BASE_DIR / "backups"
-    default_dir.mkdir(parents=True, exist_ok=True)
+    default_dir = default_backup_dir()
     suggested_name = f"pg_backup_{timezone.now().strftime('%Y%m%d_%H%M')}.dump"
 
     if request.method == "POST":
-        target_directory = Path(request.POST.get("target_directory") or default_dir)
-        file_name = Path(request.POST.get("file_name") or suggested_name).name
-        if not file_name.endswith(".dump"):
-            file_name += ".dump"
-        target_directory.mkdir(parents=True, exist_ok=True)
-        target_path = target_directory / file_name
+        target_directory = request.POST.get("target_directory") or default_dir
+        file_name = request.POST.get("file_name") or suggested_name
         try:
-            env = os.environ.copy()
-            if db_config.get("PASSWORD"):
-                env["PGPASSWORD"] = str(db_config["PASSWORD"])
-            subprocess.run(
-                _build_pg_dump_command(db_config, target_path),
-                check=True,
-                capture_output=True,
-                text=True,
-                env=env,
-            )
-            encrypted_path = encrypt_file(target_path)
+            encrypted_path = create_encrypted_pg_backup(target_directory, file_name)
             messages.success(request, f"تم إنشاء نسخة PostgreSQL احتياطية مشفرة: {encrypted_path}")
         except FileNotFoundError as exc:
             logger.error("pg_dump executable is unavailable: %s", exc, exc_info=True)
             messages.error(request, "تعذر العثور على pg_dump. ثبّت أدوات PostgreSQL أو عيّن PG_DUMP_BIN.")
-        except subprocess.CalledProcessError as exc:
+        except CalledProcessError as exc:
             logger.error("pg_dump failed: %s", exc.stderr, exc_info=True)
             messages.error(request, "فشل pg_dump أثناء إنشاء النسخة الاحتياطية. راجع إعدادات اتصال PostgreSQL.")
         except OSError as exc:

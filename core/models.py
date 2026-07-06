@@ -1504,6 +1504,154 @@ class BookEmailLog(models.Model):
 
 
 # ══════════════════════════════════════════════════════════════════
+#  إعدادات النظام العامة — هوية التطبيق المعروضة (Singleton)
+# ══════════════════════════════════════════════════════════════════
+class SystemSettings(models.Model):
+    """
+    هوية التطبيق المعروضة (اسم النظام وسطر الوصف) — سجل وحيد (Singleton).
+    مستقلّة عن هوية المؤسسة في ``EmailSettings`` (تلك خاصّة بترويسة التقارير
+    والبريد). تُعرَض في كل الصفحات عبر context processor ``system_settings``.
+    """
+
+    singleton      = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    app_name       = models.CharField("اسم النظام", max_length=100, default="نظام الكتب")
+    brand_subtitle = models.CharField(
+        "سطر الوصف في الترويسة", max_length=200, blank=True,
+        default="أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة",
+    )
+    updated_at     = models.DateTimeField(auto_now=True)
+
+    # مفتاح كاش موحّد يستخدمه context processor أيضاً (مصدر واحد لتفادي التضارب).
+    CACHE_KEY = "system_settings_singleton"
+
+    class Meta:
+        verbose_name = "إعدادات النظام"
+        verbose_name_plural = "إعدادات النظام"
+
+    def __str__(self):
+        return self.app_name
+
+    @classmethod
+    def get(cls):
+        """يعيد السجل الوحيد (ينشئه بالقيَم الافتراضية عند أول استدعاء)."""
+        obj, _ = cls.objects.get_or_create(singleton=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.singleton = 1
+        super().save(*args, **kwargs)
+        from django.core.cache import cache
+        cache.delete(self.CACHE_KEY)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  سياسة إشعارات تأخّر الكتب (Singleton)
+# ══════════════════════════════════════════════════════════════════
+class NotificationSettings(models.Model):
+    """
+    سياسة إشعارات التأخّر — سجل وحيد (Singleton).
+    يقرؤها أمر ``notify_overdue_books`` عند كل تشغيل؛ كل حقل يغيّر سلوكه فعلاً.
+    """
+
+    singleton       = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    overdue_enabled = models.BooleanField("تفعيل إشعارات التأخّر", default=True)
+    notify_admins   = models.BooleanField("إشعار المدراء داخل النظام", default=True)
+    notify_creator  = models.BooleanField("إشعار مُنشئ الكتاب", default=True)
+    email_admins    = models.BooleanField("إرسال بريد ملخّص للمدراء", default=False,
+                                          help_text="يتطلّب تفعيل إعدادات البريد")
+    updated_at      = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "إعدادات الإشعارات"
+        verbose_name_plural = "إعدادات الإشعارات"
+
+    def __str__(self):
+        return "إعدادات الإشعارات"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(singleton=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.singleton = 1
+        super().save(*args, **kwargs)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  إعدادات الأمان (Singleton)
+# ══════════════════════════════════════════════════════════════════
+class SecuritySettings(models.Model):
+    """
+    إعدادات الأمان — سجل وحيد (Singleton).
+    ``password_min_length`` يُطبَّق فعلياً عند إنشاء المستخدمين في شاشة الأدوار.
+    """
+
+    singleton           = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    password_min_length = models.PositiveSmallIntegerField("الحد الأدنى لطول كلمة المرور", default=8)
+    updated_at          = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "إعدادات الأمان"
+        verbose_name_plural = "إعدادات الأمان"
+
+    def __str__(self):
+        return "إعدادات الأمان"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(singleton=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.singleton = 1
+        super().save(*args, **kwargs)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  إعدادات النسخ الاحتياطي المجدول (Singleton)
+# ══════════════════════════════════════════════════════════════════
+class BackupSettings(models.Model):
+    """
+    إعدادات النسخ الاحتياطي المجدول — سجل وحيد (Singleton).
+    تقرؤها مهمة Celery ``scheduled_backup`` عند كل تشغيل ساعي.
+    """
+
+    FREQ_DAILY = 'daily'
+    FREQ_WEEKLY = 'weekly'
+    FREQ_MONTHLY = 'monthly'
+    FREQUENCY_CHOICES = [
+        (FREQ_DAILY, 'يومي'),
+        (FREQ_WEEKLY, 'أسبوعي'),
+        (FREQ_MONTHLY, 'شهري'),
+    ]
+
+    singleton      = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    enabled        = models.BooleanField("تفعيل النسخ التلقائي", default=False)
+    frequency      = models.CharField("التكرار", max_length=10, choices=FREQUENCY_CHOICES, default=FREQ_DAILY)
+    hour           = models.PositiveSmallIntegerField("ساعة التشغيل (0-23)", default=2)
+    retention_days = models.PositiveSmallIntegerField("مدة الاحتفاظ (يوم)", default=30)
+    last_run_at    = models.DateTimeField("آخر تشغيل ناجح", null=True, blank=True)
+    updated_at     = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "إعدادات النسخ الاحتياطي"
+        verbose_name_plural = "إعدادات النسخ الاحتياطي"
+
+    def __str__(self):
+        return "إعدادات النسخ الاحتياطي"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(singleton=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.singleton = 1
+        super().save(*args, **kwargs)
+
+
+# ══════════════════════════════════════════════════════════════════
 #  إعدادات البريد الإلكتروني للمؤسسة (Singleton)
 # ══════════════════════════════════════════════════════════════════
 class EmailSettings(models.Model):

@@ -12,6 +12,20 @@ def notifications(request):
     return {'navbar_unread_notifications': 0}
 
 
+def system_settings(request):
+    """هوية التطبيق المعروضة (اسم النظام + سطر الوصف) — تُتاح لكل القوالب."""
+    from .models import SystemSettings
+    obj = cache.get(SystemSettings.CACHE_KEY)
+    if obj is None:
+        try:
+            obj = SystemSettings.get()
+            cache.set(SystemSettings.CACHE_KEY, obj, 300)
+        except Exception:
+            # قاعدة البيانات/الهجرة غير جاهزة — القوالب تستخدم قيَماً افتراضية.
+            obj = None
+    return {'system_settings': obj}
+
+
 def mail_unread(request):
     """عدد الإيميلات الواردة غير المقروءة — يظهر في badge الـ sidebar."""
     if not request.user.is_authenticated:

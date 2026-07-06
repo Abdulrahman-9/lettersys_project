@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}الإعدادات{% endblock %}
+
+{% block content %}
+<style>
+  .settings-hub { max-width: 1140px; padding: 24px; margin-inline: auto; }
+  .settings-hub-head { display:flex; align-items:center; gap:14px; margin-bottom:22px; }
+  .settings-hub-head .settings-hub-badge {
+    width:52px; height:52px; border-radius:16px; display:grid; place-items:center;
+    background:linear-gradient(135deg,#0f766e,#0d9488); color:#fff; font-size:1.5rem;
+    box-shadow:0 8px 20px -8px rgba(13,148,136,.6);
+  }
+  .settings-hub-head h4 { margin:0; font-weight:800; }
+  .settings-hub-head p { margin:0; color:#6b7280; font-size:.9rem; }
+
+  .settings-nav { gap:4px; position:sticky; top:16px; }
+  .settings-nav-link {
+    display:flex; align-items:center; gap:10px; width:100%;
+    padding:11px 14px; border:0; border-radius:12px; background:transparent;
+    color:#374151; font-weight:600; font-size:.94rem; text-align:start;
+    transition:background .15s, color .15s;
+  }
+  .settings-nav-link i { font-size:1.1rem; opacity:.85; }
+  .settings-nav-link:hover { background:#f1f5f9; }
+  .settings-nav-link.active { background:#0f766e; color:#fff; }
+  .settings-nav-link.active i { opacity:1; }
+
+  .settings-pane-card {
+    background:#fff; border:1px solid #eef0f2; border-radius:16px; overflow:hidden;
+    box-shadow:0 2px 10px -6px rgba(15,23,42,.12);
+  }
+  .settings-pane-head { display:flex; align-items:flex-start; gap:14px; padding:22px 22px 8px; }
+  .settings-pane-icon {
+    width:46px; height:46px; border-radius:13px; display:grid; place-items:center;
+    background:color-mix(in srgb, var(--accent) 12%, #fff); color:var(--accent); font-size:1.35rem;
+    flex-shrink:0;
+  }
+  .settings-pane-head h5 { color:#111827; }
+  .settings-pane-body { padding:8px 22px 22px; }
+</style>
+
+<div class="settings-hub">
+  <div class="settings-hub-head">
+    <span class="settings-hub-badge"><i class="bi bi-sliders2"></i></span>
+    <div>
+      <h4>الإعدادات</h4>
+      <p>مركز واحد لكل إعدادات النظام.</p>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+      {{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-3">
+      <nav class="settings-nav nav flex-column nav-pills" role="tablist" aria-orientation="vertical">
+        <button class="settings-nav-link{% if active_tab == 'general' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-general" data-tab="general" type="button" role="tab">
+          <i class="bi bi-card-heading"></i><span>عام</span>
+        </button>
+        <button class="settings-nav-link{% if active_tab == 'email' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-email" data-tab="email" type="button" role="tab">
+          <i class="bi bi-envelope-fill"></i><span>البريد الإلكتروني</span>
+        </button>
+        <button class="settings-nav-link{% if active_tab == 'notifications' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-notifications" data-tab="notifications" type="button" role="tab">
+          <i class="bi bi-bell-fill"></i><span>الإشعارات</span>
+        </button>
+        <button class="settings-nav-link{% if active_tab == 'security' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-security" data-tab="security" type="button" role="tab">
+          <i class="bi bi-shield-lock-fill"></i><span>الأمان</span>
+        </button>
+        <button class="settings-nav-link{% if active_tab == 'backup' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-backup" data-tab="backup" type="button" role="tab">
+          <i class="bi bi-hdd-stack-fill"></i><span>النسخ والاستعادة</span>
+        </button>
+        <button class="settings-nav-link{% if active_tab == 'sequences' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-sequences" data-tab="sequences" type="button" role="tab">
+          <i class="bi bi-123"></i><span>العدّادات التسلسلية</span>
+        </button>
+        <button class="settings-nav-link{% if active_tab == 'network' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-network" data-tab="network" type="button" role="tab">
+          <i class="bi bi-diagram-3-fill"></i><span>الربط الشبكي</span>
+        </button>
+        <button class="settings-nav-link{% if active_tab == 'scan' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-scan" data-tab="scan" type="button" role="tab">
+          <i class="bi bi-printer-fill"></i><span>الماسح الضوئي</span>
+        </button>
+        <button class="settings-nav-link{% if active_tab == 'users' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-users" data-tab="users" type="button" role="tab">
+          <i class="bi bi-person-gear"></i><span>المستخدمون والأدوار</span>
+        </button>
+        <button class="settings-nav-link{% if active_tab == 'ai' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-ai" data-tab="ai" type="button" role="tab">
+          <i class="bi bi-robot"></i><span>الذكاء الاصطناعي</span>
+        </button>
+        <button class="settings-nav-link{% if active_tab == 'trash' %} active{% endif %}" data-bs-toggle="pill" data-bs-target="#pane-trash" data-tab="trash" type="button" role="tab">
+          <i class="bi bi-trash3-fill"></i><span>سلة المحذوفات</span>
+        </button>
+      </nav>
+    </div>
+
+    <div class="col-lg-9">
+      <div class="tab-content">
+        <div class="tab-pane fade{% if active_tab == 'general' %} show active{% endif %}" id="pane-general" role="tabpanel">
+          <div class="settings-pane-card">
+            <div class="settings-pane-head">
+              <span class="settings-pane-icon" style="--accent:#0f766e;"><i class="bi bi-card-heading"></i></span>
+              <div>
+                <h5 class="mb-1 fw-bold">هوية النظام</h5>
+                <p class="text-muted mb-0">الاسم وسطر الوصف الظاهران في ترويسة كل الصفحات.</p>
+              </div>
+            </div>
+            <div class="settings-pane-body">
+              <form method="post" action="{% url 'settings_general_save' %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">اسم النظام</label>
+                  <input type="text" name="app_name" maxlength="100" required class="form-control"
+                         value="{{ system_settings.app_name|default:'نظام الكتب' }}" placeholder="نظام الكتب">
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">سطر الوصف في الترويسة</label>
+                  <input type="text" name="brand_subtitle" maxlength="200" class="form-control"
+                         value="{{ system_settings.brand_subtitle|default:'' }}" placeholder="وصف مختصر يظهر أسفل الاسم">
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div class="tab-pane fade{% if active_tab == 'email' %} show active{% endif %}" id="pane-email" role="tabpanel">
+          {% url 'mail_settings' as u_email %}
+          {% include "core/settings/_launcher.html" with title="البريد الإلكتروني" desc="خادم SMTP والوارد IMAP وهوية المُرسِل والقوالب والاختبار." icon="bi-envelope-fill" url=u_email accent="#0369a1" %}
+        </div>
+        <div class="tab-pane fade{% if active_tab == 'notifications' %} show active{% endif %}" id="pane-notifications" role="tabpanel">
+          <div class="settings-pane-card">
+            <div class="settings-pane-head">
+              <span class="settings-pane-icon" style="--accent:#b45309;"><i class="bi bi-bell-fill"></i></span>
+              <div>
+                <h5 class="mb-1 fw-bold">سياسة إشعارات التأخّر</h5>
+                <p class="text-muted mb-0">تتحكّم بما يفعله فحص الكتب المتأخّرة اليومي (أمر notify_overdue_books).</p>
+              </div>
+            </div>
+            <div class="settings-pane-body">
+              <form method="post" action="{% url 'settings_notifications_save' %}">
+                {% csrf_token %}
+                <div class="form-check form-switch mb-3">
+                  <input class="form-check-input" type="checkbox" role="switch" id="ov_enabled" name="overdue_enabled" {% if notif_settings.overdue_enabled %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="ov_enabled">تفعيل إشعارات التأخّر</label>
+                  <div class="text-muted small">عند الإيقاف لا يُرسَل أي إشعار تأخّر.</div>
+                </div>
+                <div class="form-check form-switch mb-3">
+                  <input class="form-check-input" type="checkbox" role="switch" id="ov_admins" name="notify_admins" {% if notif_settings.notify_admins %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="ov_admins">إشعار المدراء داخل النظام</label>
+                </div>
+                <div class="form-check form-switch mb-3">
+                  <input class="form-check-input" type="checkbox" role="switch" id="ov_creator" name="notify_creator" {% if notif_settings.notify_creator %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="ov_creator">إشعار مُنشئ الكتاب</label>
+                </div>
+                <div class="form-check form-switch mb-4">
+                  <input class="form-check-input" type="checkbox" role="switch" id="ov_email" name="email_admins" {% if notif_settings.email_admins %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="ov_email">إرسال بريد ملخّص للمدراء</label>
+                  <div class="text-muted small">يتطلّب تفعيل إعدادات البريد.</div>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div class="tab-pane fade{% if active_tab == 'security' %} show active{% endif %}" id="pane-security" role="tabpanel">
+          <div class="settings-pane-card">
+            <div class="settings-pane-head">
+              <span class="settings-pane-icon" style="--accent:#9f1239;"><i class="bi bi-shield-lock-fill"></i></span>
+              <div>
+                <h5 class="mb-1 fw-bold">الأمان</h5>
+                <p class="text-muted mb-0">سياسة كلمات مرور المستخدمين الجُدد.</p>
+              </div>
+            </div>
+            <div class="settings-pane-body">
+              <form method="post" action="{% url 'settings_security_save' %}">
+                {% csrf_token %}
+                <div class="mb-3" style="max-width:280px;">
+                  <label class="form-label fw-semibold">الحد الأدنى لطول كلمة المرور</label>
+                  <input type="number" name="password_min_length" min="4" max="64" required class="form-control"
+                         value="{{ sec_settings.password_min_length }}">
+                  <div class="text-muted small mt-1">يُطبَّق عند إنشاء المستخدمين في شاشة «المستخدمون والأدوار».</div>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div class="tab-pane fade{% if active_tab == 'backup' %} show active{% endif %}" id="pane-backup" role="tabpanel">
+          <div class="settings-pane-card mb-3">
+            <div class="settings-pane-head">
+              <span class="settings-pane-icon" style="--accent:#0369a1;"><i class="bi bi-clock-history"></i></span>
+              <div>
+                <h5 class="mb-1 fw-bold">النسخ الاحتياطي المجدول</h5>
+                <p class="text-muted mb-0">نسخ تلقائي مشفّر عبر Celery beat. يتطلّب تشغيل الجدولة على الخادم.</p>
+              </div>
+            </div>
+            <div class="settings-pane-body">
+              <form method="post" action="{% url 'settings_backup_save' %}">
+                {% csrf_token %}
+                <div class="form-check form-switch mb-3">
+                  <input class="form-check-input" type="checkbox" role="switch" id="bk_enabled" name="enabled" {% if backup_settings.enabled %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="bk_enabled">تفعيل النسخ التلقائي</label>
+                </div>
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label fw-semibold">التكرار</label>
+                    <select name="frequency" class="form-select">
+                      {% for val, label in backup_settings.FREQUENCY_CHOICES %}
+                      <option value="{{ val }}" {% if backup_settings.frequency == val %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label fw-semibold">ساعة التشغيل (0–23)</label>
+                    <input type="number" name="hour" min="0" max="23" class="form-control" value="{{ backup_settings.hour }}">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label fw-semibold">مدة الاحتفاظ (يوم)</label>
+                    <input type="number" name="retention_days" min="1" max="3650" class="form-control" value="{{ backup_settings.retention_days }}">
+                  </div>
+                </div>
+                {% if backup_settings.last_run_at %}
+                <div class="text-muted small mt-3">آخر تشغيل ناجح: {{ backup_settings.last_run_at }}</div>
+                {% endif %}
+                <button type="submit" class="btn btn-primary mt-3"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
+              </form>
+            </div>
+          </div>
+          {% url 'backup_database' as u_backup %}
+          {% include "core/settings/_launcher.html" with title="نسخة احتياطية يدوية الآن" desc="إنشاء نسخة PostgreSQL مشفّرة فوراً، وتصفّح النسخ الموجودة." icon="bi-download" url=u_backup accent="#0f766e" btn_label="فتح صفحة النسخ اليدوي" %}
+          <div class="mt-3">
+            {% url 'data_restore' as u_restore %}
+            {% include "core/settings/_launcher.html" with title="استعادة البيانات الذكية" desc="استعادة من نسخة احتياطية (.bak/.dump) أو من قاعدة بيانات قديمة، مع تطبيع تلقائي وفكّ التكرار وإعادة ضبط العدّادات." icon="bi-arrow-counterclockwise" url=u_restore accent="#7c3aed" btn_label="فتح صفحة الاستعادة" %}
+          </div>
+        </div>
+        <div class="tab-pane fade{% if active_tab == 'sequences' %} show active{% endif %}" id="pane-sequences" role="tabpanel">
+          {% url 'sequence_settings' as u_seq %}
+          {% include "core/settings/_launcher.html" with title="العدّادات التسلسلية" desc="الرقم التسلسلي والبادئة لكل نوع كتاب، ومدّة حجز الأرقام." icon="bi-123" url=u_seq accent="#b45309" %}
+        </div>
+        <div class="tab-pane fade{% if active_tab == 'network' %} show active{% endif %}" id="pane-network" role="tabpanel">
+          {% url 'network_settings' as u_net %}
+          {% include "core/settings/_launcher.html" with title="الربط الشبكي" desc="دور الجهاز (مستقل/رئيسي/تابع)، اتصال قاعدة البيانات، واكتشاف أجهزة الشبكة." icon="bi-diagram-3-fill" url=u_net accent="#0f766e" %}
+        </div>
+        <div class="tab-pane fade{% if active_tab == 'scan' %} show active{% endif %}" id="pane-scan" role="tabpanel">
+          {% url 'scan_settings' as u_scan %}
+          {% include "core/settings/_launcher.html" with title="الماسح الضوئي" desc="حالة وكيل NAPS2 المحلي وأجهزة المسح المتاحة." icon="bi-printer-fill" url=u_scan accent="#7c3aed" %}
+        </div>
+        <div class="tab-pane fade{% if active_tab == 'users' %} show active{% endif %}" id="pane-users" role="tabpanel">
+          {% url 'user_roles' as u_users %}
+          {% include "core/settings/_launcher.html" with title="المستخدمون والأدوار" desc="إنشاء المستخدمين وتعيين الأدوار والصلاحيات وإدارة كلمات المرور." icon="bi-person-gear" url=u_users accent="#9f1239" %}
+        </div>
+        <div class="tab-pane fade{% if active_tab == 'ai' %} show active{% endif %}" id="pane-ai" role="tabpanel">
+          {% include "core/settings/_launcher.html" with title="الذكاء الاصطناعي" desc="مزوّد الاستخراج (محلي EasyOCR أو Azure) وعتبات الثقة — تُدار عبر لوحة الإدارة." icon="bi-robot" url="/admin/core/aiintegrationsettings/" accent="#475569" external=True btn_label="فتح لوحة الإدارة" %}
+        </div>
+        <div class="tab-pane fade{% if active_tab == 'trash' %} show active{% endif %}" id="pane-trash" role="tabpanel">
+          {% url 'trash_list' as u_trash %}
+          {% include "core/settings/_launcher.html" with title="سلة المحذوفات" desc="الكتب والمرفقات المحذوفة، مع الاسترجاع أو الحذف النهائي." icon="bi-trash3-fill" url=u_trash accent="#dc2626" %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // مزامنة التبويب النشط مع الرابط (?tab=) ليبقى بعد التحديث — دون إعادة تحميل.
+  document.querySelectorAll('.settings-nav-link[data-bs-toggle="pill"]').forEach(function (btn) {
+    btn.addEventListener('shown.bs.tab', function () {
+      var tab = btn.getAttribute('data-tab');
+      if (!tab) return;
+      var url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.history.replaceState({}, '', url);
+    });
+  });
+</script>
+{% endblock %}

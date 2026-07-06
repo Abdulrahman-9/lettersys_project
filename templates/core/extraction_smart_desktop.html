@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260702h">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260705b">
 <style>
 .scan-agent-status{font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap}
 .scan-agent-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
@@ -18,7 +18,7 @@
 .scan-auto-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.76rem;font-weight:700;color:#3730a3;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:999px;padding:.22rem .6rem;white-space:nowrap}
 .scan-auto-badge .bi{font-size:.85rem}
 </style>
-<link rel="stylesheet" href="{% static 'css/doc_canvas.css' %}?v=20260702a">
+<link rel="stylesheet" href="{% static 'css/doc_canvas.css' %}?v=20260705a">
 <link rel="stylesheet" href="{% static 'css/document_manager.css' %}?v=20260702b">
 {% endblock %}
 {% block content %}
@@ -450,7 +450,7 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260702h"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260705a"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>

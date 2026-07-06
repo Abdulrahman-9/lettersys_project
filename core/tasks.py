@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.utils import timezone
 from django.utils.html import strip_tags
 
 from .models import Attachment, DataExtractionResult, Book, ExtractionFeedback
@@ -314,6 +315,64 @@ def network_heartbeat():
         logger.warning('[NetworkHeartbeat] error: %s', exc)
 
 
+
+
+# ===================================================
+# النسخ الاحتياطي المجدول
+# ===================================================
+
+def _backup_is_due(cfg, now):
+    """
+    يقرّر إن كان النسخ المجدول مستحقّاً الآن — دالة نقية قابلة للاختبار.
+    ``cfg``: BackupSettings، ``now``: datetime محلي.
+    """
+    if not cfg.enabled:
+        return False
+    if now.hour != cfg.hour:
+        return False
+
+    today = now.date()
+    last = cfg.last_run_at
+    if last is None:
+        return True
+    last_date = timezone.localtime(last).date() if timezone.is_aware(last) else last.date()
+    if last_date >= today:
+        return False  # نُفِّذ اليوم بالفعل
+
+    if cfg.frequency == cfg.FREQ_DAILY:
+        return True
+    if cfg.frequency == cfg.FREQ_WEEKLY:
+        return (today - last_date).days >= 7
+    if cfg.frequency == cfg.FREQ_MONTHLY:
+        return (last_date.year, last_date.month) != (today.year, today.month)
+    return False
+
+
+@shared_task(name='core.tasks.scheduled_backup', ignore_result=True)
+def scheduled_backup():
+    """
+    نسخ احتياطي مجدول — يُشغَّل ساعياً عبر Celery beat، ويقرّر التنفيذ من BackupSettings.
+    ينشئ نسخة مشفّرة، يحذف النسخ الأقدم من مدة الاحتفاظ، ويحدّث آخر تشغيل.
+    """
+    from .models import BackupSettings
+    from .backup_service import create_encrypted_pg_backup, default_backup_dir, prune_old_backups
+
+    cfg = BackupSettings.get()
+    now = timezone.localtime()
+    if not _backup_is_due(cfg, now):
+        return {'skipped': True}
+
+    try:
+        path = create_encrypted_pg_backup()
+    except Exception as exc:
+        logger.exception('[scheduled_backup] فشل إنشاء النسخة: %s', exc)
+        return {'error': str(exc)}
+
+    removed = prune_old_backups(default_backup_dir(), cfg.retention_days)
+    cfg.last_run_at = timezone.now()
+    cfg.save(update_fields=['last_run_at', 'updated_at'])
+    logger.info('[scheduled_backup] أُنشئت %s؛ حُذفت %s نسخة قديمة', path, removed)
+    return {'backup': str(path), 'pruned': removed}
 
 
 def get_task_status(task_id: str) -> dict:

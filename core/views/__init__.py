@@ -75,6 +75,7 @@ from .dossiers import (
 from .dashboard import (
     dashboard,
     reports,
+    reports_export,
     followup_activity_report,
     restore_book,
     purge_book,
@@ -112,6 +113,15 @@ from .api import (
     record_ocr_feedback,
     ocr_training_statistics,
     trigger_ocr_training,
+)
+
+# مركز الإعدادات الموحّد
+from .settings_hub import (
+    settings_hub,
+    settings_general_save,
+    settings_notifications_save,
+    settings_security_save,
+    settings_backup_save,
 )
 
 # إعدادات الماسح الضوئي (وكيل NAPS2 المحلي)

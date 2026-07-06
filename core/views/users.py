@@ -23,7 +23,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 
-from ..models import UserPassword
+from ..models import SecuritySettings, UserPassword
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +144,9 @@ def user_roles(request):
                 messages.error(request, "❌ كلمتا المرور غير متطابقتين.")
                 return redirect("user_roles")
             
-            if len(password) < 4:
-                messages.error(request, "❌ كلمة المرور يجب أن تكون 4 أحرف على الأقل.")
+            min_len = SecuritySettings.get().password_min_length
+            if len(password) < min_len:
+                messages.error(request, f"❌ كلمة المرور يجب أن تكون {min_len} أحرف على الأقل.")
                 return redirect("user_roles")
             
             if User.objects.filter(username=username).exists():

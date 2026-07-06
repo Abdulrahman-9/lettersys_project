@@ -9,29 +9,41 @@
   --dc-paper-shadow:0 1px 3px rgba(16,24,40,.10), 0 8px 22px rgba(16,24,40,.08);
 }
 
-/* الحاوية + المسرح */
-#modalBody.has-image{overflow:hidden;padding:10px}
+/* الحاوية + المسرح
+   المسرح ثابت لا يتمرّر (يُثبّت أشرطة الأدوات فوقه)، وطبقة تمرير داخلية تحمل الصفحة
+   وتُمرّرها في كل الاتجاهات — فلا يُقصّ أعلى/جانب الورقة عند التكبير. */
+#modalBody.has-image{overflow:hidden;padding:6px}
 .preview-stage{
   position:relative;flex:1 1 auto;min-height:0;width:100%;
-  display:flex;align-items:center;justify-content:center;
-  background:
-    radial-gradient(120% 120% at 50% 0%, #f3f6fa 0%, var(--dc-desk) 60%, #e7ebf1 100%);
   border-radius:12px;overflow:hidden;
 }
 
-/* الصفحة (تلائم اللوحة دائماً — object-fit:contain) + تلاشٍ ناعم عند التحميل */
+/* طبقة التمرير: تملأ المسرح وتُمرَّر بحرّية. margin:auto على الصفحة يتكفّل بالتوسيط. */
+.preview-scroll{
+  position:absolute;inset:0;overflow:auto;display:flex;
+  background:
+    radial-gradient(120% 120% at 50% 0%, #f3f6fa 0%, var(--dc-desk) 60%, #e7ebf1 100%);
+  scrollbar-width:thin;overscroll-behavior:contain;
+}
+.preview-scroll::-webkit-scrollbar{width:10px;height:10px}
+.preview-scroll::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+.preview-scroll::-webkit-scrollbar-thumb:hover{background:#94a3b8;background-clip:content-box}
+
+/* الصفحة: أبعادها تُضبَط بالبكسل من JS (ملاءمة × تكبير).
+   margin:auto ⇒ تتوسّط حين تلائم، وتلتصق بالبداية وتُمرَّر كاملةً حين تفيض
+   (يُصلح اختفاء أعلى الورقة) — مع تلاشٍ ناعم عند التحميل. */
 .preview-img{
-  max-width:100%;max-height:100%;object-fit:contain;display:block;transform-origin:center;
+  margin:auto;flex:0 0 auto;display:block;object-fit:contain;
   background:var(--dc-paper);border:1px solid var(--dc-line);border-radius:4px;
   box-shadow:var(--dc-paper-shadow);
-  opacity:0;transition:opacity .2s ease;
+  opacity:0;transition:opacity .18s ease;-webkit-user-drag:none;user-select:none;
 }
 .preview-img.dc-loaded{opacity:1}
 
 /* الهيكل العظمي — بأبعاد المانيفست (صفر قفزة تخطيط) + وميض يمين→يسار (RTL) */
 .dc-skeleton{
-  position:absolute;align-self:center;
-  width:min(78%, calc((100% - 20px))); aspect-ratio:var(--dc-ar, 0.707);
+  position:absolute;inset:0;margin:auto;
+  width:min(86%, calc((100% - 16px))); aspect-ratio:var(--dc-ar, 0.707);
   max-height:calc(100% - 8px);
   background:var(--dc-paper);border:1px solid var(--dc-line);border-radius:4px;
   box-shadow:var(--dc-paper-shadow);overflow:hidden;

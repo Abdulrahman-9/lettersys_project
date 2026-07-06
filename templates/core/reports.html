@@ -52,20 +52,6 @@
 
 {% block content %}
 <style>
-@media print {
-  .print-date::after {
-    content: "📅 تاريخ الطباعة: " attr(data-date);
-    display: block;
-    text-align: center;
-    font-size: 11pt;
-    margin-top: 15px;
-    color: #666;
-    padding-top: 10px;
-    border-top: 1px solid #ddd;
-  }
-  .no-print { display: none !important; }
-  
-}
 .chart-card {
   border: 2px solid #f1f5f9;
   border-radius: 16px;
@@ -73,12 +59,12 @@
   background: white;
 }
 .chart-card:hover {
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
-  border-color: #3b82f6;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--brand, #ff9233) 18%, transparent);
+  border-color: var(--brand, #ff9233);
 }
 .filter-card {
-  background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.95));
-  border: 2px solid #e2e8f0;
+  background: #ffffff;
+  border: 1px solid #e6eaf0;
   border-radius: 16px;
 }
 .stats-summary {
@@ -88,20 +74,87 @@
   margin-bottom: 1.5rem;
 }
 .stat-item {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(139, 92, 246, 0.05));
+  background: #ffffff;
   padding: 1rem;
   border-radius: 12px;
-  border: 2px solid rgba(59, 130, 246, 0.1);
+  border: 1px solid #e6eaf0;
   text-align: center;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
 }
 .stat-value {
   font-size: 2rem;
   font-weight: 800;
-  color: #000;
+  color: #0f172a;
+}
+
+/* ── حقل الجهة: بحث + اختيار (combobox) ── */
+.entity-combo { position: relative; }
+.entity-combo-field { position: relative; display: flex; align-items: center; }
+.entity-combo-ic { position: absolute; inset-inline-start: 12px; color: #94a3b8; font-size: .9rem; pointer-events: none; }
+.entity-combo-search { padding-inline-start: 34px; padding-inline-end: 30px; }
+.entity-combo-clear { position: absolute; inset-inline-end: 8px; border: none; background: transparent; color: #94a3b8; font-size: 1.35rem; line-height: 1; cursor: pointer; padding: 0 5px; border-radius: 6px; }
+.entity-combo-clear:hover { color: #dc2626; background: #fef2f2; }
+.entity-combo-list { position: absolute; z-index: 30; inset-inline: 0; top: calc(100% + 4px); max-height: 300px; overflow-y: auto; margin: 0; padding: 5px; list-style: none; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 12px 30px rgba(16,24,40,.16); scrollbar-width: thin; }
+.entity-combo-opt { padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: .9rem; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entity-combo-opt:hover, .entity-combo-opt.active { background: color-mix(in srgb, var(--brand, #ff9233) 12%, #fff); color: var(--brand-strong, #b45309); }
+.entity-combo-opt[aria-selected="true"] { font-weight: 700; color: var(--brand-strong, #b45309); }
+.entity-combo-opt.hidden { display: none; }
+.entity-combo-empty { padding: 10px 12px; color: #94a3b8; font-size: .85rem; text-align: center; }
+
+/* ── ترويسة التقرير الاحترافي (تظهر على الشاشة وتبرز في الطباعة) ── */
+.report-doc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 3px double #0f172a; padding-bottom: .9rem; margin-bottom: 1rem; }
+.rdh-org { display: flex; align-items: center; gap: 12px; }
+.rdh-logo { height: 46px; width: auto; }
+.rdh-org-txt { display: flex; flex-direction: column; line-height: 1.35; }
+.rdh-org-txt strong { font-size: 1.05rem; font-weight: 800; color: #0f172a; }
+.rdh-org-txt span { font-size: .78rem; color: #64748b; }
+.rdh-meta { text-align: left; }
+.rdh-title { font-size: 1.2rem; font-weight: 800; color: #0f172a; }
+.rdh-date { font-size: .78rem; color: #64748b; margin-top: .25rem; }
+.report-filter-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: .6rem .9rem; font-size: .82rem; color: #475569; margin-bottom: 1.25rem; }
+.report-filter-summary b { color: #0f172a; font-weight: 700; }
+
+/* ── الطباعة الاحترافية (A4) ── */
+@media print {
+  .no-print, .app-sidebar, .app-sidebar-panel, nav.d-flex { display: none !important; }
+  body { background: #fff !important; }
+  .container-fluid { padding: 0 !important; }
+  .card, .card.shadow-sm { box-shadow: none !important; border: none !important; }
+  .card-header { padding: 0 0 .4rem !important; }
+  .report-doc-head { margin-top: 0; }
+  .report-filter-summary { background: #fff; border: 1px solid #cbd5e1; }
+  table.table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  table.table th { background: #f1f5f9 !important; border: 1px solid #94a3b8 !important; padding: 5px 6px !important; text-align: right; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table.table td { border: 1px solid #cbd5e1 !important; padding: 4px 6px !important; vertical-align: top; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; }
+  .badge, .kind-badge, .due-badge, .status-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { size: A4; margin: 1.4cm; }
 }
 </style>
 <div class="container-fluid animate-fade-in">
-<div class="print-header mb-4 text-center">
+  <!-- ترويسة التقرير الاحترافي (شاشة + طباعة) -->
+  <div class="report-doc-head">
+    <div class="rdh-org">
+      <img src="{% static 'img/md-o-c-logo.png' %}" alt="" class="rdh-logo">
+      <div class="rdh-org-txt">
+        <strong>{{ org.org_name|default:'نظام إدارة الكتب والمراسلات' }}</strong>
+        {% if org.org_section %}<span>{{ org.org_section }}</span>{% endif %}
+        {% if org.org_unit %}<span>{{ org.org_unit }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="rdh-meta">
+      <div class="rdh-title">تقرير متابعة الكتب والمراسلات</div>
+      <div class="rdh-date">تاريخ الطباعة: <span id="printDateVal">—</span></div>
+    </div>
+  </div>
+  <!-- ملخّص الفلاتر المطبَّقة -->
+  <div class="report-filter-summary">
+    <span><b>النوع:</b> {{ selected_kind_label }}</span>
+    {% if selected_entity_name %}<span><b>الجهة:</b> {{ selected_entity_name }}</span>{% endif %}
+    <span><b>الحالة:</b> {{ bucket_label }}</span>
+    {% if due_start or due_end %}<span><b>الاستحقاق:</b> {{ due_start|default:'…' }} — {{ due_end|default:'…' }}</span>{% endif %}
+    <span><b>عدد النتائج:</b> {{ total }}</span>
   </div>
 </div>
 
@@ -122,15 +175,27 @@
       </select>
     </div>
     <div class="col-sm-3 col-6">
-      <label class="form-label fw-semibold mb-1">
+      <label class="form-label fw-semibold mb-1" for="entitySearch">
         <i class="bi bi-building me-1"></i>الجهة
       </label>
-      <select class="form-select" name="entity">
-        <option value="" {% if not selected_entity %}selected{% endif %}>كل الجهات</option>
-        {% for e in entities %}
-        <option value="{{ e.id }}" {% if selected_entity == e.id|stringformat:'s' %}selected{% endif %}>{{ e.name }}</option>
-        {% endfor %}
-      </select>
+      <div class="entity-combo" id="entityCombo">
+        <input type="hidden" name="entity" id="entityInput" value="{{ selected_entity }}">
+        <div class="entity-combo-field">
+          <i class="bi bi-search entity-combo-ic"></i>
+          <input type="text" class="form-control entity-combo-search" id="entitySearch"
+                 placeholder="ابحث أو اختر الجهة…" autocomplete="off" value="{{ selected_entity_name }}"
+                 role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="entityList">
+          <button type="button" class="entity-combo-clear" id="entityClear" title="مسح الجهة"
+                  aria-label="مسح الجهة"{% if not selected_entity %} hidden{% endif %}>&times;</button>
+        </div>
+        <ul class="entity-combo-list" id="entityList" role="listbox" hidden>
+          <li class="entity-combo-opt" data-id="" role="option">كل الجهات</li>
+          {% for e in entities %}
+          <li class="entity-combo-opt" data-id="{{ e.id }}" data-name="{{ e.name }}" role="option"
+              {% if selected_entity == e.id|stringformat:'s' %}aria-selected="true"{% endif %}>{{ e.name }}</li>
+          {% endfor %}
+        </ul>
+      </div>
     </div>
     <div class="col-sm-3 col-6">
       <label class="form-label fw-semibold mb-1">
@@ -164,6 +229,12 @@
       <a class="btn btn-outline-secondary" href="{% url 'reports' %}">
         <i class="bi bi-arrow-counterclockwise me-1"></i>إعادة التعيين
       </a>
+      <a class="btn btn-outline-success ms-auto" href="{% url 'reports_export' %}{% if querystring %}?{{ querystring }}{% endif %}">
+        <i class="bi bi-file-earmark-spreadsheet me-1"></i>تصدير Excel
+      </a>
+      <button class="btn btn-outline-primary" type="button" id="printReportBtn">
+        <i class="bi bi-printer me-1"></i>طباعة التقرير
+      </button>
     </div>
   </div>
 </form>
@@ -305,7 +376,7 @@
 </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}?v=20260705a"></script>
 <script>
 (function() {
   // إحصائيات من الـ view مباشرة (server-rendered) — مصدر حقيقة واحد
@@ -315,43 +386,9 @@
   const dueTodayCount = {{ stats.due_today|default:0 }}; // مستحق اليوم
   const overdueCount  = {{ stats.overdue|default:0 }};   // متأخر
   const archivedCount = {{ stats.archived|default:0 }};  // مؤرشف
-  
-  // Update stat counters with animation
-  function animateCounter(id, target) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    let current = 0;
-    const increment = Math.ceil(target / 20);
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= target) {
-        el.textContent = target;
-        clearInterval(timer);
-      } else {
-        el.textContent = current;
-      }
-    }, 50);
-  }
-  
-  animateCounter('incomingCount', incomingCount);
-  animateCounter('outgoingCount', outgoingCount);
-  animateCounter('overdueCount', overdueCount);
-  
-  // Print button
-  const printBtn = document.getElementById('printReportBtn');
-  if (printBtn) {
-    printBtn.addEventListener('click', () => window.print());
-  }
-  
-  // Export Excel button
-  const exportBtn = document.getElementById('exportExcelBtn');
-  if (exportBtn) {
-    exportBtn.addEventListener('click', () => {
-      const params = new URLSearchParams(window.location.search);
-      window.location.href = '/books/export/?' + params.toString();
-    });
-  }
-  
+
+  if (typeof Chart === 'undefined') return;   // حارس: لو تعذّر تحميل chart.js لا نُعطّل الصفحة
+
   // Charts configuration
   const chartConfig = {
     responsive: true,
@@ -449,26 +486,73 @@
   }
 })();
 
-// معالج تاريخ الطباعة
-document.addEventListener('DOMContentLoaded', function() {
-  const today = new Date();
-  
-  // تنسيق ميلادي: DD/MM/YYYY
-  const day = String(today.getDate()).padStart(2, '0');
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const year = today.getFullYear();
-  const printDate = `${day}/${month}/${year}`;
-  
-  // تحديث الـ data-date بالتاريخ الميلادي
-  const printDateElement = document.querySelector('.print-date');
-  if (printDateElement) {
-    printDateElement.setAttribute('data-date', printDate);
-  }
-  
-  // عند طباعة الصفحة
-  document.getElementById('printReportBtn').addEventListener('click', function() {
-    window.print();
-  });
+// تاريخ الطباعة + زرّ الطباعة (معالج واحد، بلا أعطال)
+document.addEventListener('DOMContentLoaded', function () {
+  const t = new Date();
+  const d = String(t.getDate()).padStart(2, '0');
+  const m = String(t.getMonth() + 1).padStart(2, '0');
+  const el = document.getElementById('printDateVal');
+  if (el) el.textContent = `${d}/${m}/${t.getFullYear()}`;
+
+  const printBtn = document.getElementById('printReportBtn');
+  if (printBtn) printBtn.addEventListener('click', () => window.print());
 });
+
+// ── حقل الجهة: بحث + اختيار (combobox خفيف بلا مكتبات) ──
+(function () {
+  const combo = document.getElementById('entityCombo');
+  if (!combo) return;
+  const search = document.getElementById('entitySearch');
+  const hidden = document.getElementById('entityInput');
+  const list   = document.getElementById('entityList');
+  const clear  = document.getElementById('entityClear');
+  const opts   = Array.prototype.slice.call(list.querySelectorAll('.entity-combo-opt'));
+  let activeIdx = -1;
+
+  const norm = (s) => (s || '').toString().trim().toLowerCase();
+  function open()  { list.hidden = false; search.setAttribute('aria-expanded', 'true'); }
+  function close() { list.hidden = true; search.setAttribute('aria-expanded', 'false'); activeIdx = -1; opts.forEach(o => o.classList.remove('active')); }
+
+  function applyFilter() {
+    const q = norm(search.value);
+    let shown = 0;
+    opts.forEach(o => {
+      const isAll = o.dataset.id === '';
+      const txt = norm(o.dataset.name !== undefined ? o.dataset.name : o.textContent);
+      const show = isAll ? (q === '') : txt.indexOf(q) !== -1;
+      o.classList.toggle('hidden', !show);
+      if (show) shown++;
+    });
+    let empty = list.querySelector('.entity-combo-empty');
+    if (shown === 0) {
+      if (!empty) { empty = document.createElement('li'); empty.className = 'entity-combo-empty'; empty.textContent = 'لا جهة مطابقة'; list.appendChild(empty); }
+    } else if (empty) { empty.remove(); }
+  }
+
+  function pick(o) {
+    hidden.value = o.dataset.id || '';
+    search.value = o.dataset.id ? (o.dataset.name || o.textContent.trim()) : '';
+    clear.hidden = !hidden.value;
+    close();
+  }
+
+  search.addEventListener('focus', () => { applyFilter(); open(); });
+  search.addEventListener('input', () => { applyFilter(); open(); clear.hidden = !search.value; });
+  list.addEventListener('mousedown', (e) => { const o = e.target.closest('.entity-combo-opt'); if (o) { e.preventDefault(); pick(o); } });
+  clear.addEventListener('click', () => { hidden.value = ''; search.value = ''; clear.hidden = true; applyFilter(); search.focus(); });
+
+  search.addEventListener('keydown', (e) => {
+    const vis = opts.filter(o => !o.classList.contains('hidden'));
+    if (e.key === 'ArrowDown')      { e.preventDefault(); open(); activeIdx = Math.min(vis.length - 1, activeIdx + 1); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); activeIdx = Math.max(0, activeIdx - 1); }
+    else if (e.key === 'Enter')     { if (!list.hidden && vis[activeIdx]) { e.preventDefault(); pick(vis[activeIdx]); } return; }
+    else if (e.key === 'Escape')    { close(); return; }
+    else return;
+    opts.forEach(o => o.classList.remove('active'));
+    if (vis[activeIdx]) { vis[activeIdx].classList.add('active'); vis[activeIdx].scrollIntoView({ block: 'nearest' }); }
+  });
+
+  document.addEventListener('mousedown', (e) => { if (!combo.contains(e.target)) close(); });
+})();
 </script>
 {% endblock %}

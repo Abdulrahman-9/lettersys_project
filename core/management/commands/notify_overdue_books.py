@@ -11,11 +11,16 @@ notify_overdue_books — يكتشف الكتب التي انتقلت إلى "م�
 - الكتب المتأخرة الآن = is_archived=False AND due_date < today
 - لتفادي إشعار مكرر يومياً: نتحقّق من عدم وجود BookHistory(action='overdue') للكتاب.
 """
+import logging
+
 from django.contrib.auth.models import User
+from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from core.models import Book, BookHistory, Notification
+from core.models import Book, BookHistory, EmailSettings, Notification, NotificationSettings
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -27,6 +32,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         today = timezone.localdate()
         dry_run = options.get('dry_run', False)
+
+        cfg = NotificationSettings.get()
+        if not cfg.overdue_enabled:
+            self.stdout.write(self.style.WARNING("إشعارات التأخّر معطّلة من الإعدادات."))
+            return
 
         # الكتب المتأخرة حالياً (نشطة + due_date في الماضي)
         overdue_qs = Book.objects.filter(
@@ -65,7 +75,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("لا توجد كتب متأخرة جديدة."))
             return
 
-        admins = list(User.objects.filter(is_superuser=True))
+        admins = list(User.objects.filter(is_superuser=True)) if cfg.notify_admins else []
         notified = 0
 
         for book in new_overdue:
@@ -76,9 +86,9 @@ class Command(BaseCommand):
                 self.stdout.write(f"[DRY] {msg}")
                 continue
 
-            # إشعار للمدراء + المُنشئ
+            # إشعار داخل النظام حسب السياسة (المدراء و/أو المُنشئ)
             recipients = set(admins)
-            if book.created_by:
+            if cfg.notify_creator and book.created_by:
                 recipients.add(book.created_by)
             for user in recipients:
                 Notification.objects.create(user=user, message=msg)
@@ -90,5 +100,36 @@ class Command(BaseCommand):
             )
             notified += 1
 
+        # بريد ملخّص اختياري للمدراء (حسب السياسة + تفعيل البريد)
+        if cfg.email_admins and not dry_run:
+            self._email_admins_summary(new_overdue, today)
+
         verb = "سيتم إرسال" if dry_run else "أُرسلت"
         self.stdout.write(self.style.SUCCESS(f"{verb} إشعارات لـ {len(new_overdue)} كتاب متأخر جديد."))
+
+    def _email_admins_summary(self, overdue_books, today):
+        """يرسل بريداً واحداً للمدراء يلخّص الكتب المتأخّرة الجديدة (اختياري)."""
+        try:
+            if not EmailSettings.get().is_active:
+                self.stdout.write(self.style.WARNING("بريد الملخّص مُتخطّى: إعدادات البريد غير مفعّلة."))
+                return
+            emails = list(
+                User.objects.filter(is_superuser=True, is_active=True)
+                .exclude(email='').values_list('email', flat=True)
+            )
+            if not emails:
+                return
+            lines = [
+                f"- {b.our_number}: متأخر منذ {(today - b.due_date).days} يوم (استحقاق {b.due_date})"
+                for b in overdue_books
+            ]
+            send_mail(
+                subject=f"[نظام الكتب] {len(overdue_books)} كتاب متأخّر جديد",
+                message="الكتب المتأخّرة الجديدة:\n\n" + "\n".join(lines),
+                from_email=None,
+                recipient_list=emails,
+                fail_silently=True,
+            )
+            self.stdout.write(self.style.SUCCESS(f"أُرسل بريد ملخّص إلى {len(emails)} مدير."))
+        except Exception as e:
+            logger.warning("notify_overdue_books: فشل بريد الملخّص: %s", e)

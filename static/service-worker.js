@@ -9,13 +9,17 @@
 
 // نسخة ثابتة — زِدها يدوياً عند تحديث الأصول الثابتة.
 // (لا تستخدم Date.now: يُبطل التخزين ويعيد بناء الكاش في كل تحميل.)
-const CACHE_VERSION = 'v31';
+const CACHE_VERSION = 'v35';
 const CACHE_NAME = 'lettersys-' + CACHE_VERSION;
 
 // قشرة التطبيق الثابتة فقط — لا '/' ولا أي صفحة مُصادَقة.
+// الأيقونات والخطّ (Cairo) مُضمّنة محلياً (بدل CDN) كي تظهر دائماً عبر الشبكة المحلية/دون إنترنت.
 const SHELL_URLS = [
   '/static/app.css',
   '/static/app.js',
+  '/static/vendor/bootstrap-icons/bootstrap-icons.css',
+  '/static/vendor/bootstrap-icons/fonts/bootstrap-icons.woff2',
+  '/static/vendor/cairo/cairo.css',
   '/offline.html'
 ];
 

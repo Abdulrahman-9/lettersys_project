@@ -128,8 +128,8 @@ body.app-shell-body {
 }
 
 .kind-tabs-settings:hover {
-    background: #f0f4ff;
-    color: #667eea;
+    background: color-mix(in srgb, var(--brand, #0f766e) 8%, #fff);
+    color: var(--brand-strong, #0f766e);
 }
 
 .field-grid-two {
@@ -365,7 +365,7 @@ body.app-shell-body {
 .modal-header {
     padding: 10px 16px;
     border-bottom: 1px solid #e2e8f0;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--brand-strong, #0f766e) 0%, var(--brand-strong-2, #115e59) 100%);
     color: white;
     font-weight: 700;
     font-size: 0.95rem;
@@ -429,8 +429,8 @@ body.app-shell-body {
     cursor: default;
 }
 .modal-body.is-dragover {
-    background: #eff6ff;
-    outline: 2px dashed #2563eb;
+    background: color-mix(in srgb, var(--brand, #0f766e) 7%, #fff);
+    outline: 2px dashed var(--brand, #0f766e);
     outline-offset: -10px;
 }
 .modal-body.is-dragover::after {
@@ -440,7 +440,7 @@ body.app-shell-body {
     transform: translateY(-50%);
     font-size: 1.1rem;
     font-weight: 800;
-    color: #1e40af;
+    color: var(--brand-strong, #0f766e);
     pointer-events: none;
 }
 .modal-body::-webkit-scrollbar { width: 8px; }
@@ -494,7 +494,7 @@ body.app-shell-body {
     width: 48px;
     height: 48px;
     border: 4px solid #e2e8f0;
-    border-top-color: #667eea;
+    border-top-color: var(--brand, #0f766e);
     border-radius: 50%;
     animation: overlaySpinRotate 0.8s linear infinite;
 }
@@ -526,7 +526,7 @@ body.app-shell-body {
     width: 40%;
     height: 100%;
     border-radius: 999px;
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, var(--brand, #0f766e) 0%, var(--brand-strong-2, #115e59) 100%);
     animation: overlayProgressSlide 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 @keyframes overlayProgressSlide {
@@ -648,14 +648,14 @@ body.app-shell-body {
 .btn-scan-action-secondary {
     flex: 1 1 0;
     background: #ffffff;
-    color: #2563eb;
-    border: 2px solid #2563eb;
+    color: var(--brand-strong, #0f766e);
+    border: 2px solid var(--brand, #0f766e);
     box-shadow: none;
 }
 .btn-scan-action-secondary:hover:not(:disabled) {
-    background: #eff6ff;
+    background: color-mix(in srgb, var(--brand, #0f766e) 8%, #fff);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--brand, #0f766e) 20%, transparent);
 }
 .btn-scan-action-danger {
     flex: 1 1 0;
@@ -672,14 +672,14 @@ body.app-shell-body {
 .btn-scan-action-upload {
     flex: 1 1 0;
     background: #ffffff;
-    color: #6366f1;
-    border: 2px solid #6366f1;
+    color: var(--brand-strong, #0f766e);
+    border: 2px solid var(--brand, #0f766e);
     box-shadow: none;
 }
 .btn-scan-action-upload:hover:not(:disabled) {
-    background: #eef2ff;
+    background: color-mix(in srgb, var(--brand, #0f766e) 8%, #fff);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--brand, #0f766e) 20%, transparent);
 }
 
 .scan-progress-inline {
@@ -886,8 +886,8 @@ body.app-shell-body {
 }
 .form-control-smart:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    border-color: var(--brand, #0f766e);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand, #0f766e) 16%, transparent);
     transform: translateY(-1px);
 }
 .form-control-smart.has-error  { border-color: #dc2626; background: #fef2f2; }
@@ -922,10 +922,10 @@ body.app-shell-body {
     transition: all 0.2s;
     flex-shrink: 0;
 }
-.date-edit-toggle:hover { border-color: #667eea; background: #eef2ff; }
+.date-edit-toggle:hover { border-color: var(--brand, #0f766e); background: color-mix(in srgb, var(--brand, #0f766e) 8%, #fff); }
 .date-edit-toggle input[type="checkbox"] { display: none; }
 .date-edit-toggle .toggle-icon { font-size: 14px; opacity: 0.5; transition: opacity 0.2s; }
-.date-edit-toggle:has(input:checked) { border-color: #667eea; background: #eef2ff; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15); }
+.date-edit-toggle:has(input:checked) { border-color: var(--brand, #0f766e); background: color-mix(in srgb, var(--brand, #0f766e) 8%, #fff); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand, #0f766e) 15%, transparent); }
 .date-edit-toggle:has(input:checked) .toggle-icon { opacity: 1; }
 
 .form-control-smart::placeholder { color: #9aa7ba; }   /* أوضح من الظل الباهت السابق (#cbd5e1) مع بقائه إرشاداً خفيفاً */
@@ -971,8 +971,8 @@ body.app-shell-body {
     flex: 0 0 auto;
     min-width: 120px;
     box-sizing: border-box;
-    border: 2px solid #667eea;
-    color: #667eea;
+    border: 2px solid var(--brand, #0f766e);
+    color: var(--brand-strong, #0f766e);
     background: white;
     padding: 12px 20px;
     border-radius: 10px;
@@ -982,27 +982,27 @@ body.app-shell-body {
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.action-bar .btn-action-secondary:hover { background: #f0f9ff; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2); }
+.action-bar .btn-action-secondary:hover { background: color-mix(in srgb, var(--brand, #0f766e) 8%, #fff); transform: translateY(-2px); box-shadow: 0 4px 12px color-mix(in srgb, var(--brand, #0f766e) 20%, transparent); }
 .action-bar .btn-action-secondary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 .action-bar .btn-action-primary {
     flex: 0 0 auto;
     min-width: 150px;
     box-sizing: border-box;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--brand-strong, #0f766e) 0%, var(--brand-strong-2, #115e59) 100%);
     color: white;
     border: 2px solid transparent;
     padding: 12px 20px;
     border-radius: 10px;
     font-weight: 700;
     font-size: 0.95rem;
-    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--brand-strong, #0f766e) 34%, transparent);
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.action-bar .btn-action-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(102, 126, 234, 0.4); }
+.action-bar .btn-action-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 24px color-mix(in srgb, var(--brand-strong, #0f766e) 44%, transparent); }
 .action-bar .btn-action-primary:active { transform: translateY(0); }
-.action-bar .btn-action-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2); }
+.action-bar .btn-action-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: 0 4px 12px color-mix(in srgb, var(--brand-strong, #0f766e) 22%, transparent); }
 
 /* زر العودة/الإلغاء — محايد هادئ (رمادي): الأحمر التدميري محجوز للحذف الحقيقي فقط،
    والحفظ (btn-action-primary) هو الفعل الأساسي الأبرز. لا يتمدّد (flex:0) كي يبقى ثانوياً. */
@@ -1083,7 +1083,7 @@ body.app-shell-body {
     padding: 0.45rem 0.6rem; background: #fff; min-height: 44px;
     cursor: text; transition: border-color 0.2s, box-shadow 0.2s;
 }
-.multi-tag-wrapper:focus-within { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
+.multi-tag-wrapper:focus-within { border-color: var(--brand, #0f766e); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand, #0f766e) 14%, transparent); }
 .multi-tag-wrapper .entity-tag { display: inline-flex; align-items: center; gap: 4px; background: #e0f2fe; color: #0369a1; border-radius: 6px; padding: 3px 8px; font-size: 0.85rem; font-weight: 500; white-space: nowrap; }
 .multi-tag-wrapper .entity-tag.new-entity { background: #fef3c7; color: #92400e; }
 .multi-tag-wrapper .entity-tag .tag-code { font-size: 0.7rem; opacity: 0.75; padding: 0 4px; border-left: 1px solid currentColor; margin-left: 2px; }
@@ -1101,15 +1101,16 @@ body.app-shell-body .app-shell { height: 100vh; max-height: 100vh; margin: 0 !im
 body.app-shell-body .app-sidebar { height: 100vh; position: sticky; top: 0; align-self: stretch; overflow-y: auto; }
 body.app-shell-body .app-main { height: 100vh; max-height: 100vh; padding: 0 !important; margin: 0 !important; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
 
-.app-page-header { flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 8px 18px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.10); z-index: 5; }
+/* شريط رأس خفيف «تلميحة تركوازية» — خلفية فاتحة جداً + نصّ تركوازي غامق (أريح بصرياً من الشريط الداكن) */
+.app-page-header { flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 8px 18px; background: #eef7f5; color: #0e5f58; border-bottom: 1px solid #cfe6e1; box-shadow: 0 1px 3px rgba(16,24,40,0.04); z-index: 5; }
 .app-page-header .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.2px; }
 .app-page-header .brand img { height: 32px; width: auto; }
-.app-page-header .header-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.25); }
-.app-page-header .header-title { font-weight: 700; font-size: 0.95rem; opacity: 0.95; }
+.app-page-header .header-divider { width: 1px; height: 28px; background: #c7e0da; }
+.app-page-header .header-title { font-weight: 700; font-size: 0.95rem; color: #2f6a63; }
 .app-page-header .header-spacer { flex: 1; }
-.app-page-header .header-action { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.14); color: #fff; font-size: 0.85rem; font-weight: 600; text-decoration: none; border: 1px solid rgba(255,255,255,0.18); transition: background 0.2s; }
-.app-page-header .header-action:hover { background: rgba(255,255,255,0.24); color: #fff; }
-.app-page-header .header-user { display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; opacity: 0.95; }
+.app-page-header .header-action { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; background: #dcefeb; color: #0f766e; font-size: 0.85rem; font-weight: 600; text-decoration: none; border: 1px solid #bfe0d9; transition: background 0.2s, border-color 0.2s; }
+.app-page-header .header-action:hover { background: #cde8e2; color: #0b5a53; border-color: #a9d6cd; }
+.app-page-header .header-user { display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; color: #4f736d; }
 
 body.app-shell-body .app-main .extraction-container { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; padding: 14px 16px 14px 16px !important; gap: 14px !important; grid-template-columns: minmax(0, 1.55fr) minmax(420px, 1fr) !important; overflow: hidden; }
 

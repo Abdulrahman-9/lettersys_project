@@ -97,6 +97,8 @@ TEMPLATES = [
                 # مخصّص — badge الإشعارات والبريد في الشريط الجانبي
                 'core.context_processors.notifications',
                 'core.context_processors.mail_unread',
+                # مخصّص — هوية التطبيق المعروضة (اسم النظام + سطر الوصف)
+                'core.context_processors.system_settings',
             ],
         },
     },
@@ -238,6 +240,16 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 300          # 5 دقائق حد أقصى للمهمة
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 50  # استعادة ذاكرة الـ OCR دورياً
+
+# جدولة المهام الدورية (تتطلّب تشغيل `celery -A lettersys beat`)
+from celery.schedules import crontab  # noqa: E402
+CELERY_BEAT_SCHEDULE = {
+    # يُشغَّل كل ساعة عند الدقيقة 0؛ المهمة نفسها تقرّر التنفيذ من BackupSettings.
+    'scheduled-backup-hourly': {
+        'task': 'core.tasks.scheduled_backup',
+        'schedule': crontab(minute=0),
+    },
+}
 
 # ─── إعدادات الذكاء الاصطناعي والاستخراج ────────────────────────────────────
 AI_PROVIDER = os.environ.get('AI_PROVIDER', 'offline')

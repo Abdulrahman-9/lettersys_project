@@ -24,6 +24,7 @@ class ExtractionSmartSystem {
         this.pageCount = 1;
         this.currentPage = 1;
         this.zoom = 1;
+        this.fitMode = 'width';   // 'width' = ملء عرض اللوحة (أكبر/أوضح، بلا هوامش جانبية) | 'page' = احتواء كامل
         this.previewDpi = 130;
         this.extractedData = {};
         this.confidenceScores = {};
@@ -1878,7 +1879,8 @@ class ExtractionSmartSystem {
         if (!modalBody) return;
 
         let stage = modalBody.querySelector('.preview-stage');
-        if (!stage) {
+        const firstBuild = !stage;
+        if (firstBuild) {
             modalBody.innerHTML = '';
             modalBody.classList.add('has-image');
             stage = this._buildPreviewStage();
@@ -1887,6 +1889,10 @@ class ExtractionSmartSystem {
             this._bindPager();
             this._bindKeyboard();
         }
+        // إعادة ضبط الملاءمة/التمرير عند الانتقال لصفحة أخرى فقط — لا عند إعادة رسم نفس الصفحة
+        // (تحديث الدقّة أو التدوير/الحذف) كي لا يقفز التكبير الحالي فجأة.
+        const pageChanged = firstBuild || n !== this.currentPage;
+        const scroll  = stage.querySelector('.preview-scroll');
         const img     = stage.querySelector('.preview-img');
         const spinner = stage.querySelector('.preview-spinner');
         const errBox  = stage.querySelector('.preview-error');
@@ -1894,7 +1900,7 @@ class ExtractionSmartSystem {
         if (!skel) {
             skel = document.createElement('div');
             skel.className = 'dc-skeleton';
-            stage.insertBefore(skel, img);
+            (scroll || stage).insertBefore(skel, img);
         }
 
         errBox.style.display = 'none';
@@ -1902,8 +1908,10 @@ class ExtractionSmartSystem {
         skel.style.setProperty('--dc-ar', this._pageAspect(n));
         skel.style.display = 'block';
         img.classList.remove('dc-loaded');     // أخفِ الصورة القديمة أثناء التحميل (تلاشٍ)
-        this.zoom = 1;
+        if (pageChanged) this.zoom = 1;
+        this.currentPage = n;                  // اضبط الصفحة قبل القياس كي تُستخدم نسبة أبعادها الصحيحة
         this._applyZoom();
+        if (pageChanged && scroll) { scroll.scrollTop = 0; scroll.scrollLeft = 0; }
 
         // مؤشّر بطيء: لا يظهر إلا إن تأخّر التحميل (تفادي وميض للصفحات المُخبّأة مسبقاً)
         spinner.style.display = 'none';
@@ -1919,6 +1927,8 @@ class ExtractionSmartSystem {
             skel.style.display = 'none';
             img.classList.add('dc-loaded');
             this.currentPage = n;
+            this._applyZoom();                     // إعادة القياس بأبعاد الصفحة المؤكَّدة
+            if (pageChanged && scroll) scroll.scrollTop = 0;
             this._updatePager();
             this._updateThumbsActive();
             this._prefetchNeighbors(n);
@@ -1992,7 +2002,7 @@ class ExtractionSmartSystem {
                 case 'End':  e.preventDefault(); this.renderPreviewPage(total); break;
                 case '+': case '=': e.preventDefault(); this._stepZoom(1); break;
                 case '-': e.preventDefault(); this._stepZoom(-1); break;
-                case '0': e.preventDefault(); this.zoom = 1; this._applyZoom(); break;
+                case '0': e.preventDefault(); this._zoomTo(1, null, null); break;
             }
         });
     }
@@ -2169,21 +2179,28 @@ class ExtractionSmartSystem {
         const stage = document.createElement('div');
         stage.className = 'preview-stage';
 
+        // طبقة التمرير الداخلية: تحمل الصفحة وتُمرّرها في كل الاتجاهات، بينما تبقى الأدوات
+        // (أشرطة التكبير/التحرير) ثابتة على المسرح فلا تجرفها عملية التمرير.
+        const scroll = document.createElement('div');
+        scroll.className = 'preview-scroll';
+        stage.appendChild(scroll);
+
         const img = document.createElement('img');
         img.className = 'preview-img';
         img.alt = 'معاينة المستند';
-        stage.appendChild(img);
+        img.draggable = false;
+        scroll.appendChild(img);
 
         const zoom = document.createElement('div');
         zoom.className = 'preview-zoom';
         zoom.innerHTML =
-            '<button type="button" class="pz-btn" data-z="out" title="تصغير"><i class="bi bi-zoom-out"></i></button>' +
+            '<button type="button" class="pz-btn" data-z="out" title="تصغير (‪-‬)"><i class="bi bi-zoom-out"></i></button>' +
             '<span class="pz-label">100%</span>' +
-            '<button type="button" class="pz-btn" data-z="in" title="تكبير"><i class="bi bi-zoom-in"></i></button>' +
-            '<button type="button" class="pz-btn" data-z="fit" title="ملاءمة الصفحة"><i class="bi bi-arrows-fullscreen"></i></button>';
+            '<button type="button" class="pz-btn" data-z="in" title="تكبير (‪+‬)"><i class="bi bi-zoom-in"></i></button>' +
+            '<button type="button" class="pz-btn" data-z="fit" title="ملاءمة"><i class="bi bi-arrows-angle-expand"></i></button>';
         zoom.querySelector('[data-z=out]').onclick = () => this._stepZoom(-1);
         zoom.querySelector('[data-z=in]').onclick  = () => this._stepZoom(1);
-        zoom.querySelector('[data-z=fit]').onclick = () => { this.zoom = 1; this._applyZoom(); };
+        zoom.querySelector('[data-z=fit]').onclick = () => this._toggleFit();
         stage.appendChild(zoom);
 
         // أدوات تحرير الصفحة الحالية (تدوير/حذف) — تعمل على PDF المؤقّت عبر token
@@ -2222,50 +2239,134 @@ class ExtractionSmartSystem {
         errBox.appendChild(retry); errBox.appendChild(dl);
         stage.appendChild(errBox);
 
-        this._enablePan(stage, img);
+        // تنقّل مرن: Ctrl + عجلة الفأرة = تكبير حول المؤشّر (العجلة وحدها تُمرّر عادياً)،
+        // ونقر مزدوج يبدّل بين ملاءمة/تكبير 2× عند نقطة النقر.
+        scroll.addEventListener('wheel', (e) => {
+            if (!e.ctrlKey) return;
+            e.preventDefault();
+            this._zoomAt(e.deltaY < 0 ? 1 : -1, e.clientX, e.clientY, 1.18);
+        }, { passive: false });
+        scroll.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            if (this.zoom > 1.01) { this._zoomTo(1, e.clientX, e.clientY); }
+            else { this._zoomAt(1, e.clientX, e.clientY, 2); }
+        });
+
+        // إعادة القياس عند تغيّر حجم النافذة/اللوحة (يُربط مرّة واحدة)
+        if (!this._resizeBound) {
+            this._resizeBound = true;
+            window.addEventListener('resize', () => {
+                clearTimeout(this._resizeTimer);
+                this._resizeTimer = setTimeout(() => {
+                    if (document.querySelector('#modalBody .preview-scroll')) this._applyZoom();
+                }, 120);
+            });
+        }
+
+        this._enablePan(scroll, img);
         return stage;
     }
 
-    _stepZoom(dir) {
-        const steps = [1, 1.25, 1.5, 2, 3];
-        let i = steps.indexOf(this.zoom);
-        if (i === -1) i = 0;
-        i = Math.max(0, Math.min(steps.length - 1, i + dir));
-        this.zoom = steps[i];
-        const wantDpi = this.zoom > 1.5 ? 220 : 130;   // رفع كسول للدقّة عند التكبير
-        if (wantDpi !== this.previewDpi) { this.previewDpi = wantDpi; this.renderPreviewPage(this.currentPage); }
+    /** يبدّل نمط الملاءمة: عرض اللوحة ⇄ الصفحة كاملة (يُعيد ضبط التكبير والتمرير). */
+    _toggleFit() {
+        this.fitMode = (this.fitMode === 'width') ? 'page' : 'width';
+        this.zoom = 1;
         this._applyZoom();
+        const scroll = document.querySelector('#modalBody .preview-scroll');
+        if (scroll) { scroll.scrollTop = 0; scroll.scrollLeft = 0; }
+    }
+
+    _stepZoom(dir) {
+        const steps = [1, 1.25, 1.5, 2, 3, 4];
+        let i = steps.findIndex(s => Math.abs(s - this.zoom) < 0.02);
+        if (i === -1) {   // تكبير حرّ (من العجلة) ⇒ اقفز لأقرب خطوة في الاتجاه المطلوب
+            i = 0; for (let k = 0; k < steps.length; k++) { if (steps[k] <= this.zoom + 0.02) i = k; }
+        }
+        i = Math.max(0, Math.min(steps.length - 1, i + dir));
+        this._zoomTo(steps[i], null, null);
+    }
+
+    /** يحسب مقاس «الملاءمة» بالبكسل من نسبة أبعاد الصفحة وحجم طبقة التمرير. */
+    _computeFitSize(scroll) {
+        const pad = 14;   // هامش تنفّس بسيط داخل الطبقة
+        const availW = Math.max(40, scroll.clientWidth  - pad);
+        const availH = Math.max(40, scroll.clientHeight - pad);
+        const ar = parseFloat(this._pageAspect(this.currentPage || 1)) || 0.707;   // عرض/ارتفاع
+        let w, h;
+        if (this.fitMode === 'width') {
+            w = availW; h = w / ar;                       // يملأ العرض (أكبر/أوضح، بلا هوامش جانبية)
+        } else {                                          // 'page' — احتواء كامل الصفحة
+            if (availW / availH > ar) { h = availH; w = h * ar; }
+            else { w = availW; h = w / ar; }
+        }
+        return { w, h };
     }
 
     _applyZoom() {
         const modalBody = document.getElementById('modalBody');
         const stage = modalBody && modalBody.querySelector('.preview-stage');
         if (!stage) return;
+        const scroll = stage.querySelector('.preview-scroll');
         const img = stage.querySelector('.preview-img');
         const label = stage.querySelector('.pz-label');
-        if (img) {
-            img.style.transform = `scale(${this.zoom})`;
-            img.style.cursor = this.zoom > 1 ? 'grab' : 'default';
+        if (scroll && img) {
+            const fit = this._computeFitSize(scroll);
+            img.style.width  = Math.round(fit.w * this.zoom) + 'px';
+            img.style.height = Math.round(fit.h * this.zoom) + 'px';
+            const pannable = (scroll.scrollHeight > scroll.clientHeight + 1) ||
+                             (scroll.scrollWidth  > scroll.clientWidth  + 1);
+            img.style.cursor = pannable ? 'grab' : 'default';
         }
         if (label) label.textContent = Math.round(this.zoom * 100) + '%';
-        stage.style.overflow = this.zoom > 1 ? 'auto' : 'hidden';
+        const fitBtn = stage.querySelector('[data-z=fit]');
+        if (fitBtn) fitBtn.title = (this.fitMode === 'width') ? 'ملاءمة كامل الصفحة' : 'ملاءمة عرض الصفحة';
     }
 
-    _enablePan(stage, img) {
+    /** يضبط التكبير مع تثبيت نقطة (clientX/Y) بصرياً في مكانها — لتنقّل مريح. */
+    _zoomTo(newZoom, cx, cy) {
+        newZoom = Math.max(1, Math.min(5, newZoom));
+        const stage = document.querySelector('#modalBody .preview-stage');
+        const scroll = stage && stage.querySelector('.preview-scroll');
+        if (!scroll) { this.zoom = newZoom; this._applyZoom(); return; }
+        const rect = scroll.getBoundingClientRect();
+        const ax = (cx == null) ? rect.width  / 2 : (cx - rect.left);
+        const ay = (cy == null) ? rect.height / 2 : (cy - rect.top);
+        const prev = this.zoom || 1;
+        const beforeX = scroll.scrollLeft + ax;
+        const beforeY = scroll.scrollTop  + ay;
+        this.zoom = newZoom;
+        this._applyZoom();
+        const ratio = newZoom / prev;
+        scroll.scrollLeft = beforeX * ratio - ax;   // يُقصّ تلقائياً إلى [0, max]
+        scroll.scrollTop  = beforeY * ratio - ay;
+    }
+
+    /** خطوة تكبير نسبية حول نقطة (للعجلة/النقر المزدوج) مع مواءمة الدقّة عند التكبير القوي. */
+    _zoomAt(dir, cx, cy, factor) {
+        const f = factor || 1.18;
+        const nz = Math.max(1, Math.min(5, dir > 0 ? this.zoom * f : this.zoom / f));
+        const wantDpi = nz > 1.5 ? 220 : 130;
+        if (wantDpi !== this.previewDpi) { this.previewDpi = wantDpi; this.renderPreviewPage(this.currentPage); }
+        this._zoomTo(nz, cx, cy);
+    }
+
+    _enablePan(scroll, img) {
         let down = false, sx = 0, sy = 0, sl = 0, st = 0;
-        stage.addEventListener('mousedown', (e) => {
-            if (this.zoom <= 1) return;
-            down = true; sx = e.clientX; sy = e.clientY; sl = stage.scrollLeft; st = stage.scrollTop;
+        const canPan = () => (scroll.scrollHeight > scroll.clientHeight + 1) ||
+                             (scroll.scrollWidth  > scroll.clientWidth  + 1);
+        scroll.addEventListener('mousedown', (e) => {
+            if (e.button !== 0 || !canPan()) return;
+            down = true; sx = e.clientX; sy = e.clientY; sl = scroll.scrollLeft; st = scroll.scrollTop;
             if (img) img.style.cursor = 'grabbing'; e.preventDefault();
         });
         window.addEventListener('mousemove', (e) => {
             if (!down) return;
-            stage.scrollLeft = sl - (e.clientX - sx);
-            stage.scrollTop  = st - (e.clientY - sy);
+            scroll.scrollLeft = sl - (e.clientX - sx);
+            scroll.scrollTop  = st - (e.clientY - sy);
         });
         window.addEventListener('mouseup', () => {
             if (!down) return; down = false;
-            if (img) img.style.cursor = this.zoom > 1 ? 'grab' : 'default';
+            if (img) img.style.cursor = canPan() ? 'grab' : 'default';
         });
     }
 
@@ -2396,6 +2497,7 @@ class ExtractionSmartSystem {
         this.pageCount = 1;
         this.currentPage = 1;
         this.zoom = 1;
+        this.fitMode = 'width';
         this.previewDpi = 130;
         const pager = document.getElementById('previewPager');
         const thumbs = document.getElementById('previewThumbs');

@@ -70,7 +70,10 @@
           <label class="form-label fw-semibold" style="font-size:.85rem;">الاسم الودّي للجهاز</label>
           <input type="text" id="deviceName" class="form-control form-control-sm"
                  placeholder="مثال: مكتب المدير — PC-1"
-                 value="{{ cfg.device_name }}">
+                 value="{{ device_name|default:cfg.device_name }}">
+          <div class="text-muted mt-1" style="font-size:.76rem;">
+            <i class="bi bi-hdd me-1"></i>اسم خاصّ بهذا الجهاز فقط — لا تدوسه الأجهزة الأخرى.
+          </div>
         </div>
         <div class="col-md-4">
           <label class="form-label fw-semibold" style="font-size:.85rem;">
@@ -108,33 +111,42 @@
                data-role="standalone">
           <input type="radio" name="deviceRole" value="standalone"
                  {% if cfg.role == 'standalone' or not cfg.is_configured %}checked{% endif %}>
+          <span class="ns-role-check"><i class="bi bi-check-circle-fill"></i></span>
           <div class="ns-role-icon"><i class="bi bi-pc-display"></i></div>
           <div class="ns-role-title">مستقل</div>
-          <div class="ns-role-desc">جهاز واحد — قاعدة بياناته الخاصة.<br>لا يحتاج إعداداً إضافياً.</div>
+          <ul class="ns-role-points">
+            <li>جهاز واحد بقاعدة بياناته الخاصة</li>
+            <li>لا يحتاج أيّ إعداد شبكي</li>
+          </ul>
+          <div class="ns-role-hint">للاستخدام الفردي</div>
         </label>
 
         <label class="ns-role-card {% if cfg.role == 'master' %}ns-role-active{% endif %}"
                data-role="master">
           <input type="radio" name="deviceRole" value="master"
                  {% if cfg.role == 'master' %}checked{% endif %}>
-          <div class="ns-role-icon text-primary"><i class="bi bi-server"></i></div>
+          <span class="ns-role-check"><i class="bi bi-check-circle-fill"></i></span>
+          <div class="ns-role-icon"><i class="bi bi-server"></i></div>
           <div class="ns-role-title">ماستر (رئيسي)</div>
-          <div class="ns-role-desc">
-            يشغّل PostgreSQL ويستقبل الأجهزة التابعة.<br>
-            أعطِ الأجهزة الأخرى IP هذا الجهاز.
-          </div>
+          <ul class="ns-role-points">
+            <li>يشغّل قاعدة البيانات PostgreSQL</li>
+            <li>تتصل به بقيّة الأجهزة</li>
+          </ul>
+          <div class="ns-role-hint">اختر هذا للجهاز الأوّل</div>
         </label>
 
         <label class="ns-role-card {% if cfg.role == 'slave' %}ns-role-active{% endif %}"
                data-role="slave">
           <input type="radio" name="deviceRole" value="slave"
                  {% if cfg.role == 'slave' %}checked{% endif %}>
-          <div class="ns-role-icon text-success"><i class="bi bi-display"></i></div>
-          <div class="ns-role-title">تابع</div>
-          <div class="ns-role-desc">
-            يتصل بقاعدة بيانات الماستر.<br>
-            أدخل IP الماستر أدناه.
-          </div>
+          <span class="ns-role-check"><i class="bi bi-check-circle-fill"></i></span>
+          <div class="ns-role-icon"><i class="bi bi-display"></i></div>
+          <div class="ns-role-title">تابع (عميل)</div>
+          <ul class="ns-role-points">
+            <li>يتصل بقاعدة بيانات الماستر</li>
+            <li>يشارك نفس الكتب والأرقام</li>
+          </ul>
+          <div class="ns-role-hint">اختر هذا للأجهزة الإضافية</div>
         </label>
 
       </div>
@@ -149,9 +161,13 @@
       إعدادات الماستر — معلومات الاتصال للأجهزة التابعة
     </div>
     <div class="ns-section-body">
-      <p class="text-muted" style="font-size:.85rem;">
-        أعطِ هذه المعلومات لكل جهاز تابع ليتصل بقاعدة بياناتك.
-      </p>
+      <div class="ns-connect-guide ns-cg-master mb-3">
+        <div class="fw-semibold mb-1"><i class="bi bi-link-45deg me-1"></i>كيف تربط جهازاً جديداً بهذا الخادم؟</div>
+        <ol class="ns-connect-steps mb-0">
+          <li>على الجهاز الجديد، افتح صفحة الشبكة واختر الدور <strong>«تابع»</strong>.</li>
+          <li>انسخ القيم التالية والصقها هناك، ثم اضغط «اختبار الاتصال» فـ«حفظ».</li>
+        </ol>
+      </div>
       <div class="ns-info-box" id="masterInfoBox">
         <div class="ns-info-row">
           <span class="ns-info-key">DB_HOST</span>
@@ -194,6 +210,15 @@
       الاتصال بالماستر — بيانات قاعدة بيانات الجهاز الرئيسي
     </div>
     <div class="ns-section-body">
+
+      <div class="ns-connect-guide ns-cg-slave mb-3">
+        <div class="fw-semibold mb-1"><i class="bi bi-list-ol me-1"></i>خطوات الاتصال بالخادم</div>
+        <ol class="ns-connect-steps mb-0">
+          <li>أدخل <strong>عنوان IP الماستر</strong> واضغط «فحص» للتأكد من الوصول.</li>
+          <li>أكمل بيانات قاعدة البيانات (المنفذ/الاسم/المستخدم/كلمة المرور).</li>
+          <li>اضغط <strong>«اختبار الاتصال»</strong>، ثم <strong>«حفظ الإعدادات»</strong> بالأسفل.</li>
+        </ol>
+      </div>
 
       <div class="row g-3 mb-3">
         <div class="col-md-6">
@@ -550,16 +575,51 @@
   display: grid; grid-template-columns: repeat(3,1fr); gap: 12px;
 }
 .ns-role-card {
-  border: 2px solid var(--ns-border); border-radius: 12px;
-  padding: 14px; cursor: pointer; transition: border-color .15s, background .15s;
+  border: 2px solid var(--ns-border); border-radius: 14px;
+  padding: 18px 16px 14px; cursor: pointer;
+  transition: border-color .15s, background .15s, box-shadow .15s, transform .12s;
   text-align: center; position: relative;
+  display: flex; flex-direction: column; align-items: center;
 }
 .ns-role-card input[type=radio] { position: absolute; opacity: 0; width: 0; height: 0; }
-.ns-role-card:hover { border-color: #667eea; background: #f5f3ff; }
-.ns-role-active { border-color: #667eea !important; background: #f0edff !important; }
-.ns-role-icon { font-size: 1.8rem; margin-bottom: 6px; }
-.ns-role-title { font-weight: 700; margin-bottom: 4px; font-size: .88rem; }
-.ns-role-desc { font-size: .78rem; color: #64748b; line-height: 1.4; }
+.ns-role-card:hover { border-color: #cbd5e1; box-shadow: var(--ns-shadow); transform: translateY(-2px); }
+.ns-role-icon { font-size: 2rem; margin-bottom: 8px; color: #64748b; }
+.ns-role-title { font-weight: 800; margin-bottom: 8px; font-size: .95rem; }
+.ns-role-points {
+  list-style: none; padding: 0; margin: 0 0 12px; text-align: start;
+  font-size: .78rem; color: #64748b; line-height: 1.55; width: 100%;
+}
+.ns-role-points li { position: relative; padding-inline-start: 17px; }
+.ns-role-points li::before {
+  content: "✓"; position: absolute; inset-inline-start: 0; color: #94a3b8; font-weight: 700;
+}
+.ns-role-hint {
+  margin-top: auto; font-size: .76rem; font-weight: 700; color: #64748b;
+  background: #f1f5f9; border-radius: 8px; padding: 5px 10px; width: 100%;
+}
+.ns-role-check {
+  position: absolute; top: 10px; inset-inline-start: 12px;
+  font-size: 1.15rem; opacity: 0; transition: opacity .15s; color: #94a3b8;
+}
+.ns-role-active .ns-role-check { opacity: 1; }
+.ns-role-active { box-shadow: 0 8px 20px -10px rgba(15,23,42,.35) !important; }
+/* لون هويّة لكل دور (دائم للأيقونة، أبرز عند الاختيار) — مثل وضوح 26 */
+.ns-role-card[data-role="master"] .ns-role-icon { color: #0369a1; }
+.ns-role-card[data-role="slave"]  .ns-role-icon { color: #16a34a; }
+.ns-role-card[data-role="standalone"].ns-role-active {
+  border-color: #475569 !important; background: #f8fafc !important;
+}
+.ns-role-card[data-role="standalone"].ns-role-active .ns-role-check { color: #475569; }
+.ns-role-card[data-role="master"].ns-role-active {
+  border-color: #0369a1 !important; background: #eff6ff !important;
+}
+.ns-role-card[data-role="master"].ns-role-active .ns-role-check { color: #0369a1; }
+.ns-role-card[data-role="master"].ns-role-active .ns-role-hint { background: #dbeafe; color: #1e40af; }
+.ns-role-card[data-role="slave"].ns-role-active {
+  border-color: #16a34a !important; background: #f0fdf4 !important;
+}
+.ns-role-card[data-role="slave"].ns-role-active .ns-role-check { color: #16a34a; }
+.ns-role-card[data-role="slave"].ns-role-active .ns-role-hint { background: #dcfce7; color: #15803d; }
 
 /* ── صندوق معلومات الماستر ── */
 .ns-info-box {
@@ -572,6 +632,17 @@
 .ns-info-key { color: #3730a3; min-width: 140px; font-weight: 600; }
 .ns-info-val { color: #1e293b; }
 .ns-password-mask { letter-spacing: 2px; }
+
+/* ── صندوق إرشاد الاتصال ── */
+.ns-connect-guide {
+  background: #f8fafc; border: 1px solid var(--ns-border);
+  border-inline-start: 3px solid #94a3b8; border-radius: 10px;
+  padding: 12px 14px; font-size: .85rem;
+}
+.ns-connect-guide.ns-cg-master { border-inline-start-color: #0369a1; background: #f5f9ff; }
+.ns-connect-guide.ns-cg-slave  { border-inline-start-color: #16a34a; background: #f4fdf6; }
+.ns-connect-steps { padding-inline-start: 20px; margin: 0; color: #475569; line-height: 1.75; }
+.ns-connect-steps li { padding-inline-start: 2px; }
 
 /* ── جدول الأجهزة ── */
 .ns-devices-table th {
@@ -668,7 +739,7 @@
 .ns-code-block .text-muted { color: #6c7086 !important; }
 </style>
 
-<script src="{% static 'network_settings.js' %}?v=20260503b"></script>
+{# مهم: تُعرَّف NS_URLS/NS_CSRF/NS_CFG قبل تحميل السكربت الخارجي لأنه يلتقطها فور تشغيله #}
 <script>
 window.NS_URLS = {
   localIp:       "{% url 'network-local-ip' %}",
@@ -687,7 +758,9 @@ window.NS_CFG = {
   configured: {{ cfg.is_configured|yesno:"true,false" }},
   localIp:    "{{ local_ip }}",
 };
-
+</script>
+<script src="{% static 'network_settings.js' %}?v=20260705-order"></script>
+<script>
 // ─── نسخ سطر pg_hba ─────────────────────────────────────────────────────────
 document.getElementById('copyPgLine')?.addEventListener('click', function () {
   const text = document.getElementById('pgHbaLine')?.textContent?.replace(/\u00a0/g, ' ') || '';

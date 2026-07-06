@@ -55,6 +55,9 @@ releases.html
 .env.local
 .env.*.local
 
+# Per-device local identity (device name/uuid) — must NOT be shared/committed
+.device_identity.json
+
 # Coverage reports
 htmlcov/
 .coverage
@@ -77,3 +80,12 @@ docs/_build/
 backups/
 backup/
 *_backup/
+
+# Claude Code local files (worktrees, local settings, locks) — لا تُشارَك
+.claude/
+
+# Runtime logs
+logs/
+
+# Tesseract reference documentation (ليست كود التطبيق)
+tessdoc/
