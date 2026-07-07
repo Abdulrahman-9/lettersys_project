@@ -446,11 +446,15 @@ def scan_process_upload(request):
             with open(tmp_path, 'wb') as out:
                 for chunk in up.chunks():
                     out.write(chunk)
-            # تحقّق من توقيع PDF الفعلي لا الامتداد فقط (الاسم يضبطه العميل)
+            # تحقّق من توقيع PDF الفعلي لا الامتداد فقط (الاسم يضبطه العميل).
+            # مواصفة PDF (§7.5.2) تسمح بورود الترويسة ضمن أول 1024 بايت، فقد تسبقها
+            # UTF-8 BOM (EF BB BF) أو مسافات — نبحث عنها ضمن المقدّمة تماماً كما يفعل
+            # PyMuPDF/القارئات (وإلا رُفض PDF سليم صادرٌ عن أدوات تكتب BOM بادئاً).
             with open(tmp_path, 'rb') as fh:
-                if fh.read(5) != b'%PDF-':
-                    os.unlink(tmp_path)
-                    return JsonResponse({'ok': False, 'error': 'الملف ليس PDF صالحاً'}, status=400)
+                head = fh.read(1024)
+            if b'%PDF-' not in head:            # الحذف بعد إغلاق المقبض (وإلا WinError 32)
+                os.unlink(tmp_path)
+                return JsonResponse({'ok': False, 'error': 'الملف ليس PDF صالحاً'}, status=400)
         else:
             # صورة مرفوعة → تُحوَّل إلى PDF لتوحيد المعاينة والتحرير والحفظ
             from core.attachment_service import ensure_pdf_bytes
@@ -514,6 +518,22 @@ def scan_process_upload(request):
             import fitz
             with fitz.open(tmp_path) as _doc:
                 data['page_count'] = _doc.page_count
+                # حارس المسح الفارغ (مبدأ المالك: صفر حقول ≠ نجاح): صفحاتٌ بيضاء
+                # ناصعة (تباين شبه معدوم) = وجه ورقة خاطئ/تغذية فارغة — نُصارح فوراً
+                # بدل استخراجٍ صامتٍ فارغ يُحسَب انتكاساً. فحصٌ رخيص (72dpi رمادي).
+                import numpy as _np
+                _all_blank = True
+                for _i in range(_doc.page_count):
+                    _pix = _doc[_i].get_pixmap(dpi=72, colorspace=fitz.csGRAY, alpha=False)
+                    _arr = _np.frombuffer(_pix.samples, dtype=_np.uint8)
+                    if _arr.std() >= 4:            # أيّ حبرٍ حقيقي يرفع التباين فوق هذا
+                        _all_blank = False
+                        break
+                if _all_blank:
+                    data['needs_review'] = True
+                    data['blank_scan'] = True
+                    warning = ('⚠ المسح فارغ — الصفحات بيضاء بلا محتوى. '
+                               'تحقّق من وجه الورقة واتجاه التغذية ثم أعد المسح.')
         except Exception:
             data['page_count'] = 1
 
