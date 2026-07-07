@@ -619,8 +619,10 @@ class AIProcessingServiceTests(TestCase):
         )
 
         ocr_cls.return_value.clean_text.side_effect = lambda t: t
+        # «التاريخ:» تسميةُ الحقل الشرعية — صيغة «بتاريخ» الظرفية صارت تُرفض عمداً
+        # (إحالات المتن)، وباب التاريخ العام الخلفي اقتُلع من الأنبوب.
         offline_factory.return_value.extract.return_value = {
-            'raw_text': 'كتاب وارد سري من جهة تجريبية. رقم الكتاب: 99 بتاريخ 15-01-2024',
+            'raw_text': 'كتاب وارد سري من جهة تجريبية.\nالتاريخ: 15-01-2024\nرقم الكتاب: 99',
             'avg_confidence': 0.9,
         }
         settings_getter.return_value = {'AI_PROVIDER': 'offline'}

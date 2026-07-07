@@ -162,6 +162,55 @@ class SenderNumberProfiles:
         self._built_at = time.monotonic()
         logger.info('[SenderNumberProfiles] فهرس البصمات جاهز — %d جهة', len(self._profiles))
 
+    @staticmethod
+    def _edit_distance(a: str, b: str) -> int:
+        """مسافة تحرير بسيطة (Levenshtein) — بادئات قصيرة فقط، فلا حاجة لتحسينات."""
+        if len(a) < len(b):
+            a, b = b, a
+        prev = list(range(len(b) + 1))
+        for i, ca in enumerate(a, 1):
+            cur = [i]
+            for j, cb in enumerate(b, 1):
+                cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+            prev = cur
+        return prev[-1]
+
+    def repair(self, value: str, entity_id) -> Optional[str]:
+        """يُصحّح بادئةً شوّهها OCR بحرفٍ أو حرفين (llK-20260257 → NK-20260257):
+        البادئة الملتقطة قريبةٌ (مسافة ≤2) من بادئةٍ مؤكَّدة **لهذه الجهة نفسها**،
+        والخانات تُصان حرفياً، والقالب المُصحَّح معروفٌ للجهة — فلا إصلاح عابر
+        للجهات (MF لا تصير NK لأن المقارنة داخل بادئات الجهة فقط)."""
+        if not value or not entity_id:
+            return None
+        try:
+            self._ensure_index()
+        except Exception:
+            return None
+        profile = self._profiles.get(int(entity_id))
+        if not profile:
+            return None
+        m = re.match(r'([A-Za-z]{1,7})([-/].+)$', str(value).strip())
+        if not m:
+            return None
+        got_prefix, rest = m.group(1), m.group(2)
+        known = Counter()
+        for px in profile['prefixes'].values():
+            known.update({p: c for p, c in px.items() if c >= 2})
+        for px in profile['ctx_prefixes'].values():
+            known.update({p: c for p, c in px.items() if c >= 2})
+        for prefix in known:
+            if prefix.upper() == got_prefix.upper():
+                return None                      # سليمة أصلاً
+        best = None
+        for prefix, cnt in known.most_common():
+            d = self._edit_distance(got_prefix.upper(), prefix.upper())
+            if 0 < d <= 2 and (best is None or cnt > best[1]):
+                candidate = prefix + rest
+                tmpl = induce_template(candidate)
+                if tmpl in profile['templates'] or tmpl in profile['ctx_prefixes']:
+                    best = (candidate, cnt)
+        return best[0] if best else None
+
     def find(self, text: str, entity_id) -> Optional[ProfileHit]:
         """يبحث في النصّ عن رقمٍ بقالب الجهة المعروف. أول مطابقة (رأس المستند عادةً
         قبل الإحالات في المتن). الثقة تكبر بعدد الأمثلة المؤكَّدة للقالب."""

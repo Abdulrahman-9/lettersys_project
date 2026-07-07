@@ -589,12 +589,13 @@ class AIExtractionService:
                 # تاريخ في المستند؛ و book_date يبقى فارغاً (تحفظه الواجهة على اليوم).
                 result.book_date = None
                 result.book_date_confidence = 0.0
-                if patterns.get('sender_date'):
-                    result.sender_date = patterns.get('sender_date')
-                    result.sender_date_confidence = patterns.get('sender_date_confidence') or 0.0
-                else:
-                    result.sender_date = patterns.get('date')
-                    result.sender_date_confidence = patterns.get('date_confidence') or 0.0
+                # تاريخ الجهة من المُستخرِج المنضبط بمنطقة الرأس **فقط** — السقوطُ
+                # لمُستخرِج التاريخ العام كان باباً خلفياً يلتقط تواريخ إحالات المتن
+                # (معيار الجهات الخمس: كل تواريخ الأقسام العربية «الخاطئة» جاءت منه).
+                # الفراغ الصادق خيرٌ من تاريخٍ خاطئ — مبدأ المالك.
+                result.sender_date = patterns.get('sender_date')
+                result.sender_date_confidence = (patterns.get('sender_date_confidence') or 0.0) \
+                    if result.sender_date else 0.0
                 result.sender_number = patterns.get('sender_number')
                 result.sender_number_confidence = patterns.get('sender_number_confidence') or 0.0
                 result.title = patterns.get('title') or ''
@@ -682,6 +683,15 @@ class AIExtractionService:
                                     result.sender_number, hit.value, hit.template)
                         result.sender_number = hit.value
                         result.sender_number_confidence = hit.confidence
+                # إصلاح بادئة شوّهها OCR (llK-20260257 → NK-20260257) ببادئات
+                # الجهة المؤكَّدة نفسها — معيار الجهات الخمس، كتاب 11237.
+                if result.sender_number:
+                    repaired = self.number_profiles.repair(result.sender_number,
+                                                           result.issuing_entity_id)
+                    if repaired:
+                        logger.info('[profile] إصلاح بادئة: %r → %r',
+                                    result.sender_number, repaired)
+                        result.sender_number = repaired
 
             # Step 6: حساب الثقة الإجمالية
             _progress('confidence')

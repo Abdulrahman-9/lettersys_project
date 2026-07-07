@@ -122,6 +122,19 @@ class ContextPrefixLearningTests(TestCase):
         self.assertIsNotNone(hit)
         self.assertEqual(hit.value, 'MF-2026-195')   # الكود الكامل، لا «195»
 
+    def test_repair_garbled_prefix(self):
+        # كتاب 11237 الحقيقي: طبقة النصّ شوّهت N إلى ll («llK-20260257») —
+        # بصمة الجهة تُصلح البادئة والخانات تُصان حرفياً
+        from core.models import Entity
+        nk = Entity.objects.create(name='NK Petroleum')
+        u = User.objects.create_user('rep', password='p')
+        for i, seq in enumerate(('20260001', '20260002')):
+            make_book(f'r-{i}', u, f'NK-{seq}', nk)
+        profiles = pf.SenderNumberProfiles()
+        self.assertEqual(profiles.repair('llK-20260257', nk.id), 'NK-20260257')
+        self.assertIsNone(profiles.repair('NK-20260257', nk.id))     # سليمة — لا تغيير
+        self.assertIsNone(profiles.repair('QQQX-20260257', nk.id))   # بعيدة — لا تخمين
+
     def test_marker_words_not_learned_as_prefixes(self):
         from core.models import LetterheadMemory
         e = Entity.objects.create(name='جهة عربية')
