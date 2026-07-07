@@ -250,6 +250,17 @@ class ExtractSenderNumberTests(SimpleTestCase):
     def test_no_number(self):
         self.assertEqual(self.m.extract_sender_number('نصّ بلا رقم مرجعي'), (None, 0.0))
 
+    def test_adad_slash_form(self):
+        # توجيه المالك المُتحقَّق (53% من الكتب فيها «العدد» رأسياً): «العدد / 1754»
+        # (الرقم الثلاثي «585» مؤجَّل خلف بوّابة بصمة الجهة — خفضُ الأرضية قِيس
+        # فرفع الكاذبة 9→23 بخربشات خط اليد)
+        self.assertEqual(self.m.extract_sender_number('جمهورية العراق\nالعدد /1754\nالتاريخ:')[0], '1754')
+        self.assertIsNone(self.m.extract_sender_number('جمهورية العراق\nالعدد /585\nالتاريخ:')[0])
+
+    def test_adad_with_invisible_mark(self):
+        # ثاني أشيع «فاصل» بعد العدد في 331 كتاباً: علامة LRM الخفية (48 كتاباً)
+        self.assertEqual(self.m.extract_sender_number('وزارة النفط\nالعدد‎ 1754\nإلى')[0], '1754')
+
     def test_arabic_digits_slash_letter(self):
         # صيغة عربية شائعة: رقم ثم حرف سجلّ (و=وارد، ص=صادر) — «241/و»
         self.assertEqual(self.m.extract_sender_number('العدد: 241/و')[0], '241/و')
