@@ -223,7 +223,7 @@ def greedy_decode(logits):
 # دروس v1 (أُلغيت عند سقف 12 ساعة): التوليد كان يخنق الـGPU (56د/1000 خطوة)،
 # والنموذج بلغ 96.1% عند 12k أصلاً — لذا v2: توليد أخفّ + عمّال أكثر + خطوات
 # أقل تكفي + **تصدير ONNX عند كل تقييم** فلا يضيع النموذج مهما حدث.
-BATCH, STEPS, VAL_N = 64, 9000, 4000
+BATCH, STEPS, VAL_N = 64, 7000, 4000   # قياس v3: ~52د/1000 خطوة ⇒ ~6 ساعات (هامش مريح تحت 12)
 train_dl = torch.utils.data.DataLoader(SynthDS(POOLS_TRAIN, BATCH * STEPS),
                                        batch_size=BATCH, num_workers=4, collate_fn=collate,
                                        persistent_workers=True, prefetch_factor=6)
@@ -270,13 +270,25 @@ with open(f'{OUT}/charset.json', 'w', encoding='utf-8') as f:
               f, ensure_ascii=False, indent=1)
 
 def export_onnx():
-    """تصدير قابل للاستدعاء دورياً — درس v1: الإلغاء عند سقف الجلسة أضاع نموذج 96%."""
+    """تصدير قابل للاستدعاء دورياً — درس v1: الإلغاء عند سقف الجلسة أضاع نموذج 96%.
+    درس v3: torch الحديث يطلب onnxscript لمسار dynamo (غير مثبَّتة والإنترنت مغلق)
+    → المُصدّر التقليدي، وأي فشل تصديرٍ لا يقتل التدريب؛ الأوزان تُحفَظ دائماً."""
     model.eval().cpu()
-    dummy = torch.randn(1, 1, STRIP_H, 256)
-    torch.onnx.export(model, dummy, onnx_path, opset_version=17,
-                      input_names=['image'], output_names=['logits'],
-                      dynamic_axes={'image': {0: 'batch', 3: 'width'},
-                                    'logits': {0: 'batch', 1: 'steps'}})
+    torch.save(model.state_dict(), f'{OUT}/crnn_weights.pt')   # احتياطي غير قابل للكسر
+    try:
+        dummy = torch.randn(1, 1, STRIP_H, 256)
+        try:
+            torch.onnx.export(model, dummy, onnx_path, opset_version=17, dynamo=False,
+                              input_names=['image'], output_names=['logits'],
+                              dynamic_axes={'image': {0: 'batch', 3: 'width'},
+                                            'logits': {0: 'batch', 1: 'steps'}})
+        except TypeError:   # إصدار torch أقدم بلا وسيط dynamo
+            torch.onnx.export(model, dummy, onnx_path, opset_version=17,
+                              input_names=['image'], output_names=['logits'],
+                              dynamic_axes={'image': {0: 'batch', 3: 'width'},
+                                            'logits': {0: 'batch', 1: 'steps'}})
+    except Exception as exc:
+        print(f'تحذير: تصدير ONNX فشل ({type(exc).__name__}: {exc}) — الأوزان .pt محفوظة')
     model.to(DEVICE).train()
 
 model.train()
@@ -305,17 +317,21 @@ acc, by_len = evaluate()
 print(f'\nالنتيجة النهائية (كتّاب لم يرَهم النموذج): تطابق تام={acc:.3f} | حسب الطول={by_len}')
 if acc >= best:
     export_onnx()
-import onnxruntime as ort
-model.eval().cpu()                # فحص التكافؤ على CPU (التصدير الدوري أعاده لـGPU)
-sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
-ok = 0
-with torch.no_grad():
-    for a, _, txt in val_set[:32]:
-        x = np.zeros((1, 1, STRIP_H, a.shape[1]), np.float32); x[0, 0] = a
-        t_out = greedy_decode(model(torch.from_numpy(x)))[0]
-        o_out = greedy_decode(torch.from_numpy(sess.run(None, {'image': x})[0]))[0]
-        ok += int(t_out == o_out)
-print(f'تكافؤ ONNX/PyTorch: {ok}/32')
+ok = -1
+try:
+    import onnxruntime as ort
+    model.eval().cpu()            # فحص التكافؤ على CPU (التصدير الدوري أعاده لـGPU)
+    sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
+    ok = 0
+    with torch.no_grad():
+        for a, _, txt in val_set[:32]:
+            x = np.zeros((1, 1, STRIP_H, a.shape[1]), np.float32); x[0, 0] = a
+            t_out = greedy_decode(model(torch.from_numpy(x)))[0]
+            o_out = greedy_decode(torch.from_numpy(sess.run(None, {'image': x})[0]))[0]
+            ok += int(t_out == o_out)
+    print(f'تكافؤ ONNX/PyTorch: {ok}/32')
+except Exception as exc:
+    print(f'تحذير: فحص التكافؤ تعذّر ({type(exc).__name__}) — النموذج والمقاييس محفوظة')
 
 with open(f'{OUT}/metrics.json', 'w', encoding='utf-8') as f:
     json.dump({'exact_match': acc, 'by_length': by_len, 'onnx_parity': f'{ok}/32',
