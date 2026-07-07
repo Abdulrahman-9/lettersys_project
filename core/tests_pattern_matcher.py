@@ -254,6 +254,21 @@ class ExtractSenderNumberTests(SimpleTestCase):
         filler = '\n'.join(f'سطر حشو {i}' for i in range(16))
         self.assertIsNone(self.m.extract_sender_number(filler + '\nالعدد: 1234')[0])
 
+    def test_dotted_ref_no_and_two_segment_code(self):
+        # حالة EBS الحيّة: «Ref. No.» بنقطة + كود بمقطعين حرفيين وأرقام ملتصقة
+        n, _c = self.m.extract_sender_number('EBSPetroleum\nRef. No. EBS-MdOC20260594\nDate: July 3')
+        self.assertEqual(n, 'EBS-MdOC20260594')
+
+    def test_two_segment_code_with_spaces(self):
+        # حالة QPC الحيّة: مسافة بعد الشرطة الأولى
+        n, _c = self.m.extract_sender_number('Ref. No. QPC- MdOC-20260083\nSubject: x')
+        self.assertEqual(n, 'QPC-MdOC-20260083')
+
+    def test_reference_to_prose_still_ignored(self):
+        # «reference to …» النثرية لا تُلتقط (لا كود بعدها)
+        self.assertIsNone(self.m.extract_sender_number(
+            'With reference to single source tender discussions held earlier')[0])
+
 
 class ExtractSecretLevelTests(SimpleTestCase):
     def setUp(self):
