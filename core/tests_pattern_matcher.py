@@ -193,6 +193,15 @@ class TitleWrapJoinTests(SimpleTestCase):
         t = self.m.extract_title_keywords('NK Petroleum\nSubject: Gas Pipeline Coordination\nDear Sir')
         self.assertIn('Pipeline', t)
 
+    def test_full_width_body_line_not_joined(self):
+        # بلاغ مالك حيّ: بعد م/ سليمة، سطرُ متنٍ كامل العرض («حرصاً على…») ضُمّ خطأً —
+        # بوّابة الطول (>45) تصدّه حتى لو غابت افتتاحيته من القائمة
+        text = ('م/ معوقات عمل قسم الرقابة والتدقيق الداخلي\n'
+                'سعياً الى تحقيق افضل النتائج في تقويم الاداء وتطوير اجراءات العمل النافذة')
+        t = self.m.extract_title_keywords(text)
+        self.assertIn('معوقات', t)
+        self.assertNotIn('تقويم', t)
+
 
 class ExtractSenderNumberTests(SimpleTestCase):
     """رقم صادر الجهة المطبوع (إيميلات/مكتوب): كودٌ مركّب بعد العدد/ref، لا الفاكس."""

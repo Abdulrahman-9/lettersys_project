@@ -307,16 +307,22 @@ class PatternMatcher:
                          'وبعد', 'السلام', 'إشارة', 'اشارة', 'بالإشارة', 'بالاشارة', 'استناداً',
                          'استنادا', 'إلحاقاً', 'الحاقا', 'عطفاً', 'عطفا', 'بناءً', 'بناء',
                          'نحيطكم', 'نعلمكم', 'نعرض', 'تفضلوا', 'أرجو', 'لديكم', 'طلبكم',
+                         'حرصاً', 'حرصا', 'انطلاقاً', 'انطلاقا', 'تنفيذاً', 'تنفيذا',
                          # افتتاحيات المتن الإنجليزية (إيميلات) — تُقارَن على المُصغَّر
                          'dear', 'greetings', 'attention', 'attn', 'we ', 'please', 'kindly',
                          'with reference', 'reference is', 'this letter', 'warm')
 
         def _join_wrapped(captured: str, idx: int) -> str:
-            wraps = (len(captured) >= 20 or len(captured) >= 78
-                     or captured.split()[-1] in _connectors)
-            if not wraps or idx + 1 >= len(lines):
+            # دليل التفاف قويّ: ينتهي بكلمة ربط («… من شركة») أو بلغ سقف الالتقاط —
+            # يضمّ ولو طالت التتمّة. دليل ضعيف (مجرّد الطول ≥20): يضمّ تتمّةً قصيرة
+            # فقط («عمران التركية») — سطرُ متنٍ كامل العرض («حرصاً على تعزيز…»)
+            # بدايةُ نصٍّ لا تتمّة (بلاغ مالك مقيس: 196→193 لولا استثناء القويّ).
+            strong = len(captured) >= 78 or captured.split()[-1] in _connectors
+            if not (strong or len(captured) >= 20) or idx + 1 >= len(lines):
                 return captured
             nxt = lines[idx + 1]
+            if not strong and len(nxt) > 45:
+                return captured
             low = nxt.lower()
             if (sum(1 for c in nxt if '؀' <= c <= 'ۿ') < 4
                     and sum(1 for c in low if 'a' <= c <= 'z') < 4):
