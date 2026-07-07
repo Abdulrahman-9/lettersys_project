@@ -86,11 +86,11 @@ def _digit_img(X, idx_map, d):
     img = Image.fromarray(arr)                      # حبرٌ أبيض على أسود (نمط MNIST)
     s = random.randint(34, 54)                      # تفاوت أحجام الخط اليدوي
     img = img.resize((s, s), Image.BILINEAR)
-    if random.random() < 0.5:                       # ميل الكتابة (قصّ أفيني)
+    if random.random() < 0.4:                       # ميل الكتابة (قصّ أفيني)
         shear = random.uniform(-0.25, 0.25)
         img = img.transform(img.size, Image.AFFINE, (1, shear, 0, 0, 1, 0),
                             resample=Image.BILINEAR)
-    if random.random() < 0.3:                       # سماكة/نحافة الحبر
+    if random.random() < 0.12:                      # سماكة/نحافة الحبر (مُخفَّف — كان عنق سرعة v1)
         f = ImageFilter.MaxFilter(3) if random.random() < 0.5 else ImageFilter.MinFilter(3)
         img = img.filter(f)
     return img
@@ -125,8 +125,8 @@ def synth_strip(X, idx_map):
     arr *= random.uniform(0.55, 1.0)                # تلاشي الحبر (كربون/قلم باهت)
     arr += np.random.normal(0, random.uniform(2, 12), arr.shape)   # ضجيج الماسح
     strip = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
-    if random.random() < 0.4:
-        strip = strip.filter(ImageFilter.GaussianBlur(random.uniform(0.3, 1.1)))
+    if random.random() < 0.2:                       # مُخفَّف (كان عنق سرعة v1)
+        strip = strip.filter(ImageFilter.GaussianBlur(random.uniform(0.3, 1.0)))
     return strip, ''.join(str(d) for d in digits)
 
 # عقد المعالجة للتطبيق (يُنسَخ حرفياً للاستدلال في مرحلة 3):
@@ -195,9 +195,13 @@ def greedy_decode(logits):
     return out
 
 # ═══ 5) التدريب ═══
-BATCH, STEPS, VAL_N = 64, 22000, 4000
+# دروس v1 (أُلغيت عند سقف 12 ساعة): التوليد كان يخنق الـGPU (56د/1000 خطوة)،
+# والنموذج بلغ 96.1% عند 12k أصلاً — لذا v2: توليد أخفّ + عمّال أكثر + خطوات
+# أقل تكفي + **تصدير ONNX عند كل تقييم** فلا يضيع النموذج مهما حدث.
+BATCH, STEPS, VAL_N = 64, 9000, 4000
 train_dl = torch.utils.data.DataLoader(SynthDS(TRAIN_X, TRAIN_IDX, BATCH * STEPS),
-                                       batch_size=BATCH, num_workers=2, collate_fn=collate)
+                                       batch_size=BATCH, num_workers=4, collate_fn=collate,
+                                       persistent_workers=True, prefetch_factor=6)
 val_set = [SynthDS(TEST_X, TEST_IDX, 1)[0] for _ in range(VAL_N)]   # كتّاب Test فقط
 
 model = CRNN().to(DEVICE)
@@ -215,7 +219,7 @@ print('حُفظت sanity_samples.png — تحقّق أن الأرقام تبدو
 
 def evaluate():
     model.eval()
-    exact = per_len = 0
+    exact = 0
     by_len = {}
     with torch.no_grad():
         for i in range(0, VAL_N, 128):
@@ -230,7 +234,28 @@ def evaluate():
     model.train()
     return exact / VAL_N, {k: round(v[0] / v[1], 3) for k, v in sorted(by_len.items())}
 
+
+onnx_path = f'{OUT}/handwritten_digits_crnn.onnx'
+
+# عقد المفردات يُكتب مبكراً — يبقى موجوداً حتى لو أُلغيت الجلسة (درس v1)
+with open(f'{OUT}/charset.json', 'w', encoding='utf-8') as f:
+    json.dump({'charset': CHARSET, 'blank': BLANK, 'strip_h': STRIP_H,
+               'arabic_indic': '٠١٢٣٤٥٦٧٨٩',
+               'preprocess': 'invert(255-x) → resize h=64 → standardize (انظر preprocess_strip)'},
+              f, ensure_ascii=False, indent=1)
+
+def export_onnx():
+    """تصدير قابل للاستدعاء دورياً — درس v1: الإلغاء عند سقف الجلسة أضاع نموذج 96%."""
+    model.eval().cpu()
+    dummy = torch.randn(1, 1, STRIP_H, 256)
+    torch.onnx.export(model, dummy, onnx_path, opset_version=17,
+                      input_names=['image'], output_names=['logits'],
+                      dynamic_axes={'image': {0: 'batch', 3: 'width'},
+                                    'logits': {0: 'batch', 1: 'steps'}})
+    model.to(DEVICE).train()
+
 model.train()
+best = 0.0
 for step, (imgs, targets, tlens, ws, _) in enumerate(train_dl, 1):
     logits = model(imgs.to(DEVICE))
     logp = F.log_softmax(logits, dim=-1).permute(1, 0, 2)
@@ -242,35 +267,31 @@ for step, (imgs, targets, tlens, ws, _) in enumerate(train_dl, 1):
     if step % 1000 == 0:
         acc, by_len = evaluate()
         print(f'step {step:>6} loss={loss.item():.3f} exact={acc:.3f} حسب الطول={by_len}')
+        if acc > best:                      # نُصدّر الأفضل حتى الآن — لا خسارة بعد اليوم
+            best = acc
+            export_onnx()
+            with open(f'{OUT}/metrics.json', 'w', encoding='utf-8') as f:
+                json.dump({'exact_match': acc, 'by_length': by_len, 'step': step,
+                           'val_writers': 'MADBase test split (unseen writers)'}, f, indent=1)
     if step >= STEPS:
         break
 
 acc, by_len = evaluate()
 print(f'\nالنتيجة النهائية (كتّاب لم يرَهم النموذج): تطابق تام={acc:.3f} | حسب الطول={by_len}')
-
-# ═══ 6) تصدير ONNX + تحقّق تكافؤ ═══
-model.eval().cpu()
-dummy = torch.randn(1, 1, STRIP_H, 256)
-onnx_path = f'{OUT}/handwritten_digits_crnn.onnx'
-torch.onnx.export(model, dummy, onnx_path, opset_version=17,
-                  input_names=['image'], output_names=['logits'],
-                  dynamic_axes={'image': {0: 'batch', 3: 'width'},
-                                'logits': {0: 'batch', 1: 'steps'}})
+if acc >= best:
+    export_onnx()
 import onnxruntime as ort
+model.eval().cpu()                # فحص التكافؤ على CPU (التصدير الدوري أعاده لـGPU)
 sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
 ok = 0
-for a, _, txt in val_set[:32]:
-    x = np.zeros((1, 1, STRIP_H, a.shape[1]), np.float32); x[0, 0] = a
-    t_out = greedy_decode(model(torch.from_numpy(x)))[0]
-    o_out = greedy_decode(torch.from_numpy(sess.run(None, {'image': x})[0]))[0]
-    ok += int(t_out == o_out)
+with torch.no_grad():
+    for a, _, txt in val_set[:32]:
+        x = np.zeros((1, 1, STRIP_H, a.shape[1]), np.float32); x[0, 0] = a
+        t_out = greedy_decode(model(torch.from_numpy(x)))[0]
+        o_out = greedy_decode(torch.from_numpy(sess.run(None, {'image': x})[0]))[0]
+        ok += int(t_out == o_out)
 print(f'تكافؤ ONNX/PyTorch: {ok}/32')
 
-with open(f'{OUT}/charset.json', 'w', encoding='utf-8') as f:
-    json.dump({'charset': CHARSET, 'blank': BLANK, 'strip_h': STRIP_H,
-               'arabic_indic': '٠١٢٣٤٥٦٧٨٩',
-               'preprocess': 'invert(255-x) → resize h=64 → standardize (انظر preprocess_strip)'},
-              f, ensure_ascii=False, indent=1)
 with open(f'{OUT}/metrics.json', 'w', encoding='utf-8') as f:
     json.dump({'exact_match': acc, 'by_length': by_len, 'onnx_parity': f'{ok}/32',
                'val_writers': 'MADBase test split (unseen writers)'}, f, indent=1)
