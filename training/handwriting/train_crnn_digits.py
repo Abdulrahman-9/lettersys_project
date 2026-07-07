@@ -63,7 +63,18 @@ TRAIN_X, TRAIN_Y = _load_csv_pair('/kaggle/input/**/*TrainImages*.csv',
                                   '/kaggle/input/**/*TrainLabel*.csv')
 TEST_X, TEST_Y = _load_csv_pair('/kaggle/input/**/*TestImages*.csv',
                                 '/kaggle/input/**/*TestLabel*.csv')
-print(f'MADBase: train={len(TRAIN_X)} test={len(TEST_X)} (فصل كُتّاب جاهز من الداتاسِت)')
+print(f'MADBase (عربي-هندي): train={len(TRAIN_X)} test={len(TEST_X)}')
+
+# v3: كتب المالك فيها أرقام لاتينية بخط اليد أيضاً (شؤون التراخيص) — نمزج MNIST.
+# صيغة mnist-in-csv: صفّ = label,784 بكسل، مع سطر عناوين.
+def _load_mnist_csv(pattern):
+    path = sorted(glob.glob(pattern, recursive=True))[0]
+    data = np.loadtxt(path, delimiter=',', skiprows=1, dtype=np.uint8)
+    return data[:, 1:].reshape(-1, 28, 28), data[:, 0].astype(np.int64)
+
+EN_TRAIN_X, EN_TRAIN_Y = _load_mnist_csv('/kaggle/input/**/mnist_train.csv')
+EN_TEST_X, EN_TEST_Y = _load_mnist_csv('/kaggle/input/**/mnist_test.csv')
+print(f'MNIST (لاتيني): train={len(EN_TRAIN_X)} test={len(EN_TEST_X)}')
 
 # فهرس صور كل رقم (للتركيب السريع)
 def _index_by_digit(X, y):
@@ -71,6 +82,12 @@ def _index_by_digit(X, y):
 
 TRAIN_IDX = _index_by_digit(TRAIN_X, TRAIN_Y)
 TEST_IDX = _index_by_digit(TEST_X, TEST_Y)
+EN_TRAIN_IDX = _index_by_digit(EN_TRAIN_X, EN_TRAIN_Y)
+EN_TEST_IDX = _index_by_digit(EN_TEST_X, EN_TEST_Y)
+
+# مجمّعات النمطين: (تدريب، اختبار) — الاختبار من كتّابٍ لم يرَهم النموذج
+POOLS_TRAIN = {'ar': (TRAIN_X, TRAIN_IDX), 'en': (EN_TRAIN_X, EN_TRAIN_IDX)}
+POOLS_TEST = {'ar': (TEST_X, TEST_IDX), 'en': (EN_TEST_X, EN_TEST_IDX)}
 
 # ═══ 2) مُركِّب السلاسل الاصطناعي — يحاكي أشرطة مسوحاتنا ═══
 def _rand_len():
@@ -95,13 +112,21 @@ def _digit_img(X, idx_map, d):
         img = img.filter(f)
     return img
 
-def synth_strip(X, idx_map):
-    """يُعيد (صورة شريط H=64 بعرض متغيّر، نصّ السلسلة). حبرٌ أبيض على أسود داخلياً."""
+def synth_strip(pools):
+    """يُعيد (صورة شريط H=64 بعرض متغيّر، نصّ السلسلة). حبرٌ أبيض على أسود داخلياً.
+
+    v3 — نمطان للأرقام: عربي-هندي (MADBase) ولاتيني (MNIST). السلاسل أحاديةُ
+    النمط غالباً (كما في الواقع: الكاتب يلتزم نمطاً) — وهذا يحلّ التباس ٥/0
+    (كلاهما دائرة): سياق الجيران عبر BiLSTM يحسم النمط. 10% مختلطة للمتانة.
+    الفئات موحَّدة (٤ و4 كلاهما = 4) — المخرَج قيمةٌ لا رسم."""
     L = _rand_len()
     digits = [random.randint(1, 9)] + [random.randint(0, 9) for _ in range(L - 1)]
+    r = random.random()
+    script = 'ar' if r < 0.50 else ('en' if r < 0.90 else 'mix')
     canvas = Image.new('L', (MAX_W, STRIP_H), 0)
     x = random.randint(4, 30)
     for d in digits:
+        X, idx_map = pools[script] if script != 'mix' else pools[random.choice(('ar', 'en'))]
         g = _digit_img(X, idx_map, d)
         y = random.randint(0, max(0, STRIP_H - g.size[1]))
         canvas.paste(g, (x, y), g.point(lambda p: 255 if p > 30 else 0))
@@ -145,12 +170,12 @@ def _norm(strip):
 
 # ═══ 3) داتاسِت توليدي + تجميع دفعات بحشو عرض ═══
 class SynthDS(torch.utils.data.Dataset):
-    def __init__(self, X, idx_map, n):
-        self.X, self.idx, self.n = X, idx_map, n
+    def __init__(self, pools, n):
+        self.pools, self.n = pools, n
     def __len__(self):
         return self.n
     def __getitem__(self, _):
-        s, txt = synth_strip(self.X, self.idx)
+        s, txt = synth_strip(self.pools)
         return _norm(s), [CHARSET.index(c) + 1 for c in txt], txt
 
 def collate(batch):
@@ -199,10 +224,10 @@ def greedy_decode(logits):
 # والنموذج بلغ 96.1% عند 12k أصلاً — لذا v2: توليد أخفّ + عمّال أكثر + خطوات
 # أقل تكفي + **تصدير ONNX عند كل تقييم** فلا يضيع النموذج مهما حدث.
 BATCH, STEPS, VAL_N = 64, 9000, 4000
-train_dl = torch.utils.data.DataLoader(SynthDS(TRAIN_X, TRAIN_IDX, BATCH * STEPS),
+train_dl = torch.utils.data.DataLoader(SynthDS(POOLS_TRAIN, BATCH * STEPS),
                                        batch_size=BATCH, num_workers=4, collate_fn=collate,
                                        persistent_workers=True, prefetch_factor=6)
-val_set = [SynthDS(TEST_X, TEST_IDX, 1)[0] for _ in range(VAL_N)]   # كتّاب Test فقط
+val_set = [SynthDS(POOLS_TEST, 1)[0] for _ in range(VAL_N)]   # كتّاب Test فقط (النمطان)
 
 model = CRNN().to(DEVICE)
 opt = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
@@ -210,9 +235,9 @@ sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=1e-3, total_steps=STEPS)
 ctc = nn.CTCLoss(blank=BLANK, zero_infinity=True)
 
 # معاينة بشرية: شبكة عيّنات — إن بدت الأرقام معكوسة فبدّل قلاب الاتجاه أعلاه
-grid = Image.new('L', (MAX_W, STRIP_H * 6), 20)
-for i in range(6):
-    s, t = synth_strip(TRAIN_X, TRAIN_IDX)
+grid = Image.new('L', (MAX_W, STRIP_H * 8), 20)
+for i in range(8):
+    s, t = synth_strip(POOLS_TRAIN)
     grid.paste(s, (0, i * STRIP_H))
 grid.save(f'{OUT}/sanity_samples.png')
 print('حُفظت sanity_samples.png — تحقّق أن الأرقام تبدو طبيعية غير معكوسة.')
