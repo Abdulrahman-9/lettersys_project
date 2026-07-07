@@ -266,3 +266,67 @@ class PrepareEntitiesCommandTests(TestCase):
         dup.refresh_from_db()
         self.assertTrue(dup.is_active)
         self.assertIsNone(dup.merged_into_id)
+
+
+class MergePlanTests(TestCase):
+    """خطة الدمج المُخلَّدة — قرارات مُراجَعة بشرياً تُعاد عند كل استعادة."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('plan', password='p')
+        self.plan = [{'canonical': 'هيئة العمليات',
+                      'variants': ['هيأة العمليات', 'هيئة الععمليات']}]
+
+    def test_export_follows_merge_chain_to_active_canonical(self):
+        a = Entity.objects.create(name='الجهة الاولى')
+        b = Entity.objects.create(name='الجهه الاولي')
+        c = Entity.objects.create(name='الجهة الأولى')
+        dd.merge_entities(b.id, [c.id])          # ج → ب
+        dd.merge_entities(a.id, [b.id])          # ب → أ (سلسلة)
+        plan = dd.export_merge_plan()
+        self.assertEqual(len(plan), 1)
+        self.assertEqual(plan[0]['canonical'], 'الجهة الاولى')
+        self.assertEqual(set(plan[0]['variants']), {'الجهه الاولي', 'الجهة الأولى'})
+
+    def test_actions_pick_canonical_name_holder_as_target(self):
+        target = Entity.objects.create(name='هيئة العمليات')
+        victim = Entity.objects.create(name='هيأة العمليات')
+        actions = dd.plan_actions(self.plan)
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0]['target'].id, target.id)
+        self.assertEqual([v.id for v in actions[0]['victims']], [victim.id])
+
+    def test_apply_renames_best_variant_when_canonical_absent(self):
+        v1 = Entity.objects.create(name='هيأة العمليات')
+        v2 = Entity.objects.create(name='هيئة الععمليات')
+        b = make_book('p-1', self.user)
+        b.issuing_entities.add(v2)
+
+        actions = dd.plan_actions(self.plan)
+        self.assertEqual(len(actions), 1)
+        res = dd.apply_plan_action(actions[0])
+
+        self.assertEqual(res['merged'], 1)
+        survivor = Entity.objects.get(name='هيئة العمليات', is_active=True)
+        self.assertIn(survivor.id, {v1.id, v2.id})   # سُمّيت على القانوني
+        self.assertEqual(b.issuing_entities.first().id, survivor.id)
+        # إعادة التشغيل لا تفعل شيئاً — الخطة idempotent
+        self.assertEqual(dd.plan_actions(self.plan), [])
+
+    def test_claim_name_swaps_with_inactive_holder(self):
+        holder = Entity.objects.create(name='هيئة العمليات', is_active=False)
+        e = Entity.objects.create(name='هيأة العمليات')
+        self.assertTrue(dd._claim_name(e, 'هيئة العمليات'))
+        e.refresh_from_db(); holder.refresh_from_db()
+        self.assertEqual(e.name, 'هيئة العمليات')
+        self.assertEqual(holder.name, 'هيأة العمليات')   # مبادلة تحفظ الأثر
+
+    def test_claim_name_refuses_active_holder(self):
+        Entity.objects.create(name='هيئة العمليات')
+        e = Entity.objects.create(name='هيأة العمليات')
+        self.assertFalse(dd._claim_name(e, 'هيئة العمليات'))
+        e.refresh_from_db()
+        self.assertEqual(e.name, 'هيأة العمليات')        # لم يُمسّ
+
+    def test_unmatched_plan_is_silent(self):
+        self.assertEqual(dd.plan_actions(
+            [{'canonical': 'جهة غير موجودة', 'variants': ['ولا هذه']}]), [])

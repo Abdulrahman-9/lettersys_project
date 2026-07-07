@@ -7,6 +7,8 @@ core/entity_dedup.py — كشف ودمج الجهات المكرّرة.
 الدمج: إعادة توجيه روابط الكتب من النسخ إلى الأمّ، نقل بيانات الاتصال
        الناقصة، تعطيل النسخ مع تسجيل merged_into للأثر والتدقيق.
 """
+import json
+import os
 import re
 from collections import defaultdict
 
@@ -164,3 +166,94 @@ def merge_entities(canonical_id, victim_ids):
         canonical.save(update_fields=list(carried.keys()))
     return {'canonical': canonical, 'merged': len(victims),
             'moved_books': moved, 'moved_memory': moved_memory, 'carried': carried}
+
+
+# ============================================================
+# خطة الدمج المُخلَّدة — قرارات دمج مُراجَعة بشرياً تُعاد عند كل استعادة
+# ============================================================
+# الخطة بالأسماء لا المعرّفات، فتصلح لأي استعادة نسخة احتياطية أو قاعدة جديدة
+# تحمل التسميات ذاتها. التطبيق عبر: python manage.py prepare_entities
+# (تقرير = موافقة المستخدم أولاً، ثم --apply للتنفيذ).
+
+PLAN_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         'data', 'entity_merge_plan.json')
+
+
+def export_merge_plan():
+    """يستخرج الخطة من تاريخ الدمج الفعلي (merged_into) — يتبع سلاسل الدمج
+       حتى الأمّ النشطة، ويُسقط أسماء المبادلة المؤقتة."""
+    clusters = defaultdict(set)
+    victims = Entity.objects.filter(is_active=False, merged_into__isnull=False)
+    for v in victims.select_related('merged_into'):
+        canon, hops = v.merged_into, 0
+        while canon and not canon.is_active and canon.merged_into_id and hops < 10:
+            canon, hops = canon.merged_into, hops + 1
+        if canon and canon.is_active and not v.name.startswith('~'):
+            clusters[canon.name].add(v.name)
+    return [{'canonical': name, 'variants': sorted(vs - {name})}
+            for name, vs in sorted(clusters.items()) if vs - {name}]
+
+
+def save_merge_plan(plan, path=PLAN_PATH):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(plan, f, ensure_ascii=False, indent=1)
+
+
+def load_merge_plan(path=PLAN_PATH):
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def plan_actions(plan):
+    """يحلّ الخطة على القاعدة الحالية → إجراءات {'canonical','target','victims'}.
+       الهدف: الجهة النشطة باسم الأمّ إن وُجدت، وإلا أفضل النسخ (وتُعاد تسميتها)."""
+    actions = []
+    for c in plan:
+        names = [c['canonical']] + list(c.get('variants', []))
+        found = list(annotate_book_counts(
+            Entity.objects.filter(is_active=True, name__in=names)))
+        if not found:
+            continue
+        target = next((e for e in found if e.name == c['canonical']), None) \
+            or sorted(found, key=_canonical_sort_key)[0]
+        victims = [e for e in found if e.id != target.id]
+        if not victims and target.name == c['canonical']:
+            continue  # مُطبَّقة سلفاً
+        actions.append({'canonical': c['canonical'], 'target': target,
+                        'victims': victims})
+    return actions
+
+
+def _claim_name(entity, name):
+    """يمنح الجهة الاسم الموحَّد؛ إن حجزته نسخة معطَّلة يبادل الاسمين
+       (قيد الفرادة الشامل) — يرفض فقط إن كان لجهة نشطة أخرى."""
+    holder = Entity.objects.filter(name=name).exclude(id=entity.id).first()
+    if holder and holder.is_active:
+        return False
+    old = entity.name
+    if holder:
+        entity.name = f'~swap-{entity.id}~'
+        entity.save(update_fields=['name'])
+        holder.name = old
+        holder.save(update_fields=['name'])
+    entity.name = name
+    entity.save(update_fields=['name'])
+    return True
+
+
+@transaction.atomic
+def apply_plan_action(action):
+    """ينفّذ إجراء خطة واحداً ذرّياً: دمج النسخ ثم توحيد اسم الأمّ."""
+    target, victims = action['target'], action['victims']
+    if victims:
+        r = merge_entities(target.id, [v.id for v in victims])
+    else:
+        r = {'canonical': target, 'merged': 0, 'moved_books': 0,
+             'moved_memory': 0, 'carried': {}}
+    if target.name != action['canonical']:
+        target.refresh_from_db()
+        r['renamed'] = _claim_name(target, action['canonical'])
+    return r
