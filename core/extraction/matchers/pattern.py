@@ -395,6 +395,18 @@ class PatternMatcher:
             pass
         return (None, 0.0)
 
+    # بعض الجهات (Slb) تضع رقم صادرها داخل سطر الموضوع نفسه: «Ref-135, Akkas…» —
+    # لا في حقل رأسٍ منفصل. 16 كتاباً محفوظاً تُثبت أن المالك ينقل الرقم يدوياً
+    # من العنوان كل مرّة. يقتطعه هذا النمط ويُنظّف العنوان.
+    _TITLE_REF_RE = re.compile(r'^\s*(?:ref|rf)[.\-:\s]{0,3}(\d{2,6})\b[\s,.:؛،\-]*(.{4,})$', re.I)
+
+    def split_ref_from_title(self, title: str) -> Tuple[Optional[str], str]:
+        """إن بدأ العنوان بكود Ref-NNN: يعيد (الرقم، العنوان النظيف)؛ وإلا (None، كما هو)."""
+        m = self._TITLE_REF_RE.match(title or '')
+        if not m:
+            return None, title or ''
+        return m.group(1), m.group(2).strip()
+
     def extract_sender_number(self, text: str) -> Tuple[Optional[str], float]:
         """رقم صادر الجهة المُرسِلة — مطبوعٌ في المستندات المكتوبة/الإيميلات ككودٍ
         مركّب بعد «العدد/ref/rf/ro/id» (مثل KHL/25/32)، **في منطقة الرأس فقط**:

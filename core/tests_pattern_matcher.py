@@ -279,6 +279,32 @@ class ExtractSenderNumberTests(SimpleTestCase):
             'With reference to single source tender discussions held earlier')[0])
 
 
+class SplitRefFromTitleTests(SimpleTestCase):
+    """نمط Slb: رقم الصادر داخل سطر الموضوع («Ref-135, Akkas…») — يُقتطع ويُنظَّف."""
+
+    def setUp(self):
+        self.m = PatternMatcher()
+
+    def test_slb_real_saved_titles(self):
+        # عناوين محفوظة حرفياً من كتب المالك (#11238، #11188)
+        n, t = self.m.split_ref_from_title('Ref-135 Akkas-8 Abandonment and Sidetrack Program, MdOC-F-25069')
+        self.assertEqual(n, '135')
+        self.assertTrue(t.startswith('Akkas-8'))
+        n2, t2 = self.m.split_ref_from_title('ref-129, Akkas tubing requirements , mdoc -F-25069')
+        self.assertEqual(n2, '129')
+        self.assertTrue(t2.startswith('Akkas'))
+
+    def test_plain_title_untouched(self):
+        n, t = self.m.split_ref_from_title('Submission of Weekly Report No 11')
+        self.assertIsNone(n)
+        self.assertEqual(t, 'Submission of Weekly Report No 11')
+
+    def test_reference_prose_not_split(self):
+        # «Reference is made…» نثرٌ لا كود — لا اقتطاع
+        n, _t = self.m.split_ref_from_title('Reference is made to your letter regarding the pipeline')
+        self.assertIsNone(n)
+
+
 class ExtractSecretLevelTests(SimpleTestCase):
     def setUp(self):
         self.m = PatternMatcher()

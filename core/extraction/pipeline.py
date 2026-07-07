@@ -598,6 +598,15 @@ class AIExtractionService:
                 result.sender_number = patterns.get('sender_number')
                 result.sender_number_confidence = patterns.get('sender_number_confidence') or 0.0
                 result.title = patterns.get('title') or ''
+                # جهاتٌ (Slb) تضع رقم صادرها داخل سطر الموضوع («Ref-135, Akkas…») —
+                # نقتطعه رقماً وننظّف العنوان (16 كتاباً محفوظاً تُثبت النمط).
+                if result.title:
+                    ref_num, clean_title = self.pattern_matcher.split_ref_from_title(result.title)
+                    if ref_num:
+                        result.title = clean_title
+                        if not result.sender_number:
+                            result.sender_number = ref_num
+                            result.sender_number_confidence = 0.65
                 result.secret_level = patterns.get('secret_level') or ''
                 result.secret_level_confidence = patterns.get('secret_level_confidence') or 0.0
                 result.book_kind = patterns.get('book_kind') or ''
