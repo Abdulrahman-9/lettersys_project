@@ -82,6 +82,16 @@ def _header_zone(text: str, max_lines: int = _HEADER_MAX_LINES) -> str:
 # «Date: lul 22026» = «Jul 2, 2026» بحرف J→l وفاصلة ساقطة — نمطٌ مرصود في
 # طبقات الإيميلات الممرَّرة عبر ماسحات المكاتب. النافذة الضيّقة تمنع العبث بالنصّ.
 _DATE_MARKER_RE = re.compile(r'(?:الت[أا]ريخ|\bdated\b|\bdate\b)\s*[:/=.\-]?\s*', re.I)
+
+# سطرُ تاريخٍ عارٍ (بلا علامة): قوالب الرسائل الغربية (Slb) تفتتح بالتاريخ وحده
+# سطراً («July 6 , 2026»). القبول لصيَغ اسم الشهر فقط وبشرط أن يكون السطرُ كلُّه
+# تاريخاً — الصيغ الرقمية المنعزلة مُستبعَدة عمداً: شظايا أختامٍ عربية بدت أسطراً
+# (قِيس: قبولها رفع الكاذبة 2→5). خطأ التاريخ أسوأ من فراغه.
+_BARE_DATE_LINE_RE = re.compile(
+    r'^\s*('
+    r'[A-Za-z]{3,9}\.?\s+\d{1,2}\s*,?\s*\d{4}'
+    r'|\d{1,2}\s+[A-Za-z]{3,9}\.?,?\s*\d{4}'
+    r')\s*$', re.I)
 _MONTH_GARBLE_RE = re.compile(r'\b[lI1](an|un|ul)\b', re.I)      # lul→Jul، Ian→Jan، 1un→Jun
 _FUSED_DAY_YEAR_RE = re.compile(r'\b(\d{1,2})(20\d{2})\b')       # 22026 → 2 2026
 
@@ -375,6 +385,21 @@ class PatternMatcher:
             fixed = _degarble_date_zone(zone)
             if fixed != zone:
                 result = self._sender_date_once(fixed)
+        if result[0] is None:
+            # سطر تاريخ عارٍ في الرأس (قالب Slb الغربي) — انظر _BARE_DATE_LINE_RE
+            for ln in zone.split('\n'):
+                m = _BARE_DATE_LINE_RE.match(ln)
+                if not m:
+                    continue
+                cand = m.group(1).translate(_AR_DIGITS)
+                date_obj, _c = self.extract_date(cand)
+                if not (date_obj and _is_plausible_date(date_obj)):
+                    try:
+                        date_obj = date_parser.parse(cand, dayfirst=True)
+                    except (ValueError, TypeError, OverflowError):
+                        continue
+                if date_obj and _is_plausible_date(date_obj):
+                    return (date_obj, 0.70)
         return result
 
     def _sender_date_once(self, text: str) -> Tuple[Optional[datetime], float]:

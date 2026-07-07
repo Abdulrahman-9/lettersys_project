@@ -130,6 +130,17 @@ class ExtractSenderDateTests(SimpleTestCase):
         filler = '\n'.join(f'سطر حشو {i}' for i in range(16))
         self.assertIsNone(self.m.extract_sender_date(filler + '\nالتاريخ: 2026/6/9')[0])
 
+    def test_bare_date_line_in_header(self):
+        # قالب Slb الغربي: التاريخ سطرٌ عارٍ أول الرسالة بلا «Date:» (حالة حيّة)
+        d, _c = self.m.extract_sender_date('July 6 , 2026\nLetter Reference 135\nTo: MdOC')
+        self.assertIsNotNone(d)
+        self.assertEqual((d.year, d.month, d.day), (2026, 7, 6))
+
+    def test_bare_date_only_when_whole_line(self):
+        # تاريخٌ داخل جملة (إحالة) ليس سطرَ تاريخٍ عارياً — لا يُلتقط
+        self.assertIsNone(self.m.extract_sender_date(
+            'نشير الى كتابكم المؤرخ 2026/5/3 بخصوص التعيينات')[0])
+
 
 class TitleWrapJoinTests(SimpleTestCase):
     """ضمّ تتمّة الموضوع الملتفّ — حالة #11222 + الموانع (توصية استشارية)."""
