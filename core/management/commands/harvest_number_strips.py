@@ -63,6 +63,15 @@ class Command(BaseCommand):
         if new_csv:
             writer.writerow(['file', 'label', 'book_id', 'entity_id', 'source'])
 
+        # سجلّ المُعالَج: يمنع إعادة رسم المستندات المرفوضة عند كل استئناف
+        # (الشرائط المحفوظة تُتخطّى بوجود ملفها؛ هذا يغطي الباقي).
+        done_path = os.path.join(HARVEST_DIR, 'processed.txt')
+        done = set()
+        if os.path.exists(done_path):
+            with open(done_path, encoding='utf-8') as f:
+                done = {ln.strip() for ln in f if ln.strip()}
+        done_f = open(done_path, 'a', encoding='utf-8')
+
         lo, hi = opts['offset'], opts['offset'] + opts['limit']
         qs = (Book.objects.filter(is_deleted=False, attachments__isnull=False,
                                   issuing_entities__isnull=False)
@@ -75,7 +84,7 @@ class Command(BaseCommand):
             if not label_txt:
                 continue
             out_png = os.path.join(strips_dir, f'{b.id}.png')
-            if os.path.exists(out_png):
+            if os.path.exists(out_png) or str(b.id) in done:
                 skipped += 1
                 continue
             att = b.attachments.filter(is_deleted=False).order_by('-uploaded_at').first()
@@ -114,14 +123,17 @@ class Command(BaseCommand):
             except Exception as exc:
                 self.stdout.write(f'  تخطّي #{b.id}: {type(exc).__name__}: {str(exc)[:60]}')
             finally:
+                done_f.write(f'{b.id}\n')
                 gc.collect()
             if seen % 10 == 0:
                 priors.save()
                 csv_f.flush()
+                done_f.flush()
                 self.stdout.write(f'  {seen} مستنداً — حُصد {saved}')
 
         priors.save()
         csv_f.close()
+        done_f.close()
         self.stdout.write(self.style.SUCCESS(
             f'\nحُصد {saved} شريطاً من {seen} مستنداً (تخطّى {skipped} موجوداً سلفاً) '
             f'— {csv_path} | بصمات {len(priors)} جهة'))
