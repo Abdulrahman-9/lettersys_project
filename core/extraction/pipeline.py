@@ -335,28 +335,14 @@ class AIExtractionService:
 
             logger.info(f"Cache hit for image hash {image_hash}")
 
-            # Reconstruct result from cached data
+            # الكاش ناقل نصّ فقط — الحقول المستنبَطة (أنماط/جهات) يعيد الأنبوب
+            # حسابها حيّةً عند كل إصابة، فلا تتجمّد على منطقِ يومِ التخزين.
             result = AIExtractionResult()
             result.cached = True
             cached_data = cache.cached_extraction
-
-            # Populate from cache
             result.raw_text = cached_data.get('raw_text', '')
             result.cleaned_text = cached_data.get('cleaned_text', '')
             result.ocr_confidence = cached_data.get('ocr_confidence', 0.0)
-            result.book_number = cached_data.get('book_number', '')
-            result.book_number_confidence = cached_data.get('book_number_confidence', 0.0)
-            result.book_date = cached_data.get('book_date')
-            result.book_date_confidence = cached_data.get('book_date_confidence', 0.0)
-            result.title = cached_data.get('title', '')
-            result.title_confidence = cached_data.get('title_confidence', 0.0)
-            result.secret_level = cached_data.get('secret_level', '')
-            result.secret_level_confidence = cached_data.get('secret_level_confidence', 0.0)
-            result.book_kind = cached_data.get('book_kind', '')
-            result.book_kind_confidence = cached_data.get('book_kind_confidence', 0.0)
-            result.overall_confidence = cached_data.get('overall_confidence', 0.0)
-            result.status = 'completed'
-
             return result
 
         except ExtractionCache.DoesNotExist:
@@ -380,21 +366,11 @@ class AIExtractionService:
             return False
 
         try:
+            # نصّ الـ OCR وثقته فقط — انظر check_cache: المستنبَطات لا تُخزَّن.
             cache_data = {
                 'raw_text': result.raw_text,
                 'cleaned_text': result.cleaned_text,
                 'ocr_confidence': result.ocr_confidence,
-                'book_number': result.book_number,
-                'book_number_confidence': result.book_number_confidence,
-                'book_date': result.book_date,
-                'book_date_confidence': result.book_date_confidence,
-                'title': result.title,
-                'title_confidence': result.title_confidence,
-                'secret_level': result.secret_level,
-                'secret_level_confidence': result.secret_level_confidence,
-                'book_kind': result.book_kind,
-                'book_kind_confidence': result.book_kind_confidence,
-                'overall_confidence': result.overall_confidence,
             }
 
             ExtractionCache.objects.update_or_create(
@@ -469,20 +445,27 @@ class AIExtractionService:
         enhanced_image_path: Optional[str] = None
 
         try:
-            # Step 1: فحص الكاش
+            # Step 1: فحص الكاش — يختصر الغالي فقط (OCR/طبقة النص) ولا يُرجِع
+            # نتيجة نهائية: الأنماط والجهات تُعادان حيّتين دائماً، لأن ذاكرة
+            # الترويسة تتعلّم والجهات تُدمَج والمُستخرِجات تتحسّن — تجميدها في
+            # الكاش كان يُعيد اقتراحات بائتة بل يُسقط الجهات ورقم/تاريخ الجهة
+            # كلياً (الكاش لا يخزّنها؛ بلاغ المالك: «المرة الثانية لم يستخرج الجهة»).
             _progress('cache_check')
             result.image_hash = self.compute_image_hash(image_path)
             cached_result = self.check_cache(result.image_hash)
             if cached_result:
-                cached_result.processing_time = time.time() - start_time
-                cached_result.progress_stage = 'cached'
-                return cached_result
+                result.cached = True
+                result.raw_text = cached_result.raw_text
+                result.cleaned_text = cached_result.cleaned_text
+                result.ocr_confidence = cached_result.ocr_confidence
+                result.detected_language = 'ar'
+                result.ocr_engine = 'cache'
 
             # Step 2/3: طبقة النصّ المضمّنة أولاً — للمستندات الرقمية (إيميلات مطبوعة،
             # PDF مُصدَّر أو مُمسوح-ومُعالَج) نصٌّ جاهز أدقّ وأسرع وأخفّ ذاكرة من إعادة
             # الرسم + Tesseract، ويعالج كل الصفحات تلقائياً. نسقط إلى تحسين الصورة + OCR
             # فقط للصور الممسوحة بلا طبقة نصّ غنيّة.
-            pdf_text = None if skip_ocr else self._extract_pdf_text_layer(image_path)
+            pdf_text = None if (skip_ocr or result.cached) else self._extract_pdf_text_layer(image_path)
             if pdf_text:
                 # «الطبقة تكسب مكانها»: بعض الطبقات متنُها إنكليزية سليمة (تعبر
                 # بوّابة الكثافة) لكن ترويستها خردة — فيضيع الرأس كله. نقبل الطبقة
@@ -505,7 +488,7 @@ class AIExtractionService:
                 result.detected_language = 'ar'
                 result.ocr_engine = 'pdf_text_layer'
                 logger.info('Used embedded PDF text layer (%d chars) — skipped image OCR', len(pdf_text))
-            else:
+            elif not result.cached:
                 # Step 2: تحسين الصورة
                 _progress('image_enhancement')
                 result.progress_stage = 'تحسين الصورة'
@@ -720,8 +703,9 @@ class AIExtractionService:
                 result.status = 'completed'
                 result.user_message = 'تم الاستخراج بنجاح'
 
-            # Step 8: حفظ في الكاش
-            self.save_to_cache(result.image_hash, result)
+            # Step 8: حفظ في الكاش (الإصابة لا تعيد الكتابة — تحفظ عدّاد hit_count)
+            if not result.cached:
+                self.save_to_cache(result.image_hash, result)
             result.progress_stage = 'completed'
             result.processing_time = time.time() - start_time
             logger.info('Image processing done in %.2fs, confidence %.2f%%',

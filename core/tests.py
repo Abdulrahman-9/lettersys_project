@@ -647,6 +647,63 @@ class AIProcessingServiceTests(TestCase):
         # B2: مطابقة الجهة المُصدِرة نجحت دون AttributeError
         self.assertEqual(result.issuing_entity_id, entity.id)
 
+    @mock.patch('core.extraction.pipeline.build_online_provider_from_settings')
+    @mock.patch('core.extraction.pipeline.AIIntegrationSettings.get_active_settings')
+    @mock.patch('core.extraction.pipeline.build_offline_provider_from_settings')
+    @mock.patch('core.extraction.pipeline.OCRService')
+    @mock.patch('core.extraction.pipeline.ImageProcessor')
+    def test_cache_hit_still_extracts_patterns_and_entities(
+        self,
+        image_processor_cls,
+        ocr_cls,
+        offline_factory,
+        settings_getter,
+        build_online_provider,
+    ):
+        """إصابة الكاش تختصر OCR فقط — الأنماط والجهات تُعادان حيّتين.
+
+        بلاغ المالك (2026-07-07): نفس الكتاب، المرة الأولى استخرج الجهة والمرة
+        الثانية لا — لأن الإصابة كانت تُرجِع نتيجة مجمَّدة بلا جهات ولا رقم/تاريخ
+        الجهة (الكاش لا يخزّنها أصلاً). العقد الآن: الكاش ناقل نصّ، وكل تحسّن
+        لاحق في المُستخرِجات/الذاكرة/دمج الجهات يسري فوراً على الوثائق المخزَّنة.
+        """
+        from django.utils import timezone as dj_tz
+
+        entity = Entity.objects.create(
+            name='جهة مخزَّنة', code='C1', etype='both', is_active=True,
+        )
+        raw = 'كتاب وارد من جهة مخزَّنة.\nالتاريخ: 20-06-2026\nرقم الكتاب: 77'
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
+            tmp.write(b'\xff\xd8\xff\xe0cached-doc')
+            temp_path = tmp.name
+        self.addCleanup(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+
+        import hashlib
+        with open(temp_path, 'rb') as f:
+            file_hash = hashlib.md5(f.read()).hexdigest()
+        ExtractionCache.objects.create(
+            image_hash=file_hash,
+            cached_extraction={'raw_text': raw, 'cleaned_text': raw,
+                               'ocr_confidence': 0.9},
+            hit_count=0, last_used=dj_tz.now(),
+        )
+
+        service = AIExtractionService()
+        result = service._process_image_internal(temp_path)
+
+        self.assertNotEqual(result.status, 'failed', msg=result.error_message)
+        self.assertTrue(result.cached)
+        # لا OCR ولا معالجة صورة — النص من الكاش
+        image_processor_cls.assert_not_called()
+        offline_factory.return_value.extract.assert_not_called()
+        # الحقول الحيّة استُخرجت رغم الإصابة: الجهة والتاريخ والرقم
+        self.assertEqual(result.issuing_entity_id, entity.id)
+        self.assertTrue(result.sender_date and result.sender_date.startswith('2026-06-20'))
+        self.assertEqual(result.book_number, '77')
+        # الإصابة لا تعيد كتابة الصفّ (يحفظ عدّاد الاستخدام)
+        self.assertEqual(ExtractionCache.objects.get(image_hash=file_hash).hit_count, 1)
+
 
 class TesseractOCRProviderTests(TestCase):
     """اختبار محرّك Tesseract الجديد دون تشغيل tesseract فعلياً (يُحاكى pytesseract)."""

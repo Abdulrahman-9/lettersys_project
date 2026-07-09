@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260705b">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260707d">
 <style>
 .scan-agent-status{font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap}
 .scan-agent-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
@@ -51,6 +51,7 @@
 
 <div
     class="extraction-container"
+    data-ws-presence="1"
     data-initial-kind="{{ initial_kind }}"
     data-smart-extract-endpoint="{% url 'ai_smart_extract' %}"
     data-entity-list-endpoint="{% url 'entity-list-api' %}"
@@ -142,6 +143,7 @@
                                     رقمنا
                                     <span class="field-required">*</span>
                                 </label>
+                                <span class="register-type-chip" id="bookRegisterChip" style="display: none;"></span>
                                 <span class="confidence-badge high" id="bookNumberConfidence" style="display: none;">
                                     <span class="confidence-indicator" style="background: #16a34a;"></span>
                                     <span id="bookNumberConfidenceValue">95%</span>
@@ -157,6 +159,14 @@
                                 <span class="network-lock-chip" title="الحجز الشبكي للأرقام الفريدة مفعل">
                                     <i class="bi bi-shield-lock"></i>حجز شبكي مفعل
                                 </span>
+                                <button type="button" id="releaseReservationBtn" class="release-res-link" style="display:none;"
+                                        title="حرّر هذا الرقم ليُعاد تدويره لزميلك إن لم تكتبه ورقياً">
+                                    <i class="bi bi-x-circle"></i> تحرير الرقم
+                                </button>
+                            </div>
+                            <div id="recycledBanner" class="recycled-banner" style="display:none;" role="alert">
+                                <i class="bi bi-recycle"></i>
+                                <span>رقم مُدوّر: سُحب تلقائياً لعدم اكتمال إدخالٍ سابق. تأكّد أن الورقة بين يديك لا تحمل رقماً متضارباً واكتب هذا الرقم عليها.</span>
                             </div>
                         </div>
 
@@ -185,9 +195,9 @@
                     <!-- الصف 2: رقم الجهة المرسلة + تاريخ الجهة المرسلة -->
                     <div class="field-grid-two">
                         <div class="form-group-smart" id="senderNumberGroup">
-                            <label class="field-label" id="senderNumberLabel">رقم الجهة المرسلة</label>
-                            <input type="text" class="form-control-smart" id="senderNumber" placeholder="مثال: 241/و">
-                            <div class="input-hint" id="senderNumberHint">يظهر هذا الحقل في الوارد لتوثيق رقم الجهة الخارجية أو الداخلية.</div>
+                            <label class="field-label" id="senderNumberLabel">العدد</label>
+                            <input type="text" class="form-control-smart" id="senderNumber" placeholder="مثال: 512 أو 241/و">
+                            <div class="input-hint" id="senderNumberHint">رقم الجهة المرسلة — كما يظهر على كتابهم بعد «العدد /».</div>
                         </div>
 
                         <div class="form-group-smart" id="senderDateGroup">
@@ -209,7 +219,7 @@
                                 <span id="titleConfidenceValue">92%</span>
                             </span>
                         </div>
-                        <input type="text" class="form-control-smart" id="title" placeholder="موضوع الكتاب أو خلاصة المراسلة" dir="rtl">
+                        <textarea class="form-control-smart title-autogrow" id="title" rows="1" placeholder="موضوع الكتاب أو خلاصة المراسلة" dir="rtl"></textarea>
                         <div class="input-hint">اكتب عنواناً واضحاً يسهل البحث عنه لاحقاً في الأرشيف.</div>
                     </div>
 
@@ -450,7 +460,7 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260705a"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260707e"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
@@ -461,8 +471,27 @@
   'use strict';
   function initTitleAC() {
     const ta = document.getElementById('title');
-    if (!ta || !window.TitleAutocomplete) return;
-    if (ta.dataset.taBound) return;
+    if (!ta) return;
+
+    // ── توسّع تلقائي لحقل الموضوع (مستقلّ عن الإكمال) — يبقى النصّ مرئياً كاملاً بلا كتابة عمياء ──
+    if (!ta.dataset.growBound) {
+      ta.dataset.growBound = '1';
+      const AUTO_MAX = 160;
+      const growTitle = () => {
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, AUTO_MAX) + 'px';
+        ta.style.overflowY = ta.scrollHeight > AUTO_MAX ? 'auto' : 'hidden';
+      };
+      window.__autoGrowTitle = growTitle;
+      ta.addEventListener('input', growTitle);
+      // الموضوع سطرٌ منطقيّ واحد — امنع Enter من إدراج سطر جديد (الإكمال يعالج Enter لقبول الاقتراح قبله)
+      ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) e.preventDefault(); });
+      growTitle();
+      setTimeout(growTitle, 0);   // بعد أي ملء برمجي متزامن (حقن EDIT/الاستخراج)
+    }
+
+    // ── الإكمال التلقائي (إن توفّر) ──
+    if (!window.TitleAutocomplete || ta.dataset.taBound) return;
     ta.dataset.taBound = '1';
     try {
       new TitleAutocomplete(ta, {
@@ -1073,6 +1102,7 @@
     set('title', EDIT_DATA.title);
     set('senderNumber', EDIT_DATA.sender_number);
     set('margin', EDIT_DATA.margin);
+    if (window.__autoGrowTitle) window.__autoGrowTitle();   // وسّع حقل الموضوع لطول العنوان المُحمَّل
 
     // التواريخ — نُفعّل حقل التاريخ مؤقتاً ثم نعيد إغلاقه
     const dateEl = document.getElementById('date');
@@ -1205,19 +1235,28 @@
     const k = currentKind();
     const isInternal = (k === 'incoming_internal' || k === 'outgoing_internal');
     toggle.style.display = isInternal ? 'inline-flex' : 'none';
-    if (!isInternal && cb.checked) { cb.checked = false; applyNumberless(false); }
+    // أيُّ تبديل نوعٍ يفكّ «بلا رقم»: مدير الحجز يعيد رسم رقم النوع الجديد فوق
+    // الحقل أصلاً، وإبقاء الصندوق مؤشَّراً حينها = حالة هجينة تُوهم خلط
+    // الوارد بالصادر (بلاغ المالك 2026-07-07).
+    if (cb.checked) { cb.checked = false; applyNumberless(false); }
   }
 
   function applyNumberless(on) {
     if (on) {
-      bookNumField.dataset.prevValue = bookNumField.value || '';
       bookNumField.value = 'بلا رقم';
       bookNumField.classList.add('is-numberless');
       if (hint) hint.textContent = 'سيُحفظ الكتاب بلا رقم رسمي (يأخذ معرّفاً تقنياً داخلياً).';
     } else {
-      bookNumField.value = bookNumField.dataset.prevValue || bookNumField.value;
       bookNumField.classList.remove('is-numberless');
       if (hint) hint.textContent = 'رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.';
+      // التراجع يستمدّ الرقم من مصدر الحقيقة (مدير الحجز) لا من قيمة محفوظة:
+      // الحقل قد يكون فارغاً لحظة التأشير (الحجز لم يصل) فتعلق «بلا رقم» بلا رجعة.
+      const sys = window.extractionSystem;
+      const k = currentKind();
+      bookNumField.value = '';
+      if (sys && typeof sys.ensureReservation === 'function') {
+        sys.ensureReservation(k);
+      }
     }
   }
 
