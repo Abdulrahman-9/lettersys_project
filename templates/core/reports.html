@@ -116,7 +116,11 @@
 
 /* ── الطباعة الاحترافية (A4) ── */
 @media print {
-  .no-print, .app-sidebar, .app-sidebar-panel, nav.d-flex { display: none !important; }
+  /* شريط التطبيق العلوي (التنبيهات/المستخدم) لا مكان له في وثيقة رسمية */
+  .no-print, .app-topbar, .app-sidebar, .app-sidebar-panel, nav.d-flex { display: none !important; }
+  /* حركات الدخول تُطبع في حالتها «قبل-الحركة» (إزاحة/شفافية) فتتراكب الترويسة
+     على العنوان — نجمّدها على حالتها النهائية (نفس مأزق fill-mode المعروف) */
+  [class*="animate-"] { animation: none !important; opacity: 1 !important; transform: none !important; }
   body { background: #fff !important; }
   /* روابط الكتب تُطبع نصاً رسمياً أسود بلا زخرفة */
   .report-book-link { color: #000 !important; text-decoration: none !important; }
@@ -125,13 +129,35 @@
   .card-header { padding: 0 0 .4rem !important; }
   .report-doc-head { margin-top: 0; }
   .report-filter-summary { background: #fff; border: 1px solid #cbd5e1; }
-  table.table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  /* ترويسة الوثيقة تلتفّ بدل أن تفيض عن عرض A4 (أضيق من الشاشة) */
+  .report-doc-head { flex-wrap: wrap; }
+  .rdh-title { font-size: 1.05rem; }
+  /* الورق لا يتمرّج: ألغِ قصّ الفائض، ولُفّ النصوص، وأبطل أي min-width شاشي
+     (!important يغلب الأنماط السطرية)، وبتخطيطٍ ثابتٍ بعروضٍ نسبية يُجبَر
+     الجدول كاملاً — بأعمدته التسعة — داخل عرض الصفحة مهما طالت المحتويات */
+  .table-responsive { overflow: visible !important; }
+  table.table { width: 100%; border-collapse: collapse; font-size: 8.5pt; table-layout: fixed; }
+  table.table td, table.table th { white-space: normal !important; min-width: 0 !important; overflow-wrap: break-word; }
+  /* الرؤوس تلتفّ عند الفراغات فقط — لا انشطار لكلمة («الملاحظات») في منتصفها */
+  table.table th { overflow-wrap: normal; word-break: keep-all; }
+  table.table td:nth-child(3) { white-space: nowrap !important; }  /* التاريخ لا يُشطر */
+  table.table th:nth-child(1) { width: 3.5%; }   /* # */
+  table.table th:nth-child(2) { width: 11%; }    /* رقم القيد */
+  table.table th:nth-child(3) { width: 11.5%; }  /* تاريخ القيد */
+  table.table th:nth-child(4) { width: 18.5%; }  /* العنوان */
+  table.table th:nth-child(5) { width: 8%; }     /* النوع */
+  table.table th:nth-child(6) { width: 18%; }    /* الجهات */
+  table.table th:nth-child(7) { width: 10.5%; }  /* كتاب الجهة */
+  table.table th:nth-child(8) { width: 10%; }    /* المتابعة */
+  table.table th:nth-child(9) { width: 9%; }     /* الملاحظات */
+  /* غلاف المحتوى يفرض ارتفاع شاشة كاملة فيدفع صفحة أخيرة بيضاء — أبطِله ورقياً */
+  html, body, .content-shell, main { min-height: 0 !important; height: auto !important; }
   table.table th { background: #f1f5f9 !important; border: 1px solid #94a3b8 !important; padding: 5px 6px !important; text-align: right; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   table.table td { border: 1px solid #cbd5e1 !important; padding: 4px 6px !important; vertical-align: top; }
   thead { display: table-header-group; }
   tr { page-break-inside: avoid; }
   .badge, .kind-badge, .due-badge, .status-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  @page { size: A4; margin: 1.4cm; }
+  @page { size: A4; margin: 1.2cm; }
 }
 </style>
 <div class="container-fluid animate-fade-in">
@@ -312,7 +338,7 @@
             <th>العنوان</th>
             <th>النوع</th>
             <th>الجهات (من ← إلى)</th>
-            <th>كتاب الجهة (العدد/التاريخ)</th>
+            <th title="رقم كتاب الجهة المقابلة وتاريخه">عدد/تاريخ الجهة</th>
             <th>المتابعة</th>
             <th>الملاحظات</th>
           </tr>
