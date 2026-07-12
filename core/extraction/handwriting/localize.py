@@ -15,8 +15,14 @@ from typing import NamedTuple, Optional
 
 logger = logging.getLogger(__name__)
 
-# التسمية المطبوعة التي يسبق الرقمُ اليدوي جوارَها (يسارها في RTL)
-_LABEL_RE = re.compile(r'عدد|^رقم$|^الرقم$|^ref\.?:?$', re.I)
+# التسمية المطبوعة التي يسبق المكتوبُ اليدوي جوارَها (يسارها في RTL) — لكل حقل
+# مرساته: «العدد» للرقم و«التاريخ» للتاريخ (مُرتكز v2). تسمية التاريخ مُرسّاة
+# بحدود الكلمة كي لا تلتقط «بتاريخ» الظرفية من إحالات المتن.
+_LABEL_RES = {
+    'number': re.compile(r'عدد|^رقم$|^الرقم$|^ref\.?:?$', re.I),
+    'date': re.compile(r'^ال?ت[أا]ريخ$|^date$', re.I),
+}
+_LABEL_RE = _LABEL_RES['number']   # توافق خلفي
 _TOP_ZONE = 0.35           # التسمية الشرعية في أعلى ~ثلث الصفحة — تحتها جُمل متن
 _PRIOR_RADIUS = 0.14       # قرب prior الجهة يقبل مرشّحاً خارج الحزام (وُسّع 0.09→0.14
                            # بعد قياس v2: تسميات شرعية عند y≈0.38 قرب prior ȳ≈0.27 كانت
@@ -70,10 +76,14 @@ class EntityLayoutPriors:
 
 
 class NumberStripLocator:
-    """يجد صندوق تسمية العدد (أو موضع الجهة المُتعلَّم) ويقتصّ شريط الرقم اليدوي."""
+    """يجد صندوق تسمية الحقل (أو موضع الجهة المُتعلَّم) ويقتصّ شريط المكتوب اليدوي.
 
-    def __init__(self, priors: Optional[EntityLayoutPriors] = None):
+    `field`: 'number' (العدد — الافتراضي) أو 'date' (التاريخ، مُرتكز v2).
+    ملاحظة: مرّر لكل حقلٍ كائنَ priors خاصاً به — مواضع «العدد» و«التاريخ» تختلف."""
+
+    def __init__(self, priors: Optional[EntityLayoutPriors] = None, field: str = 'number'):
         self.priors = priors
+        self._label_re = _LABEL_RES[field]
 
     def find_label(self, tsv: dict, width: int, height: int,
                    entity_id=None) -> Optional[LabelBox]:
@@ -84,7 +94,7 @@ class NumberStripLocator:
         best = None
         for i, raw in enumerate(tsv.get('text', [])):
             t = (raw or '').strip().strip(':.ـ ')
-            if not t or not _LABEL_RE.search(t):
+            if not t or not self._label_re.search(t):
                 continue
             x = (tsv['left'][i] + tsv['width'][i] / 2) / width
             y = (tsv['top'][i] + tsv['height'][i] / 2) / height

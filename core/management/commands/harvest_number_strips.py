@@ -38,6 +38,9 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--limit', type=int, default=200)
         parser.add_argument('--offset', type=int, default=0)
+        parser.add_argument('--field', choices=('number', 'date'), default='number',
+                            help='الحقل المحصود: رقم الجهة (افتراضي) أو تاريخها (v2). '
+                                 'وسم التاريخ يُخزَّن ISO وتولِّد التنقيةُ صيغَه المكتوبة.')
 
     def handle(self, *args, **opts):
         import fitz
@@ -51,12 +54,15 @@ class Command(BaseCommand):
         if prov.tessdata_dir:
             os.environ['TESSDATA_PREFIX'] = prov.tessdata_dir
 
-        priors = EntityLayoutPriors(PRIORS_PATH)
-        locator = NumberStripLocator(priors)
+        field = opts['field']
+        suffix = '' if field == 'number' else '_date'
+        # بصمات منفصلة لكل حقل — موضع «التاريخ» غير موضع «العدد» في ترويسة الجهة
+        priors = EntityLayoutPriors(PRIORS_PATH.replace('.json', f'{suffix}.json'))
+        locator = NumberStripLocator(priors, field=field)
 
-        strips_dir = os.path.join(HARVEST_DIR, 'strips')
+        strips_dir = os.path.join(HARVEST_DIR, f'strips{suffix}')
         os.makedirs(strips_dir, exist_ok=True)
-        csv_path = os.path.join(HARVEST_DIR, 'labels.csv')
+        csv_path = os.path.join(HARVEST_DIR, f'labels{suffix}.csv')
         new_csv = not os.path.exists(csv_path)
         csv_f = open(csv_path, 'a', newline='', encoding='utf-8')
         writer = csv.writer(csv_f)
@@ -65,7 +71,7 @@ class Command(BaseCommand):
 
         # سجلّ المُعالَج: يمنع إعادة رسم المستندات المرفوضة عند كل استئناف
         # (الشرائط المحفوظة تُتخطّى بوجود ملفها؛ هذا يغطي الباقي).
-        done_path = os.path.join(HARVEST_DIR, 'processed.txt')
+        done_path = os.path.join(HARVEST_DIR, f'processed{suffix}.txt')
         done = set()
         if os.path.exists(done_path):
             with open(done_path, encoding='utf-8') as f:
@@ -73,14 +79,20 @@ class Command(BaseCommand):
         done_f = open(done_path, 'a', encoding='utf-8')
 
         lo, hi = opts['offset'], opts['offset'] + opts['limit']
-        qs = (Book.objects.filter(is_deleted=False, attachments__isnull=False,
-                                  issuing_entities__isnull=False)
-              .exclude(sender_number__isnull=True).exclude(sender_number='')
-              .order_by('-id').distinct()[lo:hi])
+        qs = Book.objects.filter(is_deleted=False, attachments__isnull=False,
+                                 issuing_entities__isnull=False)
+        if field == 'number':
+            qs = qs.exclude(sender_number__isnull=True).exclude(sender_number='')
+        else:
+            qs = qs.exclude(sender_date__isnull=True)
+        qs = qs.order_by('-id').distinct()[lo:hi]
 
         seen = saved = skipped = 0
         for b in qs.iterator():
-            label_txt = normalize_label(b.sender_number)
+            if field == 'number':
+                label_txt = normalize_label(b.sender_number)
+            else:
+                label_txt = b.sender_date.isoformat() if b.sender_date else None
             if not label_txt:
                 continue
             out_png = os.path.join(strips_dir, f'{b.id}.png')

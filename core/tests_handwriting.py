@@ -78,6 +78,31 @@ class FindLabelTests(SimpleTestCase):
         self.assertEqual(lb2.source, 'prior')            # لا يلتقط نسخة المتن كتسمية
 
 
+class DateFieldLocatorTests(SimpleTestCase):
+    """مُرتكز v2: مرساة «التاريخ» — نفس الانضباط، تسمية مختلفة وبصمات منفصلة."""
+    W, H = 1000, 1400
+
+    def test_date_label_found_in_top_zone(self):
+        t = tsv([('العدد:', 700, 180, 80, 30), ('التاريخ:', 700, 230, 90, 30)])
+        lb = NumberStripLocator(field='date').find_label(t, self.W, self.H)
+        self.assertIsNotNone(lb)
+        self.assertEqual(lb.top, 230)          # التقط «التاريخ» لا «العدد»
+
+    def test_citation_bitarikh_rejected(self):
+        # «بتاريخ» الظرفية (إحالة متن) لا تطابق المرساة المحدودة بحدود الكلمة
+        t = tsv([('بتاريخ', 700, 200, 90, 30)])
+        self.assertIsNone(NumberStripLocator(field='date').find_label(t, self.W, self.H))
+
+    def test_hamza_variant_matched(self):
+        t = tsv([('التأريخ', 650, 210, 90, 30)])   # الإملاء العراقي الشائع
+        lb = NumberStripLocator(field='date').find_label(t, self.W, self.H)
+        self.assertIsNotNone(lb)
+
+    def test_number_field_ignores_date_label(self):
+        t = tsv([('التاريخ:', 700, 230, 90, 30)])
+        self.assertIsNone(NumberStripLocator(field='number').find_label(t, self.W, self.H))
+
+
 class PriorsPersistenceTests(SimpleTestCase):
     def test_running_mean_and_roundtrip(self):
         fd, path = tempfile.mkstemp(suffix='.json')
