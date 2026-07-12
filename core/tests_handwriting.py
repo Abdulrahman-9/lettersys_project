@@ -122,6 +122,71 @@ class PriorsPersistenceTests(SimpleTestCase):
             os.remove(path)
 
 
+class ReaderTests(SimpleTestCase):
+    """قارئ ONNX (مرحلة 3) — منطق الفكّ والثقة بجلسة محقونة، بلا نموذج فعلي."""
+
+    class _FakeSession:
+        """جلسة مزيّفة تعيد logits مُصمَّمة: إطارات (فراغ، 1، 1، فراغ، 7) ⇒ «17»."""
+        def __init__(self):
+            import numpy as np
+            t = np.full((5, 11), -10.0, dtype=np.float32)
+            t[0, 0] = 10.0            # فراغ
+            t[1, 2] = 10.0            # '1' (الفهرس 2 = charset[1])
+            t[2, 2] = 10.0            # '1' مكررة — تُطوى
+            t[3, 0] = 10.0            # فراغ يفصل
+            t[4, 8] = 10.0            # '7'
+            self._out = t[None]
+        def run(self, _, __):
+            return [self._out]
+        def get_inputs(self):
+            raise AssertionError('لا يُستدعى مع جلسة محقونة')
+
+    def _reader(self):
+        from core.extraction.handwriting.reader import HandwrittenNumberReader
+        return HandwrittenNumberReader(session=self._FakeSession())
+
+    def test_ctc_collapse_and_confidence(self):
+        from PIL import Image
+        text, conf = self._reader().read(Image.new('L', (120, 40), 255))
+        self.assertEqual(text, '17')
+        self.assertGreater(conf, 0.99)         # logits حادّة ⇒ ثقة شبه كاملة
+
+    def test_missing_model_degrades_gracefully(self):
+        from core.extraction.handwriting.reader import HandwrittenNumberReader
+        from PIL import Image
+        r = HandwrittenNumberReader(model_path='لا/يوجد.onnx', charset_path='لا/يوجد.json')
+        self.assertFalse(r.available)
+        self.assertEqual(r.read(Image.new('L', (50, 20), 255)), (None, 0.0))
+
+    def test_preprocess_contract_shape(self):
+        from core.extraction.handwriting.reader import HandwrittenNumberReader
+        from PIL import Image
+        x = HandwrittenNumberReader.preprocess(Image.new('L', (200, 100), 255))
+        self.assertEqual(x.shape[:3], (1, 1, 64))   # (دفعة، قناة، ارتفاع 64، عرض متناسب)
+        self.assertEqual(x.shape[3], 128)            # 200 × 64/100
+
+    def test_real_model_reads_refined_strip_if_present(self):
+        """اختبار دخانيّ حيّ: النموذج المنشور يقرأ شريطاً حقيقياً منقّى بوسمه —
+        يُتخطّى بهدوء حيث لا نموذج/شريط (بيئات CI بلا أصول)."""
+        import csv
+        from PIL import Image
+        from core.extraction.handwriting.reader import HandwrittenNumberReader
+        r = HandwrittenNumberReader()
+        clean_csv = os.path.join('training', 'handwriting', 'harvest', 'labels_clean.csv')
+        if not (r.available and os.path.exists(clean_csv)):
+            self.skipTest('النموذج أو عدّة الحصاد غير حاضرين')
+        rows = [x for x in csv.DictReader(open(clean_csv, encoding='utf-8'))
+                if x['tier'] == 'A']
+        if not rows:
+            self.skipTest('لا شرائط فئة A بعد')
+        row = rows[0]
+        strip = Image.open(os.path.join('training', 'handwriting', 'harvest',
+                                        'strips_refined', row['file'])).convert('L')
+        text, conf = r.read(strip)
+        self.assertEqual(text, row['label'])
+        self.assertGreater(conf, 0.5)
+
+
 class StripBboxTests(SimpleTestCase):
     def test_strip_left_of_label_rtl(self):
         from core.extraction.handwriting.localize import LabelBox
