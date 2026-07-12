@@ -306,8 +306,11 @@ def reports_export(request):
     qs, meta = _reports_qs(request)
     status_labels = {"pending": "قيد المتابعة", "due_today": "مستحق اليوم",
                      "overdue": "متأخر", "archived": "مؤرشف"}
-    HEADERS = ["الرقم الفريد", "رقم الكتاب", "رقم الجهة المقابل", "تاريخ الإدخال",
-               "العنوان", "النوع", "الجهة المُصدِرة", "الجهة المستقبِلة",
+    # أعمدة تطابق جدول الصفحة الرسمي: تاريخا الكتاب (قيدنا + كتاب الجهة رقماً
+    # وتاريخاً) حاضران، ولا معرّفات قاعدة بيانات داخلية في مخرجات رسمية.
+    HEADERS = ["رقم القيد", "تاريخ القيد", "العنوان", "النوع",
+               "الجهة المُصدِرة", "الجهة المستقبِلة",
+               "رقم كتاب الجهة", "تاريخ كتاب الجهة", "تاريخ الإدخال",
                "تاريخ الاستحقاق", "الحالة", "الملاحظات"]
 
     def _rows():
@@ -320,14 +323,15 @@ def reports_export(request):
             issuing = "، ".join(e.name for e in b.issuing_entities.all())
             receiving = "، ".join(e.name for e in b.receiving_entities.all())
             csv.writer(buf).writerow([
-                b.id,
                 b.our_number or "",
-                b.sender_number or "",
-                b.created_at.date().isoformat() if b.created_at else "",
+                b.date.isoformat() if b.date else "",
                 b.title or "",
                 b.kind_label,
                 issuing,
                 receiving,
+                b.sender_number or "",
+                b.sender_date.isoformat() if b.sender_date else "",
+                b.created_at.date().isoformat() if b.created_at else "",
                 b.due_date.isoformat() if b.due_date else "",
                 status_labels.get(b.followup_state, b.followup_state or ""),
                 b.margin or "",
@@ -702,23 +706,29 @@ def bak_browse(request):
 
 
 def _reseed_book_sequences():
-    """يضبط BookSequence.next_number لكل سجل على (أكبر تسلسل مُستورَد للسنة الحالية + 1)."""
-    import re as _re
+    """يضبط BookSequence.next_number لكل سجل على (أكبر تسلسل دائم موجود + 1).
+    الترقيم دائم بلا سنة: يُحتسب فقط الأرقام بصيغة {R}{NNNN} (رقمية، أول خانة = رمز
+    السجل، بلا بادئة سنة). الأرقام التاريخية YYYY{R}{NNNN} تُستبعَد — ليست في فضاء
+    الترقيم الدائم. يُستدعى بعد الاستعادة كي لا تصطدم الأرقام الجديدة بالموجود."""
     from ..models import BookSequence
-    cur_year = timezone.now().year
     for kind, reg in BookSequence.REGISTER_CODES.items():
-        prefix = f"{cur_year}{reg}"
         max_seq = 0
-        for onum in Book.objects.filter(kind=kind, our_number__startswith=prefix).values_list('our_number', flat=True):
-            rest = onum[len(prefix):]
-            m = _re.match(r'^(\d+)', rest)
-            if m:
-                base = int(rest[:4]) if len(rest) >= 5 and rest[:4].isdigit() else int(m.group(1))
-                max_seq = max(max_seq, base)
-        obj, _c = BookSequence.objects.get_or_create(kind=kind, defaults={'next_number': 1, 'year': cur_year})
-        obj.year = cur_year
+        for onum in Book.objects.filter(
+            kind=kind, our_number__startswith=reg
+        ).values_list('our_number', flat=True):
+            if not onum.isdigit():
+                continue
+            # استبعاد التاريخي (يبدأ بسنة 2020-2099 وطوله ≥ 8)
+            if len(onum) >= 8 and onum[:4].isdigit() and 2020 <= int(onum[:4]) <= 2099:
+                continue
+            seq_part = onum[len(reg):]
+            if seq_part.isdigit():
+                max_seq = max(max_seq, int(seq_part))
+        obj, _c = BookSequence.objects.get_or_create(
+            kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
+        )
         obj.next_number = max_seq + 1 if max_seq else 1
-        obj.save(update_fields=['year', 'next_number', 'updated_at'])
+        obj.save(update_fields=['next_number', 'updated_at'])
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -785,7 +795,7 @@ def legacy_import_run(request):
         field_map  = json.loads(request.POST.get("field_map", "{}"))
         dry_run    = request.POST.get("dry_run", "1") == "1"
         table_name = request.POST.get("table_name", "")
-        prefix     = request.POST.get("prefix", "قديم-")
+        prefix     = request.POST.get("prefix", "")
 
         all_data = json.loads(sample_file.read_text(encoding="utf-8"))
         records  = all_data.get(table_name, []) if table_name else []
