@@ -1,0 +1,18 @@
+{
+  "id": "abdualrhmanahmed/lettersys-crnn-dates-v6",
+  "title": "lettersys-crnn-dates-v6",
+  "code_file": "finetune_crnn_dates.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_internet": "false",
+  "dataset_sources": [
+    "mloey1/ahdd1",
+    "oddrationale/mnist-in-csv",
+    "abdualrhmanahmed/lettersys-real-number-strips",
+    "abdualrhmanahmed/lettersys-real-date-strips"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
