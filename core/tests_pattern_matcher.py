@@ -12,6 +12,193 @@ from core.extraction.matchers.pattern import (
 )
 
 
+class DomainRulesTests(SimpleTestCase):
+    """قوانين المجال التي أملاها المالك (شركة نفط الوسط / قسم المتابعة ش13)،
+    مقيسة على 9,155 كتاباً مؤكَّداً — انظر تعليقات pattern.py."""
+
+    def setUp(self):
+        self.m = PatternMatcher()
+        # ترويسة نظام إدارة الجودة كما في مستندات الشركة (صورة المالك)
+        self.memo = (
+            'وزارة النفط\n'
+            'شركة نفط الوسط\n'
+            'قسم الصحة والسلامة المهنية والبيئة\n'
+            'مذكرة داخلية\n'
+            'العدد: ش8/د/1844\n'
+            'التاريخ: 19/7/2026\n'
+            'الى / كافة الهيئات والاقسام المركزية\n'
+            'م/ اجراءات ارتفاع درجات الحرارة\n'
+            'نظراً لارتفاع درجات الحرارة …\n'
+        )
+
+    # ── رمز السجلّ: يُجرَّد من الرقم (عُرف الموظف: 99% رقمي صرف) ويُعاد إشارةً ──
+    def test_arabic_register_code_stripped_from_number(self):
+        num, _ = self.m.extract_sender_number(self.memo)
+        self.assertEqual(num, '1844')                       # لا 'ش8/د/1844'
+
+    def test_register_code_exposed_separately(self):
+        self.assertEqual(self.m.extract_register_code(self.memo), 'ش8/د')
+
+    def test_simple_department_code(self):
+        num, _ = self.m.extract_sender_number('شركة نفط الوسط\nالعدد: ش13/2571\nالتاريخ:')
+        self.assertEqual(num, '2571')
+        self.assertEqual(
+            self.m.extract_register_code('شركة نفط الوسط\nالعدد: ش13/2571\nالتاريخ:'), 'ش13')
+
+    def test_space_separated_code_outgoing_external(self):
+        """الصادر الخارجي: رقمه يأتي من مكتب المدير العام بصيغة «العدد: ش13 2571»
+        (فاصلٌ مسافة، لا شرطة) — كان لا يُلتقط إطلاقاً قبل هذا الإصلاح."""
+        doc = ('شركة نفط الوسط\nمكتب المدير العام\n'
+               'العدد : ش13 2571\nالتاريخ: 19/7/2026\n'
+               'الى / شركة النفط الوطنية\nم/ تخويل\n')
+        num, _ = self.m.extract_sender_number(doc)
+        self.assertEqual(num, '2571')
+        self.assertEqual(self.m.extract_register_code(doc), 'ش13')
+        self.assertEqual(self.m.extract_recipient(doc), 'شركة النفط الوطنية')
+
+    def test_latin_company_code_kept_whole(self):
+        """الوارد الخارجي: الموظف يُبقي كود الشركة (11% مقيسة) — لا نجرّده."""
+        num, _ = self.m.extract_sender_number('EBS PETROLEUM\nRef: EBS-MdOC-20260603\nDate:')
+        self.assertEqual(num, 'EBS-MdOC-20260603')
+        self.assertIsNone(self.m.extract_register_code('EBS PETROLEUM\nRef: EBS-MdOC-20260603'))
+
+    # ── نوع الوثيقة: مطبوعٌ في الترويسة (لا تعلّم آلة) ──
+    def test_doc_type_broadcast_beats_internal_memo(self):
+        """الإعمام يُعرَف من مُخاطَبه «كافة الهيئات والاقسام» ولو حملت الترويسة
+        «مذكرة داخلية» — الأخصّ يفوز."""
+        t, conf = self.m.extract_document_type(self.memo)
+        self.assertEqual(t, 'اعمام')
+        self.assertGreater(conf, 0.5)
+
+    def test_doc_type_internal_memo(self):
+        t, _ = self.m.extract_document_type(
+            'شركة نفط الوسط\nقسم العقود\nمذكرة داخلية\nالعدد: ش4/12\nالى / قسم المتابعة')
+        self.assertEqual(t, 'مذكرة داخلية')
+
+    def test_doc_type_admin_order(self):
+        t, _ = self.m.extract_document_type('شركة نفط الوسط\nامر اداري\nالعدد: 55')
+        self.assertEqual(t, 'امر اداري')
+
+    def test_doc_type_silent_when_absent(self):
+        t, conf = self.m.extract_document_type('شركة نفط الوسط\nالعدد: 55\nالتاريخ: 1/1/2026')
+        self.assertIsNone(t)
+        self.assertEqual(conf, 0.0)
+
+    # ── المُخاطَب: بعد «الى/» في الرأس ──
+    def test_recipient_broadcast(self):
+        self.assertEqual(self.m.extract_recipient(self.memo), 'كافة الهيئات والاقسام المركزية')
+
+    def test_recipient_named_department(self):
+        r = self.m.extract_recipient('شركة نفط الوسط\nالعدد: ش4/12\nالى / قسم المتابعة\nم/ كتاب')
+        self.assertEqual(r, 'قسم المتابعة')
+
+    def test_recipient_ignores_body_lines(self):
+        self.assertIsNone(self.m.extract_recipient('شركة نفط الوسط\nالعدد: 12\nم/ موضوع\nالى / جهة في المتن'))
+
+    # ── الحقول الأخرى تبقى سليمة على نفس المستند (لا تراجع) ──
+    def test_memo_full_extraction_intact(self):
+        data = self.m.extract_all_data(self.memo)
+        self.assertEqual(data['sender_number'], '1844')
+        self.assertTrue((data['sender_date'] or '').startswith('2026-07-19'))
+        self.assertEqual(data['title'], 'اجراءات ارتفاع درجات الحرارة')
+        self.assertEqual(data['document_type'], 'اعمام')
+        self.assertEqual(data['register_code'], 'ش8/د')
+
+
+class RealCompanyDocumentsTests(SimpleTestCase):
+    """وثائق حقيقية من أرشيف المالك (صور مُرسَلة 2026-07-13) — كل حالةٍ قانونُ مجال:
+    ترويسة نظام الجودة، رمز السجلّ بصيغه الثلاث، الإعمام بـ«كافة» متقدّمةً أو
+    متأخّرة، والصادر الخارجي ثنائي اللغة."""
+
+    def setUp(self):
+        self.m = PatternMatcher()
+
+    def test_it_department_slash_code(self):
+        """قسم تقنية المعلومات: «العدد : ش/12 1556» — رمزٌ بشرطةٍ داخلية ثم مسافة."""
+        doc = ('وزارة النفط\nشركة نفط الوسط\nقسم تقنية المعلومات\nمذكرة داخلية\n'
+               'العدد : ش/12 1556\nالتاريخ : 9/7/2026\n'
+               'الى / الهيئات والاقسام المركزية كافة\nم/ صيانة وقائية\n'
+               'تحية طيبة …\nنظراً لأهمية المحافظة على جاهزية المعدات …\n')
+        self.assertEqual(self.m.extract_sender_number(doc)[0], '1556')
+        self.assertEqual(self.m.extract_register_code(doc), 'ش/12')   # ← لا «ش» وحدها
+        self.assertEqual(self.m.extract_document_type(doc)[0], 'اعمام')
+        self.assertEqual(self.m.extract_recipient(doc), 'الهيئات والاقسام المركزية كافة')
+        self.assertEqual(self.m.extract_title_keywords(doc), 'صيانة وقائية')
+
+    def test_broadcast_kaffa_leading(self):
+        """«الى / كافة الهيئات والاقسام المركزية ( )» — كافة متقدّمة + قوس فارغ."""
+        doc = ('شركة نفط الوسط\nقسم تقنية المعلومات\nمذكرة داخلية\n'
+               'العدد : ش/12 1471\nالتاريخ : 14/7/2026\n'
+               'الى / كافة الهيئات والاقسام المركزية ( )\n'
+               'م/ إطلاق بوابة الموظف الإلكترونية\nتحية طيبة،\n')
+        self.assertEqual(self.m.extract_document_type(doc)[0], 'اعمام')
+        self.assertEqual(self.m.extract_title_keywords(doc), 'إطلاق بوابة الموظف الإلكترونية')
+        self.assertEqual(self.m.extract_sender_number(doc)[0], '1471')
+
+    def test_broadcast_with_manual_routing_paren(self):
+        """قسم حماية المنشآت: «الى/ الهيئات و الاقسام المركزية كافة ( قسم المتابعة )»
+        — القوس تأشيرٌ يدوي يُقتطع من اسم المُخاطَب."""
+        doc = ('شركة نفط الوسط\nقسم حماية المنشآت النفطية\nمذكرة داخلية\n'
+               'العدد: ح م/ 903\nالتاريخ: 21/3/2026\n'
+               'الى/ الهيئات و الاقسام المركزية كافة ( قسم المتابعة )\n'
+               'م/ توجيهات\nتحية طيبة،\n')
+        self.assertEqual(self.m.extract_document_type(doc)[0], 'اعمام')
+        self.assertEqual(self.m.extract_recipient(doc), 'الهيئات و الاقسام المركزية كافة')
+        self.assertEqual(self.m.extract_sender_number(doc)[0], '903')
+        self.assertEqual(self.m.extract_register_code(doc), 'حم')     # «ح م/» بلا مسافات
+
+    def test_named_department_recipient(self):
+        """قسم العقود → هيئة الحقول: مُخاطَبٌ مسمّى (لا إعمام)."""
+        doc = ('شركة نفط الوسط\nقسم العقود\nمذكرة داخلية\n'
+               'العدد: ش5/5005\nالتاريخ: 21/5/2026\n'
+               'الى/ هيئة الحقول\nم / تمويل مشروعات\nتحية طيبة ..\n')
+        self.assertEqual(self.m.extract_recipient(doc), 'هيئة الحقول')
+        self.assertEqual(self.m.extract_document_type(doc)[0], 'مذكرة داخلية')
+        self.assertEqual(self.m.extract_register_code(doc), 'ش5')
+        self.assertEqual(self.m.extract_title_keywords(doc), 'تمويل مشروعات')
+
+    def test_outgoing_external_dg_office(self):
+        """صادر خارجي بترويسة الشركة ورقم مكتب المدير العام: «العدد: ش /13 7436»."""
+        doc = ('جمهورية العراق\nوزارة النفط\nشركة نفط الوسط (شركة عامة)\n'
+               'العدد: ش /13 7436\nالتاريخ: 30/4/2026\n'
+               'الى / وزارة النفط / دائرة العقود والتراخيص البترولية\n'
+               'م/ موقف مشاريع جولتي التراخيص التكميلية والسادسة\nتحية طيبة …\n')
+        self.assertEqual(self.m.extract_sender_number(doc)[0], '7436')
+        self.assertEqual(self.m.extract_register_code(doc), 'ش/13')
+        self.assertEqual(self.m.extract_recipient(doc), 'وزارة النفط / دائرة العقود والتراخيص البترولية')
+        self.assertEqual(self.m.extract_sender_date(doc)[0].date().isoformat(), '2026-04-30')
+
+    def test_outgoing_external_bilingual(self):
+        """صادر خارجي ثنائي اللغة (قانون جديد): Ref/Date/To/Subject إنكليزية
+        بجوار العربية — الأولوية للعربية في الموضوع، والرقم/التاريخ من أيّهما."""
+        doc = ('Republic of Iraq\nMinistry of Oil\nMidland Oil Company\n'
+               'جمهورية العراق\nوزارة النفط\nشركة نفط الوسط\n'
+               'Ref : 7298\nDate : 28/4/2026\n'
+               'To: Anwar alsuda Trade and General Contracting\n'
+               'الى / شركة انوار السدة للتجارة والمقاولات العامة محدودة المسؤولية\n'
+               'Subject/ A Letter of Interest\nالموضوع/ A Letter of Interest\n'
+               'Greetings,\nتحية طيبة.\n')
+        self.assertEqual(self.m.extract_sender_number(doc)[0], '7298')
+        self.assertEqual(self.m.extract_sender_date(doc)[0].date().isoformat(), '2026-04-28')
+        # المُخاطَب: السطر العربي هو المعتمد (يسبق «To» في الفحص لأنه أعلى؟ لا —
+        # نقبل أيّهما ما دام يطابق الجهة نفسها؛ نثبت أنّ الالتقاط لا يفشل)
+        self.assertIn(self.m.extract_recipient(doc),
+                      ('Anwar alsuda Trade and General Contracting',
+                       'شركة انوار السدة للتجارة والمقاولات العامة محدودة المسؤولية'))
+        self.assertEqual(self.m.extract_title_keywords(doc), 'A Letter of Interest')
+
+    def test_hr_broadcast_circulars(self):
+        """هيئة الموارد البشرية: «الــى / الهيئات والاقسام المركزية كافة» (تطويل)
+        + «م/ تعاميم» → إعمام."""
+        doc = ('شركة نفط الوسط\nهيئة ادارة وتنمية الموارد البشرية\nمذكرة داخلية\n'
+               'العدد: د/4288\nالتاريخ : 15/7/2026\n'
+               'الــى / الهيئات والاقسام المركزية كافة\nم/ تعاميم\nتحية طيبة ،\n')
+        self.assertEqual(self.m.extract_document_type(doc)[0], 'اعمام')
+        self.assertEqual(self.m.extract_register_code(doc), 'د')
+        self.assertEqual(self.m.extract_sender_number(doc)[0], '4288')
+        self.assertEqual(self.m.extract_recipient(doc), 'الهيئات والاقسام المركزية كافة')
+
+
 class ExtractBookNumberTests(SimpleTestCase):
     def setUp(self):
         self.m = PatternMatcher()
@@ -262,9 +449,11 @@ class ExtractSenderNumberTests(SimpleTestCase):
         self.assertEqual(self.m.extract_sender_number('وزارة النفط\nالعدد‎ 1754\nإلى')[0], '1754')
 
     def test_arabic_digits_slash_letter(self):
-        # صيغة عربية شائعة: رقم ثم حرف سجلّ (و=وارد، ص=صادر) — «241/و»
-        self.assertEqual(self.m.extract_sender_number('العدد: 241/و')[0], '241/و')
-        self.assertEqual(self.m.extract_sender_number('الرقم 12/ص')[0], '12/ص')
+        # صيغة عربية شائعة: رقم ثم حرف سجلّ (و=وارد، ص=صادر) — «241/و».
+        # تغيّر السلوك عمداً (2026-07-13): الحرف يُجرَّد ويبقى التسلسل — عُرفُ
+        # الموظف المقيس على 9,155 كتاباً (الوارد الداخلي 99% رقمي صرف).
+        self.assertEqual(self.m.extract_sender_number('العدد: 241/و')[0], '241')
+        self.assertEqual(self.m.extract_sender_number('الرقم 12/ص')[0], '12')
 
     def test_reference_number_marker(self):
         # «Reference Number» علامة كاملة — لا «ref» فقط (الذي يفشل داخل «Reference»)

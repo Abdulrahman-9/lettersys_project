@@ -121,6 +121,12 @@ class AIExtractionResult:
         self.book_kind: str = ""
         self.book_kind_confidence: float = 0.0
 
+        # قوانين المجال: نوع الوثيقة المطبوع، رمز سجلّ المُصدِر، سطر المُخاطَب
+        self.document_type: str = ""
+        self.document_type_confidence: float = 0.0
+        self.register_code: str = ""
+        self.recipient_text: str = ""
+
         # Entity matching results
         self.issuing_entity_matches: List[Dict] = []
         self.issuing_entity_id: Optional[int] = None
@@ -168,6 +174,9 @@ class AIExtractionResult:
             'secret_level_confidence': self.secret_level_confidence,
             'book_kind': self.book_kind,
             'book_kind_confidence': self.book_kind_confidence,
+            'document_type': self.document_type,
+            'document_type_confidence': self.document_type_confidence,
+            'register_code': self.register_code,
             'issuing_entity_id': self.issuing_entity_id,
             'issuing_entity_name': self.issuing_entity_name,
             'issuing_entity_confidence': self.issuing_entity_confidence,
@@ -656,6 +665,13 @@ class AIExtractionService:
                 result.secret_level_confidence = patterns.get('secret_level_confidence') or 0.0
                 result.book_kind = patterns.get('book_kind') or ''
                 result.book_kind_confidence = patterns.get('book_kind_confidence') or 0.0
+                # قوانين المجال (توجيه المالك، مقيسة على 9,155 كتاباً): نوع الوثيقة
+                # مطبوعٌ في ترويسة نظام الجودة، ورمز السجلّ «ش13» يسبق العدد ويُعرّف
+                # الجهة المُصدِرة، والمُخاطَب يقع بعد «الى/» في الرأس.
+                result.document_type = patterns.get('document_type') or ''
+                result.document_type_confidence = patterns.get('document_type_confidence') or 0.0
+                result.register_code = patterns.get('register_code') or ''
+                result.recipient_text = patterns.get('recipient') or ''
                 logger.info('Pattern matching done: book_number=%s', result.book_number)
 
             # Step 5: Entity Matching
@@ -685,6 +701,16 @@ class AIExtractionService:
                         logger.warning('[pipeline] مصدر الجهات %s فشل (%s) — تدهور رشيق',
                                        label, type(exc).__name__)
 
+                # رمز السجلّ («العدد: ش13/…») معرِّفٌ قاطعٌ للجهة المُصدِرة — يتصدّر
+                # كل شيء (قانون المجال: لكل قسم رمزٌ مسجَّل عندنا)، ويسدّ ثغرة
+                # الأقسام الجديدة التي لا ذاكرةَ ترويسةٍ لها بعد.
+                if etype == 'issuer' and getattr(result, 'register_code', ''):
+                    _extend(lambda: self.entity_matcher.match_by_register_code(
+                        result.register_code, entity_type='issuer'), 'register_code')
+                # المُخاطَب مكتوبٌ صراحةً بعد «الى/» في الرأس — أدقّ من مسح الترويسة كلها
+                if etype == 'receiver' and getattr(result, 'recipient_text', ''):
+                    _extend(lambda: self.entity_matcher.match_entity(
+                        result.recipient_text, entity_type='receiver')[:3], 'recipient_line')
                 _extend(lambda: self.entity_matcher.match_from_memory(cleaned, entity_type=etype, top_k=3),
                         'memory')
                 if len(ranked) < 3:
@@ -707,6 +733,7 @@ class AIExtractionService:
                 setattr(result, name_attr, best.get('entity_name', ''))
                 score = best.get('score', 0.0) / 100.0
                 # سقوف الثقة بحسب موثوقية المصدر المقيسة (كلّها اقتراحيّة للمراجعة):
+                #   رمز السجلّ = معرِّف مسجَّل (لا تخمين) → بلا سقف؛
                 #   ذاكرة (hit@1 ≈ 62%) → 0.85، ترويسة (≈ 11%) → 0.5، نمط صريح → كاملة.
                 cap = {'memory': 0.85, 'letterhead': 0.5}.get(best.get('match_type'))
                 setattr(result, conf_attr, min(score, cap) if cap else score)

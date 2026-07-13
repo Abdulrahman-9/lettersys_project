@@ -73,6 +73,30 @@ class EntityMatcher:
 
         return self.entities_cache
 
+    def match_by_register_code(self, code: str, entity_type: str = 'issuer') -> List[Dict]:
+        """مطابقة برمز السجلّ المسجَّل («ش13» → قسم المتابعة) — إشارةُ هويةٍ قاطعة
+        للوارد الداخلي: الرمز يسبق الرقم بعد «العدد» ويخصّ الجهة المُصدِرة نفسها.
+        المطابقة صارمة (تطبيعُ مسافات/فواصل فقط) — الرمز معرِّفٌ لا اسمٌ تقريبي."""
+        if not (code or '').strip():
+            return []
+        norm = re.sub(r'[\s/\-.]', '', code).lower()
+        out = []
+        for e in self.get_entities_list():
+            ec = re.sub(r'[\s/\-.]', '', (e.get('code') or '')).lower()
+            if not ec or ec != norm:
+                continue
+            if entity_type and entity_type != 'both' and e['etype'] not in (entity_type, 'both'):
+                continue
+            out.append({
+                'entity_id': e['id'],
+                'entity_name': e['name'],
+                'entity_code': e['code'],
+                'entity_type': e['etype'],
+                'score': 100.0,
+                'match_type': 'register_code',
+            })
+        return out
+
     def match_entity(self, entity_text: str, entity_type: Optional[str] = None) -> List[Dict]:
         """
         مطابقة جهة من النص — TF-IDF حرفي (أدقّ، يفوق fuzzy بفارق كبير على بياناتنا)

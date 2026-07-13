@@ -30,7 +30,20 @@ _INVISIBLE_MARKS = {ord(c): None for c in '‎‏​‌‍﻿'}
 #   2) كودٌ مركّب بأرقام: 25/32 ، 2025-043
 #   3) رقمٌ مجرّد (بعد علامة صريحة فقط): 20260237
 # يوضَع كما هو في الحقل ليقبله المستخدم أو يعدّله (يحذف البادئة إن شاء).
-_SENDER_NUM_CODE = (r'([A-Za-z؀-ۿ]{1,7} ?[/\-] ?[A-Za-z؀-ۿ]{1,7}[\-]? ?[0-9]{3,14}'  # مقطعان: EBS-MdOC20260594 ، QPC- MdOC-20260083
+_SENDER_NUM_CODE = (
+                    # رمز السجلّ العربي (قد يحمل رقماً: «ش13») ثم التسلسل — بفاصل
+                    # شرطة/مائل أو **مسافة**: «ش13/2571» ، «ش8/د/1844» ، «ش13 2571».
+                    # (صيغة الصادر الخارجي من مكتب المدير العام — توجيه المالك.)
+                    # يتقدّم البدائل: صنف [A-Za-z؀-ۿ] لا يشمل الأرقام اللاتينية بعد
+                    # تطبيع الأرقام العربية، فكانت هذه الصيغة تفلت كلياً.
+                    # مقاطع الرمز قد تكون حرفية («ش8/د») أو رقمية («ش/12») —
+                    # كتب قسم تقنية المعلومات تكتبها «العدد: ش/12 1556».
+                    # مقاطع الرمز يفصلها شرطة/مائل **أو مسافة** («ح م/ 903» — قسم
+                    # حماية المنشآت)، وقد تكون رقمية («ش/12»).
+                    r'([ء-ي]{1,4}[0-9]{0,3}'
+                    r'(?:(?:\s*[/\-]\s*|\s+)(?:[ء-ي]{1,4}[0-9]{0,3}|[0-9]{1,3}))*'
+                    r'(?:\s*[/\-]\s*|\s+)[0-9]{2,6}\b'
+                    r'|[A-Za-z؀-ۿ]{1,7} ?[/\-] ?[A-Za-z؀-ۿ]{1,7}[\-]? ?[0-9]{3,14}'  # مقطعان: EBS-MdOC20260594 ، QPC- MdOC-20260083
                     r'|[A-Za-z؀-ۿ]{1,7} ?[/\-] ?[0-9][0-9/\-]{1,18}'
                     r'|[0-9]{1,6} ?[/\-] ?[ء-ي]{1,4}'                  # رقم ثم حرف سجلّ عربي: 241/و ، 12/ص
                     r'|[0-9]{2,6} ?[/\-] ?[0-9][0-9/\-]{1,18}'
@@ -48,6 +61,35 @@ _SENDER_NUM_RE = re.compile(
     + _SENDER_NUM_CODE,
     re.I)
 _SENDER_NUM_BAD = ('fax', 'tel', 'phone', 'هاتف', 'فاكس', 'ص.ب', 'mobile', 'موبايل', 'جوال')
+
+# رمز السجلّ العربي قبل الرقم («العدد: ش13/1844» — رمز القسم المُصدِر: ش13، ش4، د…).
+# قِيس على 9,155 كتاباً مؤكَّداً: الموظف **يجرّد** الرمز العربي ويحفظ التسلسل وحده
+# (الوارد الداخلي 99% رقمي صرف)، بينما **يُبقي** الأكواد اللاتينية للشركات الأجنبية
+# (الوارد الخارجي: 11% بأكواد EBS-MdOC / NK / QPC…). فنطابق عُرفَه حرفياً:
+# عربيٌّ ⇒ التسلسل فقط + الرمز يُعاد منفصلاً (إشارة هوية الجهة المُصدِرة)،
+# لاتينيٌّ ⇒ الكود كما هو.
+_AR_LETTERS = re.compile(r'[ء-ي]')
+# رأس الرمز: حرفٌ/حرفان عربيان + رقم اختياري («ش13»، «د»، «ش8») — قد يتكرّر بفواصل
+_SERIAL_RE = re.compile(r'\d{2,}')
+
+
+def split_register_code(code: str):
+    """يفصل رمز السجلّ العربي عن التسلسل — **لا تُجرَّد مسافاتُه قبل الاستدعاء**.
+    القاعدة الحاسمة: **آخر مجموعة أرقام هي التسلسل**، وما قبلها هو الرمز:
+      «ش13/2571» → ('2571', 'ش13')      | «ش13 2571» → ('2571', 'ش13')
+      «ش8/د/1844» → ('1844', 'ش8/د')    | «ش/12 1556» → ('1556', 'ش/12')  ← قسم تقنية المعلومات
+      «241/و» → ('241', None)            | لاتيني: (كما هو، None)
+    (الفاصل مسافةً = صيغة الصادر الخارجي من مكتب المدير العام.)"""
+    if not code or not _AR_LETTERS.search(code):
+        return (re.sub(r'\s+', '', code) if code else code), None
+    groups = list(_SERIAL_RE.finditer(code))
+    if not groups:
+        return re.sub(r'\s+', '', code), None
+    serial = groups[-1].group(0)
+    prefix = code[:groups[-1].start()].strip(' /-.')
+    if not _AR_LETTERS.search(prefix):      # «241/و»: لا رمز — التسلسل وحده
+        return serial, None
+    return serial, re.sub(r'\s+', '', prefix)
 
 # تاريخ الجهة المُرسِلة: بعد «التاريخ» (عربي) أو «Date/Dated» (إنجليزي، شائع بالإيميلات).
 # ثلاث صيغ للتاريخ: اسم شهر إنجليزي (June 20, 2026 / 20 June 2026) أو رقمي (20/6/2026).
@@ -325,6 +367,10 @@ class PatternMatcher:
                          'استنادا', 'إلحاقاً', 'الحاقا', 'عطفاً', 'عطفا', 'بناءً', 'بناء',
                          'نحيطكم', 'نعلمكم', 'نعرض', 'تفضلوا', 'أرجو', 'لديكم', 'طلبكم',
                          'حرصاً', 'حرصا', 'انطلاقاً', 'انطلاقا', 'تنفيذاً', 'تنفيذا',
+                         # مفتتحات ظرفية شائعة في كتب الشركة (صورة المالك: «نظراً
+                         # لارتفاع درجات الحرارة…» كانت تُلصق بالموضوع)
+                         'نظراً', 'نظرا', 'بالنظر', 'وفقاً', 'وفقا', 'بالاستناد', 'ضمن',
+                         'علماً', 'علما', 'تجدون', 'مرفق', 'المرفق', 'بموجب', 'بموافقة',
                          # افتتاحيات المتن الإنجليزية (إيميلات) — تُقارَن على المُصغَّر
                          'dear', 'greetings', 'attention', 'attn', 'we ', 'please', 'kindly',
                          'with reference', 'reference is', 'this letter', 'warm')
@@ -439,6 +485,67 @@ class PatternMatcher:
             return None, title or ''
         return m.group(1), m.group(2).strip()
 
+    # نوع الوثيقة مطبوعٌ صراحةً في ترويسة نظام إدارة الجودة («مذكرة داخلية») —
+    # فهو قراءةٌ لا تعلّمُ آلة (مصنّف حزيران قاس دون خطّ الأساس فرُمي). الترتيب
+    # مقصود: الأخصّ أولاً. القيم مطابقة لأنواع قاعدة البيانات المستخدَمة فعلاً.
+    _DOC_TYPE_RULES = (
+        # الإعمام يُعرَف من مُخاطَبه: «كافة» قد تتقدّم («كافة الهيئات والاقسام»)
+        # أو تتأخّر («الهيئات والاقسام المركزية كافة») — كلا الصيغتين في كتب الشركة.
+        (re.compile(r'كافة\s+ال(?:هيئات|هيأت|هيات|اقسام)'
+                    r'|ال(?:هيئات|هيأت|هيات)[^\n]{0,40}كافة'
+                    r'|الاقسام[^\n]{0,30}كافة'
+                    r'|(?:إلى|الى)\s*/\s*كافة'), 'اعمام'),
+        (re.compile(r'\bاعمام\b|\bإعمام\b|\bتعميم\b|\bتعاميم\b'), 'اعمام'),
+        (re.compile(r'ام[رﺭ]\s+اداري|أمر\s+إداري'), 'امر اداري'),
+        (re.compile(r'مذكرة\s+داخلية|مذكره\s+داخليه'), 'مذكرة داخلية'),
+        (re.compile(r'مراسلة\s+خارجية|مراسله\s+خارجيه'), 'مراسلة خارجية'),
+        (re.compile(r'\bمحضر\b'), 'محضر'),
+        (re.compile(r'\bتقرير\b'), 'تقرير'),
+    )
+
+    def extract_document_type(self, text: str) -> Tuple[Optional[str], float]:
+        """نوع الوثيقة من ترويسة الرأس مباشرةً («مذكرة داخلية»، «اعمام»…).
+        الإعمام يُكشف أيضاً من مُخاطَبه: «الى/ كافة الهيئات والاقسام المركزية»."""
+        head = _header_zone(text or '', max_lines=20)
+        for rx, value in self._DOC_TYPE_RULES:
+            if rx.search(head):
+                return value, 0.85
+        return None, 0.0
+
+    # مُخاطَب الكتاب: بعد «الى/» في رأس الصفحة (بنية الكتاب الرسمي)، أو «To:» في
+    # الصادر الخارجي ثنائي اللغة. «الــى» بالتطويل واردةٌ في كتب الشركة.
+    _RECIPIENT_RE = re.compile(
+        r'^\s*(?:ا?ل?[اإ]?ـ*ل?ـ*ى|الى|إلى)\s*[/:]\s*(.{3,90})$'
+        r'|^\s*to\s*[/:]\s*(.{3,90})$', re.M | re.I)
+
+    def extract_recipient(self, text: str) -> Optional[str]:
+        """اسم الجهة المُخاطَبة كما هو مكتوب بعد «الى/» (أو «To:») في الرأس.
+        يُنظَّف من لواحق التأشير («… كافة ( قسم المتابعة )») ويبقى نصّاً خاماً
+        للمطابقة — لا تفسير هنا."""
+        head = _header_zone(text or '', max_lines=20)
+        m = self._RECIPIENT_RE.search(head)
+        if not m:
+            return None
+        name = m.group(1) or m.group(2) or ''
+        name = re.sub(r'\s+', ' ', name).strip(' .:،-')
+        # قوس التأشير اليدوي على الإعمام: «الهيئات والاقسام كافة ( قسم المتابعة )»
+        name = re.sub(r'\s*\([^)]*\)\s*$', '', name).strip(' .:،-()')
+        return name or None
+
+    def extract_register_code(self, text: str) -> Optional[str]:
+        """رمز سجلّ الجهة المُصدِرة من «العدد: ش13/1844» → «ش13» (أو None).
+        إشارةُ هويةٍ قويّة للوارد الداخلي: الرمز مسجَّل لدينا لكل قسم."""
+        t = _header_zone(text or '').translate(_AR_DIGITS)
+        for m in _SENDER_NUM_RE.finditer(t):
+            raw = m.group(1).strip('/-. ')          # بمسافاته: «ش13 2571» فاصلها مسافة
+            pre = t[max(0, m.start() - 14):m.start()].lower()
+            if any(b in pre for b in _SENDER_NUM_BAD):
+                continue
+            _serial, reg = split_register_code(raw)
+            if reg:
+                return reg
+        return None
+
     def extract_sender_number(self, text: str) -> Tuple[Optional[str], float]:
         """رقم صادر الجهة المُرسِلة — مطبوعٌ في المستندات المكتوبة/الإيميلات ككودٍ
         مركّب بعد «العدد/ref/rf/ro/id» (مثل KHL/25/32)، **في منطقة الرأس فقط**:
@@ -448,12 +555,14 @@ class PatternMatcher:
         يتجاهل الفاكس/الهاتف. المكتوب بخطّ اليد لا يُقرأ (يبقى None)."""
         t = _header_zone(text or '').translate(_AR_DIGITS)
         for m in _SENDER_NUM_RE.finditer(t):
-            code = re.sub(r'\s+', '', m.group(1)).strip('/-. ')
+            raw = m.group(1).strip('/-. ')            # بمسافاته (فاصل «ش13 2571»)
             pre = t[max(0, m.start() - 14):m.start()].lower()
             if any(b in pre for b in _SENDER_NUM_BAD):
                 continue                              # سياق فاكس/هاتف → ليس رقم صادر
-            if len(re.sub(r'\D', '', code)) >= 2:     # أرقامٌ كافية (ليس ضجيجاً)
-                return code, 0.70
+            if len(re.sub(r'\D', '', raw)) >= 2:      # أرقامٌ كافية (ليس ضجيجاً)
+                # عُرف الموظف المقيس: الرمز العربي يُجرَّد، واللاتيني يبقى.
+                serial, _reg = split_register_code(raw)
+                return serial, 0.70
         return None, 0.0
 
     def extract_all_data(self, text: str) -> Dict:
@@ -468,8 +577,15 @@ class PatternMatcher:
         book_kind, kind_conf = self.extract_book_kind(text)
         entities = self.extract_entities(text)
         title = self.extract_title_keywords(text)
+        doc_type, doc_type_conf = self.extract_document_type(text)
+        register_code = self.extract_register_code(text)
+        recipient = self.extract_recipient(text)
 
         return {
+            'document_type': doc_type,
+            'document_type_confidence': doc_type_conf,
+            'register_code': register_code,
+            'recipient': recipient,
             'book_number': book_number,
             'book_number_confidence': book_number_conf,
             'date': date.isoformat() if date else None,
