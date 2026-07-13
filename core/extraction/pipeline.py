@@ -348,7 +348,7 @@ class AIExtractionService:
             if located is None:
                 return None
             strip, _label = located
-            text, conf = self._hw_reader.read(strip)
+            text, conf = self._hw_reader.read_best(strip)
             del img, strip
             if text and text.isdigit() and 1 <= len(text) <= 6 and conf >= CONF_GATE:
                 return text, conf

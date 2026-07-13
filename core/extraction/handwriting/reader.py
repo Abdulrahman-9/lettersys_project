@@ -93,3 +93,28 @@ class HandwrittenNumberReader:
         if not chars:
             return None, 0.0
         return ''.join(chars), float(np.mean(confs))
+
+    @staticmethod
+    def _ink_bbox(pil_gray, pad: int = 8):
+        """صندوق الحبر (أدكن من الخلفية بوضوح) أو None لشريط فارغ."""
+        a = np.asarray(pil_gray, dtype=np.float32)
+        if a.std() < 1:
+            return None
+        dark = a < (a.mean() - 1.2 * a.std())
+        if dark.sum() < 40:
+            return None
+        ys, xs = np.where(dark)
+        return (max(0, int(xs.min()) - pad), max(0, int(ys.min()) - pad),
+                min(pil_gray.width, int(xs.max()) + pad),
+                min(pil_gray.height, int(ys.max()) + pad))
+
+    def read_best(self, pil_gray) -> Tuple[Optional[str], float]:
+        """يقرأ الشريط الخام ومقصوصَ صندوق-الحبر ويعيد الأوثق — القصّ الضيق يطابق
+        توزيع تدريب v5 (تحقق حي: خام 0.79-0.86 ← مقصوص 1.00 على نفس الأرقام)."""
+        best = self.read(pil_gray)
+        bb = self._ink_bbox(pil_gray)
+        if bb:
+            alt = self.read(pil_gray.crop(bb))
+            if alt[0] and (not best[0] or alt[1] > best[1]):
+                best = alt
+        return best
