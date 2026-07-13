@@ -40,14 +40,17 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--top', type=int, default=12, help='عدد الجهات الأكثر مراسلةً')
         parser.add_argument('--per-entity', type=int, default=6, help='كتب لكل جهة')
+        parser.add_argument('--names', nargs='*', default=None,
+                            help='جهات محدَّدة بالاسم (جزئي) بدل الأكثر مراسلةً — مثل EBS NK')
 
     def handle(self, *args, **opts):
         import fitz
         from PIL import Image
-        from django.db.models import Count
+        from django.db.models import Count, Q
         from core.models import AIIntegrationSettings, Book, Entity
         from core.extraction.ocr.providers import build_offline_provider_from_settings
         from core.extraction.matchers.profile import induce_template
+        from core.extraction.handwriting.localize import NumberStripLocator
 
         prov = build_offline_provider_from_settings(AIIntegrationSettings.get_active_settings())
         pt = prov._pytesseract
@@ -55,9 +58,15 @@ class Command(BaseCommand):
         if prov.tessdata_dir:
             os.environ['TESSDATA_PREFIX'] = prov.tessdata_dir
 
-        top = (Entity.objects.filter(is_active=True)
-               .annotate(n=Count('issued_books', distinct=True))
-               .filter(n__gt=0).order_by('-n')[:opts['top']])
+        if opts['names']:
+            q = Q()
+            for nm in opts['names']:
+                q |= Q(name__icontains=nm)
+            top = Entity.objects.filter(is_active=True).filter(q)
+        else:
+            top = (Entity.objects.filter(is_active=True)
+                   .annotate(n=Count('issued_books', distinct=True))
+                   .filter(n__gt=0).order_by('-n')[:opts['top']])
 
         profiles = {}
         for ent in top:
@@ -107,6 +116,11 @@ class Command(BaseCommand):
                         t = (raw or '').strip().strip(':.ـ /')
                         if not t:
                             continue
+                        # خلايا جدول ترويسة الجودة («Date Rev»، «Rev No.») ليست
+                        # تسميات حقول — لولا استبعادها لقاس القياسُ الجدولَ نفسه
+                        # (تلوّث كشفته الجولة الأولى: كل «Date» كانت خليّة جدول).
+                        if NumberStripLocator._in_qms_table(tsv, i):
+                            continue
                         for field, rx in _MARKERS.items():
                             if not rx.match(t):
                                 continue
@@ -116,15 +130,19 @@ class Command(BaseCommand):
                                 continue
                             stat['markers'][field][t] += 1
                             stat['positions'][field].append((round(x, 3), round(y, 3)))
-                            # الرقم مطبوعٌ إن ظهرت أرقامٌ على يسار العلامة (RTL) بنفس السطر
+                            # الرقم مطبوعٌ إن ظهرت أرقامٌ بجوار العلامة في سطرها —
+                            # **على أيّ الجهتين**: العربية تكتبه يساراً (RTL) والشركات
+                            # الإنكليزية يميناً (LTR). افتراضُ اليسار وحده كان يقرأ
+                            # أرقام EBS/NK المطبوعة «يدويةً» خطأً.
                             if field == 'number':
-                                same_line = [
+                                near = [
                                     (tsv['text'][j] or '').translate(_AR_DIGITS)
                                     for j in range(len(words))
-                                    if abs(tsv['top'][j] - tsv['top'][i]) < tsv['height'][i]
-                                    and tsv['left'][j] < tsv['left'][i]
+                                    if j != i
+                                    and abs(tsv['top'][j] - tsv['top'][i]) < max(8, tsv['height'][i])
+                                    and abs(tsv['left'][j] - tsv['left'][i]) < 0.35 * W
                                 ]
-                                has_digits = any(re.search(r'\d{2,}', s) for s in same_line)
+                                has_digits = any(re.search(r'\d{2,}', s) for s in near)
                                 stat['number_printed' if has_digits else 'number_handwritten'] += 1
                     del img, tsv
                     seen += 1
