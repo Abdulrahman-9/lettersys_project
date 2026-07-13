@@ -704,6 +704,67 @@ class AIProcessingServiceTests(TestCase):
         # الإصابة لا تعيد كتابة الصفّ (يحفظ عدّاد الاستخدام)
         self.assertEqual(ExtractionCache.objects.get(image_hash=file_hash).hit_count, 1)
 
+    @mock.patch('core.extraction.pipeline.AIExtractionService._read_handwritten_sender_number')
+    @mock.patch('core.extraction.pipeline.build_online_provider_from_settings')
+    @mock.patch('core.extraction.pipeline.AIIntegrationSettings.get_active_settings')
+    @mock.patch('core.extraction.pipeline.build_offline_provider_from_settings')
+    @mock.patch('core.extraction.pipeline.OCRService')
+    @mock.patch('core.extraction.pipeline.ImageProcessor')
+    def test_handwritten_fallback_fills_missing_sender_number(
+        self, image_processor_cls, ocr_cls, offline_factory,
+        settings_getter, build_online_provider, hw_read,
+    ):
+        """مرحلة 3: حين تصمت الطبقات المطبوعة عن رقم الجهة، قارئ خط اليد يملؤه
+        (فوق بوابة الثقة المُعايَرة) — ولا يمسّ رقماً وجدته الطبقات الأدنى."""
+        ocr_cls.return_value.clean_text.side_effect = lambda t: t
+        offline_factory.return_value.extract.return_value = {
+            'raw_text': 'جمهورية العراق\nالتاريخ: 15-01-2026\nم/ اجتماع',
+            'avg_confidence': 0.9,
+        }
+        settings_getter.return_value = {'AI_PROVIDER': 'offline'}
+        hw_read.return_value = ('1754', 0.95)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
+            tmp.write(b'\xff\xd8\xff\xe0hw-doc')
+            temp_path = tmp.name
+        self.addCleanup(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+
+        service = AIExtractionService()
+        result = service._process_image_internal(temp_path)
+
+        self.assertNotEqual(result.status, 'failed', msg=result.error_message)
+        hw_read.assert_called_once()                       # لا رقم مطبوع ⇒ استُدعي
+        self.assertEqual(result.sender_number, '1754')
+        self.assertAlmostEqual(result.sender_number_confidence, 0.95)
+
+    @mock.patch('core.extraction.pipeline.AIExtractionService._read_handwritten_sender_number')
+    @mock.patch('core.extraction.pipeline.build_online_provider_from_settings')
+    @mock.patch('core.extraction.pipeline.AIIntegrationSettings.get_active_settings')
+    @mock.patch('core.extraction.pipeline.build_offline_provider_from_settings')
+    @mock.patch('core.extraction.pipeline.OCRService')
+    @mock.patch('core.extraction.pipeline.ImageProcessor')
+    def test_handwritten_fallback_skipped_when_printed_number_found(
+        self, image_processor_cls, ocr_cls, offline_factory,
+        settings_getter, build_online_provider, hw_read,
+    ):
+        ocr_cls.return_value.clean_text.side_effect = lambda t: t
+        offline_factory.return_value.extract.return_value = {
+            'raw_text': 'جمهورية العراق\nالعدد: 4412\nالتاريخ: 15-01-2026',
+            'avg_confidence': 0.9,
+        }
+        settings_getter.return_value = {'AI_PROVIDER': 'offline'}
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
+            tmp.write(b'\xff\xd8\xff\xe0printed-doc')
+            temp_path = tmp.name
+        self.addCleanup(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+
+        service = AIExtractionService()
+        result = service._process_image_internal(temp_path)
+
+        self.assertEqual(result.sender_number, '4412')     # الطبقة المطبوعة أصابت
+        hw_read.assert_not_called()                        # فلا حاجة لخط اليد
+
 
 class TesseractOCRProviderTests(TestCase):
     """اختبار محرّك Tesseract الجديد دون تشغيل tesseract فعلياً (يُحاكى pytesseract)."""

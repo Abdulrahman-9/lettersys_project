@@ -249,6 +249,10 @@ class AIExtractionService:
         self.entity_matcher = EntityMatcher()
         self.number_profiles = SenderNumberProfiles()
 
+        # قارئ الأرقام اليدوية (مرحلة 3) — كسول: يُبنى عند أول حاجة فقط
+        self._hw_reader = None
+        self._hw_locator = None
+
         # OCR providers are initialized lazily after the document is confirmed loadable.
         self._offline_provider = None
         self._settings = None
@@ -297,6 +301,63 @@ class AIExtractionService:
             logger.info('[pipeline] طبقة النصّ المضمّنة غير مقروءة (خردة/تشكيل بصري) — OCR بديلاً')
             return None
         return text
+
+    def _read_handwritten_sender_number(self, image_path, entity_id):
+        """مرحلة 3 — رقم الجهة المخربش بخط اليد حيث تعجز كل الطبقات المطبوعة:
+        تموضعٌ بمرساة «العدد» وبصمة تخطيط الجهة ← قصّ الشريط ← قراءة CRNN (v5:
+        94.5% على شرائط محجوزة) ← بوابة الثقة المُعايَرة. يعيد (نص، ثقة) أو None؛
+        أي فشلٍ داخلي يتدهور بصمت — القارئ لا يُسقط الأنبوب أبداً."""
+        try:
+            from core.extraction.handwriting import EntityLayoutPriors, NumberStripLocator
+            from core.extraction.handwriting.reader import CONF_GATE, HandwrittenNumberReader
+
+            if self._hw_reader is None:
+                self._hw_reader = HandwrittenNumberReader()
+                priors = EntityLayoutPriors(os.path.join('var', 'handwriting_layout_priors.json'))
+                self._hw_locator = NumberStripLocator(priors)
+            if not self._hw_reader.available:
+                return None
+
+            from PIL import Image as PILImage
+            if image_path.lower().endswith('.pdf'):
+                import fitz
+                doc = fitz.open(image_path)
+                page = doc[0]
+                zoom = 300 / 72.0
+                longer = max(page.rect.width, page.rect.height) * zoom
+                if longer > 3500:
+                    zoom *= 3500 / longer
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom),
+                                      colorspace=fitz.csGRAY, alpha=False)
+                img = PILImage.frombytes('L', (pix.width, pix.height), pix.samples)
+                doc.close()
+                del pix
+            else:
+                img = PILImage.open(image_path).convert('L')
+
+            self._ensure_ocr_stack()
+            prov = self._offline_provider
+            pt = prov._pytesseract
+            pt.pytesseract.tesseract_cmd = prov.cmd
+            if prov.tessdata_dir:
+                os.environ['TESSDATA_PREFIX'] = prov.tessdata_dir
+            tsv = pt.image_to_data(img, lang=prov.lang, config=f'--psm {prov.psm}',
+                                   output_type=pt.Output.DICT)
+            located = self._hw_locator.locate(img, tsv, entity_id=entity_id)
+            del tsv
+            if located is None:
+                return None
+            strip, _label = located
+            text, conf = self._hw_reader.read(strip)
+            del img, strip
+            if text and text.isdigit() and 1 <= len(text) <= 6 and conf >= CONF_GATE:
+                return text, conf
+            logger.info('[handwriting] قراءة دون البوابة: %r (ثقة %.2f)', text, conf)
+            return None
+        except Exception as exc:
+            logger.warning('[handwriting] فشل مسار خط اليد: %s — تدهور رشيق',
+                           type(exc).__name__)
+            return None
 
     def compute_image_hash(self, image_path: str) -> str:
         """
@@ -675,6 +736,18 @@ class AIExtractionService:
                         logger.info('[profile] إصلاح بادئة: %r → %r',
                                     result.sender_number, repaired)
                         result.sender_number = repaired
+
+            # Step 5.5: رقم الجهة المخربش بخط اليد — الملاذ الأخير حين تصمت كل
+            # الطبقات المطبوعة (قياس الأرشيف: أغلبية الأرقام يدوية، Tesseract ≈ 0%
+            # عليها). يعمل في مسارَي OCR والكاش كليهما (يحتاج ملف الصورة فقط).
+            if not result.sender_number and result.image_path:
+                _progress('handwritten_number')
+                hw = self._read_handwritten_sender_number(result.image_path,
+                                                          getattr(result, 'issuing_entity_id', None))
+                if hw:
+                    result.sender_number, result.sender_number_confidence = hw
+                    logger.info('[handwriting] رقم الجهة من خط اليد: %r (ثقة %.2f)',
+                                result.sender_number, result.sender_number_confidence)
 
             # Step 6: حساب الثقة الإجمالية
             _progress('confidence')

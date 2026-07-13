@@ -21,6 +21,11 @@ _MODEL_PATH = os.path.join('var', 'models', 'handwritten_digits_crnn.onnx')
 _CHARSET_PATH = os.path.join('var', 'models', 'handwritten_digits_charset.json')
 _STRIP_H, _MAX_W = 64, 512
 
+# بوابة الثقة — مُعايَرة على 128 شريطاً حقيقياً محجوزاً (v5، 2026-07-13):
+# عند 0.90: دقة 96.6% فوق العتبة بتغطية 91.4% (0.95 ⇒ 97.3%/87.5%).
+# الحقل اقتراحٌ يُراجَع أمام المستند مع شارة ثقة — لا يُحفظ آلياً.
+CONF_GATE = 0.90
+
 
 class HandwrittenNumberReader:
     """قارئ مفرد كسول: `read(صورة PIL رمادية) → (نص أو None، ثقة)`."""
