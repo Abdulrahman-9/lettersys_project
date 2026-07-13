@@ -113,8 +113,11 @@ class Command(BaseCommand):
                 page = doc[0]
                 zoom = 300 / 72.0
                 longer = max(page.rect.width, page.rect.height) * zoom
-                if longer > 3500:
-                    zoom *= 3500 / longer
+                # سقف 3500 بكسل يفجّر الذاكرة على 8GB مع صفحات كبيرة/ممسوحة
+                # (MemoryError جمّد حصاد التواريخ): 2600 ≈ 220DPI لصفحة A4 —
+                # يكفي Tesseract لتحديد التسمية، والشريط يُقصّ من نفس الرسم.
+                if longer > 2600:
+                    zoom *= 2600 / longer
                 pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom),
                                       colorspace=fitz.csGRAY, alpha=False)
                 img = Image.frombytes('L', (pix.width, pix.height), pix.samples)
@@ -132,7 +135,9 @@ class Command(BaseCommand):
                         priors.learn(eid, (label.left + label.width / 2) / img.width,
                                      (label.top + label.height / 2) / img.height)
                 del img, tsv
-            except Exception as exc:
+            except (Exception, MemoryError) as exc:
+                # MemoryError لا يرث Exception في كل المسارات (تخصيصات C) —
+                # التقاطه صراحةً يمنع تجميد الحصاد كله على مستندٍ ضخم واحد.
                 self.stdout.write(f'  تخطّي #{b.id}: {type(exc).__name__}: {str(exc)[:60]}')
             finally:
                 done_f.write(f'{b.id}\n')
