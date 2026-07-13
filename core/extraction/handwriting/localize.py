@@ -23,6 +23,12 @@ _LABEL_RES = {
     'date': re.compile(r'^ال?ت[أا]ريخ$|^date$', re.I),
 }
 _LABEL_RE = _LABEL_RES['number']   # توافق خلفي
+
+# ترويسة نظام إدارة الجودة (IMS) جدولٌ يحمل «Date Rev» و«Rev No.» و«Doc No.» —
+# وقياسٌ بصريّ على 8,704 شريط تاريخ أثبت أن مرساة «Date» كانت تلتقط خليّة الجدول
+# (وهي أعلى الصفحة فتفوز بقاعدة «الأعلى يفوز») فيخرج القصّ حدودَ جدولٍ لا تاريخاً.
+# الحلّ: أيّ مرشّحٍ يجاوره في سطره أحدُ ألفاظ الجدول يُرفض.
+_TABLE_CONTEXT = re.compile(r'^(rev|doc|no\.?|ims|form|f\s*-?\d)', re.I)
 _TOP_ZONE = 0.35           # التسمية الشرعية في أعلى ~ثلث الصفحة — تحتها جُمل متن
 _PRIOR_RADIUS = 0.14       # قرب prior الجهة يقبل مرشّحاً خارج الحزام (وُسّع 0.09→0.14
                            # بعد قياس v2: تسميات شرعية عند y≈0.38 قرب prior ȳ≈0.27 كانت
@@ -83,13 +89,32 @@ class NumberStripLocator:
 
     def __init__(self, priors: Optional[EntityLayoutPriors] = None, field: str = 'number'):
         self.priors = priors
+        self.field = field
         self._label_re = _LABEL_RES[field]
+
+    @staticmethod
+    def _in_qms_table(tsv: dict, i: int) -> bool:
+        """هل المرشّح خليّةٌ في جدول ترويسة نظام الجودة؟ (يجاوره Rev/Doc/No/IMS
+        في سطره) — «Date Rev» كانت تخطف مرساة التاريخ في كل كتب الشركة."""
+        top_i, h_i, left_i = tsv['top'][i], tsv['height'][i], tsv['left'][i]
+        for j, raw in enumerate(tsv.get('text', [])):
+            t = (raw or '').strip().strip(':.')
+            if not t or j == i:
+                continue
+            if abs(tsv['top'][j] - top_i) > max(8, h_i):        # سطرٌ آخر
+                continue
+            if abs(tsv['left'][j] - left_i) > 6 * max(20, tsv['width'][i]):
+                continue                                        # بعيدٌ أفقياً
+            if _TABLE_CONTEXT.match(t):
+                return True
+        return False
 
     def find_label(self, tsv: dict, width: int, height: int,
                    entity_id=None) -> Optional[LabelBox]:
         """أفضل مرشّح تسمية: داخل حزام أعلى-الصفحة (يرفض نسخ المتن — خطأ المسبار
-        الرئيس)، أو قريبٌ من prior الجهة؛ الأعلى في الصفحة يفوز. وعند غياب أي
-        تسمية مقروءة: السقوط لموضع الجهة المُتعلَّم نفسه (جهات «الصفر»)."""
+        الرئيس)، أو قريبٌ من prior الجهة؛ الأعلى في الصفحة يفوز. خلايا جدول
+        الجودة («Date Rev») مرفوضة. وعند غياب أي تسمية مقروءة: السقوط لموضع
+        الجهة المُتعلَّم نفسه (جهات «الصفر»)."""
         prior = self.priors.get(entity_id) if (self.priors and entity_id) else None
         best = None
         for i, raw in enumerate(tsv.get('text', [])):
@@ -103,6 +128,8 @@ class NumberStripLocator:
                 ((x - prior['x']) ** 2 + (y - prior['y']) ** 2) ** 0.5 <= _PRIOR_RADIUS)
             if not (in_top or near_prior):
                 continue   # نسخة متن («المرقم … في») — الرفض هنا حسم خطأ المسبار
+            if self._in_qms_table(tsv, i):
+                continue   # خليّة جدول الترويسة لا تسميةَ حقل
             if best is None or y < best[1]:
                 best = (i, y)
         if best is not None:

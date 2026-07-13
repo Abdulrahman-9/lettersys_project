@@ -96,7 +96,14 @@ def find_window(pred, target):
     return best
 
 
-rows = list(csv.DictReader(open(os.path.join(HARVEST, 'labels_date.csv'), encoding='utf-8')))
+_FIELDS = ['file', 'label', 'book_id', 'entity_id', 'source']
+_csv_path = os.path.join(HARVEST, 'labels_date.csv')
+with open(_csv_path, encoding='utf-8') as _f:
+    _first = _f.readline()
+# سجلّ الحصاد قد يأتي بلا ترويسة (استئنافات متعددة) — نكشفها بدل الافتراض
+_has_header = _first.startswith('file,')
+rows = list(csv.DictReader(open(_csv_path, encoding='utf-8'),
+                           fieldnames=None if _has_header else _FIELDS))
 out_rows, stats = [], {'exact': 0, 'near': 0, 'reject': 0, 'empty': 0}
 for r in rows:
     p = os.path.join(HARVEST, 'strips_date', r['file'])

@@ -103,6 +103,32 @@ class DateFieldLocatorTests(SimpleTestCase):
         self.assertIsNone(NumberStripLocator(field='number').find_label(t, self.W, self.H))
 
 
+class QMSTableGuardTests(SimpleTestCase):
+    """ترويسة نظام الجودة جدولٌ فيه «Date Rev» — كانت تخطف مرساة التاريخ في كل
+    كتب الشركة (تدقيق بصري على 8,704 شريط: أغلب القصّات حدود جدول)."""
+    W, H = 1000, 1400
+
+    def test_table_date_cell_rejected(self):
+        t = tsv([('Date', 500, 120, 60, 25), ('Rev', 570, 120, 50, 25),
+                 ('التاريخ', 700, 300, 90, 30)])
+        lb = NumberStripLocator(field='date').find_label(t, self.W, self.H)
+        self.assertIsNotNone(lb)
+        self.assertEqual(lb.top, 300)          # التسمية الحقيقية لا خليّة الجدول
+
+    def test_rev_no_cell_rejected_for_number(self):
+        t = tsv([('No.', 300, 130, 40, 25), ('Rev', 350, 130, 50, 25),
+                 ('العدد', 700, 320, 80, 30)])
+        lb = NumberStripLocator(field='number').find_label(t, self.W, self.H)
+        self.assertIsNotNone(lb)
+        self.assertEqual(lb.top, 320)
+
+    def test_standalone_date_label_still_found(self):
+        t = tsv([('Date', 700, 200, 60, 25)])   # إيميل إنكليزي بلا جدول
+        lb = NumberStripLocator(field='date').find_label(t, self.W, self.H)
+        self.assertIsNotNone(lb)
+        self.assertEqual(lb.top, 200)
+
+
 class PriorsPersistenceTests(SimpleTestCase):
     def test_running_mean_and_roundtrip(self):
         fd, path = tempfile.mkstemp(suffix='.json')
