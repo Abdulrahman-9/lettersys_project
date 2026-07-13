@@ -17,9 +17,11 @@ import shutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 HARVEST = os.path.join(HERE, 'harvest')
 DS = os.path.join(HERE, 'dataset_real')
-DS_STRIPS = os.path.join(DS, 'strips_refined')
+# تعبئة مسطّحة: الصور في جذر الداتاسِت — kaggle CLI على ويندوز يتخطى المجلدات
+# الفرعية صامتاً عند الرفع (dir-mode=skip الافتراضي) فيصعد الداتاسِت بلا صور.
+DS_STRIPS = DS
 
-os.makedirs(DS_STRIPS, exist_ok=True)
+os.makedirs(DS, exist_ok=True)
 
 rows = list(csv.DictReader(open(os.path.join(HARVEST, 'labels_clean.csv'), encoding='utf-8')))
 seen_md5, kept, dups, missing = set(), [], 0, 0

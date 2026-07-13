@@ -91,4 +91,13 @@ logs/
 tessdoc/
 
 # بصمات تخطيط خط اليد — مُشتقّة من قاعدة البيانات (تُبنى بأمر learn_number_layouts)
-var/handwriting_layout_priors.json
+var/handwriting_layout_priors*.json
+
+# عدّة تدريب خط اليد: شرائط حقيقية من الأرشيف + مخرجات كاغل + نماذج ثنائية —
+# بيانات حساسة/ضخمة لا تدخل git أبداً (تُبنى بأوامر الحصاد/التنقية/التعبئة)
+training/handwriting/harvest/
+training/handwriting/dataset_real*/
+training/handwriting/kaggle_out_*/
+training/handwriting/v5_fail_log/
+training/handwriting/v5_log_2/
+var/models/
