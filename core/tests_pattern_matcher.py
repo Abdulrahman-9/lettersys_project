@@ -172,6 +172,21 @@ class ExternalDateFormatsTests(SimpleTestCase):
         self.assertEqual(r('2l April 2025'), '21 April 2025')
         self.assertEqual(r('April4, 2026'), 'April4, 2026')           # شهرٌ سليم لا يُمَسّ
 
+    def test_glued_letter_digit_day_not_truncated(self):
+        """ZPEC #10940 (قراءةٌ بالعين): الكتاب مطبوعٌ «Date: 18 February 2025»
+        وطبقةُ نصّه تُخرج الواحدَ حرفاً «l8». الاختبارُ الوحدويّ أعلاه كان أخضرَ
+        بينما الأنبوبُ يُخرج 2025-02-08 — لأن الالتقاط سبق الإصلاح فبُتِر اليوم.
+        هذا اختبارُ الطريق الكامل: قيمةٌ خاطئة بيومٍ ناقص أسوأ من الفراغ."""
+        self.assertEqual(self._d('ZPEC\nReference Number: MF-2025-004\n'
+                                 'To: Midland Oil Company\nDate: l8 February 2025\n'
+                                 'From:\nXianliang Geng'), '2025-02-18')
+
+    def test_unrepairable_glued_day_stays_silent(self):
+        """حرفٌ غيرُ قابلٍ للإصلاح ملتصقٌ باليوم ⇒ صمتٌ لا تخمين (لا نبتر «S8»→«8»)."""
+        d, conf = self.m.extract_sender_date('ZPEC\nDate: S8 February 2025\nFrom:')
+        self.assertIsNone(d)
+        self.assertEqual(conf, 0.0)
+
     # ── علاماتٌ شوّهها OCR أو ألصقها (قراءةٌ بالعين لسبعة كتب صامتة) ──
     def test_label_mangled_dater(self):
         """qurnain #7021: «Dater March 16,2026» — النقطتان قُرِئتا حرف r."""

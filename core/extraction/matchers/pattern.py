@@ -105,7 +105,13 @@ def split_register_code(code: str):
 #   «16\ 4 \ 2026» (الشرطة المقلوبة — كتابةٌ عربية شائعة كانت تُفقَد كلياً).
 # السنة أربع خانات إلزامياً في الصيغ الحرفية: بدونها يخطف «3 May 16» (والـ«3»
 # ضجيجُ OCR) مكانَ التاريخ الحقيقي «May 16 2026».
+# الحارس اليساري `(?<![A-Za-z0-9])` ثمنُ درسٍ بالعين (ZPEC #10940): الكتاب مطبوعٌ
+# فيه «Date: 18 February 2025» لكنّ طبقة نصّ الـPDF تُخرج الواحدَ حرفاً: «l8».
+# فبلا حارسٍ يقتنص النمطُ «8 February 2025» من **داخل** الكلمة ويرمي الحرف — فيصير
+# اليوم 8 بدل 18 بثقة 0.80. قيمةٌ خاطئة، وهي أسوأ من الفراغ. الآن: رقمٌ ملتصقٌ بحرفٍ
+# لا يُقتنَص؛ إمّا يُصلحه `_repair_ocr_digits` (l→1) فيُقرأ صحيحاً، وإمّا نصمت.
 _DATE_VALUE_RE = re.compile(
+    r'(?<![A-Za-z0-9])'
     r'([A-Za-z]{3,9}\.?\s*\d{1,2}\s*,?\s*\d{4}'
     r'|\d{1,2}\s*[A-Za-z]{3,9}\.?\,?\s*\d{4}'
     r'|[\d٠-٩]{1,4}\s*[/\\\-.]\s*[\d٠-٩]{1,2}\s*[/\\\-.]\s*[\d٠-٩]{1,4})', re.I)
@@ -151,13 +157,36 @@ def _looks_like_language(line: str) -> bool:
     return good >= 2 and good / len(toks) >= 0.5 and junk <= len(s) * 0.25
 
 
+_OCR_DIGITS = str.maketrans({'l': '1', 'I': '1', '|': '1', 'O': '0', 'o': '0'})
+
+
+def _repair_ocr_digits(cand: str) -> str:
+    """يُصحّح l\\I\\O داخل مقاطع **رقمية محضة** شوّهها OCR: «l8»→«18»، «2l»→«21».
+
+    الشرط الصارم (درس مؤلم بالقراءة بالعين): المقطع رقميٌّ إن لم يبقَ فيه بعد
+    إسقاط الحروف المُلتبِسة إلا أرقام. اشتراطُ «فيه رقمٌ ما» وحده حوّل «April4»
+    (شهرٌ ملتصقٌ باليوم) إلى «Apri14» فأهدر تواريخ سليمة — إفسادُ الإصلاح."""
+    def _fix(tok):
+        t = tok.group()
+        if not re.search(r'\d', t):
+            return t
+        core = re.sub(r'[lI|Oo]', '', t)
+        if core and re.fullmatch(r'\d+', core):
+            return t.translate(_OCR_DIGITS)
+        return t                           # «April4» تبقى كما هي
+    return re.sub(r'[\w|]+', _fix, cand)
+
+
 def _find_labeled_date(text: str):
-    """يُعيد نصّ التاريخ الذي يلي علامةً في نافذتها، أو None."""
+    """يُعيد نصّ التاريخ الذي يلي علامةً في نافذتها، أو None.
+
+    الإصلاح يسبق الالتقاط عمداً: لو التقطنا أولاً من النصّ الخام لخرجنا بـ
+    «8 February 2025» من «l8 February 2025» ثم أصلحنا قيمةً مبتورةً أصلاً."""
     for lm in _DATE_LABEL_RE.finditer(text or ''):
         tail = text[lm.end():lm.end() + _DATE_WINDOW].split('\n')[0]
         if _TABLE_NEXT_RE.match(tail):
             continue                       # «Date Rev» — خليّة جدول لا حقل
-        vm = _DATE_VALUE_RE.search(tail)
+        vm = _DATE_VALUE_RE.search(_repair_ocr_digits(tail))
         if vm:
             return vm.group(1)
     return None
@@ -572,26 +601,9 @@ class PatternMatcher:
         return result
 
     # تشويه OCR داخل التاريخ: حرف l/I يُقرأ بدل الرقم 1، وO بدل 0 («l8 February»،
-    # «2l April»، «B\?\?bZ5») — قِيس في كتب ZPEC/اللجان الممسوحة. الإصلاح محصورٌ
-    # في **المرشّح** بعد العلامة (لا النصّ كله) فلا يفسد كلمةً سليمة.
-    _OCR_DIGITS = str.maketrans({'l': '1', 'I': '1', '|': '1', 'O': '0', 'o': '0'})
-
-    @staticmethod
-    def _repair_ocr_digits(cand: str) -> str:
-        """يُصحّح l/I/O داخل مقاطع **رقمية محضة** شوّهها OCR: «l8»→«18»، «2l»→«21».
-
-        الشرط الصارم (درس مؤلم بالقراءة بالعين): المقطع رقميٌّ إن لم يبقَ فيه بعد
-        إسقاط الحروف المُلتبِسة إلا أرقام. اشتراطُ «فيه رقمٌ ما» وحده حوّل «April4»
-        (شهرٌ ملتصقٌ باليوم) إلى «Apri14» فأهدر تواريخ سليمة — إفسادُ الإصلاح."""
-        def _fix(tok):
-            t = tok.group()
-            if not re.search(r'\d', t):
-                return t
-            core = re.sub(r'[lI|Oo]', '', t)
-            if core and re.fullmatch(r'\d+', core):
-                return t.translate(PatternMatcher._OCR_DIGITS)
-            return t                       # «April4» تبقى كما هي
-        return re.sub(r'[\w|]+', _fix, cand)
+    # «2l April») — قِيس في كتب ZPEC/اللجان الممسوحة. المنطق في `_repair_ocr_digits`
+    # على مستوى الوحدة لأن `_find_labeled_date` يحتاجه **قبل** الالتقاط.
+    _repair_ocr_digits = staticmethod(_repair_ocr_digits)
 
     def _sender_date_once(self, text: str) -> Tuple[Optional[datetime], float]:
         raw = _find_labeled_date(text)
