@@ -105,6 +105,86 @@ class DomainRulesTests(SimpleTestCase):
         self.assertEqual(data['register_code'], 'ش8/د')
 
 
+class ExternalDateFormatsTests(SimpleTestCase):
+    """صيغ التاريخ المطبوعة للجهات الخارجية — **كما قِيست** على 468 مستنداً رقمياً
+    من 26 جهة (2026-07-14): لكل شركة صيغتها، وOCR يشوّه أسماء الأشهر."""
+
+    def setUp(self):
+        self.m = PatternMatcher()
+
+    def _d(self, text):
+        got, _c = self.m.extract_sender_date(text)
+        return got.date().isoformat() if got else None
+
+    def test_nk_month_day_comma_no_space(self):
+        """NK: «June 20,2026» — الشكل الأشيع (20 مرة) وبلا مسافة بعد الفاصلة."""
+        self.assertEqual(self._d('NK Petroleum\nDate: June 20,2026\nSubject: x'), '2026-06-20')
+
+    def test_qurnain_month_day_comma_space(self):
+        self.assertEqual(self._d('qurnain\nDate : April 26, 2026\nSubject'), '2026-04-26')
+
+    def test_zhongman_day_month_year(self):
+        """Zhongman: «16 March 2026»."""
+        self.assertEqual(self._d('Zhongman\nDate: 16 March 2026\nSubject'), '2026-03-16')
+
+    def test_ebs_month_day_no_comma(self):
+        self.assertEqual(self._d('EBS PETROLEUM\nDate: May 16 2026\nSubject'), '2026-05-16')
+
+    def test_abbreviated_month_with_period(self):
+        """ZPEC: «07 Aug., 2025» — اختصارٌ بنقطة ثم فاصلة."""
+        self.assertEqual(self._d('ZPEC\nDate: 07 Aug., 2025\nSubject'), '2025-08-07')
+
+    def test_no_space_between_month_and_day(self):
+        """«September2,2025» — التصاقٌ تامّ (كان يفلت من النمط القديم)."""
+        self.assertEqual(self._d('Slb\nDate: September2,2025\nSubject'), '2025-09-02')
+
+    def test_ocr_mangled_month_july(self):
+        """«luly 5 2026» — OCR قرأ July خطأً (كتب EBS الممسوحة)."""
+        self.assertEqual(self._d('EBS\nDate: luly 5 2026\nSubject'), '2026-07-05')
+
+    def test_ocr_mangled_month_april(self):
+        """«Aptil 23,2026» — OCR قرأ April خطأً (كتب BADRA)."""
+        self.assertEqual(self._d('BADRA\nDate: Aptil 23,2026\nSubject'), '2026-04-23')
+
+    def test_arabic_numeric_still_day_first(self):
+        """الصيغة الرقمية تبقى يوم/شهر (العُرف العراقي) — لا تنقلب."""
+        self.assertEqual(self._d('شركة نفط الوسط\nالتاريخ: 7/6/2026\nم/ x'), '2026-06-07')
+
+    # ── ضجيج OCR بين العلامة والتاريخ (قراءةٌ بالعين لكتب صامتة، 2026-07-14) ──
+    def test_semicolon_separator_and_backslash_date(self):
+        """CNOOC #9389: «Date; 16\\ 4 \\ 2026» — فاصلةٌ منقوطة + شرطة مقلوبة."""
+        self.assertEqual(self._d('CNOOC AFRICA\nRef:LSD\\ 179\nDate; 16\\ 4 \\ 2026\nTo\\ x'),
+                         '2026-04-16')
+
+    def test_ocr_read_colon_as_digit(self):
+        """EBS #11189: «Date3 May 16 2026» — OCR قرأ النقطتين رقماً فالتصقت."""
+        self.assertEqual(self._d('EBS Petroleum\nRef. No. EBS-MdOC-20260456\n'
+                                 'Date3 May 16 2026\nSubject: ITP'), '2026-05-16')
+
+    def test_month_glued_to_day_not_mangled_by_ocr_repair(self):
+        """EBS #7064: «Date: April4, 2026» — إصلاحُ l→1 كان يفسدها إلى «Apri14»."""
+        self.assertEqual(self._d('EBS Petroleum\nRef. No. EBS-MdOC-20260324\n'
+                                 'Date: April4, 2026\nAttn.: Mr. x'), '2026-04-04')
+
+    def test_ocr_digit_repair_only_on_numeric_tokens(self):
+        r = PatternMatcher._repair_ocr_digits
+        self.assertEqual(r('l8 February 2025'), '18 February 2025')   # رقمٌ مشوَّه
+        self.assertEqual(r('2l April 2025'), '21 April 2025')
+        self.assertEqual(r('April4, 2026'), 'April4, 2026')           # شهرٌ سليم لا يُمَسّ
+
+    def test_qms_table_date_rev_still_rejected(self):
+        """«Date Rev / May 2025» في جدول الترويسة ليست تاريخ الكتاب."""
+        doc = ('وزارة النفط\nشركة نفط الوسط\nمذكرة داخلية\n'
+               'Rev No.  Date Rev  Doc.No.\nNo.1  May,2025  F-018Q\n'
+               'العدد: ش/12 1556\nالتاريخ: 9/7/2026\nم/ صيانة\n')
+        self.assertEqual(self._d(doc), '2026-07-09')     # لا 2025-05-xx
+
+    def test_month_repair_does_not_touch_other_words(self):
+        from core.extraction.matchers.pattern import repair_month_name
+        self.assertEqual(repair_month_name('Dear Sir, Ref: MF-2026'), 'Dear Sir, Ref: MF-2026')
+        self.assertEqual(repair_month_name('luly'), 'July')
+
+
 class RealCompanyDocumentsTests(SimpleTestCase):
     """وثائق حقيقية من أرشيف المالك (صور مُرسَلة 2026-07-13) — كل حالةٍ قانونُ مجال:
     ترويسة نظام الجودة، رمز السجلّ بصيغه الثلاث، الإعمام بـ«كافة» متقدّمةً أو

@@ -95,12 +95,83 @@ def split_register_code(code: str):
 # ثلاث صيغ للتاريخ: اسم شهر إنجليزي (June 20, 2026 / 20 June 2026) أو رقمي (20/6/2026).
 # «(?<![ء-ي])» = تسميةُ الحقل القائمة بذاتها فقط: ترفض «بالتاريخ/وبتأريخ» الظرفية
 # (إحالات المتن: «المرقم … بتأريخ …») — تاريخٌ خاطئ أسوأ من فراغ (توصية استشارية).
-_SENDER_DATE_RE = re.compile(
-    r'(?:(?<![ء-ي])الت[أا]ريخ|\bdated\b|\bdate\b)\s*[:/=.\-]?\s*('
-    r'[A-Za-z]{3,9}\.?\s+\d{1,2}\s*,?\s*\d{2,4}'
-    r'|\d{1,2}\s+[A-Za-z]{3,9}\.?\,?\s*\d{2,4}'
-    r'|[\d٠-٩]{1,4}\s*[/\-.]\s*[\d٠-٩]{1,2}\s*[/\-.]\s*[\d٠-٩]{1,4}'
-    r')', re.I)
+# صيغ التاريخ المطبوعة كما قِيست فعلاً على 468 مستنداً رقمياً من 26 جهة إنكليزية
+# (2026-07-14 — توجيه المالك «كل جهة لها صيغتها»): «June 20,2026» (بلا مسافة بعد
+# الفاصلة، 20 مرة)، «August 6, 2025» (11)، «16 March 2026» (10)، «May 16 2026» (6)،
+# «07 Aug., 2025»، و**«September2,2025» بلا مسافةٍ بين الشهر واليوم** — فالمسافة
+# صارت اختيارية (\s*). الصيغة الرقمية نادرة (مرّة واحدة) فغموض ي/ش لا يهدّدنا عملياً.
+# قيمة التاريخ (بلا علامة) — الصيغ المقيسة على مستندات الأرشيف الحقيقية:
+#   «June 20,2026» ، «August 6, 2025» ، «16 March 2026» ، «10Aug.,2025» ،
+#   «16\ 4 \ 2026» (الشرطة المقلوبة — كتابةٌ عربية شائعة كانت تُفقَد كلياً).
+# السنة أربع خانات إلزامياً في الصيغ الحرفية: بدونها يخطف «3 May 16» (والـ«3»
+# ضجيجُ OCR) مكانَ التاريخ الحقيقي «May 16 2026».
+_DATE_VALUE_RE = re.compile(
+    r'([A-Za-z]{3,9}\.?\s*\d{1,2}\s*,?\s*\d{4}'
+    r'|\d{1,2}\s*[A-Za-z]{3,9}\.?\,?\s*\d{4}'
+    r'|[\d٠-٩]{1,4}\s*[/\\\-.]\s*[\d٠-٩]{1,2}\s*[/\\\-.]\s*[\d٠-٩]{1,4})', re.I)
+
+# العلامة وحدها. **درس القراءة بالعين** (2026-07-14): اشتراطُ فاصلٍ نظيفٍ بين
+# العلامة والتاريخ كان يُفقدنا كتباً حقيقية — الواقع فوضويّ:
+#   «Date; 16\ 4 \ 2026» (فاصلة منقوطة) ، «Date3 May 16 2026» (OCR قرأ «:» رقماً!)
+# فالبحث الآن **بنافذةٍ قصيرة** بعد العلامة (حتى 28 محرفاً، سطرٌ واحد) لا بالتصاق.
+# «(?![a-z])» لا «\b»: OCR يلصق ضجيجاً رقمياً بالعلامة («Date3») فيُبطل حدَّ الكلمة —
+# نسمح برقمٍ بعدها ونمنع الحروف («Dateline» ليست علامة).
+_DATE_LABEL_RE = re.compile(r'(?<![ء-ي])الت[أا]ريخ|\bdated?(?![a-z])', re.I)
+_DATE_WINDOW = 28
+# خليّة جدول ترويسة الجودة «Date Rev / May 2025» ليست تاريخ كتاب (نفس فخّ المُموضِع)
+_TABLE_NEXT_RE = re.compile(r'^\W{0,3}(rev|doc|no\b)', re.I)
+
+
+def _find_labeled_date(text: str):
+    """يُعيد نصّ التاريخ الذي يلي علامةً في نافذتها، أو None."""
+    for lm in _DATE_LABEL_RE.finditer(text or ''):
+        tail = text[lm.end():lm.end() + _DATE_WINDOW].split('\n')[0]
+        if _TABLE_NEXT_RE.match(tail):
+            continue                       # «Date Rev» — خليّة جدول لا حقل
+        vm = _DATE_VALUE_RE.search(tail)
+        if vm:
+            return vm.group(1)
+    return None
+
+# أسماء الأشهر التي يُشوّهها OCR في المسوحات: «luly 5 2026» (July)، «Aptil 23,2026»
+# (April) — قِيسا في عيّنة EBS/BADRA. نصحّح الاسمَ بمسافة تحرير ≤1 من شهرٍ معروف
+# (أو اختصاره) قبل التحليل، فتُقرأ التواريخ التي كانت تضيع كلياً.
+_EN_MONTHS = ('january', 'february', 'march', 'april', 'may', 'june', 'july',
+              'august', 'september', 'october', 'november', 'december')
+_MONTH_TOKEN_RE = re.compile(r'\b[A-Za-z]{3,9}\b')
+
+
+def _edit_le1(a: str, b: str) -> bool:
+    if a == b:
+        return True
+    if abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        return sum(1 for x, y in zip(a, b) if x != y) <= 1
+    if len(a) > len(b):
+        a, b = b, a
+    return any(a == b[:i] + b[i + 1:] for i in range(len(b)))
+
+
+_MONTH_ABBR = {m[:3] for m in _EN_MONTHS} | {'sept'}
+
+
+def repair_month_name(text: str) -> str:
+    """يُصحّح اسم شهرٍ شوّهه OCR («luly»→«July»، «Aptil»→«April») — بلا مساس بغيره.
+
+    الشرط صارم: مسافة تحرير ≤1 من **الاسم الكامل** للشهر. (مطابقةُ البادئة
+    الثلاثية بمسافة تحرير جرّبت فأسقطت «Dear» → «December» — الكلمة العادية
+    أقرب لشهرٍ ممّا نظنّ، فلا تساهل هنا.)"""
+    def _fix(m):
+        tok = m.group()
+        low = tok.lower()
+        if low in _EN_MONTHS or low in _MONTH_ABBR:
+            return tok                      # سليمٌ أصلاً (كاملاً أو اختصاراً)
+        for mon in _EN_MONTHS:
+            if _edit_le1(low, mon):
+                return mon.capitalize()
+        return tok
+    return _MONTH_TOKEN_RE.sub(_fix, text)
 
 # حدّ منطقة الرأس: في الرسالة العراقية الرسمية تاريخُ الكتاب يقع دائماً فوق سطر
 # الموضوع (م/ /الموضوع/Subject)، وكلُّ تاريخٍ تحته إحالةٌ في المتن. القطعُ عند
@@ -439,6 +510,11 @@ class PatternMatcher:
             if fixed != zone:
                 result = self._sender_date_once(fixed)
         if result[0] is None:
+            # اسم شهرٍ شوّهه OCR («luly 5 2026») — قِيس في كتب EBS/BADRA الممسوحة
+            repaired = repair_month_name(zone)
+            if repaired != zone:
+                result = self._sender_date_once(repaired)
+        if result[0] is None:
             # سطر تاريخ عارٍ في الرأس (قالب Slb الغربي) — انظر _BARE_DATE_LINE_RE
             for ln in zone.split('\n'):
                 m = _BARE_DATE_LINE_RE.match(ln)
@@ -455,11 +531,34 @@ class PatternMatcher:
                     return (date_obj, 0.70)
         return result
 
+    # تشويه OCR داخل التاريخ: حرف l/I يُقرأ بدل الرقم 1، وO بدل 0 («l8 February»،
+    # «2l April»، «B\?\?bZ5») — قِيس في كتب ZPEC/اللجان الممسوحة. الإصلاح محصورٌ
+    # في **المرشّح** بعد العلامة (لا النصّ كله) فلا يفسد كلمةً سليمة.
+    _OCR_DIGITS = str.maketrans({'l': '1', 'I': '1', '|': '1', 'O': '0', 'o': '0'})
+
+    @staticmethod
+    def _repair_ocr_digits(cand: str) -> str:
+        """يُصحّح l/I/O داخل مقاطع **رقمية محضة** شوّهها OCR: «l8»→«18»، «2l»→«21».
+
+        الشرط الصارم (درس مؤلم بالقراءة بالعين): المقطع رقميٌّ إن لم يبقَ فيه بعد
+        إسقاط الحروف المُلتبِسة إلا أرقام. اشتراطُ «فيه رقمٌ ما» وحده حوّل «April4»
+        (شهرٌ ملتصقٌ باليوم) إلى «Apri14» فأهدر تواريخ سليمة — إفسادُ الإصلاح."""
+        def _fix(tok):
+            t = tok.group()
+            if not re.search(r'\d', t):
+                return t
+            core = re.sub(r'[lI|Oo]', '', t)
+            if core and re.fullmatch(r'\d+', core):
+                return t.translate(PatternMatcher._OCR_DIGITS)
+            return t                       # «April4» تبقى كما هي
+        return re.sub(r'[\w|]+', _fix, cand)
+
     def _sender_date_once(self, text: str) -> Tuple[Optional[datetime], float]:
-        m = _SENDER_DATE_RE.search(text)
-        if not m:
+        raw = _find_labeled_date(text)
+        if not raw:
             return (None, 0.0)
-        cand = m.group(1).translate(_AR_DIGITS)
+        cand = self._repair_ocr_digits(raw).translate(_AR_DIGITS)
+        cand = cand.replace('\\', '/')          # «16\ 4 \ 2026» → «16/ 4 / 2026»
         # رقمي أولاً (extract_date يعالج ترتيب اليوم/الشهر/السنة بدقّة)
         date_obj, _c = self.extract_date(cand)
         if date_obj and _is_plausible_date(date_obj):

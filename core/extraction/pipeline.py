@@ -297,7 +297,14 @@ class AIExtractionService:
             import fitz
             doc = fitz.open(path)
             try:
-                text = '\n'.join(doc[i].get_text('text') for i in range(doc.page_count)).strip()
+                # sort=True: **ترتيبٌ بصريّ (أعلى→أسفل) لا بترتيب كتل الملفّ**.
+                # قِيس بالقراءة بالعين (2026-07-14): برامج المسح تكتب كتل النصّ
+                # بترتيبٍ عشوائي، فيقع سطر «Date» — وهو أعلى الصفحة بصرياً — عند
+                # السطر 21-23 في التيار، أي خارج «منطقة الرأس» فيضيع التاريخ رغم
+                # وضوحه التام في الصورة (كتب qurnain/EBS/NORTH). بالترتيب يعود
+                # إلى السطر 7-9 حيث ينتمي. يفيد كلَّ الحقول لا التاريخَ وحده.
+                text = '\n'.join(doc[i].get_text('text', sort=True)
+                                 for i in range(doc.page_count)).strip()
             finally:
                 doc.close()
         except Exception as exc:
