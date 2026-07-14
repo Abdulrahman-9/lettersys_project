@@ -132,6 +132,25 @@ _DATE_WINDOW = 28
 _TABLE_NEXT_RE = re.compile(r'^\W{0,3}(rev|doc|no\b)', re.I)
 
 
+# «هل هذا سطرٌ لغةٌ أم خردة ماسح؟» — طبقات المسوحات العربية تُخرج ركاماً لاتينياً
+# («Jeiill 6..y1j.1 r ,tr li;») يبدو نصّاً وليس كذلك. الحكم بنيويّ لا قاموسيّ:
+# لغةٌ حقيقية = حروفٌ متّصلة في كلماتٍ معقولة الطول، لا ركامٌ من مقاطعَ قصيرة
+# مبعثرة بين رموز. يحمي حقل العنوان من إخراج قيمةٍ خاطئة (أسوأ من الفراغ).
+def _looks_like_language(line: str) -> bool:
+    s = (line or '').strip()
+    if len(s) < 6:
+        return False
+    ar = sum(1 for c in s if '؀' <= c <= 'ۿ')
+    if ar >= 8:                                  # عربيةٌ كافية ⇒ لغة
+        return True
+    toks = re.findall(r'[A-Za-z]{2,}', s)
+    if len(toks) < 2:
+        return False
+    good = sum(1 for t in toks if len(t) >= 3)
+    junk = len(re.findall(r'[^\w\s؀-ۿ]', s))     # رموزٌ غريبة كثيرة = خردة
+    return good >= 2 and good / len(toks) >= 0.5 and junk <= len(s) * 0.25
+
+
 def _find_labeled_date(text: str):
     """يُعيد نصّ التاريخ الذي يلي علامةً في نافذتها، أو None."""
     for lm in _DATE_LABEL_RE.finditer(text or ''):
@@ -413,8 +432,12 @@ class PatternMatcher:
             r'(?:^|\s)م\s*[/:\-.,،]\s*([^\n]{3,80})',
             r'سبجكت\s*[:/\-]?\s*([^\n]{3,80})',
         )
+        # الفاصل **اختياري** (نفس درس التاريخ: تسامحٌ مع العلامة): OCR يُسقط
+        # النقطتين فتصير «Subject First Quarter Report…» — وكانت تُفقَد كلياً
+        # فيسقط المحرّك لأول سطر ويلتقط «Remark ! SFor lnformation» خردةً
+        # (EBS #11239، qurnain #11241 — قراءةٌ بالعين).
         english_markers = (
-            r'(?i:subject|subj)\s*[:.\-]\s*([^\n]{3,80})',
+            r'(?i:subject|subj)\s*[:.\-]?\s+([^\n]{3,80})',
         )
         letterhead_hints = ('جمهورية', 'وزارة', 'الشركة العامة', 'محطة', 'مديرية', 'هيئة',
                             'republic', 'ministry', 'company', 'station', 'division', 'general')
@@ -505,11 +528,14 @@ class PatternMatcher:
                 continue  # سطر المُرسَل إليه («إلى/ الجهات…») ليس موضوعاً أبداً (بلاغ مالك)
             if line.lstrip().startswith(('(', '﴾', '«', ')')):
                 continue  # شعار/علامة مائية بين قوسين (مثل شعارات وطنية) — لا موضوع
-            if sum(1 for c in line if '؀' <= c <= 'ۿ') >= 8:
+            if _looks_like_language(line) and sum(1 for c in line if '؀' <= c <= 'ۿ') >= 8:
                 return _words(line)
 
-        # 3) احتياطي
-        return _words(' '.join(lines[:3]))
+        # 3) لا مؤشّر ولا سطرَ لغةٍ سليم ⇒ **صمتٌ صادق**. السقوطُ إلى «أول ثلاثة
+        #    أسطر» كان يُخرج خردة الترويسة المشوّهة عنواناً («Jeiill 6..y1j.1 r
+        #    ,tr li; is.,;j…» — قراءةٌ بالعين لكتب ممسوحة). القيمة الخاطئة أسوأ
+        #    من الفراغ (مبدأ المالك)، والواجهة تعرض الحقل فارغاً للمراجعة.
+        return ''
 
     def extract_sender_date(self, text: str) -> Tuple[Optional[datetime], float]:
         """تاريخ رسالة الجهة المُرسِلة — من علامة «التاريخ» (عربي) أو «Date/Dated»

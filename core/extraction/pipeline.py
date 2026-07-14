@@ -220,6 +220,18 @@ def _text_layer_is_readable(text: str) -> bool:
     ar_tokens = set(re.findall(r'[؀-ۿ]{2,}', lower))
     if len(ar_tokens & _COMMON_AR) >= 2:
         return True
+
+    # **ثغرة قِيست بالقراءة بالعين (2026-07-14):** كتابٌ عربيّ ممسوح طبقتُه العربية
+    # خردة («a.,.ri+Jl .rLrf») كان يعبر البوّابة بجواز سفرٍ إنكليزيّ — لأن ترويسة
+    # نظام الجودة تحمل إنكليزيةً سليمة («Integrated management system», «Doc No.»,
+    # «Midland Oil Company»)! فيبني المحرّك على ركامٍ ويُخرج عناوين خردة.
+    # القاعدة: **المستند العربيُّ الغالب يجب أن تكون عربيّتُه مقروءة** — ولا تشفع
+    # له إنكليزيةُ ترويسته. الرفض يعني OCR المُدرَّب (الأدقّ للعربية أصلاً).
+    latin_chars = sum(1 for c in lower if 'a' <= c <= 'z')
+    ar_chars = sum(1 for c in text if '؀' <= c <= 'ۿ')
+    if ar_chars > 120 and ar_chars >= 0.30 * max(1, ar_chars + latin_chars):
+        return False
+
     latin_tokens = re.findall(r'[a-z]{2,}', lower)
     if not latin_tokens:
         return False
