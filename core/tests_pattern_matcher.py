@@ -172,6 +172,32 @@ class ExternalDateFormatsTests(SimpleTestCase):
         self.assertEqual(r('2l April 2025'), '21 April 2025')
         self.assertEqual(r('April4, 2026'), 'April4, 2026')           # شهرٌ سليم لا يُمَسّ
 
+    # ── علاماتٌ شوّهها OCR أو ألصقها (قراءةٌ بالعين لسبعة كتب صامتة) ──
+    def test_label_mangled_dater(self):
+        """qurnain #7021: «Dater March 16,2026» — النقطتان قُرِئتا حرف r."""
+        self.assertEqual(self._d('QURNAIN\nRef. No. QPC-MoO-2026\nDater March 16,2026\nAttn:'),
+                         '2026-03-16')
+
+    def test_label_mangled_dete(self):
+        """NK #7049: «Dete: March 30, 2026» — «Date» نفسها مقروءة خطأً."""
+        self.assertEqual(self._d('NK\nDete: March 30, 2026\nTo : MdOC'), '2026-03-30')
+
+    def test_label_glued_to_number(self):
+        """Geo-Jade #7023: «Ref:ZU-20260015Date: March 20, 2026» — التصاقٌ برقم."""
+        self.assertEqual(self._d('Geo-Jade\nRef:ZU-20260015Date: March 20, 2026\nTo: Mr. x'),
+                         '2026-03-20')
+
+    def test_label_glued_to_word(self):
+        """Zhongman #11097: «JMC ChairmanDate: 09 Feb. 2026» — التصاقٌ بكلمة."""
+        self.assertEqual(self._d('Zhongman\nReference Number; MF-2026-045\n'
+                                 'cc: Mr. Sattar, JMC ChairmanDate: 09 Feb. 2026\nSubject: x'),
+                         '2026-02-09')
+
+    def test_common_words_containing_date_are_not_labels(self):
+        """«update/candidate/mandate» ليست علامات — والقيمة الصارمة تحرس ما بقي."""
+        self.assertIsNone(self._d('We will update 20 March 2026 records\nحسب الخطة'))
+        self.assertIsNone(self._d('The candidate 5 May 2026 was chosen'))
+
     def test_qms_table_date_rev_still_rejected(self):
         """«Date Rev / May 2025» في جدول الترويسة ليست تاريخ الكتاب."""
         doc = ('وزارة النفط\nشركة نفط الوسط\nمذكرة داخلية\n'
