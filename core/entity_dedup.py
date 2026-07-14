@@ -94,6 +94,106 @@ def find_duplicate_clusters():
     return clusters
 
 
+# ============================================================
+# الكشف الذكي (الدلالي) — ما يفوت التطبيع الإملائي
+# ============================================================
+# التطبيع المحافظ يمسك «مديرية/مديريه» فقط. أما تكرارات الواقع فأشيعها:
+#   تصحيف حرفٍ واحد («المدبر العام»، «العقزد»، «لجة»)، التصاقُ كلمتين
+#   («المديرالعام»)، وبادئاتٌ تشريفية («السيد رئيس…» مقابل «رئيس…»).
+# الشرط الصارم: كل رمزٍ في الاسم الأقصر يقابل رمزاً في الأطول بمسافة تحرير ≤1،
+# والبقايا تشريفيةٌ فقط — فلا تُدمج فروقٌ دلالية («الفنية»≠«الادارية») ولا
+# علاقات تبعية («شعبة X» ليست «قسم X»). الناتج مرشّحات للمراجعة البشرية لا دمجاً.
+_HONORIFIC = {'السيد', 'السادة', 'مكتب', 'المحترم', 'المحترمة'}
+_GENERIC_WORDS = {'شركة', 'قسم', 'شعبة', 'مديرية', 'دائرة', 'هيئة', 'هيأة', 'هياة',
+                  'وزارة', 'لجنة', 'وحدة', 'company', 'limited', 'ltd', 'co', 'corp',
+                  'petroleum', 'oil', 'the', 'of', 'and', 'for', 'iraq'}
+
+
+def _sig_tokens(name):
+    """رموز الاسم المميِّزة (بعد التطبيع وإسقاط الكلمات العامة والواو العاطفة)."""
+    s = re.sub(r'[^\w\s؀-ۿ]', ' ', norm_key(name))
+    out = []
+    for t in s.split():
+        if t.startswith('و') and len(t) > 3:
+            t = t[1:]
+        if t in ('و',) or t in _GENERIC_WORDS or len(t) < 2:
+            continue
+        out.append(t)
+    return out
+
+
+def _within_one_edit(a, b):
+    """مسافة تحرير ≤ 1 (إبدال/حذف واحد) — رمزان متقاربان طولاً."""
+    if a == b:
+        return True
+    if abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        return sum(1 for x, y in zip(a, b) if x != y) <= 1
+    if len(a) > len(b):
+        a, b = b, a
+    return any(a == b[:i] + b[i + 1:] for i in range(len(b)))
+
+
+def _near_duplicate(t1, t2):
+    """اسمان مرشّحان للدمج: كل رمزٍ في الأقصر يقابل رمزاً في الأطول (مسافة ≤1،
+    أو التصاقٌ بكلمة مجاورة)، والبقايا تشريفيةٌ محضة."""
+    if not t1 or not t2:
+        return False
+    short, long_ = (t1, t2) if len(t1) <= len(t2) else (t2, t1)
+    rest = list(long_)
+    for tok in short:
+        hit = next((r for r in rest if _within_one_edit(tok, r)), None)
+        if hit is not None:
+            rest.remove(hit)
+            continue
+        # التصاقُ كلمتين: «المديرالعام» ≡ «المدير» + «العام» — بالاتجاهين
+        pair = next(((a, b) for i, a in enumerate(rest) for b in rest[i + 1:]
+                     if _within_one_edit(tok, a + b) or _within_one_edit(tok, b + a)), None)
+        if pair:
+            rest.remove(pair[0])
+            rest.remove(pair[1])
+            continue
+        return False
+    return all(r in _HONORIFIC for r in rest)
+
+
+def find_semantic_candidates(limit=200):
+    """مرشّحات دمجٍ ذكية (تصحيف/التصاق/تشريف) — للمراجعة البشرية في الواجهة.
+    يُعيد عناقيد بنفس شكل find_duplicate_clusters (الأمّ أولاً)."""
+    ents = list(annotate_book_counts(Entity.objects.filter(is_active=True)))
+    toks = {e.id: _sig_tokens(e.name) for e in ents}
+    parent = {e.id: e.id for e in ents}
+
+    def _root(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    ortho = {e.id for c in find_duplicate_clusters() for e in c['members']}
+    for i in range(len(ents)):
+        for j in range(i + 1, len(ents)):
+            a, b = ents[i], ents[j]
+            if a.id in ortho and b.id in ortho:
+                continue                       # يمسكه الكشف الإملائي أصلاً
+            if _near_duplicate(toks[a.id], toks[b.id]):
+                parent[_root(a.id)] = _root(b.id)
+
+    groups = defaultdict(list)
+    for e in ents:
+        groups[_root(e.id)].append(e)
+    clusters = []
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        members.sort(key=_canonical_sort_key)
+        clusters.append({'key': 'مرشّح ذكي', 'members': members,
+                         'canonical': members[0], 'smart': True})
+    clusters.sort(key=lambda c: -sum(book_count(m) for m in c['members']))
+    return clusters[:limit]
+
+
 def build_manual_cluster(ids):
     """يبني عنقوداً يدوياً من جهات حدّدها المستخدم بنفسه — تجاوزٌ للكشف الآلي
        (للتكرارات التي لا يلتقطها التطبيع: اختصارات، فروق دلالية، إلخ).

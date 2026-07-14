@@ -268,6 +268,38 @@ class PrepareEntitiesCommandTests(TestCase):
         self.assertIsNone(dup.merged_into_id)
 
 
+class SemanticCandidatesTests(TestCase):
+    """الكشف الذكي: يمسك ما يفوت التطبيع (تصحيف/التصاق/تشريف) ولا يخلط الدلالات."""
+
+    def test_single_letter_typo_paired(self):
+        a = Entity.objects.create(name='مكتب السيد المدير العام')
+        b = Entity.objects.create(name='مكتب السيد المدبر العام')     # تصحيف حرف
+        got = {m.id for c in dd.find_semantic_candidates() for m in c['members']}
+        self.assertEqual(got, {a.id, b.id})
+
+    def test_honorific_only_difference_paired(self):
+        a = Entity.objects.create(name='رئيس لجنة الادارة المشتركة')
+        b = Entity.objects.create(name='السيد رئيس لجنة الادارة المشتركة')
+        clusters = dd.find_semantic_candidates()
+        self.assertEqual(len(clusters), 1)
+        self.assertEqual({m.id for m in clusters[0]['members']}, {a.id, b.id})
+
+    def test_fused_words_paired(self):
+        a = Entity.objects.create(name='السيد المدير العام')
+        b = Entity.objects.create(name='السيد المديرالعام')            # التصاق
+        self.assertEqual(len(dd.find_semantic_candidates()), 1)
+
+    def test_semantic_difference_not_paired(self):
+        Entity.objects.create(name='مكتب معاون المدير العام للشؤون الفنية')
+        Entity.objects.create(name='مكتب معاون المدير العام للشؤون الادارية')
+        self.assertEqual(dd.find_semantic_candidates(), [])   # الفنية ≠ الادارية
+
+    def test_subordination_not_paired(self):
+        Entity.objects.create(name='قسم المتابعة')
+        Entity.objects.create(name='شعبة المتابعة الفنية')             # تبعية لا تكرار
+        self.assertEqual(dd.find_semantic_candidates(), [])
+
+
 class MergePlanTests(TestCase):
     """خطة الدمج المُخلَّدة — قرارات مُراجَعة بشرياً تُعاد عند كل استعادة."""
 

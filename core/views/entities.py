@@ -347,8 +347,10 @@ def entity_bulk_restore(request):
 
 @staff_required
 def entity_merge(request):
-    """صفحة دمج الجهات المكرّرة — كشف آلي + عنقود يدوي اختياري + دمج مؤكَّد."""
-    from ..entity_dedup import build_manual_cluster, find_duplicate_clusters, merge_entities
+    """صفحة دمج الجهات المكرّرة — كشف إملائي + **مرشّحات ذكية** (تصحيف/التصاق/
+    تشريف) + عنقود يدوي + دمج مؤكَّد. المرشّحات اقتراحٌ للمراجعة لا دمجٌ آلي."""
+    from ..entity_dedup import (build_manual_cluster, find_duplicate_clusters,
+                                find_semantic_candidates, merge_entities)
 
     if request.method == "POST":
         canonical_id = (request.POST.get("canonical") or "").strip()
@@ -374,6 +376,10 @@ def entity_merge(request):
         return redirect("entity_merge")
 
     clusters = find_duplicate_clusters()
+    smart_clusters = []
+    if request.GET.get("smart") == "1":
+        # مسحٌ أثقل (مقارنة أزواج) — يُشغَّل بطلب المستخدم لا في كل تحميل
+        smart_clusters = find_semantic_candidates()
     manual_cluster = None
     ids_raw = (request.GET.get("ids") or "").strip()
     if ids_raw:
@@ -385,5 +391,7 @@ def entity_merge(request):
     return render(
         request,
         "core/entity_merge.html",
-        {"clusters": clusters, "manual_cluster": manual_cluster},
+        {"clusters": clusters, "smart_clusters": smart_clusters,
+         "smart_on": request.GET.get("smart") == "1",
+         "manual_cluster": manual_cluster},
     )

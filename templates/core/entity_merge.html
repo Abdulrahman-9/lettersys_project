@@ -54,6 +54,36 @@
     </div>
   {% endif %}
 
+  {# ── الكشف الذكي (الدلالي): تصحيف/التصاق/تشريف — يفوت التطبيع الإملائي ── #}
+  <div class="merge-section-title mt-4">
+    <i class="bi bi-stars me-1"></i>الكشف الذكي (تصحيف وتشريفات)
+  </div>
+  {% if not smart_on %}
+    <div class="alert alert-secondary d-flex justify-content-between align-items-center py-2">
+      <span class="small mb-0">
+        يكشف ما يفوت التطبيع: خطأً مطبعياً بحرف («المدبر العام»)، التصاق كلمتين
+        («المديرالعام»)، وبادئةً تشريفية («السيد رئيس…» ≡ «رئيس…»). مسحٌ أثقل — يعمل بطلبك.
+      </span>
+      <a class="btn btn-sm btn-warning fw-semibold" href="?smart=1">
+        <i class="bi bi-search"></i> ابحث عن مرشّحات ذكية
+      </a>
+    </div>
+  {% elif smart_clusters %}
+    <div class="alert alert-warning py-2">
+      <strong>{{ smart_clusters|length }}</strong> مرشّحاً — <strong>اقتراحاتٌ للمراجعة لا دمجٌ آلي</strong>.
+      لا تُدمَج الفروق الدلالية («الفنية» ≠ «الادارية») ولا التبعيات («شعبة X» ≠ «قسم X»)،
+      لكن راجِع كل عنقود بعينك قبل الدمج.
+    </div>
+    {% for c in smart_clusters %}
+      {% include 'core/partials/_merge_cluster.html' with c=c %}
+    {% endfor %}
+  {% else %}
+    <div class="alert alert-success py-2">
+      <i class="bi bi-check-circle-fill me-1"></i>
+      لا مرشّحات ذكية — لا تصحيفات ولا تشريفات مكرّرة.
+    </div>
+  {% endif %}
+
 </div>
 
 <script>
