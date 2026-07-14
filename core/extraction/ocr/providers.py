@@ -4,7 +4,6 @@ core.extraction.ocr.providers
 ===============================
 OCR provider factory — EasyOCR (offline) and Azure Vision (online).
 """
-import base64
 import io
 import ipaddress
 import logging

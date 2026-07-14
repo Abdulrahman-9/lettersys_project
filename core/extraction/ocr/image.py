@@ -95,8 +95,24 @@ class ImageProcessor:
             longer_px = max(page.rect.width, page.rect.height) * zoom
             if max_dim and longer_px > max_dim:
                 zoom *= max_dim / longer_px
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat, alpha=False)  # بدون alpha channel
+
+            # رسم مع سقوط تلقائي عند نفاد الذاكرة: نبدأ بالدقّة المستهدفة ونتراجع
+            # تدريجياً إن فشل تخصيص الـpixmap على جهاز ضيّق الذاكرة (mupdf يرمي
+            # «malloc failed») — أفضل من فشل الاستخراج كليّاً. الأرضية ≈130 DPI
+            # تبقى مقروءةً للعربية المطبوعة. لا خسارة جودة متى توفّرت الذاكرة.
+            min_zoom = 130 / 72
+            while True:
+                try:
+                    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+                    break
+                except Exception as render_exc:
+                    msg = str(render_exc).lower()
+                    out_of_mem = isinstance(render_exc, MemoryError) or 'alloc' in msg or 'memory' in msg
+                    if not out_of_mem or zoom <= min_zoom:
+                        raise
+                    zoom *= 0.66
+                    logger.warning("[ImageProcessor] نقص ذاكرة عند الرسم — إعادة المحاولة بدقّة أدنى (~%d DPI)",
+                                   round(zoom * 72))
 
             # تحويل لـ numpy array
             img_data = pix.tobytes("png")
@@ -104,7 +120,7 @@ class ImageProcessor:
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
             doc.close()
-            logger.info(f"[ImageProcessor] PDF converted at 300 DPI, size: {img.shape}")
+            logger.info(f"[ImageProcessor] PDF converted (~{round(zoom * 72)} DPI), size: {img.shape}")
 
             # تحسين الصورة فوراً بعد التحويل — يُتخطّى لمحرّكات تطبّق تحسينها
             # داخلياً (Tesseract): المعالجة الثقيلة هنا تؤذي دقّته.

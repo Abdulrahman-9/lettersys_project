@@ -38,6 +38,8 @@ def _reservation_dict(r):
         'remaining_seconds': r.remaining_seconds,
         'expires_at':       r.expires_at.isoformat(),
         'reserved_at':      r.reserved_at.isoformat(),
+        'is_recycled':      r.is_recycled,
+        'cooldown_until':   r.cooldown_until.isoformat() if r.cooldown_until else None,
     }
 
 
@@ -58,34 +60,61 @@ def reserve_number(request):
     except (ValueError, TypeError):
         return JsonResponse({'success': False, 'message': 'بيانات غير صالحة'}, status=400)
 
-    # هل لديه حجز نشط بالفعل؟
-    existing = BookNumberReservation.get_active_for_user(request.user, kind)
-    if existing:
-        # تحقق إذا انتهت صلاحيته فعلياً (لكن الـ status لا يزال active في DB)
-        if existing.is_expired:
-            existing.mark_expired()
-            existing = None
-        else:
-            return JsonResponse({
-                'success': True,
-                'already_reserved': True,
-                'reservation': _reservation_dict(existing),
-                'message': f'لديك قيد محجوز بالفعل: {existing.formatted}'
-            })
-
-    # حجز جديد — ذري
+    # الخدمة الموحّدة تتكفّل بكل الحالات: قائم / استرجاع cooldown / إعادة تدوير / جديد
     try:
-        reservation = BookNumberReservation.reserve(request.user, kind, EXPIRE_MINUTES)
-        logger.info(f'[Reservation] Reserved {reservation.formatted} for user={request.user.username} kind={kind}')
-        return JsonResponse({
-            'success': True,
-            'already_reserved': False,
-            'reservation': _reservation_dict(reservation),
-            'message': f'تم حجز القيد {reservation.formatted} لك'
-        })
+        from .reservation_service import reserve_number as _svc_reserve
+        reservation, outcome = _svc_reserve(request.user, kind, EXPIRE_MINUTES)
     except Exception as e:
         logger.error(f'[Reservation] Error: {e}', exc_info=True)
         return JsonResponse({'success': False, 'message': 'خطأ في الحجز'}, status=500)
+
+    messages = {
+        'existing': f'لديك قيد محجوز بالفعل: {reservation.formatted}',
+        'resumed':  f'تم استرجاع قيدك بعد انقطاع سابق: {reservation.formatted}',
+        'recycled': f'رقم مُدوّر: {reservation.formatted} — تأكّد أن ورقتك لا تحمل رقماً متضارباً.',
+        'new':      f'تم حجز القيد {reservation.formatted} لك',
+    }
+    logger.info('[Reservation] %s %s for user=%s kind=%s',
+                outcome, reservation.formatted, request.user.username, kind)
+    return JsonResponse({
+        'success': True,
+        'already_reserved': outcome == 'existing',
+        'outcome': outcome,
+        'reservation': _reservation_dict(reservation),
+        'message': messages.get(outcome, messages['new']),
+    })
+
+
+@login_required
+@require_http_methods(['POST'])
+def reservation_heartbeat(request):
+    """
+    POST /books/api/reservation/heartbeat/
+    body JSON: { "reservation_id": 42 }
+
+    نبضة حضور: تُحدّث last_heartbeat فيبقى الحجز حيّاً. تُرجع alive=False إن لم يعد
+    الحجز نشطاً (سُحب/دُوّر/انتهى) — فتُنبّه الواجهة لطلب رقم جديد.
+    """
+    try:
+        body = json.loads(request.body or '{}')
+        res_id = body.get('reservation_id')
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'message': 'بيانات غير صالحة'}, status=400)
+
+    try:
+        r = BookNumberReservation.objects.get(pk=res_id, user=request.user)
+    except BookNumberReservation.DoesNotExist:
+        return JsonResponse({'success': False, 'alive': False, 'message': 'الحجز غير موجود'}, status=404)
+
+    if not r.is_live_status:
+        return JsonResponse({
+            'success': True, 'alive': False,
+            'status': r.status, 'status_label': r.get_status_display(),
+            'message': 'انتهت صلاحية حجزك أو أُعيد تدويره — اطلب رقماً جديداً.',
+        })
+
+    r.touch_heartbeat()
+    return JsonResponse({'success': True, 'alive': True, 'remaining_seconds': r.remaining_seconds})
 
 
 @login_required

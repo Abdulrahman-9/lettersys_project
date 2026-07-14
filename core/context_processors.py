@@ -26,6 +26,20 @@ def system_settings(request):
     return {'system_settings': obj}
 
 
+def embed_mode(request):
+    """وضع التضمين لمركز الإعدادات (?embed=1): تُعرَض الأداة وحدها بلا قشرة التطبيق.
+
+    نجعله «لاصقاً» عبر ترويسة ``Sec-Fetch-Dest: iframe`` التي يرسلها المتصفح مع
+    كل تنقّل داخل الإطار — بما فيه ما بعد إعادة التوجيه (302) عند حفظ النماذج —
+    كي لا تعود قشرة التطبيق للظهور داخل الإطار بعد أوّل حفظ.
+    """
+    is_embed = (
+        request.GET.get('embed') == '1'
+        or request.headers.get('Sec-Fetch-Dest') == 'iframe'
+    )
+    return {'is_embed': is_embed}
+
+
 def mail_unread(request):
     """عدد الإيميلات الواردة غير المقروءة — يظهر في badge الـ sidebar."""
     if not request.user.is_authenticated:

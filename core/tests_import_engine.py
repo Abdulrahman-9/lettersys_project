@@ -134,22 +134,24 @@ class ImportOneTests(TestCase):
         self.assertFalse(r.success)
         self.assertEqual(Book.objects.count(), 0)
 
-    def test_duplicate_number_gets_legacy_prefix(self):
+    def test_duplicate_number_is_skipped_by_default(self):
+        # الافتراضي الآن بلا بادئة «قديم» — التعارض يُتخطّى (لا نسخة مكرّرة بعلامة).
         eng = make_engine(self.user)
         eng._import_one({'our_number': '500', 'title': 'الأول'})
         r2 = eng._import_one({'our_number': '500', 'title': 'الثاني'})
         self.assertTrue(r2.success)
-        self.assertFalse(r2.skipped)
-        self.assertEqual(Book.objects.get(pk=r2.book_id).our_number, 'قديم-500')
+        self.assertTrue(r2.skipped)
+        self.assertEqual(Book.objects.count(), 1)                  # لم يُنشأ مكرّر
 
-    def test_double_duplicate_is_skipped(self):
-        eng = make_engine(self.user)
-        eng._import_one({'our_number': '600', 'title': 'الأول'})
-        eng._import_one({'our_number': '600', 'title': 'الثاني'})   # قديم-600
-        r3 = eng._import_one({'our_number': '600', 'title': 'الثالث'})
-        self.assertTrue(r3.success)
-        self.assertTrue(r3.skipped)
-        self.assertEqual(Book.objects.count(), 2)                  # لم يُنشأ ثالث
+    def test_duplicate_with_custom_prefix_still_disambiguates(self):
+        # آلية البادئة تبقى متاحة لمن يمرّرها صراحةً (توافق).
+        eng = LegacyImportEngine(field_map={}, import_user=self.user,
+                                 dry_run=False, number_prefix='X-')
+        eng._import_one({'our_number': '500', 'title': 'الأول'})
+        r2 = eng._import_one({'our_number': '500', 'title': 'الثاني'})
+        self.assertTrue(r2.success)
+        self.assertFalse(r2.skipped)
+        self.assertEqual(Book.objects.get(pk=r2.book_id).our_number, 'X-500')
 
     def test_entities_created_and_cached(self):
         eng = make_engine(self.user)

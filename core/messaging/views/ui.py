@@ -24,6 +24,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 logger = logging.getLogger('lettersys')
@@ -94,9 +95,44 @@ def mail_sent(request):
 #  Inbox
 # ══════════════════════════════════════════════════════
 
+#: أقلّ فاصل بين مزامنتين تلقائيتين عند فتح الوارد.
+INBOX_SYNC_COOLDOWN_SECONDS = 120
+
+
+def _autosync_inbox_if_due():
+    """يجلب الردود عند فتح صفحة الوارد — بلا Celery ولا Redis.
+
+    «المزامنة التلقائية» كانت وعداً بلا جدول: ``sync_inbox_task`` موجودة لكنها لم
+    تكن مُدرَجة في ``CELERY_BEAT_SCHEDULE``، وCelery يحتاج Redis غير المتاح على
+    كل نشر. فنجلب هنا عند الفتح — وهو الوقت الذي يهمّ فيه المستخدم فعلاً.
+
+    مهلة تبريد كي لا يُقصف خادم IMAP مع كل تحديث للصفحة، وسقف الرسائل وبوّابة
+    الصلة يحدّان الكلفة. وأي فشل لا يجوز أن يمنع عرض الصندوق.
+    """
+    from core.models import EmailSettings
+    from core.messaging.engines.imap import IMAPEngine
+
+    try:
+        cfg = EmailSettings.get()
+        if not cfg.imap_sync_enabled:
+            return
+
+        last = cfg.imap_last_sync
+        if last and (timezone.now() - last).total_seconds() < INBOX_SYNC_COOLDOWN_SECONDS:
+            return
+
+        stats = IMAPEngine(cfg).sync_inbox()
+        logger.info(f"[mail_inbox] مزامنة عند الفتح: {stats}")
+    except Exception as e:
+        # الصندوق يُعرَض من قاعدة البيانات على أي حال — لا نُسقط الصفحة لأجل IMAP.
+        logger.warning(f"[mail_inbox] تعذّرت المزامنة عند الفتح — {e}")
+
+
 @login_required
 def mail_inbox(request):
     from core.models import IncomingEmail
+
+    _autosync_inbox_if_due()
 
     qs = IncomingEmail.objects.select_related('thread', 'thread__book', 'thread__entity') \
                               .order_by('-received_at')

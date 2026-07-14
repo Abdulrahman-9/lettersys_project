@@ -22,6 +22,9 @@ email_urlpatterns = [
     path('settings/',            email_endpoints.email_settings,      name='email-settings'),
     path('entity/<int:entity_id>/',        email_endpoints.entity_email_info,    name='entity-email-info'),
     path('entity/<int:entity_id>/update/', email_endpoints.update_entity_email,  name='entity-email-update'),
+    # إرسال الكتاب بمرفقاته إلى جهته المعنيّة (معاينة ثم إرسال)
+    path('book/<int:book_id>/preview/',    email_endpoints.book_email_preview,   name='book-email-preview'),
+    path('book/<int:book_id>/send/',       email_endpoints.send_book_to_entity,  name='book-email-send'),
 ]
 
 # ────────────────────────────────────────────────────

@@ -193,6 +193,19 @@ class ExternalDateFormatsTests(SimpleTestCase):
                                  'cc: Mr. Sattar, JMC ChairmanDate: 09 Feb. 2026\nSubject: x'),
                          '2026-02-09')
 
+    def test_bare_numeric_date_line_when_no_label(self):
+        """BADRA #11040: نموذجٌ مطبوع بلا كلمة «Date» — سطرٌ عارٍ «24.10.2025 № AG-8748»."""
+        doc = ('BADRA PROJECT\nRoyal Tulip Al-Rasheed Hotel, Office 335\n'
+               'International Green Zone, Yafa Street, 8070\nBaghdad, Republic of Iraq\n'
+               'www.badraproject.com\n24.10.2025  No  AG-8748\n'
+               'Attn.: Mr. Mohammed Yaseen Hasan\nSubject: Bids technical evaluation\n')
+        self.assertEqual(self._d(doc), '2025-10-24')
+
+    def test_bare_line_does_not_beat_a_real_label(self):
+        """السطر العاري ملاذٌ أخير: لا يزاحم علامةً صريحة."""
+        doc = 'NK\n01.01.2020\nDate: March 30, 2026\nTo: MdOC\n'
+        self.assertEqual(self._d(doc), '2026-03-30')
+
     def test_common_words_containing_date_are_not_labels(self):
         """«update/candidate/mandate» ليست علامات — والقيمة الصارمة تحرس ما بقي."""
         self.assertIsNone(self._d('We will update 20 March 2026 records\nحسب الخطة'))

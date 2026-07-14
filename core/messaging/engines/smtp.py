@@ -20,7 +20,7 @@ Usage:
 
 import logging
 import re
-from email.mime.text import MIMEText
+from email.utils import make_msgid
 from typing import Optional
 
 from django.conf import settings
@@ -209,6 +209,12 @@ class SMTPEngine:
             # Build plain text from HTML
             plain_text = self._html_to_plain(html_body)
             
+            # Message-ID صريح ومحفوظ — بدونه لا يمكن ربط أي رد وارد بهذه الرسالة.
+            # (لو تُرك لـDjango لَولّده وقت الإرسال ولَضاع، فيبقى الحقل
+            # ``smtp_message_id`` فارغاً كما كان الحال.)
+            domain = (from_addr.split('@')[-1] or 'lettersys.local').strip('> ')
+            message_id = make_msgid(domain=domain)
+
             # Create email with alternatives
             msg = EmailMultiAlternatives(
                 subject=subject,
@@ -218,19 +224,21 @@ class SMTPEngine:
                 cc=cc,
                 reply_to=reply_to,
                 connection=connection,
+                headers={'Message-ID': message_id},
             )
             msg.attach_alternative(html_body, 'text/html')
-            
+
             if attachments:
                 for fname, content, mime in attachments:
                     msg.attach(fname, content, mime)
-            
+
             msg.send()
-            
+
             log.status = BookEmailLog.STATUS_SENT
+            log.smtp_message_id = message_id
             log.delivered_at = timezone.now()
-            log.save(update_fields=['status', 'delivered_at'])
-            logger.info(f'[SMTPEngine] Sent to={to_str} subject="{subject}" book={book.pk}')
+            log.save(update_fields=['status', 'smtp_message_id', 'delivered_at'])
+            logger.info(f'[SMTPEngine] Sent to={to_str} subject="{subject}" book={book.pk} mid={message_id}')
         
         except Exception as exc:
             log.status = BookEmailLog.STATUS_FAILED
@@ -333,18 +341,42 @@ class SMTPEngine:
     def test_connection(self) -> dict:
         """
         Test SMTP connection (used from settings panel).
-        
+
+        يبني اتصال SMTP **صريحاً** من إعدادات قاعدة البيانات بدل ``get_connection()``:
+        ذاك يسقط إلى backend الافتراضي حين ``is_active=False``، وهو في وضع DEBUG
+        الـconsole backend الذي ينجح ``open()`` عليه دائماً — فكان الزر يُبلّغ
+        «نجاح» حتى بلا خادم ولا كلمة مرور. الاختبار يجب أن يختبر الحقيقة.
+
         Returns:
             dict: {'success': bool, 'message': str}
         """
+        cfg = self.email_cfg
+        if not cfg:
+            return {'success': False, 'message': 'لا توجد إعدادات بريد محفوظة.'}
+
+        missing = [label for value, label in (
+            (cfg.smtp_host,     'خادم SMTP'),
+            (cfg.smtp_user,     'اسم المستخدم'),
+            (cfg.smtp_password, 'كلمة المرور'),
+        ) if not value]
+        if missing:
+            return {'success': False,
+                    'message': 'إعدادات SMTP ناقصة: ' + '، '.join(missing)}
+
         try:
-            if not self.email_cfg:
-                return {'success': False, 'message': 'No email configuration provided'}
-            
-            conn = self.get_connection()
+            conn = get_connection(
+                backend='django.core.mail.backends.smtp.EmailBackend',
+                host=cfg.smtp_host,
+                port=cfg.smtp_port,
+                username=cfg.smtp_user,
+                password=cfg.smtp_password,
+                use_tls=cfg.smtp_use_tls,
+                use_ssl=cfg.smtp_use_ssl,
+                fail_silently=False,
+            )
             conn.open()
             conn.close()
-            return {'success': True, 'message': 'تم الاتصال بالخادم بنجاح ✓'}
+            return {'success': True, 'message': 'تم الاتصال بخادم SMTP بنجاح ✓'}
         except Exception as e:
             return {'success': False, 'message': f'فشل الاتصال: {e}'}
 

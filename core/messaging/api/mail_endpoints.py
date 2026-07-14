@@ -351,9 +351,12 @@ def api_template_preview(request, pk):
 
 @login_required
 @require_http_methods(['POST'])
-@rate_limit('test_smtp', max_attempts=5, window_seconds=300, by='user')
 def api_test_smtp(request):
-    """Delegates to canonical email_endpoints.test_smtp to avoid duplication."""
+    """Delegates to canonical email_endpoints.test_smtp to avoid duplication.
+
+    لا محدِّد معدّل هنا عمداً: النقطة الأصلية تحمله بنفس المفتاح، فكان وجوده في
+    الطرفين يستهلك محاولتين لكل نقرة واحدة ويُنفِد الحصّة قبل أوانها.
+    """
     if not request.user.is_staff:
         return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
     from core.messaging.api.email_endpoints import test_smtp
@@ -366,7 +369,7 @@ def api_test_smtp(request):
 
 @login_required
 @require_http_methods(['POST'])
-@rate_limit('test_imap', max_attempts=5, window_seconds=300, by='user')
+@rate_limit('test_imap', max_attempts=20, window_seconds=300, by='user')
 def api_test_imap(request):
     if not request.user.is_staff:
         return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)

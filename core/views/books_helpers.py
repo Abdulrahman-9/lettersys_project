@@ -3,10 +3,108 @@
 Internal helper functions for book views.
 """
 
-from django.db.models import Case, CharField, Value, When
+from django.db.models import Case, CharField, Q, Value, When
 from django.utils import timezone
 
-from ..models import Entity
+from ..models import Book, Entity
+
+
+# ── كشف التكرار ──────────────────────────────────────────────────────────
+# الصفات الأربع التي تُطابِق كتاباً تطابقاً تامّاً (طلب المالك):
+#   1) العنوان   2) تاريخ الطرف   3) اسم جهة الطرف   4) رقم الطرف (رقم صادرهم)
+# تطابق 4/4 = مكرر مؤكَّد (يُمنَع)؛ 3/4 = مشابه (تنبيه ذكي). الفراغ لا يُحتسب مطابقةً.
+
+def _norm_ar(s):
+    """تطبيع عربي خفيف لمقارنة العناوين/الأسماء — يعيد استخدام مطبِّع مطابقة الجهات (DRY)."""
+    from ..extraction.matchers.entity import _normalize_ar
+    return _normalize_ar(s)
+
+
+def _book_party_names(book, is_incoming):
+    """أسماء جهات الطرف الآخر (مطبَّعة) لكتابٍ مرشَّح — تشمل الجهات الحيّة والمؤرشفة نصّاً."""
+    if is_incoming:
+        live = book.issuing_entities.all()
+        archived = book.archived_issuing_names or []
+    else:
+        live = book.receiving_entities.all()
+        archived = book.archived_receiving_names or []
+    names = {_norm_ar(e.name) for e in live}
+    names |= {_norm_ar(n) for n in archived}
+    return {n for n in names if n}
+
+
+def find_duplicate_candidates(*, kind, title, cmp_date, party_number,
+                              party_entities, exclude_id=None, limit=5):
+    """يبحث عن كتبٍ مطابقة/مشابهة وفق الصفات الأربع، ويُعيد قائمة dict مرتّبة تنازلياً
+    بعدد المطابقات (match_count ∈ {3,4} فقط — ما دونها ليس تنبيهاً).
+
+    Args:
+        kind:            نوع الكتاب (نطاق البحث — نفس النوع فقط)
+        title:           عنوان الكتاب المُدخَل
+        cmp_date:        تاريخ المقارنة (sender_date للوارد، date للصادر) — أو None
+        party_number:    رقم الطرف (sender_number) — أو ''
+        party_entities:  قائمة كائنات Entity لجهة الطرف الآخر (مُصدِرة للوارد/مُستلمة للصادر)
+        exclude_id:      استثناء كتاب (للتعديل)
+        limit:           أقصى عدد مرشّحين يُعادون
+
+    Returns: list[dict] بالمفاتيح: id, our_number, title, date, match_count, matched
+    """
+    is_incoming = kind in ('incoming_internal', 'incoming_external')
+    ntitle = _norm_ar(title)
+    nnumber = (party_number or '').strip()
+    nparty = {_norm_ar(e.name) for e in (party_entities or [])}
+    nparty = {n for n in nparty if n}
+    party_ids = [e.pk for e in (party_entities or []) if getattr(e, 'pk', None)]
+
+    # مرشّحون أوّليّون على DB: نفس النوع + غير محذوف + أيّ إشارة قوية (تاريخ/رقم/عنوان/جهة).
+    # OR-net واسع بما يكفي ليضمّ كل مطابقة حقيقية (3/4 قد لا تشمل العنوان)، ومحدود بسقف.
+    base = Book.objects.filter(kind=kind, is_deleted=False)
+    if exclude_id:
+        base = base.exclude(pk=exclude_id)
+
+    prelim = Q()
+    if title.strip():
+        prelim |= Q(title__icontains=title.strip()[:80])
+    if cmp_date:
+        prelim |= (Q(sender_date=cmp_date) if is_incoming else Q(date=cmp_date))
+    if nnumber:
+        prelim |= Q(sender_number=nnumber)
+    if party_ids:
+        rel = 'issuing_entities__in' if is_incoming else 'receiving_entities__in'
+        prelim |= Q(**{rel: party_ids})
+    if not prelim:
+        return []
+
+    candidates = (base.filter(prelim)
+                      .prefetch_related('issuing_entities', 'receiving_entities')
+                      .distinct()[:300])
+
+    results = []
+    for b in candidates:
+        matched = []
+        if ntitle and _norm_ar(b.title) == ntitle:
+            matched.append('title')
+        b_date = b.sender_date if is_incoming else b.date
+        if cmp_date and b_date and b_date == cmp_date:
+            matched.append('date')
+        if nparty and (nparty & _book_party_names(b, is_incoming)):
+            matched.append('entity')
+        b_number = (b.sender_number or '').strip()
+        if nnumber and b_number and b_number == nnumber:
+            matched.append('number')
+
+        if len(matched) >= 3:
+            results.append({
+                'id': b.id,
+                'our_number': b.our_number,
+                'title': b.title,
+                'date': (b_date.isoformat() if b_date else ''),
+                'match_count': len(matched),
+                'matched': matched,
+            })
+
+    results.sort(key=lambda r: r['match_count'], reverse=True)
+    return results[:limit]
 
 
 def _resolve_entities(ids_list, new_names_list, default_etype):

@@ -82,6 +82,25 @@ class EnsurePdfBytesTests(TestCase):
         self.assertFalse(converted)
         self.assertEqual(out, data)
 
+    def test_pdf_with_leading_bom_passes_through(self):
+        # تراجع: PDF مسبوق بـUTF-8 BOM (تكتبه بعض أدوات التصدير) يُكشف كـPDF لا صورة
+        data = b"\xef\xbb\xbf" + _pdf_bytes()
+        out, converted, original = ensure_pdf_bytes(data, "bom.pdf")
+        self.assertFalse(converted)          # لا يُحوَّل كصورة
+        self.assertIsNone(original)
+        self.assertEqual(out, data)
+
+    def test_validate_accepts_bom_pdf_rejects_bom_text(self):
+        # مسار الحفظ: كان يرفض PDF بـBOM برسالة «نوع الملف غير مسموح»؛ يُقبل الآن،
+        # ويبقى ملفٌ نصّي مسبوق بـBOM مرفوضاً (الحارس فعّال).
+        from core.attachment_service import validate_attachment_file
+        from django.core.exceptions import ValidationError
+        validate_attachment_file(
+            SimpleUploadedFile("bom.pdf", b"\xef\xbb\xbf" + _pdf_bytes(), content_type="application/pdf"))
+        with self.assertRaises(ValidationError):
+            validate_attachment_file(
+                SimpleUploadedFile("x.txt", b"\xef\xbb\xbfnot a pdf at all", content_type="text/plain"))
+
 
 class CreateAttachmentTests(TestCase):
     def setUp(self):

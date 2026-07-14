@@ -37,8 +37,8 @@ class Command(BaseCommand):
             help='اسم المستخدم الذي سيُسجَّل كمنشئ للسجلات (افتراضي: admin)'
         )
         parser.add_argument(
-            '--prefix', default='قديم-',
-            help='بادئة تُضاف لأرقام الكتب المتعارضة (افتراضي: قديم-)'
+            '--prefix', default='',
+            help='بادئة اختيارية لأرقام الكتب المتعارضة (فارغة افتراضياً — التعارض يُتخطّى)'
         )
         parser.add_argument(
             '--dry-run', action='store_true',

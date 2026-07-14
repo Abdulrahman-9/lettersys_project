@@ -141,7 +141,9 @@ def book_unified(request):
     date_to_str = (request.GET.get("date_to") or "").strip()
     entity_id = (request.GET.get("entity_id") or "").strip()
     followup = _resolve_followup_param(request)
-    sort = (request.GET.get("sort") or "-date").strip()
+    # عند وجود بحث ولم يختر المستخدم عموداً: افتراضٌ «relevance» يحفظ أولوية الصلة
+    # (قيدنا قبل رقم الجهة). الواجهة لا تُرسل sort إلا عند اختيار عمود صراحةً.
+    sort = (request.GET.get("sort") or ("relevance" if search_text else "-date")).strip()
 
     date_from = None
     date_to = None
@@ -269,7 +271,8 @@ def api_unified_data(request):
     date_to_s = (request.GET.get('date_to') or '').strip()
     entity_id = (request.GET.get('entity_id') or '').strip()
     followup = _resolve_followup_param(request)
-    sort = (request.GET.get('sort') or '-date').strip()
+    # عند وجود بحث ولم يختر المستخدم عموداً: «relevance» يحفظ أولوية الصلة (قيدنا قبل رقم الجهة)
+    sort = (request.GET.get('sort') or ('relevance' if search_text else '-date')).strip()
     per_page = 12
 
     date_from = date_to = None
@@ -365,7 +368,9 @@ def api_export_csv(request):
     search_text = (request.GET.get("q") or "").strip()
     entity_id = (request.GET.get("entity_id") or "").strip()
     followup = _resolve_followup_param(request)
-    sort = (request.GET.get("sort") or "-date").strip()
+    # عند وجود بحث ولم يختر المستخدم عموداً: افتراضٌ «relevance» يحفظ أولوية الصلة
+    # (قيدنا قبل رقم الجهة). الواجهة لا تُرسل sort إلا عند اختيار عمود صراحةً.
+    sort = (request.GET.get("sort") or ("relevance" if search_text else "-date")).strip()
     date_from = date_to = None
     try:
         if request.GET.get("date_from"):

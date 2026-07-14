@@ -221,6 +221,22 @@ class ProcessUploadPipelineTests(TestCase):
         self.assertEqual(body["trimmed_pages"], 0)
         self.assertEqual(body["page_count"], 2)
 
+    def test_pdf_with_leading_bom_is_accepted(self):
+        # تراجع: PDF سليم مسبوق بـUTF-8 BOM (تكتبه بعض أدوات التصدير) كان يُرفض
+        # لأنّ الفحص طلب %PDF- عند البايت صفر. المواصفة تسمح بالترويسة ضمن أول 1024 بايت.
+        pdf = b"\xef\xbb\xbf" + _make_pdf2(1)
+        resp = self._upload("bom.pdf", pdf, "application/pdf")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["page_count"], 1)
+
+    def test_non_pdf_bytes_still_rejected(self):
+        # الحارس يبقى فعّالاً: ملف بامتداد .pdf بلا توقيع %PDF- في المقدّمة يُرفض
+        resp = self._upload("fake.pdf", b"not a pdf at all" * 8, "application/pdf")
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.json()["ok"])
+
     def test_scan_token_bound_to_creator(self):
         # تراجع #12: رمز المسح مربوط بمنشئه — مستخدم آخر لا يصل للمعاينة
         token = self._upload("scan.pdf", _pdf_mixed_blank(), "application/pdf").json()["token"]

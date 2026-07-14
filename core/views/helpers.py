@@ -40,12 +40,14 @@ def apply_search_filters(queryset, search_text):
         q = Q()
 
         if n <= 4:
-            # التسلسل = آخر 4 خانات من رقم بصيغة YYYYNNNN (قديم، 8 خانات)
-            # أو YYYYRNNNN (جديد، 9 خانات). نمط مُرسّى بطول كلّي 8-9 خانات
-            # يستبعد الأرقام المركّبة (11 خانة) فلا تتسرّب كمطابقات زائفة
-            # عبر آخر 4 خاناتها العشوائية.
+            # التسلسل قد يكون في صيغتين:
+            #  • تاريخي: YYYYNNNN (8) أو YYYYRNNNN (9) — آخر 4 خانات = التسلسل.
+            #    نمط مُرسّى بطول كلّي 8-9 يستبعد المركّب (11) فلا يتسرّب زائفاً.
+            #  • دائم: {R}{NNNN} (رمز سجل 0-4 ثم التسلسل بلا سنة) — نطابق
+            #    "رمز + أصفار بادئة اختيارية + الرقم" حتى النهاية.
             padded = search_text.zfill(4)
-            q |= Q(our_number__regex=r'^[0-9]{4,5}' + padded + r'$')
+            q |= Q(our_number__regex=r'^[0-9]{4,5}' + padded + r'$')          # تاريخي
+            q |= Q(our_number__regex=r'^[0-4]0*' + str(ival) + r'$')          # دائم
 
             # الأرقام المركّبة (series_no)
             q |= Q(series_no=ival)
@@ -72,20 +74,31 @@ def apply_search_filters(queryset, search_text):
             q |= Q(title__icontains=search_text)
             q |= Q(margin__icontains=search_text)
 
-        # ترتيب: مطابقات حقول الأرقام أولاً (أولوية 0-1)، ثم مطابقات
-        # العنوان/الهامش النصية (أولوية 2) — كي لا تطغى الضوضاء النصية.
+        # الترتيب (تحت الترقيم الدائم، حيث يتكرّر التسلسل عبر السجلّات والسنوات):
+        #   1) _exact   : مطابقة رقم القيد الكامل حرفياً (مثل كتابة 10089) تتصدّر.
+        #   2) _num_pri : مطابقات حقول الأرقام (0-1) قبل ضوضاء العنوان/الهامش (2).
+        #   3) -date    : الأحدث أولاً — يضع الكتاب الدائم الحالي فوق التاريخي لنفس
+        #                 التسلسل (يُصحّح فرز -our_number النصّي الذي كان يرفع '2025…'
+        #                 فوق '10089' لأنّ '2' > '1').
+        #   4) -our_number : كسر تعادل ثابت.
         return (
             queryset.filter(q)
-            .annotate(_num_pri=Case(
-                When(Q(our_number__icontains=search_text) | Q(series_no=ival),
-                     then=Value(0)),
-                When(Q(sender_number__icontains=search_text)
-                     | Q(legacy_number__icontains=search_text), then=Value(1)),
-                default=Value(2),
-                output_field=IntegerField(),
-            ))
+            .annotate(
+                _exact=Case(
+                    When(our_number=search_text, then=Value(0)),
+                    default=Value(1), output_field=IntegerField(),
+                ),
+                _num_pri=Case(
+                    When(Q(our_number__icontains=search_text) | Q(series_no=ival),
+                         then=Value(0)),
+                    When(Q(sender_number__icontains=search_text)
+                         | Q(legacy_number__icontains=search_text), then=Value(1)),
+                    default=Value(2),
+                    output_field=IntegerField(),
+                ),
+            )
             .distinct()
-            .order_by('_num_pri', '-our_number', '-date')
+            .order_by('_exact', '_num_pri', '-date', '-our_number')
         )
 
     from django.db import connection

@@ -42,6 +42,12 @@ class Command(BaseCommand):
         parser.add_argument('--per-entity', type=int, default=6, help='كتب لكل جهة')
         parser.add_argument('--names', nargs='*', default=None,
                             help='جهات محدَّدة بالاسم (جزئي) بدل الأكثر مراسلةً — مثل EBS NK')
+        parser.add_argument('--all', action='store_true',
+                            help='كل الجهات التي لها ≥ min-books كتاباً (مسح شامل)')
+        parser.add_argument('--min-books', type=int, default=3,
+                            help='حدّ أدنى لكتب الجهة كي تُقاس بصمتها (افتراضي 3)')
+        parser.add_argument('--resume', action='store_true',
+                            help='يكمل فوق ملف البصمات الموجود (لا يعيد الجهات المقيسة)')
 
     def handle(self, *args, **opts):
         import fitz
@@ -63,13 +69,26 @@ class Command(BaseCommand):
             for nm in opts['names']:
                 q |= Q(name__icontains=nm)
             top = Entity.objects.filter(is_active=True).filter(q)
+        elif opts['all']:
+            top = (Entity.objects.filter(is_active=True)
+                   .annotate(n=Count('issued_books', distinct=True))
+                   .filter(n__gte=opts['min_books']).order_by('-n'))
         else:
             top = (Entity.objects.filter(is_active=True)
                    .annotate(n=Count('issued_books', distinct=True))
                    .filter(n__gt=0).order_by('-n')[:opts['top']])
 
         profiles = {}
+        if opts['resume'] and os.path.exists(OUT_PATH):
+            with open(OUT_PATH, encoding='utf-8') as fh:
+                profiles = json.load(fh)
+            self.stdout.write(f'استئناف: {len(profiles)} جهة مقيسة سلفاً')
+        total = top.count() if hasattr(top, 'count') else len(top)
+        self.stdout.write(f'جهات للقياس: {total}')
+        done = 0
         for ent in top:
+            if opts['resume'] and str(ent.id) in profiles:
+                continue
             books = (Book.objects.filter(is_deleted=False, issuing_entities=ent,
                                          attachments__isnull=False)
                      .order_by('-id').distinct()[:opts['per_entity'] * 3])
@@ -175,6 +194,12 @@ class Command(BaseCommand):
                     'y': round(sum(p[1] for p in pos) / len(pos), 3),
                 }
             profiles[str(ent.id)] = summary
+            done += 1
+            if done % 10 == 0:          # حفظ دوري — مسحٌ طويل لا يُهدَر بانقطاع
+                os.makedirs('var', exist_ok=True)
+                with open(OUT_PATH, 'w', encoding='utf-8') as fh:
+                    json.dump(profiles, fh, ensure_ascii=False, indent=1)
+                self.stdout.write(f'  … حُفظت {len(profiles)} بصمة ({done}/{total})')
 
             f = summary['fields']
             self.stdout.write(

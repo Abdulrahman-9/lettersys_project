@@ -325,15 +325,26 @@ class Book(models.Model):
     _REGISTER_LABELS = {'0': 'بلا رقم', '1': 'وارد داخلي', '2': 'وارد خارجي', '3': 'صادر داخلي', '4': 'صادر خارجي'}
 
     def _parse_year_prefix(self):
-        """يُعيد (year_str, register_char_or_None, rest_string) أو (None, None, our_number)."""
+        """يُعيد (year_str_or_None, register_char_or_None, rest_string).
+        - تاريخي: YYYY{R}{NNNN} (≥8 خانات) → (year, reg?, rest)
+        - دائم:   {R}{NNNN}     (رقمي، أول خانة 0-4، بلا بادئة سنة) → (None, reg, seq)
+        - خام:    نص غير معروف → (None, None, our_number)
+
+        اشتراط الطول ≥ 8 لفرع السنة حاسم: يمنع خلط الدائم القصير (مثل 20200 =
+        سجل 2، تسلسل 200) مع بادئة سنة زائفة (2020) — فكل الأرقام التاريخية
+        بطول 8 (YYYYNNNN) أو 9 (YYYYRNNNN) أو 11 (مركّب)، والدائم ≤ 7 غالباً.
+        """
         s = self.our_number or ''
-        if len(s) >= 4 and s[:4].isdigit() and 2020 <= int(s[:4]) <= 2099:
+        if len(s) >= 8 and s[:4].isdigit() and 2020 <= int(s[:4]) <= 2099:
             year = s[:4]
             rest = s[4:]
-            # الصيغة الجديدة: الخانة الخامسة بادئة سجل (1-4) والطول ≥ 9
-            if len(s) >= 9 and rest and rest[0] in '1234':
+            # الصيغة التاريخية الجديدة: الخانة الخامسة بادئة سجل (0-4) والطول ≥ 9
+            if len(s) >= 9 and rest and rest[0] in '01234':
                 return (year, rest[0], rest[1:])
             return (year, None, rest)
+        # الترقيم الدائم: رقم رقمي كامل أول خانته بادئة سجل (0-4) بلا سنة
+        if s.isdigit() and len(s) >= 5 and s[0] in '01234':
+            return (None, s[0], s[1:])
         return (None, None, s)
 
     @property
@@ -352,14 +363,14 @@ class Book(models.Model):
         """
         العرض المختصر بدون السنة وبادئة السجل:
         - مركّب (series_no + version) → 'X-Y'  (للأرقام المكررة في السجل نفسه)
-        - عادي → 'NNNN'
+        - تاريخي أو دائم → 'NNNN' (بلا أصفار بادئة)
         - خام → النص كما هو
         """
         if self.series_no is not None and self.version is not None:
             return f"{self.series_no}-{self.version}"
         year, reg, rest = self._parse_year_prefix()
-        if year is None:
-            return rest  # خام
+        if year is None and reg is None:
+            return rest  # خام — نص غير معروف
         if not rest:
             return '0'
         return (rest.lstrip('0') or '0') if rest.isdigit() else rest
@@ -1187,9 +1198,11 @@ class OCRModelVersion(models.Model):
 # =============================
 class BookSequence(models.Model):
     """
-    عدّاد تسلسلي لكل نوع كتاب — يتصفّر سنوياً.
-    الصيغة الموحّدة: YYYY{R}{NNNN} حيث R = بادئة السجل (1 وارد داخلي، 2 وارد خارجي،
-    3 صادر داخلي، 4 صادر خارجي، 0 = بلا رقم).
+    عدّاد تسلسلي دائم لكل نوع كتاب — لا يتصفّر (يَعُدّ للأبد كدفتر قيد حقيقي).
+    الصيغة الموحّدة الجديدة: {R}{NNNN} حيث R = بادئة السجل (1 وارد داخلي، 2 وارد خارجي،
+    3 صادر داخلي، 4 صادر خارجي، 0 = بلا رقم). لا سنة في الرقم — التسلسل نفسه فريد دائماً.
+    الأرقام التاريخية (كتب السنوات الماضية والمستوردة) تبقى بصيغة YYYY{R}{NNNN} للتمييز،
+    ويتكفّل تحليل Book._parse_year_prefix بقراءة الصيغتين.
     """
     # بادئة السجل لكل نوع كتاب
     REGISTER_CODES = {
@@ -1208,8 +1221,8 @@ class BookSequence(models.Model):
         help_text='غير مستخدمة بعد التطبيع — يُحتفظ بها للتوافق'
     )
     year = models.PositiveSmallIntegerField(
-        default=2026, verbose_name='سنة العدّاد',
-        help_text='السنة التي يعدّ لها next_number — يتصفّر تلقائياً عند تغيّر السنة'
+        default=2026, verbose_name='سنة بدء العدّاد',
+        help_text='سنة إنشاء/بذر العدّاد — للسجل فقط؛ لم يعد يُستخدم للتصفير (الترقيم دائم)'
     )
     next_number = models.PositiveIntegerField(
         default=1, verbose_name='الرقم التالي'
@@ -1230,52 +1243,40 @@ class BookSequence(models.Model):
 
     @classmethod
     def format_number(cls, kind, number, year=None, numberless=False):
-        """صيغة موحّدة: YYYY{R}{NNNN}."""
-        if year is None:
-            year = timezone.now().year
+        """صيغة الترقيم الدائم الجديدة: {R}{NNNN} (بلا سنة). المعامل year مُهمَل
+        (يُقبل للتوافق الرجعي مع المتصلين القدامى) — الرقم الدائم لا يحمل سنة."""
         reg = cls.NUMBERLESS_CODE if numberless else cls.register_code(kind)
-        return f"{year}{reg}{number:04d}"
-
-    def _maybe_roll_year(self):
-        """إن تغيّرت السنة، صفّر العدّاد (لا يحفظ — المتصل مسؤول عن الحفظ)."""
-        cur_year = timezone.now().year
-        if self.year != cur_year:
-            self.year = cur_year
-            self.next_number = 1
-            return True
-        return False
+        return f"{reg}{number:04d}"
 
     @classmethod
     def get_next(cls, kind):
-        """إرجاع الرقم التالي دون استهلاكه."""
+        """إرجاع الرقم التالي دون استهلاكه (دائم — لا تصفير سنوي)."""
         obj, _ = cls.objects.get_or_create(
             kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
         )
-        year = timezone.now().year
-        n = 1 if obj.year != year else obj.next_number
+        n = obj.next_number
         return {
-            'kind': kind, 'number': n, 'year': year,
+            'kind': kind, 'number': n, 'year': obj.year,
             'register': cls.register_code(kind),
-            'formatted': cls.format_number(kind, n, year),
+            'formatted': cls.format_number(kind, n),
         }
 
     @classmethod
     def consume_next(cls, kind, numberless=False):
-        """استهلاك الرقم الحالي — آمن من race conditions (SELECT FOR UPDATE)."""
+        """استهلاك الرقم الحالي — آمن من race conditions (SELECT FOR UPDATE).
+        دائم: يزيد next_number بلا أي تصفير سنوي."""
         from django.db import transaction
         with transaction.atomic():
             obj = cls.objects.select_for_update().get_or_create(
                 kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
             )[0]
-            obj._maybe_roll_year()
             current = obj.next_number
-            year = obj.year
             obj.next_number += 1
-            obj.save(update_fields=['next_number', 'year', 'updated_at'])
+            obj.save(update_fields=['next_number', 'updated_at'])
         return {
-            'kind': kind, 'number': current, 'year': year,
+            'kind': kind, 'number': current, 'year': obj.year,
             'register': cls.NUMBERLESS_CODE if numberless else cls.register_code(kind),
-            'formatted': cls.format_number(kind, current, year, numberless=numberless),
+            'formatted': cls.format_number(kind, current, numberless=numberless),
         }
 
 
@@ -1298,6 +1299,7 @@ class BookNumberReservation(models.Model):
     STATUS_VOIDED      = 'voided'
     STATUS_EXPIRED     = 'expired'
     STATUS_REACTIVATED = 'reactivated'
+    STATUS_COOLDOWN    = 'cooldown'   # انقطاع قسريّ — محجوز لصاحبه أولوية 15د قبل التدوير
 
     STATUS_CHOICES = [
         (STATUS_ACTIVE,      'نشط'),
@@ -1305,18 +1307,23 @@ class BookNumberReservation(models.Model):
         (STATUS_VOIDED,      'ملغي'),
         (STATUS_EXPIRED,     'منتهي الصلاحية'),
         (STATUS_REACTIVATED, 'مُعاد تفعيله'),
+        (STATUS_COOLDOWN,    'فترة سماح'),
     ]
 
     VOID_REASON_CANCELLED   = 'user_cancelled'
     VOID_REASON_TIMEOUT     = 'timeout'
     VOID_REASON_YEAR_RESET  = 'year_reset'
     VOID_REASON_REACTIVATED = 'reactivated'
+    VOID_REASON_FORCED      = 'forced_disconnect'   # انقطاع قسريّ (WS/heartbeat)
+    VOID_REASON_RECYCLED    = 'recycled'            # سُحب وأُعيد تدويره لمستخدم آخر
 
     VOID_REASON_CHOICES = [
         (VOID_REASON_CANCELLED,   'ألغاه المستخدم'),
         (VOID_REASON_TIMEOUT,     'انتهت المهلة'),
         (VOID_REASON_YEAR_RESET,  'إعادة تعيين سنوية'),
         (VOID_REASON_REACTIVATED, 'أُعيد تفعيله'),
+        (VOID_REASON_FORCED,      'انقطاع قسريّ'),
+        (VOID_REASON_RECYCLED,    'أُعيد تدويره'),
     ]
 
     user         = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='المستخدم')
@@ -1342,6 +1349,11 @@ class BookNumberReservation(models.Model):
     expires_at   = models.DateTimeField(verbose_name='ينتهي في')
     used_at      = models.DateTimeField(null=True, blank=True, verbose_name='وقت الاستخدام')
     voided_at    = models.DateTimeField(null=True, blank=True, verbose_name='وقت الإلغاء')
+
+    # ── الحضور اللحظيّ + إعادة التدوير بلا فجوات ──
+    last_heartbeat = models.DateTimeField(null=True, blank=True, verbose_name='آخر نبضة حضور')
+    cooldown_until = models.DateTimeField(null=True, blank=True, verbose_name='نهاية فترة السماح')
+    is_recycled    = models.BooleanField(default=False, verbose_name='رقم مُدوّر')
 
     class Meta:
         verbose_name = 'حجز رقم قيد'
@@ -1396,6 +1408,20 @@ class BookNumberReservation(models.Model):
         self.void_reason = ''
         self.save(update_fields=['status', 'expires_at', 'void_reason'])
 
+    def touch_heartbeat(self):
+        """تحديث نبضة الحضور (WS/ping) — لا تُغيّر الحالة."""
+        self.last_heartbeat = timezone.now()
+        self.save(update_fields=['last_heartbeat'])
+
+    def enter_cooldown(self, minutes):
+        """انقطاع قسريّ: يبقى الرقم محجوزاً لصاحبه فترة سماح قبل التدوير لغيره."""
+        now = timezone.now()
+        self.status         = self.STATUS_COOLDOWN
+        self.void_reason    = self.VOID_REASON_FORCED
+        self.cooldown_until = now + timedelta(minutes=minutes)
+        self.voided_at      = now
+        self.save(update_fields=['status', 'void_reason', 'cooldown_until', 'voided_at'])
+
     @classmethod
     def get_active_for_user(cls, user, kind):
         """إرجاع الحجز النشط للمستخدم لنوع معين، أو None."""
@@ -1406,33 +1432,10 @@ class BookNumberReservation(models.Model):
 
     @classmethod
     def reserve(cls, user, kind, expire_minutes=45):
-        """
-        حجز ذري: يأخذ الرقم التالي من BookSequence بـ select_for_update
-        ويُنشئ سجل حجز. آمن تماماً من race conditions.
-        """
-        from django.db import transaction
-        with transaction.atomic():
-            seq = BookSequence.objects.select_for_update().get_or_create(
-                kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
-            )[0]
-            seq._maybe_roll_year()
-            number  = seq.next_number
-            prefix  = seq.prefix
-            year    = seq.year
-            seq.next_number += 1
-            seq.save(update_fields=['next_number', 'year', 'updated_at'])
-
-            formatted = BookSequence.format_number(kind, number, year)
-            reservation = cls.objects.create(
-                user=user,
-                kind=kind,
-                number=number,
-                prefix=prefix,
-                year=year,
-                formatted=formatted,
-                status=cls.STATUS_ACTIVE,
-                expires_at=timezone.now() + timedelta(minutes=expire_minutes),
-            )
+        """حجز رقم آمن من التضارب وبلا فجوات — يفوّض لخدمة الحجز الموحّدة
+        (أولوية عودة cooldown → إعادة تدوير أصغر رقم متروك → رقم جديد)."""
+        from .reservation_service import reserve_number
+        reservation, _outcome = reserve_number(user, kind, expire_minutes)
         return reservation
 
 
@@ -1485,6 +1488,7 @@ class BookEmailLog(models.Model):
         related_name='sent_emails', verbose_name='الخيط'
     )
     smtp_message_id = models.CharField("SMTP Message-ID", max_length=500, blank=True, default="",
+                                        db_index=True,
                                         help_text="يُستخدم لربط الردود الواردة بهذا الإيميل")
 
     sent_at     = models.DateTimeField("أُرسِل في", auto_now_add=True)

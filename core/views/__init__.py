@@ -95,6 +95,7 @@ from .attachments import (
     attachment_replace,
     attachment_merge_pages,
     attachment_remove_pages,
+    serve_shared_attachment,
 )
 
 
@@ -110,9 +111,6 @@ from .api import (
     serve_service_worker,
     update_book_notes,
     attachment_ocr_text,
-    record_ocr_feedback,
-    ocr_training_statistics,
-    trigger_ocr_training,
 )
 
 # مركز الإعدادات الموحّد

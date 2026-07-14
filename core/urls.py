@@ -6,7 +6,6 @@ from . import api as api_views
 from . import reservation_api
 from . import network_views
 from django.conf import settings
-from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from .merge_api import AttachmentMergeViewSet
 from .messaging.api.urls import email_urlpatterns, mail_urlpatterns
@@ -130,15 +129,13 @@ urlpatterns = [
     path('api/reservation/void/',       reservation_api.void_reservation,      name='reservation-void'),
     path('api/reservation/reactivate/', reservation_api.reactivate_reservation, name='reservation-reactivate'),
     path('api/reservation/status/',     reservation_api.reservation_status,    name='reservation-status'),
+    path('api/reservation/heartbeat/',  reservation_api.reservation_heartbeat, name='reservation-heartbeat'),
 
     # Logging & Monitoring APIs
     path('api/logs/', logging_views.log_client_event, name='log_client_event'),
     path('api/logs/batch/', logging_views.log_client_batch, name='log_client_batch'),
 
     # Continuous Learning APIs
-    path('api/ocr/feedback/', views.record_ocr_feedback, name='ocr_feedback'),
-    path('api/ocr/training/statistics/', views.ocr_training_statistics, name='ocr_training_statistics'),
-    path('api/ocr/training/trigger/', views.trigger_ocr_training, name='trigger_ocr_training'),
 
     # ─── Email APIs ───────────────────────────────────────────────────────────
     path('api/email/', include(email_urlpatterns)),

@@ -17,6 +17,7 @@ Usage:
 import email
 import imaplib
 import logging
+import re
 from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
 from typing import Optional
@@ -205,17 +206,138 @@ class IMAPEngine:
     # Main Operations
     # ════════════════════════════════════════════════════════
 
-    def sync_inbox(self, cfg=None) -> dict:
+    #: أقصى عدد رسائل تُجلب في مزامنة واحدة. سقف سلامة إلزامي: صندوق شخصي
+    #: حقيقي قد يحوي عشرات آلاف الرسائل غير المقروءة (قيس فعلياً: 13,442)، وجلبها
+    #: كاملةً (RFC822) دفعةً واحدة يُجمّد الجهاز أو يُنفِد ذاكرته. نأخذ الأحدث فقط —
+    #: وهي وحدها ما يهمّ النظام (ردود على ما أرسله).
+    MAX_SYNC_MESSAGES = 50
+
+    # ── بوّابة الصلة ─────────────────────────────────────────────────────────
+    @staticmethod
+    def _referenced_ids(in_reply_to: str, references: str) -> list:
+        """كل Message-ID تشير إليه الرسالة (In-Reply-To + References)."""
+        raw = f"{in_reply_to or ''} {references or ''}"
+        return [mid for mid in re.findall(r'<[^<>\s]+>', raw)]
+
+    @classmethod
+    def match_sent_log(cls, in_reply_to: str, references: str):
+        """سجلّ الرسالة الصادرة التي يردّ عليها هذا الوارد — أو ``None``.
+
+        هذا ما يربط الرد **بكتابه**: بدونه يصل الرد يتيماً ولا يعرف أحد لأيّ كتاب.
+        """
+        from core.models import BookEmailLog
+
+        ids = cls._referenced_ids(in_reply_to, references)
+        if not ids:
+            return None
+        return (BookEmailLog.objects
+                .filter(smtp_message_id__in=ids)
+                .select_related('book', 'entity', 'thread')
+                .first())
+
+    @classmethod
+    def is_relevant(cls, from_addr: str, in_reply_to: str, references: str,
+                    entity_emails: set = None) -> bool:
+        """هل تخصّ هذه الرسالة النظام؟
+
+        صندوق البريد المستخدَم قد يكون شخصياً (قيس فعلياً: 13,442 رسالة غير
+        مقروءة — إعلانات واشتراكات). لو ابتلعنا كل شيء لتحوّل «وارد» النظام إلى
+        صندوق قمامة بلا قيمة. فلا يدخل إلا:
+
+        1. **ردٌّ على رسالة أرسلها النظام** — يُطابَق عبر ``BookEmailLog.smtp_message_id``.
+        2. **رسالة من بريد جهة مسجّلة** — مراسلة واردة مشروعة حتى لو لم تكن رداً.
+
+        وما عداهما يُتجاهل. (يتطلّب البند 1 أن نحفظ Message-ID لكل رسالة صادرة —
+        وهو ما يفعله ``SMTPEngine`` الآن.)
+        """
+        from core.models import BookEmailLog, Entity
+
+        ids = cls._referenced_ids(in_reply_to, references)
+        if ids and BookEmailLog.objects.filter(smtp_message_id__in=ids).exists():
+            return True
+
+        addr = (from_addr or '').strip().lower()
+        if not addr:
+            return False
+
+        if entity_emails is not None:
+            return addr in entity_emails
+        return Entity.objects.filter(is_active=True, email__iexact=addr).exists()
+
+    @staticmethod
+    def _active_entity_emails() -> set:
+        """بريد الجهات المسجّلة — يُحضَر مرّة واحدة لكل مزامنة لا لكل رسالة."""
+        from core.models import Entity
+        return {
+            e.lower()
+            for e in Entity.objects.filter(is_active=True)
+                                   .exclude(email='')
+                                   .values_list('email', flat=True)
+        }
+
+    @staticmethod
+    def _notify_reply(incoming, thread, sent_log=None):
+        """تنبيه داخل النظام عند وصول رد — وإلا وصل الرد ولم يعلم به أحد.
+
+        يُنبَّه مُدخِل الكتاب (صاحب المتابعة الفعلي) وكل المدراء. أي خلل هنا لا
+        يجوز أن يُسقط المزامنة — الرسالة مُخزَّنة أصلاً، والتنبيه إضافة.
+        """
+        from django.contrib.auth import get_user_model
+        from django.urls import reverse
+        from core.models import Notification
+
+        try:
+            book = getattr(thread, 'book', None)
+            sender = incoming.from_name or incoming.from_address
+
+            if book is not None:
+                title = f'ردّ على الكتاب {book.our_number}'
+                message = f'وصل ردّ من {sender} بشأن: {book.title[:80]}'
+            else:
+                title = 'رسالة واردة جديدة'
+                message = f'وصلت رسالة من {sender}: {(incoming.subject or "(بدون موضوع)")[:80]}'
+
+            try:
+                link = reverse('mail_thread', args=[thread.pk])
+            except Exception:
+                link = reverse('mail_inbox')
+
+            User = get_user_model()
+            targets = set(User.objects.filter(is_superuser=True, is_active=True))
+            if book is not None and book.created_by_id:
+                targets.add(book.created_by)
+
+            Notification.objects.bulk_create([
+                Notification(
+                    user=user,
+                    title=title,
+                    message=message,
+                    category='email',
+                    priority=Notification.PRIORITY_INFO,
+                    link_url=link,
+                )
+                for user in targets
+            ])
+            logger.info(f"IMAPEngine: نُبِّه {len(targets)} مستخدماً بالرد الوارد")
+        except Exception as e:
+            logger.warning(f"IMAPEngine: تعذّر إنشاء تنبيه الرد — {e}")
+
+    def sync_inbox(self, cfg=None, max_messages: int = None) -> dict:
         """
         Fetch new messages from IMAP and save as IncomingEmail objects.
-        
+
         Args:
             cfg: Optional EmailSettings override (uses self.email_cfg if None)
-            
+            max_messages: سقف الرسائل في هذه المزامنة (افتراضي ``MAX_SYNC_MESSAGES``).
+
         Returns:
-            dict: {'fetched': int, 'new': int, 'errors': int}
+            dict: {'fetched': int, 'new': int, 'errors': int, 'skipped': int}
+            ``skipped`` = رسائل غير مقروءة تجاوزت السقف فلم تُجلب (لا اقتطاع صامت).
         """
         from core.models import EmailSettings, EmailThread, IncomingEmail
+
+        if max_messages is None:
+            max_messages = self.MAX_SYNC_MESSAGES
 
         effective_cfg = cfg or self.email_cfg
         if effective_cfg is None:
@@ -234,7 +356,8 @@ class IMAPEngine:
         if not conn:
             return {'fetched': 0, 'new': 0, 'errors': 1}
 
-        stats = {'fetched': 0, 'new': 0, 'errors': 0}
+        stats = {'fetched': 0, 'new': 0, 'errors': 0, 'skipped': 0, 'ignored': 0}
+        entity_emails = self._active_entity_emails()  # مرّة واحدة لا لكل رسالة
 
         try:
             folder = effective_cfg.imap_folder or 'INBOX'
@@ -244,12 +367,42 @@ class IMAPEngine:
             _, data = conn.search(None, 'UNSEEN')
             uid_list = data[0].split() if data[0] else []
 
-            logger.info(f"IMAPEngine: {len(uid_list)} new messages in {folder}")
+            # سقف السلامة: نأخذ الأحدث فقط (القائمة تصاعدية) ونُبلّغ عمّا تُرك.
+            unseen_total = len(uid_list)
+            if unseen_total > max_messages:
+                uid_list = uid_list[-max_messages:]
+                stats['skipped'] = unseen_total - max_messages
+                logger.warning(
+                    f"IMAPEngine: {unseen_total} رسالة غير مقروءة في {folder} — "
+                    f"جُلبت الأحدث {max_messages} فقط، وتُركت {stats['skipped']} "
+                    f"(سقف سلامة يمنع تجميد الجهاز)."
+                )
+
+            logger.info(f"IMAPEngine: fetching {len(uid_list)} of {unseen_total} unseen in {folder}")
 
             for uid_bytes in uid_list:
                 stats['fetched'] += 1
                 try:
-                    _, msg_data = conn.fetch(uid_bytes, '(RFC822)')
+                    # ① الترويسات وحدها أوّلاً، بـPEEK.
+                    #    PEEK مقصود: ``RFC822`` العادي يضع علامة \\Seen على الرسالة في
+                    #    صندوق المستخدم الحقيقي — أي أن مجرّد المزامنة كانت «تقرأ»
+                    #    بريده الشخصي نيابةً عنه. ولا نُنزّل الجسم إلا لما يخصّنا:
+                    #    فحص 50 ترويسة رخيص، وتنزيل 50 رسالة كاملة ليس كذلك.
+                    _, head_data = conn.fetch(uid_bytes, '(BODY.PEEK[HEADER])')
+                    head = email.message_from_bytes(head_data[0][1])
+
+                    probe_from = parseaddr(head.get("From", ""))[1]
+                    probe_irt  = (head.get("In-Reply-To") or "").strip()
+                    probe_refs = (head.get("References") or "").strip()
+
+                    if not self.is_relevant(probe_from, probe_irt, probe_refs, entity_emails):
+                        stats['ignored'] += 1
+                        logger.debug(f"IMAPEngine: تُجوهلت رسالة لا تخصّ النظام — {probe_from}")
+                        continue
+
+                    # ② الرسالة تخصّنا ⇒ نُنزّلها كاملةً (بـPEEK أيضاً؛ نضع \\Seen
+                    #    بأنفسنا بعد نجاح الابتلاع فقط).
+                    _, msg_data = conn.fetch(uid_bytes, '(BODY.PEEK[])')
                     raw_email = msg_data[0][1]
                     msg = email.message_from_bytes(raw_email)
 
@@ -280,20 +433,34 @@ class IMAPEngine:
                     # Find or create thread
                     thread = self._find_thread_for_reply(in_reply_to, references)
 
+                    # ردٌّ على رسالة أرسلناها ⇒ نعرف كتابه وجهته. نربطه بهما،
+                    # وإلا وصل الرد يتيماً ولم يعرف أحد لأيّ كتاب يعود.
+                    sent_log = self.match_sent_log(in_reply_to, references)
+                    if thread is None and sent_log is not None:
+                        thread = sent_log.thread
+
                     if not thread:
-                        # Create new orphan thread (open inbox)
                         thread = EmailThread.objects.create(
                             subject=subject or "(بدون موضوع)",
                             ref_message_id=message_id,
-                            status=EmailThread.STATUS_OPEN,
+                            status=(EmailThread.STATUS_REPLIED if sent_log
+                                    else EmailThread.STATUS_OPEN),
+                            book=sent_log.book if sent_log else None,
+                            entity=sent_log.entity if sent_log else None,
                         )
-                        logger.info(f"IMAPEngine: New thread '{subject}' from {from_addr}")
+                        logger.info(f"IMAPEngine: New thread '{subject}' from {from_addr}"
+                                    f"{f' (كتاب {sent_log.book.our_number})' if sent_log else ''}")
                     else:
-                        # Update thread status to replied
                         thread.status = EmailThread.STATUS_REPLIED
-                        thread.save(update_fields=['status', 'last_activity'])
+                        fields = ['status', 'last_activity']
+                        # خيط قائم بلا كتاب + رد معروف المصدر ⇒ نُكمل الربط
+                        if sent_log is not None and thread.book_id is None:
+                            thread.book = sent_log.book
+                            thread.entity = sent_log.entity
+                            fields += ['book', 'entity']
+                        thread.save(update_fields=fields)
 
-                    IncomingEmail.objects.create(
+                    incoming = IncomingEmail.objects.create(
                         thread=thread,
                         from_address=from_addr,
                         from_name=from_name,
@@ -308,6 +475,15 @@ class IMAPEngine:
                     )
                     stats['new'] += 1
                     logger.info(f"IMAPEngine: Saved new message {message_id}")
+
+                    # وُضِعت \\Seen بعد نجاح الابتلاع فقط — كي لا تختفي رسالة من
+                    # قائمة UNSEEN دون أن تُخزَّن (فتضيع إلى الأبد).
+                    try:
+                        conn.store(uid_bytes, '+FLAGS', '\\Seen')
+                    except Exception as e:
+                        logger.warning(f"IMAPEngine: تعذّر وسم الرسالة كمقروءة — {e}")
+
+                    self._notify_reply(incoming, thread, sent_log)
 
                 except Exception as e:
                     stats['errors'] += 1

@@ -40,8 +40,12 @@ def _read_bytes(django_file):
 
 
 def is_pdf_bytes(data):
-    """هل المحتوى ملف PDF فعلاً (توقيع %PDF- في أوله)؟"""
-    return bool(data) and data[:5] == b"%PDF-"
+    """هل المحتوى ملف PDF فعلاً (توقيع %PDF- في أوله، متسامحاً مع UTF-8 BOM بادئ)؟"""
+    if not data:
+        return False
+    if data[:3] == b"\xef\xbb\xbf":          # بعض أدوات التصدير تسبق الترويسة بـBOM
+        data = data[3:]
+    return data[:5] == b"%PDF-"
 
 
 _IMG_SUFFIXES = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff")
@@ -70,6 +74,8 @@ _DEFAULT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 def _sniff_document_kind(head):
     """كشف نوع المستند عبر توقيع البايتات (لا يعتمد على الامتداد ولا على python-magic غير المتوفّر)."""
+    if head[:3] == b"\xef\xbb\xbf":          # تجاوز UTF-8 BOM بادئ قبل فحص التوقيع (شائع في PDF مُصدَّر)
+        head = head[3:]
     if head[:5] == b"%PDF-":
         return "pdf"
     if head[:3] == b"\xff\xd8\xff":

@@ -28,6 +28,35 @@ from ..models import Attachment, AttachmentVersion, BookHistory
 logger = logging.getLogger(__name__)
 
 
+def serve_shared_attachment(request, token):
+    """يخدم مرفقاً واحداً عبر رابط موقّع محدود المدة — **بلا تسجيل دخول**.
+
+    هذا المسار الوحيد المفتوح على المرفقات، ووجوده ضروري: الجهة الخارجية التي
+    نراسلها لا حساب لها في النظام، والملفات الكبيرة لا تُرفَق بالبريد (حدّ ~25MB).
+
+    الحماية: الرمز موقّع بـSECRET_KEY (لا يُزوَّر)، ينتهي بعد مدّة، ويفتح مرفقاً
+    واحداً بعينه لا غير. والمرفق المحذوف لا يُخدَم ولو كان الرمز صالحاً.
+    """
+    from ..attachment_sharing import read_share_token
+
+    attachment_id = read_share_token(token)
+    if attachment_id is None:
+        raise Http404("رابط التحميل غير صالح أو انتهت صلاحيته.")
+
+    attachment = Attachment.objects.filter(pk=attachment_id, is_deleted=False).first()
+    if attachment is None:
+        raise Http404("الملف لم يعد متاحاً.")
+
+    try:
+        handle = attachment.file.open('rb')
+    except (FileNotFoundError, ValueError):
+        logger.warning("serve_shared_attachment: الملف مفقود على القرص — %s", attachment_id)
+        raise Http404("الملف غير موجود.")
+
+    logger.info("serve_shared_attachment: served attachment %s", attachment_id)
+    return FileResponse(handle, as_attachment=True, filename=attachment.filename)
+
+
 @login_required
 def serve_media(request, path):
     """

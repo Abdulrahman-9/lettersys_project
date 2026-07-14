@@ -237,6 +237,11 @@ class BookSortEngine:
     @staticmethod
     def apply_sort(queryset, sort_field="-date"):
         sort_field = (sort_field or "-date").strip()
+        # «relevance»: لا نُعيد الترتيب — نحافظ على أولوية صلة البحث القادمة من
+        # apply_search_filters (_exact ثم _num_pri: قيدنا قبل رقم الجهة). بدونه كان
+        # فرز -date الافتراضي يطمس الأولوية فتظهر مطابقات رقم الجهة فوق مطابقات قيدنا.
+        if sort_field == "relevance":
+            return queryset
         if sort_field not in BookSortEngine.VALID_SORTS:
             sort_field = "-date"
         return queryset.order_by(sort_field, "-id")

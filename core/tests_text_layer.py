@@ -104,3 +104,59 @@ class TextLayerReadabilityTests(TestCase):
         from core.extraction.pipeline import _text_layer_is_readable
         shaped = 'ﻢﻜﻴﻠﻋ ﻡﻼﺴﻟﺍ ﻂﻔﻨﻟﺍ ﺓﺭﺍﺯﻭ ' * 6
         self.assertFalse(_text_layer_is_readable(shaped))
+
+
+class PdfRenderOOMFallbackTests(TestCase):
+    """رسم الصفحة الأولى يتراجع لدقّة أدنى عند فشل تخصيص الـpixmap (جهاز ضيّق
+    الذاكرة) بدل أن يفشل الاستخراج كليّاً — الأرضية ≈130 DPI تبقى مقروءة."""
+
+    def _make_pdf(self):
+        doc = fitz.open()
+        doc.new_page()  # A4 افتراضياً
+        fd, path = tempfile.mkstemp(suffix='.pdf')
+        os.close(fd)
+        doc.save(path)
+        doc.close()
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+        return path
+
+    def test_downscales_on_malloc_failure(self):
+        from core.extraction.ocr.image import ImageProcessor
+        orig = fitz.Page.get_pixmap
+        attempts = []
+
+        def flaky(self, *a, **k):
+            mat = k.get('matrix') or (a[0] if a else None)
+            scale = mat.a if mat else 1.0
+            attempts.append(round(scale * 72))
+            if max(self.rect.width, self.rect.height) * scale > 2200:
+                raise RuntimeError('code=2: malloc (25987500 bytes) failed')
+            return orig(self, *a, **k)
+
+        fitz.Page.get_pixmap = flaky
+        try:
+            ip = ImageProcessor(self._make_pdf(), preprocess_pdf=False, max_ocr_dim=3500)
+        finally:
+            fitz.Page.get_pixmap = orig
+        self.assertIsNotNone(ip.image)
+        self.assertGreater(ip.image.size, 0)
+        self.assertGreaterEqual(len(attempts), 2)   # تراجع فعليّ لا محاولة واحدة
+        self.assertLessEqual(attempts[-1], 200)      # آخر محاولة بدقّة أدنى
+
+    def test_non_memory_error_not_retried(self):
+        # خطأ غير متعلّق بالذاكرة يُرفع فوراً بلا تراجع لا نهائي
+        from core.extraction.ocr.image import ImageProcessor
+        orig = fitz.Page.get_pixmap
+        calls = []
+
+        def broken(self, *a, **k):
+            calls.append(1)
+            raise RuntimeError('corrupt page object')
+
+        fitz.Page.get_pixmap = broken
+        try:
+            with self.assertRaises(ValueError):     # يُغلَّف كـ«فشل تحويل PDF»
+                ImageProcessor(self._make_pdf(), preprocess_pdf=False, max_ocr_dim=3500)
+        finally:
+            fitz.Page.get_pixmap = orig
+        self.assertEqual(len(calls), 1)             # محاولة واحدة فقط — لا تراجع

@@ -35,9 +35,50 @@ from ..models import (
 from .books_helpers import (
     _normalize_secret_level_value,
     _resolve_entities,
+    find_duplicate_candidates,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _duplicate_guard(request, data, *, kind, title, sender_number,
+                     cmp_date, party_entities, exclude_id=None):
+    """حارس التكرار المشترك (الحفظ + التعديل). يُعيد JsonResponse(409) للمنع/التنبيه،
+    أو None للسماح بالمتابعة. يُستدعى قبل استهلاك أي رقم تسلسلي.
+
+    - 4/4 (مكرر مؤكَّد): يُمنَع؛ المشرف وحده يتجاوز بإرسال confirm_duplicate=true
+      (يُفحَص في الخادم — لا يكفي علم الواجهة).
+    - 3/4 (مشابه): تنبيه ذكي؛ أيّ مستخدم يتجاوزه بإرسال confirm_duplicate=true.
+    """
+    candidates = find_duplicate_candidates(
+        kind=kind, title=title, cmp_date=cmp_date,
+        party_number=sender_number, party_entities=party_entities,
+        exclude_id=exclude_id,
+    )
+    if not candidates:
+        return None
+
+    confirm = (data.get('confirm_duplicate') or 'false').lower() in ('true', '1', 'on')
+    is_admin = bool(request.user.is_superuser or request.user.is_staff)
+    top = candidates[0]['match_count']
+
+    if top >= 4 and not (confirm and is_admin):
+        return JsonResponse({
+            'success': False,
+            'error_code': 'DUPLICATE_BOOK',
+            'message': 'هذا الكتاب مُدخَل مسبقاً — تطابق تامّ (العنوان والتاريخ والجهة والرقم).',
+            'duplicates': candidates,
+            'can_override': is_admin,
+        }, status=409)
+    if top == 3 and not confirm:
+        return JsonResponse({
+            'success': False,
+            'error_code': 'SIMILAR_BOOK',
+            'message': 'قد يكون هذا الكتاب مشابهاً لكتابٍ مُدخَلٍ سابقاً — راجِع ثم تابِع أو ألغِ.',
+            'duplicates': candidates,
+            'can_override': True,
+        }, status=409)
+    return None
 
 
 @login_required
@@ -122,6 +163,16 @@ def save_book_api(request):
                 'message': 'صيغة التاريخ غير صحيحة',
                 'error_code': 'INVALID_DATE'
             }, status=400)
+
+        # ── كشف التكرار (قبل استهلاك أي رقم تسلسلي — لا يُحرَق رقم عند الرفض) ──
+        _dup_incoming = kind_value in ('incoming_internal', 'incoming_external')
+        _dup_resp = _duplicate_guard(
+            request, data, kind=kind_value, title=title, sender_number=sender_number,
+            cmp_date=(sender_date if _dup_incoming else book_date),
+            party_entities=(issuing_entities_list if _dup_incoming else receiving_entities_list),
+        )
+        if _dup_resp is not None:
+            return _dup_resp
 
         reservation = None
         reservation_id = (data.get('reservation_id') or '').strip()
@@ -701,6 +752,8 @@ def update_book_api(request):
         receiving_new = request.POST.getlist('receiving_entity_new[]')
         issuing_entities_list = _resolve_entities(issuing_ids, issuing_new, 'issuer')
         receiving_entities_list = _resolve_entities(receiving_ids, receiving_new, 'receiver')
+
+        # لا كشف تكرار عند التعديل: الكتاب محفوظ مسبقاً — التنبيه للإدخال الأوّل فقط.
 
         # تحقّق موحّد من الملف قبل المعاملة (400 نظيف) — #12
         if 'file' in request.FILES:

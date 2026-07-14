@@ -4,7 +4,6 @@
 """
 
 from django.contrib.auth.views import LoginView
-from django.urls import reverse_lazy
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 from django.utils.decorators import method_decorator

@@ -27,7 +27,6 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from .models import NetworkNode, NetworkSettings
