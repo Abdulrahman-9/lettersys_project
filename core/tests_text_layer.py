@@ -99,6 +99,17 @@ class TextLayerReadabilityTests(TestCase):
         self.assertFalse(_text_layer_is_readable(
             junk + 'Republic of Iraq Ministry of Oil ' + junk))
 
+    def test_ims_letterhead_english_does_not_qualify_garbage(self):
+        # ثغرة #11246 (قِيست بالعين 2026-07-16): خردةٌ عربية لاتينية-الحرف +
+        # إنكليزيةُ جدول IMS/الشعار الكثيفة («Integrated management system / Doc
+        # No. / Date Rev / Midland Oil Company») — كثافتُها تعبر عدّاً وكثافةً، لكنها
+        # بويلربليت ترويسةٍ تظهر على كل ممسوحة عربية، لا رسالةٌ إنكليزية مقروءة.
+        # كانت تعبر البوّابة فيُبنى الاستخراج على ركام → تُرفض الآن لصالح OCR.
+        from core.extraction.pipeline import _text_layer_is_readable
+        self.assertFalse(_text_layer_is_readable(
+            'Integrated management system Doc No Date Rev Midland Oil Company '
+            'Jeiill Jljo lrj asi jJslt irSL rLraj OJJj irlill LiiI Jtj'))
+
     def test_presentation_forms_rejected(self):
         # أشكال العرض (ترتيب بصري مُشكَّل) تكسر المطابقة حتى لو بدت عربيةً
         from core.extraction.pipeline import _text_layer_is_readable

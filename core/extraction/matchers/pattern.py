@@ -465,11 +465,15 @@ class PatternMatcher:
         # النقطتين فتصير «Subject First Quarter Report…» — وكانت تُفقَد كلياً
         # فيسقط المحرّك لأول سطر ويلتقط «Remark ! SFor lnformation» خردةً
         # (EBS #11239، qurnain #11241 — قراءةٌ بالعين).
+        # Tesseract يقرأ «j» حرفاً «i» كثيراً في العربي+الإنجليزي («Subiect»،
+        # «Proiect») — قِيس بالعين على كتب slb/الشركات (#11223/#11188 صمت الاستخراج
+        # رغم وضوح «Subject:» في الصورة). فنتسامح مع j↔i، ومع فاصل «/» («Sub/»).
         english_markers = (
-            r'(?i:subject|subj)\s*[:.\-]?\s+([^\n]{3,80})',
+            r'(?i:sub[ji]ect|subj)\s*[:.\-/]?\s*([^\n]{3,80})',
         )
         letterhead_hints = ('جمهورية', 'وزارة', 'الشركة العامة', 'محطة', 'مديرية', 'هيئة',
-                            'republic', 'ministry', 'company', 'station', 'division', 'general')
+                            'republic', 'ministry', 'company', 'station', 'division', 'general',
+                            'state co')   # «(State Co.)» تذييل الشركة — يظهر مشوّهاً بجوار ترويسةٍ خردة (#11247)
         # سطرٌ يبدأ باسم جهة/قسم = ترويسة لا موضوع (نطابق البداية لا مجرّد الاحتواء،
         # كي لا نُسقط عنواناً يذكر «قسم» في وسطه). يعالج التقاط اسم القسم من الترويسة.
         org_prefixes = ('قسم', 'دائرة', 'شعبة', 'مكتب', 'شركة', 'مديرية', 'هيئة',
@@ -482,6 +486,13 @@ class PatternMatcher:
             ws = [w.strip(' /:؛،.-') for w in s.split()]    # لواحق ترقيم عالقة
             ws = [w for w in ws if w and w not in stop_words]
             return ' '.join(ws[:cap])
+
+        def _looks_garbled(s: str) -> bool:
+            # توقيع تحريف OCR: حرفٌ (عربيّ أو لاتينيّ) مكرّرٌ 3+ متتالية —
+            # «شكر وتقدير» الأزرق المسطَّر قُرئ «Gomme 3 Quay التسسسراق» (#11247، قراءة
+            # بالعين). نادرٌ جداً في كلمةٍ حقيقية، شائعٌ في خردة المسح. القيمة الخاطئة
+            # أسوأ من الفراغ ⇒ نرفض المرشّح فيصمت المحرّك بدل إخراج الخردة.
+            return bool(re.search(r'([ء-يa-zA-Z])\1\1', s))
 
         # أسقِط العلامات الخفية (LRM/RLM من طبقات النصّ) قبل مطابقة العلامات —
         # «م‏/» كانت تُفشل علامة م/ فيسقط الموضوع لمسار الاحتياط (بلاغ مالك).
@@ -541,7 +552,7 @@ class PatternMatcher:
             for idx, line in enumerate(lines):
                 for pat in markers:
                     m = re.search(pat, line)
-                    if m and len(m.group(1).strip()) > 3:
+                    if m and len(m.group(1).strip()) > 3 and not _looks_garbled(m.group(1)):
                         return _words(_join_wrapped(m.group(1).strip(), idx), cap=12)
 
         # 2) تخطّي الترويسة → أوّل سطر عربي جوهري
@@ -553,11 +564,12 @@ class PatternMatcher:
                 continue  # سطر يحمل اسم جهة رسمية (ترويسة)
             if any(line.startswith(p) for p in org_prefixes):
                 continue  # سطرٌ يبدأ باسم قسم/جهة = ترويسة لا موضوع
-            if re.match(r'^(?:إلى|الى|السادة|السيد)\b|^(?:إلى|الى)\s*/', line):
-                continue  # سطر المُرسَل إليه («إلى/ الجهات…») ليس موضوعاً أبداً (بلاغ مالك)
+            if re.match(r'^/?\s*(?:إلى|الى|السادة|السيد)\b|^(?:إلى|الى)\s*/', line):
+                continue  # سطر المُرسَل إليه («إلى/ الجهات…»، «/ السادة المدرجة…») ليس موضوعاً (بلاغ مالك)
             if line.lstrip().startswith(('(', '﴾', '«', ')')):
                 continue  # شعار/علامة مائية بين قوسين (مثل شعارات وطنية) — لا موضوع
-            if _looks_like_language(line) and sum(1 for c in line if '؀' <= c <= 'ۿ') >= 8:
+            if (_looks_like_language(line) and sum(1 for c in line if '؀' <= c <= 'ۿ') >= 8
+                    and not _looks_garbled(line)):
                 return _words(line)
 
         # 3) لا مؤشّر ولا سطرَ لغةٍ سليم ⇒ **صمتٌ صادق**. السقوطُ إلى «أول ثلاثة

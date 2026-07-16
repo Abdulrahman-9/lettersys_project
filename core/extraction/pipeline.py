@@ -203,6 +203,14 @@ _COMMON_EN = {'the', 'of', 'to', 'and', 'for', 'we', 'is', 'in', 'on', 'at', 'as
               'request', 'kindly', 'regarding', 'reference', 'attached'}
 _COMMON_AR = {'في', 'من', 'الى', 'إلى', 'على', 'عن', 'رقم', 'العدد', 'السيد', 'وزارة',
               'شركة', 'قسم', 'الموضوع', 'التاريخ', 'بعد', 'تحية', 'المحترم', 'مدير', 'كتاب'}
+# إنكليزيةٌ تظهر على **كل** ترويسة (بما فيها الممسوحة العربية ذات الطبقة المعطوبة):
+# جدول IMS «Integrated management system / Doc No. / Date Rev» وشعار الشركة
+# «Midland Oil Company / Ministry / Republic of Iraq». هذه لا تُثبت أن الطبقة
+# طبقةُ رسالةٍ إنكليزية مقروءة — فلا تُحسب دليلاً (ثغرة #11246: خردةٌ لاتينية-الحرف
+# عبرت البوّابة بجواز ترويستها). قِيس بالعين 2026-07-16.
+_EN_LETTERHEAD = {'no', 'date', 'oil', 'company', 'ministry', 'republic', 'iraq',
+                  'integrated', 'management', 'system', 'doc', 'rev', 'midland',
+                  'state', 'gas', 'ims'}
 
 
 def _text_layer_is_readable(text: str) -> bool:
@@ -235,7 +243,9 @@ def _text_layer_is_readable(text: str) -> bool:
     latin_tokens = re.findall(r'[a-z]{2,}', lower)
     if not latin_tokens:
         return False
-    hits = sum(1 for t in latin_tokens if t in _COMMON_EN)
+    # كلماتُ محتوىً حقيقية فقط — بويلربليت الترويسة (Doc/No/Date/Company/Midland…)
+    # يظهر على الممسوحة العربية أيضاً فلا يُثبت طبقةً إنكليزية مقروءة.
+    hits = sum(1 for t in latin_tokens if t in _COMMON_EN and t not in _EN_LETTERHEAD)
     return hits >= 3 and hits / len(latin_tokens) >= 0.05
 
 
