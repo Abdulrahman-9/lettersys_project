@@ -519,6 +519,7 @@ class PatternMatcher:
                          # لارتفاع درجات الحرارة…» كانت تُلصق بالموضوع)
                          'نظراً', 'نظرا', 'بالنظر', 'وفقاً', 'وفقا', 'بالاستناد', 'ضمن',
                          'علماً', 'علما', 'تجدون', 'مرفق', 'المرفق', 'بموجب', 'بموافقة',
+                         'أعلاه', 'اعلاه',   # «(الموضوع) أعلاه نود…» إحالةُ متنٍ لا موضوع (#11251)
                          # افتتاحيات المتن الإنجليزية (إيميلات) — تُقارَن على المُصغَّر
                          'dear', 'greetings', 'attention', 'attn', 'we ', 'please', 'kindly',
                          'with reference', 'reference is', 'this letter', 'warm')
@@ -546,30 +547,72 @@ class PatternMatcher:
                 return captured
             return captured + ' ' + nxt
 
-        # 1) مؤشّر موضوع صريح (سقف الكلمات 12 هنا — الموضوع الملتفّ أطول):
-        #    مسحان بأولوية العربية (انظر تعليق المجموعتين أعلاه)
+        # عباراتٌ تُميّز سطرَ ترويسةٍ/جدولٍ قطعاً (لا موضوعاً) أينما وردت في السطر —
+        # لأن `startswith` يفشل حين يسبقها حرفُ خردة OCR («als لسر قسم حماية»).
+        _letterhead_phrases = ('نظام الإدارة', 'نظام الاداره', 'الإدارة المتكامل', 'الاداره المتكامل',
+                               'الإدارة المشتركة', 'الاداره المشتركه', 'مذكرة داخلية', 'مذكره داخليه',
+                               'مذكرة خارجية', 'مذكره خارجيه', 'integrated management', 'management system',
+                               'joint management', 'midland oil', 'state co', 'republic of iraq',
+                               'ministry of oil', 'rev no', 'doc no', 'date rev')
+        # يتسامح مع ضجيج OCR بادئ («5 السيد المدير…») كي يجد مرساةَ المُرسَل إليه
+        # فيُطلَق قوسُ الموضع (9/18 من الإخفاقات كانت بلا مرساةٍ لهذا السبب).
+        _recip_re = re.compile(r'^[\W\d]{0,3}\s*(?:إلى|الى|السادة|السيد)\b|^\s*to\b|^(?:إلى|الى)\s*/', re.I)
+        _field_re = re.compile(r'^[\W\d_]{0,6}(?:العدد|الرقم|التاريخ|التأريخ|date|ref|rev|doc)\b', re.I)
+
+        def _is_junk(line: str) -> bool:
+            """سطرٌ ليس موضوعاً: ترويسة/جدول/مُرسَل إليه/حقل/مفتتح متن/خردة. تُستخدَم في
+            قوس الموضع والاحتياط كي لا يُخطَف عنوانٌ زائف (خطف الترويسة كان العطل السائد
+            في العيّنة العشوائية — قِيس بالعين 2026-07-16)."""
+            low = line.lower()
+            if _looks_garbled(line):
+                return True
+            letters = [c for c in line if c.isalpha()]
+            if letters and sum(1 for c in letters if ord(c) < 128) / len(letters) > 0.6:
+                return True                                    # لاتينيّ الغالب (ترويسة/إنجليزي)
+            if any(p in low for p in _letterhead_phrases):
+                return True
+            if any(h in low for h in letterhead_hints):
+                return True
+            head = re.sub(r'^[\W\d_]+', '', line)              # أسقِط ترقيماً/أرقاماً بادئة
+            if any(w == t for w in org_prefixes for t in head.split()[:2]):
+                return True                                    # يبدأ باسم قسم/جهة (ولو بعد ترقيم)
+            if _recip_re.match(line) or _field_re.match(low):
+                return True
+            if any(low.lstrip().startswith(p) for p in _body_openers):
+                return True                                    # مفتتح متن («أعلاه/نود/نرافق…»)
+            if line.lstrip().startswith(('(', '﴾', '«', ')')):
+                return True
+            return False
+
+        # 1) مؤشّر موضوع صريح (أعلى دقّة — سقف الكلمات 12، الموضوع الملتفّ أطول):
+        #    نرفض المُلتقَط إن كان إحالةَ متنٍ («بخصوص الموضوع أعلاه نود…» بعد التحية —
+        #    #11251): «أعلاه» إشارةٌ لموضوعٍ سابق لا موضوعٌ جديد.
         for markers in (arabic_markers, english_markers):
             for idx, line in enumerate(lines):
                 for pat in markers:
                     m = re.search(pat, line)
-                    if m and len(m.group(1).strip()) > 3 and not _looks_garbled(m.group(1)):
+                    if (m and len(m.group(1).strip()) > 3 and not _looks_garbled(m.group(1))
+                            and 'أعلاه' not in m.group(1) and 'اعلاه' not in m.group(1)):
                         return _words(_join_wrapped(m.group(1).strip(), idx), cap=12)
 
-        # 2) تخطّي الترويسة → أوّل سطر عربي جوهري
+        # 1.5) قوس الموضع: الموضوع يقع **بين المُرسَل إليه والتحية** — «الى/» و«تحية
+        #      طيبة» مطبوعان قياسيّان ينجوان من OCR غالباً حتى حين تُشوَّه «م/» (وهو
+        #      العطل السائد). نأخذ أوّل سطرٍ جوهريّ بينهما (بعد تجريد «م/» إن بقيت).
+        ri = next((i for i, l in enumerate(lines) if _recip_re.match(l)), -1)
+        if ri >= 0:
+            gi = next((i for i in range(ri + 1, len(lines))
+                       if re.search(r'تحي[ةه]|سلام|dear|greeting', lines[i], re.I)), len(lines))
+            for idx in range(ri + 1, min(gi + 1, len(lines))):
+                cand = re.sub(r'^\s*م\s*[/:\-.,،]\s*', '', lines[idx]).strip()
+                if (len(cand) > 3 and not _is_junk(lines[idx]) and not _is_junk(cand)
+                        and len(re.findall(r'[ء-يA-Za-z]{2,}', cand)) >= 2):
+                    return _words(_join_wrapped(cand, idx), cap=12)
+
+        # 2) احتياطٌ مُقسّى: تخطَّ كلّ سطرٍ زائف (`_is_junk`) → أوّل سطر عربيٍّ جوهريّ
         for line in lines:
-            letters = [c for c in line if c.isalpha()]
-            if letters and sum(1 for c in letters if ord(c) < 128) / len(letters) > 0.5:
-                continue  # سطر لاتيني الغالب (ترويسة)
-            if any(h in line.lower() for h in letterhead_hints):
-                continue  # سطر يحمل اسم جهة رسمية (ترويسة)
-            if any(line.startswith(p) for p in org_prefixes):
-                continue  # سطرٌ يبدأ باسم قسم/جهة = ترويسة لا موضوع
-            if re.match(r'^/?\s*(?:إلى|الى|السادة|السيد)\b|^(?:إلى|الى)\s*/', line):
-                continue  # سطر المُرسَل إليه («إلى/ الجهات…»، «/ السادة المدرجة…») ليس موضوعاً (بلاغ مالك)
-            if line.lstrip().startswith(('(', '﴾', '«', ')')):
-                continue  # شعار/علامة مائية بين قوسين (مثل شعارات وطنية) — لا موضوع
-            if (_looks_like_language(line) and sum(1 for c in line if '؀' <= c <= 'ۿ') >= 8
-                    and not _looks_garbled(line)):
+            if _is_junk(line):
+                continue
+            if (_looks_like_language(line) and sum(1 for c in line if '؀' <= c <= 'ۿ') >= 8):
                 return _words(line)
 
         # 3) لا مؤشّر ولا سطرَ لغةٍ سليم ⇒ **صمتٌ صادق**. السقوطُ إلى «أول ثلاثة
