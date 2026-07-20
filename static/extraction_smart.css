@@ -854,8 +854,10 @@ body.app-shell-body {
     display: flex;
     align-items: center;
     gap: 0.4rem;
+    flex-wrap: nowrap;                 /* سطر واحد مضغوط — لا التفاف يُضخّم الارتفاع */
+    white-space: nowrap;               /* يمنع التفاف نصّ الوسم داخل عنصره (سبب الارتفاع 71px) */
     margin-top: 0.4rem;
-    padding: 0.4rem 0.7rem;
+    padding: 0.35rem 0.7rem;
     border-radius: 0.5rem;
     background: #ecfdf5;
     border: 1px solid #6ee7b7;
@@ -863,8 +865,13 @@ body.app-shell-body {
     color: #065f46;
     font-size: 0.8rem;
     font-weight: 800;
+    min-height: 34px;                  /* يساوي #bookNumberHint فيبقى ارتفاع منطقة التنبيه ثابتاً (صفر إزاحة) */
+    box-sizing: border-box;
 }
-.reservation-status .bi { color: #059669; }
+.reservation-status .rs-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.reservation-status .bi { color: #059669; flex: none; }
+/* التلميح (بلا رقم / قيد الطلب) يشارك المؤشّر ارتفاعه ⇒ التبديل بينهما بلا إزاحة */
+#bookNumberHint { min-height: 34px; display: flex; align-items: center; }
 .reservation-status .rs-timer {
     margin-inline-start: auto;
     font-variant-numeric: tabular-nums;
@@ -922,11 +929,46 @@ body.app-shell-body {
     50%      { box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.18); }
 }
 .release-res-link {
-    border: none; background: transparent; cursor: pointer;
-    color: #b45309; font-weight: 700; font-size: 0.74rem;
-    padding: 0 0.3rem; margin-inline-start: 0.4rem; text-decoration: underline;
+    border: none; background: transparent; cursor: pointer; flex: none;
+    color: #b45309; font-size: 0.95rem; line-height: 1;
+    padding: 0.15rem 0.25rem; margin-inline-start: 0.2rem; border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
 }
-.release-res-link:hover { color: #9a3412; }
+.release-res-link:hover { color: #9a3412; background: rgba(180, 83, 9, 0.1); }
+.release-res-link .bi { color: inherit; }
+
+/* ── خاتم الحجز + استثناء «بلا رقم» داخل حقل الرقم (RTL: النهاية = يسار) ── */
+.book-number-cell { position: relative; }
+/* !important لهزيمة اختزال .extraction-form-panel .form-control-smart المهمّ؛
+   خصوصية هذا المُحدِّد أعلى فيفوز بين المهمّين ويُفسح مكان الخاتم + أيقونة «بلا رقم». */
+.book-number-cell.has-ring .book-number-readonly { padding-inline-end: 76px !important; }
+.res-ring {
+    position: absolute; inset-inline-end: 10px; top: 50%; transform: translateY(-50%);
+    width: 26px; height: 26px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #e2e8f0; color: #94a3b8; font-size: 0.9rem; pointer-events: none;
+    transition: background 0.3s, color 0.3s;
+}
+.res-ring.is-reserved { background: #16a34a; color: #fff; }
+.nl-btn {
+    position: absolute; inset-inline-end: 44px; top: 50%; transform: translateY(-50%);
+    width: 22px; height: 22px; border-radius: 50%; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px dashed #cbd5e1; background: #fff; color: #94a3b8; cursor: pointer;
+    font-size: 0.72rem; transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.nl-btn:hover { color: #b45309; border-color: #fcd34d; }
+.nl-btn.on { background: #fffbeb; border-color: #f59e0b; color: #b45309; }
+/* الـcheckbox حالةٌ مخفية يقرؤها saveBook — لا يُعرض بصرياً ولا يستقبل تركيزاً */
+.visually-hidden-cb { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; margin: 0; }
+.nl-pop {
+    position: absolute; top: calc(100% + 6px); inset-inline: 0; z-index: 30;
+    background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;
+    border-radius: 10px; padding: 8px 12px; font-size: 0.78rem; line-height: 1.6;
+    box-shadow: 0 10px 22px -10px rgba(146, 64, 14, 0.4); display: none;
+}
+.nl-pop.on { display: block; }
+.nl-pop b { font-weight: 700; }
 
 /* حقل الموضوع المتوسّع: يكبر لأسفل مع النصّ فيبقى مرئياً كاملاً (لا كتابة عمياء) */
 textarea.title-autogrow {
@@ -1324,7 +1366,6 @@ body.app-shell-body .app-main .extraction-container { flex: 1 1 auto; min-height
 .extraction-form-panel .form-control-smart { padding: 7px 10px !important; font-size: 0.9rem !important; }
 .extraction-form-panel textarea.form-control-smart { min-height: 70px; }
 .extraction-form-panel .input-hint { font-size: 0.72rem !important; margin-top: 3px !important; }
-.network-lock-chip { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: 6px; padding: 2px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; color: #0f766e; background: #ecfdf5; border: 1px solid #a7f3d0; white-space: nowrap; vertical-align: middle; }
 .extraction-form-panel .label-with-confidence { margin-bottom: 4px !important; }
 .followup-card { padding: 10px 12px !important; }
 .followup-card-copy { font-size: 0.78rem !important; margin: 2px 0 0 !important; }

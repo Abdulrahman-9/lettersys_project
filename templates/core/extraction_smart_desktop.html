@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260719b">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260719f">
 <style>
 .scan-agent-status{font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap}
 .scan-agent-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
@@ -162,26 +162,27 @@
                                     <span id="bookNumberConfidenceValue">95%</span>
                                 </span>
                             </div>
-                            <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
+                            <div class="book-number-cell{% if edit_book_json == 'null' %} has-ring{% endif %}">
+                                <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
+                                {% if edit_book_json == 'null' %}
+                                {% comment %}خاتم الحجز: رمادي=لا حجز، أخضر=محجوز — يقوده _updateReservationRing من مصدر الحجز نفسه.{% endcomment %}
+                                <span class="res-ring" id="reservationRing" title="لم يُحجز رقم بعد" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+                                {% comment %}استثناء «بلا رقم»: أيقونة تُبدّل #numberlessCheckbox المخفي (حالة يقرؤها saveBook) — popover لا يُزيح التخطيط.{% endcomment %}
+                                <button type="button" class="nl-btn" id="numberlessToggle" style="display:none;" title="استثناء: كتاب داخلي بلا رقم رسمي" aria-pressed="false"><i class="bi bi-slash-circle"></i></button>
+                                <input type="checkbox" id="numberlessCheckbox" class="visually-hidden-cb" tabindex="-1" aria-hidden="true">
+                                <div class="nl-pop" id="numberlessPop" role="status" aria-live="polite"></div>
+                                {% endif %}
+                            </div>
                             <div class="reservation-status" id="reservationStatus" style="display:none;">
                                 <i class="bi bi-lock-fill"></i>
                                 <span class="rs-label">محجوز لك — اكتبه على المستند</span>
                                 <span class="rs-timer" id="reservationTimer"></span>
-                            </div>
-                            <label class="numberless-toggle" id="numberlessToggle" style="display:none; align-items:center; gap:0.4rem; margin-top:0.3rem; font-size:0.82rem; cursor:pointer; color:#7b5942;">
-                                <input type="checkbox" id="numberlessCheckbox" style="margin:0;">
-                                <span>بلا رقم — كتاب داخلي بلا رقم رسمي (استثناء)</span>
-                            </label>
-                            <div class="input-hint" id="bookNumberHint">
-                                رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.
-                                <span class="network-lock-chip" title="الحجز الشبكي للأرقام الفريدة مفعل">
-                                    <i class="bi bi-shield-lock"></i>حجز شبكي مفعل
-                                </span>
                                 <button type="button" id="releaseReservationBtn" class="release-res-link" style="display:none;"
-                                        title="حرّر هذا الرقم ليُعاد تدويره لزميلك إن لم تكتبه ورقياً">
-                                    <i class="bi bi-x-circle"></i> تحرير الرقم
+                                        title="تحرير الرقم — يُعاد تدويره لزميلك إن لم تكتبه ورقياً" aria-label="تحرير الرقم">
+                                    <i class="bi bi-x-circle"></i>
                                 </button>
                             </div>
+                            <div class="input-hint" id="bookNumberHint">رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.</div>
                             <div id="recycledBanner" class="recycled-banner" style="display:none;" role="alert">
                                 <i class="bi bi-recycle"></i>
                                 <span>رقم مُدوّر: سُحب تلقائياً لعدم اكتمال إدخالٍ سابق. تأكّد أن الورقة بين يديك لا تحمل رقماً متضارباً واكتب هذا الرقم عليها.</span>
@@ -513,7 +514,7 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260719c"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260719f"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
@@ -764,7 +765,13 @@
       if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
     }
 
-    clear() { this.tags = []; this._render(); }
+    // تصفير كامل: الوسوم + مربّع الكتابة + مؤشّر التحقّق (كي يعمل «تفريغ الحقول» على الجهات).
+    clear() {
+      this.tags = [];
+      if (this.input) this.input.value = '';
+      this._render();
+      if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+    }
 
     loadTags(arr) {
       this.tags = (arr || []).map(t => ({ id: t.id, name: t.name, code: t.code || '', isNew: false }));
@@ -1294,25 +1301,46 @@
     if (cb.checked) { cb.checked = false; applyNumberless(false); }
   }
 
+  const pop = document.getElementById('numberlessPop');
+  let popTimer = null;
+  function showPop(html) {
+    if (!pop) return;
+    pop.innerHTML = html;
+    pop.classList.add('on');
+    clearTimeout(popTimer);
+    popTimer = setTimeout(() => pop.classList.remove('on'), 4500);
+  }
+
   function applyNumberless(on) {
+    const sys = window.extractionSystem;
+    toggle.classList.toggle('on', on);
+    toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
     if (on) {
       bookNumField.value = 'بلا رقم';
       bookNumField.classList.add('is-numberless');
       if (hint) hint.textContent = 'سيُحفظ الكتاب بلا رقم رسمي (يأخذ معرّفاً تقنياً داخلياً).';
+      showPop('<b>وضع الاستثناء:</b> كتاب داخلي بلا رقم رسمي — لن يُحجز رقم لهذا الكتاب.');
     } else {
       bookNumField.classList.remove('is-numberless');
       if (hint) hint.textContent = 'رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.';
+      if (pop) pop.classList.remove('on');
       // التراجع يستمدّ الرقم من مصدر الحقيقة (مدير الحجز) لا من قيمة محفوظة:
       // الحقل قد يكون فارغاً لحظة التأشير (الحجز لم يصل) فتعلق «بلا رقم» بلا رجعة.
-      const sys = window.extractionSystem;
       const k = currentKind();
       bookNumField.value = '';
       if (sys && typeof sys.ensureReservation === 'function') {
         sys.ensureReservation(k);
       }
     }
+    // حدّث الخاتم + مؤشّر الحجز من مصدرهما الواحد (يقرأ حالة #numberlessCheckbox).
+    if (sys && typeof sys._updateReservationPill === 'function') sys._updateReservationPill();
   }
 
+  // الأيقونة تُبدّل حالة الـcheckbox المخفي (بديل نقر الـlabel السابق) ثم تُطلق change.
+  toggle.addEventListener('click', function() {
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+  });
   cb.addEventListener('change', function() { applyNumberless(this.checked); });
 
   // راقب تغيّر التبويب

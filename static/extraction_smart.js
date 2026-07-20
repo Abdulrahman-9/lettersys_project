@@ -947,15 +947,35 @@ class ExtractionSmartSystem {
         this._ensurePresence();
     }
 
-    /** مؤشّر «محجوز لك» البارز: يُظهر الحالة + الوقت المتبقّي بلون يتدرّج مع الاقتراب من الانتهاء. */
+    /** خاتم الحجز (أيقونة صح أقصى يسار الحقل): أخضر=محجوز، رمادي=لا حجز/بلا رقم/تعديل.
+     *  يُقاد من مصدر الحجز نفسه (_activeReservation + حالة «بلا رقم»)، ويُستدعى في مطلع
+     *  _updateReservationPill فيتحدّث مع كل نبضة عدّاد وكل تغيّر حجز أو «بلا رقم». */
+    _updateReservationRing() {
+        const ring = document.getElementById('reservationRing');
+        if (!ring) return;
+        const numberless = document.getElementById('numberlessCheckbox')?.checked;
+        const reserved = !this._editData && !numberless && !!this._activeReservation();
+        ring.classList.toggle('is-reserved', reserved);
+        ring.title = reserved ? 'الرقم محجوز لك — اكتبه على المستند' : 'لم يُحجز رقم بعد';
+    }
+
+    /** مؤشّر «محجوز لك» البارز: يُظهر الحالة + الوقت المتبقّي بلون يتدرّج مع الاقتراب من الانتهاء.
+     *  حين يظهر المؤشّر يُخفى #bookNumberHint المكرّر فيبقى سطر تنبيه واحد نظيف أسفل الحقل. */
     _updateReservationPill() {
+        this._updateReservationRing();   // الخاتم يتحدّث دائماً، مستقلّاً عن وجود المؤشّر أو مساراته المبكّرة
         const pill = document.getElementById('reservationStatus');
+        const hint = document.getElementById('bookNumberHint');
         if (!pill) return;
         const timerEl = document.getElementById('reservationTimer');
         const cur = this._activeReservation();
         const numberless = document.getElementById('numberlessCheckbox')?.checked;
-        if (this._editData || numberless || !cur) { pill.style.display = 'none'; return; }
+        if (this._editData || numberless || !cur) {
+            pill.style.display = 'none';
+            if (hint) hint.style.display = '';        // لا مؤشّر → أظهِر التلميح (قيد الطلب / بلا رقم)
+            return;
+        }
         pill.style.display = 'flex';
+        if (hint) hint.style.display = 'none';        // المؤشّر يكفي — أخفِ التلميح المكرّر
         let secs = 0;
         if (cur.r.expires_at) {
             secs = Math.max(0, Math.floor((new Date(cur.r.expires_at).getTime() - Date.now()) / 1000));
@@ -4056,6 +4076,14 @@ class ExtractionSmartSystem {
         });
         this.endTextUndoBatch?.();
 
+        // امسح وسوم الجهات: مكوّن EntityTagInput مخصّص (ليست .form-control-smart) فلا تطالها الحلقة أعلاه.
+        window.entityTagManagers?.issuing?.clear();
+        window.entityTagManagers?.receiving?.clear();
+
+        // صفّر «بلا رقم» كي لا يعلق مؤشَّراً بعد التفريغ (عبر معالج القالب الواحد).
+        const _nlCbClear = document.getElementById('numberlessCheckbox');
+        if (_nlCbClear && _nlCbClear.checked) { _nlCbClear.checked = false; _nlCbClear.dispatchEvent(new Event('change', { bubbles: true })); }
+
         const badges = document.querySelectorAll('.confidence-badge');
         console.log('[ExtractionSmart] Found', badges.length, 'confidence badges');
         badges.forEach(badge => {
@@ -4092,6 +4120,14 @@ class ExtractionSmartSystem {
                 delete field.dataset.reservationId;
             }
         });
+
+        // امسح وسوم الجهات (مكوّن مخصّص خارج .form-control-smart) — «تفريغ» يشمل الجهات.
+        window.entityTagManagers?.issuing?.clear();
+        window.entityTagManagers?.receiving?.clear();
+
+        // صفّر «بلا رقم» كي لا يعلق مؤشَّراً للكتاب التالي (عبر معالج القالب الواحد → يُعيد الحجز).
+        const _nlCb = document.getElementById('numberlessCheckbox');
+        if (_nlCb && _nlCb.checked) { _nlCb.checked = false; _nlCb.dispatchEvent(new Event('change', { bubbles: true })); }
 
         const badges = document.querySelectorAll('.confidence-badge');
         badges.forEach(badge => { badge.style.display = 'none'; });
