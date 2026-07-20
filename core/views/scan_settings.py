@@ -10,7 +10,9 @@ core.views.scan_settings
 """
 import logging
 import os
+import subprocess
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -401,6 +403,44 @@ def scan_agent_token(request):
         'token': token if alive else '',
         'agent_url': f'http://127.0.0.1:{_AGENT_PORT}',
     })
+
+
+@login_required
+@require_http_methods(['POST'])
+def scan_agent_start(request):
+    """يشغّل وكيل المسح المحلي (حزمة scan_agent في جذر المشروع، نفس جهاز الخادم) بصمت.
+
+    الأمر ثابت (لا مُدخَل مستخدم → لا حقن)، ولا يُكرَّر إن كان الوكيل يعمل أصلاً.
+    الواجهة تستدعيه من زرّ مؤشّر الحالة ثم تُعيد الفحص حتى يصير المنفذ حيّاً.
+    """
+    if _agent_is_alive(_AGENT_PORT):
+        return JsonResponse({'ok': True, 'status': 'already_running',
+                             'message': 'وكيل المسح يعمل بالفعل.'})
+
+    base_dir = str(settings.BASE_DIR)
+    if not os.path.isdir(os.path.join(base_dir, 'scan_agent')):
+        return JsonResponse({'ok': False, 'status': 'not_found',
+                             'message': 'حزمة وكيل المسح (scan_agent) غير موجودة على الخادم.'},
+                            status=404)
+
+    # فضّل pythonw من venv المشروع (بلا نافذة console)؛ وإلا pythonw من PATH.
+    pythonw = os.path.join(base_dir, '.venv', 'Scripts', 'pythonw.exe')
+    exe = pythonw if os.path.exists(pythonw) else 'pythonw'
+    creationflags = 0
+    if os.name == 'nt':
+        creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    try:
+        subprocess.Popen(
+            [exe, '-m', 'scan_agent'], cwd=base_dir, creationflags=creationflags,
+            close_fds=True, stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except (OSError, ValueError) as exc:
+        logger.warning('[scan-agent] تعذّر تشغيل الوكيل: %s', exc)
+        return JsonResponse({'ok': False, 'status': 'launch_failed',
+                             'message': f'تعذّر تشغيل وكيل المسح: {exc}'}, status=500)
+    return JsonResponse({'ok': True, 'status': 'launching',
+                         'message': 'يجري تشغيل وكيل المسح…'})
 
 
 @login_required

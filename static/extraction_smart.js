@@ -402,6 +402,7 @@ class ExtractionSmartSystem {
         this.enhanceUIFeedback();
         this.checkScanToken();
         this._initScanAgent();
+        this._setupAgentButton();
     }
 
     /** يحدّث مؤشّر حالة الوكيل (الحبّة الملوّنة) في رأس المعاينة.
@@ -522,6 +523,162 @@ class ExtractionSmartSystem {
             this.setScanStatus(state, title);
             if (wasHealthy) this.showToast(msg, 'warning', 6000, title);   // نبّه عند التحوّل فقط
         }
+    }
+
+    // ═══════ زرّ حالة الوكيل + لوحة التعليمات لكل حالة ═══════
+    /** يربط زرّ مؤشّر الحالة: نقرة تفتح/تغلق لوحة التعليمات، وأزرارها تُشغّل/تُعيد الفحص. */
+    _setupAgentButton() {
+        const btn = document.getElementById('scanAgentStatus');
+        const help = document.getElementById('scanAgentHelp');
+        if (!btn || !help) return;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (help.hidden) this._openAgentHelp(); else this._closeAgentHelp();
+        });
+        document.addEventListener('click', (e) => {
+            if (!help.hidden && !help.contains(e.target) && e.target !== btn) this._closeAgentHelp();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !help.hidden) this._closeAgentHelp();
+        });
+        help.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-action]');
+            if (!b) return;
+            const act = b.dataset.action;
+            if (act === 'recheck') this._recheckAgent();
+            else if (act === 'start') this._startAgentAndVerify();
+            else if (act === 'close') this._closeAgentHelp();
+        });
+    }
+
+    _openAgentHelp() {
+        const btn = document.getElementById('scanAgentStatus');
+        const help = document.getElementById('scanAgentHelp');
+        if (!help) return;
+        this._renderAgentHelp(btn?.dataset.state || 'checking');
+        help.hidden = false;
+        btn?.setAttribute('aria-expanded', 'true');
+        this._positionAgentHelp();
+    }
+
+    /** يضع اللوحة (fixed) قرب الزرّ ويقصُرها داخل الشاشة: فوقه إن اتّسع وإلا تحته، وأفقياً بلا خروج. */
+    _positionAgentHelp() {
+        const btn = document.getElementById('scanAgentStatus');
+        const help = document.getElementById('scanAgentHelp');
+        if (!btn || !help || help.hidden) return;
+        const b = btn.getBoundingClientRect();
+        const pw = help.offsetWidth, ph = help.offsetHeight, m = 8;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        let top = b.top - ph - m;                                  // الأصل: فوق الزرّ
+        if (top < m) top = Math.min(b.bottom + m, vh - ph - m);    // لا يتّسع فوق → تحته
+        top = Math.max(m, top);
+        let left = b.right - pw;                                   // RTL: حاذِ يمين اللوحة بيمين الزرّ
+        left = Math.max(m, Math.min(left, vw - pw - m));           // اقصُر أفقياً داخل الشاشة
+        help.style.top = top + 'px';
+        help.style.left = left + 'px';
+    }
+
+    _closeAgentHelp() {
+        const help = document.getElementById('scanAgentHelp');
+        const btn = document.getElementById('scanAgentStatus');
+        if (help) help.hidden = true;
+        btn?.setAttribute('aria-expanded', 'false');
+    }
+
+    /** يبني محتوى اللوحة حسب الحالة: عنوان + شرح + خطوات مرقّمة + أزرار (تشغيل/إعادة فحص). */
+    _renderAgentHelp(state) {
+        const help = document.getElementById('scanAgentHelp');
+        if (!help) return;
+        const devs = this._scanDevices || [];
+        let dev = '';
+        if (devs.length) {
+            const sel = document.getElementById('scanDeviceSelect');
+            const chosen = (sel && sel.value) || devs[0].id;
+            dev = (devs.find(d => d.id === chosen) || devs[0]).name;
+        }
+        const C = {
+            checking:   { tone: 'info', title: 'جارٍ فحص وكيل المسح…',
+                desc: 'نتحقّق من اتصال وكيل المسح والماسح الضوئي على هذا الجهاز.', steps: [], actions: [] },
+            ready:      { tone: 'ok', title: 'الماسح جاهز',
+                desc: dev ? `وكيل المسح متصل، والماسح «${dev}» جاهز. اضغط «مسح من السكانر» لبدء المسح.`
+                          : 'وكيل المسح متصل وجاهز للمسح.', steps: [], actions: ['recheck'] },
+            scanning:   { tone: 'busy', title: 'جارٍ المسح…',
+                desc: 'يجري مسح المستند الآن — لا تُغلق النافذة حتى ينتهي.', steps: [], actions: [] },
+            unavailable:{ tone: 'err', title: 'وكيل المسح غير مشغّل',
+                desc: 'برنامج وكيل المسح المحلي متوقّف — وهو الوسيط الذي يشغّل الماسح الضوئي.', steps: [
+                    'اضغط «شغّل الوكيل الآن» أدناه ليبدأ تلقائياً.',
+                    'أو يدوياً: نفّذ <code>scan_agent\\run_agent.bat</code> من مجلد المشروع.',
+                    'لتشغيله تلقائياً مع ويندوز: ضع اختصاره في <code>shell:startup</code> (Win+R).',
+                ], actions: ['start', 'recheck'] },
+            no_naps2:   { tone: 'err', title: 'برنامج NAPS2 غير مثبّت',
+                desc: 'الوكيل يعمل، لكنه لا يجد NAPS2 — وهو محرّك المسح الفعلي.', steps: [
+                    'نزّل NAPS2 من <code>naps2.com</code> وثبّته (الإعداد الافتراضي كافٍ).',
+                    'بعد التثبيت أعد تشغيل وكيل المسح.',
+                    'اضغط «إعادة الفحص».',
+                ], actions: ['recheck'] },
+            no_device:  { tone: 'err', title: 'لا يوجد ماسح متصل',
+                desc: 'الوكيل وNAPS2 جاهزان، لكن لا يوجد ماسح ضوئي متّصل ومُكتشَف.', steps: [
+                    'وصّل الماسح بمنفذ USB وشغّله (تأكّد أنه ليس نائماً).',
+                    'تحقّق أن ويندوز يتعرّف عليه (لوحة التحكم ← الأجهزة والطابعات).',
+                    'اضغط «إعادة الفحص».',
+                ], actions: ['recheck'] },
+        };
+        const c = C[state] || C.checking;
+        const label = { recheck: '<i class="bi bi-arrow-clockwise"></i> إعادة الفحص',
+                        start: '<i class="bi bi-play-circle"></i> شغّل الوكيل الآن' };
+        const cls = { recheck: 'sah-btn-ghost', start: 'sah-btn-primary' };
+        const stepsHtml = c.steps.length
+            ? `<ol class="sah-steps">${c.steps.map(s => `<li>${s}</li>`).join('')}</ol>` : '';
+        const actionsHtml = c.actions.length
+            ? `<div class="sah-actions">${c.actions.map(a =>
+                `<button type="button" class="sah-btn ${cls[a]}" data-action="${a}">${label[a]}</button>`).join('')}</div>` : '';
+        help.innerHTML =
+            `<div class="sah-head ${c.tone}"><span class="sah-dot"></span>${c.title}` +
+            `<button type="button" class="sah-close" data-action="close" aria-label="إغلاق">✕</button></div>` +
+            `<p class="sah-desc">${c.desc}</p>${stepsHtml}${actionsHtml}`;
+        if (!help.hidden) this._positionAgentHelp();   // الارتفاع تغيّر → أعِد القصّ داخل الشاشة
+    }
+
+    /** يعيد فحص الوكيل من الصفر (يمسح الكاش) ويحدّث المؤشّر واللوحة. */
+    async _recheckAgent() {
+        this.setScanStatus('checking', 'جارٍ فحص وكيل المسح…');
+        this._renderAgentHelp('checking');
+        this._agentBase = null; this._agentHealth = null;   // أعِد حلّ العنوان من الصفر
+        await this._initScanAgent();
+        const btn = document.getElementById('scanAgentStatus');
+        this._renderAgentHelp(btn?.dataset.state || 'unavailable');
+    }
+
+    /** يطلب من الخادم تشغيل الوكيل المحلي، ثم ينتظر حياة المنفذ (حتى ~8ث) ويعيد الفحص. */
+    async _startAgentAndVerify() {
+        const help = document.getElementById('scanAgentHelp');
+        const startBtn = help?.querySelector('[data-action="start"]');
+        if (startBtn) { startBtn.disabled = true; startBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> يجري التشغيل…'; }
+        this.setScanStatus('checking', 'جارٍ تشغيل الوكيل…');
+        try {
+            const r = await fetch('/books/api/scan/agent-start/', {
+                method: 'POST', headers: { 'X-CSRFToken': this.getCookie('csrftoken') }, credentials: 'same-origin',
+            });
+            const d = await r.json();
+            if (!d.ok) {
+                this.showToast(d.message || 'تعذّر تشغيل الوكيل', 'error', 6000, 'وكيل المسح');
+                await this._recheckAgent(); return;
+            }
+        } catch (_) {
+            this.showToast('تعذّر الاتصال بالخادم لتشغيل الوكيل.', 'error', 6000, 'وكيل المسح');
+            await this._recheckAgent(); return;
+        }
+        // انتظر حتى يصير المنفذ حيّاً (الوكيل يستغرق لحظات للإقلاع)
+        for (let i = 0; i < 8; i++) {
+            await new Promise(res => setTimeout(res, 1000));
+            try {
+                const td = await (await this._fetchWithTimeout('/books/api/scan/agent-token/', { credentials: 'same-origin' }, 3000)).json();
+                if (td.available) break;
+            } catch (_) { /* استمر بالانتظار */ }
+        }
+        await this._recheckAgent();
+        const st = document.getElementById('scanAgentStatus')?.dataset.state;
+        if (st === 'ready' || st === 'no_device') this.showToast('تم تشغيل وكيل المسح.', 'success', 4000, 'وكيل المسح');
     }
 
     /**

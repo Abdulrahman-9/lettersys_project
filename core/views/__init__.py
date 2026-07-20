@@ -132,4 +132,5 @@ from .scan_settings import (
     scan_stage_attachment,
     scan_process_upload,
     scan_agent_token,
+    scan_agent_start,
 )
