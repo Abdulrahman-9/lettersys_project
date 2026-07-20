@@ -1,17 +1,17 @@
 {
-  "id": "abdualrhmanahmed/lettersys-crnn-finetune-real",
-  "title": "lettersys-crnn-finetune-real",
-  "code_file": "finetune_crnn_real.py",
-  "language": "python",
-  "kernel_type": "script",
-  "is_private": "true",
-  "enable_gpu": "true",
-  "enable_internet": "false",
-  "dataset_sources": [
-    "mloey1/ahdd1",
-    "oddrationale/mnist-in-csv",
-    "abdualrhmanahmed/lettersys-real-number-strips"
-  ],
-  "competition_sources": [],
-  "kernel_sources": []
+ "id": "abdualrhmanahmed/lettersys-crnn-finetune-v6",
+ "title": "lettersys-crnn-finetune-v6",
+ "code_file": "finetune_crnn_real.py",
+ "language": "python",
+ "kernel_type": "script",
+ "is_private": "true",
+ "enable_gpu": "true",
+ "enable_internet": "false",
+ "dataset_sources": [
+  "mloey1/ahdd1",
+  "oddrationale/mnist-in-csv",
+  "abdualrhmanahmed/lettersys-strips-v6"
+ ],
+ "competition_sources": [],
+ "kernel_sources": []
 }

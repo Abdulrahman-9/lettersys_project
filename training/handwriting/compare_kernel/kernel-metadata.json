@@ -1,0 +1,14 @@
+{
+  "id": "abdualrhmanahmed/lettersys-v5-v6-compare",
+  "title": "lettersys-v5-v6-compare",
+  "code_file": "compare_v5_v6.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": false,
+  "dataset_sources": ["abdualrhmanahmed/lettersys-strips-v6"],
+  "kernel_sources": ["abdualrhmanahmed/lettersys-crnn-finetune-v6"],
+  "competition_sources": [],
+  "model_sources": []
+}
