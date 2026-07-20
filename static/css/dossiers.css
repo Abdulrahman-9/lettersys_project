@@ -149,3 +149,50 @@ body:not(.dd-js) .dd-pane-title { display:block; }
 .group-more { padding:.5rem 1rem; font-size:.8rem; }
 .group-more a { color:#b45309; text-decoration:none; font-weight:600; }
 .dd-empty { text-align:center; padding:3rem 1rem; color:#94a3b8; }
+
+/* ═══ خزانة الملفات الثانوية — تقسيم كل إضبارة إلى ملفات حسب النوع ═══ */
+.dd-subfile-bar { display:flex; align-items:center; gap:10px; margin:10px 0 2px; }
+.sf-back {
+    display:inline-flex; align-items:center; gap:5px; font-size:.8rem; font-weight:600;
+    color:#0f766e; text-decoration:none; border:1px solid #99f6e4; background:#f0fdfa;
+    border-radius:999px; padding:4px 12px; transition:background .15s, box-shadow .15s;
+}
+.sf-back:hover { background:#ccfbf1; color:#0f766e; box-shadow:0 3px 8px -4px rgba(15,118,110,.4); }
+.sf-open { display:inline-flex; align-items:center; gap:7px; font-weight:700; font-size:.9rem; color:#1e293b; }
+.sf-open .bi { color:#b45309; }
+.sf-count {
+    font-size:.72rem; font-weight:700; background:#e2e8f0; color:#475569;
+    border-radius:999px; padding:1px 9px; font-variant-numeric:tabular-nums;
+}
+
+.folder-grid {
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr));
+    gap:10px; padding:4px 0 8px;
+}
+.folder-card {
+    display:flex; flex-direction:column; align-items:flex-start; gap:6px;
+    padding:12px 14px; border-radius:12px; text-decoration:none; position:relative;
+    background:#fff; border:1px solid #e2e8f0; color:#1e293b;
+    transition:transform .16s, box-shadow .16s, border-color .16s;
+    /* backwards لا both — fill-mode:both يكسر :hover بعد انتهاء الحركة */
+    animation:fcIn .3s cubic-bezier(.4, 0, .2, 1) backwards;
+    animation-delay:calc(var(--i, 0) * 30ms);
+}
+.folder-card:hover {
+    transform:translateY(-2px); border-color:var(--fc, #0f766e); color:#1e293b;
+    box-shadow:0 8px 18px -10px color-mix(in srgb, var(--fc, #0f766e) 55%, transparent);
+}
+.folder-card .fc-icon { font-size:1.35rem; color:var(--fc, #64748b); }
+.folder-card.out { --fc:#b45309; }
+.folder-card.in  { --fc:#1e5a9e; }
+.fc-name { font-size:.84rem; font-weight:700; line-height:1.4; }
+.fc-count {
+    position:absolute; top:10px; inset-inline-end:12px; font-size:.72rem; font-weight:700;
+    background:color-mix(in srgb, var(--fc, #64748b) 12%, #fff); color:var(--fc, #475569);
+    border-radius:999px; padding:1px 9px; font-variant-numeric:tabular-nums;
+}
+@keyframes fcIn { from { opacity:0; transform:translateY(6px); } }
+.dd-subfile .dd-table { margin-top:4px; }
+@media (prefers-reduced-motion: reduce) {
+    .folder-card { animation:none; transition:none; }
+}

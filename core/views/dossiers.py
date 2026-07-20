@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 _MISC_LABEL = "متفرقة"          # سلّة النوع الفارغ
 _GROUP_ROW_LIMIT = 12          # أحدث صفوف معروضة لكل مجموعة نوع (الباقي عبر "عرض الكل")
+_SUBFILE_ROW_LIMIT = 200       # داخل الملف الثانوي (نوع واحد مفتوح) نعرض أكثر بكثير
 _DETAIL_SCAN_CAP = 3000        # سقف مسح صفوف العرض لكل اتجاه (الأحدث) — حماية ذاكرة 8GB
 _REPORT_CAP = 2000            # سقف صفوف التقرير لكل اتجاه
 
@@ -118,7 +119,12 @@ def _apply_filters(qs, f):
     """فلاتر الإضبارة (بلا فرز) عبر المحرّك المشترك."""
     qs = BookFilterEngine.apply_search_filter(qs, f["q"])
     qs = BookFilterEngine.apply_date_filter(qs, f["date_from"], f["date_to"])
-    qs = BookFilterEngine.apply_document_type_filter(qs, f["document_type"])
+    if f["document_type"] == _MISC_LABEL:
+        # سلّة «متفرقة» = الكتب بلا نوع — تُفتح كملف ثانوي مثل بقية الأنواع
+        # (نوع حقيقي مُسمّى «متفرقة» حرفياً يندمج معها عرضاً — تصادم مقبول بنفس الدلالة)
+        qs = qs.filter(Q(document_type="") | Q(document_type=_MISC_LABEL))
+    else:
+        qs = BookFilterEngine.apply_document_type_filter(qs, f["document_type"])
     qs = BookFilterEngine.apply_secret_filter(qs, f["secret_level"])
     qs = BookFilterEngine.apply_followup_filter(qs, f["followup"])
     return qs
@@ -173,7 +179,7 @@ def _available_types(*metas):
     return options
 
 
-def _ordered_type_groups(scan_books, meta):
+def _ordered_type_groups(scan_books, meta, row_limit=_GROUP_ROW_LIMIT):
     """مجموعات الأنواع مرتّبة (كتالوج ← حرّة ← متفرقة).
 
     العدّ من meta (دقيق DB)؛ صفوف العرض من scan_books (المُقسَّمة بايثونياً، أحدث أولاً).
@@ -189,7 +195,7 @@ def _ordered_type_groups(scan_books, meta):
         if key in seen or key not in meta:
             return
         seen.add(key)
-        rows = sampled.get(key, [])[:_GROUP_ROW_LIMIT]
+        rows = sampled.get(key, [])[:row_limit]
         total = meta[key]["count"]
         ordered.append({"type": label, "count": total, "books": rows,
                         "truncated": total > len(rows)})
@@ -278,11 +284,13 @@ def dossier_detail(request, pk):
     else:
         available_types = _available_types(out_types, in_types)
 
-    # مسح صفوف العرض دفعة واحدة لكل اتجاه (.only بلا prefetch) ثم تقسيم بايثوني
+    # مسح صفوف العرض دفعة واحدة لكل اتجاه (.only بلا prefetch) ثم تقسيم بايثوني.
+    # داخل الملف الثانوي (نوع مُنتقى) نرفع سقف الصفوف — إنه العرض المخصّص لذلك النوع.
+    row_limit = _SUBFILE_ROW_LIMIT if f["document_type"] else _GROUP_ROW_LIMIT
     out_scan = list(BookSortEngine.apply_sort(outgoing_qs.only(*_DETAIL_FIELDS), f["sort"])[:_DETAIL_SCAN_CAP])
     in_scan = list(BookSortEngine.apply_sort(incoming_qs.only(*_DETAIL_FIELDS), f["sort"])[:_DETAIL_SCAN_CAP])
-    outgoing_groups = _ordered_type_groups(out_scan, out_types)
-    incoming_groups = _ordered_type_groups(in_scan, in_types)
+    outgoing_groups = _ordered_type_groups(out_scan, out_types, row_limit)
+    incoming_groups = _ordered_type_groups(in_scan, in_types, row_limit)
 
     # prefetch الجهات للمعروض فقط (≤ 12×أنواع×اتجاهين) بدل كل المسح
     displayed = [b for g in outgoing_groups for b in g["books"]] \
@@ -319,6 +327,10 @@ def dossier_detail(request, pk):
     for _k in ("period", "date_from", "date_to"):
         _qpp.pop(_k, None)
     qs_no_period = _qpp.urlencode()
+    # querystring بلا document_type — لروابط بطاقات الملفات الثانوية وكسرة «كل الملفات»
+    _qpt = params.copy()
+    _qpt.pop("document_type", None)
+    qs_no_type = _qpt.urlencode()
 
     return render(request, "core/dossier_detail.html", {
         "entity": entity,
@@ -334,6 +346,7 @@ def dossier_detail(request, pk):
         "counter_chips": counter_chips,
         "qs_no_followup": qs_no_followup,
         "qs_no_period": qs_no_period,
+        "qs_no_type": qs_no_type,
         "period_presets": period_presets,
         "querystring": params.urlencode(),
         "secret_labels": _SECRET_LABELS,

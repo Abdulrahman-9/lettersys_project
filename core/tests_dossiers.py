@@ -343,12 +343,34 @@ class DossierFilterBarTests(DossierBaseSetup):
         self.assertNotIn('data-period=', body)             # لا أزرار قديمة
         self.assertNotIn('<input type="hidden" name="period"', body)   # لا hidden input
 
-    def test_viewall_link_no_misleading_count(self):
-        for i in range(14):                                # >12 → truncated
+    def test_folder_cabinet_full_count_and_subfile(self):
+        """الخزانة: بطاقة المجلد تعرض العدد الكامل (لا قصّ مضلِّل)،
+        والملف الثانوي المفتوح يعرض كل الصفوف (سقفه 200 لا 12)."""
+        for i in range(14):
             self._mk('v%03d' % i, self.admin, issuing=[self.lijan], dtype='مذكرة')
-        body = self.client.get(reverse('dossier_detail', args=[self.lijan.pk])).content.decode()
-        self.assertIn('عرض كل كتب هذا القسم ←', body)
-        self.assertNotIn('عرض كل كتب هذا القسم (', body)
+        # الخزانة (بلا نوع): مجلد «مذكرة» بعدّه الكامل، بلا جداول مكدّسة
+        r = self.client.get(reverse('dossier_detail', args=[self.lijan.pk]))
+        body = r.content.decode()
+        self.assertIn('folder-card', body)
+        self.assertIn('document_type=%D9%85%D8%B0%D9%83%D8%B1%D8%A9', body)   # رابط المجلد
+        g = next(x for x in r.context['outgoing_groups'] if x['type'] == 'مذكرة')
+        self.assertEqual(g['count'], 14)
+        # الملف الثانوي: كل الـ14 صفاً معروضة (لا قصّ عند 12) وكسرة العودة حاضرة
+        r2 = self.client.get(reverse('dossier_detail', args=[self.lijan.pk]),
+                             {'document_type': 'مذكرة'})
+        g2 = next(x for x in r2.context['outgoing_groups'] if x['type'] == 'مذكرة')
+        self.assertEqual(len(g2['books']), 14)
+        self.assertFalse(g2['truncated'])
+        self.assertIn('كل الملفات', r2.content.decode())
+
+    def test_misc_folder_opens_untyped_books(self):
+        """سلّة «متفرقة» تُفتح كملف ثانوي وتعرض الكتب بلا نوع فقط."""
+        self._mk('m1', self.admin, issuing=[self.lijan], dtype='')
+        self._mk('m2', self.admin, issuing=[self.lijan], dtype='مذكرة')
+        r = self.client.get(reverse('dossier_detail', args=[self.lijan.pk]),
+                            {'document_type': 'متفرقة'})
+        nums = [bk.our_number for g in r.context['outgoing_groups'] for bk in g['books']]
+        self.assertEqual(nums, ['m1'])
 
     def test_list_totals_aggregate(self):
         self._mk('t1', self.admin, issuing=[self.lijan])

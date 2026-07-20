@@ -3,7 +3,7 @@
 
 {% block title %}إضبارة: {{ entity.name }}{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20260701c">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20260719a">{% endblock %}
 
 {% block content %}
 <div class="dossier-detail">
@@ -116,6 +116,19 @@
   </div>
   {% endif %}
 
+  {# شريط الملف الثانوي المفتوح — يظهر فقط عند اختيار نوع (يخدم الاتجاهين معاً) #}
+  {% if filters.document_type %}
+  <div class="dd-subfile-bar">
+    <a class="sf-back" href="?{{ qs_no_type }}" title="عودة إلى خزانة الملفات">
+      <i class="bi bi-arrow-right"></i> كل الملفات
+    </a>
+    <span class="sf-open">
+      <i class="bi bi-folder2-open"></i> {{ filters.document_type }}
+      <span class="sf-count">{{ total_count }}</span>
+    </span>
+  </div>
+  {% endif %}
+
   {# تبويبا الاتجاه (JS) — مع تدهور رشيق: بلا JS تظهر اللوحتان مع عناوين #}
   <div class="dd-tabs" role="tablist" aria-label="اتجاه الكتب">
     <button type="button" class="dd-tab out active" id="tab-out" role="tab" aria-selected="true" aria-controls="pane-out" data-pane="pane-out"><i class="bi bi-arrow-up-right"></i> صادر <span class="cnt">{{ outgoing_count }}</span></button>
@@ -126,9 +139,22 @@
   <div class="dd-pane active" id="pane-out" role="tabpanel" aria-labelledby="tab-out" tabindex="0">
     <div class="dd-pane-title"><i class="bi bi-arrow-up-right"></i> الكتب الصادرة ({{ outgoing_count }})</div>
     {% if outgoing_groups %}
+      {% if not filters.document_type %}
+      {# خزانة الملفات: بطاقة مجلد لكل نوع — النقر يفتح الملف الثانوي وحده #}
+      <div class="folder-grid">
+        {% for g in outgoing_groups %}
+        <a class="folder-card out" style="--i:{{ forloop.counter0 }}"
+           href="?{% if qs_no_type %}{{ qs_no_type }}&{% endif %}document_type={{ g.type|urlencode }}"
+           title="فتح ملف «{{ g.type }}» ({{ g.count }})">
+          <i class="bi bi-folder-fill fc-icon"></i>
+          <span class="fc-name">{{ g.type }}</span>
+          <span class="fc-count">{{ g.count }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
       {% for g in outgoing_groups %}
-      <details class="type-group" open>
-        <summary><i class="bi bi-tag-fill" style="color:#b45309"></i> {{ g.type }} <span class="gcount">{{ g.count }}</span> <i class="bi bi-chevron-left chev"></i></summary>
+      <div class="type-group dd-subfile">
         <table class="dd-table">
           <thead><tr><th>رقم الكتاب</th><th>العنوان</th><th>التاريخ</th><th>الجهة المستلمة</th><th>المتابعة</th><th>إجراءات</th></tr></thead>
           <tbody>
@@ -136,8 +162,9 @@
           </tbody>
         </table>
         {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذا القسم ←</a></div>{% endif %}
-      </details>
+      </div>
       {% endfor %}
+      {% endif %}
     {% else %}
       <div class="dd-empty">لا كتب صادرة{% if active_filter_count %} تطابق الفلاتر{% endif %}.</div>
     {% endif %}
@@ -147,9 +174,21 @@
   <div class="dd-pane" id="pane-in" role="tabpanel" aria-labelledby="tab-in" tabindex="0">
     <div class="dd-pane-title"><i class="bi bi-arrow-down-left"></i> الكتب الواردة ({{ incoming_count }})</div>
     {% if incoming_groups %}
+      {% if not filters.document_type %}
+      <div class="folder-grid">
+        {% for g in incoming_groups %}
+        <a class="folder-card in" style="--i:{{ forloop.counter0 }}"
+           href="?{% if qs_no_type %}{{ qs_no_type }}&{% endif %}document_type={{ g.type|urlencode }}"
+           title="فتح ملف «{{ g.type }}» ({{ g.count }})">
+          <i class="bi bi-folder-fill fc-icon"></i>
+          <span class="fc-name">{{ g.type }}</span>
+          <span class="fc-count">{{ g.count }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
       {% for g in incoming_groups %}
-      <details class="type-group" open>
-        <summary><i class="bi bi-tag-fill" style="color:#1e5a9e"></i> {{ g.type }} <span class="gcount">{{ g.count }}</span> <i class="bi bi-chevron-left chev"></i></summary>
+      <div class="type-group dd-subfile">
         <table class="dd-table">
           <thead><tr><th>رقم الكتاب</th><th>العنوان</th><th>التاريخ</th><th>الجهة المرسِلة</th><th>المتابعة</th><th>إجراءات</th></tr></thead>
           <tbody>
@@ -157,8 +196,9 @@
           </tbody>
         </table>
         {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذا القسم ←</a></div>{% endif %}
-      </details>
+      </div>
       {% endfor %}
+      {% endif %}
     {% else %}
       <div class="dd-empty">لا كتب واردة{% if active_filter_count %} تطابق الفلاتر{% endif %}.</div>
     {% endif %}

@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260707d">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260719b">
 <style>
 .scan-agent-status{font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap}
 .scan-agent-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
@@ -17,6 +17,19 @@
 /* ── شارة المسح التلقائي الذكي ── */
 .scan-auto-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.76rem;font-weight:700;color:#3730a3;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:999px;padding:.22rem .6rem;white-space:nowrap}
 .scan-auto-badge .bi{font-size:.85rem}
+
+/* ── عنقود الحالة في رأس المعاينة الداكن: تكييف لونيّ فوق التدرّج التركوازي ──
+   الحالة نقطةٌ فقط (اللون يكفي، والنصّ في التلميح)، والوضع التلقائي أيقونةٌ فقط. */
+.preview-scan-status{display:inline-flex;align-items:center;gap:6px;margin-inline-start:auto;flex:none}
+.preview-scan-status .scan-agent-status{font-size:0;gap:0;padding:.34rem;background:rgba(255,255,255,.15);color:#f0fdfa}
+.preview-scan-status .scan-agent-status::before{width:10px;height:10px;background:#e2e8f0}
+.preview-scan-status .scan-agent-status[data-state=ready]::before{background:#6ee7b7}
+.preview-scan-status .scan-agent-status[data-state=scanning]::before{background:#fcd34d}
+.preview-scan-status .scan-agent-status[data-state=unavailable]::before,
+.preview-scan-status .scan-agent-status[data-state=no_naps2]::before,
+.preview-scan-status .scan-agent-status[data-state=no_device]::before{background:#fca5a5}
+.preview-scan-status .scan-auto-badge{font-size:0;gap:0;color:#f0fdfa;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);padding:.28rem .5rem}
+.preview-scan-status .scan-auto-badge .bi{font-size:.85rem}
 </style>
 <link rel="stylesheet" href="{% static 'css/doc_canvas.css' %}?v=20260705a">
 <link rel="stylesheet" href="{% static 'css/document_manager.css' %}?v=20260702b">
@@ -150,6 +163,11 @@
                                 </span>
                             </div>
                             <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
+                            <div class="reservation-status" id="reservationStatus" style="display:none;">
+                                <i class="bi bi-lock-fill"></i>
+                                <span class="rs-label">محجوز لك — اكتبه على المستند</span>
+                                <span class="rs-timer" id="reservationTimer"></span>
+                            </div>
                             <label class="numberless-toggle" id="numberlessToggle" style="display:none; align-items:center; gap:0.4rem; margin-top:0.3rem; font-size:0.82rem; cursor:pointer; color:#7b5942;">
                                 <input type="checkbox" id="numberlessCheckbox" style="margin:0;">
                                 <span>بلا رقم — كتاب داخلي بلا رقم رسمي (استثناء)</span>
@@ -258,12 +276,14 @@
                                    href="{% url 'book_unified' %}?tab=all&q={{ rb.our_number|urlencode }}&focus={{ rb.id }}"
                                    title="{{ rb.title }}">
                                     <span class="recent-book-kind recent-book-kind--{{ rb.kind }}">{{ rb.kind_label }}</span>
+                                    <span class="recent-book-time">منذ {{ rb.created_at|timesince }}</span>
                                     <span class="recent-book-number">{{ rb.our_number|default:'—' }}</span>
                                     <span class="recent-book-title">{{ rb.title|default:'(بلا عنوان)' }}</span>
                                 </a>
                             </li>
                             {% endfor %}
                         </ul>
+                        <a class="recent-books-all" href="{% url 'book_unified' %}?tab=all">كل الكتب <i class="bi bi-arrow-left-short"></i></a>
                     </div>
                     {% endif %}
                 </div>
@@ -386,16 +406,43 @@
             </button>
             {% if edit_book_json == 'null' %}
             <button type="button" class="btn-action-warn" id="clearFormButton" title="تفريغ كل الحقول المُدخَلة أو المستخرَجة (لا يحذف الصورة الممسوحة)">
-                🧹 تفريغ الحقول
+                <i class="bi bi-eraser" aria-hidden="true"></i> تفريغ الحقول
             </button>
             <button type="button" class="btn-action-secondary" id="extractButton" title="إعادة استخراج البيانات من الملف يدوياً">
-                🔍 استخراج
+                <i class="bi bi-search" aria-hidden="true"></i> استخراج
             </button>
             {% endif %}
+            <button type="button" class="btn-action-secondary" id="saveAndSendButton"
+                    title="حفظ الكتاب ثم إرساله بالبريد إلى الجهة المعنيّة مع مرفقاته">
+                <i class="bi bi-envelope" aria-hidden="true"></i> {% if edit_book_json == 'null' %}حفظ وإرسال للجهة{% else %}حفظ وإرسال{% endif %}
+            </button>
             <button type="button" class="btn-action-primary" id="saveButton" title="حفظ الكتاب في النظام">
-                ✓ حفظ الكتاب
+                <i class="bi bi-check-lg" aria-hidden="true"></i> حفظ الكتاب
             </button>
         </div>
+    </div>
+
+    {# ── حوار الإرسال للجهة: يعرض الجهة والبريد وما سيُرفَق فعلاً قبل أي إرسال ── #}
+    <div class="modal fade" id="sendToEntityModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:16px;border:0;">
+          <div class="modal-header" style="border-bottom:1px solid #eef2f2;">
+            <h5 class="modal-title fw-bold"><i class="bi bi-envelope-paper ms-1"></i> إرسال الكتاب إلى الجهة</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+          </div>
+          <div class="modal-body" id="sendToEntityBody">
+            <div class="text-center text-muted py-4">
+              <div class="spinner-border spinner-border-sm ms-2"></div> جارٍ تحضير المعاينة…
+            </div>
+          </div>
+          <div class="modal-footer" style="border-top:1px solid #eef2f2;">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
+            <button type="button" class="btn btn-primary" id="sendToEntityConfirm" disabled>
+              <i class="bi bi-send ms-1"></i> أرسل الآن
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- الجانب الأيمن: المودال الدائم -->
@@ -414,6 +461,15 @@
                 <span class="pager-label" id="pagerLabel">صفحة 1 / 1</span>
                 <button type="button" class="pager-btn" id="pagerNext" title="الصفحة التالية" aria-label="الصفحة التالية"><i class="bi bi-chevron-left"></i></button>
             </div>
+            {% comment %}حالة الوكيل + التلقائي في رأس المعاينة (الإدخال فقط) — أيقونات تُقرأ بلمحة والنصّ في التلميح؛ scanProgress والأزرار تبقى أسفل.{% endcomment %}
+            {% if edit_book_json == 'null' %}
+            <div class="preview-scan-status">
+                <span id="scanAgentStatus" class="scan-agent-status" data-state="checking" title="حالة وكيل المسح المحلي">جارٍ فحص وكيل المسح…</span>
+                <span class="scan-auto-badge" title="مسح تلقائي بالكامل: يكتشف الوجه/الوجهين، يقوّم الميل، ويزيل الصفحات الفارغة — بلا أي ضبط يدوي">
+                    <i class="bi bi-magic"></i> تلقائي ذكي
+                </span>
+            </div>
+            {% endif %}
         </div>
         <div class="modal-body" id="modalBody">
             <div class="empty-state" id="dropZone" title="اضغط أو اسحب الملف هنا">
@@ -431,24 +487,21 @@
 
         <!-- شريط أزرار المسح الضوئي (محاذٍ لشريط الإجراءات في اللوحة اليسرى) -->
         <div class="scan-action-bar"{% if edit_book_json != 'null' %} style="display:none"{% endif %}>
-            <span id="scanAgentStatus" class="scan-agent-status" data-state="checking" title="حالة وكيل المسح المحلي">جارٍ فحص وكيل المسح…</span>
             <select id="scanDeviceSelect" class="form-select form-select-sm" style="display:none;max-width:220px" title="اختر الماسح الضوئي"></select>
-            <span class="scan-auto-badge" title="مسح تلقائي بالكامل: يكتشف الوجه/الوجهين، يقوّم الميل، ويزيل الصفحات الفارغة — بلا أي ضبط يدوي">
-                <i class="bi bi-magic"></i> تلقائي ذكي
-            </span>
             <div class="scan-progress-inline" id="scanProgress" style="display: none;">
                 <div class="spinner-border spinner-border-sm" role="status"></div>
                 <span class="progress-message">جاري المسح...</span>
             </div>
+            {# الترتيب (RTL: الأول = أقصى اليمين): مسح من السكانر ← رفع ملف ← حذف الصورة #}
             <div class="scan-action-bar-buttons">
-                <button type="button" class="btn-scan-action btn-scan-action-danger" id="clearScannedButton" style="display: none;" title="حذف الصورة/الملف الممسوح فقط — لا يمسّ الحقول (لتفريغها استخدم «تفريغ الحقول»)">
-                    <i class="bi bi-trash3 me-1"></i>حذف الصورة
+                <button type="button" class="btn-scan-action btn-scan-action-primary {% if initial_kind_direction == 'incoming' %}is-incoming{% else %}is-outgoing{% endif %}" id="startScanButton" title="بدء المسح من السكانر">
+                    <i class="bi bi-upc-scan me-1"></i>مسح من السكانر
                 </button>
                 <button type="button" class="btn-scan-action btn-scan-action-upload" id="uploadFileButton" title="رفع ملف من جهازك (PDF أو صورة)">
                     <i class="bi bi-cloud-arrow-up me-1"></i>رفع ملف
                 </button>
-                <button type="button" class="btn-scan-action btn-scan-action-primary {% if initial_kind_direction == 'incoming' %}is-incoming{% else %}is-outgoing{% endif %}" id="startScanButton" title="بدء المسح من السكانر">
-                    <i class="bi bi-upc-scan me-1"></i>مسح من السكانر
+                <button type="button" class="btn-scan-action btn-scan-action-danger" id="clearScannedButton" style="display: none;" title="حذف الصورة/الملف الممسوح فقط — لا يمسّ الحقول (لتفريغها استخدم «تفريغ الحقول»)">
+                    <i class="bi bi-trash3 me-1"></i>حذف الصورة
                 </button>
             </div>
         </div>
@@ -460,7 +513,7 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260707e"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260719c"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>

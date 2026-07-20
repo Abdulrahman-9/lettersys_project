@@ -1,0 +1,2469 @@
+<!doctype html>
+
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="نظام متقدم لإدارة الكتب الواردة والصادرة مع متابعة آلية">
+    <meta name="theme-color" content="#ff9233">
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="../../static/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="إدارة الكتب">
+    <link rel="apple-touch-icon" href="../../static/img/icon-192x192.png">
+    <link rel="icon" type="image/x-icon" href="../../static/favicon.ico">
+    
+    <title>استخراج ذكي - نظام متقدم</title>
+    
+    <!-- Stylesheets -->
+    <link href="../../static/vendor/bootstrap/bootstrap.rtl.min.css?v=20260419-shellfix" rel="stylesheet">
+    <link href="../../static/vendor/bootstrap-icons/bootstrap-icons.css?v=20260705a" rel="stylesheet">
+    <link rel="stylesheet" href="../../static/vendor/cairo/cairo.css?v=20260705a">
+    <!-- Design System (موحد للألوان والمسافات) -->
+    <link rel="stylesheet" href="../../static/design-system.css?v=20260419-shellfix">
+    <link rel="stylesheet" href="../../static/app.css?v=20260707a">
+    <!-- مكوّنات واجهة محايدة اللون (مستوحاة من صفحة الدخول) — اختيارية عبر أصناف .btn-brand/.card-brand/.field-brand -->
+    <link rel="stylesheet" href="../../static/css/brand-components.css?v=20260705c">
+    
+    <style>
+      /* ضمان طباعة الألوان في جميع المتصفحات */
+      @media print {
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+      }
+      /* وضع التضمين (?embed=1): تُعرَض الأداة وحدها داخل لوحة مركز الإعدادات
+         بلا شريط علوي/جانبي — مع كامل CSS/JS الأصلي عاملاً كصفحة حقيقية. */
+      .settings-embed-body { background: transparent !important; }
+      .app-embed-main { display: block; padding: 20px 22px 28px; }
+      .settings-embed-body .settings-embed-hide { display: none !important; }
+      /* توحيد الهوية داخل المركز: الأدوات ذات لونها الخاص (البريد برتقالي) تُعاد
+         إلى تركوازي الإعدادات ما دامت معروضة داخل لوحته — وتحتفظ بهويتها كاملةً
+         حين تُفتح كتطبيق مستقل. */
+      .settings-embed-body { --warm-clay: #0f766e; }
+    </style>
+    
+    
+    
+<link rel="stylesheet" href="../../static/extraction_smart.css?v=20260719a">
+<style>
+.scan-agent-status{font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap}
+.scan-agent-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+.scan-agent-status[data-state=checking]{color:#475569;background:#f1f5f9}
+.scan-agent-status[data-state=ready]{color:#166534;background:#dcfce7}
+.scan-agent-status[data-state=scanning]{color:#92400e;background:#fef3c7}
+.scan-agent-status[data-state=unavailable],.scan-agent-status[data-state=no_naps2],.scan-agent-status[data-state=no_device]{color:#991b1b;background:#fee2e2}
+/* أنماط معاينة المستند (DocCanvas) نُقلت إلى static/css/doc_canvas.css — نظافة + بديل مُحسَّن */
+
+/* ── شارة المسح التلقائي الذكي ── */
+.scan-auto-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.76rem;font-weight:700;color:#3730a3;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:999px;padding:.22rem .6rem;white-space:nowrap}
+.scan-auto-badge .bi{font-size:.85rem}
+</style>
+<link rel="stylesheet" href="../../static/css/doc_canvas.css?v=20260705a">
+<link rel="stylesheet" href="../../static/css/document_manager.css?v=20260702b">
+
+
+    
+  </head>
+  <body class="bg-body app-shell-body">
+    
+    <header class="app-topbar">
+      <div class="app-topbar-brand">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+          <img src="../../static/img/md-o-c-logo.png" alt="الشركة" style="height: 40px; width: auto;">
+          <span class="brand-text">نظام الكتب</span>
+        </a>
+        <div class="app-topbar-copy">أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة</div>
+      </div>
+      <div class="app-topbar-actions">
+        
+        <a class="app-topbar-alert" href="/books/notifications/">
+          <i class="bi bi-bell"></i>
+          <span>التنبيهات</span>
+          
+        </a>
+        <div class="app-topbar-user">
+          <i class="bi bi-person-circle"></i>
+          <span>demo_snapshot</span>
+        </div>
+        
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside class="app-sidebar">
+        <div class="app-sidebar-panel">
+          <div class="app-sidebar-section-title">
+            <button type="button" class="app-sidebar-toggle-btn" id="sidebarToggleBtn" title="طي القائمة">
+              <i class="bi bi-layout-sidebar-reverse"></i>
+            </button>
+            <span class="sidebar-title-text">التنقل الرئيسي</span>
+          </div>
+          <nav class="app-sidebar-nav">
+            <a class="app-sidebar-link" href="/" title="لوحة التحكم">
+              <i class="bi bi-grid-1x2-fill"></i>
+              <span>لوحة التحكم</span>
+            </a>
+            <a class="app-sidebar-link active" href="/books/extract/smart-desktop/" title="الإدخال الذكي">
+              <i class="bi bi-upc-scan"></i>
+              <span>الإدخال الذكي</span>
+            </a>
+            <a class="app-sidebar-link" href="/books/unified/" title="قائمة الكتب">
+              <i class="bi bi-list-ul"></i>
+              <span>قائمة الكتب</span>
+            </a>
+            <a class="app-sidebar-link" href="/books/dossiers/" title="الأضابير">
+              <i class="bi bi-folder2-open"></i>
+              <span>الأضابير</span>
+            </a>
+            <a class="app-sidebar-link" href="/books/notifications/" title="التنبيهات">
+              <i class="bi bi-bell-fill"></i>
+              <span>التنبيهات</span>
+              
+            </a>
+            <a class="app-sidebar-link" href="/books/mail/sent/" title="البريد">
+              <i class="bi bi-envelope-fill"></i>
+              <span>البريد</span>
+              
+            </a>
+            <a class="app-sidebar-link" href="/books/reports/" title="التقارير">
+              <i class="bi bi-graph-up-arrow"></i>
+              <span>التقارير</span>
+            </a>
+            
+            <a class="app-sidebar-link" href="/books/trash/" title="سلة المهملات">
+              <i class="bi bi-trash3"></i>
+              <span>سلة المهملات</span>
+            </a>
+            <a class="app-sidebar-link" href="/books/entities/" title="الجهات">
+              <i class="bi bi-buildings"></i>
+              <span>الجهات</span>
+            </a>
+            <a class="app-sidebar-link" href="/books/users/" title="المستخدمون">
+              <i class="bi bi-person-gear"></i>
+              <span>المستخدمون</span>
+            </a>
+            <a class="app-sidebar-link" href="/books/backup/" title="النسخ الاحتياطي">
+              <i class="bi bi-cloud-arrow-down-fill"></i>
+              <span>النسخ الاحتياطي</span>
+            </a>
+            <a class="app-sidebar-link" href="/books/settings/" title="الإعدادات">
+              <i class="bi bi-sliders2"></i>
+              <span>الإعدادات</span>
+            </a>
+            
+          </nav>
+        </div>
+
+        
+
+        
+        <div class="app-sidebar-panel app-sidebar-panel-footer">
+          <form method="post" action="/logout/">
+            <input type="hidden" name="csrfmiddlewaretoken" value="I3TzguWFUGHhF67VX377K3YCmVtptQ2tt8JmnocSFrKJGYutJ08teDULuixzZkqD">
+            <button type="submit" class="app-sidebar-logout">
+              <i class="bi bi-box-arrow-left"></i>
+              <span>تسجيل الخروج</span>
+            </button>
+          </form>
+        </div>
+        
+      </aside>
+
+      <main class="app-main">
+    
+
+    
+<!-- CSRF Token (hidden but available for JS) -->
+<input type="hidden" name="csrfmiddlewaretoken" value="I3TzguWFUGHhF67VX377K3YCmVtptQ2tt8JmnocSFrKJGYutJ08teDULuixzZkqD">
+
+
+<div class="app-page-header">
+    <div class="brand">
+        <img src="../../static/img/md-o-c-logo.png" alt="الشركة">
+        <span>نظام الكتب</span>
+    </div>
+    <div class="header-divider"></div>
+    <div class="header-title">
+        <i class="bi bi-upc-scan me-1"></i>الإدخال الذكي
+    </div>
+    <div class="header-spacer"></div>
+    
+    <a class="header-action" href="/books/notifications/" title="التنبيهات">
+        <i class="bi bi-bell"></i>
+        <span>التنبيهات</span>
+        
+    </a>
+    <div class="header-user">
+        <i class="bi bi-person-circle"></i>
+        <span>demo_snapshot</span>
+    </div>
+    
+</div>
+
+<div
+    class="extraction-container"
+    data-ws-presence="1"
+    data-initial-kind="incoming_internal"
+    data-smart-extract-endpoint="/books/api/extract/smart/"
+    data-entity-list-endpoint="/books/api/entity-list/"
+    data-suggestions-endpoint="/books/api/suggestions/"
+    data-save-book-endpoint="/books/api/book/save/"
+    data-update-book-endpoint="/books/api/book/update/"
+    data-back-url=""
+    data-next-number-endpoint="/books/api/next-number/"
+    data-reservation-reserve-endpoint="/books/api/reservation/reserve/"
+    data-reservation-void-endpoint="/books/api/reservation/void/"
+    data-reservation-status-endpoint="/books/api/reservation/status/"
+    data-settings-url="/books/settings/sequences/"
+>
+    <!-- الجانب الأيسر: نماذج الإدخال -->
+    <div class="extraction-form-panel">
+        <!-- input file مخفي -->
+        <input type="file" id="fileInput" style="display: none;" accept="image/*,.pdf">
+
+        <!-- شارة الملف القديمة منقولة لرأس المعاينة (modal-header) — يُبقى فقط fileName/fileSize/scanPagesCount مخفية للتوافق -->
+        <div id="filePreview" style="display: none;">
+            <span id="fileIcon">📄</span>
+            <span id="fileName"></span>
+            <span id="fileSize"></span>
+            <span id="scanPagesCount"></span>
+            <button type="button" id="clearFile"></button>
+        </div>
+
+        <!-- 🚨 بانر تحذير: استخراج بيانات افتراضية (fallback) -->
+        <div id="fallbackBanner" class="fallback-banner" style="display: none;" role="alert" aria-live="polite">
+            <span class="fallback-banner-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
+            <div class="fallback-banner-content">
+                <div class="fallback-banner-title">بيانات افتراضية — راجعها يدوياً قبل الحفظ</div>
+                <div class="fallback-banner-sub" id="fallbackBannerReason">خدمة الذكاء الاصطناعي غير متاحة الآن</div>
+            </div>
+            <button type="button" class="fallback-banner-close" id="fallbackBannerClose" title="إخفاء">×</button>
+        </div>
+
+        <!-- شبكة النماذج بـ 3 أعمدة -->
+        <div class="extraction-form-grid">
+            <!-- ===== تبويبات التصنيف ===== -->
+            <div class="kind-tabs-wrapper">
+                <div class="kind-tabs" id="kindTabs">
+                    <button type="button" class="kind-tab" data-kind="incoming_internal">
+                        <span class="kind-tab-dot"></span>
+                        <span class="kind-tab-label">وارد داخلي</span>
+                        <span class="kind-tab-number" id="tabNum_incoming_internal">—</span>
+                    </button>
+                    <button type="button" class="kind-tab" data-kind="incoming_external">
+                        <span class="kind-tab-dot"></span>
+                        <span class="kind-tab-label">وارد خارجي</span>
+                        <span class="kind-tab-number" id="tabNum_incoming_external">—</span>
+                    </button>
+                    <button type="button" class="kind-tab" data-kind="outgoing_internal">
+                        <span class="kind-tab-dot"></span>
+                        <span class="kind-tab-label">صادر داخلي</span>
+                        <span class="kind-tab-number" id="tabNum_outgoing_internal">—</span>
+                    </button>
+                    <button type="button" class="kind-tab" data-kind="outgoing_external">
+                        <span class="kind-tab-dot"></span>
+                        <span class="kind-tab-label">صادر خارجي</span>
+                        <span class="kind-tab-number" id="tabNum_outgoing_external">—</span>
+                    </button>
+                </div>
+                <a href="/books/settings/sequences/" class="kind-tabs-settings" title="إعدادات العدّادات">
+                    <i class="bi bi-gear"></i>
+                </a>
+            </div>
+
+            <select class="form-control-smart" id="bookKind" style="display:none;">
+                <option value="incoming_internal" selected>وارد داخلي</option>
+                <option value="incoming_external" >وارد خارجي</option>
+                <option value="outgoing_internal" >صادر داخلي</option>
+                <option value="outgoing_external" >صادر خارجي</option>
+            </select>
+
+            <div class="desktop-workbench">
+                <!-- قسم الكتاب الأساسي -->
+                <div class="form-section form-section-double">
+                    <div class="form-section-title">
+                        <span class="form-section-icon"><i class="bi bi-card-list"></i></span>
+                        بيانات الكتاب الأساسية
+                    </div>
+
+                    <!-- الصف 1: رقمنا + تاريخنا -->
+                    <div class="field-grid-two">
+                        <div class="form-group-smart">
+                            <div class="label-with-confidence">
+                                <label class="field-label" id="bookNumberLabel">
+                                    رقمنا
+                                    <span class="field-required">*</span>
+                                </label>
+                                <span class="register-type-chip" id="bookRegisterChip" style="display: none;"></span>
+                                <span class="confidence-badge high" id="bookNumberConfidence" style="display: none;">
+                                    <span class="confidence-indicator" style="background: #16a34a;"></span>
+                                    <span id="bookNumberConfidenceValue">95%</span>
+                                </span>
+                            </div>
+                            <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
+                            <div class="reservation-status" id="reservationStatus" style="display:none;">
+                                <i class="bi bi-lock-fill"></i>
+                                <span class="rs-label">محجوز لك — اكتبه على المستند</span>
+                                <span class="rs-timer" id="reservationTimer"></span>
+                            </div>
+                            <label class="numberless-toggle" id="numberlessToggle" style="display:none; align-items:center; gap:0.4rem; margin-top:0.3rem; font-size:0.82rem; cursor:pointer; color:#7b5942;">
+                                <input type="checkbox" id="numberlessCheckbox" style="margin:0;">
+                                <span>بلا رقم — كتاب داخلي بلا رقم رسمي (استثناء)</span>
+                            </label>
+                            <div class="input-hint" id="bookNumberHint">
+                                رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.
+                                <span class="network-lock-chip" title="الحجز الشبكي للأرقام الفريدة مفعل">
+                                    <i class="bi bi-shield-lock"></i>حجز شبكي مفعل
+                                </span>
+                                <button type="button" id="releaseReservationBtn" class="release-res-link" style="display:none;"
+                                        title="حرّر هذا الرقم ليُعاد تدويره لزميلك إن لم تكتبه ورقياً">
+                                    <i class="bi bi-x-circle"></i> تحرير الرقم
+                                </button>
+                            </div>
+                            <div id="recycledBanner" class="recycled-banner" style="display:none;" role="alert">
+                                <i class="bi bi-recycle"></i>
+                                <span>رقم مُدوّر: سُحب تلقائياً لعدم اكتمال إدخالٍ سابق. تأكّد أن الورقة بين يديك لا تحمل رقماً متضارباً واكتب هذا الرقم عليها.</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group-smart">
+                            <div class="label-with-confidence">
+                                <label class="field-label" id="dateLabel">
+                                    تاريخنا
+                                    <span class="field-required">*</span>
+                                </label>
+                                <span class="confidence-badge medium" id="dateConfidence" style="display: none;">
+                                    <span class="confidence-indicator" style="background: #d97706;"></span>
+                                    <span id="dateConfidenceValue">78%</span>
+                                </span>
+                            </div>
+                            <div class="date-input-row">
+                                <input type="date" class="form-control-smart" id="date" disabled tabindex="-1">
+                                <label class="date-edit-toggle" title="تفعيل تعديل التاريخ">
+                                    <input type="checkbox" id="dateEditToggle" tabindex="-1">
+                                    <span class="toggle-icon"><i class="bi bi-pencil"></i></span>
+                                </label>
+                            </div>
+                            <div class="input-hint" id="dateHint">تاريخ القيد — اضغط على أيقونة التعديل لتغييره.</div>
+                        </div>
+                    </div>
+
+                    <!-- الصف 2: رقم الجهة المرسلة + تاريخ الجهة المرسلة -->
+                    <div class="field-grid-two">
+                        <div class="form-group-smart" id="senderNumberGroup">
+                            <label class="field-label" id="senderNumberLabel">العدد</label>
+                            <input type="text" class="form-control-smart" id="senderNumber" placeholder="مثال: 512 أو 241/و">
+                            <div class="input-hint" id="senderNumberHint">رقم الجهة المرسلة — كما يظهر على كتابهم بعد «العدد /».</div>
+                        </div>
+
+                        <div class="form-group-smart" id="senderDateGroup">
+                            <label class="field-label" id="senderDateLabel">تاريخ الجهة المرسلة</label>
+                            <input type="date" class="form-control-smart" id="senderDate">
+                            <div class="input-hint" id="senderDateHint">لتوثيق تاريخ الكتاب لدى الجهة التي أرسلته.</div>
+                        </div>
+                    </div>
+
+                    <!-- الصف 3: العنوان -->
+                    <div class="form-group-smart">
+                        <div class="label-with-confidence">
+                            <label class="field-label">
+                                العنوان
+                                <span class="field-required">*</span>
+                            </label>
+                            <span class="confidence-badge high" id="titleConfidence" style="display: none;">
+                                <span class="confidence-indicator" style="background: #16a34a;"></span>
+                                <span id="titleConfidenceValue">92%</span>
+                            </span>
+                        </div>
+                        <textarea class="form-control-smart title-autogrow" id="title" rows="1" placeholder="موضوع الكتاب أو خلاصة المراسلة" dir="rtl"></textarea>
+                        <div class="input-hint">اكتب عنواناً واضحاً يسهل البحث عنه لاحقاً في الأرشيف.</div>
+                    </div>
+
+                    <!-- الصف 4: المتابعة الزمنية -->
+                    <div class="followup-card" id="followupCard">
+                        <div class="followup-card-header">
+                            <div>
+                                <div class="followup-card-title">المتابعة الزمنية</div>
+                                <p class="followup-card-copy">
+                                    حدّد تاريخ استحقاق لمتابعة الكتاب — اتركه فارغاً ليُؤرشَف ابتداءً.
+                                </p>
+                            </div>
+                            <input type="checkbox" id="needsFollowup" class="followup-switch">
+                        </div>
+                        <div class="form-group-smart is-hidden" id="dueDateGroup" style="margin-bottom: 0;">
+                            <label class="field-label">تاريخ الاستحقاق</label>
+                            <input type="date" class="form-control-smart" id="dueDate">
+                            <div class="input-hint" id="dueDateHint">
+                                إذا تُرك فارغاً سيتم اقتراح موعد بعد 7 أيام من تاريخنا.
+                                الحالة تُحسَب تلقائياً:
+                                <i class="bi bi-circle-fill" style="color:#3b82f6"></i> قيد المتابعة ·
+                                <i class="bi bi-circle-fill" style="color:#f59e0b"></i> مستحق اليوم ·
+                                <i class="bi bi-circle-fill" style="color:#ef4444"></i> متأخر.
+                            </div>
+                        </div>
+                    </div>
+
+                    
+                    
+                    <div class="recent-books-widget">
+                        <div class="recent-books-heading"><i class="bi bi-clock-history"></i> آخر الكتب المسجّلة</div>
+                        <ul class="recent-books-list">
+                            
+                            <li class="recent-book-item">
+                                <a class="recent-book-link"
+                                   href="/books/unified/?tab=all&q=10231&focus=1"
+                                   title="إحالة معاملة تدقيق الرواتب لشهر تموز">
+                                    <span class="recent-book-kind recent-book-kind--incoming_internal">وارد داخلي</span>
+                                    <span class="recent-book-number">10231</span>
+                                    <span class="recent-book-title">إحالة معاملة تدقيق الرواتب لشهر تموز</span>
+                                </a>
+                            </li>
+                            
+                            <li class="recent-book-item">
+                                <a class="recent-book-link"
+                                   href="/books/unified/?tab=all&q=20488&focus=2"
+                                   title="كتاب هيئة التقاعد بخصوص مستحقات المحالين">
+                                    <span class="recent-book-kind recent-book-kind--incoming_external">وارد خارجي</span>
+                                    <span class="recent-book-number">20488</span>
+                                    <span class="recent-book-title">كتاب هيئة التقاعد بخصوص مستحقات المحالين</span>
+                                </a>
+                            </li>
+                            
+                            <li class="recent-book-item">
+                                <a class="recent-book-link"
+                                   href="/books/unified/?tab=all&q=30112&focus=3"
+                                   title="إجابة قسم الرقابة عن استفسار الجرد السنوي">
+                                    <span class="recent-book-kind recent-book-kind--outgoing_internal">صادر داخلي</span>
+                                    <span class="recent-book-number">30112</span>
+                                    <span class="recent-book-title">إجابة قسم الرقابة عن استفسار الجرد السنوي</span>
+                                </a>
+                            </li>
+                            
+                            <li class="recent-book-item">
+                                <a class="recent-book-link"
+                                   href="/books/unified/?tab=all&q=40077&focus=4"
+                                   title="مخاطبة شركة التأمين الوطنية لتجديد العقد">
+                                    <span class="recent-book-kind recent-book-kind--outgoing_external">صادر خارجي</span>
+                                    <span class="recent-book-number">40077</span>
+                                    <span class="recent-book-title">مخاطبة شركة التأمين الوطنية لتجديد العقد</span>
+                                </a>
+                            </li>
+                            
+                        </ul>
+                    </div>
+                    
+                </div>
+
+                <div class="desktop-sidebar-stack">
+                    
+                    
+                    <div class="quality-hero" id="qualityHero" style="display:none;">
+                        <div class="quality-hero-ring" id="qualityHeroRing">
+                            <span class="quality-hero-pct" id="qualityHeroPct">0%</span>
+                        </div>
+                        <div class="quality-hero-body">
+                            <div class="quality-hero-title" id="qualityHeroTitle">جودة الاستخراج</div>
+                            <div class="quality-hero-sub" id="qualityHeroSub">راجع الحقول قبل الحفظ</div>
+                        </div>
+                    </div>
+                    <div class="needs-review-card" id="needsReviewCard" style="display:none;" role="status" aria-live="polite">
+                        <span class="needs-review-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                        <div class="needs-review-body">
+                            <div class="needs-review-title">بعض الحقول تحتاج مراجعة</div>
+                            <div class="needs-review-sub" id="needsReviewSub">الثقة منخفضة — تحقّق من الحقول المُبرزة قبل الحفظ.</div>
+                        </div>
+                    </div>
+                    
+
+                    <!-- قسم الجهات -->
+                    <div class="form-section form-section-single">
+                        <div class="form-section-title">
+                            <span class="form-section-icon"><i class="bi bi-building"></i></span>
+                            الجهات المرتبطة
+                        </div>
+
+                        <div class="form-group-smart">
+                            <label class="field-label">
+                                جهة الإصدار
+                                <span class="field-required">*</span>
+                                <small class="text-muted">(يمكن إضافة أكثر من جهة)</small>
+                            </label>
+                            <div class="entity-input-container" style="position: relative;">
+                                <div class="multi-tag-wrapper" id="issuingTagWrapper">
+                                    <input type="text" class="tag-text-input" id="issuingEntity"
+                                           placeholder="اكتب اسم الجهة أو رمزها ثم Enter..." autocomplete="off">
+                                </div>
+                                <div class="entity-dropdown-container" id="issuingEntityDropdown" style="
+                                    position: absolute; top: 100%; left: 0; right: 0;
+                                    background: white; border: 1px solid #e2e8f0;
+                                    border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                    max-height: 250px; overflow-y: auto; z-index: 1000;
+                                    display: none; margin-top: 8px;
+                                "></div>
+                            </div>
+                        </div>
+
+                        <div class="form-group-smart">
+                            <label class="field-label">
+                                جهة الاستقبال
+                                <span class="field-required">*</span>
+                                <small class="text-muted">(يمكن إضافة أكثر من جهة)</small>
+                            </label>
+                            <div class="entity-input-container" style="position: relative;">
+                                <div class="multi-tag-wrapper" id="receivingTagWrapper">
+                                    <input type="text" class="tag-text-input" id="receivingEntity"
+                                           placeholder="اكتب اسم الجهة أو رمزها ثم Enter..." autocomplete="off">
+                                </div>
+                                <div class="entity-dropdown-container" id="receivingEntityDropdown" style="
+                                    position: absolute; top: 100%; left: 0; right: 0;
+                                    background: white; border: 1px solid #e2e8f0;
+                                    border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                    max-height: 250px; overflow-y: auto; z-index: 1000;
+                                    display: none; margin-top: 8px;
+                                "></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- قسم الخصائص -->
+                    <div class="form-section form-section-single">
+                        <div class="form-section-title">
+                            <span class="form-section-icon"><i class="bi bi-sliders2"></i></span>
+                            الخصائص والأرشفة
+                        </div>
+
+                        <div class="form-group-smart">
+                            <label class="field-label"><i class="bi bi-shield-lock"></i> مستوى السرية</label>
+                            <select class="form-control-smart" id="secretLevel" data-default="normal">
+                                <option value="normal" selected>اعتيادي</option>
+                                <option value="secret">سري</option>
+                                <option value="topsecret">سري للغاية</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group-smart">
+                            <label class="field-label"><i class="bi bi-tag"></i> نوع المستند</label>
+                            <select class="form-control-smart" id="documentTypeSelect" aria-label="نوع المستند"></select>
+                            <input type="text" class="form-control-smart mt-2" id="documentTypeCustom"
+                                   placeholder="أدخل نوعاً جديداً غير موجود في القائمة"
+                                   maxlength="100" autocomplete="off" dir="auto"
+                                   style="display:none;">
+                            <div class="input-hint" id="documentTypeHint">يُختار النوع الافتراضي تلقائياً حسب التبويب الحالي، ويمكنك تغييره أو إضافة نوع جديد.</div>
+                        </div>
+
+                        <div class="form-group-smart">
+                            <label class="field-label"><i class="bi bi-card-text"></i> ملاحظات</label>
+                            <textarea class="form-control-smart" id="margin" placeholder="ملاحظات إضافية أو تعليمات أرشيفية" rows="3"></textarea>
+                            <div class="input-hint"><span id="charCount">0</span> / 1000</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- شريط الإجراءات الثابت -->
+        <div class="action-bar">
+            <div class="validation-indicator" id="validationIndicator" style="margin-inline-end:auto;">
+                <span class="validation-dot"></span>
+                <span id="validationText">ملء الحقول المطلوبة...</span>
+            </div>
+            <button type="button" class="btn-action-neutral" id="cancelEditButton" data-back-url="" title="إلغاء والعودة لمكان البدء">
+                <i class="bi bi-x-lg" aria-hidden="true"></i> إلغاء
+            </button>
+            
+            <button type="button" class="btn-action-warn" id="clearFormButton" title="تفريغ كل الحقول المُدخَلة أو المستخرَجة (لا يحذف الصورة الممسوحة)">
+                🧹 تفريغ الحقول
+            </button>
+            <button type="button" class="btn-action-secondary" id="extractButton" title="إعادة استخراج البيانات من الملف يدوياً">
+                🔍 استخراج
+            </button>
+            
+            <button type="button" class="btn-action-secondary" id="saveAndSendButton"
+                    title="حفظ الكتاب ثم إرساله بالبريد إلى الجهة المعنيّة مع مرفقاته">
+                ✉️ حفظ وإرسال للجهة
+            </button>
+            <button type="button" class="btn-action-primary" id="saveButton" title="حفظ الكتاب في النظام">
+                ✓ حفظ الكتاب
+            </button>
+        </div>
+    </div>
+
+    
+    <div class="modal fade" id="sendToEntityModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:16px;border:0;">
+          <div class="modal-header" style="border-bottom:1px solid #eef2f2;">
+            <h5 class="modal-title fw-bold"><i class="bi bi-envelope-paper ms-1"></i> إرسال الكتاب إلى الجهة</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+          </div>
+          <div class="modal-body" id="sendToEntityBody">
+            <div class="text-center text-muted py-4">
+              <div class="spinner-border spinner-border-sm ms-2"></div> جارٍ تحضير المعاينة…
+            </div>
+          </div>
+          <div class="modal-footer" style="border-top:1px solid #eef2f2;">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
+            <button type="button" class="btn btn-primary" id="sendToEntityConfirm" disabled>
+              <i class="bi bi-send ms-1"></i> أرسل الآن
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الجانب الأيمن: المودال الدائم -->
+    <div class="extraction-preview-modal">
+        <div class="modal-header">
+            <div class="modal-header-title">
+                <i class="bi bi-file-earmark-text-fill"></i>
+                <span>معاينة المستند</span>
+            </div>
+            <div class="modal-header-fileinfo" id="modalFileInfo" style="display: none;">
+                <span class="modal-header-filename" id="modalFileName" title=""></span>
+                <span class="modal-header-filemeta" id="modalFileMeta"></span>
+            </div>
+            <div class="preview-pager" id="previewPager" style="display:none;">
+                <button type="button" class="pager-btn" id="pagerPrev" title="الصفحة السابقة" aria-label="الصفحة السابقة"><i class="bi bi-chevron-right"></i></button>
+                <span class="pager-label" id="pagerLabel">صفحة 1 / 1</span>
+                <button type="button" class="pager-btn" id="pagerNext" title="الصفحة التالية" aria-label="الصفحة التالية"><i class="bi bi-chevron-left"></i></button>
+            </div>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <div class="empty-state" id="dropZone" title="اضغط أو اسحب الملف هنا">
+                <div class="empty-state-icon">📄</div>
+                <div class="empty-state-text">اسحب الملف هنا أو اضغط للرفع</div>
+                <div class="empty-state-hint">PDF أو الصور (حتى 10MB) — أو استخدم زر "مسح من السكانر"</div>
+            </div>
+        </div>
+
+        <!-- شريط مصغّرات الصفحات (يظهر فقط عند تعدّد الصفحات/duplex) -->
+        <div class="preview-thumbs" id="previewThumbs" style="display:none;"></div>
+
+        <!-- لوحة إدارة مستندات الكتاب (وضع التعديل فقط — تُملأ من document_manager.js) -->
+        <div id="docManagerMount" class="docman-mount" style="margin-top:.75rem;"></div>
+
+        <!-- شريط أزرار المسح الضوئي (محاذٍ لشريط الإجراءات في اللوحة اليسرى) -->
+        <div class="scan-action-bar">
+            <span id="scanAgentStatus" class="scan-agent-status" data-state="checking" title="حالة وكيل المسح المحلي">جارٍ فحص وكيل المسح…</span>
+            <select id="scanDeviceSelect" class="form-select form-select-sm" style="display:none;max-width:220px" title="اختر الماسح الضوئي"></select>
+            <span class="scan-auto-badge" title="مسح تلقائي بالكامل: يكتشف الوجه/الوجهين، يقوّم الميل، ويزيل الصفحات الفارغة — بلا أي ضبط يدوي">
+                <i class="bi bi-magic"></i> تلقائي ذكي
+            </span>
+            <div class="scan-progress-inline" id="scanProgress" style="display: none;">
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                <span class="progress-message">جاري المسح...</span>
+            </div>
+            <div class="scan-action-bar-buttons">
+                <button type="button" class="btn-scan-action btn-scan-action-danger" id="clearScannedButton" style="display: none;" title="حذف الصورة/الملف الممسوح فقط — لا يمسّ الحقول (لتفريغها استخدم «تفريغ الحقول»)">
+                    <i class="bi bi-trash3 me-1"></i>حذف الصورة
+                </button>
+                <button type="button" class="btn-scan-action btn-scan-action-upload" id="uploadFileButton" title="رفع ملف من جهازك (PDF أو صورة)">
+                    <i class="bi bi-cloud-arrow-up me-1"></i>رفع ملف
+                </button>
+                <button type="button" class="btn-scan-action btn-scan-action-primary is-incoming" id="startScanButton" title="بدء المسح من السكانر">
+                    <i class="bi bi-upc-scan me-1"></i>مسح من السكانر
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="documentTypeCatalogData" type="application/json">{"incoming_internal": ["مذكرة داخلية", "اعمام", "تقرير", "محضر", "ايميل", "استمارة", "امر اداري", "امر وزاري", "جدول", "طلب", "مطالعه", "ورقة عمل"], "incoming_external": ["مذكرة خارجية", "اعمام", "تقرير", "محضر", "ايميل", "استمارة", "امر اداري", "امر وزاري", "جدول", "طلب", "مطالعه", "ورقة عمل", "مذكرة داخلية"], "outgoing_internal": ["مذكرة داخلية", "اعمام", "تقرير", "محضر", "ايميل", "استمارة", "امر اداري", "امر وزاري", "جدول", "طلب", "مطالعه", "ورقة عمل"], "outgoing_external": ["مذكرة خارجية", "اعمام", "تقرير", "محضر", "ايميل", "استمارة", "امر اداري", "امر وزاري", "جدول", "طلب", "مطالعه", "ورقة عمل", "مذكرة داخلية"]}</script>
+<script id="documentTypeDefaultsData" type="application/json">{"incoming_internal": "مذكرة داخلية", "incoming_external": "مذكرة خارجية", "outgoing_internal": "مذكرة داخلية", "outgoing_external": "مذكرة خارجية"}</script>
+
+<script id="editBookData" type="application/json">null</script>
+
+<script src="../../static/extraction_smart.js?v=20260719b"></script>
+<script src="../../static/js/document_manager.js?v=20260630a"></script>
+<script src="../../static/keyboard_nav.js"></script>
+<script src="../../static/title_autocomplete.js?v=20260504"></script>
+
+
+<script>
+(function(){
+  'use strict';
+  function initTitleAC() {
+    const ta = document.getElementById('title');
+    if (!ta) return;
+
+    // ── توسّع تلقائي لحقل الموضوع (مستقلّ عن الإكمال) — يبقى النصّ مرئياً كاملاً بلا كتابة عمياء ──
+    if (!ta.dataset.growBound) {
+      ta.dataset.growBound = '1';
+      const AUTO_MAX = 160;
+      const growTitle = () => {
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, AUTO_MAX) + 'px';
+        ta.style.overflowY = ta.scrollHeight > AUTO_MAX ? 'auto' : 'hidden';
+      };
+      window.__autoGrowTitle = growTitle;
+      ta.addEventListener('input', growTitle);
+      // الموضوع سطرٌ منطقيّ واحد — امنع Enter من إدراج سطر جديد (الإكمال يعالج Enter لقبول الاقتراح قبله)
+      ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) e.preventDefault(); });
+      growTitle();
+      setTimeout(growTitle, 0);   // بعد أي ملء برمجي متزامن (حقن EDIT/الاستخراج)
+    }
+
+    // ── الإكمال التلقائي (إن توفّر) ──
+    if (!window.TitleAutocomplete || ta.dataset.taBound) return;
+    ta.dataset.taBound = '1';
+    try {
+      new TitleAutocomplete(ta, {
+        kindGetter: () => document.getElementById('bookKind')?.value || ''
+      });
+      // حفظ العنوان في الـhistory المحلي عند نجاح الحفظ
+      const _saveBtn = document.getElementById('saveButton');
+      if (_saveBtn) {
+        _saveBtn.addEventListener('click', () => {
+          const v = ta.value && ta.value.trim();
+          if (v && v.length >= 4) TitleAutocomplete.saveToHistory(v);
+        });
+      }
+    } catch(e) { console.warn('TitleAutocomplete init failed:', e); }
+  }
+  if (document.readyState !== 'loading') initTitleAC();
+  else document.addEventListener('DOMContentLoaded', initTitleAC, { once: true });
+})();
+</script>
+
+
+
+
+<script>
+(function() {
+  'use strict';
+
+  // ── EntityTagInput: نظام إدخال متعدد الجهات لكل حقل ──
+  class EntityTagInput {
+    constructor(opts) {
+      this.wrapper      = document.getElementById(opts.wrapperId);
+      this.input        = document.getElementById(opts.inputId);
+      this.dropdown     = document.getElementById(opts.dropdownId);
+      this.entityType   = opts.entityType;            // 'issuer' | 'receiver'
+      this.tags         = [];                         // [{id, name, code, isNew}]
+      this.highlightIdx = -1;
+      this.debounceTimer = null;
+      this._reqSeq = 0;
+      this._lastResults = [];
+      if (!this.wrapper || !this.input || !this.dropdown) return;
+      this._init();
+    }
+
+    _init() {
+      this.wrapper.addEventListener('click', e => {
+        if (e.target === this.wrapper) this.input.focus();
+      });
+
+      this.input.addEventListener('input', () => {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = setTimeout(() => this._search(this.input.value.trim()), 200);
+      });
+
+      this.input.addEventListener('keydown', e => {
+        const advance = () => setTimeout(() => window.extractionSystem?.handleCompositeFieldAdvance?.(this.input.id), 0);
+        const hasText = !!this.input.value.trim();
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (this.highlightIdx >= 0) {
+            // Enter يؤكّد الاقتراح المُؤشَّر بالسهم (لا الحروف المكتوبة) ويبقى لجهة تالية
+            this._commitHighlighted();
+          } else if (hasText) {
+            // أكّد الرمز/الاسم المكتوب وابقَ في الحقل لتسجيل جهة أخرى
+            this._resolveOrCreate(this.input.value.trim());
+          } else {
+            // الحقل فارغ → انتقل للحقل التالي (تأكيد Enter الثاني)
+            advance();
+          }
+        } else if (e.key === 'Tab' && !e.shiftKey && hasText) {
+          // Tab بعد رمزٍ صحيح: يستدعي الجهة ويبقى لتسجيل جهة جديدة (لا ينتقل)
+          e.preventDefault();
+          if (this.highlightIdx >= 0) this._commitHighlighted();
+          else this._resolveOrCreate(this.input.value.trim());
+          // Tab على حقلٍ فارغ يمرّ للمعالِج العام فينتقل للحقل التالي
+        } else if (e.key === 'Backspace' && !this.input.value && this.tags.length) {
+          this.removeTag(this.tags.length - 1);
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault(); this._moveHighlight(1);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault(); this._moveHighlight(-1);
+        } else if (e.key === 'Escape') {
+          this._hideDropdown();
+        } else if (e.key === ',' || e.key === '،') {
+          // فاصلة كمحفّز للإضافة
+          if (this.input.value.trim()) {
+            e.preventDefault();
+            this._resolveOrCreate(this.input.value.trim());
+          }
+        }
+      });
+
+      this.input.addEventListener('blur', () => setTimeout(() => this._hideDropdown(), 200));
+
+      // عندما يملأ الـ AI الحقل قيمةً نصيّة — حوّلها تلقائياً إلى وسم
+      this.input.addEventListener('change', () => {
+        const v = this.input.value.trim();
+        if (v && this.tags.length === 0) {
+          // محاولة المطابقة مع جهة موجودة
+          this._resolveOrCreate(v, /*silent*/ true);
+        }
+      });
+    }
+
+    _resolveOrCreate(query, silent = false) {
+      const q = query.toLowerCase();
+      // جرّب أولاً من النتائج الأخيرة
+      const exact = (this._lastResults || []).find(r =>
+        (r.name||'').toLowerCase() === q || (r.code||'').toLowerCase() === q
+      );
+            if (exact) { this.addEntity(exact); return Promise.resolve(exact); }
+      // ثمّ ابحث على السيرفر للتأكد من عدم وجود مطابقة دقيقة
+            return fetch(`/books/api/search/entities/?q=${encodeURIComponent(query)}&limit=8`,
+            { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.ok ? r.json() : { results: [] })
+        .then(data => {
+          const found = (data.results || []).find(r =>
+            (r.text||r.name||'').toLowerCase() === q || (r.code||'').toLowerCase() === q
+          );
+          if (found) {
+            this.addEntity({ id: found.id, name: found.text || found.name, code: found.code || '' });
+          } else {
+            this.addNewEntity(query);
+          }
+        })
+                .catch(() => this.addNewEntity(query));
+    }
+
+    // يؤكّد الاقتراح المُؤشَّر حالياً: كيان موجود أو خيار «➕ جهة جديدة» — ثم يبقى في الحقل لجهة تالية
+    _commitHighlighted() {
+      const results = this._lastResults || [];
+      if (this.highlightIdx >= 0 && this.highlightIdx < results.length) {
+        this.addEntity(results[this.highlightIdx]);
+      } else if (this.highlightIdx === results.length && this.input.value.trim()) {
+        this.addNewEntity(this.input.value.trim());
+      }
+    }
+
+    async _search(query) {
+      if (!query) { this._hideDropdown(); return; }
+      const q = query.toLowerCase();
+      const existingIds = new Set(this.tags.filter(t => t.id).map(t => t.id));
+      let matches = [];
+
+      const reqId = ++this._reqSeq;
+      try {
+        const resp = await fetch(`/books/api/search/entities/?q=${encodeURIComponent(query)}&limit=10`,
+                                 { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (reqId !== this._reqSeq) return;
+        if (resp.ok) {
+          const data = await resp.json();
+          matches = (data.results || [])
+            .filter(r => !existingIds.has(r.id))
+            .map(r => ({ id: r.id, name: r.text || r.name, code: r.code || '' }))
+            .slice(0, 8);
+        }
+      } catch(_) {}
+
+      this._lastResults = matches;
+      this.dropdown.replaceChildren();
+      this.highlightIdx = -1;
+
+      matches.forEach((entity, idx) => {
+        const item = document.createElement('div');
+        item.className = 'entity-suggestion-item';
+        item.dataset.idx = idx;
+        item.style.cssText = 'padding:10px 14px;border-bottom:1px solid #e2e8f0;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:white;';
+        const left = document.createElement('span');
+        left.textContent = entity.name || '';
+        const right = document.createElement('small');
+        right.style.cssText = 'color:#64748b;font-size:0.78rem;';
+        right.textContent = entity.code ? `[${entity.code}]` : '';
+        item.appendChild(left); item.appendChild(right);
+        item.addEventListener('mouseenter', () => { this.highlightIdx = idx; this._updateHighlight(); item.style.background='#f0f9ff'; });
+        item.addEventListener('mouseleave', () => { item.style.background = 'white'; });
+        item.addEventListener('mousedown', e => { e.preventDefault(); this.addEntity(entity); });
+        this.dropdown.appendChild(item);
+      });
+
+      // خيار الإنشاء الجديد إن لم تكن هناك مطابقة دقيقة
+      const existingNames = new Set(this.tags.map(t => t.name.toLowerCase()));
+      const exactMatch = matches.some(e =>
+        (e.name||'').toLowerCase() === q || (e.code||'').toLowerCase() === q
+      );
+      if (!exactMatch && !existingNames.has(q)) {
+        const newItem = document.createElement('div');
+        newItem.className = 'entity-suggestion-item new-entity-option';
+        newItem.style.cssText = 'padding:10px 14px;cursor:pointer;background:#f0fdf4;color:#059669;font-weight:500;';
+        newItem.textContent = `➕ إضافة "${query}" كجهة جديدة`;
+        newItem.dataset.idx = matches.length;
+        newItem.addEventListener('mouseenter', () => { this.highlightIdx = matches.length; this._updateHighlight(); });
+        newItem.addEventListener('mousedown', e => { e.preventDefault(); this.addNewEntity(query); });
+        this.dropdown.appendChild(newItem);
+      }
+
+      this.dropdown.style.display = this.dropdown.children.length ? 'block' : 'none';
+    }
+
+    addEntity(entity) {
+      if (!entity || !entity.id) return;
+      if (this.tags.some(t => t.id === entity.id)) { this._reset(); return; }
+      this.tags.push({ id: entity.id, name: entity.name, code: entity.code || '', isNew: false });
+      this._render(); this._reset();
+    }
+
+    addNewEntity(name) {
+      const clean = (name || '').replace(/<[^>]*>/g, '').replace(/javascript:/gi, '').trim();
+      if (!clean) return;
+      if (this.tags.some(t => t.name.toLowerCase() === clean.toLowerCase())) { this._reset(); return; }
+      this.tags.push({ id: null, name: clean, code: '', isNew: true });
+      this._render(); this._reset();
+    }
+
+    removeTag(idx) {
+      this.tags.splice(idx, 1);
+      this._render();
+      try { this.input.dispatchEvent(new Event('input', { bubbles: true })); } catch(e) {}
+      if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+    }
+
+    clear() { this.tags = []; this._render(); }
+
+    loadTags(arr) {
+      this.tags = (arr || []).map(t => ({ id: t.id, name: t.name, code: t.code || '', isNew: false }));
+      this._render();
+    }
+
+    getIds()   { return this.tags.filter(t => !t.isNew).map(t => t.id); }
+    getNames() { return this.tags.filter(t => t.isNew).map(t => t.name); }
+    count()    { return this.tags.length; }
+
+    _render() {
+      this.wrapper.querySelectorAll('.entity-tag').forEach(el => el.remove());
+      this.tags.forEach((tag, idx) => {
+        const badge = document.createElement('span');
+        badge.className = `entity-tag${tag.isNew ? ' new-entity' : ''}`;
+        const codeHtml = tag.code ? `<span class="tag-code">${tag.code.replace(/</g,'&lt;')}</span>` : '';
+        const nameHtml = (tag.name || '').replace(/</g,'&lt;');
+        badge.innerHTML = `${codeHtml}${nameHtml}${tag.isNew ? ' <small>(جديدة)</small>' : ''}
+          <button type="button" class="tag-remove" aria-label="حذف">&times;</button>`;
+        badge.querySelector('.tag-remove').addEventListener('click', e => {
+          e.stopPropagation(); this.removeTag(idx);
+        });
+        this.wrapper.insertBefore(badge, this.input);
+      });
+      this.wrapper.classList.toggle('has-error', this.tags.length === 0);
+    }
+
+    _moveHighlight(dir) {
+      const items = this.dropdown.querySelectorAll('.entity-suggestion-item, .new-entity-option');
+      if (!items.length) return;
+      this.highlightIdx = Math.max(-1, Math.min(items.length - 1, this.highlightIdx + dir));
+      this._updateHighlight();
+    }
+    _updateHighlight() {
+      this.dropdown.querySelectorAll('.entity-suggestion-item, .new-entity-option').forEach((el, i) => {
+        if (i === this.highlightIdx) {
+          el.style.outline = '2px solid #3b82f6'; el.style.background = '#dbeafe';
+        } else {
+          el.style.outline = 'none';
+          if (!el.classList.contains('new-entity-option')) el.style.background = 'white';
+        }
+      });
+    }
+    _hideDropdown() {
+      this.dropdown.style.display = 'none';
+      this.highlightIdx = -1;
+    }
+    _reset() {
+      this.input.value = '';
+      this._hideDropdown();
+      this.input.focus();
+      try { this.input.dispatchEvent(new Event('input', { bubbles: true })); } catch(e) {}
+      if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+    }
+  }
+
+  // ── إنشاء المُدير العام ──
+  window.entityTagManagers = {
+    issuing:   null,
+    receiving: null
+  };
+
+  function initEntityTagManagers() {
+    if (window.entityTagManagers.issuing) return;
+    window.entityTagManagers.issuing = new EntityTagInput({
+      wrapperId: 'issuingTagWrapper', inputId: 'issuingEntity',
+      dropdownId: 'issuingEntityDropdown', entityType: 'issuer'
+    });
+    window.entityTagManagers.receiving = new EntityTagInput({
+      wrapperId: 'receivingTagWrapper', inputId: 'receivingEntity',
+      dropdownId: 'receivingEntityDropdown', entityType: 'receiver'
+    });
+  }
+
+  // ──────────────────────────────────────────────────────
+  // ── Patch ExtractionSmartSystem prototype قبل الإنشاء ──
+  // ──────────────────────────────────────────────────────
+  if (typeof ExtractionSmartSystem !== 'undefined') {
+    // 1) إلغاء آلية الـ entity dropdown القديمة (سنبني خاصتنا)
+    ExtractionSmartSystem.prototype.setupEntityCodeRecognition = function() {
+      initEntityTagManagers();
+      console.log('[ExtractionSmart] ✓ Multi-tag entity input ready');
+    };
+
+    // 2) تعديل التحقق من الحقول: إن كان حقل جهة → فحص عدد الوسوم
+    const _origValidateField = ExtractionSmartSystem.prototype.validateField;
+    ExtractionSmartSystem.prototype.validateField = function(fieldId) {
+      if (fieldId === 'issuingEntity' || fieldId === 'receivingEntity') {
+        const mgrKey = fieldId === 'issuingEntity' ? 'issuing' : 'receiving';
+        const mgr = window.entityTagManagers && window.entityTagManagers[mgrKey];
+        const ok = !!(mgr && mgr.count() > 0);
+        const wrap = document.getElementById(fieldId === 'issuingEntity' ? 'issuingTagWrapper' : 'receivingTagWrapper');
+        if (wrap) wrap.classList.toggle('has-error', !ok);
+        return ok;
+      }
+      return _origValidateField ? _origValidateField.call(this, fieldId) : true;
+    };
+
+    // 3) تعديل applyExtractionResult: عند ملء الـ AI لقيمة جهة → حوّلها لوسم
+    const _origApplyExtraction = ExtractionSmartSystem.prototype.applyExtractionResult;
+    ExtractionSmartSystem.prototype.applyExtractionResult = function(data) {
+      // إذا كانت قيمة الجهة array → استخدم كل العناصر
+      const aiIssuing   = data.issuing_entity;
+      const aiReceiving = data.receiving_entity;
+      // ندع الأصل يملأ الحقل النصي ثم نحوّله لوسم بعد ذلك
+      if (_origApplyExtraction) _origApplyExtraction.call(this, data);
+      setTimeout(() => {
+        const mgrI = window.entityTagManagers?.issuing;
+        const mgrR = window.entityTagManagers?.receiving;
+        const tryAdd = (mgr, val) => {
+          if (!mgr || !val) return;
+          const items = Array.isArray(val) ? val : String(val).split(/[،,;]/);
+          items.forEach(v => {
+            const s = (v||'').trim();
+            if (s && !mgr.tags.some(t => t.name.toLowerCase() === s.toLowerCase())) {
+              mgr._resolveOrCreate(s, true);
+            }
+          });
+          // تنظيف الـ input النصي بعد التحويل
+          if (mgr.input) mgr.input.value = '';
+        };
+        tryAdd(mgrI, aiIssuing);
+        tryAdd(mgrR, aiReceiving);
+        if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+      }, 50);
+    };
+
+    // (أُزيل تجاوز saveBook هنا: تفريغ الجهات وإلحاق معرّفاتها صار داخل الصنف
+    //  عبر _flushPendingEntities/_appendEntityIds — مسار حفظ موحّد بلا ترقيع.)
+
+    // 4) عند المسح الذكي للنموذج بعد الحفظ — امسح الوسوم أيضاً
+    const _origSmartClear = ExtractionSmartSystem.prototype.smartClearAndStay;
+    if (_origSmartClear) {
+      ExtractionSmartSystem.prototype.smartClearAndStay = function(kind) {
+        window.entityTagManagers?.issuing?.clear();
+        window.entityTagManagers?.receiving?.clear();
+        return _origSmartClear.call(this, kind);
+      };
+    }
+  }
+
+  // تأكد من التهيئة لو نُفّذ السكربت بعد DOM ready
+  if (document.readyState !== 'loading') {
+    initEntityTagManagers();
+  } else {
+    document.addEventListener('DOMContentLoaded', initEntityTagManagers, { once: true });
+  }
+})();
+</script>
+<script>
+  // (أزرار التكبير/التصغير/الملاءمة أُزيلت — يكفي زر التنزيل في تذييل المعاينة)
+
+  // Form validation and indicator
+  function updateValidationIndicator() {
+    const bookNumber = document.getElementById('bookNumber')?.value?.trim();
+    const title = document.getElementById('title')?.value?.trim();
+    const date = document.getElementById('date')?.value;
+    const mgrI = window.entityTagManagers?.issuing;
+    const mgrR = window.entityTagManagers?.receiving;
+    const issuingOk   = !!(mgrI && mgrI.count() > 0);
+    const receivingOk = !!(mgrR && mgrR.count() > 0);
+
+    // نوع المستند مطلوب في وضع الإدخال (يطابق تحقّق saveBook) — وإلا يُعلن «جاهز» ثم يُرفض الحفظ.
+    // تجاوز التعديل لا يشترط النوع (EDIT_DATA مُعرَّف في وضع التعديل فقط).
+    const requireDocType = (typeof EDIT_DATA === 'undefined');
+    let docTypeOk = true;
+    if (requireDocType) {
+      docTypeOk = false;
+      try {
+        const sys = window.extractionSystem;
+        if (sys && typeof sys.getResolvedDocumentTypeValue === 'function') {
+          docTypeOk = !!sys.getResolvedDocumentTypeValue(sys.getCurrentKind());
+        }
+      } catch (_) {}
+    }
+
+    const filled = [bookNumber, title, date].filter(f => f).length
+                 + (issuingOk ? 1 : 0) + (receivingOk ? 1 : 0)
+                 + (requireDocType && docTypeOk ? 1 : 0);
+    const totalRequired = requireDocType ? 6 : 5;
+    const isFilled = filled === totalRequired;
+    
+    const indicator = document.getElementById('validationIndicator');
+    const text = document.getElementById('validationText');
+    const saveBtn = document.getElementById('saveButton');
+    
+    if (isFilled) {
+      indicator.classList.add('success');
+      indicator.classList.remove('pending');
+      text.textContent = `✓ جاهز للحفظ (${filled}/${totalRequired})`;
+      saveBtn.disabled = false;
+    } else {
+      indicator.classList.remove('success');
+      indicator.classList.add('pending');
+      text.textContent = `ملء الحقول المطلوبة: ${filled}/${totalRequired}`;
+      saveBtn.disabled = true;
+    }
+  }
+  
+  // Character counter for notes
+  function updateCharCount() {
+    const textarea = document.getElementById('margin');
+    const charCount = document.getElementById('charCount');
+    if (textarea && charCount) {
+      charCount.textContent = textarea.value.length;
+    }
+  }
+  
+  // File upload info display
+  function displayFileInfo(file) {
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const fileIcon = document.getElementById('fileIcon');
+    
+    if (fileName && fileSize) {
+      const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+      fileName.textContent = file.name;
+      fileSize.textContent = `${sizeInMB} MB`;
+      
+      // Set icon based on file type
+      if (file.type === 'application/pdf') {
+        fileIcon.textContent = '📕';
+      } else if (file.type.startsWith('image/')) {
+        fileIcon.textContent = '🖼️';
+      }
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    // Initialize keyboard navigation
+    const formContainer = document.querySelector('.extraction-form-panel');
+
+    // AdvancedKeyboardNavigator removed — class was never implemented
+
+    // Add validation listeners
+    const validationFields = ['bookNumber', 'title', 'date', 'issuingEntity', 'receivingEntity',
+                              'documentTypeSelect', 'documentTypeCustom'];
+    validationFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('change', updateValidationIndicator);
+        el.addEventListener('input', updateValidationIndicator);
+      }
+    });
+    // شبكة أمان: نوع المستند قد يُنشأ/يتبدّل ديناميكياً — استمع بالتفويض كي يعكس المؤشّر النوع دائماً
+    document.addEventListener('change', (e) => {
+      if (e.target && (e.target.id === 'documentTypeSelect' || e.target.id === 'documentTypeCustom')) updateValidationIndicator();
+    });
+    document.addEventListener('input', (e) => {
+      if (e.target && e.target.id === 'documentTypeCustom') updateValidationIndicator();
+    });
+
+    // Character counter
+    const textarea = document.getElementById('margin');
+    if (textarea) {
+      textarea.addEventListener('input', updateCharCount);
+    }
+
+    // File display
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          displayFileInfo(e.target.files[0]);
+        }
+      });
+    }
+
+    // Initial validation check
+    updateValidationIndicator();
+
+    // === Date field: default to today, disabled unless toggle checked ===
+    const dateField = document.getElementById('date');
+    const dateToggle = document.getElementById('dateEditToggle');
+    const senderDateField = document.getElementById('senderDate');
+    const todayISO = new Date().toISOString().split('T')[0];
+
+    // Set both dates to today on load
+    if (dateField && !dateField.value) {
+      dateField.value = todayISO;
+    }
+    if (senderDateField && !senderDateField.value) {
+      senderDateField.value = todayISO;
+    }
+
+    // Toggle: enable/disable date editing
+    if (dateToggle && dateField) {
+      dateToggle.addEventListener('change', function() {
+        if (this.checked) {
+          dateField.disabled = false;
+          dateField.removeAttribute('tabindex');
+          dateField.focus();
+        } else {
+          dateField.disabled = true;
+          dateField.tabIndex = -1;
+        }
+      });
+    }
+
+    console.log('[Extraction Form] Enhanced initialization complete');
+  });
+</script>
+
+
+<script>
+(function () {
+  'use strict';
+  var btn = document.getElementById('cancelEditButton');
+  if (!btn) return;
+
+  // تتبّع «تغييرات غير محفوظة» بمقارنة قِيَمية (baseline) — لا يعتمد على الأحداث
+  // كي لا يرفع العلم زوراً عند الملء البرمجي (applyExtractionResult / حقن EDIT_DATA).
+  var FIELDS = ['title', 'date', 'senderNumber', 'senderDate', 'issuingEntity',
+                'receivingEntity', 'dueDate', 'secretLevel', 'bookKind'];
+  var baseline = {};
+  var allowLeave = false;
+  function snapshot() {
+    var s = {};
+    FIELDS.forEach(function (id) { var el = document.getElementById(id); s[id] = el ? (el.value || '') : ''; });
+    return s;
+  }
+  function setBaseline() { baseline = snapshot(); }
+  window.__setExtractionBaseline = setBaseline;   // تستدعيها extraction_smart.js بعد الحفظ/التفريغ + بلوك التعديل
+  function isDirty() {
+    return FIELDS.some(function (id) {
+      var el = document.getElementById(id);
+      return el && (el.value || '') !== (baseline[id] || '');
+    });
+  }
+  // لقطة الأساس بعد استقرار النموذج (الافتراضات + الحجز + أي حقن أوّلي)
+  setTimeout(setBaseline, 500);
+
+  function backTarget() {
+    var back = btn.getAttribute('data-back-url') || '';
+    if (back) return back;                                  // مُتحقَّق خادمياً (url_has_allowed_host_and_scheme)
+    var ref = document.referrer || '';
+    try {
+      // مقارنة أصل حقيقية (تسدّ open-redirect عبر origin.evil.com و origin@evil.com)
+      if (ref && ref !== window.location.href && new URL(ref).origin === window.location.origin) {
+        if (new URL(ref).pathname.indexOf('/login') === 0) return '/';   // لا تُعِد المستخدم لصفحة المصادقة
+        return ref;
+      }
+    } catch (e) {}
+    return '/';
+  }
+
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (isDirty() && !confirm('لديك تغييرات غير محفوظة ستُفقد عند المغادرة. هل تريد المتابعة؟')) return;
+    allowLeave = true;                                      // لئلا يتراكب beforeunload فوق تأكيدنا
+    window.location.href = backTarget();
+  });
+
+  // شبكة أمان لإغلاق التبويب/رجوع المتصفح/تنقّل خارجي (لا يلتقطها زر الإلغاء)
+  window.addEventListener('beforeunload', function (e) {
+    if (isDirty() && !allowLeave) { e.preventDefault(); e.returnValue = ''; }
+  });
+})();
+</script>
+
+
+
+
+
+<script>
+(function() {
+  const toggle = document.getElementById('numberlessToggle');
+  const cb = document.getElementById('numberlessCheckbox');
+  const bookNumField = document.getElementById('bookNumber');
+  const hint = document.getElementById('bookNumberHint');
+  if (!toggle || !cb || !bookNumField) return;
+
+  function currentKind() {
+    const active = document.querySelector('.kind-tab.active');
+    if (active && active.dataset.kind) return active.dataset.kind;
+    const sel = document.getElementById('kindSelectMobile') || document.querySelector('select[name="kind"], #kindSelect');
+    return sel ? sel.value : (document.querySelector('.extraction-container')?.dataset?.initialKind || 'incoming_internal');
+  }
+
+  function refreshToggleVisibility() {
+    const k = currentKind();
+    const isInternal = (k === 'incoming_internal' || k === 'outgoing_internal');
+    toggle.style.display = isInternal ? 'inline-flex' : 'none';
+    // أيُّ تبديل نوعٍ يفكّ «بلا رقم»: مدير الحجز يعيد رسم رقم النوع الجديد فوق
+    // الحقل أصلاً، وإبقاء الصندوق مؤشَّراً حينها = حالة هجينة تُوهم خلط
+    // الوارد بالصادر (بلاغ المالك 2026-07-07).
+    if (cb.checked) { cb.checked = false; applyNumberless(false); }
+  }
+
+  function applyNumberless(on) {
+    if (on) {
+      bookNumField.value = 'بلا رقم';
+      bookNumField.classList.add('is-numberless');
+      if (hint) hint.textContent = 'سيُحفظ الكتاب بلا رقم رسمي (يأخذ معرّفاً تقنياً داخلياً).';
+    } else {
+      bookNumField.classList.remove('is-numberless');
+      if (hint) hint.textContent = 'رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.';
+      // التراجع يستمدّ الرقم من مصدر الحقيقة (مدير الحجز) لا من قيمة محفوظة:
+      // الحقل قد يكون فارغاً لحظة التأشير (الحجز لم يصل) فتعلق «بلا رقم» بلا رجعة.
+      const sys = window.extractionSystem;
+      const k = currentKind();
+      bookNumField.value = '';
+      if (sys && typeof sys.ensureReservation === 'function') {
+        sys.ensureReservation(k);
+      }
+    }
+  }
+
+  cb.addEventListener('change', function() { applyNumberless(this.checked); });
+
+  // راقب تغيّر التبويب
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.kind-tab')) setTimeout(refreshToggleVisibility, 50);
+  });
+  const sel = document.querySelector('select[name="kind"], #kindSelect, #kindSelectMobile');
+  if (sel) sel.addEventListener('change', () => setTimeout(refreshToggleVisibility, 50));
+
+  refreshToggleVisibility();
+})();
+</script>
+
+    
+      </main>
+    </div>
+    
+
+    <!-- Toast stack for global messages -->
+    <div class="toast-container toast-center p-3 toast-stack">
+      
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="../../static/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+
+    <!-- عرض المستندات الموحّد (مصدر واحد لبناء العنصر + الحوار المنبثق) -->
+    <script src="../../static/js/doc_view.js?v=20260629-preview2"></script>
+
+    <!-- مودال معاينة الكتاب الموحد (يعمل من أي صفحة) -->
+    
+<div class="modal fade" id="bookPreviewModal" tabindex="-1" aria-labelledby="bookPreviewTitle" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable modal-fullscreen-lg-down">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+
+      
+      <div class="modal-header py-2 px-3" id="bookPreviewHeader" style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff;">
+        <div>
+          <h6 class="modal-title mb-0" id="bookPreviewTitle">تفاصيل الكتاب</h6>
+          <small id="bpNumber" class="opacity-75"></small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+
+      
+      <div class="modal-body p-0" id="bookPreviewBody">
+
+        
+        <div id="bpLoading" class="text-center py-5">
+          <div class="spinner-border text-primary"></div>
+          <div class="mt-2 text-muted small">جارٍ التحميل...</div>
+        </div>
+
+        
+        <div id="bpError" class="text-center py-5 d-none">
+          <i class="bi bi-exclamation-triangle text-danger" style="font-size:2.5rem;"></i>
+          <div class="mt-2 text-muted" id="bpErrorMsg">حدث خطأ</div>
+        </div>
+
+        
+        <div id="bpContent" class="d-none">
+
+          
+          <div class="d-flex flex-wrap gap-2 px-3 pt-3">
+            <span class="badge" id="bpKindBadge"></span>
+            <span class="badge" id="bpStatusBadge"></span>
+            <span class="badge bg-danger-subtle text-danger d-none" id="bpOverdueBadge"><i class="bi bi-clock-history me-1"></i>متأخر</span>
+            <span class="badge bg-warning-subtle text-warning d-none" id="bpFollowupBadge"><i class="bi bi-bell me-1"></i>يحتاج متابعة</span>
+          </div>
+
+          
+          <div class="px-3 pt-2">
+            <h5 class="fw-bold mb-0" id="bpTitle"></h5>
+          </div>
+
+          
+          <div class="px-3 pt-3 d-none" id="bpDocPane">
+            <div class="bp-doc-viewer" id="bpDocViewer"></div>
+            <div class="bp-doc-chips d-none" id="bpDocChips"></div>
+          </div>
+
+          
+          <div class="px-3 py-3">
+            <div class="row g-2">
+              <div class="col-6 col-md-4">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">رقمنا</div>
+                  <div class="fw-semibold" id="bpOurNumber">—</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-4 d-none" id="bpSenderNumGroup">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">رقم صادر الجهة</div>
+                  <div class="fw-semibold" id="bpSenderNumber">—</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-4">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">تاريخنا</div>
+                  <div class="fw-semibold" id="bpDate">—</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-4 d-none" id="bpSenderDateGroup">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">تاريخ الجهة</div>
+                  <div class="fw-semibold" id="bpSenderDate">—</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-4">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">مستوى السرية</div>
+                  <div class="fw-semibold" id="bpSecret">—</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-4 d-none" id="bpDueDateGroup">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">موعد المتابعة</div>
+                  <div class="fw-semibold" id="bpDueDate">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          
+          <div class="px-3 pb-2">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <div class="small text-muted mb-1"><i class="bi bi-building me-1"></i>الجهة المصدّرة</div>
+                <div id="bpIssuingEntities" class="d-flex flex-wrap gap-1"></div>
+              </div>
+              <div class="col-md-6">
+                <div class="small text-muted mb-1"><i class="bi bi-building me-1"></i>الجهة المستلمة</div>
+                <div id="bpReceivingEntities" class="d-flex flex-wrap gap-1"></div>
+              </div>
+            </div>
+          </div>
+
+          
+          <div class="px-3 pb-2 d-none" id="bpMarginGroup">
+            <div class="small text-muted mb-1"><i class="bi bi-chat-left-text me-1"></i>ملاحظات</div>
+            <div class="p-2 bg-light rounded small" id="bpMargin"></div>
+          </div>
+
+          
+          <div class="px-3 pb-2 d-none" id="bpAttachmentsGroup">
+            <div class="small text-muted mb-1"><i class="bi bi-paperclip me-1"></i>المرفقات</div>
+            <div id="bpAttachments" class="d-flex flex-column gap-1"></div>
+          </div>
+
+          
+          <div class="px-3 pb-3 border-top pt-2 mt-2">
+            <div class="d-flex justify-content-between small text-muted">
+              <span><i class="bi bi-person me-1"></i><span id="bpCreatedBy"></span></span>
+              <span><i class="bi bi-clock me-1"></i><span id="bpCreatedAt"></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      
+      <div class="modal-footer py-2 px-3">
+        <button type="button" class="btn btn-sm d-none me-auto" id="bpStatusToggle"></button>
+        <a href="#" class="btn btn-sm btn-outline-primary" id="bpEditLink"><i class="bi bi-pencil me-1"></i>تعديل</a>
+        <a href="#" class="btn btn-sm btn-primary" id="bpDetailLink"><i class="bi bi-eye me-1"></i>عرض كامل</a>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">إغلاق</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * BookPreviewModal — مودال عرض تفاصيل الكتاب الموحد
+ * يعمل من أي صفحة: أضف data-book-preview="<book_id>" لأي عنصر
+ */
+(function() {
+  'use strict';
+
+  let modalInstance = null;
+  let currentBook = null;
+
+  function getCsrf() {
+    const m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? m[1] : '';
+  }
+
+  function getModal() {
+    if (!modalInstance) {
+      const el = document.getElementById('bookPreviewModal');
+      if (el) {
+        modalInstance = new bootstrap.Modal(el);
+        // تفريغ عارض المستند عند الإغلاق حتى لا يبقى PDF محمّلاً في الخلفية
+        el.addEventListener('hidden.bs.modal', function() {
+          const viewer = document.getElementById('bpDocViewer');
+          if (viewer) viewer.innerHTML = '';
+        });
+      }
+    }
+    return modalInstance;
+  }
+
+  const KIND_COLORS = {
+    'outgoing_internal': { bg: '#ecfeff', text: '#0891b2', label: 'صادر داخلي' },
+    'outgoing_external': { bg: '#ecfeff', text: '#0e7490', label: 'صادر خارجي' },
+    'incoming_internal': { bg: '#f5f3ff', text: '#7c3aed', label: 'وارد داخلي' },
+    'incoming_external': { bg: '#f5f3ff', text: '#6d28d9', label: 'وارد خارجي' },
+  };
+
+  // الحالات الأربع الموحَّدة + ألوانها الدلالية
+  const STATUS_STYLES = {
+    pending:   { bg: 'rgba(37, 99, 235, 0.15)',  color: '#1e40af', label: 'قيد المتابعة' },
+    due_today: { bg: 'rgba(217, 119, 6, 0.18)',  color: '#b45309', label: 'مستحق اليوم' },
+    overdue:   { bg: 'rgba(220, 38, 38, 0.18)',  color: '#b91c1c', label: 'متأخر' },
+    archived:  { bg: 'rgba(100, 116, 139, 0.18)', color: '#475569', label: 'مؤرشف' },
+  };
+
+  function show(id) { document.getElementById(id)?.classList.remove('d-none'); }
+  function hide(id) { document.getElementById(id)?.classList.add('d-none'); }
+  function text(id, val) { const el = document.getElementById(id); if (el) el.textContent = val || '—'; }
+  function html(id, val) { const el = document.getElementById(id); if (el) el.innerHTML = val; }
+
+  function entityBadges(entities) {
+    if (!entities?.length) return '<span class="text-muted small">—</span>';
+    return entities.map(e => {
+      const safe = (e.name || '').replace(/</g, '&lt;');
+      return `<span class="badge bg-primary-subtle text-primary border">${safe}</span>`;
+    }).join('');
+  }
+
+  // بناء عنصر عرض المستند — يفوّض للمصدر الموحّد DocView (static/js/doc_view.js)
+  function buildDocNode(att, title) {
+    return window.DocView.buildNode({
+      url: att.url,
+      name: title || att.name,
+      kind: att.is_pdf ? 'pdf' : (att.is_image ? 'image' : 'other'),
+    });
+  }
+
+  // عرض المستند الأساسي مع شرائح تبديل عند تعدّد المرفقات
+  function renderDocPane(d) {
+    const pane = document.getElementById('bpDocPane');
+    const viewer = document.getElementById('bpDocViewer');
+    const chips = document.getElementById('bpDocChips');
+    if (!pane || !viewer || !chips) return;
+
+    viewer.innerHTML = '';
+    chips.innerHTML = '';
+    chips.classList.add('d-none');
+
+    const atts = (d.attachments || []).filter(a => a.url);
+    if (!atts.length) { pane.classList.add('d-none'); return; }
+    pane.classList.remove('d-none');
+
+    function select(att) {
+      viewer.innerHTML = '';
+      viewer.appendChild(buildDocNode(att, d.title));
+      chips.querySelectorAll('.bp-doc-chip').forEach(c => {
+        c.classList.toggle('active', c.dataset.attId === String(att.id));
+      });
+    }
+
+    if (atts.length > 1) {
+      chips.classList.remove('d-none');
+      atts.forEach(att => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'bp-doc-chip';
+        chip.dataset.attId = String(att.id);
+        const icon = document.createElement('i');
+        icon.className = att.is_pdf ? 'bi bi-file-earmark-pdf' : (att.is_image ? 'bi bi-image' : 'bi bi-file-earmark');
+        chip.appendChild(icon);
+        chip.appendChild(document.createTextNode(' ' + (att.name || 'ملف')));
+        chip.addEventListener('click', () => select(att));
+        chips.appendChild(chip);
+      });
+    }
+
+    const primary = atts.find(a => a.is_primary) || atts[0];
+    select(primary);
+  }
+
+  // رسم شارة الحالة + شرائح المتابعة + زر الإنهاء/إعادة الفتح (يُعاد استخدامه بعد التبديل)
+  function paintStatus(d) {
+    const statusBadge = document.getElementById('bpStatusBadge');
+    if (statusBadge) {
+      const s = STATUS_STYLES[d.followup_state] || STATUS_STYLES.archived;
+      statusBadge.className = 'badge';
+      statusBadge.style.cssText = `background:${s.bg};color:${s.color};`;
+      statusBadge.textContent = d.followup_label || s.label;
+    }
+
+    const isActive = d.followup_state && d.followup_state !== 'archived';
+    if (isActive) { show('bpFollowupBadge'); show('bpDueDateGroup'); text('bpDueDate', d.due_date); }
+    else { hide('bpFollowupBadge'); hide('bpDueDateGroup'); }
+    if (d.followup_state === 'overdue') { show('bpOverdueBadge'); } else { hide('bpOverdueBadge'); }
+
+    const toggle = document.getElementById('bpStatusToggle');
+    if (toggle) {
+      if (d.followup_state === 'archived') {
+        // إعادة الفتح ممكنة فقط عند وجود تاريخ متابعة
+        if (d.due_date) {
+          toggle.className = 'btn btn-sm btn-outline-success me-auto';
+          toggle.dataset.action = 'reopen';
+          toggle.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>إعادة فتح المتابعة';
+        } else {
+          toggle.className = 'btn btn-sm d-none me-auto';
+          toggle.dataset.action = '';
+        }
+      } else {
+        toggle.className = 'btn btn-sm btn-outline-warning me-auto';
+        toggle.dataset.action = 'archived';
+        toggle.innerHTML = '<i class="bi bi-archive me-1"></i>إنهاء المتابعة';
+      }
+    }
+  }
+
+  async function toggleStatus() {
+    const toggle = document.getElementById('bpStatusToggle');
+    if (!toggle || !currentBook || !currentBook.inline_status_url) return;
+    const action = toggle.dataset.action;
+    if (!action) return;
+
+    toggle.disabled = true;
+    try {
+      const resp = await fetch(currentBook.inline_status_url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'X-CSRFToken': getCsrf(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: 'status=' + encodeURIComponent(action),
+      });
+      const payload = await resp.json();
+      if (!resp.ok || !payload.success) throw new Error(payload.error || 'فشل تحديث الحالة');
+
+      currentBook.followup_state = payload.followup_state;
+      currentBook.followup_label = payload.followup_label;
+      currentBook.is_archived = payload.is_archived;
+      paintStatus(currentBook);
+
+      // مزامنة صف القائمة (إن وُجد على الصفحة)
+      document.dispatchEvent(new CustomEvent('book:status-changed', {
+        detail: {
+          bookId: currentBook.id,
+          followup_state: payload.followup_state,
+          followup_label: payload.followup_label,
+          is_archived: payload.is_archived,
+        },
+      }));
+
+      if (window.ToastCenter?.show) window.ToastCenter.show('success', payload.message || 'تم تحديث الحالة');
+    } catch (err) {
+      if (window.ToastCenter?.show) window.ToastCenter.show('error', err.message || 'تعذّر تحديث الحالة');
+    } finally {
+      toggle.disabled = false;
+    }
+  }
+
+  async function openBookPreview(bookId) {
+    const modal = getModal();
+    if (!modal) return;
+
+    // Reset states — حيّد التذييل حتى تصل بيانات الكتاب الجديد (لئلا يبقى مربوطاً بالكتاب السابق)
+    show('bpLoading'); hide('bpContent'); hide('bpError');
+    currentBook = null;
+    const _toggle = document.getElementById('bpStatusToggle');
+    if (_toggle) { _toggle.className = 'btn btn-sm d-none me-auto'; _toggle.dataset.action = ''; }
+    const _edit = document.getElementById('bpEditLink');
+    const _detail = document.getElementById('bpDetailLink');
+    if (_edit) _edit.href = '#';
+    if (_detail) _detail.href = '#';
+    modal.show();
+
+    try {
+      const resp = await fetch(`/books/api/book/${bookId}/preview/`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `خطأ ${resp.status}`);
+      }
+
+      const d = await resp.json();
+      currentBook = d;
+
+      // Header color by kind
+      const kc = KIND_COLORS[d.kind] || KIND_COLORS['incoming_internal'];
+      const header = document.getElementById('bookPreviewHeader');
+      if (header) header.style.background = `linear-gradient(135deg, ${kc.text}, ${kc.text}cc)`;
+
+      text('bpNumber', `#${d.our_number}`);
+      text('bpTitle', d.title);
+      text('bpOurNumber', d.our_number);
+      text('bpDate', d.date);
+      text('bpSecret', d.secret_level);
+      text('bpCreatedBy', d.created_by);
+      text('bpCreatedAt', d.created_at);
+
+      // Kind badge
+      const kindBadge = document.getElementById('bpKindBadge');
+      if (kindBadge) {
+        kindBadge.textContent = kc.label;
+        kindBadge.style.cssText = `background:${kc.bg};color:${kc.text};`;
+      }
+
+      // Conditional fields
+      if (d.is_incoming && d.sender_number) { show('bpSenderNumGroup'); text('bpSenderNumber', d.sender_number); } else { hide('bpSenderNumGroup'); }
+      if (d.is_incoming && d.sender_date) { show('bpSenderDateGroup'); text('bpSenderDate', d.sender_date); } else { hide('bpSenderDateGroup'); }
+
+      // الحالة + شرائح المتابعة + زر الإنهاء/إعادة الفتح
+      paintStatus(d);
+
+      // Document pane (المستند المضمّن)
+      renderDocPane(d);
+
+      // Entities
+      html('bpIssuingEntities', entityBadges(d.issuing_entities));
+      html('bpReceivingEntities', entityBadges(d.receiving_entities));
+
+      // Margin
+      if (d.margin) { show('bpMarginGroup'); text('bpMargin', d.margin); } else { hide('bpMarginGroup'); }
+
+      // Attachments — بناء آمن عبر DOM (نفس تحصين buildDocNode: فحص المخطّط + textContent)
+      const attBox = document.getElementById('bpAttachments');
+      if (d.attachments?.length && attBox) {
+        show('bpAttachmentsGroup');
+        attBox.innerHTML = '';
+        d.attachments.forEach(a => {
+          const safeUrl = /^(https?:\/\/|\/)/i.test(a.url || '') ? a.url : '';
+          const sizeKB = a.size ? ` (${(a.size / 1024).toFixed(0)} KB)` : '';
+          const link = document.createElement(safeUrl ? 'a' : 'span');
+          link.className = 'd-flex align-items-center gap-2 text-decoration-none p-2 bg-light rounded small';
+          if (safeUrl) { link.href = safeUrl; link.target = '_blank'; link.rel = 'noopener'; }
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-file-earmark text-primary';
+          const label = document.createElement('span');
+          label.textContent = (a.name || 'ملف') + sizeKB;
+          link.appendChild(icon);
+          link.appendChild(label);
+          if (safeUrl) {
+            const ext = document.createElement('i');
+            ext.className = 'bi bi-box-arrow-up-right ms-auto text-muted';
+            link.appendChild(ext);
+          }
+          attBox.appendChild(link);
+        });
+      } else { hide('bpAttachmentsGroup'); }
+
+      // Links
+      const editLink = document.getElementById('bpEditLink');
+      const detailLink = document.getElementById('bpDetailLink');
+      // التعديل يمرّر وجهة العودة = هذه الصفحة مع ?preview=<id> ليُعاد فتح الحوار عند الإلغاء/الحفظ
+      if (editLink) {
+        const ret = new URL(window.location.href);
+        ret.searchParams.set('preview', d.id);
+        const nextParam = encodeURIComponent(ret.pathname + ret.search);
+        editLink.href = d.edit_url + (d.edit_url.indexOf('?') >= 0 ? '&' : '?') + 'next=' + nextParam;
+      }
+      // العرض الكامل يمرّر وجهة العودة = هذه الصفحة بحالتها (تبويب/فلتر/صفحة) ليعود إليها زر «عودة»
+      if (detailLink) {
+        const nextParam = encodeURIComponent(window.location.pathname + window.location.search);
+        detailLink.href = d.detail_url + (d.detail_url.indexOf('?') >= 0 ? '&' : '?') + 'next=' + nextParam;
+      }
+
+      hide('bpLoading'); show('bpContent');
+
+    } catch (err) {
+      hide('bpLoading'); hide('bpContent'); show('bpError');
+      text('bpErrorMsg', err.message || 'حدث خطأ أثناء التحميل');
+    }
+  }
+
+  // Global click handler: any element with data-book-preview="<id>"
+  document.addEventListener('click', function(e) {
+    const trigger = e.target.closest('[data-book-preview]');
+    if (!trigger) return;
+    // احترام «فتح في تبويب»: Ctrl/Cmd/Shift أو نقرة غير يسرى تترك المتصفح ينتقل عبر href
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    const bookId = trigger.dataset.bookPreview;
+    if (bookId) openBookPreview(bookId);
+  });
+
+  // زر إنهاء/إعادة فتح المتابعة داخل المودال
+  document.getElementById('bpStatusToggle')?.addEventListener('click', toggleStatus);
+
+  // Expose globally for programmatic use
+  window.openBookPreview = openBookPreview;
+
+  // إعادة فتح الحوار تلقائياً عند العودة عبر ?preview=<id> (بعد إلغاء/حفظ التعديل مثلاً)
+  function deepLinkPreview() {
+    const pv = new URLSearchParams(window.location.search).get('preview');
+    if (pv) openBookPreview(pv);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', deepLinkPreview);
+  } else {
+    deepLinkPreview();
+  }
+})();
+</script>
+
+
+    <!-- مودال معاينة المستند المنبثق (يعمل من أي صفحة) -->
+    
+<div class="modal fade" id="docPreviewModal" tabindex="-1" aria-labelledby="docPreviewName" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-fullscreen-lg-down">
+    <div class="modal-content border-0 shadow-lg" style="border-radius:16px; overflow:hidden;">
+      <div class="modal-header py-2 px-3" style="background:linear-gradient(135deg,#ff9233,#ff7b18);color:#fff;">
+        <h6 class="modal-title mb-0 d-flex align-items-center gap-2">
+          <i class="bi bi-file-earmark-text"></i><span id="docPreviewName">معاينة المستند</span>
+        </h6>
+        <div class="ms-auto d-flex align-items-center gap-2">
+          <a href="#" id="docPreviewOpen" target="_blank" rel="noopener" class="btn btn-sm btn-light py-0 px-2" title="فتح في تبويب جديد"><i class="bi bi-box-arrow-up-right"></i></a>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+        </div>
+      </div>
+      <div class="modal-body p-0" id="docPreviewBody"></div>
+    </div>
+  </div>
+</div>
+
+
+    
+    <!-- jQuery (مطلوب لـ Smart Merge UI) — مُستضاف محلياً (يعمل دون إنترنت + يحترم CSP) -->
+    <script src="../../static/vendor/jquery.min.js"></script>
+    
+    <!-- نظام الأكواد الخطأ الموحد -->
+    <script src="../../static/error-codes.js"></script>
+    
+    <!-- نظام التسجيل والتحليلات -->
+    <script src="../../static/logging-system.js"></script>
+    
+    <!-- نظام إدارة الكتب - JavaScript الحديث -->
+    <script src="../../static/app.js"></script>
+
+    <!-- Sidebar Mini Toggle -->
+    <script>
+    (function () {
+      'use strict';
+      var PREF  = 'app_sidebar_mini';
+      var btn   = document.getElementById('sidebarToggleBtn');
+      var shell = document.querySelector('.app-shell');
+      if (!btn || !shell) return;
+      var icon = btn.querySelector('i');
+
+      function setMini(mini) {
+        shell.classList.toggle('sidebar-mini', mini);
+        btn.title = mini ? 'توسيع القائمة' : 'طي القائمة';
+        if (icon) icon.className = mini ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-reverse';
+        localStorage.setItem(PREF, mini ? '1' : '0');
+      }
+
+      if (localStorage.getItem(PREF) === '1') setMini(true);
+
+      btn.addEventListener('click', function () {
+        setMini(!shell.classList.contains('sidebar-mini'));
+      });
+    })();
+    </script>
+
+    <!-- Additional Page Scripts -->
+    
+
+    
+  <!-- ═══════ طبقة العرض التجريبي — لا وجود لها في الصفحة الحقيقية ═══════ -->
+<style>
+  #demoBar{
+    position:fixed; bottom:12px; inset-inline-start:12px; z-index:99999;
+    display:flex; flex-direction:column; align-items:stretch; gap:6px;
+    width:215px; background:#0f2e2b; color:#e6fffb; border-radius:14px;
+    padding:10px 14px; box-shadow:0 10px 30px -8px rgba(0,0,0,.45);
+    font-size:.75rem; font-family:inherit;
+  }
+  #demoBar .db-head{ display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  #demoBar .db-title{ font-weight:700; }
+  #demoBar .db-tag{ font-size:.68rem; border:1px solid rgba(255,255,255,.3);
+    border-radius:999px; padding:1px 8px; background:rgba(255,255,255,.1); }
+  #demoBar button{
+    font:inherit; font-weight:600; border:0; border-radius:9px; cursor:pointer;
+    padding:7px 14px; background:#14b8a6; color:#04211e;
+  }
+  #demoBar .db-chip{ font-size:.7rem; background:rgba(20,184,166,.16);
+    border:1px solid rgba(20,184,166,.45); border-radius:999px; padding:2px 10px; color:#99f6e4; }
+  #demoBar .db-chip[hidden]{ display:none; }
+  #demoRail{
+    position:fixed; top:50%; transform:translateY(-50%); inset-inline-end:6px; z-index:99998;
+    display:none; flex-direction:column; gap:5px; padding:8px 5px;
+    background:rgba(255,255,255,.92); border:1px solid #e2e8f0; border-radius:10px;
+    box-shadow:0 4px 14px -6px rgba(15,23,42,.3);
+  }
+  #demoRail.on{ display:flex; }
+  #demoRail .rail-tooth{
+    width:7px; height:15px; border-radius:4px; border:0; padding:0; cursor:pointer;
+    background:#cbd5e1; transition:background .3s, transform .2s, height .3s, opacity .3s;
+  }
+  #demoRail .rail-tooth[data-c="low"]{ background:#dc2626; height:22px; }
+  #demoRail .rail-tooth[data-c="medium"]{ background:#d97706; }
+  #demoRail .rail-tooth[data-c="high"]{ background:#16a34a; }
+  #demoRail .rail-tooth[data-c="human"]{ background:#0f766e; opacity:.55; }
+  #demoRail .rail-tooth:hover{ transform:scaleX(2); }
+  .demo-halo{ animation:demoHalo .6s ease-out; }
+  @keyframes demoHalo{ from{ box-shadow:0 0 0 0 rgba(15,118,110,.5);} to{ box-shadow:0 0 0 12px rgba(15,118,110,0);} }
+  @media (prefers-reduced-motion:reduce){ .demo-halo{ animation:none; } }
+</style>
+
+<div id="demoBar" dir="rtl">
+  <div class="db-head">
+    <span class="db-title">نموذج عرض كامل</span>
+    <span class="db-tag">الأصل غير مُعدَّل</span>
+  </div>
+  <button id="demoExtract" type="button">محاكاة الاستخراج</button>
+  <span class="db-chip" id="demoReview" hidden></span>
+  <span class="db-chip" id="demoLearn" hidden></span>
+  <span class="db-chip" id="demoSession" hidden></span>
+</div>
+<nav id="demoRail" aria-label="مسار المراجعة (Alt+↑/↓) — طبقة العرض"></nav>
+
+<script>
+(function(){
+  'use strict';
+  /* اعتراض fetch: الملف يعمل بلا خادم — أعد ردوداً فارغة صامتة لمسارات API */
+  var _fetch = window.fetch;
+  window.fetch = function(url){
+    if (String(url).indexOf('/books/') === 0 || String(url).indexOf('/api/') === 0){
+      return Promise.resolve(new Response('{"success":true,"results":[]}',
+        { headers: { 'Content-Type': 'application/json' } }));
+    }
+    return _fetch.apply(window, arguments);
+  };
+
+  /* بيانات المحاكاة — بصيغة حمولة smart_extract_direct الحقيقية (مع المرشحات الجديدة) */
+  var MOCK = {
+    success: true,
+    book_number: 'و/144', book_number_confidence: 0.92,
+    book_date: '2026-07-12', book_date_confidence: 0.71,
+    sender_date: '2026-07-08', sender_date_confidence: 0.66,
+    sender_number: 'ش13/5/0847', sender_number_confidence: 0.88,
+    title: 'تدقيق مستندات الصرف للفصل الثاني', title_confidence: 0.62,
+    issuing_entity: 'قسم الرقابة والتدقيق الداخلي', issuing_entity_confidence: 0.55,
+    issuing_entity_matches: [
+      { entity_id: 1, entity_name: 'قسم الرقابة والتدقيق الداخلي', score: 0.84, match_type: 'memory' },
+      { entity_id: 2, entity_name: 'قسم الرقابة الداخلية',          score: 0.79, match_type: 'memory' },
+      { entity_id: 3, entity_name: 'هيئة التدقيق المركزية',          score: 0.41, match_type: 'letterhead' }
+    ],
+    receiving_entity: '', receiving_entity_confidence: 0,
+    receiving_entity_matches: [],
+    secret_level: 'اعتيادي', secret_level_confidence: 0.75,
+    book_kind: 'incoming_internal', book_kind_confidence: 0.8,
+    overall_confidence: 0.68, needs_review: true
+  };
+
+  var rail = document.getElementById('demoRail');
+  var reviewChip = document.getElementById('demoReview');
+  var learnChip  = document.getElementById('demoLearn');
+  var sessChip   = document.getElementById('demoSession');
+  var learned = {}, learnCount = 0;
+
+  function groups(){
+    return Array.prototype.slice.call(
+      document.querySelectorAll('.form-group-smart[data-machine-conf]'));
+  }
+  function buildRail(){
+    rail.innerHTML = '';
+    groups().sort(function(a,b){ return a.dataset.machineConf - b.dataset.machineConf; })
+      .forEach(function(g){
+        var t = document.createElement('button');
+        t.type = 'button'; t.className = 'rail-tooth'; t.dataset.c = g.dataset.conf;
+        var lbl = g.querySelector('label');
+        t.title = lbl ? lbl.textContent.trim().replace(/\s+/g,' ') : '';
+        t.addEventListener('click', function(){ jumpTo(g); });
+        t._g = g;
+        rail.appendChild(t);
+      });
+    rail.classList.add('on');
+  }
+  function syncRail(){
+    Array.prototype.forEach.call(rail.children, function(t){ t.dataset.c = t._g.dataset.conf; });
+    var n = groups().filter(function(g){
+      return g.dataset.conf === 'low' || g.dataset.conf === 'medium'; }).length;
+    reviewChip.hidden = false;
+    reviewChip.textContent = n ? (n + ' يحتاج مراجعة') : 'اكتملت المراجعة ✓';
+  }
+  function jumpTo(g){
+    g.scrollIntoView({ behavior:'smooth', block:'center' });
+    g.classList.remove('demo-halo'); void g.offsetWidth; g.classList.add('demo-halo');
+    var inp = g.querySelector('input, textarea, select'); if (inp) inp.focus();
+  }
+  function jumpReview(dir){
+    var pending = groups().filter(function(g){
+      return g.dataset.conf === 'low' || g.dataset.conf === 'medium';
+    }).sort(function(a,b){ return a.dataset.machineConf - b.dataset.machineConf; });
+    if (!pending.length) return;
+    var act = document.activeElement && document.activeElement.closest('.form-group-smart');
+    var i = pending.indexOf(act);
+    jumpTo(pending[(i + (dir > 0 ? 1 : pending.length - 1)) % pending.length] || pending[0]);
+  }
+  function countLearning(fieldId){
+    if (learned[fieldId]) return;
+    learned[fieldId] = true; learnCount++;
+    learnChip.hidden = false;
+    learnChip.textContent = '✎ ستُعلّم النظام ' + learnCount + ' أمثلة';
+    var s = parseInt(sessionStorage.getItem('demoTaught') || '0', 10) + 1;
+    sessionStorage.setItem('demoTaught', s); renderSession();
+  }
+  function renderSession(){
+    var s = parseInt(sessionStorage.getItem('demoTaught') || '0', 10);
+    sessChip.hidden = s === 0;
+    sessChip.textContent = 'علّمت النظام ' + s + ' أمثلة هذه الجلسة';
+  }
+
+  document.getElementById('demoExtract').addEventListener('click', function(){
+    var sys = window.extractionSystem;
+    if (!sys){ alert('النظام لم يُهيَّأ بعد — أعد المحاولة'); return; }
+    /* المسار الحقيقي نفسه: الحافّة + الوسوم + المرشحات الجديدة + ملخّص الثقة */
+    sys.applyExtractionResult(MOCK);
+    setTimeout(function(){
+      buildRail(); syncRail();
+      /* التلاشي بالّمس موجود أصلاً في الصفحة — نراقبه فقط لمزامنة المشط والعدّاد */
+      groups().forEach(function(g){
+        var inp = g.querySelector('input, textarea');
+        if (!inp || inp._demoHooked) return;
+        inp._demoHooked = true;
+        inp.addEventListener('input', function(){
+          setTimeout(syncRail, 50);
+          var orig = (window.extractionSystem._origExtracted || {})[inp.id];
+          if (orig && inp.value.trim() !== orig.value) countLearning(inp.id);
+        });
+      });
+      new MutationObserver(function(){ syncRail(); })
+        .observe(document.body, { subtree:true, attributes:true, attributeFilter:['data-conf'] });
+    }, 300);
+  });
+
+  addEventListener('keydown', function(e){
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')){
+      e.preventDefault(); jumpReview(e.key === 'ArrowDown' ? 1 : -1);
+    }
+  });
+  renderSession();
+})();
+</script>
+<style>
+  /* ── طلب المالك: خاتم الحجز الدائري + تنبيه نظيف (بديل الكومة) ── */
+  .res-ring-wrap{ position:relative; display:block; }
+  .res-ring{
+    position:absolute; inset-inline-end:10px; top:50%; transform:translateY(-50%);
+    width:26px; height:26px; border-radius:50%; border:0; cursor:pointer; padding:0;
+    display:none; align-items:center; justify-content:center; font-size:.95rem;
+    background:#e2e8f0; color:#94a3b8; transition:background .3s, color .3s;
+  }
+  body.demo-after .res-ring{ display:flex; }
+  .res-ring.is-reserved{ background:#16a34a; color:#fff; }
+  body.demo-after #bookNumber{ padding-inline-end:46px; }
+  .res-notice{
+    display:none; margin-top:6px; font-size:.76rem; color:#64748b;
+    align-items:center; align-content:flex-start; gap:2px 6px; flex-wrap:wrap;
+    line-height:1.5; min-height:38px;   /* ارتفاع ثابت لكل الحالات — صفر إزاحة تخطيط */
+  }
+  body.demo-after .res-notice{ display:flex; }
+  .res-notice.ok{ color:#166534; }
+  .rn-timer{ font-variant-numeric:tabular-nums; background:#dcfce7; border-radius:6px; padding:0 6px; flex:none; }
+  .rn-release{
+    font:inherit; font-size:.72rem; border:0; background:none; color:#b45309;
+    cursor:pointer; text-decoration:underline; white-space:nowrap; flex:none; padding:0;
+  }
+  body.demo-after #bookNumberHint,
+  body.demo-after #reservationStatus,
+  body.demo-after #recycledBanner,
+  body.demo-after #numberlessToggle{ display:none !important; }
+
+  /* ── طلب المالك: «بلا رقم» أيقونة صامتة داخل الحقل + رسالة عائمة (صفر مساحة) ── */
+  .nl-btn{
+    position:absolute; inset-inline-end:44px; top:50%; transform:translateY(-50%);
+    width:22px; height:22px; border-radius:50%; border:1px dashed #cbd5e1;
+    background:#fff; color:#94a3b8; display:none; align-items:center;
+    justify-content:center; font-size:.72rem; cursor:pointer; padding:0;
+    transition:color .2s, border-color .2s, background .2s;
+  }
+  body.demo-after .nl-btn{ display:flex; }
+  .nl-btn:hover{ color:#b45309; border-color:#fcd34d; }
+  .nl-btn.on{ background:#fffbeb; border:1px solid #f59e0b; color:#b45309; }
+  body.demo-after #bookNumber{ padding-inline-end:76px; }
+  .nl-pop{
+    position:absolute; top:calc(100% + 6px); inset-inline:0; z-index:60;
+    background:#fffbeb; border:1px solid #fcd34d; color:#92400e;
+    border-radius:10px; padding:8px 12px; font-size:.76rem; line-height:1.7;
+    box-shadow:0 10px 22px -10px rgba(146,64,14,.4);
+    display:none;
+  }
+  .nl-pop.on{ display:block; }
+  .nl-undo{
+    font:inherit; font-size:.72rem; border:0; background:none; color:#92400e;
+    cursor:pointer; text-decoration:underline; padding:0; margin-inline-start:6px;
+  }
+  .res-notice.warn{ color:#92400e; }
+
+  /* ── طلب المالك: حالة الوكيل + «تلقائي ذكي» إلى رأس المعاينة (بجوار اسم الملف) ── */
+  .scan-meta-row{ display:flex; align-items:center; gap:8px; min-width:0; overflow:hidden; }
+  body:not(.demo-after) .scan-meta-row{ display:contents; } /* وضع «قبل»: كأن الترتيب لم يحدث */
+  body.demo-after .scan-action-bar{ display:flex; flex-direction:column; align-items:stretch; gap:8px; }
+  body.demo-after .scan-meta-row .form-select{ max-width:200px; font-size:.75rem; padding:2px 26px 2px 8px; display:block; }
+  /* ترتيب المالك: صفّ كامل العرض تحت الحوار — «مسح من السكانر» بامتداده الأصلي (flex:2)
+     أقصى اليمين، «رفع ملف» يجاوره، والحذف أقصى اليسار */
+  body.demo-after .scan-action-bar-buttons{
+    display:flex; flex-direction:row-reverse; gap:8px; width:100%; margin:0;
+  }
+
+  .head-status{ display:none; align-items:center; gap:6px; margin-inline-start:auto; min-width:0; flex:none; }
+  body.demo-after .head-status{ display:flex; }
+  body.demo-after .extraction-preview-modal .modal-header{ flex-wrap:nowrap; gap:8px; }
+  /* اسم الملف يأخذ المساحة المتاحة ويُقصّ بأناقة؛ الحجم يندمج في الـtooltip */
+  body.demo-after .modal-header-fileinfo{ flex:1 1 auto; min-width:0; display:flex; align-items:center; }
+  body.demo-after .modal-header-filename{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; display:block; }
+  body.demo-after .modal-header-filemeta{ display:none; }
+  /* حالة الوكيل: نقطة فقط — النص الكامل في tooltip حيّ */
+  body.demo-after .head-status .scan-agent-status{
+    font-size:0; gap:0; padding:.32rem;
+    background:rgba(255,255,255,.14) !important; color:#f0fdfa !important;
+  }
+  body.demo-after .head-status .scan-agent-status::before{ width:10px; height:10px; }
+  body.demo-after .head-status .scan-agent-status::before{ background:#e2e8f0; }
+  body.demo-after .head-status .scan-agent-status[data-state=ready]::before{ background:#6ee7b7; }
+  body.demo-after .head-status .scan-agent-status[data-state=scanning]::before{ background:#fcd34d; }
+  body.demo-after .head-status .scan-agent-status[data-state=unavailable]::before,
+  body.demo-after .head-status .scan-agent-status[data-state=no_naps2]::before,
+  body.demo-after .head-status .scan-agent-status[data-state=no_device]::before{ background:#fca5a5; }
+  /* «تلقائي ذكي»: أيقونة فقط بكبسولة شفافة — التفاصيل في الـtooltip */
+  body.demo-after .head-status .scan-auto-badge{
+    font-size:0; background:rgba(255,255,255,.14); color:#f0fdfa;
+    border-radius:999px; padding:.28rem .5rem; display:inline-flex; align-items:center;
+  }
+  body.demo-after .head-status .scan-auto-badge i{ font-size:.8rem; }
+
+  #demoBar #demoBeforeAfter{
+    background:transparent; color:#99f6e4; border:1px solid rgba(153,246,228,.5);
+  }
+
+  /* ── طلب المالك: تحسين ودجة «آخر الكتب المسجّلة» ──
+     زمن نسبي + نقاط الأنواع الأربعة بهوية التبويبات + إبراز الرقم + رابط الكل */
+  /* سطران: (النوع … الزمن) ثم (الرقم + العنوان كامل العرض) — العمود ضيّق فلا نخنق العنوان */
+  body.demo-after .recent-book-link{
+    grid-template-columns:auto 1fr auto; gap:2px 8px; padding:6px 10px;
+    grid-template-areas:"kind kind time" "number title title";
+  }
+  body.demo-after .recent-book-kind{ grid-area:kind; }
+  body.demo-after .rb-time{ grid-area:time; }
+  body.demo-after .recent-book-number{ grid-area:number; }
+  body.demo-after .recent-book-title{ grid-area:title; }
+  body.demo-after .recent-book-kind{
+    background:none !important; color:#475569 !important; padding:0;
+    display:inline-flex; align-items:center; gap:5px; font-weight:600; font-size:.7rem;
+  }
+  body.demo-after .recent-book-kind::before{
+    content:""; width:8px; height:8px; border-radius:50%; background:var(--kc,#64748b); flex:none;
+  }
+  body.demo-after .recent-book-kind--incoming_internal{ --kc:#0f766e; }
+  body.demo-after .recent-book-kind--incoming_external{ --kc:#2563eb; }
+  body.demo-after .recent-book-kind--outgoing_internal{ --kc:#d97706; }
+  body.demo-after .recent-book-kind--outgoing_external{ --kc:#db2777; }
+  body.demo-after .recent-book-number{ font-size:.85rem; color:#0f172a; }
+  .rb-time{
+    display:none; font-size:.68rem; color:#94a3b8; white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+  }
+  body.demo-after .rb-time{ display:inline; }
+  .rb-all{
+    display:none; align-items:center; justify-content:flex-end; gap:4px;
+    margin-top:6px; font-size:.72rem; color:#0f766e; text-decoration:none; font-weight:600;
+  }
+  .rb-all:hover{ text-decoration:underline; }
+  body.demo-after .rb-all{ display:flex; }
+
+  /* ── طلب المالك: كل الأزرار بمستوى «مسح من السكانر» الاحترافي ──
+     الوصفة المنقولة منه: تدرّج ثلاثي + ظل ملوّن + وزن 700 + رفع 2px عند المرور */
+  /* زر «مسح من السكانر» الأصلي مستثنى — يحتفظ بحجمه وتدرّجه كما هو (طلب المالك) */
+  body.demo-after .action-bar button,
+  body.demo-after .btn-scan-action:not(.btn-scan-action-primary){
+    min-height:40px; padding:10px 16px; border-radius:10px;
+    font-size:.88rem; font-weight:700; line-height:1;
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    transition:transform .18s, box-shadow .18s, background .18s,
+               border-color .18s, filter .18s;
+  }
+  body.demo-after .action-bar button:hover,
+  body.demo-after .btn-scan-action:not(.btn-scan-action-primary):hover{ transform:translateY(-2px); filter:brightness(1.03); }
+  body.demo-after .action-bar button:active,
+  body.demo-after .btn-scan-action:not(.btn-scan-action-primary):active{ transform:translateY(0); filter:brightness(.96); box-shadow:none !important; }
+  body.demo-after .action-bar button:focus-visible,
+  body.demo-after .btn-scan-action:focus-visible{
+    outline:none; box-shadow:0 0 0 3px rgba(20,184,166,.4) !important;
+  }
+  /* المعتمد: حفظ الكتاب بنفس تدرّج زر السكانر التركوازي وظله */
+  body.demo-after .btn-action-primary{
+    background:linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%);
+    color:#fff; border:none; box-shadow:0 6px 16px rgba(15,118,110,.32);
+  }
+  /* الثانوية القوية: أبيض بحدود 2px تركوازية + ظل ملوّن عند المرور (وصفة btn-scan-action-secondary) */
+  body.demo-after .btn-action-secondary{
+    background:#fff; border:2px solid #0f766e; color:#0f766e; box-shadow:none;
+  }
+  body.demo-after .btn-action-secondary:hover{
+    background:color-mix(in srgb, #0f766e 8%, #fff);
+    box-shadow:0 4px 12px rgba(15,118,110,.2);
+  }
+  /* التحذيري: نفس البنية بحدود كهرمانية */
+  body.demo-after .btn-action-warn{
+    background:#fff; border:2px solid #d97706; color:#b45309; box-shadow:none;
+  }
+  body.demo-after .btn-action-warn:hover{
+    background:#fffbeb; box-shadow:0 4px 12px rgba(217,119,6,.2);
+  }
+  /* المحايد: شبح بحدود رمادية بنفس السماكة ليتوازن بصرياً */
+  body.demo-after .btn-action-neutral{
+    background:#fff; border:2px solid #e2e8f0; color:#475569; box-shadow:none;
+  }
+  body.demo-after .btn-action-neutral:hover{
+    background:#f8fafc; border-color:#cbd5e1; box-shadow:0 4px 12px rgba(100,116,139,.15);
+  }
+  /* أزرار المسح الثانوية تلتحق بنفس المنظومة */
+  body.demo-after .btn-scan-action-upload{ background:#fff; border:2px solid #0f766e; color:#0f766e; box-shadow:none; }
+  body.demo-after .btn-scan-action-upload:hover{
+    background:color-mix(in srgb, #0f766e 8%, #fff); box-shadow:0 4px 12px rgba(15,118,110,.2);
+  }
+  body.demo-after .btn-scan-action-danger{ background:#fff; border:2px solid #dc2626; color:#dc2626; box-shadow:none; }
+  body.demo-after .btn-scan-action-danger:hover{
+    background:#fee2e2; box-shadow:0 4px 12px rgba(220,38,38,.2);
+  }
+</style>
+<script>
+(function(){
+  'use strict';
+  var body = document.body;
+
+  /* ── ١) خاتم الحجز الدائري أقصى يسار حقل الرقم ── */
+  var input = document.getElementById('bookNumber');
+  if (input){
+    var wrap = document.createElement('span');
+    wrap.className = 'res-ring-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    var ring = document.createElement('button');
+    ring.type = 'button'; ring.className = 'res-ring';
+    ring.innerHTML = '<i class="bi bi-check-lg"></i>';
+    wrap.appendChild(ring);
+    var notice = document.createElement('div');
+    wrap.insertAdjacentElement('afterend', notice);
+    function setReserved(on){
+      ring.classList.toggle('is-reserved', on);
+      ring.title = on ? 'الرقم محجوز لك' : 'لم يُحجز الرقم بعد — انقر للمحاكاة';
+      if (on){
+        if (!input.value || input.value === 'بلا رقم') input.value = '10233';
+        notice.className = 'res-notice ok';
+        notice.innerHTML = '<i class="bi bi-lock-fill"></i> محجوز لك — اكتبه على المستند ' +
+          '<span class="rn-timer">29:58</span>' +
+          '<button type="button" class="rn-release" title="حرّره ليُعاد تدويره لزميلك">تحرير الرقم</button>';
+        notice.querySelector('.rn-release').addEventListener('click', function(){ setReserved(false); });
+      } else {
+        input.value = '';
+        notice.className = 'res-notice';
+        notice.innerHTML = '<i class="bi bi-hourglass-split"></i> بانتظار حجز الرقم تلقائياً…';
+      }
+    }
+    ring.addEventListener('click', function(){ setReserved(!ring.classList.contains('is-reserved')); });
+    setReserved(false);
+    setTimeout(function(){ setReserved(true); }, 1600);   /* محاكاة الحجز الذري عند فتح الصفحة */
+
+    /* «بلا رقم»: أيقونة داخل الحقل + رسالة عائمة لا تُزيح المحتوى ولا تحرّك السكرول */
+    var nl = document.createElement('button');
+    nl.type = 'button'; nl.className = 'nl-btn';
+    nl.title = 'استثناء: كتاب داخلي بلا رقم رسمي';
+    nl.innerHTML = '<i class="bi bi-slash-circle"></i>';
+    wrap.appendChild(nl);
+    var pop = document.createElement('div');
+    pop.className = 'nl-pop';
+    wrap.appendChild(pop);
+    var popTimer;
+    function showPop(html){
+      pop.innerHTML = html; pop.classList.add('on');
+      clearTimeout(popTimer);
+      popTimer = setTimeout(function(){ pop.classList.remove('on'); }, 4500);
+    }
+    function setNumberless(on){
+      nl.classList.toggle('on', on);
+      if (on){
+        input.value = 'بلا رقم';
+        ring.style.opacity = '.35';
+        notice.className = 'res-notice warn';
+        notice.innerHTML = '<i class="bi bi-slash-circle"></i> استثناء — بلا رقم رسمي';
+        showPop('<b>وضع الاستثناء مفعّل:</b> كتاب داخلي بلا رقم رسمي — لن يُحجز رقم لهذا الكتاب.' +
+                '<button type="button" class="nl-undo">تراجع</button>');
+        pop.querySelector('.nl-undo').addEventListener('click', function(){ setNumberless(false); });
+      } else {
+        ring.style.opacity = '';
+        setReserved(true);   /* يعيد الرقم المحجوز وتنبيهه */
+        showPop('أُلغي الاستثناء — عاد الرقم المحجوز.');
+      }
+    }
+    nl.addEventListener('click', function(){ setNumberless(!nl.classList.contains('on')); });
+
+    /* وضع «قبل» العادل: أظهر الكومة القديمة كما تبدو أثناء حجز فعلي */
+    var rs = document.getElementById('reservationStatus');
+    if (rs){ rs.style.display = 'flex';
+      var t = document.getElementById('reservationTimer'); if (t) t.textContent = '29:58'; }
+    var rel = document.getElementById('releaseReservationBtn');
+    if (rel) rel.style.display = 'inline-flex';
+  }
+
+  /* ── ٢) حالة الوكيل + «تلقائي» إلى رأس المعاينة؛ القاع للجهاز والأزرار فقط ── */
+  var bar = document.querySelector('.scan-action-bar');
+  var headCluster = null, agentEl = null, autoEl = null, metaRow = null;
+  if (bar){
+    metaRow = document.createElement('div');
+    metaRow.className = 'scan-meta-row';
+    bar.insertBefore(metaRow, bar.firstChild);
+    ['scanAgentStatus', 'scanDeviceSelect', 'scanProgress'].forEach(function(id){
+      var el = document.getElementById(id); if (el) metaRow.appendChild(el);
+    });
+    var badge = bar.querySelector('.scan-auto-badge'); if (badge) metaRow.appendChild(badge);
+    agentEl = document.getElementById('scanAgentStatus');
+    autoEl = badge;
+    var sel = document.getElementById('scanDeviceSelect');
+    if (sel){ sel.innerHTML = '<option>Canon DR-C225 II</option>'; sel.style.display = 'block'; }
+    var head = document.querySelector('.extraction-preview-modal .modal-header');
+    if (head){
+      headCluster = document.createElement('span');
+      headCluster.className = 'head-status';
+      head.appendChild(headCluster);
+    }
+    /* النقطة بلا نص ظاهر — زامن الـtooltip مع نصّ الحالة الحيّ الذي يحدّثه فاحص الصفحة */
+    if (agentEl){
+      var syncTip = function(){ agentEl.title = agentEl.textContent.trim(); };
+      new MutationObserver(syncTip).observe(agentEl, { childList:true, characterData:true, subtree:true });
+      syncTip();
+    }
+  }
+  /* اسم ملف تجريبي في الرأس — لإثبات تعايش (العنوان + الملف + الحالة) */
+  var mockFile = { shown:false };
+  function setMockFile(on){
+    var info = document.getElementById('modalFileInfo');
+    var nm = document.getElementById('modalFileName');
+    var mt = document.getElementById('modalFileMeta');
+    if (!info || !nm) return;
+    if (on && info.style.display === 'none'){
+      nm.textContent = 'كتاب_هيئة_التقاعد_20488.pdf';
+      nm.title = nm.textContent + ' — PDF · 1.2MB';   /* الحجم في التلميح لا في الرأس */
+      if (mt) mt.textContent = 'PDF · 1.2MB';
+      info.style.display = ''; mockFile.shown = true;
+    } else if (!on && mockFile.shown){
+      info.style.display = 'none'; mockFile.shown = false;
+    }
+  }
+  function placeStatus(after){
+    if (!headCluster || !agentEl) return;
+    if (after){
+      headCluster.appendChild(agentEl);
+      if (autoEl) headCluster.appendChild(autoEl);
+      setMockFile(true);
+    } else {
+      var sel = document.getElementById('scanDeviceSelect');
+      metaRow.insertBefore(agentEl, sel || null);
+      if (autoEl) metaRow.appendChild(autoEl);
+      setMockFile(false);
+    }
+  }
+
+  /* ── ٣) الإيموجي → أيقونات رصينة في وضع «بعد» (تُستعاد في «قبل») ── */
+  var ICON_MAP = { '✓':'bi-check-lg', '🔍':'bi-search', '🧹':'bi-eraser', '✉️':'bi-envelope' };
+  var actionBtns = Array.prototype.slice.call(
+    document.querySelectorAll('.action-bar button[class*="btn-action"]'));
+  actionBtns.forEach(function(b){
+    b._origHTML = b.innerHTML;
+    var txt = b.textContent.trim();
+    for (var emoji in ICON_MAP){
+      if (txt.indexOf(emoji) === 0){
+        b._afterHTML = '<i class="bi ' + ICON_MAP[emoji] + '" aria-hidden="true"></i> ' +
+                       txt.slice(emoji.length).trim();
+        break;
+      }
+    }
+  });
+  function applyMode(){
+    var after = body.classList.contains('demo-after');
+    actionBtns.forEach(function(b){
+      if (b._afterHTML) b.innerHTML = after ? b._afterHTML : b._origHTML;
+    });
+    placeStatus(after);
+  }
+
+  /* ── ٤) ودجة آخر الكتب: زمن نسبي + رابط الكل (بيانات النموذج) ── */
+  var rbTimes = ['منذ 3 د', 'منذ 25 د', 'منذ ساعة', 'أمس'];
+  document.querySelectorAll('.recent-book-link').forEach(function(a, i){
+    if (a.querySelector('.rb-time')) return;
+    var t = document.createElement('span');
+    t.className = 'rb-time'; t.textContent = rbTimes[i] || '';
+    a.appendChild(t);
+  });
+  var rbw = document.querySelector('.recent-books-widget');
+  if (rbw && !rbw.querySelector('.rb-all')){
+    var all = document.createElement('a');
+    all.className = 'rb-all'; all.href = '/books/';
+    all.innerHTML = 'كل الكتب <i class="bi bi-arrow-left-short"></i>';
+    rbw.appendChild(all);
+  }
+
+  /* ── زرّ المقارنة قبل ⇄ بعد ── */
+  var tgl = document.createElement('button');
+  tgl.type = 'button'; tgl.id = 'demoBeforeAfter';
+  document.getElementById('demoBar').appendChild(tgl);
+  function syncTgl(){
+    tgl.textContent = body.classList.contains('demo-after')
+      ? 'عرض الوضع الحالي (قبل)' : 'عرض الترتيب الجديد (بعد)';
+  }
+  body.classList.add('demo-after');
+  syncTgl(); applyMode();
+  tgl.addEventListener('click', function(){
+    body.classList.toggle('demo-after'); syncTgl(); applyMode();
+  });
+})();
+</script>
+<!-- ═══════ نهاية طبقة العرض التجريبي ═══════ -->
+
+</body>
+</html>

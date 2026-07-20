@@ -983,6 +983,23 @@ class AIExtractionService:
         }
 
 
+def slim_entity_matches(matches) -> List[Dict[str, Any]]:
+    """يُشذِّب مرشّحي الجهة top-3 للواجهة: اسم + درجة 0-1 + مصدر المطابقة فقط
+    (لا يُسرَّب باقي حمولة المطابقة الداخلية)."""
+    slim = []
+    for m in (matches or [])[:3]:
+        name = (m.get('entity_name') or '').strip()
+        if not name:
+            continue
+        slim.append({
+            'entity_id': m.get('entity_id'),
+            'entity_name': name,
+            'score': round(min(m.get('score', 0.0) / 100.0, 1.0), 3),
+            'match_type': m.get('match_type', ''),
+        })
+    return slim
+
+
 def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
     """يحوّل نتيجة الاستخراج إلى dict مفاتيح المسح/الواجهة (المُشكِّل القانوني الموحّد).
 
@@ -1005,8 +1022,10 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         'title_confidence': result.title_confidence,
         'issuing_entity': result.issuing_entity_name,
         'issuing_entity_confidence': result.issuing_entity_confidence,
+        'issuing_entity_matches': slim_entity_matches(result.issuing_entity_matches),
         'receiving_entity': result.receiving_entity_name,
         'receiving_entity_confidence': result.receiving_entity_confidence,
+        'receiving_entity_matches': slim_entity_matches(result.receiving_entity_matches),
         'secret_level': result.secret_level,
         'secret_level_confidence': result.secret_level_confidence,
         'book_kind': result.book_kind,

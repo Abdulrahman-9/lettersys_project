@@ -88,7 +88,8 @@ class ExtractionSmartSystem {
             nextNumber: dataset.nextNumberEndpoint || '/books/api/next-number/',
             reservationReserve: dataset.reservationReserveEndpoint || '/books/api/reservation/reserve/',
             reservationVoid: dataset.reservationVoidEndpoint || '/books/api/reservation/void/',
-            reservationStatus: dataset.reservationStatusEndpoint || '/books/api/reservation/status/'
+            reservationStatus: dataset.reservationStatusEndpoint || '/books/api/reservation/status/',
+            reservationHeartbeat: dataset.reservationHeartbeatEndpoint || '/books/api/reservation/heartbeat/'
         };
     }
 
@@ -403,10 +404,11 @@ class ExtractionSmartSystem {
         this._initScanAgent();
     }
 
-    /** يحدّث مؤشّر حالة الوكيل (الحبّة الملوّنة) في شريط المسح. */
+    /** يحدّث مؤشّر حالة الوكيل (الحبّة الملوّنة) في رأس المعاينة.
+     *  النصّ يُخفى بصرياً (نقطة فقط) فنمرّره أيضاً إلى title ليبقى مقروءاً بالتحويم. */
     setScanStatus(state, text) {
         const pill = document.getElementById('scanAgentStatus');
-        if (pill) { pill.dataset.state = state; if (text) pill.textContent = text; }
+        if (pill) { pill.dataset.state = state; if (text) { pill.textContent = text; pill.title = text; } }
     }
 
     /** يعيد المؤشّر لحالة «جاهز: اسم الجهاز» إن كان هناك ماسح معروف. */
@@ -440,9 +442,8 @@ class ExtractionSmartSystem {
     // فحص جاهزية وكيل المسح المحلي وملء قائمة الأجهزة + المؤشّر (بلا مستمع نقر منافس).
     async _initScanAgent() {
         this._startAgentHealthMonitor();
-        const pill   = document.getElementById('scanAgentStatus');
         const select = document.getElementById('scanDeviceSelect');
-        const setPill = (state, text) => { if (pill) { pill.dataset.state = state; pill.textContent = text; } };
+        const setPill = (state, text) => this.setScanStatus(state, text);   // موحّد (يضبط النصّ + التلميح)
         const hideSelect = () => { if (select) select.style.display = 'none'; };
         this._scanDevices = [];
         try {
@@ -660,7 +661,9 @@ class ExtractionSmartSystem {
             const c = data[confMap[fid]];
             if (typeof c === 'number') this.setFieldConfidence(fid, c);
         });
+        if (window.__autoGrowTitle) window.__autoGrowTitle();   // وسّع الموضوع لطول النصّ المملوء
         this.updateQualitySummary(data);
+        this.renderEntityCandidates(data);
         this.endTextUndoBatch?.();
 
         if (data.needs_review) {
@@ -683,8 +686,8 @@ class ExtractionSmartSystem {
                 bookNumberLabel: 'رقم القيد الوارد',
                 bookNumberHint: 'الرقم الداخلي الذي نعتمد عليه عند تسجيل الوارد.',
                 bookNumberPlaceholder: 'مثال: و/144',
-                senderNumberLabel: 'رقم الجهة المرسلة',
-                senderNumberHint: 'رقم المرجع لدى القسم أو الوحدة التي أصدرت الكتاب.',
+                senderNumberLabel: 'العدد',
+                senderNumberHint: 'رقم الجهة المرسلة — كما يظهر على كتابهم بعد «العدد /».',
                 dateLabel: 'تاريخ القيد لدينا',
                 dateHint: 'تاريخ إدخال الكتاب في سجل الوارد الداخلي.',
                 senderDateLabel: 'تاريخ الجهة المرسلة',
@@ -705,8 +708,8 @@ class ExtractionSmartSystem {
                 bookNumberLabel: 'رقم القيد الوارد',
                 bookNumberHint: 'رقمنا الداخلي المعتمد عند تسجيل الوارد الخارجي.',
                 bookNumberPlaceholder: 'مثال: خ/203',
-                senderNumberLabel: 'رقم الكتاب لدى الجهة الخارجية',
-                senderNumberHint: 'انسخ رقم الجهة كما يظهر في المستند أو الختم.',
+                senderNumberLabel: 'العدد',
+                senderNumberHint: 'رقم الجهة الخارجية — كما يظهر في المستند/الختم بعد «العدد /».',
                 dateLabel: 'تاريخ القيد لدينا',
                 dateHint: 'تاريخ استلام الكتاب وتسجيله في المؤسسة.',
                 senderDateLabel: 'تاريخ الجهة الخارجية',
@@ -897,23 +900,70 @@ class ExtractionSmartSystem {
 
     applyReservationToUI(kind, reservation) {
         if (!reservation) return;
-        // Update the tab badge for this kind
+        // نوع السجل: تسمية + لون. رمز السجل (1-4) مُعرِّف داخلي يبقى في formatted،
+        // لكن المستخدم يرى التسلسل النظيف فقط + شارة النوع (النوع معروف من التبويب أصلاً).
+        // لون + تسمية النوع من مصدر واحد (يطابق التبويبات ومودال التكرار)
+        const meta = this._kindMeta(kind);
+        const seq = (reservation.number !== null && reservation.number !== undefined && reservation.number !== '')
+            ? String(reservation.number) : (reservation.formatted || '');
+
+        // شارة التبويب: التسلسل النظيف
         const badge = document.getElementById(`tabNum_${kind}`);
-        if (badge) badge.textContent = reservation.number || reservation.formatted || '—';
-        // If this is the currently active kind, fill the bookNumber field
+        if (badge) badge.textContent = seq || '—';
+
+        // الحقل + الشارة: للنوع الفعّال فقط
         const kindSelect = document.getElementById('bookKind');
         if (kindSelect && kindSelect.value === kind) {
-            const bookNumberField = document.getElementById('bookNumber');
-            if (bookNumberField) {
-                bookNumberField.value = reservation.formatted || '';
-                bookNumberField.dataset.reservationId = reservation.id;
-                bookNumberField.classList.remove('has-error', 'is-pending');
-                bookNumberField.classList.add('is-valid');
+            const f = document.getElementById('bookNumber');
+            if (f) {
+                f.value = seq;                                  // التسلسل النظيف (89) لا الرمز الخام (10089)
+                f.dataset.reservationId = reservation.id;       // الحفظ يعتمد على الحجز (يُخزَّن formatted الكامل)
+                f.dataset.formatted = reservation.formatted || '';
+                f.classList.remove('has-error', 'is-pending');
+                f.classList.add('is-valid');
+                f.title = `${meta.label} — رقمك ${seq} (المعرّف الداخلي الفريد: ${reservation.formatted || ''})`;
                 if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
             }
+            const chip = document.getElementById('bookRegisterChip');
+            if (chip) {
+                chip.textContent = meta.label;
+                chip.style.display = 'inline-flex';
+                chip.style.background = meta.bg;
+                chip.style.color = meta.fg;
+            }
+            // بانر «رقم مُدوّر» — تحذير صارخ عند استلام رقم أُعيد تدويره
+            const banner = document.getElementById('recycledBanner');
+            if (banner) banner.style.display = reservation.is_recycled ? 'flex' : 'none';
+            // زرّ التحرير الاختياريّ (يُظهره فقط عند وجود حجز فعّال)
+            const relBtn = document.getElementById('releaseReservationBtn');
+            if (relBtn) relBtn.style.display = 'inline';
+            // وميض خاطف يجذب العين لكتابة الرقم على الورق
+            if (f) { f.classList.remove('just-reserved'); void f.offsetWidth; f.classList.add('just-reserved'); }
+            // مؤشّر «محجوز لك» البارز + العدّاد الحيّ
+            this._updateReservationPill();
         }
-        // 🕓 ابدأ/جدّد العدّاد التنازلي لانتهاء الصلاحية
+        // 🕓 ابدأ/جدّد العدّاد التنازلي + الحضور اللحظيّ (heartbeat + خمول)
         this._ensureReservationCountdown();
+        this._ensurePresence();
+    }
+
+    /** مؤشّر «محجوز لك» البارز: يُظهر الحالة + الوقت المتبقّي بلون يتدرّج مع الاقتراب من الانتهاء. */
+    _updateReservationPill() {
+        const pill = document.getElementById('reservationStatus');
+        if (!pill) return;
+        const timerEl = document.getElementById('reservationTimer');
+        const cur = this._activeReservation();
+        const numberless = document.getElementById('numberlessCheckbox')?.checked;
+        if (this._editData || numberless || !cur) { pill.style.display = 'none'; return; }
+        pill.style.display = 'flex';
+        let secs = 0;
+        if (cur.r.expires_at) {
+            secs = Math.max(0, Math.floor((new Date(cur.r.expires_at).getTime() - Date.now()) / 1000));
+        }
+        pill.classList.remove('rs-warn', 'rs-critical');
+        if (secs > 0 && secs < 5 * 60) pill.classList.add('rs-critical');
+        else if (secs < 10 * 60) pill.classList.add('rs-warn');
+        if (timerEl) timerEl.textContent = secs > 0 ? `صالح ${Math.ceil(secs / 60)} د` : 'انتهى — سيُجدَّد';
     }
 
     /** عدّاد تنازلي مركزي يحدّث ألوان وشارات تبويبات الأنواع كل 20 ثانية. */
@@ -960,6 +1010,7 @@ class ExtractionSmartSystem {
                     tab.title = `الحجز صالح حتى ${new Date(expMs).toLocaleTimeString('ar-EG')}`;
                 }
             });
+            this._updateReservationPill();   // حدّث مؤشّر «محجوز لك» + العدّاد الحيّ
             if (!anyActive) {
                 clearInterval(this._reservationTimerId);
                 this._reservationTimerId = null;
@@ -967,6 +1018,131 @@ class ExtractionSmartSystem {
         };
         tick();
         this._reservationTimerId = setInterval(tick, 20000);
+    }
+
+    // ═══ الحضور اللحظيّ: نبضة heartbeat + كشف الخمول + معالجة فقدان الرقم ═══
+    // (يعمل عبر HTTP؛ WS طبقة تسريع اختيارية لا شرطٌ للصحّة)
+    _ensurePresence() {
+        if (this._editData) return;   // التعديل: لا حجز
+        if (!this._presenceBound) {
+            this._presenceBound = true;
+            this._lastActivity = Date.now();
+            const bump = () => {
+                this._lastActivity = Date.now();
+                if (this._idleWarned) { this._idleWarned = false; }
+            };
+            ['mousemove', 'keydown', 'pointerdown', 'input', 'wheel'].forEach(ev =>
+                document.addEventListener(ev, bump, { passive: true }));
+            const relBtn = document.getElementById('releaseReservationBtn');
+            if (relBtn) relBtn.addEventListener('click', () => this._releaseCurrentReservation());
+        }
+        if (!this._presenceTimer) {
+            this._presenceTimer = setInterval(() => this._presenceTick(), 25000);
+        }
+        // WS اختياريّ (كشف لحظيّ) — مُطفأ حتى يُفعَّل عبر data-ws-presence="1" + channels
+        if (!this._wsTried &&
+            document.querySelector('.extraction-container')?.dataset.wsPresence === '1') {
+            this._wsTried = true;
+            this._connectPresenceWS();
+        }
+    }
+
+    _connectPresenceWS() {
+        if (this._ws || !window.WebSocket) return;
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        try {
+            const ws = new WebSocket(`${proto}://${location.host}/ws/reservation/presence/`);
+            this._ws = ws;
+            ws.onopen = () => this._wsPing();
+            ws.onclose = () => { this._ws = null; };   // الخادم يتكفّل بالـcooldown عند الإغلاق
+            ws.onerror = () => { try { ws.close(); } catch (e) {} };
+            this._wsTimer = setInterval(() => this._wsPing(), 25000);
+        } catch (e) { this._ws = null; }
+    }
+
+    _wsPing() {
+        const cur = this._activeReservation();
+        if (this._ws && this._ws.readyState === 1 && cur) {
+            try { this._ws.send(JSON.stringify({ t: 'hb', id: cur.r.id })); } catch (e) {}
+        }
+    }
+
+    _activeReservation() {
+        const kind = this.getCurrentKind();
+        const r = this.reservations[kind];
+        return (r && r.id) ? { kind, r } : null;
+    }
+
+    _presenceTick() {
+        const IDLE_WARN_MS = 5 * 60 * 1000;   // خمول 5 دقائق → تنبيه (لا إسقاط)
+        const cur = this._activeReservation();
+        if (!cur) return;
+        // 1) خمول: تنبيه بصريّ+صوتيّ مرّة واحدة (لا يُسقط الحجز — سياسة المالك)
+        if (Date.now() - (this._lastActivity || Date.now()) > IDLE_WARN_MS && !this._idleWarned) {
+            this._idleWarned = true;
+            this._showIdleWarning(cur.kind, cur.r);
+        }
+        // 2) نبضة حضور: تُبقي الرقم حيّاً؛ إن عاد alive=false فالرقم فُقد/دُوّر
+        fetch(this.apiEndpoints.reservationHeartbeat || '/books/api/reservation/heartbeat/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCookie('csrftoken') },
+            body: JSON.stringify({ reservation_id: cur.r.id }),
+        }).then(r => r.json()).then(d => {
+            if (d && d.alive === false) this._onReservationLost(cur.kind);
+        }).catch(() => {});
+    }
+
+    _beep() {
+        try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = this._audioCtx || (this._audioCtx = new Ctx());
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'sine'; o.frequency.value = 880;
+            g.gain.value = 0.08;
+            o.connect(g); g.connect(ctx.destination);
+            o.start(); o.stop(ctx.currentTime + 0.35);
+        } catch (e) { /* الصوت مكمّل — لا يُفشل شيئاً */ }
+    }
+
+    _showIdleWarning(kind, res) {
+        this._beep();
+        const msg = `أنت تحجز الرقم ${res.formatted} وزملاؤك بانتظاره. إن لم تكتبه على المستند حرّره ليُعاد تدويره؛ وإن كتبته أبقِه وأكمل الحفظ.`;
+        if (window.ToastCenter && typeof window.ToastCenter.action === 'function') {
+            window.ToastCenter.action('warning', msg, [
+                { label: 'أُبقيه (كتبته)', className: 'btn btn-sm btn-warning text-dark fw-semibold',
+                  onClick: () => { this._lastActivity = Date.now(); this._idleWarned = false; } },
+                { label: 'حرّره ليُدوَّر', className: 'btn btn-sm btn-outline-danger fw-semibold',
+                  onClick: () => this._releaseCurrentReservation() },
+            ], { title: '⏳ حجزٌ خامل', delay: 0, autohide: false });
+        } else {
+            this.showToast(msg, 'warning', 9000, 'حجز خامل');
+        }
+    }
+
+    _onReservationLost(kind) {
+        delete this.reservations[kind];
+        const f = document.getElementById('bookNumber');
+        if (f) { f.value = ''; delete f.dataset.reservationId; }
+        this._beep();
+        this.showToast('انتهى حجز رقمك أو أُعيد تدويره — سنطلب رقماً جديداً.', 'warning', 7000, 'تنبيه حجز');
+        this.ensureReservation(kind);
+    }
+
+    _releaseCurrentReservation() {
+        const cur = this._activeReservation();
+        if (!cur) return;
+        fetch(this.apiEndpoints.reservationVoid, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCookie('csrftoken') },
+            body: JSON.stringify({ reservation_id: cur.r.id, note: 'تحرير اختياريّ من المستخدم' }),
+        }).then(r => r.json()).then(() => {
+            delete this.reservations[cur.kind];
+            const f = document.getElementById('bookNumber');
+            if (f) { f.value = ''; delete f.dataset.reservationId; }
+            this.showToast('حُرّر الرقم — يمكن لزميلك استخدامه الآن. سنطلب لك رقماً جديداً عند الحاجة.', 'info', 6000);
+            this.ensureReservation(cur.kind);
+        }).catch(() => this.showToast('تعذّر تحرير الرقم — حاول مجدداً', 'error'));
     }
 
     loadAllReservationStatuses() {
@@ -1127,6 +1303,13 @@ class ExtractionSmartSystem {
             } else if (btnId === 'saveButton') {
                 e.preventDefault();
                 console.log('[ExtractionSmart] Calling saveBook()');
+                this.sendToEntityAfterSave = false;
+                this.saveBook();
+            } else if (btnId === 'saveAndSendButton') {
+                e.preventDefault();
+                // نحفظ أوّلاً ثم نفتح حوار الإرسال: لا يُرسَل مستند رسمي إلا بتأكيد
+                // صريح يرى فيه المستخدم الجهة والبريد وما سيُرفَق فعلياً.
+                this.sendToEntityAfterSave = true;
                 this.saveBook();
             } else if (btnId === 'startScanButton') {
                 e.preventDefault();
@@ -1392,12 +1575,14 @@ class ExtractionSmartSystem {
             'clearScannedButton',
             'clearFormButton',
             'extractButton',
-            'saveButton'
+            'saveButton',
+            'saveAndSendButton'
         ];
     }
 
     isActionButtonField(fieldId) {
-        return ['uploadFileButton', 'startScanButton', 'clearScannedButton', 'clearFormButton', 'extractButton', 'saveButton'].includes(fieldId);
+        return ['uploadFileButton', 'startScanButton', 'clearScannedButton', 'clearFormButton',
+                'extractButton', 'saveButton', 'saveAndSendButton'].includes(fieldId);
     }
 
     isElementNavigable(element) {
@@ -1535,6 +1720,135 @@ class ExtractionSmartSystem {
                 },
                 onHidden: () => finalize(false),
             });
+        });
+    }
+
+    /** لون + تسمية نوع السجل — مصدر واحد (يطابق تبويبات النوع). */
+    _kindMeta(kind) {
+        const M = {
+            incoming_internal: { label: 'وارد داخلي', bg: '#f0fdfa', fg: '#0f766e' },
+            incoming_external: { label: 'وارد خارجي', bg: '#f0f9ff', fg: '#0369a1' },
+            outgoing_internal: { label: 'صادر داخلي', bg: '#fff7ed', fg: '#b45309' },
+            outgoing_external: { label: 'صادر خارجي', bg: '#fff1f2', fg: '#9f1239' },
+        };
+        return M[kind] || { label: 'سجل', bg: '#e5e7eb', fg: '#374151' };
+    }
+
+    /** مودال التكرار: قائمة المطابقات + معاينة سريعة لكل كتاب، ويُعيد Promise<boolean>
+     *  (true = تابِع الحفظ، false = ألغِ الإدخال). DUPLICATE_BOOK لغير المشرف = منع بلا متابعة. */
+    _confirmDuplicate(data) {
+        return new Promise((resolve) => {
+            const dups = data.duplicates || [];
+            const hard = data.error_code === 'DUPLICATE_BOOK';
+            const canProceed = hard ? !!data.can_override : true;
+            const title = hard ? 'كتاب مكرّر (تطابق تامّ)' : 'كتاب مشابه موجود';
+            const esc = (s) => String(s == null ? '' : s)
+                .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+            if (!document.body) { resolve(false); return; }
+
+            let settled = false;
+            const overlay = document.createElement('div');
+            overlay.className = 'dup-modal-overlay';
+            overlay.innerHTML =
+                `<div class="dup-modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+                    <div class="dup-modal-header ${hard ? 'is-hard' : 'is-soft'}">
+                        <span class="dup-modal-title"><i class="bi ${hard ? 'bi-exclamation-octagon-fill' : 'bi-exclamation-triangle-fill'}"></i> ${esc(title)}</span>
+                        <button type="button" class="dup-modal-close" aria-label="إغلاق">&times;</button>
+                    </div>
+                    <div class="dup-modal-body"></div>
+                    <div class="dup-modal-footer"></div>
+                </div>`;
+            document.body.appendChild(overlay);
+            const body = overlay.querySelector('.dup-modal-body');
+            const footer = overlay.querySelector('.dup-modal-footer');
+
+            const finish = (r) => {
+                if (settled) return;
+                settled = true;
+                document.removeEventListener('keydown', onKey);
+                overlay.classList.add('dup-closing');
+                setTimeout(() => overlay.remove(), 160);
+                resolve(r);
+            };
+            const backOrCancel = () => {
+                if (overlay.dataset.view === 'preview') renderList();
+                else finish(false);
+            };
+            const onKey = (e) => { if (e.key === 'Escape') backOrCancel(); };
+            document.addEventListener('keydown', onKey);
+            overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) backOrCancel(); });
+            overlay.querySelector('.dup-modal-close').addEventListener('click', backOrCancel);
+
+            const renderList = () => {
+                overlay.dataset.view = 'list';
+                body.innerHTML =
+                    `<p class="dup-msg">${esc(data.message || '')}</p>` +
+                    `<div class="dup-list">` + dups.map(d => `
+                        <div class="dup-item">
+                            <span class="dup-badge">${esc(d.match_count || 0)}/4</span>
+                            <div class="dup-item-main">
+                                <div class="dup-item-num">${esc(d.our_number || '—')}</div>
+                                <div class="dup-item-title">${esc(d.title || 'بدون عنوان')}</div>
+                                <div class="dup-item-date">${esc(d.date || '')}</div>
+                            </div>
+                            <button type="button" class="dup-preview-btn" data-id="${esc(d.id)}"><i class="bi bi-eye"></i> معاينة</button>
+                        </div>`).join('') + `</div>`;
+                footer.innerHTML =
+                    (canProceed ? `<button type="button" class="btn btn-sm ${hard ? 'btn-danger' : 'btn-warning text-dark'} fw-semibold" data-act="proceed">${hard ? 'حفظ رغم التكرار' : 'متابعة الحفظ'}</button>` : '') +
+                    `<button type="button" class="btn btn-sm btn-outline-secondary fw-semibold" data-act="cancel">إلغاء الإدخال</button>`;
+                footer.querySelector('[data-act="cancel"]').onclick = () => finish(false);
+                const pb = footer.querySelector('[data-act="proceed"]'); if (pb) pb.onclick = () => finish(true);
+                body.querySelectorAll('.dup-preview-btn').forEach(b => b.onclick = () => renderPreview(b.dataset.id));
+            };
+
+            const renderPreview = async (id) => {
+                overlay.dataset.view = 'preview';
+                body.innerHTML = `<div class="dup-loading"><span class="spinner"></span> جارٍ تحميل المعاينة...</div>`;
+                footer.innerHTML = `<button type="button" class="btn btn-sm btn-link" data-act="back">رجوع للقائمة</button>`;
+                footer.querySelector('[data-act="back"]').onclick = renderList;
+                let b;
+                try {
+                    const r = await fetch(`/books/api/book/${id}/preview/`, { credentials: 'same-origin' });
+                    b = await r.json();
+                    if (!r.ok) throw new Error(b.error || 'تعذّر التحميل');
+                } catch (e) {
+                    body.innerHTML = `<div class="dup-error">تعذّرت المعاينة. <a href="/books/${esc(id)}/" target="_blank">افتح الكتاب في صفحة مستقلة ↗</a></div>`;
+                    return;
+                }
+                const meta = this._kindMeta(b.kind);
+                const prim = (b.attachments || []).find(a => a.is_primary) || (b.attachments || [])[0];
+                let docHtml = '<div class="dup-doc-empty"><i class="bi bi-file-earmark"></i> لا مرفق</div>';
+                if (prim && prim.is_image) docHtml = `<img class="dup-doc-img" src="${esc(prim.url)}" alt="مستند" loading="lazy">`;
+                else if (prim) docHtml = `<a class="dup-doc-link" href="${esc(prim.url)}" target="_blank"><i class="bi bi-file-earmark-pdf"></i> فتح المستند</a>`;
+                const entities = (b.issuing_entities || []).concat(b.receiving_entities || [])
+                    .map(e => esc(e.name)).join('، ') || '—';
+                body.innerHTML =
+                    `<div class="dup-preview">
+                        <div class="dup-fields">
+                            <span class="dup-chip" style="background:${meta.bg};color:${meta.fg}">${esc(meta.label)}</span>
+                            <div class="dup-f"><label>رقمنا</label><b>${esc(b.our_number)}</b></div>
+                            <div class="dup-f"><label>العنوان</label><span>${esc(b.title || 'بدون عنوان')}</span></div>
+                            <div class="dup-f"><label>تاريخنا</label><span>${esc(b.date || '—')}</span></div>
+                            <div class="dup-f"><label>رقم الجهة</label><span>${esc(b.sender_number || '—')}</span></div>
+                            <div class="dup-f"><label>تاريخهم</label><span>${esc(b.sender_date || '—')}</span></div>
+                            <div class="dup-f"><label>الجهات</label><span>${entities}</span></div>
+                            <div class="dup-f"><label>الحالة</label><span>${esc(b.followup_label || '')}</span></div>
+                        </div>
+                        <div class="dup-doc">${docHtml}<a class="dup-open-full" href="/books/${esc(id)}/" target="_blank">فتح الكتاب كاملاً ↗</a></div>
+                    </div>`;
+                footer.innerHTML =
+                    `<button type="button" class="btn btn-sm btn-danger fw-semibold" data-act="cancel"><i class="bi bi-x-circle"></i> هذا مكرّر — ألغِ الإدخال</button>` +
+                    (canProceed ? `<button type="button" class="btn btn-sm btn-outline-secondary fw-semibold" data-act="proceed">ليس مطابقاً — تابِع</button>` : '') +
+                    `<button type="button" class="btn btn-sm btn-link" data-act="back">رجوع</button>`;
+                footer.querySelector('[data-act="cancel"]').onclick = () => finish(false);
+                const pb = footer.querySelector('[data-act="proceed"]'); if (pb) pb.onclick = () => finish(true);
+                footer.querySelector('[data-act="back"]').onclick = renderList;
+            };
+
+            renderList();
+            requestAnimationFrame(() => overlay.classList.add('dup-open'));
+            setTimeout(() => overlay.querySelector('.dup-modal-close')?.focus(), 30);
         });
     }
 
@@ -2640,7 +2954,9 @@ class ExtractionSmartSystem {
             this._hideExtractionOverlay();   // لا تترك مؤشّر الرفع عالقاً عند فشل التجهيز
             this.currentFile = file;
             this.displayFilePreview(file);
-            this.showToast('تم تحميل الملف — جاري الاستخراج...', 'info');
+            // صراحةً: نُبلّغ سبب فشل التجهيز على الخادم بدل رسالة نجاح مضلِّلة، ثم نحاول محلياً
+            const why = (err && err.message) ? ` (${err.message})` : '';
+            this.showToast(`تعذّرت معالجة الملف على الخادم${why} — جارٍ محاولة محلية…`, 'warning', 6000);
             setTimeout(() => this.extractData(), 350);
         });
     }
@@ -2668,6 +2984,9 @@ class ExtractionSmartSystem {
         this.currentPage = 1;
         this.previewDpi = 130;
         this._previewVersion = (this._previewVersion || 0) + 1;
+        // إن أعاد الخادم تنبيهاً (مثلاً: تعذّر الاستخراج التلقائي — أدخِل يدوياً) نُظهره
+        // في مسار الرفع أيضاً، لا مسار السكانر وحده (كان يُهمَل هنا سابقاً).
+        if (ud.warning) this._showProgressBanner(ud.warning, 'warning');
         const serveUrl = `/books/api/scan/serve/${encodeURIComponent(ud.token)}/`;
         this.loadScannedFile(serveUrl, ud.source_file || file.name, { noAutoExtract: false });
     }
@@ -2863,6 +3182,7 @@ class ExtractionSmartSystem {
     }
 
     _hideExtractionOverlay() {
+        this._stopOverlayPhases();
         const modalBody = document.getElementById('modalBody');
         if (!modalBody) return;
         const overlay = modalBody.querySelector('.extraction-loading-overlay');
@@ -2870,6 +3190,34 @@ class ExtractionSmartSystem {
             overlay.style.opacity = '0';
             overlay.style.transition = 'opacity 0.3s';
             setTimeout(() => overlay.remove(), 300);
+        }
+    }
+
+    // تقدّم حيّ خفيف أثناء الاستخراج: الخادم نداءٌ واحد حاجب، فنعرض مؤقّتاً منقضياً
+    // (إشارة صادقة دائماً أنّ العمل جارٍ، لا تجمّد) مع تسمية المرحلة المتوقّعة بحسب
+    // الزمن — بديلٌ عن السبينر الثابت الذي يبدو متجمّداً حتى 5 دقائق. بلا خادم/SSE.
+    _startOverlayPhases(phases) {
+        this._stopOverlayPhases();
+        const modalBody = document.getElementById('modalBody');
+        const subEl = modalBody && modalBody.querySelector('.extraction-loading-overlay .overlay-sub');
+        if (!subEl || !Array.isArray(phases) || !phases.length) return;
+        const startedAt = Date.now();
+        let idx = 0;
+        const tick = () => {
+            const secs = Math.floor((Date.now() - startedAt) / 1000);
+            while (idx < phases.length - 1 && secs >= phases[idx + 1].at) idx++;
+            const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+            const ss = String(secs % 60).padStart(2, '0');
+            subEl.textContent = `${phases[idx].label} — ${mm}:${ss}`;
+        };
+        tick();
+        this._overlayPhaseTimer = setInterval(tick, 1000);
+    }
+
+    _stopOverlayPhases() {
+        if (this._overlayPhaseTimer) {
+            clearInterval(this._overlayPhaseTimer);
+            this._overlayPhaseTimer = null;
         }
     }
 
@@ -2902,6 +3250,11 @@ class ExtractionSmartSystem {
             extractBtn.disabled = true;
         }
         this._showExtractionOverlay();
+        this._startOverlayPhases([
+            { at: 0,  label: 'جارٍ تجهيز صورة المستند' },
+            { at: 2,  label: 'جارٍ قراءة النص واستخراج الحقول' },
+            { at: 30, label: 'المعالجة مستمرة — قد يستغرق تحميل نماذج القراءة وقتاً لأوّل مرّة' },
+        ]);
 
         this.callExtractApi()
             .then((data) => {
@@ -2916,9 +3269,17 @@ class ExtractionSmartSystem {
                 if (data.request_id) {
                     console.info('extract request_id:', data.request_id);
                 }
-                this.showToast(this.t('extractSuccess'), 'success');
-                // بعد النجاح: حدّث نص الزر ليدل على "إعادة الاستخراج" وركّز على أول حقل يحتاج مراجعة
-                if (extractBtn) extractBtn.innerHTML = '↺ إعادة الاستخراج';
+                // رسالة صادقة بحسب النتيجة الفعلية: صفر حقول ⇒ لا نُبلّغ «نجاحاً» بل نُرشد
+                // للإدخال اليدوي (المستند محفوظ ومعروض)؛ وإلا نؤكّد عدد الحقول المُستخرَجة.
+                const extractedCount = this._countExtractedFields(data);
+                if (extractedCount === 0) {
+                    this.showToast('تعذّرت قراءة بيانات المستند تلقائياً — أدخِل الحقول يدوياً. المستند محفوظ ومعروض للمراجعة.', 'warning', 8000);
+                    if (extractBtn) extractBtn.innerHTML = '↺ إعادة المحاولة';
+                } else {
+                    this.showToast(`${this.t('extractSuccess')} (${extractedCount} حقل)`, 'success');
+                    if (extractBtn) extractBtn.innerHTML = '↺ إعادة الاستخراج';
+                }
+                // ركّز على أول حقل يحتاج مراجعة/إدخال — إرشادٌ بصريّ لما يفعله المستخدم تالياً
                 setTimeout(() => this._focusFirstReviewField(data), 200);
             })
             .catch((err) => {
@@ -2991,6 +3352,17 @@ class ExtractionSmartSystem {
         return data;
     }
 
+    // يَعُدّ الحقول التي استُخرجت فعلاً (قيمة غير فارغة) — لرسالة صادقة بعد الاستخراج:
+    // صفر ⇒ فشل قراءة ⇒ إرشاد للإدخال اليدوي بدل ادّعاء النجاح.
+    _countExtractedFields(data) {
+        const keys = ['book_number', 'title', 'book_date', 'sender_date', 'sender_number',
+                      'issuing_entity', 'receiving_entity', 'secret_level', 'book_kind'];
+        return keys.reduce((n, k) => {
+            const v = data[k];
+            return n + ((typeof v !== 'undefined' && v !== null && String(v).trim() !== '') ? 1 : 0);
+        }, 0);
+    }
+
     applyExtractionResult(data) {
         const mapping = [
             { field: 'bookNumber', key: 'book_number', conf: 'book_number_confidence' },
@@ -3042,11 +3414,70 @@ class ExtractionSmartSystem {
 
         // ملخّص الثقة الكلي + تنبيه المراجعة (بطاقتا P1)
         this.updateQualitySummary(data);
+        this.renderEntityCandidates(data);
 
         // ضمان تحديث عام بعد الانتهاء من كل الحقول
         if (typeof updateValidationIndicator === 'function') {
             try { updateValidationIndicator(); } catch (e) {}
         }
+    }
+
+    // مرشّحو الجهة top-3 بنسب التشابه — يُزرعون تحت حقلَي الجهة داخل التخطيط
+    // القائم بلا أي تغيير في ترتيب الصفحة (قرار المالك 2026-07-19).
+    renderEntityCandidates(data) {
+        // تأجيل دورة: بعد تحويل قيمة الـAI إلى وسم (patch القالب يعمل بعد 50ms)
+        setTimeout(() => {
+            this._renderCandidateList('issuing', data.issuing_entity_matches);
+            this._renderCandidateList('receiving', data.receiving_entity_matches);
+        }, 120);
+    }
+
+    _renderCandidateList(side, matches) {
+        const wrap = document.getElementById(side === 'issuing' ? 'issuingTagWrapper' : 'receivingTagWrapper');
+        const container = wrap && wrap.closest('.entity-input-container');
+        if (!container) return;
+        let box = container.querySelector('.entity-candidates');
+        const list = (Array.isArray(matches) ? matches : []).filter(m => (m.entity_name || '').trim());
+        if (!list.length) { if (box) box.remove(); return; }
+        if (!box) {
+            box = document.createElement('div');
+            box.className = 'entity-candidates';
+            container.appendChild(box);
+        }
+        const sourceLabels = { memory: 'من الذاكرة', letterhead: 'من الترويسة', register: 'رمز السجلّ', pattern: 'نمط صريح' };
+        const mgr = window.entityTagManagers?.[side];
+        box.replaceChildren();
+        list.slice(0, 3).forEach((m) => {
+            const name = m.entity_name.trim();
+            const pct = Math.round((m.score || 0) * 100);
+            const chosen = !!(mgr && mgr.tags.some(t => (t.name || '').trim().toLowerCase() === name.toLowerCase()));
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'entity-candidate' + (chosen ? ' is-chosen' : '');
+            btn.title = chosen ? 'مُضافة كوسم' : 'إضافة كوسم';
+            const nameEl = document.createElement('span');
+            nameEl.className = 'candidate-name';
+            nameEl.textContent = name;
+            const bar = document.createElement('span');
+            bar.className = 'candidate-bar';
+            const fill = document.createElement('i');
+            fill.style.width = pct + '%';
+            bar.appendChild(fill);
+            const pctEl = document.createElement('span');
+            pctEl.className = 'candidate-pct';
+            pctEl.textContent = pct + '%';
+            const srcEl = document.createElement('small');
+            srcEl.className = 'candidate-src';
+            srcEl.textContent = chosen ? '✓' : (sourceLabels[m.match_type] || '');
+            btn.append(nameEl, bar, pctEl, srcEl);
+            btn.addEventListener('click', () => {
+                if (!mgr || btn.classList.contains('is-chosen')) return;
+                if (m.entity_id) mgr.addEntity({ id: m.entity_id, name, code: '' });
+                else mgr._resolveOrCreate(name, true);
+                box.remove();   // أدّت القائمة غرضها — تختفي بعد التضمين (قرار المالك)
+            });
+            box.appendChild(btn);
+        });
     }
 
     // ملخّص الثقة الكلي (quality-hero) + تنبيه المراجعة (needs_review) — بطاقتا P1
@@ -3840,7 +4271,148 @@ class ExtractionSmartSystem {
         (mgrR?.getNames() || []).forEach(n  => formData.append('receiving_entity_new[]', n));
     }
 
-    /** إرسال تعديل كتاب قائم إلى update-book-api ثم العودة لوجهة البدء. */
+    // ════════════════════════════════════════════════════════════════
+    //  إرسال الكتاب إلى الجهة المعنيّة (مع مرفقاته)
+    //  لا يخرج مستند رسمي دون أن يرى المستخدم الجهة والبريد وما سيُرفَق.
+    // ════════════════════════════════════════════════════════════════
+
+    _escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = String(s ?? '');
+        return d.innerHTML;
+    }
+
+    async openSendToEntity(bookId) {
+        const modalEl = document.getElementById('sendToEntityModal');
+        const body    = document.getElementById('sendToEntityBody');
+        const confirm = document.getElementById('sendToEntityConfirm');
+        if (!modalEl || !body || !confirm) return;
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        body.innerHTML = '<div class="text-center text-muted py-4">'
+                       + '<div class="spinner-border spinner-border-sm ms-2"></div> جارٍ تحضير المعاينة…</div>';
+        confirm.disabled = true;
+        modal.show();
+
+        let preview;
+        try {
+            const resp = await fetch(`/books/api/email/book/${bookId}/preview/`, {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            preview = await resp.json();
+            if (!resp.ok || !preview.success) throw new Error(preview.message || 'تعذّرت المعاينة');
+        } catch (e) {
+            body.innerHTML = `<div class="alert alert-danger mb-0">تعذّر تحضير المعاينة: ${this._escapeHtml(e.message)}</div>`;
+            return;
+        }
+
+        body.innerHTML = this._renderSendPreview(preview);
+
+        // لا نُفعّل الإرسال إلا إذا كان ممكناً فعلاً — لا زرّ يَعِد بما لا يقدر عليه.
+        const blocked = !preview.email_enabled || !preview.entity;
+        confirm.disabled = blocked;
+        confirm.onclick = blocked ? null : () => this._doSendToEntity(bookId, modal, confirm);
+    }
+
+    _renderSendPreview(p) {
+        if (!p.email_enabled) {
+            return '<div class="alert alert-warning mb-0">'
+                 + '<strong>إرسال البريد معطّل.</strong> فعّله من: الإعدادات ← البريد الإلكتروني ← «تفعيل إرسال البريد».'
+                 + '</div>';
+        }
+        if (!p.entity) {
+            return `<div class="alert alert-warning mb-0"><strong>لا يمكن الإرسال.</strong> ${this._escapeHtml(p.entity_error || 'لا توجد جهة معنيّة.')}</div>`;
+        }
+
+        const cc = (p.entity.cc || []).length
+            ? `<div class="text-muted small">نسخة إلى: ${this._escapeHtml(p.entity.cc.join('، '))}</div>` : '';
+
+        const attach = p.files.filter(f => f.mode === 'attach');
+        const linked = p.files.filter(f => f.mode === 'link');
+        const failed = p.files.filter(f => f.mode === 'failed');
+
+        const row = (f, icon, note) => `
+            <li class="d-flex align-items-center gap-2 py-1">
+              <i class="bi ${icon}"></i>
+              <span class="flex-grow-1 text-truncate">${this._escapeHtml(f.name)}</span>
+              <span class="text-muted small">${this._escapeHtml(f.size_label)}</span>
+              ${note ? `<span class="badge bg-light text-dark">${note}</span>` : ''}
+            </li>`;
+
+        let files = '';
+        if (!p.files.length) {
+            files = '<div class="text-muted small">لا مرفقات على هذا الكتاب — ستُرسل الرسالة نصّاً فقط.</div>';
+        } else {
+            files = '<ul class="list-unstyled mb-0" style="max-height:190px;overflow:auto">'
+                  + attach.map(f => row(f, 'bi-paperclip', '')).join('')
+                  + linked.map(f => row(f, 'bi-link-45deg', 'رابط')).join('')
+                  + failed.map(f => row(f, 'bi-exclamation-triangle text-danger', 'تعذّر')).join('')
+                  + '</ul>';
+        }
+
+        const linkNote = linked.length
+            ? `<div class="alert alert-info py-2 px-3 mt-2 mb-0" style="font-size:.82rem">
+                 ${linked.length} ملف يتجاوز حدّ البريد (${this._escapeHtml(p.limit_label)}) — سيُرسَل
+                 <strong>رابط تحميل موقّع</strong> بدل إرفاقه. الرابط ينتهي بعد 7 أيام.
+               </div>` : '';
+
+        return `
+          <div class="mb-3">
+            <div class="text-muted small">إلى</div>
+            <div class="fw-bold">${this._escapeHtml(p.entity.name)}</div>
+            <div dir="ltr" class="text-muted" style="font-size:.85rem">${this._escapeHtml(p.entity.email)}</div>
+            ${cc}
+          </div>
+          <div class="mb-3">
+            <div class="text-muted small">الموضوع</div>
+            <div>${this._escapeHtml(p.subject)}</div>
+          </div>
+          <div>
+            <div class="text-muted small mb-1">المرفقات (${p.files.length}) — سيُرفَق ${this._escapeHtml(p.attach_label)}</div>
+            ${files}
+            ${linkNote}
+          </div>`;
+    }
+
+    async _doSendToEntity(bookId, modal, confirmBtn) {
+        const original = confirmBtn.innerHTML;
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm ms-1"></span> جارٍ الإرسال…';
+        try {
+            const resp = await fetch(`/books/api/email/book/${bookId}/send/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                body: '{}',
+            });
+            const data = await resp.json();
+            if (data.success) {
+                // تقرير صادق: ما أُرفِق فعلاً وما أُحيل إلى رابط
+                const bits = [data.message];
+                if (data.attached?.length) bits.push(`أُرفِق ${data.attached.length} ملف (${data.attached_label})`);
+                if (data.linked?.length)   bits.push(`${data.linked.length} ملف أُرسل كرابط`);
+                if (data.failed?.length)   bits.push(`${data.failed.length} ملف تعذّر`);
+                this.showToast(bits.join(' — '), 'success', 7000);
+                modal.hide();
+            } else {
+                this.showToast(data.message || 'فشل الإرسال', 'error', 8000);
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = original;
+            }
+        } catch (e) {
+            this.showToast('خطأ في الاتصال — لم تُرسَل الرسالة', 'error', 6000);
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = original;
+        }
+    }
+
+    /** إرسال تعديل كتاب قائم إلى update-book-api ثم العودة لوجهة البدء.
+     *  لا كشف تكرار هنا: الكتاب محفوظ مسبقاً — التنبيه للإدخال الأوّل فقط. */
     async _submitEdit(formData) {
         const saveBtn = document.getElementById('saveButton');
         const originalText = saveBtn.innerHTML;
@@ -3858,17 +4430,24 @@ class ExtractionSmartSystem {
                 this._pagesEditedInPreview = false;   // استُهلكت تعديلات الصفحات بالحفظ
                 if (window.__setExtractionBaseline) window.__setExtractionBaseline();  // لا يعترض beforeunload التوجيه
                 this.showToast('تم حفظ التعديلات بنجاح ✓', 'success', 3000);
+                // «حفظ وإرسال» في وضع التعديل: نفتح الحوار ولا نغادر الصفحة —
+                // المغادرة أثناء الإرسال تقطع العملية على المستخدم.
+                if (this.sendToEntityAfterSave && result.book_id) {
+                    this.sendToEntityAfterSave = false;
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.disabled = false;
+                    this.openSendToEntity(result.book_id);
+                    return;
+                }
                 setTimeout(() => { window.location.href = this.backUrl || result.redirect_url || '/'; }, 1200);
-            } else {
-                this.showToast(result.message || 'فشل الحفظ', 'error', 6000);
-                saveBtn.innerHTML = originalText;
-                saveBtn.disabled = false;
+                return;
             }
+            this.showToast(result.message || 'فشل الحفظ', 'error', 6000);
         } catch (e) {
             this.showToast('خطأ في الاتصال — حاول مجدداً', 'error', 5000);
-            saveBtn.innerHTML = originalText;
-            saveBtn.disabled = false;
         }
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
     }
 
     async submitBookData(formData) {
@@ -3879,6 +4458,7 @@ class ExtractionSmartSystem {
         saveBtn.disabled = true;
 
         let retriedAfterReservationRefresh = false;
+        let confirmedDuplicate = false;
 
         try {
             while (true) {
@@ -3910,6 +4490,12 @@ class ExtractionSmartSystem {
                     this.smartClearAndStay(savedKind);
                     this.clearFile();
                     this.ensureReservation(savedKind);
+                    // «حفظ وإرسال»: النموذج يُمسح بعد الحفظ، لذا نلتقط معرّف الكتاب
+                    // من الاستجابة ونفتح حوار الإرسال عليه.
+                    if (this.sendToEntityAfterSave && data.book_id) {
+                        this.sendToEntityAfterSave = false;
+                        this.openSendToEntity(data.book_id);
+                    }
                     break;
                 }
 
@@ -3920,6 +4506,18 @@ class ExtractionSmartSystem {
                         this.updateFormDataReservation(formData, replacementReservation);
                         continue;
                     }
+                }
+
+                // كشف التكرار: 3/4 (SIMILAR) أو 4/4 (DUPLICATE) — نستأذن مرّة ثم نُعيد بعلَم التأكيد
+                if (!confirmedDuplicate &&
+                    (data.error_code === 'SIMILAR_BOOK' || data.error_code === 'DUPLICATE_BOOK')) {
+                    const proceed = await this._confirmDuplicate(data);
+                    if (proceed) {
+                        confirmedDuplicate = true;
+                        formData.set('confirm_duplicate', 'true');
+                        continue;
+                    }
+                    break;   // ألغى المستخدم
                 }
 
                 const msg = data.message || this.t('saveFail');

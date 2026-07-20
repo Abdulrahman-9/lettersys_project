@@ -29,7 +29,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from core.tasks import process_attachment_extraction
-from core.extraction.pipeline import AIExtractionService
+from core.extraction.pipeline import AIExtractionService, slim_entity_matches
 from core.decorators import rate_limit_scan, rate_limit
 from core.models import (
     Attachment,
@@ -322,8 +322,10 @@ def smart_extract_direct(request):
                 'title_confidence': result.title_confidence,
                 'issuing_entity': result.issuing_entity_name,
                 'issuing_entity_confidence': result.issuing_entity_confidence,
+                'issuing_entity_matches': slim_entity_matches(result.issuing_entity_matches),
                 'receiving_entity': result.receiving_entity_name,
                 'receiving_entity_confidence': result.receiving_entity_confidence,
+                'receiving_entity_matches': slim_entity_matches(result.receiving_entity_matches),
                 'secret_level': result.secret_level,
                 'secret_level_confidence': result.secret_level_confidence,
                 'book_kind': result.book_kind,
