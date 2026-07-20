@@ -458,8 +458,13 @@ class PatternMatcher:
             r'بخصوص\s*[:/\-]?\s*([^\n]{3,80})',
             r'بشأن\s*[:/\-]?\s*([^\n]{3,80})',
             r'(?:^|\s)حول\s*[:/\-.،]?\s*([^\n]{3,80})',
-            r'(?:^|\s)م\s*[/:\-.,،]\s*([^\n]{3,80})',
+            # «م/» بتحريف OCR: تُقرأ «ام/» أو «آم/» («آم/محضر الاجتماع» — #9436 بالعين)
+            r'(?:^|\s)[اأآ]?م\s*[/:\-.,،]\s*([^\n]{3,80})',
             r'سبجكت\s*[:/\-]?\s*([^\n]{3,80})',
+            # OCR يأكل «م» ويُبقي المائل: سطرٌ يبدأ بـ«/ الموضوع…» («/ تنفيذ اعمال
+            # ازالة الالغام» #9507، «/ ضوابط استيراد» #4855 — قراءةٌ بالعين). يُستثنى
+            # المُرسَل إليه («/ السادة المدرجة» #11247) وكافة/إلى.
+            r'^\s*/\s*(?!السادة|السيد|الى|إلى|كافة)([^\n]{3,80})',
         )
         # الفاصل **اختياري** (نفس درس التاريخ: تسامحٌ مع العلامة): OCR يُسقط
         # النقطتين فتصير «Subject First Quarter Report…» — وكانت تُفقَد كلياً
@@ -485,6 +490,14 @@ class PatternMatcher:
             s = s.translate(_INVISIBLE_MARKS)               # أسقِط علامات LTR/RTL الخفيّة
             ws = [w.strip(' /:؛،.-') for w in s.split()]    # لواحق ترقيم عالقة
             ws = [w for w in ws if w and w not in stop_words]
+            # بتّار ذيل الخردة: عنوانٌ عربيّ الغالب يليه حطامُ OCR لاتينيّ قصير
+            # («…لمناقصة د 0 aN Pea pe» — #9529 بالعين): يُقصّ من أول حطامٍ لاتينيّ.
+            ar_n = sum(1 for w in ws if re.search(r'[ء-ي]', w))
+            if ar_n >= 2 and ar_n >= len(ws) * 0.5:
+                for k, w in enumerate(ws):
+                    if k >= 2 and re.fullmatch(r'[A-Za-z0-9]{1,4}', w):
+                        ws = ws[:k]
+                        break
             return ' '.join(ws[:cap])
 
         def _looks_garbled(s: str) -> bool:
@@ -492,7 +505,16 @@ class PatternMatcher:
             # «شكر وتقدير» الأزرق المسطَّر قُرئ «Gomme 3 Quay التسسسراق» (#11247، قراءة
             # بالعين). نادرٌ جداً في كلمةٍ حقيقية، شائعٌ في خردة المسح. القيمة الخاطئة
             # أسوأ من الفراغ ⇒ نرفض المرشّح فيصمت المحرّك بدل إخراج الخردة.
-            return bool(re.search(r'([ء-يa-zA-Z])\1\1', s))
+            if re.search(r'([ء-يa-zA-Z])\1\1', s):
+                return True
+            # حطامُ رموزٍ قصير («,+ t? I» ، «\\,(» — #11142/#11150 بالعين): نصٌّ حقيقي
+            # أغلبُ محارفه غير الفراغية حروفٌ — دونها خردةٌ تُرفَض ليصمت المحرّك.
+            dense = re.sub(r'\s', '', s)
+            if dense:
+                letters = len(re.findall(r'[ء-يA-Za-z]', dense))
+                if letters / len(dense) < 0.55:
+                    return True
+            return False
 
         # أسقِط العلامات الخفية (LRM/RLM من طبقات النصّ) قبل مطابقة العلامات —
         # «م‏/» كانت تُفشل علامة م/ فيسقط الموضوع لمسار الاحتياط (بلاغ مالك).
@@ -520,6 +542,7 @@ class PatternMatcher:
                          'نظراً', 'نظرا', 'بالنظر', 'وفقاً', 'وفقا', 'بالاستناد', 'ضمن',
                          'علماً', 'علما', 'تجدون', 'مرفق', 'المرفق', 'بموجب', 'بموافقة',
                          'أعلاه', 'اعلاه',   # «(الموضوع) أعلاه نود…» إحالةُ متنٍ لا موضوع (#11251)
+                         'بخصوص الموضوع',    # «بخصوص الموضوع أعلاه نود بيان» إحالةٌ لا موضوع
                          # افتتاحيات المتن الإنجليزية (إيميلات) — تُقارَن على المُصغَّر
                          'dear', 'greetings', 'attention', 'attn', 'we ', 'please', 'kindly',
                          'with reference', 'reference is', 'this letter', 'warm')
@@ -566,6 +589,10 @@ class PatternMatcher:
             low = line.lower()
             if _looks_garbled(line):
                 return True
+            if 'أعلاه' in line or 'اعلاه' in line:
+                return True                                # إحالة متن («الموضوع أعلاه») لا موضوع
+            if re.search(r'تحيات|مع التقدير|مع الشكر', line):
+                return True                                # عبارات ختام («اطيب التحيات») لا موضوع
             letters = [c for c in line if c.isalpha()]
             if letters and sum(1 for c in letters if ord(c) < 128) / len(letters) > 0.6:
                 return True                                    # لاتينيّ الغالب (ترويسة/إنجليزي)
@@ -588,10 +615,14 @@ class PatternMatcher:
         #    نرفض المُلتقَط إن كان إحالةَ متنٍ («بخصوص الموضوع أعلاه نود…» بعد التحية —
         #    #11251): «أعلاه» إشارةٌ لموضوعٍ سابق لا موضوعٌ جديد.
         for markers in (arabic_markers, english_markers):
+            # الإنكليزي: حدٌّ أدنى أعلى — «Subiect» المشوّهة كانت تلتقط بقايا مبتورة
+            # («ect» — #11240 بالعين) فتُخرج خردةً قصيرة بدل السقوط للقوس الموضعي.
+            min_cap = 4 if markers is arabic_markers else 6
             for idx, line in enumerate(lines):
                 for pat in markers:
                     m = re.search(pat, line)
-                    if (m and len(m.group(1).strip()) > 3 and not _looks_garbled(m.group(1))
+                    if (m and len(m.group(1).strip()) >= min_cap
+                            and not _looks_garbled(m.group(1))
                             and 'أعلاه' not in m.group(1) and 'اعلاه' not in m.group(1)):
                         return _words(_join_wrapped(m.group(1).strip(), idx), cap=12)
 
@@ -606,6 +637,21 @@ class PatternMatcher:
                 cand = re.sub(r'^\s*م\s*[/:\-.,،]\s*', '', lines[idx]).strip()
                 if (len(cand) > 3 and not _is_junk(lines[idx]) and not _is_junk(cand)
                         and len(re.findall(r'[ء-يA-Za-z]{2,}', cand)) >= 2):
+                    return _words(_join_wrapped(cand, idx), cap=12)
+            # قوسٌ إنكليزي: في الكتب الإنكليزية (slb/اللجان) يعيش الموضوع بين To/Attn
+            # والتحية، و_is_junk يرفض اللاتينيّ الغالبَ عمداً — فمسحٌ ثانٍ يسمح به هنا
+            # فقط، بشرط سطرٍ جوهريّ لا حقلَ/ترويسةَ/تحية («Zurbatiya Block Exploration
+            # Plan/» #9519، «Ref-135, Akkas-8 Abandonment…» #11240 — قراءةٌ بالعين).
+            for idx in range(ri + 1, min(gi, len(lines))):
+                ln = lines[idx]
+                low = ln.lower()
+                if (_looks_garbled(ln) or _recip_re.match(ln) or _field_re.match(low)
+                        or re.search(r'تحي[ةه]|dear|greeting', low)
+                        or any(p in low for p in _letterhead_phrases)
+                        or any(low.lstrip().startswith(p) for p in _body_openers)):
+                    continue
+                cand = re.sub(r'(?i)^\s*(?:sub[ji]?ect|subj|sub)\s*[:./\-]?\s*', '', ln).strip()
+                if len(re.findall(r'[A-Za-z]{3,}', cand)) >= 2 and len(cand) >= 8:
                     return _words(_join_wrapped(cand, idx), cap=12)
 
         # 2) احتياطٌ مُقسّى: تخطَّ كلّ سطرٍ زائف (`_is_junk`) → أوّل سطر عربيٍّ جوهريّ
