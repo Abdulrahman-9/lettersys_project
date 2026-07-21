@@ -803,6 +803,23 @@ class AIExtractionService:
             _assign_entity(_resolve_entity('receiver'), 'receiving_entity_id',
                            'receiving_entity_name', 'receiving_entity_confidence', 'receiving_entity_matches')
 
+            # نوع الوثيقة — prior الجهة: القاعدة العامّة تصمت غالباً (مقيس 2% فقط على
+            # 38 كتاباً)، بينما لكل جهةٍ نوعٌ مهيمنٌ في كتبها المؤكَّدة («مذكرة داخلية»
+            # للأقسام، «اعمام»…). يُطبَّق **فقط حين تصمت القاعدة** فلا يزاحمها أبداً
+            # (استحالة تراجعٍ بنيويّة)، وبثقةٍ منخفضة لأنه ترجيحٌ إحصائيّ لا قراءةٌ من
+            # المستند. مقيس: 2% ⟵ ~36% (يغطّي 21/36، يصيب 61% منها).
+            if not (getattr(result, 'document_type', '') or '').strip() \
+                    and getattr(result, 'issuing_entity_id', None):
+                try:
+                    from core.extraction.entity_profiles import EntityProfileStore
+                    prior = EntityProfileStore.get().doc_type_prior(result.issuing_entity_id)
+                    if prior:
+                        result.document_type = prior
+                        result.document_type_confidence = 0.40
+                except Exception as exc:
+                    logger.warning('[pipeline] prior نوع الوثيقة تعذّر (%s) — تدهورٌ رشيق',
+                                   type(exc).__name__)
+
             # بصمة الجهة: بعد معرفة المُرسِل، ابحث عن رقمٍ بقالب أرقامه المُتعلَّم من
             # كتبه المؤكَّدة — يلتقط ما فاتته العلامات العامة ويُصحّح الالتقاط الناقص
             # (مثل «195» بدل «MF-2026-195»).
