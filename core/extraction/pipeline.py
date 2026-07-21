@@ -340,6 +340,27 @@ class AIExtractionService:
             return None
         return text
 
+    def _profile_entity_matches(self, text, etype):
+        """مرشّحو الجهة من مُعرّف البروفايل (كلماتٌ مميّزة + ترجيح رمز السجلّ).
+        يُستدعى **بعد** ذاكرة الترويسة ليملأ فجوتها (جهةٌ جديدة بلا تاريخ)، فلا
+        يزاحم ترشيحاً واثقاً. أي خطأٍ داخليّ ⟵ قائمةٌ فارغة (تدهورٌ رشيق)."""
+        if not (text or '').strip():
+            return []
+        try:
+            from core.extraction.entity_profiles import EntityResolver
+            out = []
+            for score, eid, name in EntityResolver.get().resolve(text, top_k=3):
+                if score <= 0:
+                    continue
+                out.append({'entity_id': eid, 'entity_name': name,
+                            'score': round(min(1.0, score) * 100, 1),
+                            'match_type': 'profile'})
+            return out
+        except Exception as exc:
+            logger.warning('[pipeline] مُعرّف البروفايل تعذّر (%s) — تدهورٌ رشيق',
+                           type(exc).__name__)
+            return []
+
     def _read_handwritten_sender_number(self, image_path, entity_id):
         """مرحلة 3 — رقم الجهة المخربش بخط اليد حيث تعجز كل الطبقات المطبوعة:
         تموضعٌ بمرساة «العدد» وبصمة تخطيط الجهة ← قصّ الشريط ← قراءة CRNN (v5:
@@ -742,6 +763,15 @@ class AIExtractionService:
                         result.recipient_text, entity_type='receiver')[:3], 'recipient_line')
                 _extend(lambda: self.entity_matcher.match_from_memory(cleaned, entity_type=etype, top_k=3),
                         'memory')
+                # مُعرّف البروفايل: كلماتٌ مميّزة من اسم الجهة + ترجيحُ رمز السجلّ، على
+                # **المنطقة الصحيحة بحسب الاتجاه** (المُصدِرة من الترويسة، المُخاطَب من
+                # سطر «الى/») — قانون المالك: «الوارد ليس كالصادر». يأتي **بعد** الذاكرة
+                # فلا يزاحم ترشيحها الواثق، ويملأ ما تعجز عنه: جهةٌ جديدة أو أوّل كتابٍ
+                # منها لا ذاكرةَ لها. مقيس على 80 (نصّ مخزَّن): دمجُه مع الذاكرة أنقذ 2
+                # وأفسد 0 (top-1 55→57، top-3 63→66)؛ وحده 23%.
+                _extend(lambda: self._profile_entity_matches(
+                    (getattr(result, 'recipient_text', '') if etype == 'receiver' else cleaned), etype),
+                    'profile')
                 if len(ranked) < 3:
                     _extend(lambda: self.entity_matcher.match_from_letterhead(cleaned, entity_type=etype, top_k=3),
                             'letterhead')
@@ -764,7 +794,8 @@ class AIExtractionService:
                 # سقوف الثقة بحسب موثوقية المصدر المقيسة (كلّها اقتراحيّة للمراجعة):
                 #   رمز السجلّ = معرِّف مسجَّل (لا تخمين) → بلا سقف؛
                 #   ذاكرة (hit@1 ≈ 62%) → 0.85، ترويسة (≈ 11%) → 0.5، نمط صريح → كاملة.
-                cap = {'memory': 0.85, 'letterhead': 0.5}.get(best.get('match_type'))
+                #   بروفايل (top-1 ≈ 23% وحده) → 0.45 — اقتراحٌ يملأ فجوة الذاكرة لا يحسم.
+                cap = {'memory': 0.85, 'letterhead': 0.5, 'profile': 0.45}.get(best.get('match_type'))
                 setattr(result, conf_attr, min(score, cap) if cap else score)
 
             _assign_entity(_resolve_entity('issuer'), 'issuing_entity_id',
