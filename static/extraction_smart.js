@@ -403,6 +403,36 @@ class ExtractionSmartSystem {
         this.checkScanToken();
         this._initScanAgent();
         this._setupAgentButton();
+        this._setupAutoExtractToggle();
+    }
+
+    // ═══════ مفتاح الاستخراج التلقائي (تفعيل/إطفاء، مُخزَّن) ═══════
+    /** هل يُشغَّل الاستخراج تلقائياً بعد رفع الملف؟ (افتراضياً نعم؛ يُخزَّن في localStorage). */
+    _autoExtractEnabled() {
+        return localStorage.getItem('lettersys_auto_extract') !== 'off';
+    }
+
+    _setupAutoExtractToggle() {
+        const btn = document.getElementById('autoExtractToggle');
+        if (!btn) return;
+        const render = () => {
+            const on = this._autoExtractEnabled();
+            btn.classList.toggle('is-on', on);
+            btn.classList.toggle('is-off', !on);
+            btn.setAttribute('aria-checked', on ? 'true' : 'false');
+            const lbl = btn.querySelector('.aet-label');
+            if (lbl) lbl.textContent = on ? 'استخراج تلقائي' : 'استخراج يدوي';
+        };
+        render();
+        btn.addEventListener('click', () => {
+            const next = this._autoExtractEnabled() ? 'off' : 'on';
+            localStorage.setItem('lettersys_auto_extract', next);
+            render();
+            this.showToast(
+                next === 'on' ? 'الاستخراج التلقائي مفعّل — يُستخرَج فور رفع الملف.'
+                              : 'الاستخراج التلقائي مُطفأ — أدخِل يدوياً أو اضغط «استخراج» وقتما تشاء.',
+                'info', 4000);
+        });
     }
 
     /** يحدّث مؤشّر حالة الوكيل (الحبّة الملوّنة) في رأس المعاينة.
@@ -723,6 +753,11 @@ class ExtractionSmartSystem {
                 // تنبيه (تأجيل الاستخراج/فشل OCR) له الأولوية على رسالة الثقة
                 if (notice) {
                     this._showProgressBanner(notice, 'warning');
+                } else if (data.extract_skipped) {
+                    // المستخدم أطفأ الاستخراج التلقائي — رسالة صادقة بدل «ثقة 0%»
+                    this._showProgressBanner(
+                        'تم التقاط المستند — الاستخراج التلقائي مُطفأ. أدخِل الحقول يدوياً أو اضغط «استخراج».',
+                        'info');
                 } else {
                     this._showProgressBanner(
                         `تم تحميل بيانات المسح تلقائياً — ثقة ${Math.round((data.overall_confidence || 0) * 100)}%`,
@@ -2212,6 +2247,8 @@ class ExtractionSmartSystem {
             const fd = new FormData();
             fd.append('file', blob, 'scan.pdf');
             fd.append('trim_blanks', '1');           // إزالة ظهور الصفحات الفارغة (مسح مزدوج)
+            // مفتاح الاستخراج التلقائي يحكم مسار المسح أيضاً: مطفأً يُلتقط المستند فوراً بلا OCR
+            fd.append('auto_ocr', this._autoExtractEnabled() ? '1' : '0');
             const ud = await (await fetch('/books/api/scan/process-upload/', {
                 method: 'POST',
                 credentials: 'same-origin',
@@ -2321,9 +2358,14 @@ class ExtractionSmartSystem {
                 this.displayFileName(fileName);
                 this._updateScanState();
                 if (!noAutoExtract) {
-                    this.showToast('✓ تم المسح — جاري الاستخراج...', 'info');
-                    // استخراج تلقائي بعد المسح الضوئي
-                    setTimeout(() => this.extractData(), 400);
+                    if (this._autoExtractEnabled()) {
+                        this.showToast('✓ تم المسح — جاري الاستخراج...', 'info');
+                        // استخراج تلقائي بعد المسح الضوئي
+                        setTimeout(() => this.extractData(), 400);
+                    } else {
+                        // الاستخراج التلقائي مُطفأ — المستند جاهز للإدخال اليدوي، وزرّ «استخراج» متاح
+                        this.showToast('✓ المستند جاهز — أدخِل الحقول يدوياً أو اضغط «استخراج» متى شئت.', 'info', 6000);
+                    }
                 }
             })
             .catch(error => {
@@ -3146,6 +3188,10 @@ class ExtractionSmartSystem {
         const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
         const fd = new FormData();
         fd.append('file', file, file.name);
+        // تجهيز فقط بلا OCR: الاستخراج يجري بعد المعاينة عبر extractData (المحكوم بمفتاح
+        // «استخراج تلقائي»). بدون هذا كان OCR يعمل مرّتين — في process-upload (وتُهمَل
+        // نتيجتها) ثم في smart_extract_direct — فيتضاعف أبطأ جزء في المسار.
+        fd.append('auto_ocr', '0');
         // مؤشّر تحميل احترافي داخل لوحة المعاينة (بدل التجمّد الصامت أثناء رفع/معالجة المستند).
         // يبقى ظاهراً حتى تُرسَم المعاينة، ثم يعود أثناء الاستخراج — فلا يشعر المستخدم بجمود.
         this._showExtractionOverlay('جارٍ رفع المستند…', 'يتم رفع المستند ومعالجته على الخادم');

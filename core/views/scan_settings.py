@@ -528,7 +528,13 @@ def scan_process_upload(request):
         # الاستخراج التلقائي (OCR) مؤجَّل افتراضياً: محرّك EasyOCR ثقيل وقد يتعطّل أصلياً
         # على الأجهزة محدودة الذاكرة. حتى يجهز عامل OCR المقيم، نلتقط المستند ونترك
         # الإدخال يدوياً. يُعاد تفعيله بضبط SCAN_AUTO_OCR=True.
-        if getattr(dj_settings, 'SCAN_AUTO_OCR', False):
+        # مفتاح «الاستخراج التلقائي» في الواجهة يَعلو على الإعداد لكل طلب: يتيح للمستخدم
+        # تخطّي OCR البطيء والانتقال للإدخال اليدوي فوراً (يبقى زرّ «استخراج» متاحاً لاحقاً).
+        _req_ocr = (request.POST.get('auto_ocr') or '').strip()
+        _user_skipped = _req_ocr in ('0', 'false', 'False')
+        auto_ocr = (_req_ocr in ('1', 'true', 'True')) if _req_ocr \
+            else getattr(dj_settings, 'SCAN_AUTO_OCR', False)
+        if auto_ocr:
             # Tesseract يعمل كبرنامج خارجي (لا segfault) فنشغّله داخل العملية: أسرع
             # بكثير (بلا إعادة إقلاع Django ~5-11ث). EasyOCR/PyTorch يحتاج عزل عملية فرعية.
             if getattr(dj_settings, 'AI_OFFLINE_ENGINE', 'tesseract') == 'tesseract':
@@ -546,7 +552,11 @@ def scan_process_upload(request):
                 warning = ''
         else:
             data = {'needs_review': True}
-            warning = 'حُفِظ المستند الممسوح — أدخل البيانات يدوياً (الاستخراج التلقائي مؤجَّل حالياً).'
+            data['extract_skipped'] = True
+            # تخطّي المستخدم المقصود ليس شذوذاً ⇒ بلا تنبيه (العميل يعرف أنه أطفأ المفتاح،
+            # وقد يُتبعه باستخراج عند الطلب). التنبيه يبقى لتخطّي الإعداد وحده.
+            warning = '' if _user_skipped else \
+                'حُفِظ المستند الممسوح — أدخل البيانات يدوياً (الاستخراج التلقائي مؤجَّل حالياً).'
 
         source_name = (request.POST.get('source_name') or up.name or 'scan.pdf').strip()
         data['source_file'] = os.path.basename(source_name)
@@ -582,7 +592,7 @@ def scan_process_upload(request):
         logger.info('[ScanUpload] done token=%s user=%s conf=%.0f%% pages=%s auto_ocr=%s',
                     token[:8], request.user,
                     (data.get('overall_confidence') or 0) * 100, data['page_count'],
-                    getattr(dj_settings, 'SCAN_AUTO_OCR', False))
+                    auto_ocr)   # القيمة الفعّالة (بعد تجاوز الطلب) لا الإعداد وحده
         return JsonResponse({
             'ok': True,
             'token': token,

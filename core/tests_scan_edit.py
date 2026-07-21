@@ -7,12 +7,13 @@ import json
 import os
 import tempfile
 import uuid
+from unittest import mock
 
 import fitz  # PyMuPDF
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from core.tests_attachment_pdf import _png_bytes, _pdf_mixed_blank
@@ -295,3 +296,59 @@ def _make_pdf2(pages):
     data = d.tobytes()
     d.close()
     return data
+
+
+def _make_pdf_inked(pages=1):
+    """PDF فيه حبر حقيقي — يتجاوز حارس «المسح الفارغ» الذي يطغى على التنبيهات."""
+    import fitz
+    d = fitz.open()
+    for _ in range(pages):
+        pg = d.new_page()
+        pg.draw_rect(fitz.Rect(40, 40, 400, 300), color=(0, 0, 0), fill=(0, 0, 0))
+    data = d.tobytes()
+    d.close()
+    return data
+
+
+class ScanAutoOcrToggleTests(TestCase):
+    """مفتاح «الاستخراج التلقائي» في الواجهة: معامل auto_ocr يَعلو على إعداد
+    SCAN_AUTO_OCR لكل طلب — فيستطيع المستخدم تخطّي OCR البطيء والإدخال يدوياً."""
+
+    def setUp(self):
+        self.client = Client()
+        User.objects.create_user("ocr_u", password="p")
+        self.client.login(username="ocr_u", password="p")
+
+    def _upload(self, **extra):
+        return self.client.post(
+            reverse("scan_process_upload"),
+            data={"file": SimpleUploadedFile("s.pdf", _make_pdf_inked(1),
+                                             content_type="application/pdf"), **extra},
+        )
+
+    @override_settings(SCAN_AUTO_OCR=True)
+    def test_auto_ocr_zero_skips_ocr_even_when_setting_on(self):
+        with mock.patch("core.extraction.pipeline.run_ocr_inprocess") as m:
+            resp = self._upload(auto_ocr="0")
+        self.assertEqual(resp.status_code, 200)
+        m.assert_not_called()                                   # لم يُشغَّل OCR إطلاقاً
+        body = resp.json()
+        self.assertEqual(body.get("warning", ""), "")           # تخطٍّ مقصود ⇒ بلا تنبيه مُقلِق
+        data = cache.get(f"scan_token:{body['token']}")
+        self.assertTrue(data.get("extract_skipped"))            # العميل يعرف أنه تُخطّي
+
+    @override_settings(SCAN_AUTO_OCR=False, AI_OFFLINE_ENGINE="tesseract")
+    def test_auto_ocr_one_runs_ocr_even_when_setting_off(self):
+        with mock.patch("core.extraction.pipeline.run_ocr_inprocess",
+                        return_value={"title": "س"}) as m:
+            resp = self._upload(auto_ocr="1")
+        self.assertEqual(resp.status_code, 200)
+        m.assert_called_once()                                  # التجاوز يعمل بالاتجاهين
+
+    @override_settings(SCAN_AUTO_OCR=False)
+    def test_no_param_falls_back_to_setting(self):
+        with mock.patch("core.extraction.pipeline.run_ocr_inprocess") as m:
+            resp = self._upload()
+        self.assertEqual(resp.status_code, 200)
+        m.assert_not_called()                                   # بلا معامل ⇒ الإعداد يحكم
+        self.assertIn("يدوياً", resp.json().get("warning", ""))  # تنبيه الإعداد يبقى

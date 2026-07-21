@@ -45,6 +45,15 @@
 /* ── شارة المسح التلقائي الذكي ── */
 .scan-auto-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.76rem;font-weight:700;color:#3730a3;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:999px;padding:.22rem .6rem;white-space:nowrap}
 .scan-auto-badge .bi{font-size:.85rem}
+/* ── مفتاح الاستخراج التلقائي (تفعيل/إطفاء) ── */
+.auto-extract-toggle{font:inherit;font-size:.74rem;font-weight:700;display:inline-flex;align-items:center;gap:5px;padding:.26rem .7rem;border-radius:999px;cursor:pointer;border:1px solid transparent;white-space:nowrap;transition:color .15s,background .15s,border-color .15s}
+.auto-extract-toggle .bi{font-size:.85rem}
+.auto-extract-toggle.is-on{color:#0f766e;background:#f0fdfa;border-color:#99f6e4}
+.auto-extract-toggle.is-on:hover{background:#ccfbf1}
+.auto-extract-toggle.is-off{color:#94a3b8;background:#f8fafc;border-color:#e2e8f0}
+.auto-extract-toggle.is-off .bi{opacity:.5}
+.auto-extract-toggle.is-off:hover{color:#64748b;border-color:#cbd5e1}
+.auto-extract-toggle:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(20,184,166,.35)}
 
 /* ── عنقود الحالة في رأس المعاينة الداكن: تكييف لونيّ فوق التدرّج التركوازي ──
    الحالة نقطةٌ فقط (اللون يكفي، والنصّ في التلميح)، والوضع التلقائي أيقونةٌ فقط. */
@@ -522,6 +531,11 @@
         <!-- شريط أزرار المسح الضوئي (محاذٍ لشريط الإجراءات في اللوحة اليسرى) -->
         <div class="scan-action-bar"{% if edit_book_json != 'null' %} style="display:none"{% endif %}>
             <select id="scanDeviceSelect" class="form-select form-select-sm" style="display:none;max-width:220px" title="اختر الماسح الضوئي"></select>
+            {# مفتاح الاستخراج التلقائي: مفعّلاً يُستخرَج فور رفع الملف؛ مطفأً تُدخِل يدوياً بلا انتظار (يُخزَّن) #}
+            <button type="button" id="autoExtractToggle" class="auto-extract-toggle is-on" role="switch" aria-checked="true"
+                    title="الاستخراج التلقائي بعد رفع الملف — أطفئه لتُدخِل الحقول يدوياً بلا انتظار، ويبقى زرّ «استخراج» متاحاً وقتما تشاء">
+                <i class="bi bi-lightning-charge-fill"></i><span class="aet-label">استخراج تلقائي</span>
+            </button>
             <div class="scan-progress-inline" id="scanProgress" style="display: none;">
                 <div class="spinner-border spinner-border-sm" role="status"></div>
                 <span class="progress-message">جاري المسح...</span>
@@ -547,7 +561,7 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260719h"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260720a"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
