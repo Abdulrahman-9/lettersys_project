@@ -103,7 +103,7 @@
     class="extraction-container"
     data-ws-presence="1"
     data-initial-kind="{{ initial_kind }}"
-    data-smart-extract-endpoint="{% url 'ai_smart_extract' %}"
+    data-smart-extract-stream-endpoint="{% url 'ai_smart_extract_stream' %}"
     data-entity-list-endpoint="{% url 'entity-list-api' %}"
     data-suggestions-endpoint="{% url 'ai_suggestions' %}"
     data-save-book-endpoint="{% url 'save-book-api' %}"
@@ -561,7 +561,7 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260720a"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260720b"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>

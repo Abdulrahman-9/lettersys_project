@@ -24,7 +24,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
+from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
@@ -385,6 +388,104 @@ def smart_extract_direct(request):
                 os.remove(temp_path)
             except OSError:
                 pass
+
+
+# تسميات المراحل كما يراها المستخدم (مصدر واحد لرسائل التقدّم الحيّة)
+_STAGE_LABELS = {
+    'cache_check': 'تجهيز المستند',
+    'image_enhancement': 'تحسين الصورة',
+    'ocr': 'قراءة النص',
+    'ocr_azure_fallback': 'تحسين القراءة (سحابة)',
+    'pattern_matching': 'استخراج الحقول',
+    'entity_matching': 'مطابقة الجهات',
+    'handwritten_number': 'قراءة الرقم بخط اليد',
+    'confidence': 'حساب الثقة',
+}
+
+
+@login_required
+@require_http_methods(['POST'])
+def smart_extract_stream(request):
+    """بثّ الاستخراج تدريجياً (NDJSON): سطرٌ لكل مرحلة بحقولها المكتملة ثم سطر نهائي.
+
+    يتيح للواجهة ملء الحقول لحظياً برسائل صادقة من الأنبوب نفسه، وإيقافاً يُبقي ما
+    وصل — بدل انتظار الحصيلة كاملةً في نداء متزامن واحد.
+
+    البنية: خيطٌ منتِج يشغّل process_image ويدفع أحداث on_progress إلى طابور،
+    والمولّد يستنزف الطابور ويبثّ. قطع العميل للاتصال يُنهي البثّ، والخيط يُكمل
+    ويُنظّف ملفه المؤقّت (لا يُقتَل — قتل خيط OCR غير آمن).
+    """
+    upload = request.FILES.get('file')
+    if not upload:
+        return JsonResponse({'ok': False, 'error': 'file مطلوب'}, status=400)
+    if upload.content_type not in {'image/jpeg', 'image/png', 'application/pdf'}:
+        return JsonResponse({'ok': False, 'error': 'نوع الملف غير مدعوم'}, status=400)
+    if upload.size > 10 * 1024 * 1024:
+        return JsonResponse({'ok': False, 'error': 'حجم الملف يتجاوز 10MB'}, status=400)
+
+    suffix = Path(upload.name).suffix or '.tmp'
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        for chunk in upload.chunks():
+            tmp.write(chunk)
+        temp_path = tmp.name
+
+    def _events():
+        import json as _json
+        import queue as _queue
+        import threading as _threading
+        from core.extraction.pipeline import result_to_scan_data
+
+        events = _queue.Queue()
+        box = {}
+
+        def _on_progress(stage, fields):
+            events.put({'type': 'stage', 'stage': stage,
+                        'label': _STAGE_LABELS.get(stage, stage), 'fields': fields})
+
+        def _work():
+            try:
+                box['result'] = AIExtractionService().process_image(
+                    temp_path, on_progress=_on_progress)
+            except Exception as exc:              # noqa: BLE001 — يُبلَّغ للعميل كسطر خطأ
+                logger.exception('[extract-stream] فشل الاستخراج')
+                box['error'] = str(exc)
+            finally:
+                # التنظيف في الخيط لا المولّد: العميل قد ينقطع مبكراً بينما OCR ما زال
+                # يقرأ الملف (حذفه حينها يفشل على ويندوز فيتسرّب).
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+                events.put(None)
+
+        _threading.Thread(target=_work, daemon=True).start()
+
+        while True:
+            item = events.get()
+            if item is None:
+                break
+            yield _json.dumps(item, ensure_ascii=False) + '\n'
+
+        result = box.get('result')
+        if result is None:
+            yield _json.dumps({'type': 'error',
+                               'message': box.get('error') or 'تعذّر استخراج البيانات'},
+                              ensure_ascii=False) + '\n'
+        else:
+            payload = result_to_scan_data(result)
+            payload.update({
+                'type': 'done',
+                'success': True,
+                'request_id': _request_id(),
+                'overall_confidence': result.overall_confidence,
+                'cached': result.cached,
+            })
+            yield _json.dumps(payload, ensure_ascii=False) + '\n'
+
+    resp = StreamingHttpResponse(_events(), content_type='application/x-ndjson; charset=utf-8')
+    resp['Cache-Control'] = 'no-cache'
+    resp['X-Accel-Buffering'] = 'no'      # امنع التخزين الوسيط (nginx) كي يصل التقدّم فوراً
+    return resp
 
 
 @api_view(['GET'])

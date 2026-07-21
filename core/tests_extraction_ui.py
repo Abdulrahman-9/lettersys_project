@@ -83,3 +83,83 @@ class ExtractionP1CardsTests(TestCase):
         body = self.client.get(reverse(URL)).content.decode()
         self.assertIn('id="qualityHero"', body)
         self.assertIn('id="needsReviewCard"', body)
+
+
+class SmartExtractStreamTests(TestCase):
+    """نقطة البثّ التدريجي: سطر NDJSON لكل مرحلة بحقولها المكتملة، ثم سطر نهائي."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("streamer", "s@x.com", "pass1234")
+        self.client.force_login(self.user)
+
+    @staticmethod
+    def _fake_process(path, on_progress=None, **kwargs):
+        """يحاكي الأنبوب: يُعلن المراحل ويُمرّر لقطات متنامية كما يفعل _progress."""
+        from core.extraction.pipeline import AIExtractionResult
+        res = AIExtractionResult()
+        if on_progress:
+            on_progress("ocr", {})                                   # لا حقول بعد
+            res.title, res.title_confidence = "موضوع تجريبي", 0.8
+            on_progress("pattern_matching", {"title": res.title, "title_confidence": 0.8})
+            res.issuing_entity_name, res.issuing_entity_confidence = "قسم الرقابة", 0.7
+            on_progress("entity_matching", {"title": res.title, "title_confidence": 0.8,
+                                            "issuing_entity": "قسم الرقابة"})
+        res.status = "completed"
+        res.overall_confidence = 0.75
+        return res
+
+    def _stream_lines(self):
+        import json
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from unittest import mock
+        with mock.patch("core.extraction.api.endpoints.AIExtractionService") as svc:
+            svc.return_value.process_image.side_effect = self._fake_process
+            resp = self.client.post(
+                reverse("ai_smart_extract_stream"),
+                data={"file": SimpleUploadedFile("a.png", b"\x89PNG\r\n\x1a\n" + b"0" * 64,
+                                                 content_type="image/png")},
+            )
+            self.assertEqual(resp.status_code, 200)
+            raw = b"".join(resp.streaming_content).decode("utf-8")
+        return [json.loads(ln) for ln in raw.splitlines() if ln.strip()]
+
+    def test_stream_emits_stages_with_growing_fields_then_done(self):
+        events = self._stream_lines()
+        stages = [e for e in events if e.get("type") == "stage"]
+        self.assertGreaterEqual(len(stages), 3)
+        # المراحل مُعنونة بالعربية للمستخدم (لا مفاتيح تقنية)
+        self.assertEqual(stages[0]["label"], "قراءة النص")
+        self.assertEqual(stages[0]["fields"], {})                    # لا شيء بعد
+        # اللقطة تنمو: العنوان يصل قبل الجهة
+        self.assertEqual(stages[1]["fields"]["title"], "موضوع تجريبي")
+        self.assertNotIn("issuing_entity", stages[1]["fields"])
+        self.assertEqual(stages[2]["fields"]["issuing_entity"], "قسم الرقابة")
+        # السطر الأخير حصيلة كاملة
+        done = events[-1]
+        self.assertEqual(done["type"], "done")
+        self.assertTrue(done["success"])
+        self.assertEqual(done["title"], "موضوع تجريبي")
+
+    def test_stream_reports_failure_as_error_line(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from unittest import mock
+        import json
+        with mock.patch("core.extraction.api.endpoints.AIExtractionService") as svc:
+            svc.return_value.process_image.side_effect = RuntimeError("انفجار")
+            resp = self.client.post(
+                reverse("ai_smart_extract_stream"),
+                data={"file": SimpleUploadedFile("a.png", b"\x89PNG\r\n\x1a\n" + b"0" * 64,
+                                                 content_type="image/png")},
+            )
+            raw = b"".join(resp.streaming_content).decode("utf-8")
+        last = json.loads(raw.splitlines()[-1])
+        self.assertEqual(last["type"], "error")                       # فشل صادق لا صمت
+        self.assertIn("انفجار", last["message"])
+
+    def test_stream_rejects_unsupported_type(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        resp = self.client.post(
+            reverse("ai_smart_extract_stream"),
+            data={"file": SimpleUploadedFile("a.exe", b"MZ", content_type="application/x-msdownload")},
+        )
+        self.assertEqual(resp.status_code, 400)

@@ -80,7 +80,7 @@ class ExtractionSmartSystem {
         const dataset = container ? container.dataset : {};
 
         return {
-            smartExtract: dataset.smartExtractEndpoint || '/books/api/extract/smart/',
+            smartExtractStream: dataset.smartExtractStreamEndpoint || '/books/api/extract/smart/stream/',
             entityList: dataset.entityListEndpoint || '/books/api/entity-list/',
             suggestions: dataset.suggestionsEndpoint || '/books/api/suggestions/',
             saveBook: dataset.saveBookEndpoint || '/books/api/book/save/',
@@ -3405,7 +3405,6 @@ class ExtractionSmartSystem {
     }
 
     _hideExtractionOverlay() {
-        this._stopOverlayPhases();
         const modalBody = document.getElementById('modalBody');
         if (!modalBody) return;
         const overlay = modalBody.querySelector('.extraction-loading-overlay');
@@ -3416,33 +3415,8 @@ class ExtractionSmartSystem {
         }
     }
 
-    // تقدّم حيّ خفيف أثناء الاستخراج: الخادم نداءٌ واحد حاجب، فنعرض مؤقّتاً منقضياً
-    // (إشارة صادقة دائماً أنّ العمل جارٍ، لا تجمّد) مع تسمية المرحلة المتوقّعة بحسب
-    // الزمن — بديلٌ عن السبينر الثابت الذي يبدو متجمّداً حتى 5 دقائق. بلا خادم/SSE.
-    _startOverlayPhases(phases) {
-        this._stopOverlayPhases();
-        const modalBody = document.getElementById('modalBody');
-        const subEl = modalBody && modalBody.querySelector('.extraction-loading-overlay .overlay-sub');
-        if (!subEl || !Array.isArray(phases) || !phases.length) return;
-        const startedAt = Date.now();
-        let idx = 0;
-        const tick = () => {
-            const secs = Math.floor((Date.now() - startedAt) / 1000);
-            while (idx < phases.length - 1 && secs >= phases[idx + 1].at) idx++;
-            const mm = String(Math.floor(secs / 60)).padStart(2, '0');
-            const ss = String(secs % 60).padStart(2, '0');
-            subEl.textContent = `${phases[idx].label} — ${mm}:${ss}`;
-        };
-        tick();
-        this._overlayPhaseTimer = setInterval(tick, 1000);
-    }
-
-    _stopOverlayPhases() {
-        if (this._overlayPhaseTimer) {
-            clearInterval(this._overlayPhaseTimer);
-            this._overlayPhaseTimer = null;
-        }
-    }
+    // (أُزيلت مراحل الأوفرلاي المؤقّتة الوهمية: البثّ التدريجي صار يعطي مرحلةً حقيقية
+    //  من الأنبوب مع كل حدث — انظر _onExtractStage.)
 
     _focusFirstReviewField(data) {
         // بعد الاستخراج، ضع التركيز على أول حقل مهم يحتاج مراجعة (ثقة منخفضة أو فارغ)
@@ -3472,15 +3446,18 @@ class ExtractionSmartSystem {
             extractBtn.innerHTML = '<span class="spinner"></span> جاري...';
             extractBtn.disabled = true;
         }
-        this._showExtractionOverlay();
-        this._startOverlayPhases([
-            { at: 0,  label: 'جارٍ تجهيز صورة المستند' },
-            { at: 2,  label: 'جارٍ قراءة النص واستخراج الحقول' },
-            { at: 30, label: 'المعالجة مستمرة — قد يستغرق تحميل نماذج القراءة وقتاً لأوّل مرّة' },
-        ]);
+        // تقدّم حقيقي من الأنبوب (بدل مؤقّتات وهمية) + إيقاف يُبقي ما استُخرج
+        this._streamFilled = new Set();
+        this._extractStopped = false;
+        this._extractAbort = new AbortController();
+        this._showExtractionOverlay(
+            'جارٍ تجهيز المستند…',
+            'ستُملأ الحقول تِباعاً فور استخراج كلٍّ منها',
+            () => this._stopExtraction());
 
-        this.callExtractApi()
+        this._streamExtract()
             .then((data) => {
+                if (this._extractStopped) return;
                 const fallbackFlag = (data.details && data.details.fallback) || (data.message && data.message.toLowerCase().includes('mock'));
                 if (fallbackFlag) {
                     const reason = data.details && data.details.reason ? ` (سبب: ${data.details.reason})` : '';
@@ -3506,6 +3483,8 @@ class ExtractionSmartSystem {
                 setTimeout(() => this._focusFirstReviewField(data), 200);
             })
             .catch((err) => {
+                // الإيقاف المقصود ليس خطأً — _stopExtraction تولّى الرسالة والحالة
+                if (this._extractStopped || err.name === 'AbortError') return;
                 this.showToast(err.message || this.t('extractFail'), 'error', 6000);
                 console.error(err);
             })
@@ -3519,60 +3498,130 @@ class ExtractionSmartSystem {
             });
     }
 
-    async callExtractApi() {
+    // ═══════ الاستخراج التدريجي الحيّ (بثّ NDJSON) ═══════
+    /** يبثّ الاستخراج ويملأ الحقول تِباعاً، ويُعيد الحصيلة النهائية.
+     *  مسارٌ واحد يحلّ محلّ النداء المتزامن القديم: تقدّم حقيقي من الأنبوب + إيقاف
+     *  يُبقي ما وصل (بدل انتظار كلّ شيء ثم لا شيء عند القطع). */
+    async _streamExtract() {
         const form = new FormData();
         form.append('file', this.currentFile);
 
-        // إضافة timeout (5 دقائق للتحميل الأول للنموذج)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 300000);
-
         let response;
         try {
-            response = await fetch(this.apiEndpoints.smartExtract, {
+            response = await fetch(this.apiEndpoints.smartExtractStream, {
                 method: 'POST',
-                headers: {
-                    'X-CSRFToken': this.getCookie('csrftoken'),
-                    'Accept': 'application/json'
-                },
+                headers: { 'X-CSRFToken': this.getCookie('csrftoken') },
                 body: form,
-                signal: controller.signal
+                credentials: 'same-origin',
+                signal: this._extractAbort.signal,
             });
-            clearTimeout(timeoutId);
         } catch (err) {
-            clearTimeout(timeoutId);
-            if (err.name === 'AbortError') {
-                console.error('[ExtractionSmart] ✗ Request timeout (5 min)');
-                throw new Error('انتهت مهلة الاستخراج (5 دقائق). قد يكون السيرفر يحمّل النماذج للمرة الأولى. يرجى المحاولة مرة أخرى.');
-            }
-            console.error('[ExtractionSmart] ✗ Fetch failed:', err);
+            if (err.name === 'AbortError') throw err;      // إيقاف المستخدم — يعالجه _stopExtraction
             throw new Error(`خطأ في الاتصال: ${err.message}`);
         }
 
-        let data;
-        try {
-            data = await response.json();
-        } catch (err) {
-            // غالباً رد HTML (login أو خطأ خادم). نقرأ النص لعرضه.
-            const text = await response.text();
-            const hint = text && text.slice(0, 180);
-            console.error('[ExtractionSmart] ✗ Non-JSON response from extract API:', hint);
-            throw new Error(`فشل الاستخراج (HTTP ${response.status}). يرجى التحقق من تسجيل الدخول أو سجلات الخادم.`);
-        }
-
-        if (!response.ok || data.success === false) {
-            const msg = data.message || this.t('extractFail');
-            if (data.error_code === 'FILE_TYPE') {
-                throw new Error(this.t('fileType'));
-            }
-            if (data.error_code === 'FILE_SIZE') {
-                throw new Error(this.t('fileSize'));
+        if (!response.ok) {
+            let msg = `فشل الاستخراج (HTTP ${response.status}).`;
+            try {
+                const body = await response.json();
+                if (body && body.error) msg = body.error;
+            } catch (_) {
+                if (response.status === 403 || response.redirected) {
+                    msg = 'انتهت الجلسة — سجّل الدخول ثم أعد المحاولة.';
+                }
             }
             throw new Error(msg);
         }
+        if (!response.body) throw new Error('المتصفّح لا يدعم القراءة التدريجية للاستجابة.');
 
-        this.applyExtractionResult(data);
-        return data;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '', final = null;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let nl;
+            while ((nl = buffer.indexOf('\n')) >= 0) {
+                const line = buffer.slice(0, nl).trim();
+                buffer = buffer.slice(nl + 1);
+                if (!line) continue;
+                let ev;
+                try { ev = JSON.parse(line); } catch (_) { continue; }   // سطر تالف يُتخطّى
+                if (ev.type === 'stage') this._onExtractStage(ev);
+                else if (ev.type === 'error') throw new Error(ev.message || this.t('extractFail'));
+                else if (ev.type === 'done') final = ev;
+            }
+        }
+        if (!final) throw new Error('انقطع البثّ قبل اكتمال الاستخراج — أعد المحاولة.');
+        this.applyExtractionResult(final);   // الحصيلة الكاملة (جهات + مرشّحات + ملخّص الثقة)
+        return final;
+    }
+
+    /** حدث مرحلة: رسالة تقدّم صادقة من الأنبوب + ملء ما اكتمل من حقول فوراً. */
+    _onExtractStage(ev) {
+        this._applyPartialFields(ev.fields);
+        const overlay = document.querySelector('#modalBody .extraction-loading-overlay');
+        if (!overlay) return;
+        const text = overlay.querySelector('.overlay-text');
+        const sub = overlay.querySelector('.overlay-sub');
+        if (text) text.textContent = `يجري ${ev.label}…`;
+        if (sub) {
+            const names = [...(this._streamFilled || [])].map(id => this._fieldLabelAr(id)).filter(Boolean);
+            sub.textContent = names.length
+                ? `تم استخراج: ${names.join('، ')}`
+                : 'ستُملأ الحقول تِباعاً فور استخراج كلٍّ منها';
+        }
+    }
+
+    /** يملأ حقول اللقطة الجزئية — مرّة واحدة لكل حقل (لا يدهس ما ملأه المستخدم بعدها). */
+    _applyPartialFields(fields) {
+        if (!fields) return;
+        const filled = this._streamFilled || (this._streamFilled = new Set());
+        [
+            ['bookNumber', 'book_number', 'book_number_confidence'],
+            ['title', 'title', 'title_confidence'],
+            ['date', 'book_date', 'book_date_confidence'],
+            ['senderDate', 'sender_date', 'sender_date_confidence'],
+            ['senderNumber', 'sender_number', 'sender_number_confidence'],
+            ['secretLevel', 'secret_level', 'secret_level_confidence'],
+        ].forEach(([id, key, confKey]) => {
+            const value = fields[key];
+            if (value === undefined || value === null || value === '' || filled.has(id)) return;
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.value = (id === 'date' || id === 'senderDate') ? String(value).slice(0, 10) : value;
+            // نفس ترتيب applyExtractionResult: حدث input أولاً ثم الثقة، وإلا وُسِم «يقين بشري»
+            try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+            const conf = fields[confKey] || 0;
+            this.updateConfidenceBadge(id, conf);
+            this.setFieldConfidence(id, conf);
+            this.validateField(id);
+            filled.add(id);
+        });
+        if (window.__autoGrowTitle) window.__autoGrowTitle();
+    }
+
+    _fieldLabelAr(id) {
+        return ({
+            bookNumber: 'رقمنا', title: 'الموضوع', date: 'تاريخنا',
+            senderDate: 'تاريخ الجهة', senderNumber: 'العدد', secretLevel: 'السرية',
+        })[id] || '';
+    }
+
+    /** إيقاف الاستخراج الجاري: يقطع البثّ ويُبقي كلّ ما مُلئ حتى اللحظة للإكمال يدوياً. */
+    _stopExtraction() {
+        if (this._extractStopped) return;
+        this._extractStopped = true;
+        try { this._extractAbort?.abort(); } catch (_) {}
+        this._hideExtractionOverlay();
+        const kept = (this._streamFilled || new Set()).size;
+        this.showToast(
+            kept ? `أُوقف الاستخراج — بقي ما استُخرج (${kept} حقل)، أكمل الباقي يدوياً.`
+                 : 'أُوقف الاستخراج — أدخِل الحقول يدوياً.',
+            'info', 6000, 'إيقاف الاستخراج');
+        const btn = document.getElementById('extractButton');
+        if (btn) { btn.disabled = false; btn.innerHTML = '↺ إعادة الاستخراج'; }
     }
 
     // يَعُدّ الحقول التي استُخرجت فعلاً (قيمة غير فارغة) — لرسالة صادقة بعد الاستخراج:

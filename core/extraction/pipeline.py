@@ -511,7 +511,7 @@ class AIExtractionService:
         self,
         image_path: str,
         skip_ocr: bool = False,
-        on_progress: Optional[Callable[[str], None]] = None,
+        on_progress: Optional[Callable[[str, Dict[str, Any]], None]] = None,
     ) -> AIExtractionResult:
         """
         Process single image through complete extraction pipeline.
@@ -548,16 +548,23 @@ class AIExtractionService:
         self,
         image_path: str,
         skip_ocr: bool = False,
-        on_progress: Optional[Callable[[str], None]] = None,
+        on_progress: Optional[Callable[[str, Dict[str, Any]], None]] = None,
     ) -> AIExtractionResult:
         """المعالجة الداخلية — تُستدعى داخل thread منفصل."""
 
         def _progress(stage: str) -> None:
-            if on_progress:
-                try:
-                    on_progress(stage)
-                except Exception as cb_exc:
-                    logger.debug('[pipeline] progress callback failed: %s', cb_exc)
+            """يُعلن المرحلة التالية ويُمرّر لقطة الحقول المستخرَجة **حتى الآن**.
+
+            المراحل تُعلَن قبل تنفيذها، فاللقطة تعكس ما اكتمل فعلاً (مثلاً عند إعلان
+            entity_matching تكون حقول pattern_matching جاهزة) — وهذا ما يتيح للواجهة
+            ملء الحقول تدريجياً برسائل صادقة بدل انتظار الحصيلة كاملةً.
+            """
+            if not on_progress:
+                return
+            try:
+                on_progress(stage, partial_scan_data(result))
+            except Exception as cb_exc:
+                logger.debug('[pipeline] progress callback failed: %s', cb_exc)
 
         start_time = time.time()
         result = AIExtractionResult()
@@ -1046,6 +1053,39 @@ def slim_entity_matches(matches) -> List[Dict[str, Any]]:
             'match_type': m.get('match_type', ''),
         })
     return slim
+
+
+def partial_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
+    """لقطة الحقول المكتملة حتى اللحظة (غير الفارغة فقط) — وقود البثّ التدريجي.
+
+    نُرسل ما اكتمل فقط كي تملأ الواجهة حقلاً حقلاً بلا أن تمسح قيمةً لم تُستخرَج بعد
+    (الحقول الفارغة تُحذف من اللقطة بدل إرسالها فارغة).
+    """
+    snap: Dict[str, Any] = {}
+    for field, conf in (
+        ('book_number', 'book_number_confidence'),
+        ('book_date', 'book_date_confidence'),
+        ('sender_date', 'sender_date_confidence'),
+        ('sender_number', 'sender_number_confidence'),
+        ('title', 'title_confidence'),
+        ('secret_level', 'secret_level_confidence'),
+        ('book_kind', 'book_kind_confidence'),
+    ):
+        value = getattr(result, field, None)
+        if value not in (None, '', []):
+            snap[field] = value
+            snap[conf] = getattr(result, conf, 0.0)
+    if getattr(result, 'document_type', ''):
+        snap['document_type'] = result.document_type
+    if getattr(result, 'issuing_entity_name', ''):
+        snap['issuing_entity'] = result.issuing_entity_name
+        snap['issuing_entity_confidence'] = result.issuing_entity_confidence
+        snap['issuing_entity_matches'] = slim_entity_matches(result.issuing_entity_matches)
+    if getattr(result, 'receiving_entity_name', ''):
+        snap['receiving_entity'] = result.receiving_entity_name
+        snap['receiving_entity_confidence'] = result.receiving_entity_confidence
+        snap['receiving_entity_matches'] = slim_entity_matches(result.receiving_entity_matches)
+    return snap
 
 
 def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
