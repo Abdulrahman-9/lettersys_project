@@ -29,10 +29,26 @@ _LABEL_RE = _LABEL_RES['number']   # توافق خلفي
 # (وهي أعلى الصفحة فتفوز بقاعدة «الأعلى يفوز») فيخرج القصّ حدودَ جدولٍ لا تاريخاً.
 # الحلّ: أيّ مرشّحٍ يجاوره في سطره أحدُ ألفاظ الجدول يُرفض.
 _TABLE_CONTEXT = re.compile(r'^(rev|doc|no\.?|ims|form|f\s*-?\d)', re.I)
+
+# ختمُنا نحن على الكتاب الوارد يحمل حقلَين مطبوعَين اسمهما «العدد» و«التاريخ»
+# مملوءَين بخطّ اليد — أي **مرساتَي البحث نفسهما، بخطّ يدٍ، في صندوقٍ عالي التباين**.
+# فعلى كلّ واردٍ مختوم توجد «العدد» مرّتين: مرساة الجهة (إن وُجدت) ومرساتنا؛
+# ومرساتنا أسهل التقاطاً ⟵ **النظام كان يقرأ رقمَنا ويكتبه مكان رقم الجهة**.
+# مشاهدةٌ بالعين على المستندات الخام (2026-07-21، #11119): جهةٌ إنكليزية رقمها
+# مطبوع «№ VD-1231» ولا خطّ يد فيها إطلاقاً — والأرقام اليدوية الوحيدة أختامُنا،
+# فسجّلت الجهة 0 من 120 شريطاً. وهذا جذر تسمّم التواريخ نفسه [[date_labels_poisoned]].
+# «وزارة النفط»/«شركة نفط الوسط» **لا تصلحان** علامةً: ترويسة IMS الداخلية تحملهما.
+_OUR_STAMP = re.compile(r'المتابعة|الوارد|الصادر|m\s*\.?d\s*\.?o\s*\.?c', re.I)
+_STAMP_NEAR_X = 3.0        # أضعاف عرض التسمية أفقياً
+_STAMP_NEAR_Y = 4.0        # أضعاف ارتفاع التسمية عمودياً (الختم كتلةٌ لا سطر)
 _TOP_ZONE = 0.35           # التسمية الشرعية في أعلى ~ثلث الصفحة — تحتها جُمل متن
-_PRIOR_RADIUS = 0.14       # قرب prior الجهة يقبل مرشّحاً خارج الحزام (وُسّع 0.09→0.14
-                           # بعد قياس v2: تسميات شرعية عند y≈0.38 قرب prior ȳ≈0.27 كانت
-                           # تُرفض؛ القطر مقيَّد بمحيط الـprior فلا يبلغ جُمل المتن الدنيا)
+_PRIOR_RADIUS = 0.09       # قرب prior الجهة يقبل مرشّحاً خارج حزام أعلى الصفحة.
+                           # وُسّع 0.09→0.14 لأجل التاريخ، فصار **يُتوّج نصوص المتن
+                           # مراسيَ شرعية** (#9178 «٤١ في ٢٠٢٦/٣/٨ المتضمنة انعقاد
+                           # الاجتماع» → 41 بينما الحقيقة 884؛ وكذلك #8958 و#9259).
+                           # وقياس 2026-07-21: الصفوف التي لا بصمةَ لجهتها أعطت دقّة
+                           # 100% (5/5) مقابل 70% حين توجد بصمة ⟵ الحزام يضرّ الدقّة.
+                           # أُعيد إلى 0.09 وقِيس على البطاقة المجمّدة.
 _MIN_PRIOR_SAMPLES = 3     # لا نثق بـprior قبل 3 مشاهدات
 
 
@@ -109,6 +125,21 @@ class NumberStripLocator:
                 return True
         return False
 
+    @staticmethod
+    def _in_our_stamp(tsv: dict, i: int) -> bool:
+        """هل المرشّح حقلٌ داخل ختمنا نحن؟ (كتلةٌ ثنائية البعد لا سطر، فالجوار
+        صندوقٌ حول المرشّح لا محاذاةُ سطر.)"""
+        top_i, left_i = tsv['top'][i], tsv['left'][i]
+        dx = _STAMP_NEAR_X * max(20, tsv['width'][i])
+        dy = _STAMP_NEAR_Y * max(10, tsv['height'][i])
+        for j, raw in enumerate(tsv.get('text', [])):
+            t = (raw or '').strip().strip(':.ـ ')
+            if not t or j == i or not _OUR_STAMP.search(t):
+                continue
+            if abs(tsv['top'][j] - top_i) <= dy and abs(tsv['left'][j] - left_i) <= dx:
+                return True
+        return False
+
     def find_label(self, tsv: dict, width: int, height: int,
                    entity_id=None) -> Optional[LabelBox]:
         """أفضل مرشّح تسمية: داخل حزام أعلى-الصفحة (يرفض نسخ المتن — خطأ المسبار
@@ -130,6 +161,8 @@ class NumberStripLocator:
                 continue   # نسخة متن («المرقم … في») — الرفض هنا حسم خطأ المسبار
             if self._in_qms_table(tsv, i):
                 continue   # خليّة جدول الترويسة لا تسميةَ حقل
+            if self._in_our_stamp(tsv, i):
+                continue   # ختمنا نحن — رقمُنا لا رقمُ الجهة
             if best is None or y < best[1]:
                 best = (i, y)
         if best is not None:
@@ -145,11 +178,48 @@ class NumberStripLocator:
         return None
 
     @staticmethod
-    def strip_bbox(label: LabelBox, width: int, height: int):
-        """صندوق شريط الرقم: يسار التسمية (RTL)، بهندسة المسبار المُثبَتة."""
+    def rule_above(img, y: int, min_span: float = 0.25):
+        """صفُّ آخر خطٍّ أفقيّ مستمرّ **فوق** `y` (بكسل)، أو None.
+
+        أرضيّةُ قصٍّ لا مُصفاة: القصّ كان يصعد 0.6×ارتفاع التسمية بلا قيد فيجرف صفّ
+        «No.1» من جدول IMS، فتضيع الخانة الأولى للرقم (١٧٥٤→154 · ١٧٨٥→3785 ·
+        ١٨٠٧→187 — مشاهَدةٌ بالعين 2026-07-21).
+
+        **درسٌ مدفوع:** أوّل نسخةٍ أخذت «آخر خطٍّ في أعلى 32% من الصفحة» ورفضت أيّ
+        تسميةٍ فوقه — فانهارت التغطية 140→58 والنتيجة 18%→10%، لأن ذلك الخطّ يقع
+        **تحت** سطر العدد في كثيرٍ من القوالب. الحدّ الصحيح مقيَّدٌ بالتسمية نفسها،
+        ولا يرفض شيئاً أبداً.
+        """
+        try:
+            import cv2
+            import numpy as np
+
+            cut = max(1, min(int(y), img.height))
+            arr = np.asarray(img.convert('L').crop((0, 0, img.width, cut)), dtype=np.uint8)
+            bw = cv2.threshold(arr, 0, 255,
+                               cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+            span = max(20, int(img.width * min_span))
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (span, 1))
+            lines = cv2.morphologyEx(bw, cv2.MORPH_OPEN, kernel)
+            rows = np.flatnonzero(lines.sum(axis=1) >= span * 255)
+            del arr, bw, lines
+            if rows.size == 0:
+                return None
+            return int(rows.max())
+        except Exception:      # لا يُسقط الأنبوب أبداً — المِرساة تحسينٌ لا شرط
+            return None
+
+    @staticmethod
+    def strip_bbox(label: LabelBox, width: int, height: int, floor_y: int = 0):
+        """صندوق شريط الرقم: يسار التسمية (RTL)، بهندسة المسبار المُثبَتة.
+
+        `floor_y` = حافّة الجدول السفلى: لا يصعد القصّ فوقها فلا يجرف صفّ «No.1».
+        """
         x1 = max(0, label.left - 2)
         x0 = max(0, label.left - 8 * max(label.width, 40))
         y0 = max(0, label.top - int(0.6 * label.height))
+        if floor_y:
+            y0 = max(y0, min(floor_y + 2, label.top))
         y1 = min(height, label.top + int(1.6 * label.height))
         return (x0, y0, x1, y1)
 
@@ -158,7 +228,34 @@ class NumberStripLocator:
         label = self.find_label(tsv, img.width, img.height, entity_id=entity_id)
         if label is None:
             return None
-        box = self.strip_bbox(label, img.width, img.height)
+        floor_y = self.rule_above(img, label.top) or 0
+        box = self.strip_bbox(label, img.width, img.height, floor_y=floor_y)
         if box[2] - box[0] < 30:   # شريط أضيق من أن يحوي رقماً
             return None
-        return img.crop(box), label
+        crop = img.crop(box)
+        if self._is_blank(crop):
+            # **طبقة القصاصات الفارغة** (2026-07-21): حين تقع التسمية قرب حافّة
+            # الصفحة اليسرى (x < 0.18) يرتطم `x0` بالصفر فيصير الشريط هامشَ ورقةٍ
+            # فارغاً. المولّد: مِرساة `Ref:` اللاتينية في الترويسات ثنائية اللغة —
+            # تجلس يساراً **وقيمتها يمينها**، والقصّ لا يعرف إلا اليسار.
+            # مقيس: 1,539 من 5,312 شريط تسمية أضيق من 8×40−2=318 بكسل (**29%**)،
+            # و**صفرٌ صحيح** من 11 قصاصةً ضيّقة في عيّنة الـ250 مقابل انبعاثين خاطئين.
+            # الامتناع هنا **لا يخسر شيئاً**: لا صواب تحته، وفيه خطأٌ يُحذَف.
+            # (قصُّ اليمين للمراسي اللاتينية إصلاحٌ لاحق — قيمتها مطبوعةٌ غالباً،
+            #  فلا يُوصَّل قبل نقض المنطقة المطبوعة.)
+            del crop
+            return None
+        return crop, label
+
+    @staticmethod
+    def _is_blank(crop) -> bool:
+        """هل القصاصة خاليةٌ من الحبر؟ (نفس معيار `reader._ink_bbox` تقريباً)"""
+        try:
+            import numpy as np
+
+            a = np.asarray(crop.convert('L'), dtype=np.float32)
+            if a.std() < 1:
+                return True
+            return int((a < (a.mean() - 1.2 * a.std())).sum()) < 40
+        except Exception:
+            return False

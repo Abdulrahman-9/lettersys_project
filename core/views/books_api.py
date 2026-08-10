@@ -345,7 +345,10 @@ def save_book_api(request):
                     persist_extraction_capture(
                         book=book, attachment=attachment, suggested=suggested,
                         final={'our_number': book.our_number, 'title': book.title,
-                               'secret_level': book.secret_level, 'kind': book.kind},
+                               'secret_level': book.secret_level, 'kind': book.kind,
+                               # العدد النهائي = حقيقة التدريب لحلقة العدد الجديدة
+                               'sender_number': book.sender_number or '',
+                               'sender_date': str(book.sender_date or '')},
                         user=request.user)
             except Exception as cap_err:
                 logger.warning('[capture] تعذّر التقاط التدريب: %s', cap_err)

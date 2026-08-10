@@ -108,6 +108,13 @@ class AIExtractionResult:
 
         self.sender_number: Optional[str] = None
         self.sender_number_confidence: float = 0.0
+        # موضع قصّ العدد اليدويّ مُطبَّعاً [x0,y0,x1,y1] (0-1) — ميتاداتا تدريب التوضيع
+        # تُلتقَط عند الحفظ؛ None حين لا يُقرأ العدد يدوياً. (رافعة Fable: أزواج تدريب CRNN.)
+        self.sender_number_bbox: Optional[list] = None
+        # قصاصةُ شريط «التأريخ» اليدويّ (data URL) لعرضها بجوار حقل الإدخال (خيار F،
+        # فيبل15/16): الكاتب — القارئ الموثوق — ينسخها بنظرة. لا تُقرأ آلياً ولا تُبثّ
+        # في الكاش/الحفظ؛ تعيش في scan_data (استجابة HTTP عابرة) فقط. None حين لا شريط.
+        self.sender_date_crop: Optional[str] = None
 
         self.title: str = ""
         self.title_confidence: float = 0.0
@@ -283,6 +290,7 @@ class AIExtractionService:
         # قارئ الأرقام اليدوية (مرحلة 3) — كسول: يُبنى عند أول حاجة فقط
         self._hw_reader = None
         self._hw_locator = None
+        self._hw_date_locator = None   # مُموضِع «التأريخ» لقصاصة الواجهة (خيار F)
 
         # OCR providers are initialized lazily after the document is confirmed loadable.
         self._offline_provider = None
@@ -361,11 +369,15 @@ class AIExtractionService:
                            type(exc).__name__)
             return []
 
-    def _read_handwritten_sender_number(self, image_path, entity_id):
+    def _read_handwritten_sender_number(self, image_path, entity_id, want_date_crop=False):
         """مرحلة 3 — رقم الجهة المخربش بخط اليد حيث تعجز كل الطبقات المطبوعة:
         تموضعٌ بمرساة «العدد» وبصمة تخطيط الجهة ← قصّ الشريط ← قراءة CRNN (v5:
-        94.5% على شرائط محجوزة) ← بوابة الثقة المُعايَرة. يعيد (نص، ثقة) أو None؛
-        أي فشلٍ داخلي يتدهور بصمت — القارئ لا يُسقط الأنبوب أبداً."""
+        94.5% على شرائط محجوزة) ← بوابة الثقة المُعايَرة.
+
+        يعيد `(number_result, date_crop)`: `number_result` = (نص، ثقة، bbox) أو None؛
+        و`date_crop` = data URL لشريط «التأريخ» اليدويّ (خيار F) أو None. القصاصةُ تركب
+        نفس الرسم+TSV (بلا مسحٍ ثانٍ — فيبل16) وتُحسَب **باستقلالٍ عن ارتدادات العدد**.
+        أيّ فشلٍ داخليّ يتدهور بصمت — القارئ لا يُسقط الأنبوب أبداً."""
         try:
             from core.extraction.handwriting import EntityLayoutPriors, NumberStripLocator
             from core.extraction.handwriting.reader import CONF_GATE, HandwrittenNumberReader
@@ -374,8 +386,11 @@ class AIExtractionService:
                 self._hw_reader = HandwrittenNumberReader()
                 priors = EntityLayoutPriors(os.path.join('var', 'handwriting_layout_priors.json'))
                 self._hw_locator = NumberStripLocator(priors)
+                # مُموضِع «التأريخ» بلا priors: لا بصمةَ تاريخٍ لكل جهةٍ بعد (فيبل16)،
+                # فمرساةُ التسمية المطبوعة وحدها تقود — ونقبل source='label' فقط.
+                self._hw_date_locator = NumberStripLocator(None, field='date')
             if not self._hw_reader.available:
-                return None
+                return None, None
 
             from PIL import Image as PILImage
             if image_path.lower().endswith('.pdf'):
@@ -402,20 +417,82 @@ class AIExtractionService:
                 os.environ['TESSDATA_PREFIX'] = prov.tessdata_dir
             tsv = pt.image_to_data(img, lang=prov.lang, config=f'--psm {prov.psm}',
                                    output_type=pt.Output.DICT)
+
+            # ── العدد اليدويّ (قراءة) ── لا early-return: نحسب التاريخ من نفس الرسم+TSV
+            number_result = None
             located = self._hw_locator.locate(img, tsv, entity_id=entity_id)
-            del tsv
-            if located is None:
-                return None
-            strip, _label = located
-            text, conf = self._hw_reader.read_best(strip)
-            del img, strip
-            if text and text.isdigit() and 1 <= len(text) <= 6 and conf >= CONF_GATE:
-                return text, conf
-            logger.info('[handwriting] قراءة دون البوابة: %r (ثقة %.2f)', text, conf)
-            return None
+            if located is not None:
+                strip, _label = located
+                if getattr(_label, 'source', '') != 'label':
+                    # ارتداد البصمة (شريطٌ أعمى حول نقطة الجهة الوسطيّة) — مقيسٌ
+                    # 2026-07-21: 80/2,958 = **2.7%** إصابة على الأشرطة المحصودة،
+                    # و0 صواب من 17 قصاصة على الـ38 مقابل انبعاثٍ خاطئ واحد.
+                    # يبقى متاحاً للحصاد (توليد مرشّحات) ولا يصل الحقل أبداً.
+                    logger.info('[handwriting] قصاصة ارتداد البصمة — لا تُصدَر')
+                else:
+                    # تُراجِعٌ 2026-07-22: توصيل `printed_region_veto` هنا **قِيس فتراجَع** —
+                    # البطاقة 18.1%→14.0% (حذف 12 انبعاثاً: 10 صحيحة/2 خاطئة). السبب بالعين:
+                    # Tesseract **يقرأ الأرقام العربية-الهندية الواضحة** (١١٣، ٦٩) فتُنقَض قراءةٌ
+                    # يدويّةٌ صحيحة. الفرضيّة «Tesseract≈0% على خطّ اليد» أضعف من أن تصمد.
+                    # النقض يصيب اقتباسات المتن «رقم في تاريخ» بحقّ، لكنّ تلك دون البوّابة أصلاً —
+                    # فالمكسب صفر والكلفة 10 صحيحة. الإصلاح الصحيح واعٍ بالسياق (نمط «في+تاريخ»)
+                    # لا رقمين مجرّدين. `guards.printed_region_veto` يبقى مكتوباً غير موصول.
+                    text, conf = self._hw_reader.read_best(strip)
+                    # موضع القصّ مُطبَّعاً [x0,y0,x1,y1] — يُعاد حسابه من التسمية (حتميّ، لا
+                    # يمسّ الاستخراج). ميتاداتا تدريب التوضيع: أين قصّ المُموضِع حين انبعث العدد.
+                    loc = self._hw_locator
+                    fy = loc.rule_above(img, _label.top) or 0
+                    bx = loc.strip_bbox(_label, img.width, img.height, floor_y=fy)
+                    W, H = img.width, img.height
+                    bbox_norm = [round(bx[0] / W, 4), round(bx[1] / H, 4),
+                                 round(bx[2] / W, 4), round(bx[3] / H, 4)]
+                    if text and text.isdigit() and 1 <= len(text) <= 6 and conf >= CONF_GATE:
+                        number_result = (text, conf, bbox_norm)
+                    else:
+                        logger.info('[handwriting] قراءة دون البوابة: %r (ثقة %.2f)', text, conf)
+                del strip
+
+            # ── قصاصة «التأريخ» للواجهة (خيار F) — من نفس img+tsv، لا قراءة ──
+            date_crop = self._crop_date_strip(img, tsv) if want_date_crop else None
+
+            del tsv, img
+            return number_result, date_crop
         except Exception as exc:
             logger.warning('[handwriting] فشل مسار خط اليد: %s — تدهور رشيق',
                            type(exc).__name__)
+            return None, None
+
+    def _crop_date_strip(self, img, tsv):
+        """قصاصةُ شريط «التأريخ» اليدويّ للعرض في الواجهة (خيار F) — لا قراءة، الكاتب
+        ينسخها. **هندسةٌ فضفاضةٌ متناظرة عمداً**: تمركزٌ حول التسمية وامتدادٌ للجهتين
+        (القيمة العربيّة يساراً والإنجليزيّة يميناً) + حشوٌ رأسيّ سخيّ — الإفراطُ في
+        القصّ مجّانيٌّ (بشريُّ العرض) والتقصيرُ وحده يُفقِد القيمة (فيبل16). لا نُعيد
+        استعمال صندوق القارئ الضيّق. يُعيد data URL (PNG رماديّ) أو None."""
+        try:
+            located = self._hw_date_locator.locate(img, tsv, entity_id=None)
+            if located is None:
+                return None
+            _strip, label = located
+            if getattr(label, 'source', '') != 'label':
+                return None                       # تسميةٌ مرئيّة فقط — لا بصمةَ عمياء
+            import base64
+            import io
+            W, H = img.width, img.height
+            lw = max(label.width, 40)
+            x0 = max(0, label.left - int(6.5 * lw))
+            x1 = min(W, label.left + label.width + int(6.5 * lw))
+            pad = int(1.2 * label.height)
+            y0 = max(0, label.top - pad)
+            y1 = min(H, label.top + label.height + pad)
+            crop = img.crop((x0, y0, x1, y1))
+            if crop.width > 760:                  # رفيعٌ ورخيص (~بضعة KB)
+                r = 760 / crop.width
+                crop = crop.resize((760, max(1, int(crop.height * r))))
+            buf = io.BytesIO()
+            crop.save(buf, format='PNG', optimize=True)
+            return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode('ascii')
+        except Exception as exc:
+            logger.warning('[handwriting] قصاصة التاريخ تعذّرت: %s', type(exc).__name__)
             return None
 
     def compute_image_hash(self, image_path: str) -> str:
@@ -851,14 +928,21 @@ class AIExtractionService:
             # Step 5.5: رقم الجهة المخربش بخط اليد — الملاذ الأخير حين تصمت كل
             # الطبقات المطبوعة (قياس الأرشيف: أغلبية الأرقام يدوية، Tesseract ≈ 0%
             # عليها). يعمل في مسارَي OCR والكاش كليهما (يحتاج ملف الصورة فقط).
+            # ويركب نفسَ الرسم+TSV قصاصةُ «التأريخ» اليدويّ للواجهة (خيار F) حين خلا
+            # تاريخُ الجهة من الطبقات المطبوعة — بلا مسحٍ ثانٍ (فيبل16).
             if not result.sender_number and result.image_path:
                 _progress('handwritten_number')
-                hw = self._read_handwritten_sender_number(result.image_path,
-                                                          getattr(result, 'issuing_entity_id', None))
-                if hw:
-                    result.sender_number, result.sender_number_confidence = hw
+                want_crop = not result.sender_date
+                num_res, date_crop = self._read_handwritten_sender_number(
+                    result.image_path, getattr(result, 'issuing_entity_id', None),
+                    want_date_crop=want_crop)
+                if num_res:
+                    result.sender_number, result.sender_number_confidence, result.sender_number_bbox = num_res
                     logger.info('[handwriting] رقم الجهة من خط اليد: %r (ثقة %.2f)',
                                 result.sender_number, result.sender_number_confidence)
+                if date_crop:
+                    result.sender_date_crop = date_crop
+                    logger.info('[handwriting] قصاصة تاريخ الجهة للواجهة (خيار F)')
 
             # Step 6: حساب الثقة الإجمالية
             _progress('confidence')
@@ -1104,8 +1188,10 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         'book_date_confidence': result.book_date_confidence,
         'sender_date': result.sender_date,
         'sender_date_confidence': result.sender_date_confidence,
+        'sender_date_crop': result.sender_date_crop,   # قصاصة «التأريخ» اليدويّ للواجهة (خيار F) — عابرةٌ في الاستجابة فقط
         'sender_number': result.sender_number,
         'sender_number_confidence': result.sender_number_confidence,
+        'sender_number_bbox': result.sender_number_bbox,   # موضع القصّ لالتقاط تدريب التوضيع
         'title': result.title,
         'title_confidence': result.title_confidence,
         'issuing_entity': result.issuing_entity_name,

@@ -136,6 +136,12 @@ _DATE_LABEL_RE = re.compile(
 _DATE_WINDOW = 28
 # خليّة جدول ترويسة الجودة «Date Rev / May 2025» ليست تاريخ كتاب (نفس فخّ المُموضِع)
 _TABLE_NEXT_RE = re.compile(r'^\W{0,3}(rev|doc|no\b)', re.I)
+# فرعُ العلامة الإنجليزيّة المتسامح مع OCR يلتقط **كلماتِ متنٍ** حقيقيّة لا حقولاً:
+# «dated» ظرفُ إحالةٍ دائماً («letter No. 77 dated February 10» — تاريخُ الكتاب
+# المُحال لا كتابِنا)، و«Data/data» اسمٌ («Expenditure Data for the Years»). قِيسَ
+# بالعين 2026-08-09: كلُّ التواريخ الخاطئة الثلاثة من هذه الكلمات. الحقلُ اسمُه
+# «Date» فقط. إسقاطُها يُصمِت الإحالات (فراغٌ أصدق من قيمةٍ خاطئة — مبدأ المالك).
+_DATE_BODY_WORD_RE = re.compile(r'^(dated|dates|dating|data)$', re.I)
 
 
 # «هل هذا سطرٌ لغةٌ أم خردة ماسح؟» — طبقات المسوحات العربية تُخرج ركاماً لاتينياً
@@ -184,6 +190,11 @@ def _find_labeled_date(text: str):
     «8 February 2025» من «l8 February 2025» ثم أصلحنا قيمةً مبتورةً أصلاً."""
     for lm in _DATE_LABEL_RE.finditer(text or ''):
         tail = text[lm.end():lm.end() + _DATE_WINDOW].split('\n')[0]
+        # «dated/Data» كلمةُ متنٍ **ما لم يتبعْها فاصلُ حقلٍ صريح**: «Dated:» ترويسةٌ
+        # شرعيّة، بينما «dated February 10» إحالةُ متن. النقطتان (:؛) تُميّزان الحقلَ
+        # من الظرف — قِيس بالعين 2026-08-09 (#9322/#8811/#8720 كلُّها بلا فاصلة).
+        if _DATE_BODY_WORD_RE.match(lm.group()) and not re.match(r'\s*[:：;]', tail):
+            continue
         if _TABLE_NEXT_RE.match(tail):
             continue                       # «Date Rev» — خليّة جدول لا حقل
         vm = _DATE_VALUE_RE.search(_repair_ocr_digits(tail))
@@ -400,16 +411,23 @@ class PatternMatcher:
 
         return (None, 0.0)
 
-    def extract_secret_level(self, text: str) -> Tuple[Optional[str], float]:
-        """
-        استخراج مستوى السرية من النص
-        """
-        for pattern, level in self.PATTERNS['secret_level']:
-            if re.search(pattern, text, re.IGNORECASE):
-                confidence = 0.95
-                return (level, confidence)
+    def extract_secret_level(self, text: str) -> Tuple[str, float]:
+        """مستوى السرّية — **بُعدٌ مستقلّ عن نوع المستند** (قرار المالك 2026-07-22).
 
-        return (None, 0.0)
+        يظهر «(سري)»/«(سري وعاجل)» في **حزام الرأس فوق سطر الموضوع** (مُتحقَّق بالعين
+        على عيّنات سري داخلية؛ القاعدة: 379/426 سري = وارد داخلي). نقصر الكشف على
+        `_header_zone` لتفادي إيجابيات المتن (كلمة «سري» في جملةٍ عابرة)، والافتراضيّ
+        **'normal'** (الأغلبية اعتيادية) — فالانبعاث صادقٌ لا فارغ، وقيمة القاعدة
+        المحفوظة لا تتغيّر (Book.secret_level افتراضُه normal أصلاً)."""
+        head = _header_zone(text)
+        for pattern, level in self.PATTERNS['secret_level']:
+            if level == 'normal':
+                continue   # «اعتيادي» هو الافتراضيّ أدناه — لا يُطابَق صراحةً كسرّية
+            if re.search(pattern, head, re.IGNORECASE):
+                return (level, 0.9)
+        # اعتياديّ صريحٌ في الرأس يرفع الثقة؛ وإلا الافتراضيّ منخفض الثقة
+        conf = 0.9 if re.search(r'\bاعتيادي\b', head) else 0.5
+        return ('normal', conf)
 
     def extract_book_kind(self, text: str) -> Tuple[Optional[str], float]:
         """
@@ -543,6 +561,13 @@ class PatternMatcher:
                          'علماً', 'علما', 'تجدون', 'مرفق', 'المرفق', 'بموجب', 'بموافقة',
                          'أعلاه', 'اعلاه',   # «(الموضوع) أعلاه نود…» إحالةُ متنٍ لا موضوع (#11251)
                          'بخصوص الموضوع',    # «بخصوص الموضوع أعلاه نود بيان» إحالةٌ لا موضوع
+                         # تأشيرات/تحويلات/مرافقات تُلصَق موضوعاً زائفاً (قِيس بالعين
+                         # 2026-08-09 على مجموعة الوارد الذهبيّة): «ومرفقها التقرير
+                         # الشهري» #8780/#9412، «حسب توجهات الإدارة العليا» #8600،
+                         # «بهامش السيد المدير العام» #9262، «المتابعة للتفضل بالعلم»
+                         # #9535. هذه تذييلٌ/متنٌ يقع تحت الموضوع لا موضوعاً.
+                         'ومرفق', 'ومرفقها', 'ومرفقه', 'مرافق', 'حسب', 'بهامش', 'للتفضل',
+                         'للمتابعة', 'بالعطف', 'وبالعطف', 'استلمنا', 'تسلمنا',
                          # افتتاحيات المتن الإنجليزية (إيميلات) — تُقارَن على المُصغَّر
                          'dear', 'greetings', 'attention', 'attn', 'we ', 'please', 'kindly',
                          'with reference', 'reference is', 'this letter', 'warm')
@@ -582,6 +607,17 @@ class PatternMatcher:
         _recip_re = re.compile(r'^[\W\d]{0,3}\s*(?:إلى|الى|السادة|السيد)\b|^\s*to\b|^(?:إلى|الى)\s*/', re.I)
         _field_re = re.compile(r'^[\W\d_]{0,6}(?:العدد|الرقم|التاريخ|التأريخ|date|ref|rev|doc)\b', re.I)
 
+        # تسميةٌ عارية (سطرٌ = اسمُ حقلٍ فقط بلا قيمة): «موضوع» #9201، «العدد». القيمة
+        # المُلتقَطة تساوي التسمية ⇒ ضجيج. تُقاس على مُصغَّرٍ بلا مسافات/فواصل/أرقام.
+        _label_only = {'موضوع', 'الموضوع', 'العدد', 'الرقم', 'التاريخ', 'التأريخ',
+                       'المرفقات', 'المرافقات', 'المرفق', 'نسخة', 'subject', 'subj', 'date', 'ref'}
+        # مرافقات/نُسَخ/تذييل — يتحمّل تشظّي OCR بالمسافات («المر افقات» #8931 → «المرافقات»).
+        _attach_norm = ('المرفقات', 'المرافقات', 'صورةعنه', 'صورةمنه', 'نسخةالى', 'نسخةإلى',
+                        'نسخةمنه', 'مرفقربطا', 'مرفقطيا', 'email', 'e-mail', 'gov.iq', 'oil.gov')
+
+        def _norm_ar(s: str) -> str:
+            return re.sub(r'[\s\d/:\-.,،_()]+', '', s).lower()
+
         def _is_junk(line: str) -> bool:
             """سطرٌ ليس موضوعاً: ترويسة/جدول/مُرسَل إليه/حقل/مفتتح متن/خردة. تُستخدَم في
             قوس الموضع والاحتياط كي لا يُخطَف عنوانٌ زائف (خطف الترويسة كان العطل السائد
@@ -589,6 +625,11 @@ class PatternMatcher:
             low = line.lower()
             if _looks_garbled(line):
                 return True
+            core = _norm_ar(line)
+            if core in _label_only:
+                return True                                # تسميةٌ عارية («موضوع»/«العدد»)
+            if any(tok in core for tok in _attach_norm):
+                return True                                # مرافقات/نسخة/تذييل («المر افقات»/بريد)
             if 'أعلاه' in line or 'اعلاه' in line:
                 return True                                # إحالة متن («الموضوع أعلاه») لا موضوع
             if re.search(r'تحيات|مع التقدير|مع الشكر', line):
@@ -623,6 +664,7 @@ class PatternMatcher:
                     m = re.search(pat, line)
                     if (m and len(m.group(1).strip()) >= min_cap
                             and not _looks_garbled(m.group(1))
+                            and _norm_ar(m.group(1)) not in _label_only
                             and 'أعلاه' not in m.group(1) and 'اعلاه' not in m.group(1)):
                         return _words(_join_wrapped(m.group(1).strip(), idx), cap=12)
 
@@ -654,8 +696,17 @@ class PatternMatcher:
                 if len(re.findall(r'[A-Za-z]{3,}', cand)) >= 2 and len(cand) >= 8:
                     return _words(_join_wrapped(cand, idx), cap=12)
 
-        # 2) احتياطٌ مُقسّى: تخطَّ كلّ سطرٍ زائف (`_is_junk`) → أوّل سطر عربيٍّ جوهريّ
-        for line in lines:
+        # 2) احتياطٌ مُقسّى: تخطَّ كلّ سطرٍ زائف (`_is_junk`) → أوّل سطر عربيٍّ جوهريّ،
+        #    **فوق التحية/مفتتح المتن فقط**. الموضوع يقع بنيويّاً فوقهما في كتب الوارد
+        #    (فيبل)، فأيُّ سطرٍ تحتهما تأشيرةٌ/متنٌ/تذييل — وكان تسريبها العطلَ السائد
+        #    في الاحتياط (قِيس بالعين 2026-08-09: «ومرفقها…»، «E-Mail…»، «يرجى بيان…»).
+        #    إن غابت التحية عن OCR (نادر) يبقى المسحُ كاملاً بلا حدٍّ سفليّ.
+        def _greeting_or_body(l: str) -> bool:
+            low = l.lower()
+            return (bool(re.search(r'تحي[ةه]|السلام|dear|greeting', low))
+                    or any(low.lstrip().startswith(p) for p in _body_openers))
+        body_start = next((i for i, l in enumerate(lines) if _greeting_or_body(l)), len(lines))
+        for line in lines[:body_start]:
             if _is_junk(line):
                 continue
             if (_looks_like_language(line) and sum(1 for c in line if '؀' <= c <= 'ۿ') >= 8):

@@ -62,12 +62,14 @@ class FindLabelTests(SimpleTestCase):
         self.assertIsNone(NumberStripLocator(priors).find_label(t, self.W, self.H, entity_id=5))
 
     def test_label_slightly_below_zone_near_prior_admitted(self):
-        # حالة 9480 المقيسة: تسمية شرعية عند y≈0.38 وprior الجهة عند ȳ≈0.27 —
-        # القطر المُوسَّع (0.14) يقبلها، وجُمل المتن (y≥0.5) تبقى خارج أي قطر
+        # تسمية شرعية أسفل الحزام (y≈0.38) لكن ضمن قطر prior الجهة — تُقبَل كتسمية.
+        # حُدِّث القطر 0.14→0.09 (قياسٌ 2026-07-21: الحزام الأوسع «يُتوّج المتن»
+        # مراسيَ فيضرّ الدقّة 100%→70%). فالـprior هنا ȳ≈0.31 كي يبقى المرشّح (dist≈0.07)
+        # داخل 0.09 — نفس القدرة، بهندسةٍ تطابق القطر الحاليّ. وجُمل المتن (y≥0.5) خارجه.
         priors = EntityLayoutPriors(os.devnull)
         for _ in range(3):
-            priors.learn(11, 0.45, 0.27)
-        t = tsv([('العدد', 430, 532, 80, 30)])          # y=0.38, x=0.47 → dist≈0.11
+            priors.learn(11, 0.45, 0.31)
+        t = tsv([('العدد', 430, 532, 80, 30)])          # y≈0.38, x≈0.47 → dist≈0.07 < 0.09
         lb = NumberStripLocator(priors).find_label(t, self.W, self.H, entity_id=11)
         self.assertIsNotNone(lb)
         self.assertEqual(lb.source, 'label')

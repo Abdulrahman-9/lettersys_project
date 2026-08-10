@@ -226,6 +226,24 @@ class ExternalDateFormatsTests(SimpleTestCase):
         self.assertIsNone(self._d('We will update 20 March 2026 records\nحسب الخطة'))
         self.assertIsNone(self._d('The candidate 5 May 2026 was chosen'))
 
+    def test_dated_citation_is_not_the_letter_date(self):
+        """«dated» ظرفُ إحالةٍ لا حقلَ ترويسة (قِيس بالعين 2026-08-09: #9322/#8811/#8720
+        كانت تُخرج تاريخَ الكتاب المُحال). حقلُ الترويسة اسمُه «Date» فقط — و«dated»
+        بلا حقلٍ صريح ⇒ صمتٌ (فراغٌ أصدق من تاريخِ كتابٍ آخر)."""
+        self.assertIsNone(self._d('Midland Oil\nFurther to our letter No. 77 '
+                                  'dated February 10, 2026, andto\nنرجو'))
+        self.assertIsNone(self._d('letter No. (75) dated 1/21/2026 which refers to the'))
+
+    def test_data_noun_is_not_a_date_label(self):
+        """«Data/data» اسمٌ لا علامة («Expenditure Data for the Years 2023, 2024»)."""
+        self.assertIsNone(self._d('Sub Expenditure Data for the Years (2023, 2024, 2025)'))
+
+    def test_real_date_label_still_wins_over_dated_citation(self):
+        """حارسُ عدم التراجع: «Date:» الصريحة تُستخرَج ولو ورد «dated» في المتن تحتها."""
+        doc = ('Zhongman Oil\nDate: 21 June, 2026\nTo: MdOC\n'
+               'With reference to your letter No. 12 dated March 3, 2026, we advise')
+        self.assertEqual(self._d(doc), '2026-06-21')
+
     def test_qms_table_date_rev_still_rejected(self):
         """«Date Rev / May 2025» في جدول الترويسة ليست تاريخ الكتاب."""
         doc = ('وزارة النفط\nشركة نفط الوسط\nمذكرة داخلية\n'
@@ -624,6 +642,49 @@ class ExtractSenderNumberTests(SimpleTestCase):
             'With reference to single source tender discussions held earlier')[0])
 
 
+class SubjectAnchorLowerBoundTests(SimpleTestCase):
+    """مرساةُ الموضوع السفليّة (2026-08-09، مُقاسة على مجموعة الوارد الذهبيّة): الموضوع
+    يقع فوق التحية/مفتتح المتن بنيويّاً؛ ما تحتهما تأشيرةٌ/متنٌ/تذييل. القيمةُ الخاطئة
+    أسوأ من الفراغ (مبدأ المالك) — فالتسريباتُ تُستبدَل بصمتٍ صادق، والمواضيع الصحيحة
+    تبقى (صفر تراجع مقيس)."""
+
+    def setUp(self):
+        self.m = PatternMatcher()
+
+    def test_bare_subject_label_silenced(self):
+        # #9201: سطرٌ = «موضوع» وحده (تسميةٌ بلا قيمة) كان يُخرَج عنواناً — يُرفَض
+        text = 'وزارة النفط\nموضوع\nتحية طيبة وبعد\nنود إعلامكم'
+        self.assertEqual(self.m.extract_title_keywords(text), '')
+
+    def test_attachment_label_silenced(self):
+        # #8931: «المر افقات» (مرافقات مُشظّاة بمسافة OCR) ليست موضوعاً
+        text = 'الى / السيد المدير\nالمر افقات\nتحية طيبة'
+        self.assertNotIn('افقات', self.m.extract_title_keywords(text))
+
+    def test_body_below_greeting_not_leaked(self):
+        # #8780/#9412: «ومرفقها التقرير الشهري» تحت التحية متنٌ لا موضوع ⇒ صمت
+        text = ('شركة نفط ميسان\nالى / مدير الدائرة\nتحية طيبة وبعد\n'
+                'ومرفقها التقرير الشهري الحالة المنجزة للعقود')
+        self.assertEqual(self.m.extract_title_keywords(text), '')
+
+    def test_footer_contact_below_greeting_not_leaked(self):
+        # #8510: تذييل الاتصال (E-Mail/هاتف) أسفل المتن — لا يُخطَف موضوعاً
+        text = ('الى / الجهات كافة\nتحية طيبة وبعد\nنود إحاطتكم بالموضوع\n'
+                'E-Mail Pladmdoc.oil.gov.iq Tel 1717')
+        self.assertNotIn('mail', self.m.extract_title_keywords(text).lower())
+
+    def test_real_subject_above_greeting_still_extracted(self):
+        # حارسُ عدم التراجع: موضوعٌ حقيقيّ فوق التحية يبقى يُستخرَج كما كان
+        text = 'الى / السيد المدير العام\nم / تحديد سياقات عمل\nتحية طيبة وبعد'
+        t = self.m.extract_title_keywords(text)
+        self.assertIn('سياقات', t)
+
+    def test_marker_subject_unaffected_by_lower_bound(self):
+        # علامة «م/» الصريحة فوق التحية تبقى المسارَ الأعلى دقّةً (لا يمسّها الحدّ)
+        text = 'وزارة النفط\nم / طلب اوليات صرف\nتحية طيبة وبعد\nنرجو التفضل'
+        self.assertIn('اوليات', self.m.extract_title_keywords(text))
+
+
 class SplitRefFromTitleTests(SimpleTestCase):
     """نمط Slb: رقم الصادر داخل سطر الموضوع («Ref-135, Akkas…») — يُقتطع ويُنظَّف."""
 
@@ -664,8 +725,11 @@ class ExtractSecretLevelTests(SimpleTestCase):
     def test_normal(self):
         self.assertEqual(self.m.extract_secret_level('كتاب اعتيادي')[0], 'normal')
 
-    def test_none(self):
-        self.assertEqual(self.m.extract_secret_level('بلا تصنيف'), (None, 0.0))
+    def test_unmarked_defaults_normal(self):
+        # العقد الجديد (نطاق السرّيّة 2026): غيابُ علامةٍ سرّيّة ⇒ «اعتيادي» لا مجهول —
+        # مطابقةً لافتراضِ Book.secret_level في القاعدة (الـ None/1% القديم كان أثرَ قياسٍ
+        # لا حقيقة). ثقةٌ أدنى (0.5) لأنه استنتاجٌ بالغياب لا تصريحٌ بـ«اعتيادي» (0.9).
+        self.assertEqual(self.m.extract_secret_level('بلا تصنيف'), ('normal', 0.5))
 
 
 class ExtractBookKindTests(SimpleTestCase):

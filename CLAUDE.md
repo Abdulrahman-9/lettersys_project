@@ -54,7 +54,14 @@ Everything lives in `core/`. The two refactored sub-packages have their own inte
 - `matchers/` — `PatternMatcher` (dates, numbers), `EntityMatcher` (NER)
 - `helpers.py` — `ExtractionWorkflow`, `ConfidenceAnalyzer`, `QuickFillAssistant`
 - `api/endpoints.py` — REST views; `views/ui.py` — HTML views
-- `learning.py` + `core/continuous_learning.py` — feedback loop & model improvement
+- `learning.py` — feedback **analysis only** (patterns + per-field accuracy scores).
+  ⚠️ `core/continuous_learning.py` **does not exist** (removed); the old pointer here
+  misled several sessions. And note what the loop actually captures: `capture.py`
+  `_FIELD_MAP` tracks **`title` and `secret_level` only** — `sender_number` is captured
+  neither as a value nor as a location, so that field **cannot improve with use** today.
+  The socket is live though: `persist_extraction_capture` (capture.py:69) fires post-commit
+  with both `suggested` and `final`, and `DataExtractionResult.additional_data` (JSONField)
+  is a ready carrier for the locator box that `pipeline.py:409` currently discards.
 
 **`core/messaging/`** — email & IMAP (see `core/messaging/README.md` for full API)
 - `engines/smtp.py` — `SMTPEngine`; `engines/imap.py` — `IMAPEngine`

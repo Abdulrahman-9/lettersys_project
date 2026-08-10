@@ -9,10 +9,12 @@ core.extraction.capture
 """
 import logging
 
+from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
-from core.models import OCRResult, DataExtractionResult, ExtractionFeedback, LetterheadMemory
+from core.models import (DataExtractionResult, ExtractionFeedback,
+                         LetterheadMemory, OCRResult)
 
 logger = logging.getLogger('lettersys')
 
@@ -37,11 +39,26 @@ def _persist_letterhead_memory(book, text):
 #   - book_number ↔ our_number و book_kind ↔ kind مستبعدان: النظام يُعيد تنسيق
 #     الرقم ويُفصّل النوع (incoming→incoming_internal) فتختلف الصيغة دائماً = ضوضاء.
 #   - التاريخ مستبعد: فرق صيغة ISO/Date يعطي إيجابيات كاذبة.
+#   - sender_number مُضاف 2026-07-22: يُخزَّن خاماً بلا إعادة تنسيق (قياس القاعدة:
+#     أرقام صرفة للجهات الكبرى)، فالمقارنة نظيفة. **هذا هو أوّل توصيل لحلقة تعلّم
+#     العدد** — كانت غائبةً كلّياً (لا قيمة ولا موضع). القيمة تُلتقط الآن؛ الموضع
+#     (bbox) يركب لاحقاً على `additional_data['sender_number_bbox']` حين يتوقّف
+#     الأنبوب عن حذف صندوق `_read_handwritten_sender_number` (pipeline.py:409).
 # كل الاقتراحات (رقم/نوع/تاريخ) تبقى مخزَّنة في DataExtractionResult للسجل والتحليل.
 _FIELD_MAP = (
-    ('title',        'title'),
-    ('secret_level', 'secret_level'),
+    ('title',         'title'),
+    ('secret_level',  'secret_level'),
+    ('sender_number', 'sender_number'),
 )
+
+# العدد يُستخرَج للوارد فقط. الصادر يُفرّغ الحقل في الواجهة (showSenderFields:false)
+# بينما الأنبوب يُصدر اقتراحاً — فبلا هذه البوّابة يُسجَّل كلّ حفظِ صادرٍ تصحيحاً
+# كاذباً «154→''» = عيّنة تدريبٍ سالبةٌ مفبركة. (Fable، استشارة 9.)
+_INCOMING_KINDS = ('incoming_internal', 'incoming_external')
+# تطبيع نصّ الأرقام (عربية-هنديّة ← لاتينيّة) قبل مقارنة العدد: القاعدة تخزّنه لاتينياً
+# اليوم (قياس: صفر عربية-هنديّة من 9,163) لكنّ الحارس يمنع تسجيل قراءةٍ صحيحةٍ بخطٍّ
+# رقميٍّ مختلف كأنّها تصحيح إن أدخل موظّفٌ أرقاماً عربية مستقبلاً.
+_AR_DIGITS = str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789')
 
 
 def _to_float(v):
@@ -49,6 +66,10 @@ def _to_float(v):
         return float(v or 0.0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _same_number(a, b):
+    return (a or '').translate(_AR_DIGITS).strip() == (b or '').translate(_AR_DIGITS).strip()
 
 
 def _norm_secret(v):
@@ -73,7 +94,7 @@ def persist_extraction_capture(*, book, attachment, suggested, final, user=None)
         book:       الكتاب المحفوظ (Book)
         attachment: المرفق الممسوح (Attachment) — لازم لربط OCRResult
         suggested:  قاموس اقتراحات OCR (كاش scan_token): raw_text + الحقول المُقترَحة
-        final:      قاموس القيم النهائية المحفوظة (our_number/title/kind/secret_level)
+        final:      قاموس القيم النهائية المحفوظة (our_number/title/kind/secret_level/sender_number)
         user:       المستخدم المؤكِّد
 
     Returns:
@@ -81,58 +102,88 @@ def persist_extraction_capture(*, book, attachment, suggested, final, user=None)
     """
     if attachment is None or not suggested:
         return None
+    raw_text = suggested.get('raw_text') or ''
+    cleaned_text = suggested.get('cleaned_text') or raw_text
+    if not (raw_text or cleaned_text):
+        return None  # لا نصّ = لا قيمة تدريبية
     try:
-        raw_text = suggested.get('raw_text') or ''
-        cleaned_text = suggested.get('cleaned_text') or raw_text
-        if not (raw_text or cleaned_text):
-            return None  # لا نصّ = لا قيمة تدريبية
-
-        ocr = OCRResult.objects.create(
-            attachment=attachment,
-            status='completed',
-            raw_text=raw_text,
-            cleaned_text=cleaned_text,
-            confidence_score=_to_float(suggested.get('overall_confidence')),
-            num_characters=len(raw_text),
-            processed_by=suggested.get('ocr_engine') or 'tesseract',
-        )
-        extraction = DataExtractionResult.objects.create(
-            ocr_result=ocr,
-            attachment=attachment,
-            book=book,
-            status='reviewed',
-            book_number=(suggested.get('book_number') or '')[:50],
-            book_number_confidence=_to_float(suggested.get('book_number_confidence')),
-            book_date=_parse_iso_date(suggested.get('book_date')),
-            book_date_confidence=_to_float(suggested.get('book_date_confidence')),
-            title=(suggested.get('title') or '')[:500],
-            title_confidence=_to_float(suggested.get('title_confidence')),
-            secret_level=_norm_secret(suggested.get('secret_level')),
-            secret_level_confidence=_to_float(suggested.get('secret_level_confidence')),
-            book_kind=suggested.get('book_kind') or None,
-            book_kind_confidence=_to_float(suggested.get('book_kind_confidence')),
-            overall_confidence=_to_float(suggested.get('overall_confidence')),
-            reviewed_by=user,
-            reviewed_at=timezone.now(),
-        )
-
-        # تصحيحات المستخدم: حيث اختلف المُقترَح عن النهائي → إشارة تعلّم
-        for sug_key, final_key in _FIELD_MAP:
-            original = str(suggested.get(sug_key) or '').strip()
-            corrected = str(final.get(final_key) or '').strip()
-            if original and original != corrected:
-                ExtractionFeedback.objects.create(
-                    extraction=extraction,
-                    field_name=final_key,
-                    feedback_type='incorrect' if corrected else 'partial',
-                    original_value=original,
-                    corrected_value=corrected,
-                    created_by=user,
-                )
-
-        # ذاكرة الترويسة → الجهة المؤكَّدة (تعلّمٌ تراكمي لاقتراح الجهة)
-        _persist_letterhead_memory(book, cleaned_text or raw_text)
-        return extraction
+        # savepoint: OCRResult وDataExtractionResult كلاهما OneToOne بالمرفق، فأيّ
+        # فشلٍ في منتصف السلسلة يترك يتيماً يحجز الخانة ويُفشل أيّ التقاطٍ لاحق بصمت.
+        # الالتفاف يجعلها كلًّا-أو-لا-شيء (الالتقاط post-commit فنحن في autocommit).
+        with transaction.atomic():
+            return _do_capture(book, attachment, suggested, final, user,
+                               raw_text, cleaned_text)
     except Exception as exc:  # noqa: BLE001 — الالتقاط لا يُفشل الحفظ أبداً
         logger.warning('[capture] فشل التقاط التدريب (الحفظ غير متأثّر): %s', exc, exc_info=True)
         return None
+
+
+def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text):
+    """جسم الالتقاط داخل savepoint — الاستثناءات تصعد إلى المُغلِّف (لا تُبلَع هنا)."""
+    is_incoming = (book.kind or '') in _INCOMING_KINDS
+    # book_kind يُختم دائماً كي يُميّز المستهلك «صادر: الحقل غير منطبق» عن
+    # «وارد: القارئ أخفق فعلاً» — وإلا صارا سواءً في البيانات.
+    add_data = {'book_kind': book.kind or ''}
+    if is_incoming:
+        add_data.update({
+            'sender_number_suggested': (suggested.get('sender_number') or '')[:50],
+            'sender_number_confidence': _to_float(suggested.get('sender_number_confidence')),
+            'sender_number_final': str(final.get('sender_number') or '')[:50],
+            'sender_number_bbox': suggested.get('sender_number_bbox') or None,
+        })
+
+    ocr = OCRResult.objects.create(
+        attachment=attachment,
+        status='completed',
+        raw_text=raw_text,
+        cleaned_text=cleaned_text,
+        confidence_score=_to_float(suggested.get('overall_confidence')),
+        num_characters=len(raw_text),
+        processed_by=suggested.get('ocr_engine') or 'tesseract',
+    )
+    extraction = DataExtractionResult.objects.create(
+        ocr_result=ocr,
+        attachment=attachment,
+        book=book,
+        status='reviewed',
+        book_number=(suggested.get('book_number') or '')[:50],
+        book_number_confidence=_to_float(suggested.get('book_number_confidence')),
+        book_date=_parse_iso_date(suggested.get('book_date')),
+        book_date_confidence=_to_float(suggested.get('book_date_confidence')),
+        title=(suggested.get('title') or '')[:500],
+        title_confidence=_to_float(suggested.get('title_confidence')),
+        secret_level=_norm_secret(suggested.get('secret_level')),
+        secret_level_confidence=_to_float(suggested.get('secret_level_confidence')),
+        book_kind=suggested.get('book_kind') or None,
+        book_kind_confidence=_to_float(suggested.get('book_kind_confidence')),
+        overall_confidence=_to_float(suggested.get('overall_confidence')),
+        reviewed_by=user,
+        reviewed_at=timezone.now(),
+        # سجلّ العدد الكامل (للوارد فقط): المُقترَح + النهائي + حامل الموضع (فارغ
+        # اليوم، يمتلئ حين يمرّر الأنبوب صندوق القصّ). يلتقط الإبقاء والتصحيح معاً —
+        # ExtractionFeedback يسجّل التصحيح فقط. `sender_number` لا عمود له في
+        # النموذج، فـ additional_data (JSONField) حامله الجاهز.
+        additional_data=add_data,
+    )
+
+    # تصحيحات المستخدم: حيث اختلف المُقترَح عن النهائي → إشارة تعلّم
+    for sug_key, final_key in _FIELD_MAP:
+        if final_key == 'sender_number' and not is_incoming:
+            continue   # الصادر: لا عدد جهةٍ يُستخرَج — لا إشارة تصحيح
+        original = str(suggested.get(sug_key) or '').strip()
+        corrected = str(final.get(final_key) or '').strip()
+        differs = (not _same_number(original, corrected)
+                   if final_key == 'sender_number' else original != corrected)
+        if original and differs:
+            ExtractionFeedback.objects.create(
+                extraction=extraction,
+                field_name=final_key,
+                feedback_type='incorrect' if corrected else 'partial',
+                original_value=original,
+                corrected_value=corrected,
+                created_by=user,
+            )
+
+    # ذاكرة الترويسة → الجهة المؤكَّدة (تعلّمٌ تراكمي لاقتراح الجهة)
+    _persist_letterhead_memory(book, cleaned_text or raw_text)
+    return extraction

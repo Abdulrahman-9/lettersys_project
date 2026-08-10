@@ -722,7 +722,8 @@ class AIProcessingServiceTests(TestCase):
             'avg_confidence': 0.9,
         }
         settings_getter.return_value = {'AI_PROVIDER': 'offline'}
-        hw_read.return_value = ('1754', 0.95)
+        # العقد الجديد (خيار F): (number_result, date_crop) — number_result=(نصّ، ثقة، صندوق)
+        hw_read.return_value = (('1754', 0.95, [0.11, 0.15, 0.20, 0.18]), None)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
             tmp.write(b'\xff\xd8\xff\xe0hw-doc')

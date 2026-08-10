@@ -1169,6 +1169,39 @@ textarea.title-autogrow {
 
 .input-hint { font-size: 0.8rem; color: #94a3b8; margin-top: 6px; }
 
+/* ===== قصاصة «التأريخ» اليدويّ (خيار F) — مساعدةٌ بصريّة لا حقلٌ مملوء ===== */
+.sender-date-crop {
+    margin: 8px 0 0;
+    padding: 6px 8px 5px;
+    border: 1px dashed #99f6e4;                 /* تركوازيّ فاتح — يميّزها كـ«قصاصةٍ للتحقّق» لا حقلاً */
+    border-radius: 10px;
+    background: #f0fdfa;
+    animation: senderCropIn .18s ease both;
+}
+@keyframes senderCropIn { from { opacity: 0; transform: translateY(-3px); } }
+.sender-date-crop img {
+    display: block;
+    width: 100%;
+    max-height: 84px;
+    object-fit: contain;
+    object-position: right center;              /* يبدأ من اليمين (RTL) */
+    background: #fff;
+    border-radius: 6px;
+    image-rendering: -webkit-optimize-contrast; /* حدّةٌ أعلى لخطّ اليد الرفيع */
+    cursor: zoom-in;
+    transition: max-height .18s ease;
+}
+.sender-date-crop img:hover { max-height: 200px; }   /* تكبيرٌ بالمرور لقراءةٍ أوضح */
+.sender-date-crop figcaption {
+    font-size: 0.72rem;
+    color: #0f766e;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.sender-date-crop figcaption .bi { font-size: 0.85rem; flex: none; }
+
 
 /* ===== شريط الإجراءات الثابت ===== */
 .action-bar {
