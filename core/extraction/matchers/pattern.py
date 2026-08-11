@@ -110,10 +110,18 @@ def split_register_code(code: str):
 # فبلا حارسٍ يقتنص النمطُ «8 February 2025» من **داخل** الكلمة ويرمي الحرف — فيصير
 # اليوم 8 بدل 18 بثقة 0.80. قيمةٌ خاطئة، وهي أسوأ من الفراغ. الآن: رقمٌ ملتصقٌ بحرفٍ
 # لا يُقتنَص؛ إمّا يُصلحه `_repair_ocr_digits` (l→1) فيُقرأ صحيحاً، وإمّا نصمت.
+# اللاحقة الترتيبية بعد اليوم — «July 29th, 2026» (QPC #11293) و«August 5th, 2026»
+# (ADO #11291) قراءةً بالعين 2026-08-10: الشركات تطبعها بالمرتفعة فيُخرجها OCR
+# مسخاً («29"،» «5s») أو تصل سليمةً من طبقة النصّ («29th») — وكلتاهما كانت تكسر
+# النمط فيصمت التاريخ رغم وضوحه. تُقبل ملتصقةً باليوم (كلمة ترتيب أو مسخها
+# القصير) وتُجرَّد قبل التحليل في `_DAY_SUFFIX_RE`.
+_ORDINAL_SUFFIX = r'(?:\s?(?:st|nd|rd|th)|["\'’`°*%~s]{1,2})?'
+_DAY_SUFFIX_RE = re.compile(
+    r'(?<=\d)(?:\s?(?:st|nd|rd|th)|["\'’`°*%~s]{1,2})(?=[\s,.]|$)', re.I)
 _DATE_VALUE_RE = re.compile(
     r'(?<![A-Za-z0-9])'
-    r'([A-Za-z]{3,9}\.?\s*\d{1,2}\s*,?\s*\d{4}'
-    r'|\d{1,2}\s*[A-Za-z]{3,9}\.?\,?\s*\d{4}'
+    r'([A-Za-z]{3,9}\.?\s*\d{1,2}' + _ORDINAL_SUFFIX + r'\s*,?\s*\d{4}'
+    r'|\d{1,2}' + _ORDINAL_SUFFIX + r'\s*[A-Za-z]{3,9}\.?\,?\s*\d{4}'
     r'|[\d٠-٩]{1,4}\s*[/\\\-.]\s*[\d٠-٩]{1,2}\s*[/\\\-.]\s*[\d٠-٩]{1,4})', re.I)
 
 # العلامة وحدها. **درس القراءة بالعين** (2026-07-14): اشتراطُ فاصلٍ نظيفٍ بين
@@ -281,10 +289,29 @@ _DATE_MARKER_RE = re.compile(r'(?:الت[أا]ريخ|\bdated\b|\bdate\b)\s*[:/=.
 # يُسمح برمزٍ قصير بجواره (№/رقم النموذج) ولا يُقبل إلا حين تصمت العلامات كلها.
 _BARE_DATE_LINE_RE = re.compile(
     r'^\s*('
-    r'[A-Za-z]{3,9}\.?\s+\d{1,2}\s*,?\s*\d{4}'
-    r'|\d{1,2}\s+[A-Za-z]{3,9}\.?,?\s*\d{4}'
+    r'[A-Za-z]{3,9}\.?\s+\d{1,2}' + _ORDINAL_SUFFIX + r'\s*,?\s*\d{4}'
+    r'|\d{1,2}' + _ORDINAL_SUFFIX + r'\s+[A-Za-z]{3,9}\.?,?\s*\d{4}'
     r'|\d{1,2}\s*[/.\-]\s*\d{1,2}\s*[/.\-]\s*\d{4}'      # «24.10.2025» رقمي عارٍ
     r')(?:\s+[^\s]{1,12}){0,2}\s*$', re.I)
+
+# تاريخ ذيل التوقيع — رسائل الشركات الغربية (ADO #11291، قراءةٌ بالعين 2026-08-10):
+# لا تاريخ في الرأس إطلاقاً؛ يُطبع أسفل الصفحة داخل كتلة التوقيع («Qiu Chao /
+# Director General / ADO Digital Energy FZCO / August 5th, 2026»). ملاذٌ أخير بعد
+# صمت الرأس كلّه: مرساةُ توقيعٍ إنكليزية ثم سطرُ تاريخٍ عارٍ باسم شهرٍ في نافذتها.
+# الصيغ الرقمية مُستبعَدة عمداً (شظايا الأختام العربية تُشبهها)، والمرساة إنكليزية
+# حصراً (الكتب العربية تاريخها في الرأس، وتحت توقيعها أختامُ تأشيرٍ لا نقرؤها)،
+# والمسح مسقوفٌ بأول 60 سطراً غير فارغ ≈ الصفحة الأولى (جداول الملاحق خارجه).
+_SIGNATURE_ANCHOR_RE = re.compile(
+    r'\b(?:sincerely|faithfully|respectfully|regards'
+    r'|director\s+general|general\s+manager|managing\s+director'
+    r'|president|chairman|country\s+manager)\b', re.I)
+_SIG_DATE_LINE_RE = re.compile(
+    r'^\s*('
+    r'[A-Za-z]{3,9}\.?\s+\d{1,2}' + _ORDINAL_SUFFIX + r'\s*,?\s*\d{4}'
+    r'|\d{1,2}' + _ORDINAL_SUFFIX + r'\s+[A-Za-z]{3,9}\.?,?\s*\d{4}'
+    r')\s*$', re.I)
+_SIG_SCAN_LINES = 60
+_SIG_WINDOW = 6
 _MONTH_GARBLE_RE = re.compile(r'\b[lI1](an|un|ul)\b', re.I)      # lul→Jul، Ian→Jan، 1un→Jun
 _FUSED_DAY_YEAR_RE = re.compile(r'\b(\d{1,2})(20\d{2})\b')       # 22026 → 2 2026
 
@@ -491,8 +518,10 @@ class PatternMatcher:
         # Tesseract يقرأ «j» حرفاً «i» كثيراً في العربي+الإنجليزي («Subiect»،
         # «Proiect») — قِيس بالعين على كتب slb/الشركات (#11223/#11188 صمت الاستخراج
         # رغم وضوح «Subject:» في الصورة). فنتسامح مع j↔i، ومع فاصل «/» («Sub/»).
+        # والفاصلة «,» فاصلٌ مشروع: طبقة نصّ ADO #11291 تُخرج «Subject, Monthly…»
+        # (النقطتان تُقرآن فاصلة) فكانت تعلق في أول العنوان (قراءةٌ بالعين 2026-08-10).
         english_markers = (
-            r'(?i:sub[ji]ect|subj)\s*[:.\-/]?\s*([^\n]{3,80})',
+            r'(?i:sub[ji]ect|subj)\s*[:.\-/,،]?\s*([^\n]{3,80})',
         )
         letterhead_hints = ('جمهورية', 'وزارة', 'الشركة العامة', 'محطة', 'مديرية', 'هيئة',
                             'republic', 'ministry', 'company', 'station', 'division', 'general',
@@ -516,6 +545,15 @@ class PatternMatcher:
                     if k >= 2 and re.fullmatch(r'[A-Za-z0-9]{1,4}', w):
                         ws = ws[:k]
                         break
+            # ذيلُ رموزٍ بلا لغة («?-J.,I» — طبقة ADO #11291 تُلحق حطامَ منطقة الختم
+            # بسطر الموضوع بعيداً يميناً): كلمةٌ ختامية بلا أرقامٍ وأغلبُها رموزٌ تُقصّ.
+            # شرطُ خلوّها من الأرقام يحمي الرموزَ الشرعية («y2026» في عناوين التقارير).
+            def _symbol_tail(w: str) -> bool:
+                if re.search(r'\d', w):
+                    return False
+                return len(re.findall(r'[A-Za-zء-ي]', w)) < len(w) * 0.5
+            while ws and _symbol_tail(ws[-1]):
+                ws.pop()
             return ' '.join(ws[:cap])
 
         def _looks_garbled(s: str) -> bool:
@@ -741,7 +779,7 @@ class PatternMatcher:
                 m = _BARE_DATE_LINE_RE.match(ln)
                 if not m:
                     continue
-                cand = m.group(1).translate(_AR_DIGITS)
+                cand = _DAY_SUFFIX_RE.sub('', m.group(1).translate(_AR_DIGITS))
                 date_obj, _c = self.extract_date(cand)
                 if not (date_obj and _is_plausible_date(date_obj)):
                     try:
@@ -750,6 +788,26 @@ class PatternMatcher:
                         continue
                 if date_obj and _is_plausible_date(date_obj):
                     return (date_obj, 0.70)
+        if result[0] is None:
+            # تاريخ ذيل التوقيع (ADO) — مرساةُ توقيعٍ ثم سطرُ تاريخٍ عارٍ باسم شهر.
+            # خارج منطقة الرأس عمداً: هذا هو الموضع الوحيد الذي نقرأ فيه تحتها،
+            # والقيمة محروسة ببِنية السطر (تاريخٌ كاملٌ وحده) لا بجوار العلامة.
+            lines = [ln.translate(_INVISIBLE_MARKS).strip()
+                     for ln in (text or '').split('\n') if ln.strip()][:_SIG_SCAN_LINES]
+            for i, ln in enumerate(lines):
+                if not _SIGNATURE_ANCHOR_RE.search(ln):
+                    continue
+                for cand_ln in lines[i:i + _SIG_WINDOW + 1]:
+                    m = _SIG_DATE_LINE_RE.match(cand_ln)
+                    if not m:
+                        continue
+                    cand = _DAY_SUFFIX_RE.sub('', m.group(1).translate(_AR_DIGITS))
+                    try:
+                        date_obj = date_parser.parse(cand, dayfirst=True)
+                    except (ValueError, TypeError, OverflowError):
+                        continue
+                    if _is_plausible_date(date_obj):
+                        return (date_obj, 0.70)
         return result
 
     # تشويه OCR داخل التاريخ: حرف l/I يُقرأ بدل الرقم 1، وO بدل 0 («l8 February»،
@@ -763,6 +821,7 @@ class PatternMatcher:
             return (None, 0.0)
         cand = self._repair_ocr_digits(raw).translate(_AR_DIGITS)
         cand = cand.replace('\\', '/')          # «16\ 4 \ 2026» → «16/ 4 / 2026»
+        cand = _DAY_SUFFIX_RE.sub('', cand)     # «29th,»/«29",»/«5s,» → «29,»/«5,»
         # رقمي أولاً (extract_date يعالج ترتيب اليوم/الشهر/السنة بدقّة)
         date_obj, _c = self.extract_date(cand)
         if date_obj and _is_plausible_date(date_obj):

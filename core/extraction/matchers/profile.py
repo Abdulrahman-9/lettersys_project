@@ -92,7 +92,14 @@ def _template_regex(template: str, prefixes) -> Optional[re.Pattern]:
     if not first or first[0] not in ('L', 'ح') or first[1] < _MIN_PREFIX_LEN:
         return None
     alt = '(?:' + '|'.join(re.escape(p) for p in sorted(prefixes)) + ')'
-    body = alt + _render_runs(runs[1:])
+    body_runs = runs[1:]
+    # طبقات الماسحات تُسقط الشرطة بعد البادئة («ADO627» بدل «ADO-627» — ADO #11291
+    # قراءةً بالعين 2026-08-10) فتفلت من القالب الحرفي. الشرطة الأولى اختيارية؛
+    # الدقّة مصونة بأطوال الخانات الحرفية وحارسَي الطرفين (لا التقاط من داخل كود أطول).
+    if body_runs and not body_runs[0][0] and body_runs[0][2] in '-–—':
+        alt += r'(?:\s*[-–—]\s*)?'
+        body_runs = body_runs[1:]
+    body = alt + _render_runs(body_runs)
     try:
         return re.compile('(?<![A-Za-z0-9؀-ۿ])' + body + r'(?!\d)', re.IGNORECASE)
     except re.error:

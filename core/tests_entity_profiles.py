@@ -44,6 +44,15 @@ class TemplateRegexTests(TestCase):
         rx = pf._template_regex('L2-D8', {'NK'})
         self.assertIsNotNone(rx.search('Ref: NK - 20260237'))
 
+    def test_dropped_hyphen_after_prefix_still_matches(self):
+        # طبقة ماسح ADO #11291 (بالعين 2026-08-10): تكتب «ADO627» بلا شرطة —
+        # الشرطة بعد البادئة اختيارية، والخانات المحددة تصون الدقّة
+        rx = pf._template_regex('L3-D3', {'ADO'})
+        m = rx.search('No.: ADO627 Subject: Monthly Report')
+        self.assertIsNotNone(m)
+        self.assertEqual(m.group(), 'ADO627')
+        self.assertIsNone(rx.search('ADO2026 budget'))     # خانات أكثر — لا التقاط جزئي
+
     def test_bare_digit_template_rejected(self):
         # قالب أرقام مجرّدة مبهم (يطابق سنين/هواتف) — لا يُبنى له نمط بحث مباشر
         self.assertIsNone(pf._template_regex('D4', None))

@@ -256,6 +256,60 @@ class ExternalDateFormatsTests(SimpleTestCase):
         self.assertEqual(repair_month_name('Dear Sir, Ref: MF-2026'), 'Dear Sir, Ref: MF-2026')
         self.assertEqual(repair_month_name('luly'), 'July')
 
+    # ── اللاحقة الترتيبية بعد اليوم (قراءةٌ بالعين لمدخلات 2026-08-09/10) ──
+    def test_ordinal_th_after_day(self):
+        """QPC #11293: مطبوعٌ «Date: July 29th, 2026» — «th» كانت تكسر النمط كلياً."""
+        self.assertEqual(self._d('Qurnain Petroleum\nRef. No. QPC-MdOC-20260106\n'
+                                 'Date: July 29th, 2026\nAttn.: Mr. x'), '2026-07-29')
+
+    def test_ordinal_garbled_to_quote(self):
+        """QPC عبر Tesseract: المرتفعة «th» تُقرأ «"» — «July 29", 2026»."""
+        self.assertEqual(self._d('Qurnain Petroleum\nRef. No. QPC-MdOC-20260106\n'
+                                 'Date: July 29", 2026\nAttn.: Mr. x'), '2026-07-29')
+
+    def test_ordinal_day_first_style(self):
+        """الصيغة الأوروبية بالترتيب: «29th July 2026»."""
+        self.assertEqual(self._d('Company\nDate: 29th July 2026\nSubject: x'), '2026-07-29')
+
+    def test_ordinal_suffix_does_not_fabricate(self):
+        """الحارس: التجريد لا يلفّق أرقاماً — «4s5» ليست تاريخاً ولا تُمسّ."""
+        from core.extraction.matchers.pattern import _DAY_SUFFIX_RE
+        self.assertEqual(_DAY_SUFFIX_RE.sub('', 'July 29", 2026'), 'July 29, 2026')
+        self.assertEqual(_DAY_SUFFIX_RE.sub('', 'August 5s, 2026'), 'August 5, 2026')
+        self.assertEqual(_DAY_SUFFIX_RE.sub('', 'ref 4s5 x'), 'ref 4s5 x')
+
+    # ── تاريخ ذيل التوقيع (ADO #11291 — قراءةٌ بالعين 2026-08-10) ──
+    def test_signature_block_date(self):
+        """ADO: لا تاريخ في الرأس؛ «August 5th, 2026» تحت التوقيع (Tesseract: «5"،»)."""
+        doc = ('ADO DIGITAL ENERGY FZCO\nTo: Mr. Mohammed Y. Hassan, Director General of MdOC\n'
+               'Cc: JMC Chairman of Dhufriyah Contract Area\nFrom: ADO Digital Energy FZCO\n'
+               'No.: ADO-627\nSubject: Monthly Procurement Report for July 2026\n'
+               'Dear Sir,\nReference is made to MdOC’s letter No.13998 dated July 15, 2025, regarding\n'
+               'Monthly Reports for Tenders and Contracts. We have attached the relevant documents.\n'
+               'Your kind understanding and support are highly appreciated.\n'
+               'Qiu Chao\nDirector General\nADO Digital Energy FZCO\nAugust 5", 2026\n')
+        self.assertEqual(self._d(doc), '2026-08-05')
+
+    def test_signature_date_is_last_resort(self):
+        """تاريخ الرأس الصريح يتقدّم على ذيل التوقيع دائماً."""
+        doc = ('Company\nDate: July 29, 2026\nSubject: x\nDear Sir,\nbody\n'
+               'Director General\nAugust 5, 2026\n')
+        self.assertEqual(self._d(doc), '2026-07-29')
+
+    def test_signature_date_ignores_body_citations(self):
+        """إحالات المتن («dated July 15, 2025») ليست سطوراً عارية — لا تُلتقط ذيلاً."""
+        doc = ('Company\nSubject: x\nDear Sir,\n'
+               'Reference is made to letter No.13998 dated July 15, 2025, regarding reports.\n'
+               'Sincerely yours,\nMr. Ma Cheng\nGeneral Manager\nQURNAIN PETROLEUM COMPANY LIMITED\n'
+               'CC: Mr. Mohammed Yaseen Hasan, DG of MdOC.\n')
+        self.assertIsNone(self._d(doc))
+
+    def test_signature_numeric_bare_line_rejected(self):
+        """الرقمية العارية تحت التوقيع مُستبعَدة (شظايا أختامٍ تُشبهها) — صمتٌ أصدق."""
+        doc = ('Company\nSubject: x\nDear Sir,\nbody\n'
+               'Director General\n12/7/2026\n')
+        self.assertIsNone(self._d(doc))
+
 
 class RealCompanyDocumentsTests(SimpleTestCase):
     """وثائق حقيقية من أرشيف المالك (صور مُرسَلة 2026-07-13) — كل حالةٍ قانونُ مجال:
@@ -537,6 +591,14 @@ class TitleWrapJoinTests(SimpleTestCase):
         t = self.m.extract_title_keywords(text)
         self.assertIn('الموازنة', t)
         self.assertNotIn('Approval', t)
+
+    def test_comma_separator_and_symbol_tail_cleaned(self):
+        # طبقة نصّ ADO #11291 (بالعين 2026-08-10): «Subject, Monthly … 2026   ?-J.,I» —
+        # النقطتان قُرئتا فاصلةً وحطامُ منطقة الختم لحق بالسطر بعيداً يميناً
+        text = ('ADO DIGITAL ENERGY FZCO\nNo.: ADO627\n'
+                'Subject, Monthly Procurement Report for July 2026        ?-J.,I\nDear Sir,')
+        self.assertEqual(self.m.extract_title_keywords(text),
+                         'Monthly Procurement Report for July 2026')
 
     def test_english_only_doc_still_uses_subject(self):
         # مستند إنكليزي صرف (لا علامة عربية): Subject يعمل كما كان
