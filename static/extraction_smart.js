@@ -3636,6 +3636,10 @@ class ExtractionSmartSystem {
     }
 
     applyExtractionResult(data) {
+        // حلقة التعلّم (إصلاح 2026-08-16): الخادم يسكّ رمز مسحٍ لكلّ استخراج — بما فيه
+        // **الرفع اليدويّ** الذي كان بلا رمز فيضيع تصحيح الكاتب (6 سجلّات التقاطٍ فقط
+        // في القاعدة كلّها). نحفظه هنا ليُرسَل مع الحفظ فيُلتقَط الزوج (اقتراح → تصحيح).
+        if (data && data.scan_token) this.scanToken = data.scan_token;
         const mapping = [
             { field: 'bookNumber', key: 'book_number', conf: 'book_number_confidence' },
             { field: 'title', key: 'title', conf: 'title_confidence' },

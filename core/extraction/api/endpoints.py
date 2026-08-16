@@ -262,6 +262,29 @@ def extraction_statistics(request):
     }, status=status.HTTP_200_OK)
 
 
+def _mint_scan_token(result) -> str:
+    """يسكّ رمز مسحٍ لأيّ استخراج (رفعٌ يدويّ أو بثّ) ويخزّن اقتراحه في الكاش.
+
+    **إصلاح حلقة التعلّم (2026-08-16، تشخيصٌ على الكتاب 11298):** كانت الحلقة تُنشئ
+    الرمز في مسار **وكيل المسح وحده** (`scan_settings`)، فكلُّ مستندٍ يُرفع يدوياً لا
+    يُنتج رمزاً ⟵ `books_api` يتخطّى `persist_extraction_capture` ⟵ **تصحيحُ الكاتب
+    يضيع**. الدليل: 6 سجلّات التقاطٍ في القاعدة كلّها (و0 لهذا الكتاب) مقابل آلاف
+    الحفظات. المخزَّن هو `result_to_scan_data` نفسه لأن الالتقاط يقرأ منه raw_text
+    والحقول والثقات وصندوق العدد. يُعاد الرمز في الاستجابة لترسله الواجهة عند الحفظ."""
+    try:
+        import uuid
+
+        from django.core.cache import cache as _cache
+
+        from core.extraction.pipeline import result_to_scan_data
+        token = uuid.uuid4().hex
+        _cache.set(f'scan_token:{token}', result_to_scan_data(result), timeout=86400)
+        return token
+    except Exception as exc:                      # الحلقة تحسينٌ لا شرط — لا تُفشل الاستخراج
+        logger.warning('[capture] تعذّر سكّ رمز المسح: %s', type(exc).__name__)
+        return ''
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @rate_limit_scan(max_attempts=20, window_seconds=300)
@@ -336,6 +359,8 @@ def smart_extract_direct(request):
                 'overall_confidence': result.overall_confidence,
                 'cached': result.cached,
                 'needs_review': getattr(result, 'status', '') == 'manual_review',
+                # حلقة التعلّم: ترسله الواجهة عند الحفظ فيُلتقَط (اقتراح → تصحيح الكاتب)
+                'scan_token': _mint_scan_token(result),
             }
         except Exception as exc:
             logger.exception("Smart extract processing failed")
@@ -479,6 +504,8 @@ def smart_extract_stream(request):
                 'request_id': _request_id(),
                 'overall_confidence': result.overall_confidence,
                 'cached': result.cached,
+                # حلقة التعلّم: ترسله الواجهة عند الحفظ فيُلتقَط (اقتراح → تصحيح الكاتب)
+                'scan_token': _mint_scan_token(result),
             })
             yield _json.dumps(payload, ensure_ascii=False) + '\n'
 

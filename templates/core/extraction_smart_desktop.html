@@ -192,6 +192,8 @@
                                 <label class="field-label" id="bookNumberLabel">
                                     رقمنا
                                     <span class="field-required">*</span>
+                                    <i class="bi bi-info-circle ms-1" style="opacity:.6; font-size:.85em;"
+                                       title="رقم قيدنا يولّده النظام: الخانة الأولى = السجل (1 وارد داخلي، 2 وارد خارجي، 3 صادر داخلي، 4 صادر خارجي) ثم تسلسل فريد. كتب السنوات السابقة تحمل سنتها في المقدّمة. هذا ليس العدد المطبوع على المستند — ذاك حقل «العدد»."></i>
                                 </label>
                                 <span class="register-type-chip" id="bookRegisterChip" style="display: none;"></span>
                                 <span class="confidence-badge high" id="bookNumberConfidence" style="display: none;">
@@ -251,9 +253,16 @@
                     <!-- الصف 2: رقم الجهة المرسلة + تاريخ الجهة المرسلة -->
                     <div class="field-grid-two">
                         <div class="form-group-smart" id="senderNumberGroup">
-                            <label class="field-label" id="senderNumberLabel">العدد</label>
-                            <input type="text" class="form-control-smart" id="senderNumber" placeholder="مثال: 512 أو 241/و">
-                            <div class="input-hint" id="senderNumberHint">رقم الجهة المرسلة — كما يظهر على كتابهم بعد «العدد /».</div>
+                            <label class="field-label" id="senderNumberLabel">
+                                العدد
+                                <i class="bi bi-info-circle ms-1" style="opacity:.6; font-size:.85em;"
+                                   title="العدد الحقيقي المطبوع على المستند، كما أصدرته الجهة المرسِلة. انقله كما هو ولا تُصححه. هذا ليس رقم قيدنا — رقمنا يولّده النظام تلقائياً."></i>
+                            </label>
+                            <input type="text" class="form-control-smart" id="senderNumber" placeholder="مثال: 512 أو 241/و"
+                                   aria-describedby="senderNumberHint">
+                            <div class="input-hint" id="senderNumberHint">
+                                <strong>العدد المطبوع على الورقة</strong> — كما يظهر على كتاب الجهة بعد «العدد /». يُنقَل كما هو، ولا علاقة له برقم قيدنا.
+                            </div>
                         </div>
 
                         <div class="form-group-smart" id="senderDateGroup">
@@ -567,7 +576,7 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260720b"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260816a"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
