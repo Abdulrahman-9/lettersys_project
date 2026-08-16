@@ -61,6 +61,39 @@ class FindLabelTests(SimpleTestCase):
         t = tsv([('ترويسة', 100, 60, 90, 30)])
         self.assertIsNone(NumberStripLocator(priors).find_label(t, self.W, self.H, entity_id=5))
 
+    def test_date_floor_skips_ims_header_date(self):
+        # بلاغ المالك 2026-08-11: قصاصة التاريخ التقطت تاريخ نموذج الإيزو («Date Rev»
+        # وسط الترويسة) بدل تاريخ الجهة الذي يقع بعد «التاريخ» **أسفل «العدد»**.
+        # فيتو الجدول يعتمد قراءةَ الجار وقد يفشل حين يشوّهه OCR («Bev») — الأرضيّةُ
+        # الهندسيّة (min_top = تسمية العدد) لا تُخدَع.
+        t = tsv([('Date', 400, 60, 60, 24), ('Bev', 470, 60, 50, 24),   # خلية إيزو بجارٍ مشوَّه
+                 ('التاريخ', 700, 260, 90, 30)])                          # حقل الجهة أسفل العدد
+        loc = NumberStripLocator(None, field='date')
+        # بلا معرفة صفّ العدد: «الأعلى يفوز» فيخطف الإيزو (يوثّق الفخّ)
+        self.assertEqual(loc.find_label(t, 1000, 1400).top, 60)
+        # مع صفّ «العدد» (top≈200): يُرجَّح ما تحته — حقل الجهة
+        lb = loc.find_label(t, 1000, 1400, min_top=200 - 45)
+        self.assertIsNotNone(lb)
+        self.assertEqual(lb.top, 260)
+
+    def test_ranking_never_drops_a_legitimate_date(self):
+        """الترجيح لا يُقصي: حين لا مرشّحَ **تحت** صفّ العدد (أرضيّةٌ مشتقّةٌ من اقتباس
+        متنٍ منخفض) يبقى المرشّح الأعلى فائزاً — الإقصاء الصارم أهدر 4 من 7 قصاصات
+        صحيحة (قِيس بالعين 2026-08-11: #11287/11253/11254)."""
+        t = tsv([('التاريخ', 700, 625, 90, 30)])          # حقل الجهة الحقيقيّ
+        loc = NumberStripLocator(None, field='date')
+        lb = loc.find_label(t, 1000, 3500, min_top=1018)  # أرضيّةٌ زائفة من المتن
+        self.assertIsNotNone(lb)
+        self.assertEqual(lb.top, 625)
+
+    def test_tatweel_label_is_matched(self):
+        """«العـــدد»/«التأريــخ» بالتطويل (U+0640) شائعةٌ في الترويسات — كانت تُفوَّت
+        فيقع المُموضِع على اقتباس المتن (اكتُشف بالعين 2026-08-11)."""
+        t = tsv([('العـــدد', 700, 200, 110, 30)])
+        self.assertIsNotNone(NumberStripLocator().find_label(t, 1000, 1400))
+        t2 = tsv([('التأريــخ', 700, 260, 110, 30)])
+        self.assertIsNotNone(NumberStripLocator(None, field='date').find_label(t2, 1000, 1400))
+
     def test_label_slightly_below_zone_near_prior_admitted(self):
         # تسمية شرعية أسفل الحزام (y≈0.38) لكن ضمن قطر prior الجهة — تُقبَل كتسمية.
         # حُدِّث القطر 0.14→0.09 (قياسٌ 2026-07-21: الحزام الأوسع «يُتوّج المتن»

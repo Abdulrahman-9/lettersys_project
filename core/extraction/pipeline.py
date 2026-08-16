@@ -420,6 +420,7 @@ class AIExtractionService:
 
             # ── العدد اليدويّ (قراءة) ── لا early-return: نحسب التاريخ من نفس الرسم+TSV
             number_result = None
+            num_label_floor = None    # أرضيّة قصاصة التاريخ: تسمية «العدد» (قانون المجال)
             located = self._hw_locator.locate(img, tsv, entity_id=entity_id)
             if located is not None:
                 strip, _label = located
@@ -450,10 +451,15 @@ class AIExtractionService:
                         number_result = (text, conf, bbox_norm)
                     else:
                         logger.info('[handwriting] قراءة دون البوابة: %r (ثقة %.2f)', text, conf)
+                    # قانون المجال (بلاغ المالك 2026-08-11): تاريخ الجهة بعد «التاريخ»
+                    # **أسفل «العدد»** — لا «Date Rev» الإيزو وسط الترويسة فوقه. تسمية
+                    # العدد أرضيّةٌ لبحث التاريخ (بتسامح ارتفاعِ تسميةٍ ونصف للصفّ نفسه).
+                    num_label_floor = max(0, _label.top - int(1.5 * _label.height))
                 del strip
 
             # ── قصاصة «التأريخ» للواجهة (خيار F) — من نفس img+tsv، لا قراءة ──
-            date_crop = self._crop_date_strip(img, tsv) if want_date_crop else None
+            date_crop = (self._crop_date_strip(img, tsv, min_top=num_label_floor)
+                         if want_date_crop else None)
 
             del tsv, img
             return number_result, date_crop
@@ -462,14 +468,47 @@ class AIExtractionService:
                            type(exc).__name__)
             return None, None
 
-    def _crop_date_strip(self, img, tsv):
+    @staticmethod
+    def _number_label_floor(tsv):
+        """أرضيّةُ بحثِ التاريخ = صفُّ تسمية «العدد» في TSV (بلا قراءةٍ ولا قصّ).
+
+        بلاغ المالك (2026-08-11، مُكرَّر): القصاصة كانت تلتقط **تاريخ اعتماد نموذج
+        الإيزو** («Date Rev» وسط ترويسة نظام الإدارة المتكامل)، بينما تاريخ الجهة —
+        وبنسبةٍ عالية في المذكّرات الداخليّة — يقع **تحت العدد بعد كلمة «التاريخ»**.
+        الأرضيّةُ الأولى تُشتقّ من مسار العدد، لكنّه يصمت في ~42% من الصفحات؛ فهنا
+        نشتقّها مباشرةً من TSV كي لا تبقى ثغرةٌ يتسلّل منها تاريخ الترويسة. تُعاد
+        None إن لم تُقرأ تسمية «العدد» إطلاقاً (فلا نخنق الحالات المشروعة)."""
+        try:
+            from core.extraction.handwriting.localize import _LABEL_RES, _norm_label
+            num_re = _LABEL_RES['number']
+            tops = [tsv['top'][i] for i, raw in enumerate(tsv.get('text', []))
+                    if _norm_label(raw) and num_re.search(_norm_label(raw))]
+            if not tops:
+                return None
+            page_h = max(tsv.get('top') or [0]) or 0
+            top = min(tops)
+            # حارسٌ مقيسٌ بالعين (2026-08-11): «العدد» يردُ في اقتباسات المتن أيضاً.
+            # أرضيّةٌ مشتقّةٌ من اقتباسٍ منخفض **تخنق حقلَ التاريخ الحقيقيّ فوقه**
+            # (#11287/11253/11254: الحقل y=625 والاقتباس y=1018). فلا نثق بالأرضيّة
+            # إلا إن جاءت من ترويسةٍ حقيقيّة — أعلى ~45% من ارتفاع المحتوى.
+            if page_h and top > 0.45 * page_h:
+                return None
+            heights = [h for h in tsv.get('height', []) if h] or [30]
+            return max(0, top - int(1.5 * (sum(heights) / len(heights))))
+        except Exception:
+            return None
+
+    def _crop_date_strip(self, img, tsv, min_top=None):
         """قصاصةُ شريط «التأريخ» اليدويّ للعرض في الواجهة (خيار F) — لا قراءة، الكاتب
         ينسخها. **هندسةٌ فضفاضةٌ متناظرة عمداً**: تمركزٌ حول التسمية وامتدادٌ للجهتين
         (القيمة العربيّة يساراً والإنجليزيّة يميناً) + حشوٌ رأسيّ سخيّ — الإفراطُ في
         القصّ مجّانيٌّ (بشريُّ العرض) والتقصيرُ وحده يُفقِد القيمة (فيبل16). لا نُعيد
         استعمال صندوق القارئ الضيّق. يُعيد data URL (PNG رماديّ) أو None."""
         try:
-            located = self._hw_date_locator.locate(img, tsv, entity_id=None)
+            if min_top is None:
+                min_top = self._number_label_floor(tsv)
+            located = self._hw_date_locator.locate(img, tsv, entity_id=None,
+                                                   min_top=min_top)
             if located is None:
                 return None
             _strip, label = located

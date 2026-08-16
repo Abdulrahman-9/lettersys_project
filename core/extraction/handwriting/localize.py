@@ -30,6 +30,18 @@ _LABEL_RE = _LABEL_RES['number']   # توافق خلفي
 # الحلّ: أيّ مرشّحٍ يجاوره في سطره أحدُ ألفاظ الجدول يُرفض.
 _TABLE_CONTEXT = re.compile(r'^(rev|doc|no\.?|ims|form|f\s*-?\d)', re.I)
 
+# **التطويل يكسر مطابقة التسمية** (اكتُشف بالعين 2026-08-11): ترويسات المذكّرات تكتب
+# «العـــدد» و«التأريــخ» بمحرف التطويل (U+0640) بين الحروف، فـ`عدد` لا تطابق «عـدد».
+# النتيجة: المُموضِع يتخطّى تسمية الترويسة الحقيقيّة ويقع على «العدد» في اقتباس المتن
+# (قِيس: #11287/11253/11254 — التسمية الحقيقيّة y=625 والمُلتقَط y=1018). التطبيع يجب
+# أن يُسقط التطويل من **داخل** الكلمة لا من أطرافها فقط.
+_TATWEEL = 'ـ'
+
+
+def _norm_label(raw) -> str:
+    """تطبيعُ رمزٍ من TSV قبل مطابقة التسمية: إسقاط التطويل داخلياً + تقليم الفواصل."""
+    return (raw or '').replace(_TATWEEL, '').strip().strip(':.  ')
+
 # ختمُنا نحن على الكتاب الوارد يحمل حقلَين مطبوعَين اسمهما «العدد» و«التاريخ»
 # مملوءَين بخطّ اليد — أي **مرساتَي البحث نفسهما، بخطّ يدٍ، في صندوقٍ عالي التباين**.
 # فعلى كلّ واردٍ مختوم توجد «العدد» مرّتين: مرساة الجهة (إن وُجدت) ومرساتنا؛
@@ -141,15 +153,22 @@ class NumberStripLocator:
         return False
 
     def find_label(self, tsv: dict, width: int, height: int,
-                   entity_id=None) -> Optional[LabelBox]:
+                   entity_id=None, min_top: Optional[int] = None) -> Optional[LabelBox]:
         """أفضل مرشّح تسمية: داخل حزام أعلى-الصفحة (يرفض نسخ المتن — خطأ المسبار
         الرئيس)، أو قريبٌ من prior الجهة؛ الأعلى في الصفحة يفوز. خلايا جدول
         الجودة («Date Rev») مرفوضة. وعند غياب أي تسمية مقروءة: السقوط لموضع
-        الجهة المُتعلَّم نفسه (جهات «الصفر»)."""
+        الجهة المُتعلَّم نفسه (جهات «الصفر»).
+
+        `min_top` (بكسل): **ترجيحٌ لا إقصاء** — قانون المجال (بلاغ المالك 2026-08-11):
+        تاريخ الجهة بعد «التاريخ» **أسفل «العدد»**، بينما «Date Rev» الإيزو يقبع في
+        ترويسة نظام الجودة فوقه (وفيتو الجدول يعتمد قراءةَ الجار فيفشل حين يشوّه OCR
+        «Rev»). فحين نعرف صفَّ «العدد» نُرجّح أقربَ مرشّحٍ **تحته**؛ وإن لم يوجد مرشّحٌ
+        تحته يفوز الأعلى كالسابق. **الإقصاءُ الصارم قِيس فضرّ** (2026-08-11: أهدر 4 من 7
+        قصاصاتٍ صحيحة حين اشتُقّت الأرضيّة من «العدد» في اقتباس متن) — فلا نُقصي أبداً."""
         prior = self.priors.get(entity_id) if (self.priors and entity_id) else None
         best = None
         for i, raw in enumerate(tsv.get('text', [])):
-            t = (raw or '').strip().strip(':.ـ ')
+            t = _norm_label(raw)
             if not t or not self._label_re.search(t):
                 continue
             x = (tsv['left'][i] + tsv['width'][i] / 2) / width
@@ -163,8 +182,11 @@ class NumberStripLocator:
                 continue   # خليّة جدول الترويسة لا تسميةَ حقل
             if self._in_our_stamp(tsv, i):
                 continue   # ختمنا نحن — رقمُنا لا رقمُ الجهة
-            if best is None or y < best[1]:
-                best = (i, y)
+            # الترتيب: الأعلى يفوز افتراضاً؛ ومع معرفة صفّ «العدد» (min_top) يُرجَّح
+            # أوّلُ مرشّحٍ **تحته** (قانون المجال) على ما فوقه (خليّة الإيزو).
+            rank = (0 if (min_top is None or tsv['top'][i] >= min_top) else 1, y)
+            if best is None or rank < best[1]:
+                best = (i, rank)
         if best is not None:
             i = best[0]
             return LabelBox(tsv['left'][i], tsv['top'][i], tsv['width'][i],
@@ -223,9 +245,10 @@ class NumberStripLocator:
         y1 = min(height, label.top + int(1.6 * label.height))
         return (x0, y0, x1, y1)
 
-    def locate(self, img, tsv: dict, entity_id=None):
+    def locate(self, img, tsv: dict, entity_id=None, min_top: Optional[int] = None):
         """الواجهة العليا: (مقصوصة الشريط، صندوق التسمية) أو None."""
-        label = self.find_label(tsv, img.width, img.height, entity_id=entity_id)
+        label = self.find_label(tsv, img.width, img.height, entity_id=entity_id,
+                                min_top=min_top)
         if label is None:
             return None
         floor_y = self.rule_above(img, label.top) or 0
