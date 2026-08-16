@@ -1,0 +1,55 @@
+# -*- coding: utf-8 -*-
+"""اتّجاه الكتاب يحكم مصادر الجهة المستلِمة (فيبل، قياس 2026-08-16).
+
+الجذر المُقاس: المستلِمة **0/30** على نصوصٍ حقيقيّة — لا لعطلٍ في المطابقة بل لأن
+المهمّة مُؤطَّرةٌ خطأً: في الوارد لا تُذكر جهتُنا المستلِمة في الكتاب؛ سطر «الى/» يحمل
+المُخاطَب داخل جهة المُرسِل، والكاتب يسجّل **وجهة التوجيه عندنا** (9,360 كتاباً: 45
+قيمة فقط، السائدة 64.9%). الذاكرة تخزّن هذا التوجيه — لكنّ «الى/» كان يتصدّرها.
+LOO على 300 صفّ: أساس 51.3% مقابل ذاكرة 58.7% (+7.4، تجاوز بوّابة فيبل +5).
+
+تُختبَر الدالّة التي يستعملها الأنبوب نفسه (`entity_source_plan`) — لا نسخةٌ منها."""
+from django.test import SimpleTestCase
+
+from core.extraction.pipeline import entity_source_plan
+
+
+class EntitySourcePlanTests(SimpleTestCase):
+    def test_outgoing_keeps_recipient_line_first(self):
+        """الصادر لا يُمسّ: «الى/» هو المُخاطَب الحقيقيّ ⟵ يتصدّر."""
+        for kind in ('outgoing_internal', 'outgoing_external'):
+            p = entity_source_plan('receiver', kind, True)
+            self.assertIn('recipient_line_first', p, kind)
+            self.assertNotIn('recipient_line_after_memory', p, kind)
+
+    def test_incoming_internal_memory_first_then_recipient(self):
+        p = entity_source_plan('receiver', 'incoming_internal', True)
+        self.assertIn('memory', p)
+        self.assertIn('recipient_line_after_memory', p)
+        self.assertNotIn('recipient_line_first', p)
+
+    def test_incoming_external_drops_recipient_line(self):
+        """«الى/» في الوارد الخارجيّ يسمّي مُخاطَباً داخل جهة المُرسِل ⟵ يُسقط."""
+        p = entity_source_plan('receiver', 'incoming_external', True)
+        self.assertIn('memory', p)
+        self.assertNotIn('recipient_line_first', p)
+        self.assertNotIn('recipient_line_after_memory', p)
+
+    def test_letterhead_never_feeds_receiver_on_incoming(self):
+        """الترويسة اسمُ المُرسِل دائماً ⟵ تُمنع عن حقل المستلِمة في الوارد (جذر #11298)."""
+        for kind in ('incoming_internal', 'incoming_external'):
+            self.assertNotIn('letterhead', entity_source_plan('receiver', kind, True), kind)
+
+    def test_letterhead_still_used_for_issuer_and_for_outgoing_receiver(self):
+        self.assertIn('letterhead', entity_source_plan('issuer', 'incoming_external', True))
+        self.assertIn('letterhead', entity_source_plan('receiver', 'outgoing_external', True))
+
+    def test_no_recipient_text_means_no_recipient_source(self):
+        p = entity_source_plan('receiver', 'incoming_internal', False)
+        self.assertNotIn('recipient_line_after_memory', p)
+        self.assertIn('memory', p)
+
+    def test_unknown_kind_behaves_like_outgoing(self):
+        """اتّجاهٌ مجهول (نمطٌ لم يُستنتَج) ⟵ السلوك السابق، بلا مفاجآت."""
+        p = entity_source_plan('receiver', '', True)
+        self.assertIn('recipient_line_first', p)
+        self.assertIn('letterhead', p)

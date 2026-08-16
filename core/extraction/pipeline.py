@@ -880,12 +880,16 @@ class AIExtractionService:
                 if etype == 'issuer' and getattr(result, 'register_code', ''):
                     _extend(lambda: self.entity_matcher.match_by_register_code(
                         result.register_code, entity_type='issuer'), 'register_code')
-                # المُخاطَب مكتوبٌ صراحةً بعد «الى/» في الرأس — أدقّ من مسح الترويسة كلها
-                if etype == 'receiver' and getattr(result, 'recipient_text', ''):
+                _plan = entity_source_plan(etype, str(getattr(result, 'book_kind', '') or ''),
+                                           bool(getattr(result, 'recipient_text', '')))
+                if 'recipient_line_first' in _plan:
                     _extend(lambda: self.entity_matcher.match_entity(
                         result.recipient_text, entity_type='receiver')[:3], 'recipient_line')
                 _extend(lambda: self.entity_matcher.match_from_memory(cleaned, entity_type=etype, top_k=3),
                         'memory')
+                if 'recipient_line_after_memory' in _plan:
+                    _extend(lambda: self.entity_matcher.match_entity(
+                        result.recipient_text, entity_type='receiver')[:3], 'recipient_line')
                 # مُعرّف البروفايل: كلماتٌ مميّزة من اسم الجهة + ترجيحُ رمز السجلّ، على
                 # **المنطقة الصحيحة بحسب الاتجاه** (المُصدِرة من الترويسة، المُخاطَب من
                 # سطر «الى/») — قانون المالك: «الوارد ليس كالصادر». يأتي **بعد** الذاكرة
@@ -895,7 +899,7 @@ class AIExtractionService:
                 _extend(lambda: self._profile_entity_matches(
                     (getattr(result, 'recipient_text', '') if etype == 'receiver' else cleaned), etype),
                     'profile')
-                if len(ranked) < 3:
+                if len(ranked) < 3 and 'letterhead' in _plan:
                     _extend(lambda: self.entity_matcher.match_from_letterhead(cleaned, entity_type=etype, top_k=3),
                             'letterhead')
                 pattern_match = (self.entity_matcher.match_issuing_entity if etype == 'issuer'
@@ -1209,6 +1213,31 @@ def partial_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         snap['receiving_entity_confidence'] = result.receiving_entity_confidence
         snap['receiving_entity_matches'] = slim_entity_matches(result.receiving_entity_matches)
     return snap
+
+
+def entity_source_plan(etype: str, kind: str, has_recipient: bool) -> set:
+    """أيّ مصادر الجهات تُستعمَل ولأيّ ترتيب — **بحسب اتّجاه الكتاب** (فيبل 2026-08-16).
+
+    قِيس على 30 نصّاً حقيقيّاً: الجهة المستلِمة **0/30**. الجذر ليس المطابقة بل
+    **تأطير المهمّة**: في الوارد لا تُذكر جهتُنا المستلِمة في الكتاب أصلاً — سطر «الى/»
+    يحمل المُخاطَب داخل جهة المُرسِل، بينما الكاتب يسجّل **وجهة التوجيه عندنا**
+    (9,360 كتاباً: 45 قيمة فقط، السائدة 64.9%). وذاكرة الترويسة تخزّن هذا التوجيه
+    أصلاً، لكنّ «الى/» كان يتصدّرها فيُفسدها. LOO على 300 صفّ ذاكرة: أساسٌ ثابت 51.3%
+    مقابل ذاكرة **58.7%** (+7.4 — تجاوز بوّابة فيبل +5).
+
+    القواعد: الصادر لا يُمسّ («الى/» هو المُخاطَب الحقيقيّ فيتصدّر) · الوارد الداخليّ
+    يقدّم الذاكرة ثم «الى/» · الوارد الخارجيّ يُسقط «الى/» · والترويسة (اسمُ المُرسِل
+    دائماً) تُمنع عن حقل المستلِمة في الوارد — وهو جذر خلط الاتّجاه في #11298."""
+    incoming = str(kind or '').startswith('incoming')
+    plan = {'memory', 'profile', 'patterns'}
+    if etype == 'receiver':
+        if has_recipient and kind != 'incoming_external':
+            plan.add('recipient_line_after_memory' if incoming else 'recipient_line_first')
+        if not incoming:
+            plan.add('letterhead')
+    else:
+        plan.add('letterhead')
+    return plan
 
 
 def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:

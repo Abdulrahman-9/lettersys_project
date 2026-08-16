@@ -161,7 +161,15 @@ def _looks_like_language(line: str) -> bool:
     if len(s) < 6:
         return False
     ar = sum(1 for c in s if '؀' <= c <= 'ۿ')
-    if ar >= 8:                                  # عربيةٌ كافية ⇒ لغة
+    if ar >= 8:
+        # «عربيةٌ كافية ⇒ لغة» كان يمرّ عدّاً محضاً، فتُقبل **حروفٌ مبعثرة** بلا كلمات:
+        # «ع ل ١ اكير د as or ler VPP? wis ريقر pwaw» (عنوان #11298 المُنبعث فعلاً —
+        # بلاغ المالك 2026-08-16) فيه 12 حرفاً عربياً فمرّ، وهو خردةُ مسحٍ محضة.
+        # اللغةُ كلماتٌ لا حروف: نرفض حين تغلب الرموزُ الأحاديّة على الرموز العربيّة.
+        ar_toks = re.findall(r'[؀-ۿ]+', s)
+        singles = sum(1 for t in ar_toks if len(t) == 1)
+        if singles >= 2 and singles >= 0.4 * len(ar_toks):
+            return False
         return True
     toks = re.findall(r'[A-Za-z]{2,}', s)
     if len(toks) < 2:
