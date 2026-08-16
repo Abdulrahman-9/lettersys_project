@@ -908,6 +908,8 @@ class AIExtractionService:
                     _extend(lambda: pattern_match(entity_text), 'patterns')
                     if len(ranked) > 3:
                         break
+                if etype == 'issuer':
+                    ranked = prefer_jmc_committee(ranked, cleaned)
                 return ranked[:3]
 
             def _assign_entity(matches, id_attr, name_attr, conf_attr, matches_attr):
@@ -1213,6 +1215,31 @@ def partial_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         snap['receiving_entity_confidence'] = result.receiving_entity_confidence
         snap['receiving_entity_matches'] = slim_entity_matches(result.receiving_entity_matches)
     return snap
+
+
+_JMC_RE = re.compile(r'لجنة\s*الاداره?|لجنة\s*الإدارة|joint\s*management', re.I)
+
+
+def prefer_jmc_committee(ranked: list, text: str) -> list:
+    """عُرف المالك (2026-08-16): في كتب **اللجان المشتركة** الجهةُ المُصدِرة هي
+    **اللجنة** لا الشركة المُشغِّلة — ونماذج JMC تحمل شعار المُشغِّل واسمَ اللجنة معاً،
+    فيتصدّر اسمُ الشركة أحياناً (#8720: «NK Petroleum» بدل «لجنة الادارة المشتركة
+    لرقعة…»).
+
+    **إعادةُ ترتيبٍ لا إقصاء**: تُطلق فقط حين تحمل الترويسة «لجنة الإدارة المشتركة»
+    ويكون المتصدّر غيرَ لجنةٍ ويوجد مرشّحُ لجنةٍ في القائمة — فلا تخسر شيئاً حين لا
+    يوجد بديل. مقيسٌ على 30 نصّاً حقيقيّاً: 73% → **77%**، أُطلقت مرّةً واحدة وأصابت،
+    وصفر تراجع. والقاعدة تسند العُرف: 1,476 صفّ ذاكرةٍ ترويستها JMC، **73%** منها
+    سجّل الكاتب لجنةً (والـ27% الباقية أقسامٌ داخليّة لنا — حالةٌ أخرى لا مخالفة)."""
+    if not ranked or not _JMC_RE.search(text or ''):
+        return ranked
+    top_name = (ranked[0].get('entity_name') or '') if isinstance(ranked[0], dict) else ''
+    if _JMC_RE.search(top_name):
+        return ranked
+    for i, m in enumerate(ranked[1:], start=1):
+        if _JMC_RE.search((m.get('entity_name') or '') if isinstance(m, dict) else ''):
+            return [ranked[i]] + ranked[:i] + ranked[i + 1:]
+    return ranked
 
 
 def entity_source_plan(etype: str, kind: str, has_recipient: bool) -> set:

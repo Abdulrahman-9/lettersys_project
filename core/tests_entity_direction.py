@@ -10,7 +10,7 @@ LOO على 300 صفّ: أساس 51.3% مقابل ذاكرة 58.7% (+7.4، تجا
 تُختبَر الدالّة التي يستعملها الأنبوب نفسه (`entity_source_plan`) — لا نسخةٌ منها."""
 from django.test import SimpleTestCase
 
-from core.extraction.pipeline import entity_source_plan
+from core.extraction.pipeline import entity_source_plan, prefer_jmc_committee
 
 
 class EntitySourcePlanTests(SimpleTestCase):
@@ -53,3 +53,36 @@ class EntitySourcePlanTests(SimpleTestCase):
         p = entity_source_plan('receiver', '', True)
         self.assertIn('recipient_line_first', p)
         self.assertIn('letterhead', p)
+
+
+class PreferJmcCommitteeTests(SimpleTestCase):
+    """عُرف المالك: في كتب اللجان المشتركة الجهةُ المُصدِرة هي **اللجنة** لا الشركة
+    المُشغِّلة. إعادةُ ترتيبٍ لا إقصاء — مقيس: 73%→77% (أصابت #8720)، صفر تراجع."""
+
+    JMC = ('ترويسة\n'
+           'لجنة الادارة المشتركة لرقعة النفط خانة\n'
+           'NK Petroleum Company Limited')
+
+    def _c(self, *names):
+        return [{'entity_id': i, 'entity_name': n} for i, n in enumerate(names, 1)]
+
+    def test_promotes_committee_over_operator(self):
+        out = prefer_jmc_committee(
+            self._c('NK Petroleum Company Limited', 'لجنة الادارة المشتركة لرقعة'), self.JMC)
+        self.assertEqual(out[0]['entity_name'], 'لجنة الادارة المشتركة لرقعة')
+        self.assertEqual(len(out), 2, 'إعادة ترتيبٍ لا حذف')
+
+    def test_no_committee_candidate_keeps_order(self):
+        c = self._c('NK Petroleum Company Limited', 'قسم تقنية المعلومات')
+        self.assertEqual(prefer_jmc_committee(c, self.JMC), c)
+
+    def test_no_jmc_in_text_never_fires(self):
+        c = self._c('Zhongman', 'لجنة الادارة المشتركة')
+        self.assertEqual(prefer_jmc_committee(c, 'Zhongman Babylon Oil & Gas DMCC'), c)
+
+    def test_committee_already_top_untouched(self):
+        c = self._c('لجنة الادارة المشتركة لحقل بدرة', 'NK Petroleum')
+        self.assertEqual(prefer_jmc_committee(c, self.JMC), c)
+
+    def test_empty_ranked_safe(self):
+        self.assertEqual(prefer_jmc_committee([], self.JMC), [])
