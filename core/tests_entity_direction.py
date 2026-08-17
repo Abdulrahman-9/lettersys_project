@@ -112,3 +112,31 @@ class MemorySelfMatchExclusionTests(TestCase):
                         'الصفّ الوحيد يجب أن يُطابق حين لا إقصاء')
         self.assertEqual(em.match_from_memory(head, 'issuer', exclude_book_id=book.id), [],
                          'صفّ الكتاب نفسه يجب أن يُقصى ⟵ لا مرشّح')
+
+
+class MemoryVoteCapTests(TestCase):
+    """سقف مساهمات الجهة الواحدة: التواتر لا يشتري الصدارة.
+
+    الجذر المُقاس: الترتيب كان بمجموعٍ **مفتوح** لكلّ صفوف الجهة، فجهةٌ بأربعين صفّاً
+    متوسّط التشابه تسبق جهةً بصفّين ممتازين. مسحٌ على 1000 استعلامٍ مُجمَّد (LOO نظيف):
+    ∞→46.3% مقابل 5→49.0%، ربح 40 خسارة 13، والاختيار يتكرّر على نصفٍ محجوز (+2.2)."""
+
+    def test_two_excellent_rows_beat_many_mediocre(self):
+        user = User.objects.create_user('cap', password='x')
+        strong = Entity.objects.create(name='هيئة الاستثمار')
+        noisy = Entity.objects.create(name='قسم الحسابات')
+        head = 'جمهورية العراق هيئة الاستثمار الوطنية مكتب الرئيس'
+
+        def _row(ent, text):
+            bk = Book.objects.create(title='ت', kind='incoming_internal', created_by=user)
+            LetterheadMemory.objects.create(book=bk, letterhead=text, issuing_entity=ent)
+
+        for _ in range(2):
+            _row(strong, head)                       # مطابقٌ تماماً — صفّان
+        for i in range(20):                          # مُشوّشٌ مِكثار — عشرون صفّاً
+            _row(noisy, f'جمهورية العراق قسم الحسابات شعبة {i} مكتب')
+
+        got = EntityMatcher().match_from_memory(head, 'issuer', top_k=2)
+        self.assertTrue(got, 'يجب أن تُرجَع مرشّحات')
+        self.assertEqual(got[0]['entity_id'], strong.id,
+                         'الصفّان الممتازان يجب أن يسبقا عشرين صفّاً متوسّطاً')

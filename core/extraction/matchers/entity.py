@@ -18,6 +18,12 @@ logger = logging.getLogger('lettersys')
 _ENTITY_CACHE_TTL = 300  # 5 دقائق
 _TFIDF_MIN_SIM = 0.3     # عتبة كوزَيْن دنيا لاعتبار مطابقة TF-IDF
 _MEMORY_MIN_SIM = 0.25       # عتبة تشابه ترويسة دنيا لاعتبار مطابقة ذاكرة
+_VOTE_TOP_N = 5             # سقف مساهمات الجهة الواحدة في الترتيب (كبح انفلات التواتر).
+                            # مقيسٌ لا مُخمَّن — مسحٌ على 1000 استعلامٍ مُجمَّد (LOO نظيف):
+                            # 1→45.3% · 2→48.4% · 3→48.2% · **5→49.0%** · 8→48.9% ·
+                            # 12→48.5% · ∞→46.3%. قمّةٌ عريضة (5-8)، والطرفان يخسران:
+                            # صفٌّ واحدٌ لا يكفي (الاتّساق إشارة)، والمجموع المفتوح يجعل
+                            # جهةً بأربعين صفّاً متوسّطاً تسبق جهةً بصفّين ممتازين.
 _MEMORY_HALFLIFE_DAYS = 180  # نصف-عُمر ترجيح الحداثة: الأحدث أوثق (يعالج انجراف التوجيه)
 _AR_TASHKEEL = re.compile(r'[ً-ْٰـ]')
 
@@ -310,12 +316,17 @@ class EntityMatcher:
             weighted = s * _recency_weight(row)
             v = votes.get(eid)
             if v is None:
-                votes[eid] = [weighted, s, row[cols[1]], row[cols[2]]]
+                votes[eid] = [[weighted], s, row[cols[1]], row[cols[2]]]
             else:
-                v[0] += weighted
+                v[0].append(weighted)
                 if s > v[1]:
                     v[1] = s
-        ranked = sorted(votes.items(), key=lambda kv: kv[1][0], reverse=True)[:top_k]
+        # الترتيب بمجموع **أفضل _VOTE_TOP_N** مساهمةٍ لا بمجموعها كلّه: المجموع المفتوح
+        # يجعل جهةً بأربعين صفّاً متوسّطاً تسبق جهةً بصفّين ممتازين — انفلاتُ تواترٍ لا
+        # دليلَ تطابق. القصّ يُبقي إشارة «الاتّساق» (بضعة صفوف مؤكِّدة) ويقتل الانفلات.
+        ranked = sorted(votes.items(),
+                        key=lambda kv: sum(sorted(kv[1][0], reverse=True)[:_VOTE_TOP_N]),
+                        reverse=True)[:top_k]
         return [{
             'entity_id': eid,
             'entity_name': v[2],
