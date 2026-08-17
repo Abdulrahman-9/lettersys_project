@@ -238,7 +238,8 @@ class EntityMatcher:
             'letterhead',
             'issuing_entity_id', 'issuing_entity__name', 'issuing_entity__code',
             'receiving_entity_id', 'receiving_entity__name', 'receiving_entity__code',
-            'book__date', 'created_at'))       # 7,8: إشارتا الحداثة للترجيح
+            'book__date', 'created_at',        # 7,8: إشارتا الحداثة للترجيح
+            'book_id'))                        # 9: لإقصاء المستند المُقاس عن نفسه (قياسٌ نظيف)
         if not rows:
             self._memory_index = (None, None, [], count)
             self._memory_built_at = now
@@ -251,12 +252,18 @@ class EntityMatcher:
         return self._memory_index
 
     def match_from_memory(self, text: str, entity_type: str = 'issuer',
-                          top_k: int = 3) -> List[Dict]:
+                          top_k: int = 3, exclude_book_id=None) -> List[Dict]:
         """يقترح الجهة بمطابقة ترويسة مستندٍ جديد بترويسات سابقة مؤكَّدة (تعلّمٌ من الداتا بيس).
 
         يكسر سقف «الوحدات الداخلية غير المطبوعة»: مستندات نفس المُرسِل تُسنَد دوماً
         لنفس الجهة، فالتشابه يكشفها. مقيسٌ بترك-واحد: hit@3 ≈ 85% مقابل ≈16% لمطابقة
-        الاسم. يكبر مع كلّ كتاب يُحفَظ (حلقة الالتقاط) — بلا حدّ ولا إعادة تدريب."""
+        الاسم. يكبر مع كلّ كتاب يُحفَظ (حلقة الالتقاط) — بلا حدّ ولا إعادة تدريب.
+
+        `exclude_book_id`: **للقياس فقط** — يُقصي صفوف الكتاب نفسه من التصويت. بدونه
+        يتعرّف المستند على ترويسة **نفسه** المخزَّنة فيُضخَّم الرقم (فيبل 2026-08-17:
+        «77% للجهة المُصدِرة تسريبُ مطابقةٍ ذاتيّة، لا أداءٌ حقيقيّ»). الإنتاج يمرّ None
+        لأن المستند الجديد لا صفَّ له بعد — فالسلوك الحيّ صادقٌ أصلاً، والمعطوب هو
+        **القياس**. القناعُ عند الاستعلام لا عند بناء الفهرس (الفهرس مُشترَكٌ ومُخزَّن)."""
         text = (text or '').strip()
         if not text:
             return []
@@ -295,6 +302,8 @@ class EntityMatcher:
             if s < _MEMORY_MIN_SIM:
                 continue
             row = rows[i]
+            if exclude_book_id is not None and len(row) > 9 and row[9] == exclude_book_id:
+                continue                       # صفّ الكتاب نفسه — إقصاءٌ للقياس النظيف
             eid = row[cols[0]]
             if eid is None:
                 continue

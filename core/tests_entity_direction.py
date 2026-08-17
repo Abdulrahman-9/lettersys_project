@@ -8,9 +8,13 @@
 LOO على 300 صفّ: أساس 51.3% مقابل ذاكرة 58.7% (+7.4، تجاوز بوّابة فيبل +5).
 
 تُختبَر الدالّة التي يستعملها الأنبوب نفسه (`entity_source_plan`) — لا نسخةٌ منها."""
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
+from core.extraction.matchers.entity import EntityMatcher
 from core.extraction.pipeline import entity_source_plan, prefer_jmc_committee
+from django.contrib.auth.models import User
+
+from core.models import Book, Entity, LetterheadMemory
 
 
 class EntitySourcePlanTests(SimpleTestCase):
@@ -86,3 +90,25 @@ class PreferJmcCommitteeTests(SimpleTestCase):
 
     def test_empty_ranked_safe(self):
         self.assertEqual(prefer_jmc_committee([], self.JMC), [])
+
+
+class MemorySelfMatchExclusionTests(TestCase):
+    """قناع `exclude_book_id`: صفّ الكتاب نفسه لا يُصوِّت لنفسه (قياسٌ نظيف).
+
+    الجذر المُقاس (2026-08-17): بلا القناع كان المستند يتعرّف على ترويسة **نفسه**
+    المخزَّنة في LetterheadMemory فيُصوّت لها بتشابهٍ 1.0 — فأظهر القياسُ 73% للجهة
+    المُصدِرة، وهو **تسريبٌ لا أداء**. نظيفاً: 60%. الإنتاج سليمٌ أصلاً (الكتاب الجديد
+    بلا صفّ)، والمعطوب كان المسطرة. هذا الاختبار يمنع عودة التسريب."""
+
+    def test_own_row_excluded_from_vote(self):
+        head = 'شركة نفط الوسط قسم شؤون التراخيص البترولية العدد التاريخ'
+        user = User.objects.create_user('leak', password='x')
+        ent = Entity.objects.create(name='قسم شؤون التراخيص البترولية')
+        book = Book.objects.create(title='ت', kind='incoming_internal', created_by=user)
+        LetterheadMemory.objects.create(book=book, letterhead=head, issuing_entity=ent)
+
+        em = EntityMatcher()
+        self.assertTrue(em.match_from_memory(head, 'issuer'),
+                        'الصفّ الوحيد يجب أن يُطابق حين لا إقصاء')
+        self.assertEqual(em.match_from_memory(head, 'issuer', exclude_book_id=book.id), [],
+                         'صفّ الكتاب نفسه يجب أن يُقصى ⟵ لا مرشّح')
