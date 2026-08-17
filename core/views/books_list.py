@@ -77,6 +77,7 @@ def _serialize_book(book):
     return {
         'id': book.id,
         'our_number': book.our_number or '',
+        'our_number_display': book.our_number_display,
         'our_number_year': book.our_number_year,
         'our_number_sequence': book.our_number_sequence,
         'our_number_is_compound': book.our_number_is_compound,

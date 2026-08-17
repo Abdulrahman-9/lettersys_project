@@ -97,6 +97,7 @@ def find_duplicate_candidates(*, kind, title, cmp_date, party_number,
             results.append({
                 'id': b.id,
                 'our_number': b.our_number,
+                'our_number_display': b.our_number_display,
                 'title': b.title,
                 'date': (b_date.isoformat() if b_date else ''),
                 'match_count': len(matched),

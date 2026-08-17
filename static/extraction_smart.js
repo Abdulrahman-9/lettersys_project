@@ -2048,7 +2048,7 @@ class ExtractionSmartSystem {
                         <div class="dup-item">
                             <span class="dup-badge">${esc(d.match_count || 0)}/4</span>
                             <div class="dup-item-main">
-                                <div class="dup-item-num">${esc(d.our_number || '—')}</div>
+                                <div class="dup-item-num">${esc(d.our_number_display || d.our_number || '—')}</div>
                                 <div class="dup-item-title">${esc(d.title || 'بدون عنوان')}</div>
                                 <div class="dup-item-date">${esc(d.date || '')}</div>
                             </div>
@@ -2087,7 +2087,7 @@ class ExtractionSmartSystem {
                     `<div class="dup-preview">
                         <div class="dup-fields">
                             <span class="dup-chip" style="background:${meta.bg};color:${meta.fg}">${esc(meta.label)}</span>
-                            <div class="dup-f"><label>رقمنا</label><b>${esc(b.our_number)}</b></div>
+                            <div class="dup-f"><label>رقمنا</label><b>${esc(b.our_number_display || b.our_number)}</b></div>
                             <div class="dup-f"><label>العنوان</label><span>${esc(b.title || 'بدون عنوان')}</span></div>
                             <div class="dup-f"><label>تاريخنا</label><span>${esc(b.date || '—')}</span></div>
                             <div class="dup-f"><label>رقم الجهة</label><span>${esc(b.sender_number || '—')}</span></div>

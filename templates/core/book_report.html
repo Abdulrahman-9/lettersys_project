@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <title>تقرير دورة حياة الكتاب — {{ book.our_number }}</title>
+  <title>تقرير دورة حياة الكتاب — {{ book.our_number_display }}</title>
   <style>
     /* ===== تقرير دورة حياة الكتاب — طباعة A4 (سطح المكتب) ===== */
     :root{
@@ -124,7 +124,7 @@
       </div>
       <div class="num-chip">
         <div class="lbl">رقم القيد</div>
-        <div class="val">{{ book.our_number|default:"—" }}</div>
+        <div class="val">{{ book.our_number_display|default:"—" }}</div>
       </div>
     </div>
 
@@ -292,7 +292,7 @@
     <!-- التذييل -->
     <div class="rpt-foot">
       <span>أصدر التقرير: {{ generated_by }} · {{ generated_at|date:"d/m/Y H:i" }}</span>
-      <span>LetterSys — تقرير دورة حياة الكتاب {{ book.our_number }}</span>
+      <span>LetterSys — تقرير دورة حياة الكتاب {{ book.our_number_display }}</span>
     </div>
   </div>
 

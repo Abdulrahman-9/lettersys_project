@@ -90,7 +90,7 @@
     {% with b=report_book %}
     {% if b %}
     <div class="book-card">
-      <div class="bc-row"><div class="bc-k">رقم الكتاب</div><div class="bc-v num">{{ b.our_number }}</div></div>
+      <div class="bc-row"><div class="bc-k">رقم الكتاب</div><div class="bc-v num">{{ b.our_number_display }}</div></div>
       <div class="bc-row"><div class="bc-k">العنوان</div><div class="bc-v">{{ b.title }}</div></div>
       <div class="bc-row"><div class="bc-k">نوع المستند</div><div class="bc-v">{{ b.document_type|default:"—" }}</div></div>
       <div class="bc-row"><div class="bc-k">التاريخ</div><div class="bc-v">{{ b.date|date:"Y/m/d" }}</div></div>
@@ -121,7 +121,7 @@
       <thead><tr><th>#</th><th>رقم الكتاب</th><th>نوع المستند</th><th>العنوان</th><th>التاريخ</th><th>الجهة المستلِمة</th><th>السرية</th><th>المتابعة</th></tr></thead>
       <tbody>
       {% for b in outgoing %}
-        <tr><td>{{ forloop.counter }}</td><td class="num">{{ b.our_number }}</td><td>{{ b.document_type|default:"—" }}</td>
+        <tr><td>{{ forloop.counter }}</td><td class="num">{{ b.our_number_display }}</td><td>{{ b.document_type|default:"—" }}</td>
         <td>{{ b.title }}</td><td>{{ b.date|date:"Y/m/d" }}</td><td>{{ b.first_receiving_entity|default:"—" }}</td>
         <td>{% if b.secret_level != 'normal' %}{{ b.get_secret_level_display }}{% else %}—{% endif %}</td><td>{{ b.followup_label }}</td></tr>
       {% endfor %}
@@ -136,7 +136,7 @@
       <thead><tr><th>#</th><th>رقم الكتاب</th><th>نوع المستند</th><th>العنوان</th><th>التاريخ</th><th>الجهة المرسِلة</th><th>السرية</th><th>المتابعة</th></tr></thead>
       <tbody>
       {% for b in incoming %}
-        <tr><td>{{ forloop.counter }}</td><td class="num">{{ b.our_number }}</td><td>{{ b.document_type|default:"—" }}</td>
+        <tr><td>{{ forloop.counter }}</td><td class="num">{{ b.our_number_display }}</td><td>{{ b.document_type|default:"—" }}</td>
         <td>{{ b.title }}</td><td>{{ b.date|date:"Y/m/d" }}</td><td>{{ b.first_issuing_entity|default:"—" }}</td>
         <td>{% if b.secret_level != 'normal' %}{{ b.get_secret_level_display }}{% else %}—{% endif %}</td><td>{{ b.followup_label }}</td></tr>
       {% endfor %}

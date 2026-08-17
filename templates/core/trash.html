@@ -60,7 +60,7 @@
         <tbody>
           {% for book in deleted_books %}
           <tr>
-            <td>{{ book.our_number|default:book.id }}</td>
+            <td>{{ book.our_number_display|default:book.id }}</td>
             <td>{{ book.title|default:'—' }}</td>
             <td>{{ book.first_issuing_entity|default:'—' }}</td>
             <td>{{ book.deleted_at|date:"Y-m-d H:i" }}</td>
@@ -103,7 +103,7 @@
           {% for att in deleted_attachments %}
           <tr>
             <td class="text-truncate" style="max-width:240px">{{ att.file.name|default:'—' }}</td>
-            <td>{{ att.book.our_number|default:att.book.id }}</td>
+            <td>{{ att.book.our_number_display|default:att.book.id }}</td>
             <td>{{ att.deleted_at|date:"Y-m-d H:i" }}</td>
             <td class="text-end">
               <form method="post" action="{% url 'restore_attachment' att.id %}" class="d-inline">

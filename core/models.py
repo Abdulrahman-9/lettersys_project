@@ -121,11 +121,9 @@ class Tag(models.Model):
         return self.name
 
 
-# نطاق السنة المقبول في وسم الرقم — مُعاد تصديره من `core/numbering.py` (المصدر
-# الوحيد) للمتصلين القدامى. لا تُعرِّف حدّاً جديداً هنا: كان الحدّ 2020 في موضع
-# و2000 في آخر، فتُقرأ كتب 2000/2007/2014 قراءتين متناقضتين.
-OUR_NUMBER_YEAR_MIN = numbering.MIN_YEAR
-OUR_NUMBER_YEAR_MAX = numbering.MAX_YEAR
+# حدود سنة الوسم في `core/numbering.py` وحده (MIN_YEAR/MAX_YEAR). أُزيلت إعادة
+# التصدير من هنا بعد أن استغنى عنها آخر متّصل: وجودُ اسمين لحدٍّ واحد هو تحديداً
+# ما جعله 2020 في موضع و2000 في آخر، فتُقرأ كتب 2000/2007/2014 قراءتين متناقضتين.
 
 
 class Book(models.Model):
@@ -164,7 +162,7 @@ class Book(models.Model):
     # ── أرقام الكتاب ──
     # الصادر: our_number = رقم الصادر الخاص بنا
     # الوارد: our_number = رقم الوارد الخاص بنا، sender_number = رقم صادر الجهة المرسلة
-    # بعد التطبيع: our_number بصيغة YYYYNNNN (مثل 20251304)
+    # صيغة `our_number` وتحليلها وعرضها كلّها في `core/numbering.py` — المصدر الوحيد.
     our_number = models.CharField("رقمنا (صادر/وارد)", max_length=50, default="", db_index=True)
     sender_number = models.CharField("رقم صادر الجهة", max_length=50, blank=True, default="")
     # ── حقول التطبيع ──
@@ -353,6 +351,22 @@ class Book(models.Model):
     def our_number_sequence(self):
         """الرقم المجرّد كما هو مكتوب على الورق — بلا سنة وبلا بادئة."""
         return numbering.display(self.our_number)
+
+    @property
+    def our_number_display(self):
+        """
+        الرقم كسطرٍ واحد للعرض في أي مكان: «2433» أو «825/2025» أو «T131» أو ''.
+
+        القائمة الموحّدة تفصل الجزأين في عنصرَين لتُصغّر الوسم بصرياً؛ وكل موضعٍ
+        آخر (التفاصيل، التقارير، الأضابير، البريد، المهملات) يستعمل هذا. بدونه
+        كانت تلك الصفحات تعرض المخزَّن الخام «20250825» فيخالف ما تعرضه القائمة
+        وما هو مطبوع على الورقة.
+        """
+        seq = numbering.display(self.our_number)
+        if not seq:
+            return ''
+        tag = numbering.year_tag(self.our_number)
+        return f'{seq}/{tag}' if tag else seq
 
     @property
     def our_number_register_label(self):

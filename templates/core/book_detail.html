@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}{{ book.title }} - كتاب {{ book.our_number }}{% endblock %}
+{% block title %}{{ book.title }} - كتاب {{ book.our_number_display }}{% endblock %}
 
 {% block page_sidebar %}
 <div class="app-sidebar-panel app-sidebar-context-panel">
@@ -10,7 +10,7 @@
     <div class="app-context-item">
       <div>
         <div class="app-context-meta">رقمنا</div>
-        <strong>{{ book.our_number }}</strong>
+        <strong>{{ book.our_number_display }}</strong>
       </div>
       <span class="app-context-chip is-info"><i class="bi bi-hash"></i> قيد</span>
     </div>
@@ -63,7 +63,7 @@
       <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start gap-3">
         <div>
           <div class="d-flex align-items-center gap-3 mb-2">
-            <span class="badge bg-light text-dark fs-6">{{ book.our_number }}</span>
+            <span class="badge bg-light text-dark fs-6">{{ book.our_number_display }}</span>
             {% if book.is_incoming %}
               <span class="kind-badge kind-incoming" role="status" aria-label="نوع المراسلة: {{ book.kind_label }}"><i class="bi bi-arrow-down-left me-1" aria-hidden="true"></i>{{ book.kind_label }}</span>
             {% else %}
@@ -126,7 +126,7 @@
               <div class="detail-field">
                 <label class="detail-label">رقم القيد الفريد</label>
                 <div class="detail-value d-flex align-items-center gap-2">
-                  <span class="badge bg-info" id="bookNumberText">{{ book.our_number|default:book.id }}</span>
+                  <span class="badge bg-info" id="bookNumberText">{{ book.our_number_display|default:book.id }}</span>
                   <button type="button" class="btn btn-sm btn-link p-0" data-copy-target="bookNumberText" title="نسخ الرقم" aria-label="نسخ رقم الكتاب إلى الحافظة"><i class="bi bi-clipboard" aria-hidden="true"></i></button>
                 </div>
               </div>
@@ -515,7 +515,7 @@
       <div class="modal-header bg-light border-bottom p-3">
         <div>
           <h5 class="modal-title fw-bold" id="notesModalLabel"><i class="bi bi-pencil-square text-primary me-2"></i>تعديل الملاحظات والهوامش</h5>
-          <small class="text-muted d-block mt-1" id="notesModalDesc">الكتاب: {{ book.our_number }} - {{ book.title }}</small>
+          <small class="text-muted d-block mt-1" id="notesModalDesc">الكتاب: {{ book.our_number_display }} - {{ book.title }}</small>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
       </div>

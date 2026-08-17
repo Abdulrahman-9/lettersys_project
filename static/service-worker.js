@@ -9,7 +9,7 @@
 
 // نسخة ثابتة — زِدها يدوياً عند تحديث الأصول الثابتة.
 // (لا تستخدم Date.now: يُبطل التخزين ويعيد بناء الكاش في كل تحميل.)
-const CACHE_VERSION = 'v73';
+const CACHE_VERSION = 'v74';
 const CACHE_NAME = 'lettersys-' + CACHE_VERSION;
 
 // قشرة التطبيق الثابتة فقط — لا '/' ولا أي صفحة مُصادَقة.

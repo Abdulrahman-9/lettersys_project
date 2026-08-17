@@ -620,7 +620,8 @@ def api_book_detail_json(request, pk):
 
     data = {
         'id': book.pk,
-        'our_number': book.our_number or '',
+        'our_number': book.our_number or '',                 # المخزَّن — للمطابقة
+        'our_number_display': book.our_number_display,       # المعروض — «825/2025»
         'sender_number': book.sender_number or '',
         'kind': book.kind,
         'kind_label': book.kind_label,

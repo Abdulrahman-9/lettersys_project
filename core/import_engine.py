@@ -164,9 +164,12 @@ class LegacyImportEngine:
             return ImportResult(success=False, error="العنوان فارغ")
 
         # 3. تحويل أرقام الكتب
+        # صفٌّ بلا رقم يبقى **بلا رقم** — استثناءٌ معتمَد في النظام. كان يُسَكّ له
+        # `auto-3` وهو رقمٌ مخترع لا يوجد على أي ورقة، وخارج نحو الترقيم
+        # (`core/numbering.py`) فلا يُعرض صحيحاً ولا يُوجَد بالبحث ولا يُفرَز.
         original_number = our_number
         if not our_number:
-            our_number = f"{self.number_prefix}auto-{self.summary.total}"
+            our_number = ''
         elif Book.objects.filter(our_number=our_number).exists():
             # تعارض: مع بادئة نميّز الرقم، وبلا بادئة (الافتراضي الآن) نتخطّى الموجود
             # (سلوك الاستعادة الآمن — لا نُنشئ نسخة مكرّرة بعلامة).

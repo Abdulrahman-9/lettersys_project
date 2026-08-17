@@ -349,7 +349,7 @@
             <td class="text-muted small">{{ page_obj.start_index|add:forloop.counter0 }}</td>
             <td>
               <a href="{% url 'book_detail' b.pk %}" class="fw-bold text-decoration-none report-book-link"
-                 title="فتح الكتاب">{{ b.our_number|default:b.pk }}</a>
+                 title="فتح الكتاب">{{ b.our_number_display|default:b.pk }}</a>
             </td>
             <td class="text-nowrap">{{ b.date|date:"d/m/Y"|default:"—" }}</td>
             <td style="word-wrap: break-word; white-space: normal; min-width: 100px;">{{ b.title }}</td>

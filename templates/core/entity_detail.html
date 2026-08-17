@@ -138,7 +138,7 @@
                 <tr style="cursor:pointer" data-book-preview="{{ book.pk }}">
                   <td class="text-muted">{{ forloop.counter }}</td>
                   <td class="fw-bold">
-                    <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number }}</a>
+                    <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number_display }}</a>
                   </td>
                   <td>{{ book.title|truncatechars:60 }}</td>
                   <td><span class="badge bg-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}-subtle text-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}">{{ book.kind_label }}</span></td>
@@ -209,7 +209,7 @@
                 <tr style="cursor:pointer" data-book-preview="{{ book.pk }}">
                   <td class="text-muted">{{ forloop.counter }}</td>
                   <td class="fw-bold">
-                    <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number }}</a>
+                    <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number_display }}</a>
                   </td>
                   <td>{{ book.title|truncatechars:60 }}</td>
                   <td><span class="badge bg-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}-subtle text-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}">{{ book.kind_label }}</span></td>

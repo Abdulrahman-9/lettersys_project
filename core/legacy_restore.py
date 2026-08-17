@@ -531,7 +531,6 @@ class LegacyRestoreEngine:
         import hashlib
         import os
         from django.conf import settings
-        from django.db.models import Q
         from .models import Attachment, Book
 
         self.connect()
@@ -1067,7 +1066,8 @@ class LegacyRestoreEngine:
 
         # لا مرحلة «فكّ تكرارات» بعد الاستيراد: كانت تمسح كل الكتب لا المستوردة فقط،
         # فتُعيد ترقيم كتبٍ أدخلها المستخدم بيده. التفرّد تحرسه قيود قاعدة البيانات،
-        # وتوحيد الصيغ عمل أمرٍ مستقلّ يُعايَن ويُعتمَد (normalize_book_numbers).
+        # وإعادة البناء على سلسلة الختم عمل أمرٍ مستقلّ يُعايَن ثم يُعتمَد
+        # (`rebase_book_numbers`، معاينةٌ افتراضاً وله مسار `--undo`).
         self.close()
         return dict(summary)
 

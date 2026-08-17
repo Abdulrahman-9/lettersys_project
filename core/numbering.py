@@ -211,7 +211,7 @@ def sort_key_sql():
     الموسوم، والتسلسل رقمٌ صحيح.
     """
     from django.db.models import Case, IntegerField, Value, When
-    from django.db.models.functions import Cast, Length, Substr
+    from django.db.models.functions import Cast, Substr
 
     return {
         '_num_year': Case(

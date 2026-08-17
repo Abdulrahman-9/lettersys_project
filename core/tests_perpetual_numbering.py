@@ -121,6 +121,54 @@ class BookNumberDisplayTests(TestCase):
         b = self._book('27189', kind='outgoing_external')
         self.assertIn('المدير العام', b.our_number_explained)
 
+    def test_display_is_one_string_for_every_shape(self):
+        # سطرٌ واحد تستعمله كلّ الصفحات خارج القائمة الموحّدة
+        self.assertEqual(self._book('2433').our_number_display, '2433')
+        self.assertEqual(self._book('20250825').our_number_display, '825/2025')
+        self.assertEqual(self._book('T57').our_number_display, 'T57')
+        self.assertEqual(self._book('').our_number_display, '')
+
+    def test_display_never_leaks_the_stored_shape(self):
+        # الفخّ الذي وقعنا فيه: صفحاتٌ تعرض المخزَّن الخام فتخالف القائمة والورقة
+        b = self._book('20250825')
+        self.assertNotIn('20250825', b.our_number_display)
+
+
+class DisplayUnificationTests(TestCase):
+    """
+    حارسٌ بنيويّ: لا قالبَ يعرض `our_number` الخام كنصٍّ للمستخدم.
+
+    الخام يبقى مسموحاً في القيم الآلية وحدها (`data-*` وبارامترات البحث)، لأنّ
+    المطابقة تجري على المخزَّن. أمّا العرض فمن `our_number_display` وحده — وإلا
+    ظهر «20250825» في التفاصيل بينما القائمة تعرض «825/2025» والورقة تقول «825».
+    """
+
+    #: سياقات آلية يجوز فيها الخام
+    MACHINE = ('data-book-number=', 'urlencode', 'data-number=')
+
+    def test_no_template_prints_raw_our_number(self):
+        import os
+        import re
+        root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            'templates')
+        # `{{ ... our_number ... }}` بلا لاحقة (_display/_year/_sequence/…)
+        pat = re.compile(r'\{\{[^}]*\bour_number\b(?![_a-z])[^}]*\}\}')
+        offenders = []
+        for dirpath, _dirs, files in os.walk(root):
+            for fn in files:
+                if not fn.endswith('.html'):
+                    continue
+                p = os.path.join(dirpath, fn)
+                with open(p, encoding='utf-8') as fh:
+                    for i, line in enumerate(fh, 1):
+                        if not pat.search(line):
+                            continue
+                        if any(m in line for m in self.MACHINE):
+                            continue
+                        offenders.append('%s:%d  %s' % (os.path.relpath(p, root), i,
+                                                        line.strip()[:90]))
+        self.assertEqual(offenders, [], 'قوالب تعرض الرقم الخام:\n' + '\n'.join(offenders))
+
 
 class SearchFormatTests(TestCase):
     """كتابة الرقم المجرّد تجده في كل صيغه المخزَّنة — ولا تجد ما يشبهه."""
