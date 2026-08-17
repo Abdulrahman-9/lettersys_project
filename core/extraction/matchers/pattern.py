@@ -179,6 +179,16 @@ def _looks_like_language(line: str) -> bool:
     return good >= 2 and good / len(toks) >= 0.5 and junk <= len(s) * 0.25
 
 
+# ثقةُ العنوان بحسب المسار المُنتِج — مقيسٌ على 40 نصّاً حقيقيّاً (تتبّع مسار 2026-08-17):
+#   marker (علامة صريحة «م/»/«الموضوع»): 25/40، متوسّط F1 0.530، صالح 64% ⟵ نطاق «راجِع»
+#   fallback (أوّل سطر عربيٍّ جوهريّ فوق التحية): 4/40، متوسّط 0.208 ⟵ ثقةٌ منخفضة
+#   bracket_*: قِيست 0/8 (كلّها خاطئة) وأُقصيت — تبقى صفراً إن عادت يوماً
+# كان `title_confidence` يبقى 0.0 دائماً فتُظهر الواجهة 0% لكلّ عنوان، بما فيه المسار
+# الوحيد الذي يعمل — فيتعلّم الكاتب ألّا يثق به. القيم مُعايَرةٌ على عتبتَي 0.85/0.65.
+_TITLE_SOURCE_CONF = {'marker': 0.75, 'bracket_ar': 0.0, 'bracket_en': 0.0,
+                      'fallback': 0.35, '': 0.0}
+
+
 _OCR_DIGITS = str.maketrans({'l': '1', 'I': '1', '|': '1', 'O': '0', 'o': '0'})
 
 
@@ -712,6 +722,7 @@ class PatternMatcher:
                             and not _looks_garbled(m.group(1))
                             and _norm_ar(m.group(1)) not in _label_only
                             and 'أعلاه' not in m.group(1) and 'اعلاه' not in m.group(1)):
+                        self.last_title_source = 'marker'
                         return _words(_join_wrapped(m.group(1).strip(), idx), cap=12)
 
         # 1.5) قوس الموضع: الموضوع يقع **بين المُرسَل إليه والتحية** — «الى/» و«تحية
@@ -719,12 +730,23 @@ class PatternMatcher:
         #      العطل السائد). نأخذ أوّل سطرٍ جوهريّ بينهما (بعد تجريد «م/» إن بقيت).
         ri = next((i for i, l in enumerate(lines) if _recip_re.match(l)), -1)
         if ri >= 0:
-            gi = next((i for i in range(ri + 1, len(lines))
-                       if re.search(r'تحي[ةه]|سلام|dear|greeting', lines[i], re.I)), len(lines))
+            # **القوس يُغلَق أو يُمتنَع** (قياسٌ 2026-08-17، تتبّعُ مسارٍ على 40 نصّاً):
+            # حين تغيب التحية كان `gi = len(lines)` فيصير «القوس» مسحاً للرسالة كلّها،
+            # فتُخطَف هوامشُ وتذييلات: **8 انبعاثاتٍ كلّها خاطئة (0/8، متوسّط 0.044)**.
+            # والتحية موجودةٌ في 11/40 فقط، فالحالة الغالبة هي الحالة المعطوبة.
+            # الآن: بحثٌ محدود عن التحية؛ فإن غابت **نمتنع** (فراغٌ أصدق من قيمةٍ خاطئة).
+            # الكلفة المقيسة: متوسّط −0.009 وصفر فقدٍ في الصالح (لا واحد من الثمانية كان صالحاً).
+            _GREET_WINDOW = 12
+            gi = next((i for i in range(ri + 1, min(ri + 1 + _GREET_WINDOW, len(lines)))
+                       if re.search(r'تحي[ةه]|سلام|dear|greeting', lines[i], re.I)), -1)
+            if gi < 0:
+                ri = -1          # قوسٌ غير مُغلَق ⟵ لا نمسح الصفحة؛ نسقط للاحتياط المُقسّى
+        if ri >= 0:
             for idx in range(ri + 1, min(gi + 1, len(lines))):
                 cand = re.sub(r'^\s*م\s*[/:\-.,،]\s*', '', lines[idx]).strip()
                 if (len(cand) > 3 and not _is_junk(lines[idx]) and not _is_junk(cand)
                         and len(re.findall(r'[ء-يA-Za-z]{2,}', cand)) >= 2):
+                    self.last_title_source = 'bracket_ar'
                     return _words(_join_wrapped(cand, idx), cap=12)
             # قوسٌ إنكليزي: في الكتب الإنكليزية (slb/اللجان) يعيش الموضوع بين To/Attn
             # والتحية، و_is_junk يرفض اللاتينيّ الغالبَ عمداً — فمسحٌ ثانٍ يسمح به هنا
@@ -740,6 +762,7 @@ class PatternMatcher:
                     continue
                 cand = re.sub(r'(?i)^\s*(?:sub[ji]?ect|subj|sub)\s*[:./\-]?\s*', '', ln).strip()
                 if len(re.findall(r'[A-Za-z]{3,}', cand)) >= 2 and len(cand) >= 8:
+                    self.last_title_source = 'bracket_en'
                     return _words(_join_wrapped(cand, idx), cap=12)
 
         # 2) احتياطٌ مُقسّى: تخطَّ كلّ سطرٍ زائف (`_is_junk`) → أوّل سطر عربيٍّ جوهريّ،
@@ -756,12 +779,14 @@ class PatternMatcher:
             if _is_junk(line):
                 continue
             if (_looks_like_language(line) and sum(1 for c in line if '؀' <= c <= 'ۿ') >= 8):
+                self.last_title_source = 'fallback'
                 return _words(line)
 
         # 3) لا مؤشّر ولا سطرَ لغةٍ سليم ⇒ **صمتٌ صادق**. السقوطُ إلى «أول ثلاثة
         #    أسطر» كان يُخرج خردة الترويسة المشوّهة عنواناً («Jeiill 6..y1j.1 r
         #    ,tr li; is.,;j…» — قراءةٌ بالعين لكتب ممسوحة). القيمة الخاطئة أسوأ
         #    من الفراغ (مبدأ المالك)، والواجهة تعرض الحقل فارغاً للمراجعة.
+        self.last_title_source = ''
         return ''
 
     def extract_sender_date(self, text: str) -> Tuple[Optional[datetime], float]:
@@ -947,6 +972,7 @@ class PatternMatcher:
         book_kind, kind_conf = self.extract_book_kind(text)
         entities = self.extract_entities(text)
         title = self.extract_title_keywords(text)
+        title_conf = _TITLE_SOURCE_CONF.get(getattr(self, 'last_title_source', ''), 0.0) if title else 0.0
         doc_type, doc_type_conf = self.extract_document_type(text)
         register_code = self.extract_register_code(text)
         recipient = self.extract_recipient(text)
@@ -970,6 +996,7 @@ class PatternMatcher:
             'book_kind_confidence': kind_conf,
             'entities': entities,
             'title': title,
+            'title_confidence': title_conf,
             'raw_text': text[:500],  # أول 500 حرف
         }
 

@@ -825,6 +825,9 @@ class AIExtractionService:
                 result.sender_number = patterns.get('sender_number')
                 result.sender_number_confidence = patterns.get('sender_number_confidence') or 0.0
                 result.title = patterns.get('title') or ''
+                # ثقةٌ صادقةٌ بحسب المسار (فيبل 2026-08-17): كانت تبقى 0.0 دائماً فتُظهر
+                # الواجهة 0% لكلّ عنوان — بما فيه مسار العلامة المقيس 64% صالحاً.
+                result.title_confidence = float(patterns.get('title_confidence') or 0.0)
                 # جهاتٌ (Slb) تضع رقم صادرها داخل سطر الموضوع («Ref-135, Akkas…») —
                 # نقتطعه رقماً وننظّف العنوان (16 كتاباً محفوظاً تُثبت النمط).
                 if result.title:
