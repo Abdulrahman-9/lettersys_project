@@ -5,6 +5,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db import models
 from django.utils import timezone
 
+from . import numbering
 from .extraction.kinds import BOOK_KIND_CHOICES, EXTRACTION_KIND_CHOICES
 
 
@@ -120,6 +121,13 @@ class Tag(models.Model):
         return self.name
 
 
+# نطاق السنة المقبول في وسم الرقم — مُعاد تصديره من `core/numbering.py` (المصدر
+# الوحيد) للمتصلين القدامى. لا تُعرِّف حدّاً جديداً هنا: كان الحدّ 2020 في موضع
+# و2000 في آخر، فتُقرأ كتب 2000/2007/2014 قراءتين متناقضتين.
+OUR_NUMBER_YEAR_MIN = numbering.MIN_YEAR
+OUR_NUMBER_YEAR_MAX = numbering.MAX_YEAR
+
+
 class Book(models.Model):
     """
     نموذج الكتاب - تخزين معلومات الكتب الواردة والصادرة
@@ -171,6 +179,14 @@ class Book(models.Model):
         "هوية المصدر",
         max_length=40, blank=True, default="", db_index=True,
         help_text='"{TABLE}#{ID}" في قاعدة المصدر — يربط الكتاب بصفّه الأصلي للدمج المستقبلي',
+    )
+    is_training = models.BooleanField(
+        "كتاب تدريب",
+        default=False, db_index=True,
+        help_text=(
+            "أُدخل أثناء فترة التدريب. رقمه من فضاء منفصل (T…) فلا يستهلك السلسلة "
+            "الرسمية، ويُحذف كلّه عند التدشين لأن أصله موجود في النظام القديم."
+        ),
     )
     # للأرقام المركّبة قديم-X-Y: series_no = X (السلسلة)، version = Y (الرقم الفرعي)
     series_no = models.PositiveIntegerField(
@@ -321,68 +337,63 @@ class Book(models.Model):
         return entities[0] if entities else None
 
 
-    # خريطة بادئة السجل → تسمية
-    _REGISTER_LABELS = {'0': 'بلا رقم', '1': 'وارد داخلي', '2': 'وارد خارجي', '3': 'صادر داخلي', '4': 'صادر خارجي'}
-
-    def _parse_year_prefix(self):
-        """يُعيد (year_str_or_None, register_char_or_None, rest_string).
-        - تاريخي: YYYY{R}{NNNN} (≥8 خانات) → (year, reg?, rest)
-        - دائم:   {R}{NNNN}     (رقمي، أول خانة 0-4، بلا بادئة سنة) → (None, reg, seq)
-        - خام:    نص غير معروف → (None, None, our_number)
-
-        اشتراط الطول ≥ 8 لفرع السنة حاسم: يمنع خلط الدائم القصير (مثل 20200 =
-        سجل 2، تسلسل 200) مع بادئة سنة زائفة (2020) — فكل الأرقام التاريخية
-        بطول 8 (YYYYNNNN) أو 9 (YYYYRNNNN) أو 11 (مركّب)، والدائم ≤ 7 غالباً.
-        """
-        s = self.our_number or ''
-        if len(s) >= 8 and s[:4].isdigit() and 2020 <= int(s[:4]) <= 2099:
-            year = s[:4]
-            rest = s[4:]
-            # الصيغة التاريخية الجديدة: الخانة الخامسة بادئة سجل (0-4) والطول ≥ 9
-            if len(s) >= 9 and rest and rest[0] in '01234':
-                return (year, rest[0], rest[1:])
-            return (year, None, rest)
-        # الترقيم الدائم: رقم رقمي كامل أول خانته بادئة سجل (0-4) بلا سنة
-        if s.isdigit() and len(s) >= 5 and s[0] in '01234':
-            return (None, s[0], s[1:])
-        return (None, None, s)
+    # ── رقم القيد: كل التحليل والعرض من `core/numbering.py` وحده ──
+    #
+    # القاعدة (قرار المالك): سلسلةٌ واحدة لا نهائية أساسها أرقام 2026 بلا تصفير
+    # سنوي، وبيانات 2025 وما قبلها موسومةٌ بسنة إضافتها، ولا بادئة سجلّ في الرقم
+    # إطلاقاً — النوع يحمله عمود `kind`. الخصائص أدناه واجهةُ عرضٍ رفيعة فوق
+    # الوحدة؛ لا تُعِد كتابة قاعدةٍ هنا.
 
     @property
     def our_number_year(self):
-        """السنة (أول 4 خانات إن كانت 2020-2099)، وإلا ''."""
-        return self._parse_year_prefix()[0] or ''
-
-    @property
-    def our_number_register_label(self):
-        """تسمية السجل (وارد داخلي / صادر خارجي ...) من بادئة الرقم، أو ''."""
-        reg = self._parse_year_prefix()[1]
-        return self._REGISTER_LABELS.get(reg, '') if reg else ''
+        """وسم السنة للكتب المنقولة من سجلّات ما قبل 2026، وإلا '' للسلسلة الجارية."""
+        return numbering.year_tag(self.our_number)
 
     @property
     def our_number_sequence(self):
-        """
-        العرض المختصر بدون السنة وبادئة السجل:
-        - مركّب (series_no + version) → 'X-Y'  (للأرقام المكررة في السجل نفسه)
-        - تاريخي أو دائم → 'NNNN' (بلا أصفار بادئة)
-        - خام → النص كما هو
-        """
-        if self.series_no is not None and self.version is not None:
-            return f"{self.series_no}-{self.version}"
-        year, reg, rest = self._parse_year_prefix()
-        if year is None and reg is None:
-            return rest  # خام — نص غير معروف
-        if not rest:
-            return '0'
-        return (rest.lstrip('0') or '0') if rest.isdigit() else rest
+        """الرقم المجرّد كما هو مكتوب على الورق — بلا سنة وبلا بادئة."""
+        return numbering.display(self.our_number)
+
+    @property
+    def our_number_register_label(self):
+        """تسمية السجلّ — من نوع الكتاب لا من الرقم (البادئة أُلغيت)."""
+        return dict(BOOK_KIND_CHOICES).get(self.kind, '')
 
     @property
     def our_number_is_compound(self):
+        """الصيغة المركّبة (X-Y) انتهت بإعادة البناء؛ تبقى للبيانات غير المُرحَّلة."""
         return self.series_no is not None and self.version is not None
 
     @property
     def our_number_is_numberless(self):
-        """كتاب داخلي بلا رقم رسمي (بادئة السجل = 0)."""
-        return self._parse_year_prefix()[1] == '0'
+        """كتاب بلا رقم رسمي — استثناءٌ معتمَد في النظام (الحقل فارغ)."""
+        return numbering.parse(self.our_number).kind_of == 'blank'
+
+    @property
+    def our_number_is_training(self):
+        """كتاب أُدخل في فترة التدريب (فضاء T) — يُحذف عند التدشين."""
+        return numbering.parse(self.our_number).kind_of == 'training'
+
+    @property
+    def our_number_explained(self):
+        """شرحٌ نصّيّ لرقم القيد، لتلميح الواجهة — يميّز **رقمنا** عن رقم الجهة."""
+        p = numbering.parse(self.our_number)
+        label = self.our_number_register_label
+
+        if p.kind_of == 'blank':
+            return 'كتاب بلا رقم قيد — استثناء معتمَد في النظام.'
+        if p.kind_of == 'training':
+            return (f'كتاب تدريب رقم {p.seq} — خارج السلسلة الرسمية، '
+                    f'ويُحذف عند تدشين النظام.')
+        if p.kind_of == 'tagged':
+            return (f'رقم قيدنا: {p.seq} من سجلّ سنة {p.year} · {label} — '
+                    f'الوسم السنوي يفصله عن رقم السلسلة الجارية. '
+                    f'هذا رقمنا نحن، وليس العدد المطبوع على المستند.')
+        if self.kind in numbering.MANUAL_KINDS:
+            return (f'رقم الصادر: {p.raw} — يصدر من مكتب السيد المدير العام، '
+                    f'ولا يخضع لسلسلة النظام.')
+        return (f'رقم قيدنا: {p.raw} · {label} — من السلسلة الجارية المستمرّة '
+                f'بلا تصفير سنوي. هذا رقمنا نحن، وليس العدد المطبوع على المستند.')
 
     def __str__(self):
         return f"{self.our_number} - {self.title}"
@@ -411,10 +422,23 @@ class Book(models.Model):
             models.Index(fields=['-date', '-id'], name='book_date_idx'),
         ]
         constraints = [
-            # سلامة بيانات السجل الرسمي: لا رقمان متطابقان لنفس النوع (يستثني الفارغ).
+            # التفرّد ضمانةٌ على ما **يُصدره النظام**، لا على ما يُسجّله من الورق.
+            #
+            # ثلاثة استثناءات، كلٌّ منها مفروضٌ بدليل مقيس:
+            #  • `source_ref` غير فارغ = صفٌّ منقولٌ من سجلّ ورقيّ. وذلك السجلّ فيه
+            #    تكرارٌ حقيقي: الكاتب كتب «٨٢٥» على مستندين مختلفين في اليوم نفسه
+            #    (مُتحقَّق بالعين على المستندين). فرضُ التفرّد عليه يُجبرنا على
+            #    تزوير أحدهما.
+            #  • الصادر الخارجي رقمه من مكتب المدير العام لا من سلسلتنا، وتكراره
+            #    مشروع (بياناته: 0، 109، 1555، 27189 — بلا تسلسل).
+            #  • المحذوف لا يحجز رقمه: كتابٌ حُذف كان يمنع إعادة إدخال رقمه
+            #    الشرعي، فيعجز الموظّف عن تصحيح خطئه.
             models.UniqueConstraint(
                 fields=['our_number', 'kind'],
-                condition=~models.Q(our_number=''),
+                condition=(~models.Q(our_number='')
+                           & models.Q(source_ref='')
+                           & ~models.Q(kind='outgoing_external')
+                           & models.Q(is_deleted=False)),
                 name='uniq_book_our_number_kind',
             ),
         ]
@@ -701,6 +725,82 @@ class ScanJob(models.Model):
 
     def __str__(self):
         return f"ScanJob({self.id}) {self.status} - {self.file_name}"
+
+
+class RestoreJob(models.Model):
+    """
+    مهمّة دمج بيانات من المصدر القديم — تعمل خارج دورة الطلب.
+
+    لماذا صفّ في قاعدة البيانات لا متغيّر في الذاكرة: الدمج يستغرق دقائق إلى
+    ساعات، فلا يجوز أن يحمله طلب HTTP (ينتهي المهلة والمتصفّح يظنّ أنه فشل بينما
+    هو يعمل). وبجعل الحالة صفّاً مشتركاً: يستطيع المستخدم إغلاق الصفحة والعودة،
+    ويراها زميله، وتبقى الخلاصة بعد الانتهاء.
+
+    الاعتماد **لا يُحفظ هنا أبداً** — يُمرَّر إلى العملية الابنة عبر بيئتها.
+    """
+    STATUS_QUEUED = 'queued'
+    STATUS_RUNNING = 'running'
+    STATUS_DONE = 'done'
+    STATUS_FAILED = 'failed'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = (
+        (STATUS_QUEUED, 'في الانتظار'),
+        (STATUS_RUNNING, 'قيد التنفيذ'),
+        (STATUS_DONE, 'انتهت'),
+        (STATUS_FAILED, 'فشلت'),
+        (STATUS_CANCELLED, 'أُلغيت'),
+    )
+    LIVE_STATUSES = (STATUS_QUEUED, STATUS_RUNNING)
+
+    status = models.CharField('الحالة', max_length=12, choices=STATUS_CHOICES,
+                              default=STATUS_QUEUED, db_index=True)
+    phase = models.CharField('المرحلة', max_length=200, blank=True, default='')
+    done_count = models.PositiveIntegerField('المُنجَز', default=0)
+    total_count = models.PositiveIntegerField('الإجمالي', default=0)
+    params = models.JSONField('المعاملات (بلا اعتماد)', default=dict, blank=True)
+    summary = models.JSONField('الخلاصة', default=dict, blank=True)
+    error_message = models.TextField('الخطأ', blank=True, default='')
+    cancel_requested = models.BooleanField('طُلب الإلغاء', default=False)
+    pid = models.PositiveIntegerField('معرّف العملية', null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='restore_jobs')
+    created_at = models.DateTimeField('أُنشئت', auto_now_add=True)
+    updated_at = models.DateTimeField('آخر تحديث', auto_now=True)
+    finished_at = models.DateTimeField('انتهت في', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'مهمّة دمج'
+        verbose_name_plural = 'مهامّ الدمج'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"RestoreJob({self.id}) {self.status} — {self.phase or '—'}"
+
+    @property
+    def is_live(self):
+        return self.status in self.LIVE_STATUSES
+
+    @property
+    def percent(self):
+        if not self.total_count:
+            return 0
+        return min(100, round(100 * self.done_count / self.total_count))
+
+    @classmethod
+    def running(cls):
+        """المهمّة الحيّة إن وُجدت — تمنع تشغيل دمجَين على المصدر نفسه."""
+        return cls.objects.filter(status__in=cls.LIVE_STATUSES).order_by('-created_at').first()
+
+    def touch(self, *, phase=None, done=None, total=None):
+        """تحديث تقدّم خفيف — يُكتب بـUPDATE مباشر ولا يقرأ الصفّ."""
+        fields = {'updated_at': timezone.now()}
+        if phase is not None:
+            fields['phase'] = phase[:200]
+        if done is not None:
+            fields['done_count'] = done
+        if total is not None:
+            fields['total_count'] = total
+        type(self).objects.filter(pk=self.pk).update(**fields)
 
 
 # ===================================================
@@ -1198,20 +1298,18 @@ class OCRModelVersion(models.Model):
 # =============================
 class BookSequence(models.Model):
     """
-    عدّاد تسلسلي دائم لكل نوع كتاب — لا يتصفّر (يَعُدّ للأبد كدفتر قيد حقيقي).
-    الصيغة الموحّدة الجديدة: {R}{NNNN} حيث R = بادئة السجل (1 وارد داخلي، 2 وارد خارجي،
-    3 صادر داخلي، 4 صادر خارجي، 0 = بلا رقم). لا سنة في الرقم — التسلسل نفسه فريد دائماً.
-    الأرقام التاريخية (كتب السنوات الماضية والمستوردة) تبقى بصيغة YYYY{R}{NNNN} للتمييز،
-    ويتكفّل تحليل Book._parse_year_prefix بقراءة الصيغتين.
+    عدّاد تسلسلي **لا نهائي** لكل سجلّ — لا يتصفّر عند رأس السنة أبداً.
+
+    أساسه أرقام سنة 2026 كما هي مثبَّتة في ختم الوارد: بعد 2432 يأتي 2433، في
+    2027 و2028 وما بعدها. الرقم يُخزَّن مجرّداً بلا بادئة سجلّ وبلا سنة — النوع
+    يحمله عمود `kind`، والتفرّد على (kind, our_number).
+
+    الصادر الخارجي لا عدّاد له: رقمه يصدر من مكتب السيد المدير العام.
+    وكتب السنوات السابقة موسومةٌ بسنتها ({السنة}{الرقم}) فهي خارج فضاء العدّاد.
+    كل تحليلٍ أو تنسيق يمرّ عبر `core/numbering.py`.
     """
-    # بادئة السجل لكل نوع كتاب
-    REGISTER_CODES = {
-        'incoming_internal': '1',
-        'incoming_external': '2',
-        'outgoing_internal': '3',
-        'outgoing_external': '4',
-    }
-    NUMBERLESS_CODE = '0'   # كتاب داخلي بلا رقم رسمي (استثناء يدعمه النظام)
+    #: السجلّات التي يمنحها النظام أرقاماً من سلسلته
+    SERIES_KINDS = numbering.SERIES_KINDS
 
     kind = models.CharField(
         max_length=20, choices=BOOK_KIND_CHOICES, unique=True, verbose_name='نوع الكتاب'
@@ -1235,36 +1333,40 @@ class BookSequence(models.Model):
 
     def __str__(self):
         label = dict(BOOK_KIND_CHOICES).get(self.kind, self.kind)
-        return f"{label}: {self.format_number(self.kind, self.next_number, self.year)}"
-
-    @classmethod
-    def register_code(cls, kind):
-        return cls.REGISTER_CODES.get(kind, '9')
+        return f"{label}: {self.format_number(self.kind, self.next_number)}"
 
     @classmethod
     def format_number(cls, kind, number, year=None, numberless=False):
-        """صيغة الترقيم الدائم الجديدة: {R}{NNNN} (بلا سنة). المعامل year مُهمَل
-        (يُقبل للتوافق الرجعي مع المتصلين القدامى) — الرقم الدائم لا يحمل سنة."""
-        reg = cls.NUMBERLESS_CODE if numberless else cls.register_code(kind)
-        return f"{reg}{number:04d}"
+        """الرقم كما يُكتب على الورق: مجرّد بلا بادئة ولا سنة.
+        `numberless=True` ⇒ نصّ فارغ، فـ«بلا رقم» تعني لا رقم فعلاً.
+        المعاملان `year`/`kind` يُقبلان للتوافق الرجعي ولا أثر لهما."""
+        if numberless:
+            return ''
+        return numbering.format_series(number)
 
     @classmethod
     def get_next(cls, kind):
-        """إرجاع الرقم التالي دون استهلاكه (دائم — لا تصفير سنوي)."""
+        """إرجاع الرقم التالي دون استهلاكه (لا نهائي — لا تصفير سنوي)."""
         obj, _ = cls.objects.get_or_create(
             kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
         )
         n = obj.next_number
         return {
             'kind': kind, 'number': n, 'year': obj.year,
-            'register': cls.register_code(kind),
             'formatted': cls.format_number(kind, n),
         }
 
     @classmethod
     def consume_next(cls, kind, numberless=False):
-        """استهلاك الرقم الحالي — آمن من race conditions (SELECT FOR UPDATE).
-        دائم: يزيد next_number بلا أي تصفير سنوي."""
+        """
+        استهلاك الرقم الحالي — آمن من التسابق (SELECT FOR UPDATE)، بلا تصفير سنوي.
+
+        `numberless=True` **لا يستهلك العدّاد**: الكتاب بلا رقم رسمي، فمنحه رقماً
+        من السلسلة كان يبتلع رقماً لا يظهر على أي ورقة ويفتح فجوة في الدفتر.
+        """
+        if numberless:
+            return {'kind': kind, 'number': None, 'year': None, 'formatted': ''}
+
         from django.db import transaction
         with transaction.atomic():
             obj = cls.objects.select_for_update().get_or_create(
@@ -1275,8 +1377,7 @@ class BookSequence(models.Model):
             obj.save(update_fields=['next_number', 'updated_at'])
         return {
             'kind': kind, 'number': current, 'year': obj.year,
-            'register': cls.NUMBERLESS_CODE if numberless else cls.register_code(kind),
-            'formatted': cls.format_number(kind, current, numberless=numberless),
+            'formatted': cls.format_number(kind, current),
         }
 
 

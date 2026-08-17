@@ -821,7 +821,13 @@ class ExtractionSmartSystem {
         // لم يُدمج المساران بعد لأن مُنتِج كاش scan_token قيد إعادة الكتابة في نافذة
         // أخرى (عقد القيمة المُخزَّنة غير مُجمَّد) — يُوحَّدان حين يستقرّ العقد.
         const dateOnly = (v) => (v ? String(v).slice(0, 10) : v);   // ISO بوقت → YYYY-MM-DD
-        setVal('bookNumber', data.book_number);
+        // رقم السجلّ اليدويّ يمرّ عبر مصالحة صريحة؛ وسلسلة النظام لا تُمسّ إطلاقاً.
+        if (data.book_number != null && data.book_number !== '') {
+            const numEl = document.getElementById('bookNumber');
+            if (numEl && this._reconcileManualNumber(numEl, data.book_number, data.book_number_confidence)) {
+                numEl.value = data.book_number;
+            }
+        }
         setVal('date', dateOnly(data.book_date));
         setVal('senderDate', dateOnly(data.sender_date));
         setVal('senderNumber', data.sender_number);
@@ -941,9 +947,9 @@ class ExtractionSmartSystem {
                 numberPlanCopy: 'في الصادر الخارجي نستخدم رقمنا الرسمي فقط لأنه المرجع الذي يُرسل إلى الخارج.',
                 datePlanTitle: 'تاريخ الإرسال + المتابعة',
                 datePlanCopy: 'تاريخنا هو تاريخ الإرسال الرسمي، ويمكن إدخال تاريخ متابعة للرد أو الإنجاز.',
-                bookNumberLabel: 'رقم الصادر الخارجي',
-                bookNumberHint: 'رقم الخطاب أو الصادر الرسمي المعتمد عند الإرسال للخارج.',
-                bookNumberPlaceholder: 'مثال: ص/خ/57',
+                bookNumberLabel: 'رقم صادر مكتب السيد المدير العام',
+                bookNumberHint: 'اكتبه كما هو على الكتاب، أو امسح المستند ليُقرأ تلقائياً. لا يولّده النظام.',
+                bookNumberPlaceholder: 'مثال: 7436',
                 senderNumberLabel: 'رقم الجهة المرسلة',
                 senderNumberHint: '',
                 dateLabel: 'تاريخ الإرسال',
@@ -952,6 +958,10 @@ class ExtractionSmartSystem {
                 senderDateHint: '',
                 propertiesCopy: 'الصادر الخارجي لا يحتاج رقم جهة مرسلة، لكنه يحتاج صياغة متابعة واضحة إذا كان هناك رد منتظر.',
                 showSenderFields: false,
+                // هذا السجلّ **لا سلسلة له**: الرقم يصدر من مكتب المدير العام لا من النظام.
+                // قياساً على البيانات الفعلية أرقامه (0, 109, 1555, 27189…) بلا تسلسل ولا
+                // ترتيب، وتتكرّر — فحجز رقمٍ له من عدّادنا يخترع رقماً لا وجود له على الورق.
+                manualNumber: true,
             },
         };
 
@@ -1013,6 +1023,7 @@ class ExtractionSmartSystem {
         const bookNumber = document.getElementById('bookNumber');
         if (bookNumber) {
             bookNumber.placeholder = config.bookNumberPlaceholder;
+            this.applyNumberMode(kind, config, bookNumber);
         }
 
         if (senderNumberGroup) {
@@ -1055,9 +1066,46 @@ class ExtractionSmartSystem {
      *  - On page open → loadAllReservationStatuses() restores any active holds
      */
 
+    /**
+     * يضبط سلوك حقل الرقم حسب السجلّ.
+     *
+     * السجلّات الثلاثة الأولى: الرقم يولّده النظام ويُحجز ذرّياً — الحقل للقراءة فقط
+     * كي لا يكتب موظّفان الرقم نفسه.
+     * الصادر الخارجي: لا سلسلة له أصلاً — الرقم يصدر من مكتب المدير العام. فالحقل
+     * قابل للكتابة، ويُملأ تلقائياً من استخلاص المستند الممسوح، وإن كُتب قبل المسح
+     * يُطلَب تأكيد المطابقة بدل الكتابة فوقه بصمت.
+     */
+    applyNumberMode(kind, config, field) {
+        const manual = !!config.manualNumber;
+        field.readOnly = !manual;
+        field.tabIndex = manual ? 0 : -1;
+        field.classList.toggle('book-number-readonly', !manual);
+        field.classList.toggle('book-number-manual', manual);
+        field.setAttribute('inputmode', manual ? 'numeric' : 'none');
+
+        // عناصر الحجز لا معنى لها بلا سلسلة
+        ['reservationStatus', 'reservationRing', 'numberlessToggle', 'recycledBanner']
+            .forEach((id) => {
+                const el = document.getElementById(id);
+                if (el && manual) el.style.display = 'none';
+            });
+
+        if (manual) {
+            // نظّف أي رقم محجوز بقي من تبويب آخر — رقم هذا السجلّ يأتي من الورق
+            if (field.dataset.reservationId) {
+                delete field.dataset.reservationId;
+                delete field.dataset.formatted;
+                field.value = '';
+            }
+            field.classList.remove('is-valid', 'is-pending', 'has-error');
+        }
+    }
+
     ensureReservation(kind) {
         // وضع التعديل: الرقم ثابت فلا حجز (كان override في القالب — نُقل للصنف لتوحيد كشف الوضع)
         if (this._editData) return Promise.resolve(null);
+        // سجلّ بلا سلسلة (الصادر الخارجي): لا نحجز رقماً لا وجود له على الورق.
+        if (this.getKindConfig(kind).manualNumber) return Promise.resolve(null);
         // Already have an active reservation cached for this kind → just paint
         if (this.reservations[kind] && this.reservations[kind].id) {
             this.applyReservationToUI(kind, this.reservations[kind]);
@@ -3590,6 +3638,10 @@ class ExtractionSmartSystem {
             if (value === undefined || value === null || value === '' || filled.has(id)) return;
             const el = document.getElementById(id);
             if (!el) return;
+            if (id === 'bookNumber' && !this._reconcileManualNumber(el, value, fields[confKey])) {
+                filled.add(id);          // حُسم أمره — لا نُعيد سؤاله في اللقطة التالية
+                return;
+            }
             el.value = (id === 'date' || id === 'senderDate') ? String(value).slice(0, 10) : value;
             // نفس ترتيب applyExtractionResult: حدث input أولاً ثم الثقة، وإلا وُسِم «يقين بشري»
             try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
@@ -3635,6 +3687,47 @@ class ExtractionSmartSystem {
         }, 0);
     }
 
+    /**
+     * يوفّق بين ما كتبه الموظّف في حقل الرقم وما قرأه الاستخلاص من المستند.
+     *
+     * يُعيد true إن جاز للاستخلاص الكتابة في الحقل، وfalse إن وجب تركه.
+     * ثلاث حالات:
+     *   • سجلّ له سلسلة  → الرقم محجوز من النظام؛ الاستخلاص لا يمسّه إطلاقاً.
+     *   • الحقل فارغ     → يُملأ من المستند (وهو المقصود من المسح).
+     *   • فيه رقم مكتوب  → يتطابقان: تأكيد صامت بعلامة. يختلفان: نسأله أيّهما الصحيح.
+     */
+    _reconcileManualNumber(input, extracted, confidence) {
+        const kind = document.getElementById('bookKind')?.value;
+        if (!this.getKindConfig(kind).manualNumber) return false;   // سلسلة النظام لا تُمسّ
+
+        const norm = (v) => String(v ?? '').replace(/[^\d]/g, '');
+        const typed = norm(input.value);
+        const read = norm(extracted);
+        if (!read) return false;
+
+        if (!typed) {
+            input.classList.add('number-from-scan');
+            this.showToast(`قُرئ رقم الصادر من المستند: ${read}`, 'info', 4000);
+            return true;
+        }
+        if (typed === read) {
+            input.classList.add('number-confirmed');
+            this.showToast(`تطابق: الرقم الذي كتبته «${typed}» هو نفسه المقروء من المستند.`, 'success', 4000);
+            return false;                       // القيمة نفسها — لا داعي للكتابة
+        }
+
+        const takeScan = window.confirm(
+            'اختلاف في رقم الصادر:\n\n' +
+            `  ما كتبتَه      : ${input.value}\n` +
+            `  المقروء من المستند: ${extracted}` +
+            (confidence ? `  (ثقة ${Math.round(confidence * 100)}%)` : '') +
+            '\n\nموافق = اعتمد المقروء من المستند\nإلغاء = أبقِ ما كتبتَه'
+        );
+        input.classList.add(takeScan ? 'number-from-scan' : 'number-kept-manual');
+        if (!takeScan) this.showToast('أُبقي رقمك كما كتبتَه.', 'warning', 4000);
+        return takeScan;
+    }
+
     applyExtractionResult(data) {
         // حلقة التعلّم (إصلاح 2026-08-16): الخادم يسكّ رمز مسحٍ لكلّ استخراج — بما فيه
         // **الرفع اليدويّ** الذي كان بلا رمز فيضيع تصحيح الكاتب (6 سجلّات التقاطٍ فقط
@@ -3657,6 +3750,11 @@ class ExtractionSmartSystem {
             if (typeof value !== 'undefined' && value !== null) {
                 const input = document.getElementById(field);
                 if (input) {
+                    // رقم السجلّ اليدويّ (الصادر الخارجي): لا يُكتب فوق ما كتبه الموظّف
+                    // بصمت. إن تطابقا فتأكيدٌ صامت، وإن اختلفا فقرارٌ صريح منه.
+                    if (field === 'bookNumber' && !this._reconcileManualNumber(input, value, data[conf])) {
+                        return;
+                    }
                     if (field === 'bookKind') {
                         let resolvedKind = value;
                         if (resolvedKind === 'incoming') {
@@ -4506,6 +4604,15 @@ class ExtractionSmartSystem {
 
         // ── 6) وضع الإدخال: حقول الترقيم/الحجز + إرسال إلى save-book-api ──
         const bookNumber = document.getElementById('bookNumber').value;
+
+        // سجلّ بلا سلسلة: النظام لا يملك رقماً يمنحه، فالرقم إلزاميّ من الموظّف.
+        if (!numberlessChecked && this.getKindConfig(kindValue).manualNumber && !bookNumber.trim()) {
+            this.showToast('أدخل رقم صادر مكتب السيد المدير العام — هذا السجلّ لا يولّد رقماً تلقائياً.',
+                           'error', 6000);
+            const el = document.getElementById('bookNumber');
+            if (el) { el.focus(); el.classList.add('has-error'); }
+            return;
+        }
         const dueDate = document.getElementById('dueDate').value;
         const needsFollowup = document.getElementById('needsFollowup')?.checked;
         // Keep both keys during the extraction transition layer.
@@ -4526,6 +4633,11 @@ class ExtractionSmartSystem {
             formData.delete('auto_number');
             formData.set('our_number', '');
             formData.set('book_number', '');
+        } else if (this.getKindConfig(kindValue).manualNumber) {
+            // سجلّ بلا سلسلة: الرقم من الورق حرفياً — لا حجز ولا توليد تلقائي.
+            // بدون هذا كان الخادم يخترع رقماً من عدّادٍ لا يخصّ هذا السجلّ.
+            formData.delete('reservation_id');
+            formData.append('auto_number', 'false');
         } else {
             // Prefer the active reservation; fall back to auto_number generation server-side.
             const activeReservation = this.reservations[kindValue];

@@ -103,17 +103,33 @@ Everything lives in `core/`. The two refactored sub-packages have their own inte
 - `AI_PROVIDER=offline` uses EasyOCR locally; `azure` uses Azure Cognitive Services.
 - `pg_trgm` extension is required for full-text entity search; enabled by migration `0019`.
 
-### Book Number Format (critical — affects search logic)
-`our_number` has three formats after migrations 0033–0036:
-- **New** (9 chars): `YYYY R NNNN` — year + register(1-4) + 4-digit-padded sequence
-- **Old** (8 chars): `YYYY NNNN` — year + 4-digit-padded sequence (imported/legacy)
-- **Compound** (11 chars): `YYYY NNNN VVV` — deduplicated entries; also has `series_no` + `version` fields
+### Book Number Format — `core/numbering.py` is the SINGLE SOURCE
+Never re-implement a numbering rule anywhere else. Parse/format/display/search/sort
+all go through this module. (The rule used to live in eleven places and had already
+drifted: the year floor was 2020 in one and 2000 in another.)
 
-Register codes: `1`=incoming_internal, `2`=incoming_external, `3`=outgoing_internal, `4`=outgoing_external
+Rebased 2026-08-17 onto the number stamped inside the incoming stamp (ختم الوارد):
 
-Search logic lives entirely in `core/views/helpers.py::apply_search_filters()`.
-Key rule: `our_number__endswith=padded` (4-digit) matches both old and new formats correctly
-because the last 4 chars are always the sequence NNNN regardless of format.
+- **Current series** — bare, e.g. `2433`. One infinite series per register, **no
+  yearly reset**, based on 2026's numbers. After 2432 comes 2433 in 2027 and beyond.
+- **Tagged** — `{year}{seq:04d}`, e.g. `20250825`, for ledger year ≤ 2025. Displays
+  as `825` with a separate `2025` tag. The year is the **source table's** year
+  (`IIMAIL_2025`), not the document date.
+- **Manual** — `outgoing_external` has no series of ours; its number comes from the
+  Director General's office and is stored verbatim (duplicates allowed).
+- **Numberless** — empty string. Supported exception; consumes no counter.
+- **Training** — `T131`. Books entered during the training period; outside the
+  official space by construction (leading non-digit). Purged at launch.
+
+Source columns (measured, not guessed): incoming tables have both `WID` and `NUM` —
+`WID` is a dense 1.00 series (our stamp number), `NUM` is scattered 0.02 (the
+sender's number). Outgoing tables have **no `WID` column**; `NUM` is ours.
+
+Uniqueness is `(kind, our_number)` scoped by migration 0058 to app-issued rows only —
+paper-imported rows are exempt because the 2025 clerk really did stamp 825 twice.
+
+Commands: `rebase_book_numbers` (idempotent, `--dry-run` by default, `--undo CSV`),
+`purge_dev_seed_books` (keys off `is_training`). See `docs/LAUNCH_RUNBOOK.md`.
 
 ## Consultation Rule
 - إذا واجهت قراراً معمارياً أو خطأً غامضاً بعد محاولتين، استشر Opus عبر Agent tool قبل المتابعة.
@@ -122,6 +138,15 @@ because the last 4 chars are always the sequence NNNN regardless of format.
 
 ## Current State
 <!-- أحدِّث هذا القسم بعد كل جلسة عمل مهمة -->
+
+### آخر تعديلات (2026-08-17) — إعادة بناء الترقيم
+**11,183 رقماً أُعيد بناؤها على سلسلة ختم الوارد** (7,757 موسوم + 3,262 سلسلة جارية
++ 131 تدريب + 33 بلا رقم)، والعدّادات 2433/358/455 بلا عدّادٍ للصادر الخارجي.
+- `core/numbering.py` صار مصدراً وحيداً موصولاً بالعرض والبحث والفرز والمستورد وإعادة البذر
+- هجرة 0058: `is_training` + تضييق قيد التفرّد ليستثني المنقول من الورق
+- حُذف `normalize_book_numbers` (يفرض بادئاتٍ أُلغيت)، و`purge_dev_seed_books` صار على `is_training`
+- 229 حجزاً في الفضاء المُلغى حُذفت (حجزٌ واحد بالرقم 417 كان يبتلع 358–417)
+- 729 اختباراً أخضر + 29 تحقّقاً على البيانات الحيّة · دليل التدشين في `docs/LAUNCH_RUNBOOK.md`
 
 ### آخر تعديلات (2026-08-11)
 **ملفات:** `core/extraction/matchers/pattern.py` + `profile.py` — تواريخ إيميلات الشركات

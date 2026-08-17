@@ -23,10 +23,16 @@ from django.views.decorators.http import require_POST
 
 from ..backup_service import create_encrypted_pg_backup, default_backup_dir
 from ..extraction.kinds import get_kind_label
-from ..models import Attachment, AttachmentVersion, Book, BookHistory, Entity
+from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
+                      RestoreJob)
 from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
+
+
+class _NoJob:
+    """بديل فارغ كي يبقى القالب بسيطاً (id = None ⇒ لا مهمّة حيّة)."""
+    id = None
 
 
 @login_required
@@ -538,13 +544,21 @@ def data_restore(request):
     """
     from ..legacy_restore import LegacyRestoreEngine
 
+    # الاعتماد لا يُكتب في القالب ولا يُعاد للمتصفّح. يُقرأ من البيئة، وحقل النموذج
+    # يبقى متاحاً لمن يفضّل إدخاله يدوياً.
+    saved_password = os.environ.get('LEGACY_SQL_PASSWORD', '')
+
     ctx = {
         'form': {
             'server': request.POST.get('server', 'localhost'),
             'database': request.POST.get('database', ''),
             'username': request.POST.get('username', 'sa'),
         },
-        'book_count': Book.objects.count(),
+        'has_saved_password': bool(saved_password),
+        'state': _restore_state(),
+        # مهمّة دمج حيّة (إن وُجدت) — تُلتقط عند فتح الصفحة فيرى المستخدم تقدّمها
+        # حتى لو بدأها قبل ساعة ثم أغلق المتصفّح.
+        'live_job_id': (RestoreJob.running() or _NoJob).id,
     }
 
     if request.method == 'POST':
@@ -555,7 +569,8 @@ def data_restore(request):
             bak_path = (request.POST.get('bak_path') or '').strip()
             bak_server = (request.POST.get('bak_server') or 'localhost').strip()
             bak_user = (request.POST.get('bak_user') or 'sa').strip()
-            bak_pass = request.POST.get('bak_password') or ''
+            bak_pass = request.POST.get('bak_password') or saved_password
+            bak_work_dir = (request.POST.get('bak_work_dir') or '').strip()
             restore_files = request.POST.get('restore_files') == 'on'
             mode = request.POST.get('merge_mode') or 'skip_existing'
             if mode not in ('fresh', 'skip_existing', 'update_existing'):
@@ -563,6 +578,7 @@ def data_restore(request):
             ctx['form']['bak_path'] = bak_path
             ctx['form']['bak_server'] = bak_server
             ctx['form']['bak_user'] = bak_user
+            ctx['form']['bak_work_dir'] = bak_work_dir
             if not bak_path:
                 messages.error(request, 'مسار ملف الباكاب مطلوب.')
                 return render(request, 'core/data_restore.html', ctx)
@@ -570,6 +586,7 @@ def data_restore(request):
                 summary = LegacyRestoreEngine.restore_from_bak(
                     bak_path, sql_server=bak_server, admin_user=bak_user, admin_password=bak_pass,
                     created_by=request.user, restore_files=restore_files, mode=mode,
+                    work_dir=bak_work_dir or None,
                 )
                 if summary.get('aborted'):
                     messages.warning(request, summary.get('reason', 'تم الإيقاف.'))
@@ -586,14 +603,14 @@ def data_restore(request):
             except Exception as e:
                 logger.exception('restore_from_bak failed')
                 messages.error(request, f'فشل أثناء الاستعادة من الملف: {e}')
-            ctx['book_count'] = Book.objects.count()
+            ctx['state'] = _restore_state()
             return render(request, 'core/data_restore.html', ctx)
 
         # ── طريقة 1: اتصال مباشر بقاعدة حية ──
         server = (request.POST.get('server') or 'localhost').strip()
         database = (request.POST.get('database') or '').strip()
         username = (request.POST.get('username') or 'sa').strip()
-        password = request.POST.get('password') or ''
+        password = request.POST.get('password') or saved_password
 
         if not database:
             messages.error(request, 'اسم قاعدة البيانات مطلوب.')
@@ -616,35 +633,183 @@ def data_restore(request):
             return render(request, 'core/data_restore.html', ctx)
 
         if action == 'import':
-            restore_files = request.POST.get('restore_files') == 'on'
-            mode = request.POST.get('merge_mode') or 'skip_existing'
-            if mode not in ('fresh', 'skip_existing', 'update_existing'):
-                mode = 'skip_existing'
-            try:
-                summary = engine.run(
-                    created_by=request.user,
-                    restore_files=restore_files,
-                    mode=mode,
-                )
-                if summary.get('aborted'):
-                    messages.warning(request, summary.get('reason', 'تم الإيقاف.'))
-                else:
-                    ctx['summary'] = summary
-                    parts = []
-                    if summary.get('books'):   parts.append(f"{summary['books']:,} كتاب جديد")
-                    if summary.get('updated'): parts.append(f"{summary['updated']:,} مُحدَّث")
-                    if summary.get('skipped'): parts.append(f"{summary['skipped']:,} متخطّى")
-                    if restore_files and summary.get('files'): parts.append(f"{summary['files']:,} مرفق")
-                    if summary.get('dedup_fixed'): parts.append(f"فُكّ {summary['dedup_fixed']} تكرار")
-                    messages.success(request, "تمت الاستعادة: " + ("، ".join(parts) if parts else "لا تغييرات"))
-                    _reseed_book_sequences()
-            except Exception as e:
-                logger.exception('data_restore import failed')
-                messages.error(request, f'فشل أثناء الاستعادة: {e}')
-            ctx['book_count'] = Book.objects.count()
+            # المسار المتزامن أُلغي: الدمج قد يستغرق ساعات، وتشغيلُه داخل الطلب
+            # كان ينهي مهلة المتصفّح فيظنّ المستخدم أنه فشل بينما هو ماضٍ.
+            # البديل: restore_start ينشئ RestoreJob ويشغّله كعمليةٍ مستقلّة.
+            messages.info(request, 'استعمل زرّ «ابدأ الدمج الآن» في الخطوة ٤ — يعمل بالخلفية بمؤشّر تقدّم.')
+            ctx['state'] = _restore_state()
             return render(request, 'core/data_restore.html', ctx)
 
     return render(request, 'core/data_restore.html', ctx)
+
+
+# ── واجهات JSON لصفحة الاستعادة (كلها قراءة رخيصة عدا reconcile بـ apply) ──
+
+def _restore_engine(request):
+    """يبني المحرّك من حقول النموذج، والاعتماد من البيئة إن تُرك الحقل فارغاً."""
+    from ..legacy_restore import LegacyRestoreEngine
+    return LegacyRestoreEngine(
+        (request.POST.get('server') or 'localhost').strip(),
+        (request.POST.get('database') or 'ARCHMDOC').strip(),
+        (request.POST.get('username') or 'sa').strip(),
+        request.POST.get('password') or os.environ.get('LEGACY_SQL_PASSWORD', ''),
+    )
+
+
+def _restore_state():
+    """حالة النظام التي تحكم أي خطوة متاحة الآن."""
+    total = Book.objects.count()
+    stamped = Book.objects.exclude(source_ref='').count()
+    return {
+        'books': total,
+        'stamped': stamped,
+        'unstamped': total - stamped,
+        'attachments': Attachment.objects.filter(is_deleted=False).count(),
+        'entities': Entity.objects.count(),
+    }
+
+
+@staff_required
+@require_POST
+def restore_probe(request):
+    """يتحقّق من الاتصال ويعرض جداول المصدر وأعدادها — قراءة فقط."""
+    try:
+        info = _restore_engine(request).discover()
+    except Exception as exc:
+        logger.warning('restore_probe failed: %s', exc)
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=200)
+    total = sum(t['rows'] for t in info['tables'])
+    return JsonResponse({
+        'ok': True, 'years': info['years'], 'tables': info['tables'],
+        'total_rows': total, 'state': _restore_state(),
+    })
+
+
+@staff_required
+@require_POST
+def restore_reconcile(request):
+    """
+    يربط الكتب الحالية بصفوفها في المصدر ويختم source_ref.
+    apply=0 (الافتراضي) معاينة لا تكتب شيئاً.
+    """
+    apply_it = request.POST.get('apply') == '1'
+    try:
+        verify = int(request.POST.get('verify_bytes') or 40)
+    except ValueError:
+        verify = 40
+    try:
+        report = _restore_engine(request).reconcile(
+            apply=apply_it, verify_bytes=max(0, min(verify, 300)))
+    except Exception as exc:
+        logger.warning('restore_reconcile failed: %s', exc)
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=200)
+    report['ok'] = True
+    report['state'] = _restore_state()
+    report['verify_mismatches'] = [list(m) for m in report.get('verify_mismatches', [])]
+    return JsonResponse(report)
+
+
+@staff_required
+@require_POST
+def restore_start(request):
+    """
+    يبدأ الدمج كعمليةٍ مستقلّة ويعود فوراً.
+
+    الطلب لا ينفّذ شيئاً: يتحقّق، يُنشئ صفّ مهمّة، يُشغّل الأمر، ويردّ بمعرّفها.
+    قبل هذا كان الدمج يعمل داخل الطلب نفسه — فتنتهي مهلة المتصفّح ويظنّ المستخدم
+    أنه فشل بينما هو ماضٍ، ولا يبقى منه أثر إن أُغلقت الصفحة.
+    """
+    import subprocess
+    import sys
+
+    from ..models import RestoreJob
+
+    live = RestoreJob.running()
+    if live:
+        return JsonResponse({'ok': False, 'job_id': live.id,
+                             'error': f'توجد مهمّة دمج قيد التنفيذ (#{live.id}). '
+                                      'انتظر انتهاءها أو ألغِها قبل بدء أخرى.'})
+
+    mode = request.POST.get('merge_mode') or 'skip_existing'
+    if mode not in ('fresh', 'skip_existing', 'update_existing'):
+        mode = 'skip_existing'
+
+    password = request.POST.get('password') or os.environ.get('LEGACY_SQL_PASSWORD', '')
+    if not password:
+        return JsonResponse({'ok': False, 'error': 'كلمة سرّ المصدر مطلوبة.'})
+
+    job = RestoreJob.objects.create(
+        created_by=request.user,
+        params={
+            'server': (request.POST.get('server') or 'localhost').strip(),
+            'database': (request.POST.get('database') or 'ARCHMDOC').strip(),
+            'username': (request.POST.get('username') or 'sa').strip(),
+            'mode': mode,
+            'restore_files': request.POST.get('restore_files') == 'on',
+            'include_held': request.POST.get('include_held') == 'on',
+        },
+    )
+
+    # الاعتماد يُمرَّر في بيئة العملية الابنة فقط — لا في صفّ المهمّة ولا في سطر الأوامر.
+    env = dict(os.environ, LEGACY_SQL_PASSWORD=password, PYTHONIOENCODING='utf-8')
+    creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+    try:
+        subprocess.Popen(
+            [sys.executable, 'manage.py', 'run_restore_job', '--job', str(job.id)],
+            cwd=str(settings.BASE_DIR), env=env, creationflags=creationflags,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        job.status = RestoreJob.STATUS_FAILED
+        job.error_message = f'تعذّر تشغيل العملية: {exc}'
+        job.finished_at = timezone.now()
+        job.save(update_fields=['status', 'error_message', 'finished_at'])
+        return JsonResponse({'ok': False, 'error': job.error_message})
+
+    return JsonResponse({'ok': True, 'job_id': job.id})
+
+
+@staff_required
+def restore_job_status(request, job_id):
+    """حالة مهمّة الدمج — تُستطلَع من الصفحة كل ثانيتين."""
+    from ..models import RestoreJob
+
+    job = RestoreJob.objects.filter(pk=job_id).first()
+    if not job:
+        return JsonResponse({'ok': False, 'error': 'المهمّة غير موجودة.'}, status=404)
+    return JsonResponse({
+        'ok': True, 'id': job.id, 'status': job.status, 'phase': job.phase,
+        'done': job.done_count, 'total': job.total_count, 'percent': job.percent,
+        'is_live': job.is_live, 'summary': job.summary, 'error': job.error_message,
+        'cancel_requested': job.cancel_requested,
+        'state': _restore_state(),
+    })
+
+
+@staff_required
+@require_POST
+def restore_job_cancel(request, job_id):
+    """يطلب الإلغاء — يُفحَص بين الدفعات فلا يُترك مرفقٌ نصفه."""
+    from ..models import RestoreJob
+
+    updated = RestoreJob.objects.filter(pk=job_id, status__in=RestoreJob.LIVE_STATUSES) \
+                                .update(cancel_requested=True)
+    return JsonResponse({'ok': bool(updated),
+                         'error': '' if updated else 'المهمّة غير حيّة.'})
+
+
+@staff_required
+@require_POST
+def restore_delta(request):
+    """يعرض ما الجديد في المصدر مقارنةً بما عندنا — بلا نقل مرفقات."""
+    try:
+        info = _restore_engine(request).delta()
+    except Exception as exc:
+        logger.warning('restore_delta failed: %s', exc)
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=200)
+    info['ok'] = True
+    info['state'] = _restore_state()
+    return JsonResponse(info)
 
 
 @staff_required
@@ -706,29 +871,49 @@ def bak_browse(request):
 
 
 def _reseed_book_sequences():
-    """يضبط BookSequence.next_number لكل سجل على (أكبر تسلسل دائم موجود + 1).
-    الترقيم دائم بلا سنة: يُحتسب فقط الأرقام بصيغة {R}{NNNN} (رقمية، أول خانة = رمز
-    السجل، بلا بادئة سنة). الأرقام التاريخية YYYY{R}{NNNN} تُستبعَد — ليست في فضاء
-    الترقيم الدائم. يُستدعى بعد الاستعادة كي لا تصطدم الأرقام الجديدة بالموجود."""
-    from ..models import BookSequence
-    for kind, reg in BookSequence.REGISTER_CODES.items():
-        max_seq = 0
-        for onum in Book.objects.filter(
-            kind=kind, our_number__startswith=reg
-        ).values_list('our_number', flat=True):
-            if not onum.isdigit():
-                continue
-            # استبعاد التاريخي (يبدأ بسنة 2020-2099 وطوله ≥ 8)
-            if len(onum) >= 8 and onum[:4].isdigit() and 2020 <= int(onum[:4]) <= 2099:
-                continue
-            seq_part = onum[len(reg):]
-            if seq_part.isdigit():
-                max_seq = max(max_seq, int(seq_part))
+    """
+    يرفع BookSequence.next_number لكل سجلّ إلى ما يضمن ألّا يتكرّر رقم — **ولا يُنزله أبداً**.
+
+    السلسلة لا نهائية بلا تصفير سنوي، فيُحتسب أساسها من أرقام **السلسلة الجارية**
+    وحدها (المجرّدة). الموسوم بسنته وكتب التدريب خارج فضائها: لو حُسب '20255782'
+    تسلسلاً لقفز العدّاد إلى عشرين مليوناً. والصادر الخارجي لا عدّاد له أصلاً —
+    رقمه من مكتب السيد المدير العام.
+
+    العدّاد لا ينزل لأن الرقم قد يكون **محجوزاً الآن** لمستخدم يكتب كتاباً لم يُحفظ بعد
+    (BookNumberReservation نشط)، أو قد يكون في حجزٍ ينتظر. إنزال العدّاد كان يمنح
+    ذلك الرقم لشخصٍ آخر فيتصادمان. لذا: الجديد = أكبر (العدّاد الحالي، أكبر رقم كتاب،
+    أكبر رقم محجوز) + ١. الفجوات مقبولة؛ تكرار الأرقام ليس كذلك.
+    """
+    from django.db.models import Max
+
+    from .. import numbering
+    from ..models import BookNumberReservation, BookSequence
+
+    live = (BookNumberReservation.STATUS_ACTIVE,
+            BookNumberReservation.STATUS_REACTIVATED,
+            BookNumberReservation.STATUS_COOLDOWN,
+            BookNumberReservation.STATUS_USED)
+
+    # مسحة واحدة على الأرقام كلها بدل مسحةٍ لكل سجلّ تُحمّلها في الذاكرة مراراً.
+    max_seq = {kind: 0 for kind in numbering.SERIES_KINDS}
+    for kind, onum in (Book.objects.exclude(our_number='')
+                       .filter(kind__in=numbering.SERIES_KINDS)
+                       .values_list('kind', 'our_number').iterator(chunk_size=2000)):
+        p = numbering.parse(onum)
+        if p.kind_of == 'series' and p.seq:
+            max_seq[kind] = max(max_seq[kind], p.seq)
+
+    reserved = dict(BookNumberReservation.objects.filter(status__in=live)
+                    .values_list('kind').annotate(m=Max('number')))
+
+    for kind in numbering.SERIES_KINDS:
         obj, _c = BookSequence.objects.get_or_create(
             kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
         )
-        obj.next_number = max_seq + 1 if max_seq else 1
-        obj.save(update_fields=['next_number', 'updated_at'])
+        target = max(obj.next_number, max_seq[kind] + 1, (reserved.get(kind) or 0) + 1, 1)
+        if target != obj.next_number:
+            obj.next_number = target
+            obj.save(update_fields=['next_number', 'updated_at'])
 
 
 # ══════════════════════════════════════════════════════════════════

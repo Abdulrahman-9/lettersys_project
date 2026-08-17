@@ -14,6 +14,8 @@ from datetime import timedelta
 from django.db.models import Q, Count
 from django.utils import timezone
 
+from .. import numbering
+
 
 # تبويبات النوع (kind) — مستقلة عن حالة المتابعة
 _KIND_TABS = {
@@ -244,4 +246,15 @@ class BookSortEngine:
             return queryset
         if sort_field not in BookSortEngine.VALID_SORTS:
             sort_field = "-date"
-        return queryset.order_by(sort_field, "-id")
+        resolved = BookSortEngine.VALID_SORTS[sort_field]
+
+        # الفرز بالرقم **رقميّ لا نصّيّ**: نصّياً يأتي '10' قبل '9'، ويعلو
+        # الموسوم '20250825' على كل أرقام السلسلة الجارية لأنّ '2' > '1'.
+        # نفرز على (السنة الفعّالة، التسلسل) — والسلسلة الجارية تُعامَل بسنة
+        # الأساس فتأتي بعد الموسوم بسنته، وهو الترتيب الزمني الصحيح.
+        if resolved.lstrip('-') == 'our_number':
+            desc = resolved.startswith('-')
+            keys = ('-_num_year', '-_num_seq') if desc else ('_num_year', '_num_seq')
+            return queryset.annotate(**numbering.sort_key_sql()).order_by(*keys, "-id")
+
+        return queryset.order_by(resolved, "-id")

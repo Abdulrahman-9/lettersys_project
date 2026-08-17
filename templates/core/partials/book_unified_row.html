@@ -17,40 +17,42 @@
 
   {# 2: رقم القيد (قيدنا) #}
   <td class="col-our-number">
-    <div class="num-cell" title="{% if book.legacy_number %}الأصل: {{ book.legacy_number }} • {% endif %}رقم القيد لدينا: {{ book.our_number }}">
+    <div class="num-cell" title="{{ book.our_number_explained }}{% if book.legacy_number %} — الرقم قبل التوحيد: {{ book.legacy_number }}{% endif %}">
       {% if book.is_incoming %}
         <i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>
       {% else %}
         <i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>
       {% endif %}
       {% if book.our_number_is_numberless %}
-        <span class="book-number-numberless" title="كتاب داخلي بلا رقم رسمي (استثناء)">بلا رقم</span>
-      {% elif book.our_number %}
-        {% if book.our_number_year %}
-          <span class="book-number-text"><span class="num-sequence">{{ book.our_number_sequence }}</span><span class="num-year">/{{ book.our_number_year }}</span></span>
-        {% else %}
-          <span class="book-number-text">{{ book.our_number }}</span>
-        {% endif %}
+        <span class="book-number-numberless" title="كتاب بلا رقم رسمي — استثناء معتمَد في النظام">بلا رقم</span>
       {% else %}
-        <span class="book-number-missing" title="لا يوجد رقم قيد">غير مسجل</span>
+        {% comment %}
+        يُعرض **رقم الختم مجرّداً** كما كتبه الموظّف على الورقة — بلا بادئة سجلّ.
+        وسم السنة يظهر منفصلاً لكتب السجلّات السابقة وحدها، لأن الرقم نفسه كان
+        يتكرّر بين سنة وأخرى قبل أن تصير سلسلة 2026 أساساً لا نهائياً؛ أمّا كتب
+        السلسلة الجارية فتُعرض بلا وسم لأن رقمها فريدٌ إلى الأبد.
+        {% endcomment %}
+        <span class="book-number-text">
+          <span class="num-sequence">{{ book.our_number_sequence }}</span>{% if book.our_number_year %}<span class="num-year">/{{ book.our_number_year }}</span>{% endif %}
+        </span>
       {% endif %}
     </div>
   </td>
 
-  {# 3: رقم الجهة (رقمهم) — للوارد فقط؛ يُخفى العمود كاملاً في الصادر #}
+  {# 3: تاريخ تسجيل الكتاب — استلام للوارد / إصدار للصادر — بجوار رقمنا (جانبنا) #}
+  <td class="col-date">
+    <span class="date-val" title="{% if book.is_incoming %}تاريخ استلامنا للكتاب{% else %}تاريخ إصدار الكتاب{% endif %}">{{ book.date|date:"d/m/Y"|default:"—" }}</span>
+  </td>
+
+  {# 4: رقم الجهة (رقمهم) — للوارد فقط؛ يُخفى العمود كاملاً في الصادر #}
   <td class="col-sender-number">
     {% if book.is_incoming %}
       {% if book.sender_number %}
-        <span class="sender-number-value" title="رقم الكتاب لدى الجهة المرسلة">{{ book.sender_number }}</span>
+        <span class="sender-number-value" title="العدد الحقيقي المطبوع على المستند — رقم الكتاب لدى الجهة المرسِلة. لا علاقة له برقم قيدنا.">{{ book.sender_number }}</span>
       {% else %}
-        <span class="sender-number-empty" title="لم يُستورد من النظام القديم — أضِفه عند التعديل">لم يُسجَّل</span>
+        <span class="sender-number-empty" title="العدد المطبوع على المستند لم يُسجَّل بعد — أضِفه عند التعديل">لم يُسجَّل</span>
       {% endif %}
     {% endif %}
-  </td>
-
-  {# 4: التاريخ — استلام للوارد / إصدار للصادر #}
-  <td class="col-date">
-    <span class="date-val" title="{% if book.is_incoming %}تاريخ استلامنا للكتاب{% else %}تاريخ إصدار الكتاب{% endif %}">{{ book.date|date:"d/m/Y"|default:"—" }}</span>
   </td>
 
   {# 5: تاريخ الإرسال — للوارد فقط؛ يُخفى العمود كاملاً في الصادر #}

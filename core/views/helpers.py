@@ -10,13 +10,17 @@ import re
 from django.db.models import Case, IntegerField, Q, Value, When
 from django.contrib.auth.decorators import user_passes_test
 
+from .. import numbering
+
 
 def apply_search_filters(queryset, search_text):
     """
     تطبيق فلاتر البحث على QuerySet الكتب.
+
     - مدخل رقمي محض: يبحث في حقول الأرقام (our_number, sender_number).
-      الصيغة: YYYYRNNNN (جديد، 9 خانات) أو YYYYNNNN (قديم، 8 خانات).
-      في كلتا الصيغتين آخر 4 خانات = NNNN (التسلسل المكمّل بأصفار).
+      كتابة الرقم المجرّد («825») تجده في كل صيغه المخزَّنة: رقم السلسلة
+      الجارية '825'، وكتاب 2025 المخزَّن '20250825'، وكتاب 2007 المخزَّن
+      '20070825' — والأنماط كلّها من `core/numbering.py` لا مكتوبة هنا.
     - مدخل نصي: PostgreSQL FTS أو SQLite icontains.
     """
     if not search_text:
@@ -39,22 +43,20 @@ def apply_search_filters(queryset, search_text):
         ival = int(search_text)
         q = Q()
 
-        if n <= 4:
-            # التسلسل قد يكون في صيغتين:
-            #  • تاريخي: YYYYNNNN (8) أو YYYYRNNNN (9) — آخر 4 خانات = التسلسل.
-            #    نمط مُرسّى بطول كلّي 8-9 يستبعد المركّب (11) فلا يتسرّب زائفاً.
-            #  • دائم: {R}{NNNN} (رمز سجل 0-4 ثم التسلسل بلا سنة) — نطابق
-            #    "رمز + أصفار بادئة اختيارية + الرقم" حتى النهاية.
-            padded = search_text.zfill(4)
-            q |= Q(our_number__regex=r'^[0-9]{4,5}' + padded + r'$')          # تاريخي
-            q |= Q(our_number__regex=r'^[0-4]0*' + str(ival) + r'$')          # دائم
+        if n <= 5:
+            # الرقم المجرّد يجد كل صيغه المخزَّنة (سلسلة جارية / موسوم بسنة /
+            # تدريب) — والأنماط من المصدر الوحيد، فلا تنحرف قراءتها عن العرض.
+            for pat in numbering.search_patterns(ival):
+                q |= Q(our_number__regex=pat)
 
-            # الأرقام المركّبة (series_no)
+            # الأرقام المركّبة (series_no) — بقايا بيانات لم تُرحَّل بعد
             q |= Q(series_no=ival)
 
-            # سنة: 4 خانات ضمن نطاق YYYY → ابحث بالبادئة أيضاً
-            if n == 4 and 2020 <= ival <= 2099:
-                q |= Q(our_number__startswith=search_text)
+            # كتابة سنةٍ وحدها تجد كل كتب سجلّ تلك السنة
+            if n == 4:
+                year_pat = numbering.year_search_pattern(ival)
+                if year_pat:
+                    q |= Q(our_number__regex=year_pat)
 
             # رقم الجهة المرسلة: رقم مستقل (لا يُطابَق كجزء من رقم أطول)
             _sn_pat = r'(^|[^0-9])' + re.escape(search_text) + r'([^0-9]|$)'
@@ -74,12 +76,11 @@ def apply_search_filters(queryset, search_text):
             q |= Q(title__icontains=search_text)
             q |= Q(margin__icontains=search_text)
 
-        # الترتيب (تحت الترقيم الدائم، حيث يتكرّر التسلسل عبر السجلّات والسنوات):
-        #   1) _exact   : مطابقة رقم القيد الكامل حرفياً (مثل كتابة 10089) تتصدّر.
+        # الترتيب (الرقم نفسه يتكرّر عبر السجلّات والسنوات، فالترتيب هو ما يفرزه):
+        #   1) _exact   : مطابقة رقم القيد الكامل حرفياً (كتابة 825) تتصدّر.
         #   2) _num_pri : مطابقات حقول الأرقام (0-1) قبل ضوضاء العنوان/الهامش (2).
-        #   3) -date    : الأحدث أولاً — يضع الكتاب الدائم الحالي فوق التاريخي لنفس
-        #                 التسلسل (يُصحّح فرز -our_number النصّي الذي كان يرفع '2025…'
-        #                 فوق '10089' لأنّ '2' > '1').
+        #   3) -date    : الأحدث أولاً — يضع كتاب السلسلة الجارية فوق الموسوم
+        #                 بسنته لنفس الرقم، وهو ما يريده الباحث غالباً.
         #   4) -our_number : كسر تعادل ثابت.
         return (
             queryset.filter(q)

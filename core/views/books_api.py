@@ -279,6 +279,8 @@ def save_book_api(request):
                 # تعيين الرقم التلقائي داخل المعاملة (B2): لا يُستهلك رقم السجل الرسمي
                 # إلا إذا اكتمل إنشاء الكتاب — يمنع فجوات الترقيم عند فشل الإنشاء.
                 if numberless_internal:
+                    # «بلا رقم»: الحقل يبقى فارغاً ولا يُستهلك رقمٌ من السلسلة —
+                    # منحُه رقماً كان يبتلع رقماً لا يظهر على أي ورقة.
                     our_number = BookSequence.consume_next(kind_value, numberless=True)['formatted']
                 elif auto_number and not reservation_id:
                     our_number = BookSequence.consume_next(kind_value)['formatted']

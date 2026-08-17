@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
-"""اختبارات الترقيم الدائم + كشف التكرار.
+"""اختبارات السلسلة اللانهائية + العرض + البحث + كشف التكرار.
 
-يغطّي:
-  • BookSequence: format_number بلا سنة + consume_next لا يتصفّر.
-  • Book._parse_year_prefix والخصائص: تمييز التاريخي/الدائم + فخّ reg=2 (20200).
-  • apply_search_filters: إيجاد التسلسل في الصيغتين.
-  • find_duplicate_candidates + حارس الحفظ (4/4 منع، 3/4 تنبيه).
+القاعدة المُختبَرة هنا (قرار المالك): سلسلةٌ واحدة لا نهائية أساسها أرقام 2026
+بلا تصفير سنوي، وبيانات 2025 وما قبلها موسومةٌ بسنة إضافتها، ولا بادئة سجلّ في
+الرقم إطلاقاً. نحو الأرقام نفسه مُثبَّت في `core/tests_numbering.py`؛ هذا الملف
+يُثبّت **الطبقات فوقه**: العدّاد، وخصائص العرض، والبحث، والفرز، وحارس التكرار.
 """
 from datetime import date
 
@@ -14,42 +13,54 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from .models import Book, BookSequence, Entity
+from .views.filter_helpers import BookSortEngine
 from .views.helpers import apply_search_filters
 from .views.books_helpers import find_duplicate_candidates
 
 
 class BookSequenceFormatTests(TestCase):
-    def test_format_number_drops_year(self):
-        # الصيغة الدائمة: {R}{NNNN} بلا سنة
-        self.assertEqual(BookSequence.format_number('incoming_internal', 89), '10089')
-        self.assertEqual(BookSequence.format_number('incoming_external', 5), '20005')
-        self.assertEqual(BookSequence.format_number('outgoing_external', 1234), '41234')
+    def test_format_number_is_bare(self):
+        # لا بادئة سجلّ ولا سنة — الرقم كما يُكتب على الورق
+        self.assertEqual(BookSequence.format_number('incoming_internal', 89), '89')
+        self.assertEqual(BookSequence.format_number('incoming_external', 5), '5')
+        self.assertEqual(BookSequence.format_number('outgoing_internal', 1234), '1234')
 
-    def test_format_number_numberless(self):
-        self.assertEqual(BookSequence.format_number('incoming_internal', 3, numberless=True), '00003')
+    def test_numberless_is_empty_not_a_number(self):
+        # «بلا رقم» تعني لا رقم فعلاً — لا '0NNNN'
+        self.assertEqual(BookSequence.format_number('incoming_internal', 3, numberless=True), '')
 
     def test_format_number_ignores_year_arg(self):
-        # المعامل year مُهمَل (توافق رجعي) — لا يظهر في الناتج
-        self.assertEqual(BookSequence.format_number('incoming_internal', 89, year=2026), '10089')
+        self.assertEqual(BookSequence.format_number('incoming_internal', 89, year=2026), '89')
 
     def test_consume_next_is_perpetual(self):
         r1 = BookSequence.consume_next('incoming_internal')
         r2 = BookSequence.consume_next('incoming_internal')
         self.assertEqual(r1['number'] + 1, r2['number'])
-        self.assertEqual(r2['formatted'], f"1{r2['number']:04d}")
+        self.assertEqual(r2['formatted'], str(r2['number']))
+
+    def test_numberless_does_not_consume_the_counter(self):
+        # الفجوة التي كانت: كتابٌ بلا رقم يبتلع رقماً لا يظهر على أي ورقة
+        BookSequence.objects.update_or_create(
+            kind='incoming_internal', defaults={'next_number': 2433, 'year': 2026})
+        out = BookSequence.consume_next('incoming_internal', numberless=True)
+        self.assertEqual(out['formatted'], '')
+        self.assertEqual(
+            BookSequence.objects.get(kind='incoming_internal').next_number, 2433)
 
     def test_seed_high_then_continue(self):
-        # يحاكي بذرة تسلسل عالية (كتب 2026 مُرحَّلة) → يُكمل لا يتصفّر
+        # أساس السلسلة من بيانات 2026 (مثل 2433) → يُكمل ولا يتصفّر
         seq, _ = BookSequence.objects.update_or_create(
-            kind='outgoing_internal', defaults={'next_number': 2470, 'year': 2026})
+            kind='outgoing_internal', defaults={'next_number': 455, 'year': 2026})
         r = BookSequence.consume_next('outgoing_internal')
-        self.assertEqual(r['number'], 2470)
-        self.assertEqual(r['formatted'], '32470')
+        self.assertEqual(r['number'], 455)
+        self.assertEqual(r['formatted'], '455')
         seq.refresh_from_db()
-        self.assertEqual(seq.next_number, 2471)
+        self.assertEqual(seq.next_number, 456)
 
 
-class BookNumberParseTests(TestCase):
+class BookNumberDisplayTests(TestCase):
+    """خصائص العرض — كلّها واجهةٌ رفيعة فوق `core/numbering.py`."""
+
     def setUp(self):
         self.user = User.objects.create_user('u', password='p')
 
@@ -57,116 +68,165 @@ class BookNumberParseTests(TestCase):
         return Book.objects.create(our_number=our_number, title='ع', kind=kind,
                                    created_by=self.user, **kw)
 
-    def test_historical_9char(self):
-        b = self._book('202610089')
-        self.assertEqual(b.our_number_year, '2026')
-        self.assertEqual(b.our_number_register_label, 'وارد داخلي')
-        self.assertEqual(b.our_number_sequence, '89')
+    def test_series_number_shows_bare_without_tag(self):
+        b = self._book('2433')
+        self.assertEqual(b.our_number_sequence, '2433')
+        self.assertEqual(b.our_number_year, '')          # السلسلة الجارية بلا وسم
+        self.assertFalse(b.our_number_is_numberless)
 
-    def test_historical_8char_no_register(self):
-        b = self._book('20260089')
-        self.assertEqual(b.our_number_year, '2026')
-        self.assertEqual(b.our_number_sequence, '89')
+    def test_tagged_number_shows_bare_with_year_tag(self):
+        # المخزَّن '20250825' يُعرض «825» ووسمه «2025» منفصلاً
+        b = self._book('20250825')
+        self.assertEqual(b.our_number_sequence, '825')
+        self.assertEqual(b.our_number_year, '2025')
 
-    def test_perpetual_basic(self):
-        b = self._book('10089')
-        self.assertEqual(b.our_number_year, '')                 # بلا سنة
-        self.assertEqual(b.our_number_register_label, 'وارد داخلي')
-        self.assertEqual(b.our_number_sequence, '89')
+    def test_old_ledger_years_are_tagged_too(self):
+        b = self._book('20070825')
+        self.assertEqual(b.our_number_sequence, '825')
+        self.assertEqual(b.our_number_year, '2007')
 
-    def test_perpetual_reg2_year_lookalike(self):
-        # الفخّ الحرج: 20200 (سجل 2، تسلسل 200) يجب ألّا يُقرأ كسنة 2020
-        b = self._book('20200', kind='incoming_external')
+    def test_base_year_prefix_is_not_a_tag(self):
+        # الفخّ: '20260825' رقم سلسلةٍ لا وسم — سنة الأساس ليست وسماً
+        b = self._book('20260825')
         self.assertEqual(b.our_number_year, '')
-        self.assertEqual(b.our_number_register_label, 'وارد خارجي')
-        self.assertEqual(b.our_number_sequence, '200')
+        self.assertEqual(b.our_number_sequence, '20260825')
 
-    def test_perpetual_numberless(self):
-        b = self._book('00003')
+    def test_short_number_is_never_read_as_a_year(self):
+        # '2025' وحده تسلسلٌ لا سنة (اشتراط الطول ≥ 8 للوسم)
+        b = self._book('2025')
+        self.assertEqual(b.our_number_year, '')
+        self.assertEqual(b.our_number_sequence, '2025')
+
+    def test_numberless_is_empty_field(self):
+        b = self._book('')
         self.assertTrue(b.our_number_is_numberless)
-        self.assertEqual(b.our_number_year, '')
+        self.assertEqual(b.our_number_sequence, '')
+        self.assertIn('بلا رقم', b.our_number_explained)
 
-    def test_perpetual_large_sequence(self):
-        b = self._book('112345')   # سجل 1، تسلسل 12345
-        self.assertEqual(b.our_number_year, '')
-        self.assertEqual(b.our_number_sequence, '12345')
+    def test_training_number_is_outside_the_series(self):
+        b = self._book('T57')
+        self.assertTrue(b.our_number_is_training)
+        self.assertEqual(b.our_number_sequence, 'T57')
+        self.assertIn('تدريب', b.our_number_explained)
+
+    def test_register_label_comes_from_kind_not_from_the_number(self):
+        b = self._book('825', kind='incoming_external')
+        self.assertEqual(b.our_number_register_label, 'وارد خارجي')
+
+    def test_explained_distinguishes_our_number_from_theirs(self):
+        b = self._book('825')
+        self.assertIn('رقمنا', b.our_number_explained)
+
+    def test_explained_for_manual_kind_names_the_source(self):
+        b = self._book('27189', kind='outgoing_external')
+        self.assertIn('المدير العام', b.our_number_explained)
 
 
 class SearchFormatTests(TestCase):
+    """كتابة الرقم المجرّد تجده في كل صيغه المخزَّنة — ولا تجد ما يشبهه."""
+
     def setUp(self):
         self.user = User.objects.create_user('u', password='p')
         mk = lambda o, k='incoming_internal': Book.objects.create(
             our_number=o, title='ع', kind=k, created_by=self.user)
-        self.hist = mk('202610089')      # تاريخي: تسلسل 89
-        self.perp = mk('10090')          # دائم: تسلسل 90
-        self.perp89 = mk('10089')        # دائم: تسلسل 89 (نفس تسلسل التاريخي)
-        self.ext = mk('20200', 'incoming_external')  # دائم reg2 تسلسل 200
+        self.cur = mk('825')             # السلسلة الجارية
+        self.y25 = mk('20250825')        # موسوم 2025 — نفس الرقم
+        self.y07 = mk('20070825')        # موسوم 2007 — نفس الرقم
+        self.near1 = mk('8250')          # ليس 825
+        self.near2 = mk('1825')          # ليس 825
+        self.other = mk('826')
 
     def _search(self, text):
-        return set(apply_search_filters(Book.objects.all(), text).values_list('our_number', flat=True))
+        return set(apply_search_filters(Book.objects.all(), text)
+                   .values_list('our_number', flat=True))
 
-    def test_search_sequence_finds_both_formats(self):
-        res = self._search('89')
-        self.assertIn('202610089', res)   # تاريخي
-        self.assertIn('10089', res)       # دائم
-        self.assertNotIn('10090', res)
+    def test_bare_number_finds_every_stored_shape(self):
+        res = self._search('825')
+        self.assertIn('825', res)
+        self.assertIn('20250825', res)
+        self.assertIn('20070825', res)
 
-    def test_search_perpetual_only_sequence(self):
-        res = self._search('90')
-        self.assertIn('10090', res)
-        self.assertNotIn('10089', res)
+    def test_bare_number_does_not_match_lookalikes(self):
+        res = self._search('825')
+        self.assertNotIn('8250', res)
+        self.assertNotIn('1825', res)
+        self.assertNotIn('826', res)
 
-    def test_search_reg2_perpetual(self):
-        res = self._search('200')
-        self.assertIn('20200', res)
+    def test_year_alone_finds_that_ledger(self):
+        res = self._search('2025')
+        self.assertIn('20250825', res)
+        self.assertNotIn('20070825', res)
 
-    def test_search_year_finds_historical(self):
-        res = self._search('2026')
-        self.assertIn('202610089', res)
+    def test_base_year_is_not_a_ledger_tag(self):
+        # لا كتب موسومة بـ2026 — سنة الأساس بلا وسم
+        self.assertNotIn('20250825', self._search('2026'))
+
+    def test_training_number_findable_by_its_sequence(self):
+        Book.objects.create(our_number='T57', title='تدريب',
+                            kind='incoming_internal', created_by=self.user)
+        self.assertIn('T57', self._search('57'))
 
 
 class SearchRankingTests(TestCase):
-    """الترتيب تحت الترقيم الدائم: المطابقة التامّة أولاً، ثم الأحدث (الدائم فوق التاريخي)."""
+    """الترتيب حين يتكرّر الرقم بين السلسلة الجارية والموسوم بسنته."""
 
     def setUp(self):
         self.user = User.objects.create_user('u', password='p')
-        # تسلسل 89 يتكرّر: تاريخي 2025 + دائم حالي 2026
-        self.hist2025 = Book.objects.create(
-            our_number='202510089', title='تاريخي', date=date(2025, 3, 1),
+        self.tagged = Book.objects.create(
+            our_number='20250089', title='موسوم', date=date(2025, 3, 1),
             kind='incoming_internal', created_by=self.user)
-        self.perp = Book.objects.create(
-            our_number='10089', title='حالي', date=date(2026, 6, 1),
+        self.current = Book.objects.create(
+            our_number='89', title='جارٍ', date=date(2026, 6, 1),
             kind='incoming_internal', created_by=self.user)
 
     def _ordered(self, text):
         return list(apply_search_filters(Book.objects.all(), text)
                     .values_list('our_number', flat=True))
 
-    def test_current_perpetual_ranks_above_historical(self):
-        # البحث بالتسلسل «89» يُظهر الدائم الحالي (2026) قبل التاريخي (2025)
+    def test_current_series_ranks_above_tagged(self):
         res = self._ordered('89')
-        self.assertEqual(res[0], '10089')
-        self.assertIn('202510089', res)
+        self.assertEqual(res[0], '89')
+        self.assertIn('20250089', res)
 
     def test_exact_full_number_ranks_first(self):
-        # كتابة رقم القيد الكامل يتصدّر حتى لو طابق «89» عدّة كتب
-        res = self._ordered('202510089')
-        self.assertEqual(res[0], '202510089')
+        res = self._ordered('20250089')
+        self.assertEqual(res[0], '20250089')
 
     def test_our_number_ranks_above_sender_number(self):
-        # السيناريو الحقيقي: البحث «512» — قيدنا (10512) يجب أن يعلو رقم الجهة (512)
-        # حتى لو كانت كتب رقم-الجهة أحدث تاريخاً.
-        ours = Book.objects.create(
-            our_number='10512', title='قيدنا 512', date=date(2026, 1, 1),
+        # السيناريو الحقيقي: البحث «512» — قيدنا يعلو رقم الجهة حتى لو كان أقدم
+        Book.objects.create(
+            our_number='512', title='قيدنا 512', date=date(2026, 1, 1),
             kind='incoming_internal', created_by=self.user)
         Book.objects.create(
-            our_number='11717', sender_number='512', title='رقمهم أ',
+            our_number='1717', sender_number='512', title='رقمهم أ',
             date=date(2026, 3, 29), kind='incoming_internal', created_by=self.user)
         Book.objects.create(
-            our_number='11082', sender_number='512', title='رقمهم ب',
+            our_number='1082', sender_number='512', title='رقمهم ب',
             date=date(2026, 2, 22), kind='incoming_internal', created_by=self.user)
-        res = self._ordered('512')
-        self.assertEqual(res[0], '10512')   # قيدنا أولاً رغم أنّ رقم-الجهة أحدث
+        self.assertEqual(self._ordered('512')[0], '512')
+
+
+class NumericSortTests(TestCase):
+    """الفرز بالرقم رقميّ لا نصّيّ — وإلا جاء '10' قبل '9'."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('u', password='p')
+        for n in ('9', '10', '100', '20250009', '20259999'):
+            Book.objects.create(our_number=n, title='ع', kind='incoming_internal',
+                                date=date(2026, 1, 1), created_by=self.user)
+
+    def _sorted(self, field):
+        return list(BookSortEngine.apply_sort(Book.objects.all(), field)
+                    .values_list('our_number', flat=True))
+
+    def test_ascending_is_numeric_and_tagged_comes_first(self):
+        # الموسوم بسنته أقدم زمنياً فيتقدّم، ثم السلسلة الجارية رقمياً
+        self.assertEqual(self._sorted('our_number'),
+                         ['20250009', '20259999', '9', '10', '100'])
+
+    def test_descending_is_the_exact_mirror(self):
+        self.assertEqual(self._sorted('-our_number'),
+                         ['100', '10', '9', '20259999', '20250009'])
 
 
 class DuplicateDetectionTests(TestCase):
@@ -174,7 +234,7 @@ class DuplicateDetectionTests(TestCase):
         self.user = User.objects.create_user('u', password='p')
         self.ent = Entity.objects.create(name='وزارة الصحة', etype='issuer')
         self.book = Book.objects.create(
-            our_number='10001', title='طلب إجازة', kind='incoming_external',
+            our_number='1001', title='طلب إجازة', kind='incoming_external',
             sender_number='ص-500', sender_date=date(2026, 5, 1), created_by=self.user)
         self.book.issuing_entities.add(self.ent)
 
@@ -191,12 +251,11 @@ class DuplicateDetectionTests(TestCase):
         self.assertEqual(res[0]['match_count'], 4)
 
     def test_three_of_four_when_number_differs(self):
-        res = self._find(party_number='ص-999')   # الرقم مختلف → 3/4
+        res = self._find(party_number='ص-999')
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]['match_count'], 3)
 
     def test_two_of_four_not_reported(self):
-        # عنوان وتاريخ مختلفان → 2/4 فقط (الجهة+الرقم) → لا يُبلَّغ
         res = self._find(title='عنوان آخر تماماً', cmp_date=date(2020, 1, 1))
         self.assertEqual(res, [])
 
@@ -205,7 +264,6 @@ class DuplicateDetectionTests(TestCase):
         self.assertEqual(res, [])
 
     def test_empty_number_not_counted_as_match(self):
-        # رقم فارغ في الطرفين لا يُحتسب مطابقةً (يبقى 3/4 من العنوان+التاريخ+الجهة)
         self.book.sender_number = ''
         self.book.save(update_fields=['sender_number'])
         res = self._find(party_number='')
@@ -222,14 +280,14 @@ class DuplicateGuardApiTests(TestCase):
         self.admin = User.objects.create_superuser('boss', password='pass1234', email='b@t.com')
         self.moi = Entity.objects.create(name='وزارة الداخلية', etype='issuer', is_active=True)
         self.existing = Book.objects.create(
-            our_number='20001', title='طلب تعيين', date=date(2026, 5, 1),
+            our_number='2001', title='طلب تعيين', date=date(2026, 5, 1),
             sender_date=date(2026, 4, 20), sender_number='ص-77',
             kind='incoming_external', created_by=self.user)
         self.existing.issuing_entities.add(self.moi)
 
     def _payload(self, **over):
         p = {
-            'book_number': '20500',           # رقم مختلف كي لا يتعارض DUPLICATE_NUMBER
+            'book_number': '2500',            # رقم مختلف كي لا يتعارض DUPLICATE_NUMBER
             'title': 'طلب تعيين',
             'date': '2026-05-02',
             'sender_date': '2026-04-20',
@@ -248,11 +306,9 @@ class DuplicateGuardApiTests(TestCase):
         data = r.json()
         self.assertEqual(data['error_code'], 'DUPLICATE_BOOK')
         self.assertFalse(data['can_override'])
-        # لم يُنشأ كتاب جديد
-        self.assertFalse(Book.objects.filter(our_number='20500').exists())
+        self.assertFalse(Book.objects.filter(our_number='2500').exists())
 
     def test_regular_user_cannot_override_full_duplicate(self):
-        # حتى مع علَم التأكيد: غير المشرف لا يتجاوز 4/4 (يُفحَص في الخادم)
         self.client.login(username='owner', password='pass1234')
         r = self.client.post(reverse('save-book-api'),
                              self._payload(confirm_duplicate='true'))
@@ -284,13 +340,11 @@ class SearchListOrderingApiTests(TestCase):
         self.client = Client()
         self.admin = User.objects.create_superuser('boss', password='pass1234', email='b@t.com')
         self.client.login(username='boss', password='pass1234')
-        # قيدنا = 512 (تاريخ أقدم)
-        Book.objects.create(our_number='10512', title='قيدنا 512', date=date(2026, 1, 1),
+        Book.objects.create(our_number='512', title='قيدنا 512', date=date(2026, 1, 1),
                             kind='incoming_internal', created_by=self.admin)
-        # رقم الجهة = 512 (تواريخ أحدث — كانت تتصدّر خطأً بفرز -date)
-        Book.objects.create(our_number='11717', sender_number='512', title='رقمهم أ',
+        Book.objects.create(our_number='1717', sender_number='512', title='رقمهم أ',
                             date=date(2026, 3, 29), kind='incoming_internal', created_by=self.admin)
-        Book.objects.create(our_number='11082', sender_number='512', title='رقمهم ب',
+        Book.objects.create(our_number='1082', sender_number='512', title='رقمهم ب',
                             date=date(2026, 2, 22), kind='incoming_internal', created_by=self.admin)
 
     def test_search_prioritizes_our_number_over_sender(self):
@@ -298,4 +352,4 @@ class SearchListOrderingApiTests(TestCase):
         self.assertEqual(r.status_code, 200)
         books = r.json()['books']
         self.assertTrue(books)
-        self.assertEqual(books[0]['our_number'], '10512')   # قيدنا أولاً
+        self.assertEqual(books[0]['our_number'], '512')

@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-أمر تنظيف البيانات التجريبية عند اعتماد النسخة لدى الجهة المستفيدة.
+أمر حذف كتب فترة التدريب عند تدشين النظام — قرار المالك.
 
-المشكلة: خلال التطوير أُدخِلت كتب تجريبية عبر التطبيق أخذت أرقاماً تسلسلية حقيقية،
-فتكسر تسلسل الجهة عند الاعتماد. هذه الكتب مميّزة بوضوح: مُدخَلة بالتطبيق بلا استيراد
-(legacy_number='' و source_ref='') — بينما بيانات الجهة المستوردة لها legacy_number.
+خلال فترة التدريب أُدخِلت كتبٌ عبر التطبيق، وأصلُها كلّه موجودٌ في النظام القديم
+ويصل عبر الدمج. فتُحذف كلّها عند التدشين كي لا تُزدوج ولا تستهلك من السلسلة.
 
-يحذف الأمر الكتب التجريبية **مع الحفاظ على القيمة التدريبية**:
+المُميِّز هو الوسم `is_training` الذي يضعه `rebase_book_numbers`، وأرقامها في فضاء
+`T` المنفصل خارج السلسلة الرسمية أصلاً. الشرط القديم (`legacy_number=''` و
+`source_ref=''`) كان يُخطئ في الاتّجاهين معاً — مقيساً: يُفلت 73 كتاب تدريب
+لأنّها اكتسبت `legacy_number`، ويلتقط 55 كتاباً حقيقياً مستورداً بلا رقم قديم.
+
+يحذف الأمر كتب التدريب **مع الحفاظ على القيمة التدريبية**:
   • LetterheadMemory و DataExtractionResult و OCRResult مرتبطة بـ on_delete=SET_NULL
     ⇒ الحذف يفصلها فقط ولا يمحوها (الترويسة/الجهة/النصّ الخام تبقى للتعلّم).
   • العائق الوحيد Attachment.book=PROTECT ⇒ نفكّ مرفقات الكتب التجريبية أولاً
@@ -29,7 +33,7 @@ from core.models import (Attachment, Book, DataExtractionResult,
 
 
 class Command(BaseCommand):
-    help = 'حذف الكتب التجريبية المُدخَلة بالتطبيق (بلا استيراد) مع حفظ القيمة التدريبية وإعادة بذر العدّادات.'
+    help = 'حذف كتب فترة التدريب (is_training) عند التدشين، مع حفظ القيمة التدريبية وإعادة بذر العدّادات.'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -42,14 +46,20 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        dev = Book.objects.filter(legacy_number='', source_ref='')
+        dev = Book.objects.filter(is_training=True)
         total = dev.count()
 
         w = self.stdout.write
         w('=' * 60)
-        w(f'الكتب التجريبية المرشّحة للحذف (legacy_number="" و source_ref=""): {total}')
+        w(f'كتب فترة التدريب المرشّحة للحذف (is_training=True): {total}')
         for row in dev.values('kind').order_by('kind').annotate(n=Count('id')):
             w(f'  {row["kind"]}: {row["n"]}')
+
+        # حارس: الوسم يضعه `rebase_book_numbers`. إن لم يُوسَم شيء بعد، الحذف
+        # بلا وسمٍ يعني حذف صفر — نُبلّغ بدل الصمت.
+        if not total:
+            w('لا كتب موسومة بالتدريب. شغّل rebase_book_numbers أوّلاً إن كنت تتوقّع غير ذلك.')
+            return
 
         dev_ids = list(dev.values_list('id', flat=True))
         att_count = Attachment.objects.filter(book_id__in=dev_ids).count()

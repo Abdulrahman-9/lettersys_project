@@ -31,20 +31,25 @@ BOOK UNIFIED CARD (Mobile View)
     
     <div class="card-header-left">
       {# رقم الكتاب #}
-      <div class="card-book-number">
+      <div class="card-book-number" title="{{ book.our_number_explained }}">
         {% if book.is_incoming %}
           <i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>
         {% else %}
           <i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>
         {% endif %}
-        <span class="book-number-text">{{ book.our_number|default:"-" }}</span>
+        {% if book.our_number_is_numberless %}
+          <span class="book-number-numberless">بلا رقم</span>
+        {% else %}
+          <span class="book-number-text">{{ book.our_number_sequence }}{% if book.our_number_year %}<span class="num-year">/{{ book.our_number_year }}</span>{% endif %}</span>
+        {% endif %}
       </div>
-      
-      {# رقم ثانوي #}
+
+      {# العدد المطبوع على المستند (رقم الجهة) #}
       {% if book.sender_number %}
       <div class="card-secondary-number">
-        <span class="secondary-number-badge-mobile 
-                     {% if book.is_incoming %}badge-incoming{% else %}badge-outgoing{% endif %}">
+        <span class="secondary-number-badge-mobile
+                     {% if book.is_incoming %}badge-incoming{% else %}badge-outgoing{% endif %}"
+              title="العدد الحقيقي المطبوع على المستند — رقم الكتاب لدى الجهة المرسِلة، لا رقم قيدنا.">
           {% if book.is_incoming %}و-{% else %}ص-{% endif %}{{ book.sender_number }}
         </span>
       </div>
