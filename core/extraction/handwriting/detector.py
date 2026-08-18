@@ -1,0 +1,136 @@
+# -*- coding: utf-8 -*-
+"""كاشف صندوق «العدد» — استدلال ONNX على CPU، بعقد هندسةٍ صريح.
+
+**لماذا وُجد:** أرضيّة قصاصة التاريخ تُشتقّ اليوم من تسمية «العدد» التي يقرأها
+Tesseract، وهي **تصمت في ~42% من الصفحات** (موثَّقٌ في `_number_label_floor`) فيتسلّل
+تاريخ ترويسة الأيزو. الكاشف يُطلق على **164/165** من صور التحقّق (99.4%) بمركزٍ داخل
+الصندوق الصحيح في **96%** — أي يملك بالضبط ما ينقص الأرضيّة. لا يُزيح المسار القائم:
+يملأ صمته فقط (قرار فيبل 2026-08-17).
+
+**عقد الهندسة (اقرأه قبل أن تمسّ أيّ إحداثيّة):** الكاشف دُرِّب على **أعلى 55% من
+الصفحة** مرسومةً بـ175dpi ثم مُلَبَّدةً (letterbox) إلى 1280×1280. فالاستدلال يجب أن
+يُكرّر ذلك حرفيّاً، والصندوق العائد يُعاد إلى **إحداثيّات الصفحة الكاملة المُطبَّعة**
+قبل أن يغادر هذه الوحدة. كلّ رقمٍ هنا مصحوبٌ بمقاسه المرجعيّ صراحةً — هكذا يموت فخّ
+1600/2600/3500 بالبناء لا باليقظة.
+
+النموذج: yolov8n صنفٌ واحد، mAP50 0.830 (det-b، T4 واحدة — وقد تفوّق على تدريب
+لوحتين). يُحمَّل كسولاً ويُشارَك، ويصمت رشيقاً إن غاب الملفّ أو سقط الاستدلال:
+غيابُ صندوقٍ يُعيدنا للسلوك السابق تماماً، ولا يكسر استخراجاً.
+"""
+from __future__ import annotations
+
+import logging
+import os
+import threading
+from typing import Optional, Tuple
+
+import numpy as np
+
+logger = logging.getLogger(__name__)
+
+IMGSZ = 1280          # مقاس التدريب — تغييره يُبطل الأوزان
+TRAIN_CROP = 0.55     # أعلى 55% من الصفحة (نفس pack_detector_dataset.py)
+CONF_MIN = 0.15       # نفس عتبة قياس البوّابة M1 في الدفتر
+_CHANNELS = 5         # [cx, cy, w, h, conf] — صنفٌ واحد
+
+_session = None
+_sess_lock = threading.Lock()
+_load_failed = False
+
+
+def _model_path() -> str:
+    from django.conf import settings as dj
+    p = getattr(dj, 'NUMBER_DETECTOR_ONNX', '') or ''
+    if p:
+        return p
+    return os.path.join(getattr(dj, 'BASE_DIR', ''), 'var', 'models', 'number_detector.onnx')
+
+
+def _get_session():
+    """جلسةٌ واحدةٌ مُشارَكة — تحميلٌ ثانٍ على جهاز 8GB يعني انهياراً."""
+    global _session, _load_failed
+    if _session is not None or _load_failed:
+        return _session
+    with _sess_lock:
+        if _session is not None or _load_failed:
+            return _session
+        path = _model_path()
+        if not os.path.exists(path):
+            logger.info('[detector] لا نموذج في %s — الكاشف صامت', path)
+            _load_failed = True
+            return None
+        try:
+            import onnxruntime as ort
+            so = ort.SessionOptions()
+            so.intra_op_num_threads = 1        # الجهاز 8GB — لا تُنافس عامل OCR
+            so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            _session = ort.InferenceSession(path, so, providers=['CPUExecutionProvider'])
+            logger.info('[detector] حُمِّل %s', path)
+        except Exception as exc:
+            logger.warning('[detector] تعذّر التحميل (%s) — تدهور رشيق', type(exc).__name__)
+            _load_failed = True
+    return _session
+
+
+def _letterbox(arr: np.ndarray, size: int) -> Tuple[np.ndarray, float, int, int]:
+    """يُلبِّد إلى مربّعٍ بحفظ النسبة (كما يفعل ultralytics). يُعيد (الصورة، المقياس، dx, dy)."""
+    h, w = arr.shape[:2]
+    r = min(size / w, size / h)
+    nw, nh = int(round(w * r)), int(round(h * r))
+    from PIL import Image
+    im = Image.fromarray(arr).resize((nw, nh), Image.BILINEAR)
+    canvas = np.full((size, size, 3), 114, dtype=np.uint8)     # نفس حشو ultralytics
+    dx, dy = (size - nw) // 2, (size - nh) // 2
+    canvas[dy:dy + nh, dx:dx + nw] = np.asarray(im)
+    return canvas, r, dx, dy
+
+
+def detect_number_box(pil_img) -> Optional[Tuple[list, float]]:
+    """يُعيد `([x0, y0, x1, y1] مُطبَّعاً على **الصفحة الكاملة**, ثقة)` أو None.
+
+    المُدخَل صفحةٌ كاملة (PIL). القصّ إلى أعلى 55% يجري هنا داخليّاً كي لا يستطيع أيّ
+    مُستدعٍ أن يخطئ في تكرار تحضير التدريب. الإحداثيّات الخارجة مُطبَّعة على الصفحة
+    الكاملة لا على القصاصة — هذا نصّ العقد.
+    """
+    sess = _get_session()
+    if sess is None:
+        return None
+    try:
+        W, H = pil_img.size
+        ch = max(1, int(TRAIN_CROP * H))
+        crop = np.asarray(pil_img.convert('RGB'))[:ch, :, :]
+        canvas, r, dx, dy = _letterbox(crop, IMGSZ)
+        x = canvas.astype(np.float32).transpose(2, 0, 1)[None] / 255.0
+        out = sess.run(None, {sess.get_inputs()[0].name: x})[0]
+        # yolov8 يُخرج (1, 4+nc, N). صنفٌ واحد ⟵ القنوات **خمسٌ بالتعريف**
+        # [cx, cy, w, h, conf]. نُحدّد محور القنوات بالمساواة بـ_CHANNELS لا بمقارنة
+        # الأبعاد: المقارنة تنهار حين يكون المرشَّح واحداً (5,1) فتُقرأ مقلوبةً بصمت.
+        arr = out[0] if out.ndim == 3 else out
+        if arr.shape[0] == _CHANNELS:
+            pred = arr.T
+        elif arr.shape[-1] == _CHANNELS:
+            pred = arr
+        else:
+            logger.warning('[detector] شكل مخرجاتٍ غير متوقّع %s — تخطٍّ', arr.shape)
+            return None
+        if pred.size == 0:
+            return None
+        conf = pred[:, 4]
+        i = int(conf.argmax())
+        if float(conf[i]) < CONF_MIN:
+            return None
+        cx, cy, bw, bh = (float(v) for v in pred[i, :4])
+        # فكّ التلبيد ⟵ إحداثيّات القصاصة بالبكسل
+        x0 = (cx - bw / 2 - dx) / r
+        y0 = (cy - bh / 2 - dy) / r
+        x1 = (cx + bw / 2 - dx) / r
+        y1 = (cy + bh / 2 - dy) / r
+        # ⟵ ثمّ إلى الصفحة الكاملة مُطبَّعةً (المرجع W×H لا القصاصة)
+        box = [max(0.0, x0 / W), max(0.0, y0 / H),
+               min(1.0, x1 / W), min(1.0, y1 / H)]
+        if not (box[0] < box[2] and box[1] < box[3]):
+            return None
+        return box, float(conf[i])
+    except Exception as exc:
+        logger.warning('[detector] فشل الاستدلال (%s) — تدهور رشيق', type(exc).__name__)
+        return None
