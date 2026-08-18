@@ -6,8 +6,12 @@
 `persist_extraction_capture` ⟵ **تصحيح الكاتب يضيع**. الدليل المقيس: 6 سجلّات التقاطٍ
 في القاعدة كلّها مقابل آلاف الحفظات. هذه الاختبارات تحرس أن الرمز يُسكّ ويحمل شكلاً
 يقبله الالتقاط، وأن الالتقاط يسجّل التصحيح فعلاً."""
+from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
+
+from core.extraction.capture import persist_extraction_capture
+from core.models import Attachment, Book
 
 
 class _FakeResult:
@@ -40,3 +44,45 @@ class MintScanTokenTests(SimpleTestCase):
         """الحلقة تحسينٌ لا شرط: نتيجةٌ معطوبة ⟵ رمزٌ فارغ لا استثناء."""
         from core.extraction.api.endpoints import _mint_scan_token
         self.assertEqual(_mint_scan_token(object()), '')
+
+
+class SenderNumberBoxCaptureTests(TestCase):
+    """الصندوق يُحفَظ حتى حين **يمتنع** القارئ — وهناك تسكن عيّنات التدريب المفيدة.
+
+    قِيس 2026-08-18: صفٌّ واحدٌ من 12 في القاعدة يحمل صندوقاً، لأنّ الصندوق كان
+    مشروطاً بقراءةٍ تجتاز CONF_GATE=0.90 — أي جمعُ أمثلةٍ من الصفحات التي نجحنا فيها
+    أصلاً. الكاشف يجد الموضع على ~90% بصرف النظر عن قدرة القارئ، فصار يُحفَظ موسوماً
+    بمصدره ومقاسه المرجعيّ."""
+
+    def _capture(self, suggested, kind='incoming_internal'):
+        user = User.objects.create_user('boxcap', password='x')
+        book = Book.objects.create(title='ت', kind=kind, created_by=user)
+        att = Attachment.objects.create(book=book, file='attachments/a.pdf')
+        return persist_extraction_capture(
+            book=book, attachment=att, suggested=suggested,
+            final={'sender_number': '1754'}, user=user)
+
+    def test_detector_box_persisted_with_source_and_dims(self):
+        res = self._capture({
+            'raw_text': 'نصّ', 'sender_number': '',
+            'sender_number_bbox': [0.7, 0.1, 0.8, 0.13],
+            'sender_number_bbox_source': 'detector',
+            'sender_number_bbox_dims': [2480, 3508],
+        })
+        self.assertIsNotNone(res)
+        ad = res.additional_data
+        self.assertEqual(ad['sender_number_bbox'], [0.7, 0.1, 0.8, 0.13])
+        self.assertEqual(ad['sender_number_bbox_source'], 'detector',
+                         'المصدر يميّز صندوقَ قراءةٍ واثقة عن صندوقِ كاشفٍ امتنع عنده القارئ')
+        self.assertEqual(ad['sender_number_bbox_dims'], [2480, 3508],
+                         'بلا المقاس المرجعيّ لا تُعاد البكسلات — وذاك فخّ 1600/2600/3500')
+
+    def test_outgoing_still_skips_the_whole_number_block(self):
+        """الصادر لا عددَ لنا فيه ⟵ لا صندوق ولا قيمة (وإلّا فُبركت عيّنةٌ سالبة)."""
+        res = self._capture({
+            'raw_text': 'نصّ',
+            'sender_number_bbox': [0.7, 0.1, 0.8, 0.13],
+            'sender_number_bbox_source': 'detector',
+        }, kind='outgoing_external')
+        self.assertIsNotNone(res)
+        self.assertNotIn('sender_number_bbox', res.additional_data)

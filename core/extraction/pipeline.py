@@ -111,6 +111,8 @@ class AIExtractionResult:
         # موضع قصّ العدد اليدويّ مُطبَّعاً [x0,y0,x1,y1] (0-1) — ميتاداتا تدريب التوضيع
         # تُلتقَط عند الحفظ؛ None حين لا يُقرأ العدد يدوياً. (رافعة Fable: أزواج تدريب CRNN.)
         self.sender_number_bbox: Optional[list] = None
+        self.sender_number_bbox_source: str = ''      # 'crnn' (قراءةٌ واثقة) أو 'detector'
+        self.sender_number_bbox_dims: Optional[list] = None   # [W, H] المقاس المرجعيّ
         # قصاصةُ شريط «التأريخ» اليدويّ (data URL) لعرضها بجوار حقل الإدخال (خيار F،
         # فيبل15/16): الكاتب — القارئ الموثوق — ينسخها بنظرة. لا تُقرأ آلياً ولا تُبثّ
         # في الكاش/الحفظ؛ تعيش في scan_data (استجابة HTTP عابرة) فقط. None حين لا شريط.
@@ -461,12 +463,22 @@ class AIExtractionService:
             date_crop = (self._crop_date_strip(img, tsv, min_top=num_label_floor)
                          if want_date_crop else None)
 
+            # ── صندوق الكاشف حتى حين **يمتنع** القارئ ──────────────────────────
+            # كان الصندوق يُحفَظ فقط مع قراءةٍ تجتاز CONF_GATE=0.90، أي أنّنا نجمع
+            # عيّنات تدريبٍ من الصفحات التي **نجحنا فيها أصلاً** ونُهدر الصعبة —
+            # وهي عين ما يحتاجه التدريب. قِيس 2026-08-18: صفٌّ واحدٌ من 12 يحمل
+            # صندوقاً. الكاشف يجده على ~90% بصرف النظر عن قدرة القارئ.
+            det_box = None
+            if number_result is None:
+                det_box = self._detector_box(img)
+
+            W, H = img.width, img.height
             del tsv, img
-            return number_result, date_crop
+            return number_result, date_crop, (det_box, W, H)
         except Exception as exc:
             logger.warning('[handwriting] فشل مسار خط اليد: %s — تدهور رشيق',
                            type(exc).__name__)
-            return None, None
+            return None, None, (None, 0, 0)
 
     @staticmethod
     def _number_label_floor(tsv):
@@ -1064,13 +1076,22 @@ class AIExtractionService:
             if not result.sender_number and result.image_path:
                 _progress('handwritten_number')
                 want_crop = not result.sender_date
-                num_res, date_crop = self._read_handwritten_sender_number(
+                num_res, date_crop, (det_box, _pw, _ph) = self._read_handwritten_sender_number(
                     result.image_path, getattr(result, 'issuing_entity_id', None),
                     want_date_crop=want_crop)
                 if num_res:
                     result.sender_number, result.sender_number_confidence, result.sender_number_bbox = num_res
+                    result.sender_number_bbox_source = 'crnn'
                     logger.info('[handwriting] رقم الجهة من خط اليد: %r (ثقة %.2f)',
                                 result.sender_number, result.sender_number_confidence)
+                elif det_box:
+                    # لا قراءة، لكنّ الموضع معروف ⟵ عيّنةُ تدريبٍ **للحالة الصعبة**
+                    result.sender_number_bbox = [round(v, 4) for v in det_box]
+                    result.sender_number_bbox_source = 'detector'
+                if _pw and _ph:
+                    # مقاسٌ مرجعيٌّ صريح: الصندوق مُطبَّعٌ عليه. بدونه لا يستطيع
+                    # مستهلكٌ لاحق إعادة بناء البكسلات — وذاك فخّ 1600/2600/3500.
+                    result.sender_number_bbox_dims = [_pw, _ph]
                 if date_crop:
                     result.sender_date_crop = date_crop
                     logger.info('[handwriting] قصاصة تاريخ الجهة للواجهة (خيار F)')
@@ -1373,6 +1394,8 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         'sender_number': result.sender_number,
         'sender_number_confidence': result.sender_number_confidence,
         'sender_number_bbox': result.sender_number_bbox,   # موضع القصّ لالتقاط تدريب التوضيع
+        'sender_number_bbox_source': getattr(result, 'sender_number_bbox_source', ''),
+        'sender_number_bbox_dims': getattr(result, 'sender_number_bbox_dims', None),
         'title': result.title,
         'title_confidence': result.title_confidence,
         'issuing_entity': result.issuing_entity_name,

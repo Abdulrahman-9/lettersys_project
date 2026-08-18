@@ -41,9 +41,11 @@ def _persist_letterhead_memory(book, text):
 #   - التاريخ مستبعد: فرق صيغة ISO/Date يعطي إيجابيات كاذبة.
 #   - sender_number مُضاف 2026-07-22: يُخزَّن خاماً بلا إعادة تنسيق (قياس القاعدة:
 #     أرقام صرفة للجهات الكبرى)، فالمقارنة نظيفة. **هذا هو أوّل توصيل لحلقة تعلّم
-#     العدد** — كانت غائبةً كلّياً (لا قيمة ولا موضع). القيمة تُلتقط الآن؛ الموضع
-#     (bbox) يركب لاحقاً على `additional_data['sender_number_bbox']` حين يتوقّف
-#     الأنبوب عن حذف صندوق `_read_handwritten_sender_number` (pipeline.py:409).
+#     العدد** — كانت غائبةً كلّياً (لا قيمة ولا موضع).
+#   - الموضع (bbox) اكتمل 2026-08-18: كان يُحفَظ فقط مع قراءةٍ تجتاز CONF_GATE=0.90
+#     (صفٌّ واحدٌ من 12 مقيساً)، أي عيّناتٌ من الصفحات الناجحة أصلاً بينما التدريب
+#     يحتاج الصعبة. صار صندوق الكاشف يُحفَظ عند امتناع القارئ أيضاً، موسوماً
+#     بـ`_bbox_source` ومصحوباً بـ`_bbox_dims` (المقاس المرجعيّ).
 # كل الاقتراحات (رقم/نوع/تاريخ) تبقى مخزَّنة في DataExtractionResult للسجل والتحليل.
 _FIELD_MAP = (
     ('title',         'title'),
@@ -130,6 +132,11 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
             'sender_number_confidence': _to_float(suggested.get('sender_number_confidence')),
             'sender_number_final': str(final.get('sender_number') or '')[:50],
             'sender_number_bbox': suggested.get('sender_number_bbox') or None,
+            # مصدر الصندوق ومقاسه المرجعيّ: بدونهما لا يُعاد بناء البكسلات، ولا
+            # يُميَّز صندوقُ قراءةٍ واثقة عن صندوقِ كاشفٍ امتنع القارئ عنده — وهما
+            # عيّنتا تدريبٍ مختلفتا القيمة تماماً.
+            'sender_number_bbox_source': suggested.get('sender_number_bbox_source') or '',
+            'sender_number_bbox_dims': suggested.get('sender_number_bbox_dims') or None,
         })
 
     ocr = OCRResult.objects.create(
