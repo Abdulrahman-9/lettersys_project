@@ -1144,6 +1144,34 @@ textarea.title-autogrow {
 .form-control-smart.book-number-readonly:focus { outline: none; box-shadow: none; transform: none; }
 .form-control-smart.book-number-readonly.is-pending { background: #fef3c7; border-color: #fde68a; color: #92400e; }
 
+/* ── الصادر الخارجي: الرقم يُكتب أو يُقرأ من المستند، لا يولّده النظام ──
+   يبدو حقلَ إدخالٍ حقيقياً (لا الحقل الأزرق المقفل) كي لا يظنّه المستخدم محجوزاً. */
+.form-control-smart.book-number-manual {
+    background: #fff;
+    border-color: #cbd5e1;
+    color: #0f172a;
+    font-weight: 700;
+    font-family: 'Cairo', monospace;
+    letter-spacing: 0.5px;
+    cursor: text;
+}
+.form-control-smart.book-number-manual:focus {
+    border-color: var(--accent, #ff9233);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #ff9233) 22%, transparent);
+}
+/* أُخذ من المستند الممسوح */
+.form-control-smart.book-number-manual.number-from-scan {
+    background: #ecfdf5; border-color: #6ee7b7;
+}
+/* كتبه الموظّف وطابقه المستند */
+.form-control-smart.book-number-manual.number-confirmed {
+    background: #f0fdf4; border-color: #86efac;
+}
+/* اختلف عن المستند وأبقاه الموظّف عمداً */
+.form-control-smart.book-number-manual.number-kept-manual {
+    background: #fffbeb; border-color: #fcd34d;
+}
+
 .date-input-row { display: flex; align-items: center; gap: 8px; }
 .date-input-row .form-control-smart { flex: 1; }
 .date-edit-toggle {

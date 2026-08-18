@@ -49,28 +49,79 @@
   // ─── Search highlighting ──────────────────────────────────────────────────────
   // يلفّ مطابقات نص البحث داخل خلايا الرقم/العنوان/الجهة بـ <mark> ويبرز الصف.
   // يعمل على نصوص DOM الموجودة فعلاً (آمن من XSS — لا HTML من المستخدم).
-  const HL_CELL_SELECTOR = '.col-our-number, .col-sender-number, .col-title, .col-entity';
+  // خلايا الأرقام (تظليل أزرق) مقابل خلايا النصّ (تظليل كهرماني) — لونان مختلفان.
+  const HL_NUM_SELECTOR = '.col-our-number, .col-sender-number';
+  const HL_TEXT_SELECTOR = '.col-title, .col-entity';
 
-  function _highlightTextNode(node, lowerTerm, termLen) {
-    const text = node.nodeValue;
-    const lowerText = text.toLowerCase();
-    let idx = lowerText.indexOf(lowerTerm);
-    if (idx === -1) return false;
-
-    const frag = document.createDocumentFragment();
-    let last = 0;
-    while (idx !== -1) {
-      if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
-      const mark = document.createElement('mark');
-      mark.className = 'search-hl';
-      mark.textContent = text.slice(idx, idx + termLen);
-      frag.appendChild(mark);
-      last = idx + termLen;
-      idx = lowerText.indexOf(lowerTerm, last);
+  // تطبيع عربي 1:1 — يجب أن يبقى الطول مطابقاً حرفاً بحرف، لأن الفهارس المحسوبة
+  // على النصّ المُطبَّع تُستعمَل لتقطيع النصّ **الأصلي**. لذا لا نستدعي
+  // toLowerCase() على النصّ كلّه: بعض الحروف تتمدّد (مثل 'İ' → حرفان) فتنزاح
+  // كل الفهارس بعدها ويُبتَر ذيل النصّ من الصفحة. نُصغّر حرفاً حرفاً ونتراجع
+  // عن أي تصغير يغيّر الطول.
+  function _foldAr(s) {
+    s = s || '';
+    let out = '';
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      let low = ch.toLowerCase();
+      if (low.length !== 1) low = ch;
+      switch (low) {
+        case 'إ': case 'أ': case 'آ': low = 'ا'; break;
+        case 'ؤ': low = 'و'; break;
+        case 'ئ': case 'ى': low = 'ي'; break;
+        case 'ة': low = 'ه'; break;
+        default: break;
+      }
+      out += low;
     }
-    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    return out;
+  }
+
+  function _highlightTextNode(node, tokens, cls) {
+    const text = node.nodeValue;
+    const folded = _foldAr(text);
+    // حارس دفاعي: لو انكسر تعادل الطول يوماً، لا نلمس الـDOM أصلاً.
+    if (folded.length !== text.length) return false;
+    const ranges = [];
+    tokens.forEach(tok => {
+      let idx = folded.indexOf(tok);
+      while (idx !== -1) {
+        ranges.push([idx, idx + tok.length]);
+        idx = folded.indexOf(tok, idx + tok.length);
+      }
+    });
+    if (!ranges.length) return false;
+    // دمج النطاقات المتداخلة (كلمات متجاورة/متكرّرة)
+    ranges.sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    ranges.forEach(r => {
+      const last = merged[merged.length - 1];
+      if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+      else merged.push(r.slice());
+    });
+    const frag = document.createDocumentFragment();
+    let pos = 0;
+    merged.forEach(([s, e]) => {
+      if (s > pos) frag.appendChild(document.createTextNode(text.slice(pos, s)));
+      const mark = document.createElement('mark');
+      mark.className = cls;
+      mark.textContent = text.slice(s, e);   // نُبرز الأصل لا المُطبَّع
+      frag.appendChild(mark);
+      pos = e;
+    });
+    if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
     node.parentNode.replaceChild(frag, node);
     return true;
+  }
+
+  function _paintCells(row, selector, tokens, cls, state) {
+    if (!tokens.length) return;
+    row.querySelectorAll(selector).forEach(cell => {
+      const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      nodes.forEach(n => { if (_highlightTextNode(n, tokens, cls)) state.matched = true; });
+    });
   }
 
   function highlightMatches(term) {
@@ -82,20 +133,32 @@
 
     const clean = (term || '').trim();
     if (!clean) return;
-    const lowerTerm = clean.toLowerCase();
-    const termLen = clean.length;
+
+    const isNumeric = /^\d+$/.test(clean);
+    // الأرقام: كلمة واحدة. النصّ: كلمات مطبَّعة (≥ حرفين) لتظليل كلٍّ على حدة.
+    const numTokens = [_foldAr(clean)];
+    const textTokens = isNumeric
+      ? [_foldAr(clean)]
+      : clean.split(/\s+/).map(_foldAr).filter(t => t.length >= 2);
 
     tbody.querySelectorAll('tr.book-row').forEach(row => {
-      let matched = false;
-      row.querySelectorAll(HL_CELL_SELECTOR).forEach(cell => {
-        const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
-        const nodes = [];
-        while (walker.nextNode()) nodes.push(walker.currentNode);
-        nodes.forEach(n => {
-          if (_highlightTextNode(n, lowerTerm, termLen)) matched = true;
-        });
-      });
-      if (matched) row.classList.add('book-row--match');
+      const state = { matched: false };
+      _paintCells(row, HL_NUM_SELECTOR, numTokens, 'search-hl-num', state);   // أزرق
+      _paintCells(row, HL_TEXT_SELECTOR, textTokens, 'search-hl-text', state); // كهرماني
+      if (state.matched) row.classList.add('book-row--match');
+    });
+  }
+
+  // ─── توسيع الصفّ بالنقر لإظهار العنوان/الجهات كاملةً (مفوَّض، يتجاهل التفاعلي) ───
+  if (!window.__bookRowExpandBound) {
+    window.__bookRowExpandBound = true;
+    document.addEventListener('click', function (e) {
+      if (e.target.closest(
+        'button, a, input, label, select, .status-badge, .act-btn, ' +
+        '.row-checkbox, .col-select, .col-status, .col-actions'
+      )) return;
+      const row = e.target.closest('tr.book-row');
+      if (row) row.classList.toggle('row-expanded');
     });
   }
 

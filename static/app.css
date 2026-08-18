@@ -1206,42 +1206,6 @@ body {
   }
 }
 
-/* Quick access rows - صفوف الوصول السريع */
-.quick-row {
-  transition: all 0.2s ease;
-}
-.quick-row:hover {
-  background-color: rgba(255, 247, 237, 0.6);
-}
-.quick-row-danger {
-  background: linear-gradient(90deg, rgba(254, 226, 226, 0.4), rgba(254, 202, 202, 0.3));
-  border-left: 4px solid #dc2626;
-}
-.quick-row-danger:hover {
-  background: linear-gradient(90deg, rgba(254, 226, 226, 0.6), rgba(254, 202, 202, 0.5));
-}
-.quick-row-warning {
-  background: linear-gradient(90deg, rgba(254, 243, 199, 0.4), rgba(253, 224, 71, 0.2));
-  border-left: 4px solid #f59e0b;
-}
-.quick-row-warning:hover {
-  background: linear-gradient(90deg, rgba(254, 243, 199, 0.6), rgba(253, 224, 71, 0.3));
-}
-.quick-row-info {
-  background: linear-gradient(90deg, rgba(224, 242, 254, 0.3), rgba(186, 230, 253, 0.2));
-  border-left: 4px solid #3b82f6;
-}
-.quick-row-info:hover {
-  background: linear-gradient(90deg, rgba(224, 242, 254, 0.5), rgba(186, 230, 253, 0.3));
-}
-.quick-row-normal {
-  background: rgba(249, 250, 251, 0.3);
-  border-left: 4px solid #d1d5db;
-}
-.quick-row-normal:hover {
-  background: rgba(249, 250, 251, 0.5);
-}
-
 /* Kind chips for due table */
 .kind-chip {
   display: inline-flex;

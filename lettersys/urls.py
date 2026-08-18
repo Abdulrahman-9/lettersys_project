@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from core import views as core_views
 from core.auth_views import CustomLoginView
-from core.views.attachments import serve_media
+from core.views.attachments import serve_media, serve_shared_attachment
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -14,4 +14,8 @@ urlpatterns = [
     path('service-worker.js', core_views.serve_service_worker, name='service_worker_root'),
     # خدمة MEDIA خلف مصادقة + فحص ملكية (يحلّ محلّ static(MEDIA_URL) المفتوح) — C1
     re_path(r'^media/(?P<path>.*)$', serve_media, name='media'),
+    # المسار الوحيد المفتوح على المرفقات: رابط موقّع محدود المدة يفتح مرفقاً واحداً
+    # بعينه — لأن الجهة الخارجية التي نراسلها لا حساب لها، والملفات الكبيرة لا
+    # تُرفَق بالبريد. الرمز موقّع بـSECRET_KEY فلا يُزوَّر ولا يُخمَّن.
+    path('share/attachment/<str:token>/', serve_shared_attachment, name='attachment_share'),
 ]

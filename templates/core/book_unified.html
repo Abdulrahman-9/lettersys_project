@@ -6,8 +6,9 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/book_unified.css' %}">
 <link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}">
-<link rel="stylesheet" href="{% static 'css/book_unified_table.css' %}?v=20260701a">
+<link rel="stylesheet" href="{% static 'css/book_unified_table.css' %}?v=20260811a">
 <link rel="stylesheet" href="{% static 'css/book_unified_mobile.css' %}?v=20260629-preview">
+<link rel="stylesheet" href="{% static 'css/number_hint.css' %}?v=20260810">
 {% endblock %}
 
 {# الـ sidebar مُلغى لهذه الصفحة #}
@@ -26,6 +27,9 @@
 
   {# شريط فلترة موحّد: بحث + scope + status pills + متقدم #}
   {% include 'core/partials/book_unified_filter_bar.html' %}
+
+  {# تنبيه مؤقّت: تركيبة رقم القيد، وتمييزه عن العدد المطبوع على المستند #}
+  {% include 'core/partials/number_hint_notice.html' %}
 
   {# شريط الإجراءات الجماعية (يظهر عند تحديد صفوف) #}
   <div class="bulk-actions-bar" id="bulkActionsBar" style="display: none;">
@@ -75,6 +79,11 @@
     <div class="pagination-info">
       عرض <strong id="paginationFrom">{{ pagination_from }}</strong>-<strong id="paginationTo">{{ pagination_to }}</strong>
       من <strong id="paginationTotal">{{ total_count }}</strong>
+      <button type="button" class="btn btn-link btn-sm p-0 ms-2 text-decoration-none"
+              onclick="window.resetBookColumns && window.resetBookColumns();"
+              title="إعادة عرض الأعمدة إلى الافتراضي (تُحفَظ تعديلاتك تلقائياً حتى تُعيد الضبط)">
+        <i class="bi bi-arrow-counterclockwise"></i> إعادة ضبط الأعمدة
+      </button>
     </div>
     {% if page_obj.has_other_pages %}
       <nav aria-label="ترقيم الصفحات">
@@ -128,9 +137,13 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20260701a"></script>
+<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20260810a"></script>
 <script src="{% static 'js/book_unified_actions.js' %}?v=20260629-b2"></script>
 <script src="{% static 'js/book_unified_api.js' %}?v=20260629-b2"></script>
-{# التهيئة تتم ذاتياً داخل book_unified_ajax_manager.js على DOMContentLoaded —
-   لا تُكرّرها هنا وإلا عمل مديران معاً فيُطلق كل إجراء طلبَي AJAX مزدوجين. #}
+<script src="{% static 'js/book_column_resize.js' %}?v=20260707c"></script>
+<script src="{% static 'js/number_hint.js' %}?v=20260810"></script>
+{% comment %}
+التهيئة تتم ذاتياً داخل book_unified_ajax_manager.js على DOMContentLoaded —
+لا تُكرّرها هنا وإلا عمل مديران معاً فيُطلق كل إجراء طلبَي AJAX مزدوجين.
+{% endcomment %}
 {% endblock %}

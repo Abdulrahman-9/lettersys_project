@@ -54,6 +54,7 @@ CSRF_TRUSTED_ORIGINS = [o.strip() for o in _raw_origins.split(',') if o.strip()]
 
 # ─── التطبيقات المثبّتة ───────────────────────────────────────────────────────
 INSTALLED_APPS = [
+    'daphne',   # يجب أن يسبق staticfiles ليرقّي runserver إلى ASGI (WebSocket)
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -62,6 +63,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # مكتبات خارجية
     'rest_framework',
+    'channels',
     # تطبيقات المشروع
     'core.apps.CoreConfig',
 ]
@@ -99,12 +101,29 @@ TEMPLATES = [
                 'core.context_processors.mail_unread',
                 # مخصّص — هوية التطبيق المعروضة (اسم النظام + سطر الوصف)
                 'core.context_processors.system_settings',
+                # مخصّص — وضع التضمين (?embed=1) لمركز الإعدادات
+                'core.context_processors.embed_mode',
             ],
         },
     },
 ]
 
 WSGI_APPLICATION = 'lettersys.wsgi.application'
+ASGI_APPLICATION = 'lettersys.asgi.application'
+
+# ─── Channels (حضور الحجز اللحظيّ عبر WebSocket) ──────────────────────────────
+# التطوير (عملية runserver واحدة): طبقة في الذاكرة — خفيفة وبلا Redis (تليق بجهاز 8GB).
+# الإنتاج متعدّد العمّال: بدّلها إلى channels_redis عبر ضبط CHANNELS_REDIS_URL.
+_CHANNELS_REDIS_URL = os.environ.get('CHANNELS_REDIS_URL', '')
+if _CHANNELS_REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [_CHANNELS_REDIS_URL]},
+        }
+    }
+else:
+    CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}
 
 # ─── قاعدة البيانات ───────────────────────────────────────────────────────────
 DATABASES = {
@@ -248,6 +267,15 @@ CELERY_BEAT_SCHEDULE = {
     'scheduled-backup-hourly': {
         'task': 'core.tasks.scheduled_backup',
         'schedule': crontab(minute=0),
+    },
+    # جلب الردود الواردة. كانت المهمّة موجودة في core/tasks.py لكنها **غير مجدولة**
+    # إطلاقاً — فكان مفتاح «المزامنة التلقائية» وعداً بلا جدول. المهمّة نفسها تحترم
+    # imap_sync_enabled، وسقف الرسائل، وبوّابة الصلة.
+    # ملاحظة: يتطلّب Redis + worker + beat. حيث لا يتوفّر ذلك، تتكفّل المزامنة
+    # عند فتح صفحة الوارد (core.messaging.views.ui._autosync_inbox_if_due).
+    'sync-inbox-every-10-minutes': {
+        'task': 'core.tasks.sync_inbox_task',
+        'schedule': crontab(minute='*/10'),
     },
 }
 

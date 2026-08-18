@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="{% static 'vendor/cairo/cairo.css' %}?v=20260705a">
     <!-- Design System (موحد للألوان والمسافات) -->
     <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260419-shellfix">
-    <link rel="stylesheet" href="{% static 'app.css' %}?v=20260629-preview">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20260707a">
     <!-- مكوّنات واجهة محايدة اللون (مستوحاة من صفحة الدخول) — اختيارية عبر أصناف .btn-brand/.card-brand/.field-brand -->
     <link rel="stylesheet" href="{% static 'css/brand-components.css' %}?v=20260705c">
     
@@ -38,6 +38,15 @@
           color-adjust: exact !important;
         }
       }
+      /* وضع التضمين (?embed=1): تُعرَض الأداة وحدها داخل لوحة مركز الإعدادات
+         بلا شريط علوي/جانبي — مع كامل CSS/JS الأصلي عاملاً كصفحة حقيقية. */
+      .settings-embed-body { background: transparent !important; }
+      .app-embed-main { display: block; padding: 20px 22px 28px; }
+      .settings-embed-body .settings-embed-hide { display: none !important; }
+      /* توحيد الهوية داخل المركز: الأدوات ذات لونها الخاص (البريد برتقالي) تُعاد
+         إلى تركوازي الإعدادات ما دامت معروضة داخل لوحته — وتحتفظ بهويتها كاملةً
+         حين تُفتح كتطبيق مستقل. */
+      .settings-embed-body { --warm-clay: #0f766e; }
     </style>
     
     {# Optional per-page CSS block (for legacy templates) #}
@@ -45,8 +54,10 @@
 
     {% block extra_head %}{% endblock %}
   </head>
-  <body class="bg-body{% if request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %} app-shell-body{% endif %}">
-    {% if request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
+  <body class="bg-body{% if is_embed %} settings-embed-body{% elif request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %} app-shell-body{% endif %}">
+    {% if is_embed %}
+    <main class="app-embed-main">
+    {% elif request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
     <main class="app-auth-main">
     {% else %}
     <header class="app-topbar">
@@ -97,10 +108,6 @@
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' %} active{% endif %}" href="{% url 'book_unified' %}" title="قائمة الكتب">
               <i class="bi bi-list-ul"></i>
               <span>قائمة الكتب</span>
-            </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' and request.GET.tab == 'overdue' %} active{% endif %}" href="{% url 'book_unified' %}?tab=overdue" title="الوصول السريع">
-              <i class="bi bi-lightning-charge-fill"></i>
-              <span>الوصول السريع</span>
             </a>
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dossier_list' or request.resolver_match.url_name == 'dossier_detail' %} active{% endif %}" href="{% url 'dossier_list' %}" title="الأضابير">
               <i class="bi bi-folder2-open"></i>
@@ -167,7 +174,7 @@
 
     {% block content %}{% endblock %}
 
-    {% if request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
+    {% if is_embed or request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
     </main>
     {% else %}
       </main>
@@ -226,7 +233,7 @@
     <script src="{% static 'logging-system.js' %}"></script>
     
     <!-- نظام إدارة الكتب - JavaScript الحديث -->
-    <script src="{% static 'app.js' %}"></script>
+    <script src="{% static 'app.js' %}?v=20260722a"></script>
 
     <!-- Sidebar Mini Toggle -->
     <script>
@@ -255,5 +262,74 @@
 
     <!-- Additional Page Scripts -->
     {% block extra_js %}{% endblock %}
+
+    {% if is_embed %}
+    <!-- وضع التضمين: (1) إبقاء كل تنقّل داخل الإطار مُضمَّناً، (2) تبليغ الارتفاع. -->
+    <script>
+    (function () {
+      'use strict';
+
+      // ── (1) وسم الروابط والنماذج بـ embed=1 ──
+      // بدونه: نقرة رابط داخل الإطار (مثل «إنشاء رسالة») تُحمّل الصفحة بلا embed،
+      // فتُرسَم قشرة التطبيق كاملة داخل لوحة الإعدادات — «تطبيق داخل تطبيق».
+      // نضع embed في *مسار* النموذج (query) لا كحقل مخفي، كي يراه request.GET
+      // حتى في طلبات POST.
+      function withEmbed(raw) {
+        try {
+          var u = new URL(raw, window.location.href);
+          if (u.origin !== window.location.origin) return null;  // خارجي — اتركه
+          u.searchParams.set('embed', '1');
+          return u.pathname + u.search + u.hash;
+        } catch (e) { return null; }
+      }
+
+      function markNavigation() {
+        document.querySelectorAll('a[href]').forEach(function (a) {
+          if (a.target === '_blank' || a.dataset.embedMarked) return;
+          var href = a.getAttribute('href');
+          if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) return;
+          var next = withEmbed(href);
+          if (next) { a.setAttribute('href', next); a.dataset.embedMarked = '1'; }
+        });
+        document.querySelectorAll('form').forEach(function (f) {
+          if (f.dataset.embedMarked) return;
+          var next = withEmbed(f.getAttribute('action') || window.location.href);
+          if (next) { f.setAttribute('action', next); f.dataset.embedMarked = '1'; }
+        });
+      }
+
+      // يُلاحَظ childList فقط (لا attributes) فلا يُعيد وسْمُنا إطلاق المراقب.
+      // ومع ذلك نؤجّل عبر rAF كي لا نمشي على الشجرة مع كل تغيّر في صفحة نشِطة.
+      var pending = false;
+      function scheduleMark() {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function () { pending = false; markNavigation(); });
+      }
+
+      markNavigation();
+      document.addEventListener('DOMContentLoaded', markNavigation);
+      if (window.MutationObserver) {
+        new MutationObserver(scheduleMark).observe(document.documentElement, {
+          childList: true, subtree: true,
+        });
+      }
+
+      // ── (2) تبليغ الارتفاع — يُبقي الإطار بارتفاع المحتوى بلا تمرير مزدوج ──
+      function report() {
+        var h = Math.max(
+          document.body.scrollHeight, document.documentElement.scrollHeight,
+          document.body.offsetHeight, document.documentElement.offsetHeight
+        );
+        try { parent.postMessage({ type: 'settings-embed-height', height: h }, window.location.origin); } catch (e) {}
+      }
+      window.addEventListener('load', report);
+      window.addEventListener('resize', report);
+      if (window.ResizeObserver) { new ResizeObserver(report).observe(document.body); }
+      else { setInterval(report, 700); }
+      document.addEventListener('DOMContentLoaded', report);
+    })();
+    </script>
+    {% endif %}
   </body>
 </html>

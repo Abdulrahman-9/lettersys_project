@@ -545,14 +545,22 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   
   // إضافة تأثير loading لجميع الأزرار
+  // فخّ حرج: تعطيل الزرّ *داخل* معالج submit يُسقط name/value الخاصّ به من الطلب —
+  // المتصفّح يبني قائمة الحقول بعد الحدث، والحقل المُعطَّل لا يُرسَل. لذا كانت أزرار
+  // مثل name="action" value="restore_from_bak" تصل فارغة للخادم. نؤجّل التعطيل
+  // بـ setTimeout(0) ليقع بعد بناء الطلب، ونتخطّاه إن أُلغي الإرسال (confirm) وإلا
+  // بقي الزرّ معطّلاً للأبد.
   document.querySelectorAll('button[type="submit"]').forEach(btn => {
     const form = btn.closest('form');
-    if (form && !form.hasAttribute('data-ajax-form')) {
-      form.addEventListener('submit', function() {
+    if (!form || form.hasAttribute('data-ajax-form')) return;
+    form.addEventListener('submit', function(e) {
+      if (e.defaultPrevented) return;
+      const label = btn.textContent;
+      setTimeout(() => {
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + btn.textContent;
-      });
-    }
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + label;
+      }, 0);
+    });
   });
   
   console.log('✅ نظام إدارة الكتب - تم تحميل جميع الوظائف بنجاح');
