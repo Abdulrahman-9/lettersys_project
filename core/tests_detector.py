@@ -72,3 +72,39 @@ class DetectorGeometryContractTests(SimpleTestCase):
         self.assertAlmostEqual(cy, 0.5 * D.TRAIN_CROP, delta=0.02,
                                msg='الصندوق مُطبَّعٌ على القصاصة لا على الصفحة — عقدٌ مكسور')
         self.assertTrue(0.0 <= box[0] < box[2] <= 1.0)
+
+
+class DateCropBoxAnchorTests(SimpleTestCase):
+    """مرساة قصاصة التاريخ: صندوق العدد يُنتج قصاصةً حين تصمت تسمية «التاريخ».
+
+    قانون المالك: «التاريخ دائماً تحت العدد». قِيس 2026-08-18 على 20 مستنداً حقيقيّاً:
+    ظهور القصاصة 35% ⟵ **90%**، والسبعُ القائمة **مطابقةٌ بايتاً ببايت** (صفر تغيّر،
+    صفر ضياع)، و10/10 من الجديدة صحيحةٌ بالعين بصفر انزلاقٍ لتاريخ الأيزو.
+
+    درسٌ مدفوعُ الثمن: أوّل تصميمٍ جعل الصندوق **أرضيّةً** للمُموضِع فرفع تغطية
+    الأرضيّة 70%⟵90% لكنّه لم يُنتج **ولا قصاصةً واحدة** — الأرضيّة تُرتّب المرشّحين
+    ولا تخلقهم، وTesseract لا يقرأ «التاريخ» على تلك الصفحات أصلاً. تغطيةُ آليّةٍ
+    وسيطة ليست تحسيناً؛ قِس المُخرَج."""
+
+    def _img(self, w=1000, h=1400):
+        from PIL import Image as I
+        return I.new('RGB', (w, h), 'white')
+
+    def test_crop_starts_below_the_box_and_is_generous_sideways(self):
+        from core.extraction.pipeline import AIExtractionService as S
+        img = self._img()
+        box = [0.70, 0.10, 0.80, 0.13]          # عددٌ أعلى اليمين
+        out = S._crop_below_box(img, box)
+        self.assertTrue(out and out.startswith('data:image/png;base64,'))
+
+    def test_no_box_means_no_crop(self):
+        from core.extraction.pipeline import AIExtractionService as S
+        self.assertIsNone(S._crop_below_box(self._img(), None))
+
+    def test_low_box_is_rejected_as_anchor(self):
+        """صندوقٌ منخفض (اقتباس متن) يخنق حقلَ التاريخ فوقه ⟵ يُرفض مرساةً."""
+        from unittest import mock
+        from core.extraction.pipeline import AIExtractionService as S
+        with mock.patch('core.extraction.handwriting.detector.detect_number_box',
+                        return_value=([0.1, 0.62, 0.2, 0.66], 0.9)):
+            self.assertIsNone(S._detector_box(self._img()))

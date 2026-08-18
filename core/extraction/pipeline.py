@@ -498,6 +498,81 @@ class AIExtractionService:
         except Exception:
             return None
 
+    @staticmethod
+    def _detector_box(img):
+        """صندوق «العدد» من الكاشف — `[x0,y0,x1,y1]` مُطبَّعاً على الصفحة أو None."""
+        try:
+            from core.extraction.handwriting.detector import detect_number_box
+            got = detect_number_box(img)
+            if not got:
+                return None
+            box, _conf = got
+            # نفس حارس `_number_label_floor`: مرساةٌ منخفضةٌ تخنق حقلَ التاريخ فوقها.
+            return box if box[1] <= 0.45 else None
+        except Exception as exc:
+            logger.warning('[handwriting] الكاشف تعذّر: %s', type(exc).__name__)
+            return None
+
+    @staticmethod
+    def _crop_below_box(img, box):
+        """قصاصةُ التاريخ **مرساةً بصندوق العدد** حين تصمت تسمية «التاريخ».
+
+        قانون المالك: التاريخ يقع تحت العدد مباشرةً. المسار القديم يحتاج Tesseract أن
+        يقرأ كلمة «التاريخ» كي يُموضِع — وهو يفشل في صفحاتٍ كثيرة فلا تظهر قصاصةٌ
+        إطلاقاً. الصندوق يتجاوز القراءة: يُقصّ ما تحته بهندسةٍ سخيّةٍ متناظرة (نفس
+        فلسفة `_crop_date_strip`: الإفراط مجّانيّ لأن العرض بشريّ، والتقصير وحده يُفقِد).
+        """
+        if not box:
+            return None
+        try:
+            import base64
+            import io
+            W, H = img.width, img.height
+            bx0, by0, bx1, by1 = (box[0] * W, box[1] * H, box[2] * W, box[3] * H)
+            bh = max(by1 - by0, 12)
+            bw = max(bx1 - bx0, 40)
+            x0 = max(0, int(bx0 - 3.0 * bw))
+            x1 = min(W, int(bx1 + 3.0 * bw))
+            y0 = max(0, int(by1 + 0.15 * bh))      # يبدأ أسفل العدد مباشرة
+            y1 = min(H, int(by1 + 3.2 * bh))       # سطران تقريباً — يلتقط التاريخ ولو أزيح
+            if y1 - y0 < 8 or x1 - x0 < 40:
+                return None
+            crop = img.crop((x0, y0, x1, y1))
+            if crop.width > 760:
+                r = 760 / crop.width
+                crop = crop.resize((760, max(1, int(crop.height * r))))
+            buf = io.BytesIO()
+            crop.save(buf, format='PNG', optimize=True)
+            return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode('ascii')
+        except Exception as exc:
+            logger.warning('[handwriting] قصاصة تحت الصندوق تعذّرت: %s', type(exc).__name__)
+            return None
+
+    @staticmethod
+    def _detector_floor_from_box(box, img):
+        """أرضيّةُ بحثِ التاريخ من **صندوق الكاشف** — تُستعمل فقط حين يصمت مسار TSV.
+
+        بلاغ المالك: القصاصة تلتقط تاريخ اعتماد نموذج الإيزو («Date Rev» وسط ترويسة
+        نظام الإدارة المتكامل) بدل تاريخ الجهة الواقع **تحت العدد**. الأرضيّة تمنع ذلك،
+        لكنّها كانت مشتقّةً من تسمية «العدد» التي يقرأها Tesseract — وهي **تصمت في
+        ~42% من الصفحات** (موثَّقٌ في `_number_label_floor`)، فتبقى ثغرةٌ يتسلّل منها
+        تاريخ الترويسة. الكاشف يُطلق على 164/165 (99.4%) بمركزٍ صحيحٍ 96%، فيسدّها.
+
+        **لا يُزيح المسار القائم** (قرار فيبل 2026-08-17): تسمية TSV تبقى الحَكَم حين
+        تُقرأ — سلوكٌ متحقَّقٌ منه — والكاشف يملأ صمتها فقط. أضيق تدخّلٍ وأقلّ سطحِ تراجع.
+        """
+        try:
+            if not box:
+                return None
+            H = img.height
+            top_px = box[1] * H
+            # تسامحٌ بارتفاع الصندوق تقريباً فوقه: التاريخ قد يشترك مع العدد في صفٍّ
+            # واحد (ترويسة اللجان المشتركة: «العدد:» يميناً و«التاريخ:» تحته مباشرة).
+            return max(0, int(top_px - 0.8 * (box[3] - box[1]) * H))
+        except Exception as exc:
+            logger.warning('[handwriting] أرضيّة الكاشف تعذّرت: %s', type(exc).__name__)
+            return None
+
     def _crop_date_strip(self, img, tsv, min_top=None):
         """قصاصةُ شريط «التأريخ» اليدويّ للعرض في الواجهة (خيار F) — لا قراءة، الكاتب
         ينسخها. **هندسةٌ فضفاضةٌ متناظرة عمداً**: تمركزٌ حول التسمية وامتدادٌ للجهتين
@@ -507,13 +582,21 @@ class AIExtractionService:
         try:
             if min_top is None:
                 min_top = self._number_label_floor(tsv)
+            det_box = None
+            if min_top is None:
+                det_box = self._detector_box(img)
+                min_top = self._detector_floor_from_box(det_box, img)
             located = self._hw_date_locator.locate(img, tsv, entity_id=None,
                                                    min_top=min_top)
-            if located is None:
-                return None
+            if located is None or getattr(located[1], 'source', '') != 'label':
+                # لا تسمية «التاريخ» مقروءة ⟵ **المرساة هي صندوق العدد نفسه**.
+                # قانون المالك: «التاريخ دائماً تحت العدد». قِيس (2026-08-18) أنّ
+                # الأرضيّة وحدها لا تُنتج قصاصةً هنا: هي تُرتّب مرشّحي المُموضِع ولا
+                # تخلقهم، وعلى هذه الصفحات لا يقرأ Tesseract «التاريخ» إطلاقاً.
+                # القصّ تحت الصندوق يتجاوز القراءة كلّها.
+                return self._crop_below_box(img, det_box if det_box is not None
+                                            else self._detector_box(img))
             _strip, label = located
-            if getattr(label, 'source', '') != 'label':
-                return None                       # تسميةٌ مرئيّة فقط — لا بصمةَ عمياء
             import base64
             import io
             W, H = img.width, img.height
