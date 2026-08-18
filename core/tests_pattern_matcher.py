@@ -838,3 +838,48 @@ class HelpersTests(SimpleTestCase):
 
     def test_parse_date_flexible(self):
         self.assertEqual(parse_date_flexible('2024-01-15').date().isoformat(), '2024-01-15')
+
+
+class SubjectConfidentWrongTests(SimpleTestCase):
+    """«واثقٌ ومخطئ» — الهراءُ المعروض بثقة 0.75 يقتل ثقة الكاتب أكثر من الصمت.
+
+    token-F1 يعطي **صفراً** للهراء الواثق وصفراً للصمت، فلا يفرّق بينهما — وهما عند
+    الكاتب مختلفان تماماً. لذا يُقاس الموضوع برباعيّة (متوسّط · صالح · صامت ·
+    واثقٌ‑ومخطئ). قِيس 2026-08-18 على 40 مستنداً: **9 ⟵ 5** بصفر نجاحٍ مفقود."""
+
+    def setUp(self):
+        from core.extraction.matchers.pattern import PatternMatcher
+        self.m = PatternMatcher()
+
+    def test_reference_line_never_becomes_a_subject(self):
+        """«إشارة الى مذكرتكم… حول …» إحالةٌ لكتابٍ آخر لا موضوعُ هذا الكتاب."""
+        txt = ('شركة نفط الوسط\n'
+               'إشارة الى مذكرتكم ذات العدد 707 في 2026/3/11 حول ما اشر بهامش السيد المدير\n'
+               'يرجى التفضل بالاطلاع')
+        out = self.m.extract_title_keywords(txt)
+        self.assertNotIn('بهامش', out, 'التُقط متنُ إحالةٍ موضوعاً')
+        self.assertNotEqual(getattr(self.m, 'last_title_source', ''), 'marker',
+                            'سطر الإحالة يجب ألّا يُصدَّر بثقة المرساة 0.75')
+
+    def test_appendix_reference_line_vetoed(self):
+        """«الحاقاً بمذكرة … المرقمة … بخصوص …» — نفس الصنف، بمفتتحٍ آخر."""
+        txt = ('وزارة النفط\n'
+               'الحاقاً بمذكرة قسمنا المرقمة 355 بتاريخ 2026/3/31 بخصوص الموضوع اعلاه\n'
+               'مع التقدير')
+        self.assertNotEqual(getattr(self.m, 'last_title_source', ''), 'marker',
+                            msg=self.m.extract_title_keywords(txt))
+
+    def test_two_letter_debris_is_not_a_subject(self):
+        """«م/ ت الا» حطامُ مسحٍ يجتاز حارس المحارف — يلزم كلمتان أو واحدةٌ طويلة."""
+        out = self.m.extract_title_keywords('شركة نفط الوسط\nم / ت الا\nتحية طيبة')
+        self.assertNotEqual(out.strip(), 'ت الا')
+
+    def test_single_long_word_subject_still_accepted(self):
+        """موضوعٌ من كلمةٍ واحدةٍ مشروع — الحارس لا يجوز أن يبتلعه."""
+        self.assertEqual(
+            self.m.extract_title_keywords('م / الإجازات\nكافة الأقسام مدعوة'), 'الإجازات')
+
+    def test_marker_inside_a_word_does_not_fire(self):
+        """«بشأنها» ليست «بشأن» — حدُّ الكلمة (كتاب 9442: التُقط «ها من الأمانة…»)."""
+        txt = 'شركة نفط الوسط\nالى التوجيهات الصادرة بشأنها من الامانة العامة لمجلس الوزراء\nمع التقدير'
+        self.assertNotIn('ها من الامانة', self.m.extract_title_keywords(txt))
