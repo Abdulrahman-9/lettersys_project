@@ -459,18 +459,38 @@ class AIExtractionService:
                     num_label_floor = max(0, _label.top - int(1.5 * _label.height))
                 del strip
 
-            # ── قصاصة «التأريخ» للواجهة (خيار F) — من نفس img+tsv، لا قراءة ──
-            date_crop = (self._crop_date_strip(img, tsv, min_top=num_label_floor)
-                         if want_date_crop else None)
-
-            # ── صندوق الكاشف حتى حين **يمتنع** القارئ ──────────────────────────
-            # كان الصندوق يُحفَظ فقط مع قراءةٍ تجتاز CONF_GATE=0.90، أي أنّنا نجمع
-            # عيّنات تدريبٍ من الصفحات التي **نجحنا فيها أصلاً** ونُهدر الصعبة —
-            # وهي عين ما يحتاجه التدريب. قِيس 2026-08-18: صفٌّ واحدٌ من 12 يحمل
-            # صندوقاً. الكاشف يجده على ~90% بصرف النظر عن قدرة القارئ.
+            # ── صندوق الكاشف — من الملفّ الأصليّ بوصفة التدريب، مرّةً واحدة ──
+            # يُحفَظ حتى حين يمتنع القارئ (عيّنات الحالات الصعبة هي ما يُعلّم؛
+            # قِيس: صفٌّ واحدٌ من 12 كان يحمل صندوقاً)، ويُغذّي مرساةَ قصاصة التاريخ.
             det_box = None
-            if number_result is None:
-                det_box = self._detector_box(img)
+            if number_result is None or want_date_crop:
+                det_box = self._detector_box_from_file(image_path)
+
+            # ── قراءة CRNN على قصاصة الكاشف حين يُخفق المُموضِع القديم ─────────
+            # تفكيك e2e‑A: في 35/100 وجد الكاشفُ الصندوقَ وبقي الحقل صامتاً لأن
+            # القارئ لا يصل قصاصته أصلاً — المُموضِع القديم (تسمية Tesseract) هو
+            # الطريق الوحيد إليه. هنا يُفتح طريقٌ ثانٍ بنفس بوّابة الثقة تماماً:
+            # لا يرتفع «واثقٌ‑ومخطئ» بالبناء، لأن العتبة والقارئ هما نفساهما.
+            if number_result is None and det_box is not None:
+                bx0, by0, bx1, by1 = det_box
+                pw, ph = img.width, img.height
+                padx = 0.30 * (bx1 - bx0)
+                pady = 0.40 * (by1 - by0)
+                crop2 = img.crop((max(0, int((bx0 - padx) * pw)),
+                                  max(0, int((by0 - pady) * ph)),
+                                  min(pw, int((bx1 + padx) * pw)),
+                                  min(ph, int((by1 + pady) * ph))))
+                text2, conf2 = self._hw_reader.read_best(crop2)
+                del crop2
+                if text2 and text2.isdigit() and 1 <= len(text2) <= 6 and conf2 >= CONF_GATE:
+                    number_result = (text2, conf2, [round(v, 4) for v in det_box])
+                    logger.info('[handwriting] قراءةٌ من قصاصة الكاشف: %r (ثقة %.2f)',
+                                text2, conf2)
+
+            # ── قصاصة «التأريخ» للواجهة (خيار F) — من نفس img+tsv، لا قراءة ──
+            date_crop = (self._crop_date_strip(img, tsv, min_top=num_label_floor,
+                                               det_box=det_box)
+                         if want_date_crop else None)
 
             W, H = img.width, img.height
             del tsv, img
@@ -508,6 +528,43 @@ class AIExtractionService:
             heights = [h for h in tsv.get('height', []) if h] or [30]
             return max(0, top - int(1.5 * (sum(heights) / len(heights))))
         except Exception:
+            return None
+
+    @staticmethod
+    def _detector_box_from_file(image_path):
+        """صندوق «العدد» من **الملفّ الأصليّ** مرسوماً بوصفة التدريب حرفيّاً (175dpi، RGB).
+
+        الجذر المقيس لفجوة e2e‑A (45/100 بلا صندوق): الأنبوب كان يُغذّي الكاشف صورته
+        الرماديّة (`csGRAY` عند 300dpi) بينما دُرِّب على رسمٍ خام RGB — حبرُ القلم
+        الأزرق يفقد تباينه رماديّاً. A/B على 12 صفحةً صامتة (2026-08-18): الرسم الخام
+        يُطلق **10/12** والرماديّ **0/12**. الرسمُ هنا جزءٌ من عقد الهندسة كالقصّ سواء:
+        يجري داخل الوحدة كي لا يستطيع مُستدعٍ أن يخطئ في تكراره."""
+        try:
+            from core.extraction.handwriting.detector import detect_number_box
+            from PIL import Image as PILImage
+            if image_path.lower().endswith('.pdf'):
+                import fitz
+                doc = fitz.open(image_path)
+                page = doc[0]
+                zoom = 175 / 72.0
+                longer = max(page.rect.width, page.rect.height) * zoom
+                if longer > 3500:
+                    zoom *= 3500 / longer
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+                im = PILImage.frombytes('RGB', (pix.width, pix.height), pix.samples)
+                doc.close()
+                del pix
+            else:
+                im = PILImage.open(image_path).convert('RGB')
+            got = detect_number_box(im)
+            del im
+            if not got:
+                return None
+            box, _conf = got
+            # نفس حارس الارتفاع: صندوقٌ منخفض اقتباسُ متنٍ يخنق حقلَ التاريخ فوقه
+            return box if box[1] <= 0.45 else None
+        except Exception as exc:
+            logger.warning('[handwriting] كاشفٌ من الملفّ تعذّر: %s', type(exc).__name__)
             return None
 
     @staticmethod
@@ -585,7 +642,7 @@ class AIExtractionService:
             logger.warning('[handwriting] أرضيّة الكاشف تعذّرت: %s', type(exc).__name__)
             return None
 
-    def _crop_date_strip(self, img, tsv, min_top=None):
+    def _crop_date_strip(self, img, tsv, min_top=None, det_box=None):
         """قصاصةُ شريط «التأريخ» اليدويّ للعرض في الواجهة (خيار F) — لا قراءة، الكاتب
         ينسخها. **هندسةٌ فضفاضةٌ متناظرة عمداً**: تمركزٌ حول التسمية وامتدادٌ للجهتين
         (القيمة العربيّة يساراً والإنجليزيّة يميناً) + حشوٌ رأسيّ سخيّ — الإفراطُ في
@@ -594,9 +651,7 @@ class AIExtractionService:
         try:
             if min_top is None:
                 min_top = self._number_label_floor(tsv)
-            det_box = None
             if min_top is None:
-                det_box = self._detector_box(img)
                 min_top = self._detector_floor_from_box(det_box, img)
             located = self._hw_date_locator.locate(img, tsv, entity_id=None,
                                                    min_top=min_top)
@@ -606,8 +661,7 @@ class AIExtractionService:
                 # الأرضيّة وحدها لا تُنتج قصاصةً هنا: هي تُرتّب مرشّحي المُموضِع ولا
                 # تخلقهم، وعلى هذه الصفحات لا يقرأ Tesseract «التاريخ» إطلاقاً.
                 # القصّ تحت الصندوق يتجاوز القراءة كلّها.
-                return self._crop_below_box(img, det_box if det_box is not None
-                                            else self._detector_box(img))
+                return self._crop_below_box(img, det_box)
             _strip, label = located
             import base64
             import io
