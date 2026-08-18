@@ -101,3 +101,7 @@ training/handwriting/kaggle_out_*/
 training/handwriting/v5_fail_log/
 training/handwriting/v5_log_2/
 var/models/
+
+# بيانات تدريبٍ ومخرجاتُ تشغيلٍ محليّة — ليست كوداً ولا تُودَع
+training/handwriting/dataset_v6/
+var/
