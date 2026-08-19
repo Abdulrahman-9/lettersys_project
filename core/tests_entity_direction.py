@@ -140,3 +140,30 @@ class MemoryVoteCapTests(TestCase):
         self.assertTrue(got, 'يجب أن تُرجَع مرشّحات')
         self.assertEqual(got[0]['entity_id'], strong.id,
                          'الصفّان الممتازان يجب أن يسبقا عشرين صفّاً متوسّطاً')
+
+
+class OutgoingSenderFieldGateTests(SimpleTestCase):
+    """حقول الجهة تُفرَّغ في الصادر **على الخادم** لا في الواجهة وحدها.
+
+    قِيس في القاعدة (2026-08-18): **11 كتاباً صادراً** تحمل حقول جهةٍ تسرّبت
+    (تاريخٌ في 2 · عددٌ في 9) من 1,777. المسار: رمز المسح يملأ الحقلين بلا شرط ولا
+    يستدعي `syncKindUI`، فيحتفظ حقلٌ مخفيٌّ بقيمته ويُرسَل. والضرر أبعد من التجميل:
+    `SenderNumberProfiles` يقرأ كلّ كتابٍ بعددِ جهةٍ **بلا مرشِّح نوع**، فصادرٌ ملوَّث
+    يُدرّب قالبَ أرقامٍ لأحد أقسامنا كأنّه جهةٌ مُرسِلة."""
+
+    def test_outgoing_kinds_are_emptied(self):
+        from core.views.books_api import _strip_sender_fields_for_outgoing as gate
+        for kind in ('outgoing_internal', 'outgoing_external'):
+            self.assertEqual(gate(kind, '1754', '2026-08-13'), ('', ''), kind)
+
+    def test_incoming_kinds_pass_through(self):
+        from core.views.books_api import _strip_sender_fields_for_outgoing as gate
+        for kind in ('incoming_internal', 'incoming_external', 'incoming'):
+            self.assertEqual(gate(kind, '1754', '2026-08-13'), ('1754', '2026-08-13'), kind)
+
+    def test_unknown_kind_is_treated_as_outgoing(self):
+        """المجهول يُفرَّغ: خانةٌ فارغةٌ في الوارد تُصحَّح بنقرة، وقيمةٌ مفبركةٌ في
+        الصادر تُسمّم قوالب الأرقام صامتةً."""
+        from core.views.books_api import _strip_sender_fields_for_outgoing as gate
+        for kind in ('', None, 'غير معروف'):
+            self.assertEqual(gate(kind, '1754', '2026-08-13'), ('', ''), repr(kind))

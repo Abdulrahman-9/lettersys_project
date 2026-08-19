@@ -41,6 +41,26 @@ from .books_helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _strip_sender_fields_for_outgoing(kind, sender_number, sender_date_str):
+    """حقول الجهة المُرسِلة لا معنى لها في الصادر — تُفرَّغ **على الخادم**.
+
+    الجذر المقيس (2026-08-18): البوّابة كانت في الواجهة وحدها — `extraction_smart.js`
+    يُخفي الحقلين عند `showSenderFields:false`، لكنّ مسار رمز المسح يملأ
+    `senderDate`/`senderNumber` **بلا شرط** ولا يستدعي `syncKindUI`، فيحتفظ حقلٌ مخفيٌّ
+    بقيمته ويُرسَل عند الحفظ. القاعدة تحمل الأثر: **11 كتاباً صادراً** تسرّبت إليه حقول
+    جهةٍ (تاريخٌ في 2 · عددٌ في 9) من 1,777. نادرٌ لكنّه حيّ.
+
+    والضرر ليس تجميليّاً: `SenderNumberProfiles._ensure_index` يقرأ كلّ كتابٍ بعددِ جهةٍ
+    **بلا مرشِّح نوع** (profile.py:120-125)، فكتابٌ صادرٌ ملوَّث يُدرّب قالبَ أرقامٍ
+    لقسمٍ من أقسامنا نحن كأنّه جهةٌ مُرسِلة. البوّابةُ على الخادم تجعل التسرّب مستحيلاً
+    لا نادراً — والواجهة تبقى طبقةَ راحةٍ لا طبقةَ صحّة.
+    """
+    from core.extraction.kinds import is_incoming_kind
+    if is_incoming_kind(kind):
+        return sender_number, sender_date_str
+    return '', ''
+
+
 def _duplicate_guard(request, data, *, kind, title, sender_number,
                      cmp_date, party_entities, exclude_id=None):
     """حارس التكرار المشترك (الحفظ + التعديل). يُعيد JsonResponse(409) للمنع/التنبيه،
@@ -101,6 +121,8 @@ def save_book_api(request):
         sender_date_str = (data.get('sender_date') or '').strip()
         due_date_str = (data.get('due_date') or data.get('dueDate') or '').strip()
         kind_value = (data.get('kind') or data.get('book_kind') or 'incoming_internal').strip()
+        sender_number, sender_date_str = _strip_sender_fields_for_outgoing(
+            kind_value, sender_number, sender_date_str)
         # توافق رجعي: needs_followup كانت تُستخدم كعَلَم تفعيل المتابعة
         # الآن: وجود due_date نفسه يحدّد المتابعة (is_archived يُحسَب تلقائياً)
         needs_followup = (data.get('needs_followup') or 'false').lower() in ('true', '1', 'on')
@@ -738,6 +760,8 @@ def update_book_api(request):
         title = (data.get('title') or '').strip()
         book_date_str = (data.get('date') or '').strip()
         sender_date_str = (data.get('sender_date') or '').strip()
+        sender_number, sender_date_str = _strip_sender_fields_for_outgoing(
+            (data.get('kind') or getattr(book, 'kind', '') or ''), sender_number, sender_date_str)
         due_date_str = (data.get('due_date') or data.get('dueDate') or '').strip()
         needs_followup = (data.get('needs_followup') or 'false').lower() in ('true', '1', 'on')
         secret_level = _normalize_secret_level_value(data.get('secret_level'))
