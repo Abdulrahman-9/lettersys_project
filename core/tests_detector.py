@@ -115,7 +115,13 @@ class DateCropBoxAnchorTests(SimpleTestCase):
 
 
 class NumberEmissionSuppressedTests(TestCase):
-    """حقل «عدد الجهة» مُسكَتٌ عن الكاتب — من **كلّ** الكُتّاب، وفي **كلا** الحاملَين.
+    """سياسة إصدار حقل «عدد الجهة» — نصّيٌّ مكتوم، بصريٌّ يُعرض بثقته.
+
+    أُسكت الحقل كلّياً 2026-08-18 (4 صواب/24 خطأً تُملأ تلقائيّاً). ثمّ **أعاد المالك
+    نطاقه** (2026-08-19) بعد رافعتين مقيستين — صفرُ الحشو (51.5⟵66.5%) وثقةُ السلسلة
+    (فصل الحذف 0.903) — «يكتب ما يقرأ، والضعيف يُؤشَّر». فالقراءة البصريّة
+    (`bbox_source == 'crnn'`) تمرّ بثقتها الحقيقيّة، ويبقى النصّيّ مكتوماً
+    (قياسُه 2 صواب مقابل 17 خطأً، كلّها بثقة 0.70 تُعرض أصفر لا أحمر).
 
     قِيس على خطّ الأساس المُعتمَد (تشغيلة A، 100 كتابٍ نظيف، فاشل 0): إصابة 4 مقابل
     **خاطئ 24**، منها 6 بثقة ≥0.90 كلّها من مسار CRNN. والواجهة **بلا عتبة عرض** —
@@ -136,6 +142,18 @@ class NumberEmissionSuppressedTests(TestCase):
         r.sender_number_bbox_source = 'detector'
         r.sender_number_bbox_dims = [2480, 3508]
         return r
+
+    def test_crnn_visual_read_passes_with_its_true_confidence(self):
+        """إعادةُ نطاقٍ بأمر المالك (2026-08-19): القراءة البصريّة تُعرض بثقتها —
+        «لا يكون خانة العدد صامتاً؛ يكتب ما يقرأ، والضعيف يُؤشَّر». التأشير مسؤوليّة
+        الواجهة (ما دون 0.65 يُعرض أحمر «يجب التصحيح يدوياً»)، لا الإسكات."""
+        from core.extraction.pipeline import _suppress_sender_number_emission as kill
+        r = self._result(value='7099', conf=0.42)      # ضعيفةٌ عمداً — تُعرض وتُؤشَّر
+        r.sender_number_bbox_source = 'crnn'
+        kill(r)
+        self.assertEqual(r.sender_number, '7099', 'القراءة البصريّة يجب ألّا تُكتم')
+        self.assertAlmostEqual(r.sender_number_confidence, 0.42,
+                               msg='الثقة الحقيقيّة تصل الواجهة كي تؤشّر الضعيف')
 
     def test_suppressor_dominates_any_writer(self):
         """النقطة الواحدة بعد الكُتّاب الخمسة ⟵ لا يهمّ من كتب القيمة."""
