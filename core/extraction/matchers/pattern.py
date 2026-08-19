@@ -1002,6 +1002,15 @@ class PatternMatcher:
             pre = t[max(0, m.start() - 14):m.start()].lower()
             if any(b in pre for b in _SENDER_NUM_BAD):
                 continue                              # سياق فاكس/هاتف → ليس رقم صادر
+            # R3 — نقضُ سطر الإحالة: «إشارة الى مذكرتكم ذات العدد 707 في …» يحمل
+            # «العدد» ورقماً داخل **منطقة الرأس**، فيمرّ من حصر `_header_zone` ويُصدَر
+            # بثقة 0.70 — وهي فوق عتبة العرض المتوسّطة 0.65، أي **يراه الكاتب**.
+            # نفس قانون المجال المطبَّق على التاريخ ثمّ الموضوع، بنفس التعبير المشترك
+            # `_REFERENCE_LINE_RE` (مصدرٌ واحد لا نسخة). قِيس على e2e-A أدناه.
+            _ls = t.rfind(chr(10), 0, m.start()) + 1
+            _le = t.find(chr(10), m.start())
+            if _REFERENCE_LINE_RE.search(t[_ls:_le if _le != -1 else len(t)]):
+                continue
             if len(re.sub(r'\D', '', raw)) >= 2:      # أرقامٌ كافية (ليس ضجيجاً)
                 # عُرف الموظف المقيس: الرمز العربي يُجرَّد، واللاتيني يبقى.
                 serial, _reg = split_register_code(raw)
