@@ -56,12 +56,12 @@ Everything lives in `core/`. The two refactored sub-packages have their own inte
 - `api/endpoints.py` — REST views; `views/ui.py` — HTML views
 - `learning.py` — feedback **analysis only** (patterns + per-field accuracy scores).
   ⚠️ `core/continuous_learning.py` **does not exist** (removed); the old pointer here
-  misled several sessions. And note what the loop actually captures: `capture.py`
-  `_FIELD_MAP` tracks **`title` and `secret_level` only** — `sender_number` is captured
-  neither as a value nor as a location, so that field **cannot improve with use** today.
-  The socket is live though: `persist_extraction_capture` (capture.py:69) fires post-commit
-  with both `suggested` and `final`, and `DataExtractionResult.additional_data` (JSONField)
-  is a ready carrier for the locator box that `pipeline.py:409` currently discards.
+  misled several sessions. Capture state (corrected 2026-08-19 — the previous text here
+  was stale and said the opposite): `_FIELD_MAP` tracks `title`, `secret_level` **and
+  `sender_number`**; the detector bbox + reference dims + source are persisted in
+  `additional_data` even when the reader abstains, and the scan payload is durable in DB
+  (`ScanPayload`) so training gold survives cache loss. Count confirmed pairs with
+  `python manage.py capture_stats`.
 
 **`core/messaging/`** — email & IMAP (see `core/messaging/README.md` for full API)
 - `engines/smtp.py` — `SMTPEngine`; `engines/imap.py` — `IMAPEngine`
@@ -130,6 +130,20 @@ paper-imported rows are exempt because the 2025 clerk really did stamp 825 twice
 
 Commands: `rebase_book_numbers` (idempotent, `--dry-run` by default, `--undo CSV`),
 `purge_dev_seed_books` (keys off `is_training`). See `docs/LAUNCH_RUNBOOK.md`.
+
+### آخر تعديلات (2026-08-19) — جبهة العدد انقلبت
+- **إصدار العدد أُعيد فتحه بأمر المالك** (بصريٌّ فقط): CRNN على قصاصة الكاشف **بصفر
+  حشو** يُعرض بثقته الحقيقيّة والواجهة تؤشّر الضعيف (<0.65 أحمر). النصّيّ يبقى مكتوماً
+  (2 صواب/17 خطأ). منحنى مقيس: الكلّ 67% · ≥0.95 ⟵ 93%.
+- **صفرُ الحشو** هو المكسب الأكبر: 51.5⟵66.5% مطابقةً تامّة (عيّنتان مستقلّتان) —
+  الحشو الموروث كان يُدخل رمز السجلّ فيُفسد القراءة. حشوُ الحصاد وحشوُ الإنتاج
+  يتحرّكان معاً في إيداعٍ واحد.
+- **ثقةُ السلسلة** (CTC الأماميّة، `_sequence_confidence`): فصلُ الحذف 0.903 مقابل
+  0.734 للقديمة. `CONF_GATE=0.90` مُعلَّمٌ غيرَ مُعايَرٍ للسُلَّم الجديد.
+- **جذرُ تسميم التواريخ وُجد**: الواجهة كانت تملأ «تاريخ الجهة» بتاريخ اليوم تلقائيّاً
+  (`resetDateFields`) — أُزيل الافتراضيّ، والقصاصة هي مسار النسخ (CRNN لا يقرأ
+  التواريخ — قِيس: None و«2027» مبتورة).
+- حصاد T2.4 جارٍ (~4.4k/8.4k زوجاً) نحو تدريب كاغل ببروتوكولٍ مُسجَّل.
 
 ## أرقامٌ مسحوبة — لا تُقتبَس
 - **الجهة المُصدِرة ليست 77% ولا 85%.** ذلك كان تسريبَ مطابقةٍ ذاتيّة (المستند يتعرّف
