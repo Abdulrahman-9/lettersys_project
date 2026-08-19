@@ -1022,6 +1022,35 @@ class ExtractionStatistics(models.Model):
         return f"Statistics - {self.date}"
 
 
+class ScanPayload(models.Model):
+    """حمولةُ اقتراحات المسح **دائمةً** — لأن ذهب التدريب لا يجوز أن يعبر كاشاً متطايراً.
+
+    الجذر المقيس (2026-08-18): `_mint_scan_token` كان يضع الحمولة في الكاش وحده، وبلا
+    `REDIS_CACHE_URL` يكون الكاش `LocMemCache` — **نسخةٌ لكلّ عمليّة**. فرمزٌ يُسكّ في
+    عاملٍ لا يراه عاملٌ آخر يستقبل الحفظ، وكلّ إعادة تشغيلٍ تمحو المعلّق. والنتيجة
+    ضياعُ زوج (قصاصة، حقيقة) **بلا رجعة** — وهو الحقل الوحيد الذي خسارتُه لا تُعوَّض:
+    نصٌّ خاطئ يُعاد حسابه غداً، وقيمةٌ كتبها الكاتب بيده تضيع إلى الأبد.
+
+    وقيمتها ارتفعت اليوم تحديداً: بإسكات اقتراح العدد صارت القيمة النهائيّة **ذهباً
+    نظيفاً** — كتبها الكاتب وهو ينظر إلى الورقة، بلا انحياز قبولٍ لاقتراحٍ معروض.
+    (قاعدةٌ عامّة: نهائيّاتُ حقلٍ تصلح تدريباً **ما دام ملؤه التلقائيّ مُطفأً**.)
+
+    الكاش يبقى مسارَ السرعة، وهذا الجدول مسارُ الحقيقة: يُقرأ حين يخيب.
+    """
+
+    token = models.CharField(max_length=64, unique=True, db_index=True)
+    data = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'حمولة مسح'
+        verbose_name_plural = 'حمولات المسح'
+        indexes = [models.Index(fields=['-created_at'])]
+
+    def __str__(self):
+        return f'ScanPayload({self.token[:12]}…)'
+
+
 class ExtractionCache(models.Model):
     """ذاكرة تخزين مؤقت لنتائج الاستخراج"""
     image_hash = models.CharField(max_length=256, unique=True, db_index=True)

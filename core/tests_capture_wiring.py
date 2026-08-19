@@ -86,3 +86,30 @@ class SenderNumberBoxCaptureTests(TestCase):
         }, kind='outgoing_external')
         self.assertIsNotNone(res)
         self.assertNotIn('sender_number_bbox', res.additional_data)
+
+
+class ScanPayloadDurabilityTests(TestCase):
+    """ذهبُ التدريب لا يعبر كاشاً متطايراً.
+
+    الجذر المقيس (2026-08-18): الحمولة كانت في الكاش وحده، وبلا `REDIS_CACHE_URL`
+    يكون `LocMemCache` — **نسخةٌ لكلّ عمليّة**. فرمزٌ يُسكّ في عاملٍ لا يراه عاملٌ آخر
+    يستقبل الحفظ، وكلّ إعادة تشغيلٍ تمحو المعلّق. وهذا الحقل تحديداً لا تُعوَّض خسارتُه:
+    نصٌّ خاطئ يُعاد حسابه غداً، وقيمةٌ كتبها الكاتب بيده تضيع أبداً."""
+
+    def test_mint_writes_a_durable_row_beside_the_cache(self):
+        from core.extraction.api.endpoints import _mint_scan_token
+        from core.models import ScanPayload
+        token = _mint_scan_token(_FakeResult().r)
+        self.assertTrue(token)
+        row = ScanPayload.objects.filter(token=token).first()
+        self.assertIsNotNone(row, 'لا نسخة دائمة — الحمولة في الكاش وحده')
+        self.assertTrue(row.data.get('raw_text'), 'الحمولة الدائمة فارغة')
+
+    def test_durable_row_survives_a_cold_cache(self):
+        """محاكاةُ إعادة تشغيلٍ أو عاملٍ آخر: يُمسح الكاش ويبقى الصفّ."""
+        from core.extraction.api.endpoints import _mint_scan_token
+        from core.models import ScanPayload
+        token = _mint_scan_token(_FakeResult().r)
+        cache.clear()
+        self.assertIsNone(cache.get('scan_token:%s' % token))
+        self.assertTrue(ScanPayload.objects.get(token=token).data.get('raw_text'))

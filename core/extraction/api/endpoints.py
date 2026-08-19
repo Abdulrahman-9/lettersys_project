@@ -278,7 +278,17 @@ def _mint_scan_token(result) -> str:
 
         from core.extraction.pipeline import result_to_scan_data
         token = uuid.uuid4().hex
-        _cache.set(f'scan_token:{token}', result_to_scan_data(result), timeout=86400)
+        payload = result_to_scan_data(result)
+        _cache.set(f'scan_token:{token}', payload, timeout=86400)
+        # **ونسخةٌ دائمة**: الكاش مسارُ السرعة وهذا مسارُ الحقيقة. بلا REDIS_CACHE_URL
+        # يكون الكاش LocMemCache — نسخةٌ لكلّ عمليّة — فرمزٌ يُسكّ في عاملٍ لا يراه
+        # عاملٌ آخر يستقبل الحفظ، وكلّ إعادة تشغيلٍ تمحو المعلّق. وضياعُ زوج (قصاصة،
+        # حقيقة) لا يُعوَّض: النصّ الخاطئ يُعاد حسابه غداً، وما كتبه الكاتب يضيع أبداً.
+        try:
+            from core.models import ScanPayload
+            ScanPayload.objects.update_or_create(token=token, defaults={'data': payload})
+        except Exception as exc:                  # الدوام تحسينٌ لا شرط
+            logger.warning('[capture] تعذّر حفظ حمولة المسح دائماً: %s', type(exc).__name__)
         return token
     except Exception as exc:                      # الحلقة تحسينٌ لا شرط — لا تُفشل الاستخراج
         logger.warning('[capture] تعذّر سكّ رمز المسح: %s', type(exc).__name__)

@@ -343,6 +343,14 @@ def save_book_api(request):
                 from django.core.cache import cache as _scan_cache
                 from core.extraction.capture import persist_extraction_capture
                 suggested = _scan_cache.get(f'scan_token:{scan_token}')
+                if not suggested:
+                    # الكاش خاب (عمليّةٌ أخرى · إعادةُ تشغيل · انقضاءُ مهلة) ⟵ الجدول
+                    # الدائم. بدون هذا الارتداد يضيع ذهبُ التدريب بالصدفة لا بالخطأ.
+                    from core.models import ScanPayload
+                    _row = ScanPayload.objects.filter(token=scan_token).first()
+                    suggested = _row.data if _row else None
+                    if suggested:
+                        logger.info('[capture] حمولة المسح من الجدول الدائم (الكاش خاب)')
                 if suggested:
                     persist_extraction_capture(
                         book=book, attachment=attachment, suggested=suggested,
