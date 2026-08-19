@@ -7,7 +7,11 @@ ONNX/torch 98.2%) — بل العقدُ الذي يجعل تلك الدقّة ت
 يُصمِت الكاشف بدل أن يكسر استخراجاً."""
 from unittest import mock
 
-from django.test import SimpleTestCase, override_settings
+from django.contrib.auth.models import User
+from django.test import SimpleTestCase, TestCase, override_settings
+
+from core.extraction.capture import persist_extraction_capture
+from core.models import Attachment, Book, ExtractionFeedback
 from PIL import Image
 
 from core.extraction.handwriting import detector as D
@@ -108,3 +112,74 @@ class DateCropBoxAnchorTests(SimpleTestCase):
         with mock.patch('core.extraction.handwriting.detector.detect_number_box',
                         return_value=([0.1, 0.62, 0.2, 0.66], 0.9)):
             self.assertIsNone(S._detector_box(self._img()))
+
+
+class NumberEmissionSuppressedTests(TestCase):
+    """حقل «عدد الجهة» مُسكَتٌ عن الكاتب — من **كلّ** الكُتّاب، وفي **كلا** الحاملَين.
+
+    قِيس على خطّ الأساس المُعتمَد (تشغيلة A، 100 كتابٍ نظيف، فاشل 0): إصابة 4 مقابل
+    **خاطئ 24**، منها 6 بثقة ≥0.90 كلّها من مسار CRNN. والواجهة **بلا عتبة عرض** —
+    تكتب أيّ اقتراحٍ في الحقل مهما كانت ثقته. فكلفةُ انتباه الكاتب تفوق ما توفّره
+    الإصابات الأربع، والصمت المتّسق أصدق من صوابٍ عرَضيٍّ يرافقه خطأٌ واثق.
+
+    يُعاد الفتح بشرطٍ مُسجَّل: إعادة تدريب CRNN عند 300 قصاصةٍ مؤكَّدة ثمّ نظرةٌ على
+    e2e-B ببوّابةٍ مُسبَقة — لا بقلب الراية وحدها."""
+
+    def _result(self, value='7369', conf=0.95):
+        from core.extraction.pipeline import AIExtractionResult
+        r = AIExtractionResult()
+        r.raw_text = 'العدد : 7369'
+        r.cleaned_text = r.raw_text
+        r.sender_number = value
+        r.sender_number_confidence = conf
+        r.sender_number_bbox = [0.7, 0.1, 0.8, 0.13]
+        r.sender_number_bbox_source = 'detector'
+        r.sender_number_bbox_dims = [2480, 3508]
+        return r
+
+    def test_suppressor_dominates_any_writer(self):
+        """النقطة الواحدة بعد الكُتّاب الخمسة ⟵ لا يهمّ من كتب القيمة."""
+        from core.extraction.pipeline import _suppress_sender_number_emission as kill
+        for src_conf in (0.70, 0.65, 0.95, 0.998):
+            r = self._result(conf=src_conf)
+            kill(r)
+            self.assertIsNone(r.sender_number, 'نجا عددٌ بثقة %s' % src_conf)
+            self.assertEqual(r.sender_number_confidence, 0.0)
+
+    def test_neither_carrier_carries_the_value(self):
+        """الحاملان: لقطةُ رمز المسح (scan_token) واستجابةُ الواجهة."""
+        from core.extraction.pipeline import (_suppress_sender_number_emission as kill,
+                                              result_to_scan_data)
+        r = self._result()
+        kill(r)
+        snap = result_to_scan_data(r)
+        self.assertFalse(snap.get('sender_number'), 'الرقم تسرّب في لقطة رمز المسح')
+        self.assertFalse(snap.get('sender_number_confidence'))
+
+    def test_flywheel_invariant_box_survives_suppression(self):
+        """الصندوق ومقاسه ومصدره **مادّةُ تدريبٍ لا مادّةُ عرض** — تبقى بعد الإسكات."""
+        from core.extraction.pipeline import (_suppress_sender_number_emission as kill,
+                                              result_to_scan_data)
+        r = self._result()
+        kill(r)
+        snap = result_to_scan_data(r)
+        self.assertEqual(snap.get('sender_number_bbox'), [0.7, 0.1, 0.8, 0.13])
+        self.assertEqual(snap.get('sender_number_bbox_source'), 'detector')
+        self.assertEqual(snap.get('sender_number_bbox_dims'), [2480, 3508])
+
+    def test_empty_suggestion_creates_no_feedback_row(self):
+        """دلالةٌ نظيفة: «الكاتب صحّح ما عرضناه» — ولم نعرض شيئاً، فلا صفَّ تصحيح."""
+        user = User.objects.create_user('emit', password='x')
+        book = Book.objects.create(title='ت', kind='incoming_internal', created_by=user)
+        att = Attachment.objects.create(book=book, file='attachments/a.pdf')
+        res = persist_extraction_capture(
+            book=book, attachment=att,
+            suggested={'raw_text': 'نصّ', 'sender_number': '',
+                       'sender_number_bbox': [0.7, 0.1, 0.8, 0.13],
+                       'sender_number_bbox_source': 'detector'},
+            final={'sender_number': '1754'}, user=user)
+        self.assertIsNotNone(res)
+        self.assertEqual(ExtractionFeedback.objects.filter(field_name='sender_number').count(), 0)
+        # ومع ذلك يبقى زوجُ التدريب كاملاً
+        self.assertEqual(res.additional_data['sender_number_final'], '1754')
+        self.assertTrue(res.additional_data['sender_number_bbox'])

@@ -704,6 +704,7 @@ class AIProcessingServiceTests(TestCase):
         # الإصابة لا تعيد كتابة الصفّ (يحفظ عدّاد الاستخدام)
         self.assertEqual(ExtractionCache.objects.get(image_hash=file_hash).hit_count, 1)
 
+    @mock.patch('core.extraction.pipeline.NUMBER_EMISSION_ENABLED', True)
     @mock.patch('core.extraction.pipeline.AIExtractionService._read_handwritten_sender_number')
     @mock.patch('core.extraction.pipeline.build_online_provider_from_settings')
     @mock.patch('core.extraction.pipeline.AIIntegrationSettings.get_active_settings')
@@ -740,6 +741,7 @@ class AIProcessingServiceTests(TestCase):
         self.assertEqual(result.sender_number, '1754')
         self.assertAlmostEqual(result.sender_number_confidence, 0.95)
 
+    @mock.patch('core.extraction.pipeline.NUMBER_EMISSION_ENABLED', True)
     @mock.patch('core.extraction.pipeline.AIExtractionService._read_handwritten_sender_number')
     @mock.patch('core.extraction.pipeline.build_online_provider_from_settings')
     @mock.patch('core.extraction.pipeline.AIIntegrationSettings.get_active_settings')
