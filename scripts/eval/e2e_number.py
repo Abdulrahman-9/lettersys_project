@@ -65,8 +65,12 @@ for bid in todo:
     gc.collect()
 
 n = len(done)
-scored = [r for r in done if r.get("truth") and r.get("status") == "completed"]
-timed_out = sum(1 for r in done if r.get("status") and r["status"] != "completed")
+# الأنبوب يستعمل أربع حالات: pending/completed/failed/manual_review (pipeline.py:155).
+# **`manual_review` نجاحٌ** (ثقةٌ منخفضة تستدعي مراجعةً بشريّة) لا فشل — وأوّل صياغةٍ
+# لهذا المُرشِّح قبلت `completed` وحدها فأقصت 60 تشغيلةً ناجحة وأوهمت بمهلةٍ 95%.
+_DEAD = ('failed', 'pending')
+scored = [r for r in done if r.get("truth") and (r.get("status") or '') not in _DEAD]
+timed_out = sum(1 for r in done if (r.get("status") or '') in _DEAD)
 hit = sum(1 for r in scored if r.get("hit"))
 silent = sum(1 for r in scored if not r.get("pred"))
 wrong = len(scored) - hit - silent
