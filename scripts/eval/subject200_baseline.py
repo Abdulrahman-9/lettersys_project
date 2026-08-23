@@ -30,7 +30,7 @@ def _n(s):
     return s
 
 def T(s):
-    return {t for t in _AR.split(_n(s).strip()) if len(t) >= 2 and t.lower() not in _ST}
+    return {t.lower() for t in _AR.split(_n(s).strip()) if len(t) >= 2 and t.lower() not in _ST}
 
 def f1(a, b):
     A, B = T(a), T(b)
