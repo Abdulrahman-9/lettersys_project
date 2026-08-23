@@ -59,3 +59,45 @@ class SequenceConfidenceTests(SimpleTestCase):
         """«99» تحتاج فراغاً بين الرمزين — شرطُ CTC للمكرّر، وهو مُنفَّذٌ هنا."""
         p = _frames([(3, 10), (9, 10)])
         self.assertGreater(self.r._sequence_confidence(p, '99'), 0.9)
+
+
+class _NamedInput:
+    def __init__(self, name):
+        self.name = name
+
+
+class _FakeSession:
+    """جلسةٌ باسم مُدخَلٍ غير `image` — تُخفق إن نُودي عليها بالاسم الخطأ."""
+
+    def __init__(self, name='input'):
+        self._name = name
+        self.fed_names = []
+
+    def get_inputs(self):
+        return [_NamedInput(self._name)]
+
+    def run(self, _out, feed):
+        self.fed_names += list(feed)
+        if self._name not in feed:
+            raise ValueError('invalid input name')
+        T, C = 14, 11
+        logits = np.full((1, T, C), -10.0, dtype=np.float32)
+        logits[0, :, 0] = 10.0
+        return [logits]
+
+
+class InjectedSessionInputNameTests(SimpleTestCase):
+    """العطب الخامس من صنف «مسارَي بناءٍ أحدهما يتخطّى اللازم» (2026-08-23).
+
+    الاشتقاق كان في مسار التحميل من الملفّ وحده؛ الجلسة المحقونة تبقى على
+    الافتراضيّ `'image'` بينما مُدخَل T2.4 اسمه `'input'` ⟵ ValueError على كلّ
+    قراءةٍ ومسحُ عتبةٍ كاملٌ صفريّ النتائج (0/393) قبل الإصلاح."""
+
+    def test_injected_session_input_name_is_honoured(self):
+        from PIL import Image
+        sess = _FakeSession('input')
+        r = HandwrittenNumberReader(session=sess)
+        text, conf = r.read(Image.new('L', (100, 40), 255))
+        self.assertEqual(sess.fed_names, ['input'])
+        self.assertIsNone(text)            # كلّها فراغٌ ⟵ امتناعٌ صامت
+        self.assertEqual(conf, 0.0)
