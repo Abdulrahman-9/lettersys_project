@@ -16,7 +16,7 @@ import gc
 import os
 import re
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from core.extraction.handwriting import EntityLayoutPriors, NumberStripLocator
 
@@ -43,6 +43,11 @@ class Command(BaseCommand):
                                  'وسم التاريخ يُخزَّن ISO وتولِّد التنقيةُ صيغَه المكتوبة.')
 
     def handle(self, *args, **opts):
+        if options.get('field') == 'date':
+            raise CommandError(
+                'مسار --field date أُوقف (2026-08-24): بقايا v6 بلا حارس فارقٍ ولا '
+                'استثناء المجموعات المختومة — يُنتج مجموعةً أدنى بصمت. البديل '
+                'المعتمد: scripts/eval/harvest_dates.py (سجلّ التقييم قسم D).')
         import fitz
         from PIL import Image
         from core.models import AIIntegrationSettings, Book
