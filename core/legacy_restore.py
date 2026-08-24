@@ -80,6 +80,25 @@ def _parse_date(v):
     return None
 
 
+def _legacy_dates(rd, prefix, is_out):
+    """تعيينُ عمودَي التاريخ من سجلّ المصدر ⟵ `(Book.date, Book.sender_date)`.
+
+    **مُصحَّحٌ 2026-08-23 (مؤكَّدٌ عدائيّاً — سجلّ التقييم قسم D):** في سجلّات
+    الوارد عمود `DATE` هو **حبرُ الجهة** و`CND` (القيد) هو **تاريخُنا** — عكسُ
+    ما يوحي به الاسمان. الأدلّة: رتابةُ سلسلة الختم WID لعمود CND (انقلاب
+    0.36%/0.00% في IIMAIL 2025/2026) مقابل بعثرة DATE (~29%)، والجمعةُ صفرٌ
+    مطلقٌ في CND (0/11,050 — دوامُنا الرسميّ) مقابل 3.33% عطلاً في DATE،
+    والعينُ على القصاصات 5/5. التعيينُ القديم كان معكوساً، وأصلحت الصفوفَ
+    المستوردةَ قبله هجرةُ المبادلة 0060.
+
+    الصادر بلا انقلاب: `DATE` تاريخُنا فعلاً (رتيبٌ 2.8–3.5% فقط) ولا `CND`
+    معتبرَ فيه (فارغٌ في 2,039/2,041)."""
+    if is_out:
+        return _parse_date(rd.get(f"{prefix}DATE")), None
+    return (_parse_date(rd.get(f"{prefix}CND")),      # تاريخُ قيدنا
+            _parse_date(rd.get(f"{prefix}DATE")))     # حبرُ الجهة
+
+
 def _parse_entity_names(raw):
     """
     يفصل 'شعبة X + سارة' → ['شعبة X', 'سارة'].
@@ -1077,8 +1096,7 @@ class LegacyRestoreEngine:
 
         num = str(rd.get(f"{prefix}NUM") or '').strip()
         title = (rd.get(f"{prefix}SUB") or '').strip() or 'بدون عنوان'
-        bdate = _parse_date(rd.get(f"{prefix}DATE"))
-        sdate = _parse_date(rd.get(f"{prefix}CND")) if not is_out else None
+        bdate, sdate = _legacy_dates(rd, prefix, is_out)
         clas = (rd.get(f"{prefix}CLAS") or '').strip()
         stat = rd.get(f"{prefix}STAT")
         note = (rd.get(f"{prefix}NOTE") or '').strip()

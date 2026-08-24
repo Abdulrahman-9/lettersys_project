@@ -19,20 +19,14 @@
    وأقصى ضررٍ إعادةُ كتبٍ قليلة. ومفتاحُ الاستئناف «حاولنا» لا «نجحنا»، وإلّا دارت
    الكتبُ المرفوضة في حلقةٍ مقفلة كلَّ دفعة (وقعت في حصاد T2.4).
 
-**الوسم — انقلابُ العمودين مؤكَّدٌ عدائيّاً (2026-08-23، السجلّ قسم D):**
-في صفوف **الوارد المستوردة** عمودا التاريخ معكوسان عن اسميهما في Django: الاستيراد
-(`core/legacy_restore.py:1080`) يضع `{P}DATE ⟵ Book.date` و`{P}CND ⟵ Book.sender_date`،
-والقياس المُعاد من الصفر على القاعدة الحيّة أثبت أنّ `sender_date` تاريخُ **قيدنا**
-و`date` حبرُ **الجهة**، بثلاث عدساتٍ متطابقة:
-  · رتابةُ سلسلة الختم (WID): انقلابات `sender_date` 0.36%/0.00% (IIMAIL 2025/2026)
-    مقابل `date` 29.6%/28.7% — ويعمّم على OIMAIL بالسنتين.
-  · `sender_date − date` موجبٌ في 92.5% من 11,050 صفّاً (وسيطُه +3) = زمنُ الوصول.
-  · بصمةُ العطل: الجمعة **صفرٌ مطلق** في `sender_date` (0/11,050 — دوامُنا الرسميّ)
-    مقابل 3.33% عطلاً في `date` (حبرُ جهاتٍ لا تلتزم أسبوعنا).
-  · والعين: 5/5 قصاصاتٍ حبرُها يطابق `date` لا `sender_date`.
-لذلك `label` هنا = **الحبر بحسب المصدر**: للمستورد `Book.date`، وللكاتبيّ النظيف
-(ما بعد الإصلاح) `Book.sender_date` (ما نسخه الكاتب من القصاصة). الحقلان الخامان
-يُحملان معاً دوماً، وبوّابةُ العين n=100 تصادق على مطابقة الحبر ≥85% قبل أيّ تدريب.
+**الوسم — موحَّدٌ بعد هجرة المبادلة 0060 (2026-08-23):**
+انقلابُ عمودَي التاريخ في الوارد المستورد اكتُشف (D0) وأُكّد عدائيّاً ثمّ **صُوِّب
+جذريّاً**: هجرةُ 0060 بادلت العمودين لـ11,048 صفّاً وأُصلح تعيينُ الاستيراد نفسُه
+(`_legacy_dates`). فالدلالة الآن مستقيمةٌ في القاعدة كلّها بلا استثناء:
+`sender_date` = حبرُ الجهة (الوسم) و`date` = تاريخُ قيدنا، والفارق
+`date − sender_date` = زمنُ الوصول (موجبٌ 92.5%، وسيطُه +3).
+`label` = `sender_date` دوماً، وبوّابةُ العين n=100 تصادق على مطابقة الحبر ≥85%
+قبل أيّ تدريب. التفاصيل والأدلّة في سجلّ التقييم قسم D.
 
     python scripts/eval/harvest_dates.py [عدد الكتب في الدفعة]
 """
@@ -155,12 +149,11 @@ if os.path.exists(MANIFEST):
         except Exception:
             pass
 
-# ── المجمّعان ────────────────────────────────────────────────────────────────
-# 'clean'    — كاتبيٌّ (source_ref فارغ) بعد إصلاح الافتراضيّ (978ccdf): الوسم ما
-#              نسخه الكاتب في «تاريخ الجهة» = sender_date. (مقيسٌ صفراً حتّى
-#              2026-08-23 — الفرع للتراكم القادم.)
-# 'filtered' — مستورَدٌ بحارس الفارق المُصحَّح: 0 < قيدُنا(sender_date) − حبرُ
-#              الجهة(date) ≤ 45 يوماً. الوسم = date.
+# ── المجمّعان (دلالة ما بعد هجرة 0060: sender_date=الحبر · date=قيدُنا) ──────
+# 'clean'    — كاتبيٌّ (source_ref فارغ) بعد إصلاح الافتراضيّ (978ccdf). (مقيسٌ
+#              صفراً حتّى 2026-08-23 — الفرع للتراكم القادم.)
+# 'filtered' — مستورَدٌ بحارس الفارق: 0 < قيدُنا(date) − حبرُ الجهة(sender_date)
+#              ≤ 45 يوماً.
 #
 # **فخّان مقيسان (D0):** `created_at` لصفٍّ مستورد هو زمنُ الاستيراد (دفعةُ 2,037
 # صفّاً هبطت في 17 دقيقة يوم 2026-08-19) فلا يصلح مرجعاً زمنيّاً؛ والكاتبيُّ قبل
@@ -179,11 +172,11 @@ for bid, bdate, sdate, created, sref in rows:
         if timezone.localtime(created).date() < FIX_DATE:
             continue                      # كاتبيٌّ قبل الإصلاح = وسمٌ مسموم
         pool_of[bid] = 'clean'
-        delta_of[bid] = (sdate - bdate).days if bdate else None
+        delta_of[bid] = (bdate - sdate).days if bdate else None
     else:
         if bdate is None:
             continue
-        delta = (sdate - bdate).days      # قيدُنا − حبرُ الجهة = زمنُ الوصول
+        delta = (bdate - sdate).days      # قيدُنا − حبرُ الجهة = زمنُ الوصول
         if not (0 < delta <= MAX_DELTA):
             continue
         pool_of[bid], delta_of[bid] = 'filtered', delta
@@ -230,16 +223,14 @@ with open(MANIFEST, 'a', encoding='utf-8') as mf:
                 tiny += 1
                 _skip('tiny_crop')
                 continue
-            ink = b.sender_date if clerk_of[bid] else b.date
             mf.write(json.dumps({
                 'book': bid,
                 'files': files,
-                # الوسم = الحبر بحسب المصدر (انظر رأس الملفّ): مستورَد ⟵ date،
-                # كاتبيٌّ نظيف ⟵ sender_date. الخامان محمولان دوماً للمراجعة.
-                'label': ink.isoformat(),
+                # الدلالة موحَّدةٌ بعد هجرة 0060: sender_date هو الحبر دوماً.
+                'label': b.sender_date.isoformat(),
                 'db_date': b.date.isoformat() if b.date else None,
                 'db_sender_date': b.sender_date.isoformat(),
-                'stamp_minus_doc': (b.sender_date - b.date).days if b.date else None,
+                'stamp_minus_doc': (b.date - b.sender_date).days if b.date else None,
                 'delta_days': delta_of[bid],
                 'pool': pool_of[bid],
                 'clerk': clerk_of[bid],   # source_ref فارغ ⇒ إدخالُ كاتبٍ لا استيراد
