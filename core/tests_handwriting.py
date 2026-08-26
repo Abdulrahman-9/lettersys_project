@@ -199,8 +199,17 @@ class ReaderTests(SimpleTestCase):
             self._out = t[None]
         def run(self, _, __):
             return [self._out]
+
         def get_inputs(self):
-            raise AssertionError('لا يُستدعى مع جلسة محقونة')
+            # **صُحِّح 2026-08-26:** كان هذا يرفع AssertionError تثبيتاً لافتراض
+            # «الجلسةُ المحقونة لا تُسأل عن اسم مُدخَلها» — وذاك الافتراضُ نفسُه
+            # كان العطب: القارئ يبقى على الاسم الافتراضيّ 'image' بينما نموذج
+            # T2.4 اسمُ مُدخَله 'input' ⟵ ValueError على كلّ قراءةٍ ومسحُ عتبةٍ
+            # صفريّ النتائج (0/393). العقدُ الآن: الاشتقاقُ من الجلسة **دائماً**
+            # أيّاً كان مسار البناء، فالمزيّفةُ تُوفّي به.
+            class _In:
+                name = 'input'
+            return [_In()]
 
     def _reader(self):
         from core.extraction.handwriting.reader import HandwrittenNumberReader

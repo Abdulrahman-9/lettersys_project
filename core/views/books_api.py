@@ -386,7 +386,18 @@ def save_book_api(request):
                                # مُحتمَلة · ومؤكَّدٌ بنقرةٍ ≠ مكتوبٌ بيد).
                                'date': str(book.date or ''),
                                'sender_date_provenance': (
-                                   request.POST.get('sender_date_provenance') or '')},
+                                   request.POST.get('sender_date_provenance') or ''),
+                               # العدد هو الحقل الوحيد المملوء تلقائيّاً: بلا
+                               # هذا الوسم لا يُميَّز ما كتبه الكاتب ممّا ختمه
+                               # صامتاً، فيتغذّى النموذج على خطئه هو.
+                               'sender_number_provenance': (
+                                   request.POST.get('sender_number_provenance') or ''),
+                               # ما عُرض على الكاتب فعلاً — الواجهةُ وحدها تعرفه
+                               # (اقتراحٌ موجود ≠ اقتراحٌ معروض).
+                               'displayed_fields': [
+                                   s.strip() for s in
+                                   (request.POST.get('displayed_fields') or '').split(',')
+                                   if s.strip()]},
                         user=request.user)
             except Exception as cap_err:
                 logger.warning('[capture] تعذّر التقاط التدريب: %s', cap_err)

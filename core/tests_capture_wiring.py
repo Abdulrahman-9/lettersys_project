@@ -175,3 +175,183 @@ class SenderDateCaptureTests(TestCase):
                                kind='outgoing_external')
         self.assertNotIn('sender_date_suggested_iso', res.additional_data)
         self.assertEqual(res.feedbacks.filter(field_name='sender_date').count(), 0)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# عقدُ الالتقاط — المخطّط والمصدرُ والعرضُ والحجر (حوكمة 2026-08-26)
+# ════════════════════════════════════════════════════════════════════════════
+_FULL_SUGGESTED = {
+    'raw_text': 'العدد : 7369',
+    'sender_number': '7369',
+    'sender_number_confidence': 0.91,
+    'sender_number_bbox': [0.7, 0.1, 0.8, 0.13],
+    'sender_number_bbox_source': 'detector',
+    'sender_number_bbox_dims': [2480, 3508],
+    'sender_date_suggestion': {'raw': '2025/3/6', 'iso': '2025-03-06', 'parse': 'ok',
+                               'confidence': 0.99, 'bbox': [0.6, 0.12, 0.9, 0.16],
+                               'source': 'crnn_d2', 'geometry': 'x1'},
+}
+_FULL_FINAL = {
+    'title': 'ت', 'secret_level': 'normal', 'sender_number': '7369',
+    'sender_date': '2025-03-06', 'date': '2025-03-09',
+    'sender_date_provenance': 'confirmed', 'sender_number_provenance': 'typed',
+    'displayed_fields': ['sender_number', 'sender_date', 'title', 'secret_level'],
+}
+
+
+def _run_capture(username, kind='incoming_internal', suggested=None, final=None):
+    """التقاطٌ حقيقيّ عبر المسار الكامل — المفاتيح تُقرأ من الناتج لا من نصّ المصدر."""
+    user = User.objects.create_user(username, password='x')
+    book = Book.objects.create(title='ت', kind=kind, created_by=user)
+    att = Attachment.objects.create(book=book, file='attachments/a.pdf')
+    res = persist_extraction_capture(
+        book=book, attachment=att,
+        suggested=dict(suggested if suggested is not None else _FULL_SUGGESTED),
+        final=dict(final if final is not None else _FULL_FINAL), user=user)
+    return res, book
+
+
+class CaptureSchemaContractTests(TestCase):
+    """حرزُ عقد المفاتيح: `additional_data` قاموسٌ حرّ، وإعادةُ تسميةٍ صامتة تقتل
+    الجرد بلا صوت (الحاصدُ يقرأ مفتاحاً لم يعد يُكتب فيُخرج صفراً ويبدو سليماً).
+
+    الفحصُ بتشغيل التقاطٍ حقيقيّ ومقارنة **المفاتيح الناتجة** بالمخطّط — لا
+    بتحليل نصّ المصدر: تحليلُ النصّ يمرّ على مفتاحٍ يُكتب عبر متغيّر.
+    """
+
+    def test_full_incoming_capture_writes_exactly_the_declared_schema(self):
+        from core.extraction.capture_schema import CAPTURE_KEYS
+        res, _ = _run_capture('schema-full')
+        keys = set(res.additional_data)
+        self.assertEqual(keys - CAPTURE_KEYS, set(), 'مفتاحٌ يُكتب خارج المخطّط')
+        self.assertEqual(CAPTURE_KEYS - keys, set(), 'مفتاحٌ مُعلَنٌ لا يُكتب')
+
+    def test_no_capture_path_leaks_an_undeclared_key(self):
+        """المساراتُ المشروطة (صادر · واردٌ بلا اقتراح تاريخ) داخل المخطّط أيضاً."""
+        from core.extraction.capture_schema import CAPTURE_KEYS
+        for name, kind, sug in (
+                ('schema-out', 'outgoing_external', _FULL_SUGGESTED),
+                ('schema-min', 'incoming_external', {'raw_text': 'نصّ'})):
+            res, _ = _run_capture(name, kind=kind, suggested=sug, final={})
+            self.assertTrue(set(res.additional_data) <= CAPTURE_KEYS,
+                            'مفتاحٌ خارج المخطّط في %s' % name)
+
+    def test_outgoing_carries_the_base_keys_only(self):
+        from core.extraction.capture_schema import BASE_KEYS
+        res, _ = _run_capture('schema-out-base', kind='outgoing_internal', final={})
+        self.assertEqual(set(res.additional_data), set(BASE_KEYS))
+
+
+class ProvenanceCaptureTests(TestCase):
+    """`sender_number_provenance` — سدُّ أخطر ثغرات التسمّم الذاتيّ.
+
+    العدد هو الحقل الوحيد الذي تملؤه الواجهة تلقائيّاً وكان الوحيد بلا وسم مصدر،
+    فقيمةٌ حُفظت بلا لمسٍ تحمل خطأ النموذج نفسَه؛ تدريبٌ عليها يُعزّز الخطأ.
+    """
+
+    def test_autofilled_is_persisted_verbatim(self):
+        final = dict(_FULL_FINAL, sender_number_provenance='autofilled')
+        res, _ = _run_capture('prov-auto', final=final)
+        self.assertEqual(res.additional_data['sender_number_provenance'], 'autofilled')
+
+    def test_typed_and_confirmed_survive_both_fields(self):
+        res, _ = _run_capture('prov-typed')
+        self.assertEqual(res.additional_data['sender_number_provenance'], 'typed')
+        self.assertEqual(res.additional_data['sender_date_provenance'], 'confirmed')
+
+    def test_unknown_value_is_emptied_not_stored(self):
+        """مصدرٌ مجهولٌ أصدقُ من مصدرٍ مُختلَق — وإلّا تسلّلت قيمةٌ لا يفهمها المرشِّح."""
+        final = dict(_FULL_FINAL, sender_number_provenance='guessed')
+        res, _ = _run_capture('prov-junk', final=final)
+        self.assertEqual(res.additional_data['sender_number_provenance'], '')
+
+    def test_missing_provenance_is_present_and_empty(self):
+        final = {k: v for k, v in _FULL_FINAL.items() if not k.endswith('_provenance')}
+        res, _ = _run_capture('prov-absent', final=final)
+        self.assertEqual(res.additional_data['sender_number_provenance'], '')
+
+
+class DisplayedFlagCaptureTests(TestCase):
+    """رايةُ `displayed`: «وُجد اقتراح» ليس «عُرض اقتراح».
+
+    سياسةُ العرض تبدّلت ثلاث مرّاتٍ في أسبوعين، فبلا الراية تختلط دلالةُ «لم
+    يُصحَّح» بين «صحيحٌ» و«لم يره أحد». المصدرُ الواجهةُ وحدها.
+    """
+
+    def test_flags_follow_the_ui_list_not_the_suggestion(self):
+        final = dict(_FULL_FINAL, displayed_fields=['sender_number'])
+        res, _ = _run_capture('disp-partial', final=final)
+        ad = res.additional_data
+        self.assertTrue(ad['sender_number_displayed'])
+        # الاقتراحُ موجودٌ كاملاً في الحمولة ومع ذلك الرايةُ كاذبة — وهذا المقصود
+        self.assertFalse(ad['sender_date_displayed'])
+        self.assertFalse(ad['title_displayed'])
+        self.assertFalse(ad['secret_level_displayed'])
+
+    def test_absent_list_means_nothing_was_displayed(self):
+        final = {k: v for k, v in _FULL_FINAL.items() if k != 'displayed_fields'}
+        res, _ = _run_capture('disp-none', final=final)
+        for key in ('sender_number_displayed', 'sender_date_displayed',
+                    'title_displayed', 'secret_level_displayed'):
+            self.assertFalse(res.additional_data[key], key)
+
+    def test_outgoing_declares_no_sender_flags(self):
+        res, _ = _run_capture('disp-out', kind='outgoing_external')
+        self.assertNotIn('sender_number_displayed', res.additional_data)
+        self.assertNotIn('sender_date_displayed', res.additional_data)
+
+
+class EvalHoldTests(TestCase):
+    """حجرُ التقييم بالهاش لحظةَ الالتقاط — لا بالاختيار ولا بالزمن.
+
+    الحجرُ اللاحق يسمح بترحيل صفٍّ من الحجز إلى التدريب **بعد** رؤية نتيجته،
+    وذاك بابُ تسريبٍ لا يُكشَف لاحقاً بأيّ قياس.
+    """
+
+    def test_capture_stamps_the_hash_verdict(self):
+        from core.extraction.capture_schema import eval_hold_for
+        res, book = _run_capture('hold-stamp')
+        self.assertEqual(res.additional_data['eval_hold'], eval_hold_for(book.id))
+
+    def test_verdict_is_deterministic_for_the_same_book(self):
+        from core.extraction.capture_schema import eval_hold_for
+        for book_id in (1, 7, 42, 11298, 999999):
+            self.assertEqual(eval_hold_for(book_id), eval_hold_for(book_id))
+            self.assertEqual(eval_hold_for(book_id), eval_hold_for(str(book_id)),
+                             'الحكمُ على النصّ لا على النوع — وإلّا انقلب بتغيّر المستدعي')
+
+    def test_share_is_about_one_in_ten(self):
+        from core.extraction.capture_schema import eval_hold_for
+        held = sum(1 for i in range(1, 1001) if eval_hold_for(i))
+        self.assertTrue(60 <= held <= 150, 'نسبةُ الحجز انزاحت: %d/1000' % held)
+
+    def test_outgoing_is_held_too(self):
+        """الحجرُ خاصّيّةُ كتابٍ لا خاصّيّةُ حقل — وإلّا اختلّت المجموعتان."""
+        res, book = _run_capture('hold-out', kind='outgoing_internal', final={})
+        from core.extraction.capture_schema import eval_hold_for
+        self.assertEqual(res.additional_data['eval_hold'], eval_hold_for(book.id))
+
+
+class CaptureWirePayloadTests(SimpleTestCase):
+    """حرزُ السلك الواجهيّ — لا مُشغّلَ اختباراتٍ لـJS في المشروع.
+
+    وسمُ المصدر ورايةُ العرض تُولَدان في الواجهة حصراً؛ فإن سقط سطرُ الإرسال
+    سقطا بلا صوتٍ ووصل الالتقاط بحقولٍ فارغة تبدو «قيماً مشروعة».
+    """
+
+    def _src(self):
+        import os
+        from django.conf import settings
+        with open(os.path.join(settings.BASE_DIR, 'static/extraction_smart.js'),
+                  encoding='utf-8') as f:
+            return f.read()
+
+    def test_ui_sends_both_provenances_and_the_displayed_list(self):
+        src = self._src()
+        for key in ('sender_date_provenance', 'sender_number_provenance',
+                    'displayed_fields'):
+            self.assertIn("formData.append('%s'" % key, src, key)
+
+    def test_code_fills_are_shielded_from_the_human_touch_flag(self):
+        """ملءُ الكود يُطلق input/change بنفسه — بلا العلم يُحسب لمسةً بشريّة."""
+        self.assertGreaterEqual(self._src().count('codeFill('), 4)

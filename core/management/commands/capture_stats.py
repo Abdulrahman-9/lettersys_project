@@ -13,6 +13,7 @@ from collections import Counter
 
 from django.core.management.base import BaseCommand
 
+from core.extraction.capture_schema import EVAL_HOLD_KEY
 from core.models import DataExtractionResult
 
 TARGET = 300
@@ -24,7 +25,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         rows = DataExtractionResult.objects.values_list('additional_data', flat=True)
-        total = confirmed = 0
+        total = confirmed = held = 0
         src = Counter()
         box_no_value = value_no_box = 0
         for ad in rows:
@@ -37,6 +38,9 @@ class Command(BaseCommand):
             has_val = bool((ad.get('sender_number_final') or '').strip())
             if has_box and has_val:
                 confirmed += 1
+                # المحجوزُ للتقييم يُعدّ ولا يُدرَّب عليه — عرضُه هنا يمنع مفاجأةَ
+                # «العتبة بلغت 300» بينما عُشرُها خارج متناول التدريب أصلاً.
+                held += 1 if ad.get(EVAL_HOLD_KEY) else 0
                 src[ad.get('sender_number_bbox_source') or '?'] += 1
             elif has_box:
                 box_no_value += 1
@@ -47,6 +51,7 @@ class Command(BaseCommand):
         w('سجلّات الاستخراج الكليّة        : %d' % total)
         w('**قصاصاتٌ مؤكَّدة (تعريف السجلّ) : %d / %d**' % (confirmed, TARGET))
         w('  بحسب المصدر                   : %s' % (dict(src) or '—'))
+        w('  محجوزٌ للتقييم (لا يُدرَّب عليه) : %d' % held)
         w('  صندوقٌ بلا قيمةٍ نهائيّة        : %d' % box_no_value)
         w('  قيمةٌ بلا صندوق                : %d' % value_no_box)
         if confirmed >= TARGET:

@@ -13,6 +13,10 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
+from core.extraction.capture_schema import (ALWAYS_CAPTURED_FIELDS,
+                                            EVAL_HOLD_KEY, displayed_key,
+                                            eval_hold_for,
+                                            normalize_provenance)
 from core.models import (DataExtractionResult, ExtractionFeedback,
                          LetterheadMemory, OCRResult)
 
@@ -96,7 +100,9 @@ def persist_extraction_capture(*, book, attachment, suggested, final, user=None)
         book:       الكتاب المحفوظ (Book)
         attachment: المرفق الممسوح (Attachment) — لازم لربط OCRResult
         suggested:  قاموس اقتراحات OCR (كاش scan_token): raw_text + الحقول المُقترَحة
-        final:      قاموس القيم النهائية المحفوظة (our_number/title/kind/secret_level/sender_number)
+        final:      قاموس القيم النهائية المحفوظة (our_number/title/kind/secret_level/
+                    sender_number/sender_date) + وسمَي الواجهة: `*_provenance`
+                    (مصدرُ القيمة) و`displayed_fields` (ما عُرض على الكاتب فعلاً)
         user:       المستخدم المؤكِّد
 
     Returns:
@@ -153,14 +159,32 @@ def _capture_date_feedback(extraction, suggested, final, user, is_incoming):
 def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text):
     """جسم الالتقاط داخل savepoint — الاستثناءات تصعد إلى المُغلِّف (لا تُبلَع هنا)."""
     is_incoming = (book.kind or '') in _INCOMING_KINDS
+    # ما عُرض على الكاتب فعلاً — من الواجهة وحدها. «وُجد اقتراح» ليس «عُرض
+    # اقتراح»، وبلا هذا الفصل تختلط دلالةُ «لم يُصحَّح» بين «صحيحٌ» و«لم يره
+    # أحد» عبر تبدّلات سياسة العرض (تبدّلت ثلاثاً في أسبوعين).
+    displayed = {str(f) for f in (final.get('displayed_fields') or ())}
     # book_kind يُختم دائماً كي يُميّز المستهلك «صادر: الحقل غير منطبق» عن
     # «وارد: القارئ أخفق فعلاً» — وإلا صارا سواءً في البيانات.
-    add_data = {'book_kind': book.kind or ''}
+    add_data = {
+        'book_kind': book.kind or '',
+        # الحجرُ يُحسم لحظةَ الالتقاط لا عند بناء الدفعة: قرارٌ لاحق يعني ترحيلاً
+        # ممكناً من الحجز إلى التدريب بعد رؤية النتيجة.
+        EVAL_HOLD_KEY: eval_hold_for(book.id),
+    }
+    for _f in ALWAYS_CAPTURED_FIELDS:
+        add_data[displayed_key(_f)] = _f in displayed
     if is_incoming:
         add_data.update({
             'sender_number_suggested': (suggested.get('sender_number') or '')[:50],
             'sender_number_confidence': _to_float(suggested.get('sender_number_confidence')),
             'sender_number_final': str(final.get('sender_number') or '')[:50],
+            # العدد هو الحقل الوحيد الذي تملؤه الواجهة تلقائيّاً، فكان الوحيد بلا
+            # وسم مصدر: `autofilled` (حُفظ بلا لمس) يحمل خطأ النموذج نفسَه ⟵
+            # يُستبعَد من التدريب كلّيّاً، وإلّا عزّز النموذجُ خطأه بنفسه.
+            'sender_number_provenance': normalize_provenance(
+                final.get('sender_number_provenance')),
+            displayed_key('sender_number'): 'sender_number' in displayed,
+            displayed_key('sender_date'): 'sender_date' in displayed,
             'sender_number_bbox': suggested.get('sender_number_bbox') or None,
             # مصدر الصندوق ومقاسه المرجعيّ: بدونهما لا يُعاد بناء البكسلات، ولا
             # يُميَّز صندوقُ قراءةٍ واثقة عن صندوقِ كاشفٍ امتنع القارئ عنده — وهما
@@ -194,7 +218,8 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
                 # مصدرُ القيمة: ما أكّده الكاتب بنقرةٍ ليس شاهدَ تقييمٍ مستقلّاً
                 # (قد يختم بلا تدقيق)، وما كتبه بيده شاهدٌ نظيف. التدريب يأكل
                 # الاثنين، والتقييم لا يثق إلّا بالثاني.
-                'sender_date_provenance': str(final.get('sender_date_provenance') or '')[:12],
+                'sender_date_provenance': normalize_provenance(
+                    final.get('sender_date_provenance')),
             })
 
     ocr = OCRResult.objects.create(

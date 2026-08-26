@@ -36,6 +36,73 @@ const CONFIDENCE_THRESHOLDS = { high: 0.85, medium: 0.65 };
  */
 const SENDER_DATE_GAP_MAX = 45;
 
+/* ===== عقدُ الالتقاط في الواجهة: مصدرُ القيمة + رايةُ العرض ==================
+ *
+ * **مصدرُ القيمة (provenance)** — الواجهةُ وحدها تعرفه، ولا يُستنتَج خادميّاً.
+ * العدد هو الحقل الوحيد الذي يُملأ تلقائيّاً، فقيمةٌ حُفظت بلا لمسٍ تحمل خطأ
+ * النموذج نفسَه؛ تدريبٌ عليها تسميمٌ ذاتيّ (ضجيجٌ في اتّجاهٍ واحد لا تذيبه
+ * أرضيّةُ الدقّة). فتُوسَم `autofilled` وتُستبعَد لاحقاً، والتقييم لا يثق إلّا
+ * بـ`typed`. والعلمُ الداخليّ لازم: مسارات الملء تُطلق input/change بنفسها،
+ * فبدونه يُحسب ملءُ الكود لمسةً بشريّة فينقلب الوسم كذباً.
+ *
+ * **رايةُ العرض (displayed)** — «وُجد اقتراح» ليس «عُرض اقتراح». بلا الراية
+ * تختلط دلالةُ «لم يُصحَّح» بين «صحيحٌ» و«لم يره أحد» عبر تبدّلات سياسة العرض.
+ */
+const PROV_TYPED = 'typed';
+const PROV_CONFIRMED = 'confirmed';
+const PROV_AUTOFILLED = 'autofilled';
+const PROVENANCE_FIELD_IDS = ['senderNumber', 'senderDate'];
+// معرّف الحقل في الواجهة ⟵ اسمه في عقد الالتقاط الخادميّ
+const CAPTURE_FIELD_BY_ID = {
+    senderNumber: 'sender_number', senderDate: 'sender_date',
+    title: 'title', secretLevel: 'secret_level',
+};
+
+let _codeFillDepth = 0;
+const _displayedSuggestions = new Set();
+
+/** يُغلّف كلَّ كتابةٍ من الكود كي لا تُحسب أحداثُها لمسةً بشريّة. */
+function codeFill(fn) {
+    _codeFillDepth++;
+    try { return fn(); } finally { _codeFillDepth--; }
+}
+
+function markSuggestionDisplayed(field) { if (field) _displayedSuggestions.add(field); }
+function unmarkSuggestionDisplayed(field) { _displayedSuggestions.delete(field); }
+function displayedFieldsList() { return Array.from(_displayedSuggestions); }
+function resetCaptureProvenance(el) { if (el && el.dataset) delete el.dataset.provenance; }
+
+/** يُستدعى من مسارات الملء الثلاثة بعد كتابة قيمةٍ مُقترَحة في حقل. */
+function noteSuggestionFilled(id, value) {
+    if (value === undefined || value === null || String(value).trim() === '') return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    const group = el.closest ? el.closest('.form-group-smart') : null;
+    if (group && group.classList.contains('is-hidden')) return;   // مخفيٌّ = لم يُعرَض
+    markSuggestionDisplayed(CAPTURE_FIELD_BY_ID[id]);
+    if (PROVENANCE_FIELD_IDS.indexOf(id) >= 0) el.dataset.provenance = PROV_AUTOFILLED;
+}
+
+/** مصدرُ القيمة عند الحفظ — الافتراضُ `typed` لأنّ ما لم يملأه الكود كتبه الكاتب. */
+function fieldProvenance(id) {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    return el.dataset.provenance || (String(el.value || '').trim() ? PROV_TYPED : '');
+}
+
+function _onHumanTouch(ev) {
+    if (_codeFillDepth) return;
+    const el = ev.target;
+    if (!el || !el.id || PROVENANCE_FIELD_IDS.indexOf(el.id) < 0) return;
+    // لمسُ قيمةٍ مُلئت تلقائيّاً يرفعها إلى `confirmed` (شاهدُ تدريبٍ لا تقييم)،
+    // وحقلٌ لم يملأه الكود قطّ يعني كتابةً بيد الكاتب.
+    const prev = el.dataset.provenance;
+    el.dataset.provenance =
+        (prev === PROV_AUTOFILLED || prev === PROV_CONFIRMED) ? PROV_CONFIRMED : PROV_TYPED;
+}
+document.addEventListener('input', _onHumanTouch, true);
+document.addEventListener('change', _onHumanTouch, true);
+
 function _sdEl(id) { return document.getElementById(id); }
 
 function _senderDateGap(iso) {
@@ -72,6 +139,8 @@ function applySenderDateSuggestion(data) {
     if (!sug || !sug.raw) { card.hidden = true; return; }
 
     card.hidden = false;
+    // هنا — وهنا فقط — رأى الكاتبُ اقتراحَ التاريخ فعلاً.
+    markSuggestionDisplayed('sender_date');
     _sdEl('senderDateRaw').textContent = sug.raw;
     const conf = Number(sug.confidence || 0);
     const green = Number(sug.green_threshold || 0.98);
@@ -118,8 +187,8 @@ function _confirmSenderDateSuggestion() {
     const el = _sdEl('senderDate');
     if (!card || card.hidden || !el || !card.dataset.iso) return false;
     el.value = card.dataset.iso;
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-    el.dataset.sdProvenance = 'confirmed';     // مصدرُ القيمة — للالتقاط لاحقاً
+    codeFill(() => el.dispatchEvent(new Event('change', { bubbles: true })));
+    el.dataset.provenance = PROV_CONFIRMED;    // مصدرُ القيمة — للالتقاط لاحقاً
     card.hidden = true;
     return true;
 }
@@ -939,7 +1008,10 @@ class ExtractionSmartSystem {
         this.beginTextUndoBatch?.();   // لقطة قبل التعبئة → يصير الاستخراج خطوة تراجع واحدة
         const setVal = (id, val) => {
             const el = document.getElementById(id);
-            if (el && val != null && val !== '') el.value = val;
+            if (el && val != null && val !== '') {
+                el.value = val;
+                noteSuggestionFilled(id, val);   // مُلئ تلقائيّاً وعُرض — عقدُ الالتقاط
+            }
         };
         // ملاحظة DRY: هذا التعيين يوازي applyExtractionResult (مسار الرفع المباشر).
         // المعرّفات الصحيحة في القالب هي #date و #title (لا #bookDate/#bookTitle) —
@@ -1165,6 +1237,10 @@ class ExtractionSmartSystem {
             const senderDate = document.getElementById('senderDate');
             if (senderNumber) senderNumber.value = '';
             if (senderDate) senderDate.value = '';
+            // الحقلان أُخفيا وفُرِّغا: مصدرُ قيمةٍ لم تعد موجودة، وعرضٌ لم يعد
+            // قائماً — إبقاؤهما يكذب على الالتقاط عند تبديل النوع بعد الاستخراج.
+            [senderNumber, senderDate].forEach(resetCaptureProvenance);
+            ['sender_number', 'sender_date'].forEach(unmarkSuggestionDisplayed);
         }
 
         if (startScanButton) {
@@ -3772,7 +3848,10 @@ class ExtractionSmartSystem {
             }
             el.value = (id === 'date' || id === 'senderDate') ? String(value).slice(0, 10) : value;
             // نفس ترتيب applyExtractionResult: حدث input أولاً ثم الثقة، وإلا وُسِم «يقين بشري»
-            try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+            codeFill(() => {
+                try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+            });
+            noteSuggestionFilled(id, value);
             const conf = fields[confKey] || 0;
             this.updateConfidenceBadge(id, conf);
             this.setFieldConfidence(id, conf);
@@ -3900,8 +3979,11 @@ class ExtractionSmartSystem {
                         input.value = value;
                     }
                     // إطلاق حدث input لتفعيل مؤشر التحقق وتفعيل زر الحفظ
-                    try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
-                    try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+                    codeFill(() => {
+                        try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+                        try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+                    });
+                    noteSuggestionFilled(field, value);
                     this.updateConfidenceBadge(field, data[conf] || 0);
                     this.setFieldConfidence(field, data[conf] || 0);   // حافّة الثقة
                     this.validateField(field);
@@ -4446,6 +4528,10 @@ class ExtractionSmartSystem {
             // دائماً موجب = زمن الوصول). يبقى فارغاً: القصاصة أمام الكاتب ينسخ منها،
             // وفارغٌ يُصحَّح بنقرة، وافتراضيٌّ خاطئ يُسمّم ذهب التدريب صامتاً.
             senderDateField.value = '';
+            // المصدرُ يموت مع القيمة: حقلٌ فُرِّغ ثمّ حُفظ لا يجوز أن يحمل وسم
+            // قيمةٍ سابقة (هذه نقطةُ التفريغ الوحيدة لتاريخ الجهة).
+            resetCaptureProvenance(senderDateField);
+            unmarkSuggestionDisplayed('sender_date');
         }
         if (dateToggle) {
             dateToggle.checked = false;
@@ -4557,10 +4643,12 @@ class ExtractionSmartSystem {
                 field.value = '';
             }
             field.classList.remove('has-error', 'is-valid');
+            resetCaptureProvenance(field);      // نموذجٌ فارغ = لا مصدرَ قيمةٍ بعد
             if (field.id === 'bookNumber') {
                 delete field.dataset.reservationId;
             }
         });
+        _displayedSuggestions.clear();          // ولا اقتراحَ معروضاً بعد
         this.endTextUndoBatch?.();
 
         // امسح وسوم الجهات: مكوّن EntityTagInput مخصّص (ليست .form-control-smart) فلا تطالها الحلقة أعلاه.
@@ -4603,10 +4691,15 @@ class ExtractionSmartSystem {
             // Clear bookNumber too — ensureReservation() will paint the next reserved value.
             field.value = '';
             field.classList.remove('has-error', 'is-valid');
+            resetCaptureProvenance(field);
             if (field.id === 'bookNumber') {
                 delete field.dataset.reservationId;
             }
         });
+        // الكتابُ التالي يبدأ بصفحةٍ بيضاء: لا اقتراحَ معروضاً موروثاً عن سابقه
+        // (تسريبُ حالةٍ يُفسد رايةَ الالتقاط صامتاً). ووسمُ تاريخ الجهة يسقط في
+        // `resetDateFields` مع قيمته أدناه.
+        _displayedSuggestions.clear();
 
         // امسح وسوم الجهات (مكوّن مخصّص خارج .form-control-smart) — «تفريغ» يشمل الجهات.
         window.entityTagManagers?.issuing?.clear();
@@ -4712,14 +4805,16 @@ class ExtractionSmartSystem {
         formData.append('date', document.getElementById('date').value);
         formData.append('sender_number', senderNumber);
         formData.append('sender_date', senderDate);
-        // مصدرُ قيمة التاريخ: مؤكَّدةٌ بنقرةٍ على الاقتراح أم مكتوبةٌ بيد الكاتب.
-        // المؤكَّدةُ ليست شاهدَ تقييمٍ مستقلّاً (قد تُختم بلا تدقيق) — والفصلُ
-        // يُتيح لاحقاً تدريباً على الاثنين وتقييماً على المكتوبة وحدها.
+        // مصدرُ قيمة التاريخ والعدد: مكتوبةٌ بيد الكاتب أم مؤكَّدةٌ بلمسة أم
+        // مملوءةٌ تلقائيّاً وحُفظت بلا لمس. المؤكَّدةُ ليست شاهدَ تقييمٍ مستقلّاً
+        // (قد تُختم بلا تدقيق)، والمملوءةُ تلقائيّاً ليست شهادةً أصلاً.
         {
-            const _sdEl2 = document.getElementById('senderDate');
-            const _prov = (_sdEl2 && _sdEl2.dataset.sdProvenance) ||
-                          (senderDate ? 'typed' : '');
-            if (_prov) formData.append('sender_date_provenance', _prov);
+            const _sdProv = fieldProvenance('senderDate');
+            if (_sdProv) formData.append('sender_date_provenance', _sdProv);
+            const _snProv = fieldProvenance('senderNumber');
+            if (_snProv) formData.append('sender_number_provenance', _snProv);
+            // ما عُرض على الكاتب فعلاً — لا يُخمَّن خادميّاً من وجود الاقتراح.
+            formData.append('displayed_fields', displayedFieldsList().join(','));
         }
         formData.append('secret_level', document.getElementById('secretLevel')?.value || 'normal');
         formData.append('document_type', documentTypeValue || '');
