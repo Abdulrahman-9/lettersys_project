@@ -726,7 +726,8 @@ class AIProcessingServiceTests(TestCase):
         # العقد الجديد (خيار F): (number_result, date_crop) — number_result=(نصّ، ثقة، صندوق)
         # العقد صار ثلاثيّاً 2026-08-18: (قراءة، قصاصة تاريخ، (صندوق الكاشف، W, H))
         # — الصندوق يُحفَظ حتى حين يمتنع القارئ، فتُلتقط الحالات الصعبة لا الناجحة وحدها.
-        hw_read.return_value = (('1754', 0.95, [0.11, 0.15, 0.20, 0.18]), None, (None, 2480, 3508))
+        hw_read.return_value = (('1754', 0.95, [0.11, 0.15, 0.20, 0.18]), None, None,
+                                (None, 2480, 3508))
 
         with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
             tmp.write(b'\xff\xd8\xff\xe0hw-doc')

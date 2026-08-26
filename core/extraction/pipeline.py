@@ -117,6 +117,8 @@ class AIExtractionResult:
         # فيبل15/16): الكاتب — القارئ الموثوق — ينسخها بنظرة. لا تُقرأ آلياً ولا تُبثّ
         # في الكاش/الحفظ؛ تعيش في scan_data (استجابة HTTP عابرة) فقط. None حين لا شريط.
         self.sender_date_crop: Optional[str] = None
+        # اقتراحُ قارئ التاريخ (D2) — قاموسٌ منفصلٌ لا يُكتب في الحقل
+        self.sender_date_suggestion: Optional[dict] = None
 
         self.title: str = ""
         self.title_confidence: float = 0.0
@@ -550,18 +552,72 @@ class AIExtractionService:
                     logger.info('[handwriting] قراءةٌ من قصاصة الكاشف (صفر حشو): %r '
                                 '(ثقة %.3f)', text2, conf2)
 
-            # ── قصاصة «التأريخ» للواجهة (خيار F) — من نفس img+tsv، لا قراءة ──
-            date_crop = (self._crop_date_strip(img, tsv, min_top=num_label_floor,
-                                               det_box=det_box)
-                         if want_date_crop else None)
+            # ── قصاصة «التأريخ»: تُقرأ وتُعرض من **الصورة نفسها** ────────────
+            # حين يوجد صندوقُ كاشفٍ نقصّ بهندسة `x` (هندسةُ تدريب القارئ، وبوّابةُ
+            # عينٍ n=100: حبرٌ ظاهر 96%) فنقرأها ونعرضها معاً — لئلّا يُصادق الكاتبُ
+            # على صورةٍ غيرِ التي قرأها النموذج. وحين يصمت الكاشف (~35% من الصفحات
+            # مقيسةً في e2e-C) يبقى مسارُ التسمية القديم **عرضاً فقط بلا اقتراح**:
+            # توزيعُه لم يُقَس، وإطعامُ القارئ قصاصةً غريبةً يكسر عقد «توزيعٌ واحد».
+            date_crop, date_suggestion = None, None
+            if want_date_crop:
+                if det_box is not None:
+                    from core.extraction.handwriting.date_geometry import (
+                        GEOMETRY_TAG, crop_below_box)
+                    dcrop = crop_below_box(img, det_box)
+                    if dcrop is not None:
+                        date_crop = self._to_data_url(dcrop)
+                        date_suggestion = self._suggest_date(dcrop, det_box, GEOMETRY_TAG)
+                        del dcrop
+                if date_crop is None:
+                    date_crop = self._crop_date_strip(img, tsv, min_top=num_label_floor,
+                                                      det_box=det_box)
 
             W, H = img.width, img.height
             del tsv, img
-            return number_result, date_crop, (det_box, W, H)
+            return number_result, date_crop, date_suggestion, (det_box, W, H)
         except Exception as exc:
             logger.warning('[handwriting] فشل مسار خط اليد: %s — تدهور رشيق',
                            type(exc).__name__)
-            return None, None, (None, 0, 0)
+            return None, None, None, (None, 0, 0)
+
+    def _suggest_date(self, crop, det_box, geometry_tag):
+        """اقتراحُ تاريخٍ من قصاصة `x` — **لا يُكتب في الحقل أبداً**.
+
+        يُعاد قاموسٌ بمفتاحٍ منفصل (`sender_date_suggestion`) لا في `sender_date`:
+        مسارات ملء الواجهة تكتب `sender_date` في الحقل صامتاً
+        (`extraction_smart.js:832`)، فوضعُ قراءةٍ بدقّة 71% هناك = إعادةُ بناء
+        جذر تسميم التواريخ الذي اجتُثّ. والفصلُ يعزل أيضاً سُلَّمَي ثقةٍ غير
+        متقارنين: ثقةُ المطبوع مجدولةٌ يدويّاً، وهذه معايَرةٌ بـH6.
+
+        `iso` قد يكون None مع `parse` = invalid/ambiguous — وذاك امتناعٌ مقصود:
+        القصاصةُ معروضةٌ والكاتب يحسم، ولا تخمينَ باحتمالٍ غالب.
+        """
+        try:
+            from core.extraction.handwriting.date_parse import parse_drawn_date
+            from core.extraction.handwriting.date_reader import (
+                DATE_CONF_GREEN, get_date_reader)
+            rd = get_date_reader()
+            if not rd.available:
+                return None
+            raw, conf = rd.read(crop.convert('L'))
+            if not raw:
+                return None
+            iso, status = parse_drawn_date(raw, entry_date=timezone.localdate())
+            logger.info('[handwriting] اقتراح تاريخ: %r ⟵ %s (ثقة %.3f · %s)',
+                        raw, iso or '—', conf, status)
+            return {
+                'raw': raw,
+                'iso': iso,
+                'parse': status,
+                'confidence': round(float(conf), 4),
+                'green_threshold': DATE_CONF_GREEN,
+                'bbox': [round(float(v), 4) for v in det_box],
+                'geometry': geometry_tag,
+                'source': 'crnn_d2',
+            }
+        except Exception as exc:
+            logger.warning('[handwriting] اقتراح التاريخ تعذّر: %s', type(exc).__name__)
+            return None
 
     @staticmethod
     def _number_label_floor(tsv):
@@ -646,39 +702,37 @@ class AIExtractionService:
             return None
 
     @staticmethod
-    def _crop_below_box(img, box):
-        """قصاصةُ التاريخ **مرساةً بصندوق العدد** حين تصمت تسمية «التاريخ».
-
-        قانون المالك: التاريخ يقع تحت العدد مباشرةً. المسار القديم يحتاج Tesseract أن
-        يقرأ كلمة «التاريخ» كي يُموضِع — وهو يفشل في صفحاتٍ كثيرة فلا تظهر قصاصةٌ
-        إطلاقاً. الصندوق يتجاوز القراءة: يُقصّ ما تحته بهندسةٍ سخيّةٍ متناظرة (نفس
-        فلسفة `_crop_date_strip`: الإفراط مجّانيّ لأن العرض بشريّ، والتقصير وحده يُفقِد).
-        """
-        if not box:
-            return None
+    def _to_data_url(crop, max_w=760):
+        """قصاصةُ PIL ⟵ data URL للعرض. التصغيرُ للعرض فقط، بعد القراءة دائماً."""
         try:
             import base64
             import io
-            W, H = img.width, img.height
-            bx0, by0, bx1, by1 = (box[0] * W, box[1] * H, box[2] * W, box[3] * H)
-            bh = max(by1 - by0, 12)
-            bw = max(bx1 - bx0, 40)
-            x0 = max(0, int(bx0 - 3.0 * bw))
-            x1 = min(W, int(bx1 + 3.0 * bw))
-            y0 = max(0, int(by1 + 0.15 * bh))      # يبدأ أسفل العدد مباشرة
-            y1 = min(H, int(by1 + 3.2 * bh))       # سطران تقريباً — يلتقط التاريخ ولو أزيح
-            if y1 - y0 < 8 or x1 - x0 < 40:
-                return None
-            crop = img.crop((x0, y0, x1, y1))
-            if crop.width > 760:
-                r = 760 / crop.width
-                crop = crop.resize((760, max(1, int(crop.height * r))))
+            if crop.width > max_w:
+                r = max_w / crop.width
+                crop = crop.resize((max_w, max(1, int(crop.height * r))))
             buf = io.BytesIO()
             crop.save(buf, format='PNG', optimize=True)
             return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode('ascii')
         except Exception as exc:
-            logger.warning('[handwriting] قصاصة تحت الصندوق تعذّرت: %s', type(exc).__name__)
+            logger.warning('[handwriting] ترميز القصاصة تعذّر: %s', type(exc).__name__)
             return None
+
+    @staticmethod
+    def _crop_below_box(img, box):
+        """قصاصةُ التاريخ **مرساةً بصندوق العدد** — بالهندسة المعتمدة `x`.
+
+        قانون المالك: التاريخ يقع تحت العدد مباشرةً. المسار القديم يحتاج Tesseract أن
+        يقرأ كلمة «التاريخ» كي يُموضِع — وهو يفشل في صفحاتٍ كثيرة فلا تظهر قصاصةٌ
+        إطلاقاً. الصندوق يتجاوز القراءة.
+
+        الهندسةُ تُستورد من `date_geometry` ولا تُنسَخ هنا: هي بعينها التي دُرِّب
+        عليها قارئ التاريخ، وهي بعينها التي يقصّها الحصاد. ونصُّ «الإفراط مجّانيّ
+        لأن العرض بشريّ» سقط لحظةَ صارت القصاصةُ مقروءةً آليّاً ومعروضةً للتصديق:
+        الكاتب يجب أن يرى **الصورة نفسها التي قرأها النموذج**.
+        """
+        from core.extraction.handwriting.date_geometry import crop_below_box
+        crop = crop_below_box(img, box)
+        return AIExtractionService._to_data_url(crop) if crop is not None else None
 
     @staticmethod
     def _detector_floor_from_box(box, img):
@@ -1197,7 +1251,8 @@ class AIExtractionService:
             if not result.sender_number and result.image_path:
                 _progress('handwritten_number')
                 want_crop = not result.sender_date
-                num_res, date_crop, (det_box, _pw, _ph) = self._read_handwritten_sender_number(
+                (num_res, date_crop, date_suggestion,
+                 (det_box, _pw, _ph)) = self._read_handwritten_sender_number(
                     result.image_path, getattr(result, 'issuing_entity_id', None),
                     want_date_crop=want_crop)
                 if num_res:
@@ -1216,6 +1271,11 @@ class AIExtractionService:
                 if date_crop:
                     result.sender_date_crop = date_crop
                     logger.info('[handwriting] قصاصة تاريخ الجهة للواجهة (خيار F)')
+                if date_suggestion:
+                    # مفتاحٌ منفصل عمداً — انظر `_suggest_date`. ولا يدخل
+                    # `field_confidences` أدناه: ثقةُ اقتراحٍ منخفضة كانت ستجرّ
+                    # `overall_confidence` فتقلب كتباً إلى manual_review صامتاً.
+                    result.sender_date_suggestion = date_suggestion
 
             # Step 6: حساب الثقة الإجمالية
             _progress('confidence')
@@ -1515,6 +1575,9 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         'sender_date': result.sender_date,
         'sender_date_confidence': result.sender_date_confidence,
         'sender_date_crop': result.sender_date_crop,   # قصاصة «التأريخ» اليدويّ للواجهة (خيار F) — عابرةٌ في الاستجابة فقط
+        # اقتراحُ القارئ منفصلاً عن `sender_date` — الواجهةُ القديمة تتجاهله
+        # بالبناء، فالنشرُ آمنٌ قبل توصيلها.
+        'sender_date_suggestion': getattr(result, 'sender_date_suggestion', None),
         'sender_number': result.sender_number,
         'sender_number_confidence': result.sender_number_confidence,
         'sender_number_bbox': result.sender_number_bbox,   # موضع القصّ لالتقاط تدريب التوضيع

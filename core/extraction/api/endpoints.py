@@ -352,6 +352,11 @@ def smart_extract_direct(request):
                 'book_date_confidence': result.book_date_confidence,
                 'sender_date': result.sender_date,
                 'sender_date_confidence': result.sender_date_confidence,
+                # القصاصةُ والاقتراح كانا يصلان في مسار البثّ ورمز المسح ويغيبان
+                # عن الرفع المباشر — ثلاثةُ مسارات لحمولةٍ واحدة يجب أن تتساوى،
+                # وإلّا اختلف سلوكُ الحقل باختلاف طريق المستخدم إليه.
+                'sender_date_crop': getattr(result, 'sender_date_crop', None),
+                'sender_date_suggestion': getattr(result, 'sender_date_suggestion', None),
                 'sender_number': result.sender_number,
                 'sender_number_confidence': result.sender_number_confidence,
                 'title': result.title,
