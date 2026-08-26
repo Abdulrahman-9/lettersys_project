@@ -25,7 +25,6 @@ from .models import (
 )
 from .extraction.pipeline import AIExtractionService
 from .extraction.helpers import ExtractionWorkflow, ConfidenceAnalyzer, QuickFillAssistant
-from .extraction.learning import ExtractionLearningSystem
 
 
 class ModelTests(TestCase):
@@ -481,81 +480,6 @@ class QuickFillAssistantTests(TestCase):
         summary = QuickFillAssistant.extract_confidence_summary(result)
         
         self.assertIn('🟢', summary)  # عالي جداً
-
-
-class ExtractionLearningTests(TestCase):
-    """اختبارات نظام التعلم"""
-    
-    def setUp(self):
-        """إعداد البيانات"""
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        
-        # إنشاء بيانات تصحيحات
-        for i in range(10):
-            # تجهيز كتاب/مرفق/نتيجة OCR ثم نتيجة استخراج مطابقة للموديل
-            entity = Entity.objects.create(name=f'جهة {i}', code=f'C{i}', etype='both', is_active=True)
-            book = Book.objects.create(
-                our_number=f'2024-{i:03d}',
-                title=f'كتاب {i}',
-                date=timezone.now().date(),
-                created_by=self.user
-            )
-            book.issuing_entities.add(entity)
-            book.receiving_entities.add(entity)
-            file = SimpleUploadedFile(name=f't{i}.jpg', content=b'x', content_type='image/jpeg')
-            attachment = Attachment.objects.create(book=book, file=file)
-            ocr = OCRResult.objects.create(attachment=attachment, status='completed')
-            result = DataExtractionResult.objects.create(
-                ocr_result=ocr,
-                attachment=attachment,
-                book_number=f'2024-{i:03d}',
-                overall_confidence=0.80 + (i * 0.01),
-                status='extracted'
-            )
-            ExtractionFeedback.objects.create(
-                extraction=result,
-                field_name='title' if i % 2 == 0 else 'book_number',
-                feedback_type='incorrect',
-                original_value=f'القيمة {i}',
-                corrected_value=f'القيمة المصححة {i}',
-                reason='تصحيح يدوي',
-                created_by=self.user,
-            )
-    
-    def test_analyze_feedback_patterns(self):
-        """اختبار تحليل أنماط التصحيحات"""
-        patterns = ExtractionLearningSystem.analyze_feedback_patterns(days=7)
-        
-        self.assertIsInstance(patterns, dict)
-        self.assertIn('title', patterns)
-    
-    def test_get_field_accuracy_score(self):
-        """اختبار حساب دقة الحقل"""
-        score = ExtractionLearningSystem.get_field_accuracy_score('title', days=30)
-        
-        if score:
-            self.assertIn('accuracy', score)
-            self.assertIn('grade', score)
-            self.assertTrue(0 <= score['accuracy'] <= 1)
-    
-    def test_get_learning_report(self):
-        """اختبار تقرير التعلم"""
-        report = ExtractionLearningSystem.get_learning_report(days=30)
-        
-        self.assertIn('period_days', report)
-        self.assertIn('total_extractions', report)
-        self.assertIn('total_corrections', report)
-        self.assertIn('field_accuracy', report)
-    
-    def test_update_statistics(self):
-        """اختبار تحديث الإحصائيات"""
-        stats = ExtractionLearningSystem.update_statistics()
-        
-        self.assertIsNotNone(stats)
-        self.assertEqual(stats.date, timezone.now().date())
 
 
 class AIProcessingServiceTests(TestCase):
@@ -1292,7 +1216,8 @@ class IntegrationTests(TestCase):
         self.assertEqual(book.our_number, '2024-TEST-001')
         self.assertEqual(attachment.book, book)
         self.assertEqual(result.overall_confidence, 0.88)
-        
-        # 6. تحليل التعلم
-        patterns = ExtractionLearningSystem.analyze_feedback_patterns()
-        self.assertIsInstance(patterns, dict)
+
+        # 6. إشارةُ التعلّم مُسجَّلة (التحليلُ نفسه صار في `learning_stats`)
+        self.assertEqual(feedback.extraction_id, result.id)
+        self.assertEqual(
+            ExtractionFeedback.objects.filter(extraction=result, field_name='title').count(), 1)

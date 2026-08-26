@@ -12,7 +12,6 @@ Replaces the legacy flat-file layout:
   core/ai_pattern_matcher.py     → core.extraction.matchers.pattern
   core/extraction_kinds.py       → core.extraction.kinds
   core/extraction_helpers.py     → core.extraction.helpers
-  core/extraction_learning.py    → core.extraction.learning
   core/extraction_views.py       → core.extraction.api.endpoints
   core/extraction_ui_views.py    → core.extraction.views.ui
 
