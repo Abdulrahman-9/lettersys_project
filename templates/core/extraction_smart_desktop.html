@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260811a">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260826a">
 <style>
 .scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
 .scan-agent-status:hover{filter:brightness(.97)}
@@ -274,6 +274,21 @@
                             <figure class="sender-date-crop" id="senderDateCrop" hidden>
                                 <img id="senderDateCropImg" alt="قصاصة تاريخ الجهة كما ورد في المستند" loading="lazy">
                                 <figcaption><i class="bi bi-eye"></i> تاريخ الجهة كما ورد في المستند — تحقّق منه بنظرة</figcaption>
+                                <!-- اقتراحُ القارئ: **لا يملأ الحقل من تلقائه أبداً** — الكاتب يؤكّد.
+                                     دقّةُ الأخضر مقيسة 93.5% بتغطية 68% (حجزٌ لم يُرَ، n=360). -->
+                                <div class="date-suggest" id="senderDateSuggest" hidden>
+                                    <div class="date-suggest__head">
+                                        <span class="date-suggest__label">قراءةُ النظام</span>
+                                        <bdi class="date-suggest__raw" id="senderDateRaw"></bdi>
+                                        <span class="confidence-badge" id="senderDateSuggestConf"></span>
+                                    </div>
+                                    <div class="date-suggest__warn" id="senderDateSuggestWarn" hidden></div>
+                                    <button type="button" class="date-suggest__btn" id="senderDateApply">
+                                        <i class="bi bi-check2"></i>
+                                        <span id="senderDateApplyText">تأكيد</span>
+                                        <kbd id="senderDateKbd">Enter</kbd>
+                                    </button>
+                                </div>
                             </figure>
                         </div>
                     </div>
@@ -576,7 +591,7 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260819a"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260826a"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
@@ -957,7 +972,10 @@
       // ندع الأصل يملأ الحقل النصي ثم نحوّله لوسم بعد ذلك
       if (_origApplyExtraction) _origApplyExtraction.call(this, data);
       // قصاصة تاريخ الجهة (خيار F): أظهِرها إن وردت — مساعدةٌ بصريّة، لا تملأ الحقل
-      _updateSenderDateCrop(data && data.sender_date_crop);
+      // نقطةُ دخولٍ واحدة للقصاصة والاقتراح معاً (extraction_smart.js) — بديلاً
+      // عن `_updateSenderDateCrop` المحلّيّ كي لا يتشعّب العرض في موضعين.
+      if (window.applySenderDateSuggestion) window.applySenderDateSuggestion(data);
+      else _updateSenderDateCrop(data && data.sender_date_crop);
       setTimeout(() => {
         const mgrI = window.entityTagManagers?.issuing;
         const mgrR = window.entityTagManagers?.receiving;

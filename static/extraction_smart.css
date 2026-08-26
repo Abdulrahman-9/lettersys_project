@@ -1230,6 +1230,68 @@ textarea.title-autogrow {
 }
 .sender-date-crop figcaption .bi { font-size: 0.85rem; flex: none; }
 
+/* ===== بطاقة اقتراح التاريخ — تصديقٌ بنقرة، لا ملءٌ تلقائيّ ===== */
+.date-suggest {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed #99f6e4;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+}
+.date-suggest__head { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.date-suggest__label { font-size: 0.72rem; color: #0f766e; flex: none; }
+.date-suggest__raw {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    direction: ltr;                              /* السلسلة كما رُسمت بالبكسل */
+    unicode-bidi: isolate;
+}
+.date-suggest__warn {
+    flex: 1 1 100%;
+    font-size: 0.72rem;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.date-suggest__warn.is-blocked { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
+.date-suggest__btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #065f46;
+    background: #ecfdf5;
+    border: 1px solid #6ee7b7;
+    border-radius: 8px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+}
+.date-suggest__btn:hover { background: #d1fae5; border-color: #34d399; }
+.date-suggest__btn:focus-visible { outline: 2px solid #0d9488; outline-offset: 2px; }
+.date-suggest__btn[disabled] { color: #94a3b8; background: #f8fafc; border-color: #e2e8f0; cursor: not-allowed; }
+.date-suggest__btn kbd {
+    font-size: 0.68rem;
+    background: #fff;
+    border: 1px solid #a7f3d0;
+    border-radius: 4px;
+    padding: 0 4px;
+    color: #047857;
+}
+.date-suggest__btn[disabled] kbd { display: none; }
+
 
 /* ===== شريط الإجراءات الثابت ===== */
 .action-bar {

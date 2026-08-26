@@ -75,3 +75,34 @@ class SuggestionPayloadTests(SimpleTestCase):
         r.sender_date_suggestion = {'iso': '2025-03-06', 'confidence': 0.10}
         self.assertNotIn('sender_date', (r.field_confidences or {}))
         self.assertNotIn('sender_date_suggestion', (r.field_confidences or {}))
+
+
+class ZeroAutofillSourceGuardTests(SimpleTestCase):
+    """حرزٌ بنيويٌّ على مصدر الواجهة — لا مُشغّلَ اختباراتٍ لـJS في المشروع.
+
+    يقفل قانون «صفرُ ملءٍ تلقائيٍّ صامت» عند حدّه الحقيقيّ: الموضعُ **الوحيد**
+    الذي يكتب قيمةً في حقل تاريخ الجهة من الاقتراح هو دالّةُ التأكيد.
+    """
+
+    JS = 'static/extraction_smart.js'
+
+    def _src(self):
+        import os
+        from django.conf import settings
+        with open(os.path.join(settings.BASE_DIR, self.JS), encoding='utf-8') as f:
+            return f.read()
+
+    def test_only_the_confirm_function_writes_the_field(self):
+        src = self._src()
+        body = src[src.index('function _confirmSenderDateSuggestion'):]
+        body = body[:body.index('\n}')]
+        self.assertIn("el.value = card.dataset.iso", body)
+        # خارج دالّة التأكيد: لا كتابةَ قيمةٍ في العنصر من الاقتراح
+        rest = src.replace(body, '')
+        for forbidden in ("senderDate').value =", 'senderDate").value =',
+                          "setVal('senderDate', data.sender_date_suggestion"):
+            self.assertNotIn(forbidden, rest)
+
+    def test_renderer_is_the_single_entry_point_for_all_three_paths(self):
+        """مسارات الملء الثلاثة (كاش المسح · البثّ · الرفع) تمرّ بنقطةٍ واحدة."""
+        self.assertGreaterEqual(self._src().count('applySenderDateSuggestion('), 3)

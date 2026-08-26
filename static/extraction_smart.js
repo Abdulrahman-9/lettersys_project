@@ -15,6 +15,132 @@
  */
 const CONFIDENCE_THRESHOLDS = { high: 0.85, medium: 0.65 };
 
+/* ===== اقتراحُ تاريخ الجهة (قارئ D2) — تصديقٌ بنقرة، لا ملءٌ تلقائيّ ==========
+ *
+ * **القانون الذي يحكم هذا كلّه:** الحقل لا يُملأ إلا بفعلٍ من الكاتب. جذرُ تسميم
+ * التواريخ (آلافُ الصفوف حملت تاريخ الإدخال بدل حبر الجهة) كان ملءً تلقائيّاً
+ * صامتاً؛ فالاقتراحُ يصل في مفتاحٍ منفصل (`sender_date_suggestion`) ولا يُكتب
+ * في `senderDate` أبداً إلا بضغطة تأكيد.
+ *
+ * **العتبة 0.98 وليست 0.65:** مقيسةٌ على حجز القارئ (n=360): فوقها دقّةُ 93.5%
+ * بتغطية 68%، وما دونها ~24% — فلا شريحة «صفراء» صادقة. و0.65 معايرةُ نموذج
+ * العدد، ونقلُها إلى نموذجٍ آخر خطأٌ بالبناء.
+ *
+ * **حارسُ الفارق** إشارةٌ متعامدة: لا يمنع العرض ولا يمسّ الثقة (تلك معايَرة)،
+ * بل يحكم **طريقة التأكيد**. يُحسب مقابل قيمة حقل تاريخ القيد الحيّة لا مقابل
+ * «اليوم» — فالكاتبُ المُدخِل أرشيفاً قديماً يحرّر تاريخ القيد فتنزاح النافذة معه.
+ *   0 < الفارق <= 45  ⟵ تأكيدٌ بـEnter
+ *   الفارق = 0        ⟵ تحذيرٌ ونقرةٌ إلزاميّة: قد يكون **ختمَنا** لا حبر الجهة
+ *                        (13% من القصاصات يدخلها ختمُ الوارد — مقيسٌ ببوّابة العين)
+ *   سالبٌ أو > 45     ⟵ محجوبُ التأكيد السريع، كتابةٌ يدويّة
+ */
+const SENDER_DATE_GAP_MAX = 45;
+
+function _sdEl(id) { return document.getElementById(id); }
+
+function _senderDateGap(iso) {
+    const entry = _sdEl('date') && _sdEl('date').value;
+    if (!entry || !iso) return null;
+    const ms = Date.parse(entry) - Date.parse(iso);
+    return Number.isNaN(ms) ? null : Math.round(ms / 86400000);
+}
+
+function _senderDateGuard(iso) {
+    const gap = _senderDateGap(iso);
+    if (gap === null) return { state: 'ok', gap: null };
+    if (gap === 0) return { state: 'same_day', gap };
+    if (gap < 0 || gap > SENDER_DATE_GAP_MAX) return { state: 'out_of_range', gap };
+    return { state: 'ok', gap };
+}
+
+/** يعرض القصاصة والاقتراح معاً — نقطةُ الدخول الوحيدة لمسارات الملء الثلاثة. */
+function applySenderDateSuggestion(data) {
+    const fig = _sdEl('senderDateCrop');
+    const img = _sdEl('senderDateCropImg');
+    const card = _sdEl('senderDateSuggest');
+    if (!fig || !img || !card) return;
+    const crop = data && data.sender_date_crop;
+    const sug = data && data.sender_date_suggestion;
+
+    if (typeof crop === 'string' && crop.startsWith('data:image/')) {
+        img.src = crop;
+        fig.hidden = false;
+    } else {
+        img.removeAttribute('src');
+        fig.hidden = !sug;                 // اقتراحٌ بلا قصاصة يبقى مرئيّاً
+    }
+    if (!sug || !sug.raw) { card.hidden = true; return; }
+
+    card.hidden = false;
+    _sdEl('senderDateRaw').textContent = sug.raw;
+    const conf = Number(sug.confidence || 0);
+    const green = Number(sug.green_threshold || 0.98);
+    const badge = _sdEl('senderDateSuggestConf');
+    badge.textContent = Math.round(conf * 100) + '%';
+    badge.className = 'confidence-badge ' + (conf >= green ? 'high' : 'low');
+
+    const warn = _sdEl('senderDateSuggestWarn');
+    const btn = _sdEl('senderDateApply');
+    const btnText = _sdEl('senderDateApplyText');
+    const kbd = _sdEl('senderDateKbd');
+    const guard = _senderDateGuard(sug.iso);
+    let msg = '', blocked = false, enterOk = true;
+
+    if (!sug.iso) {
+        msg = sug.parse === 'ambiguous'
+            ? 'سنةٌ غامضة — الطرفان محتملان. اكتب التاريخ بنفسك من القصاصة.'
+            : 'تعذّرت قراءةُ تاريخٍ صالح — اكتبه بنفسك من القصاصة.';
+        blocked = true; enterOk = false;
+    } else if (conf < green) {
+        msg = 'قراءةٌ ضعيفة — طابِقها بالقصاصة قبل التأكيد.';
+        enterOk = false;
+    } else if (guard.state === 'same_day') {
+        msg = 'يساوي تاريخ القيد — تأكّد أنّه حبرُ الجهة لا ختمُنا.';
+        enterOk = false;
+    } else if (guard.state === 'out_of_range') {
+        msg = guard.gap < 0
+            ? 'التاريخ بعد تاريخ القيد — راجعه.'
+            : 'أقدمُ من ' + SENDER_DATE_GAP_MAX + ' يوماً من تاريخ القيد — راجعه.';
+        enterOk = false;
+    }
+    warn.textContent = msg;
+    warn.hidden = !msg;
+    warn.classList.toggle('is-blocked', blocked);
+    btn.disabled = blocked;
+    btnText.textContent = blocked ? 'تعذّر الاقتراح' : 'تأكيد';
+    kbd.hidden = !enterOk;
+    card.dataset.iso = sug.iso || '';
+    card.dataset.enter = enterOk ? '1' : '';
+}
+
+function _confirmSenderDateSuggestion() {
+    const card = _sdEl('senderDateSuggest');
+    const el = _sdEl('senderDate');
+    if (!card || card.hidden || !el || !card.dataset.iso) return false;
+    el.value = card.dataset.iso;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dataset.sdProvenance = 'confirmed';     // مصدرُ القيمة — للالتقاط لاحقاً
+    card.hidden = true;
+    return true;
+}
+
+document.addEventListener('click', (e) => {
+    if (e.target && e.target.closest && e.target.closest('#senderDateApply')) {
+        e.preventDefault();
+        _confirmSenderDateSuggestion();
+    }
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const card = _sdEl('senderDateSuggest');
+    if (!card || card.hidden || !card.dataset.enter) return;
+    const active = document.activeElement;
+    if (active && active.id !== 'senderDate' && active.id !== 'senderDateApply') return;
+    if (_confirmSenderDateSuggestion()) e.preventDefault();
+});
+window.applySenderDateSuggestion = applySenderDateSuggestion;
+
+
 class ExtractionSmartSystem {
     constructor() {
         this.currentFile = null;
@@ -830,6 +956,7 @@ class ExtractionSmartSystem {
         }
         setVal('date', dateOnly(data.book_date));
         setVal('senderDate', dateOnly(data.sender_date));
+        applySenderDateSuggestion(data);
         setVal('senderNumber', data.sender_number);
         setVal('title', data.title);
         setVal('secretLevel', data.secret_level);
@@ -3625,6 +3752,7 @@ class ExtractionSmartSystem {
     /** يملأ حقول اللقطة الجزئية — مرّة واحدة لكل حقل (لا يدهس ما ملأه المستخدم بعدها). */
     _applyPartialFields(fields) {
         if (!fields) return;
+        applySenderDateSuggestion(fields);
         const filled = this._streamFilled || (this._streamFilled = new Set());
         [
             ['bookNumber', 'book_number', 'book_number_confidence'],
