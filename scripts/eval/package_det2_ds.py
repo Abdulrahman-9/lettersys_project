@@ -291,8 +291,22 @@ def main():
                     im = im.resize((max(1, int(round(W * scale))),
                                     max(1, int(round(H * scale)))), Image.LANCZOS)
                 name = '%d.jpg' % bid
-                im.save(os.path.join(IMGD, name), 'JPEG', quality=JPEG_Q)
+                ipath = os.path.join(IMGD, name)
+                im.save(ipath, 'JPEG', quality=JPEG_Q)
                 del im
+                # **تحقّقٌ بعد الكتابة** — كتابةٌ انقطعت تُخلّف ملفّاً بحجمٍ معقول
+                # لا يُفتَح، فيموت التدريبُ بعد رفعِ مئات الميغابايتات (وقع فعلاً:
+                # 7 صورٍ تالفة أسقطت نواة det2 عند الصورة 9061 بعد رفعٍ كامل).
+                try:
+                    with Image.open(ipath) as _v:
+                        _v.verify()
+                except Exception:
+                    os.remove(ipath)
+                    lbl = os.path.join(LBLD, '%d.txt' % bid)
+                    if os.path.exists(lbl):
+                        os.remove(lbl)
+                    _skip('corrupt_write')
+                    continue
                 with open(os.path.join(LBLD, '%d.txt' % bid), 'w', encoding='utf-8') as lf:
                     lf.write('\n'.join(lines) + '\n')
                 sp = split_of(bid)
