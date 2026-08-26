@@ -1148,12 +1148,18 @@
     const senderDateField = document.getElementById('senderDate');
     const todayISO = new Date().toISOString().split('T')[0];
 
-    // Set both dates to today on load
+    // تاريخُ **قيدنا** وحده يفترض اليوم — وهو صحيحٌ بالتعريف (لحظةُ القيد الآن).
     if (dateField && !dateField.value) {
       dateField.value = todayISO;
     }
-    if (senderDateField && !senderDateField.value) {
-      senderDateField.value = todayISO;
+    // ⛔ **تاريخُ الجهة لا يُملأ تلقائيّاً أبداً** — هذا هو جذرُ تسميم التواريخ
+    // (آلافُ الصفوف حملت تاريخ الإدخال بدل حبر الجهة، مقيسٌ 336/344 مخالفاً
+    // للمطبوع بفارقٍ موجبٍ دائماً). أُزيل من `resetDateFields` في 978ccdf
+    // (2026-08-19) لكنّ **هذا الموضع الثاني بقي حيّاً** وكشفه تشغيلُ الصفحة
+    // في متصفّحٍ حقيقيّ 2026-08-26: الحقل يُعرض ممتلئاً بتاريخ اليوم قبل أيّ
+    // استخراج. لا تُعِده: القيمةُ تأتي من الكاتب أو من تأكيد بطاقة الاقتراح.
+    if (senderDateField) {
+      senderDateField.dataset.noAutofill = '1';
     }
 
     // Toggle: enable/disable date editing
