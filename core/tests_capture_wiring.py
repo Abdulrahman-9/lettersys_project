@@ -113,3 +113,65 @@ class ScanPayloadDurabilityTests(TestCase):
         cache.clear()
         self.assertIsNone(cache.get('scan_token:%s' % token))
         self.assertTrue(ScanPayload.objects.get(token=token).data.get('raw_text'))
+
+
+class SenderDateCaptureTests(TestCase):
+    """التقاطُ تاريخ الجهة — الحقل كان مستثنى فضاع كلُّ تصحيحٍ للتاريخ.
+
+    الاستثناء كان بحجّة «فرق صيغة ISO/Date يعطي إيجابيّاتٍ كاذبة»، وتلك علّةُ
+    **مقارنةٍ** لا سببٌ لإهدار الذهب: تُقارَن كائناتُ تاريخٍ لا نصوص، والمقارنةُ
+    على `iso` لا على السلسلة الخام، وامتناعُ المحلّل لا يولّد إشارةَ تصحيح.
+    """
+
+    def _capture(self, sug, final, kind='incoming_internal'):
+        user = User.objects.create_user('dcap-%s' % kind, password='x')
+        book = Book.objects.create(title='ت', kind=kind, created_by=user)
+        att = Attachment.objects.create(book=book, file='attachments/a.pdf')
+        base = {'raw_text': 'نصّ'}
+        base.update(sug)
+        return persist_extraction_capture(book=book, attachment=att, suggested=base,
+                                          final=final, user=user), book
+
+    def _sug(self, iso='2025-03-06', raw='2025/3/6', parse='ok'):
+        return {'sender_date_suggestion': {
+            'raw': raw, 'iso': iso, 'parse': parse, 'confidence': 0.99,
+            'bbox': [0.6, 0.12, 0.9, 0.16], 'source': 'crnn_d2', 'geometry': 'x1'}}
+
+    def test_gold_keys_persisted_with_geometry_and_provenance(self):
+        res, _ = self._capture(self._sug(), {'sender_date': '2025-03-06',
+                                             'date': '2025-03-09',
+                                             'sender_date_provenance': 'confirmed'})
+        ad = res.additional_data
+        self.assertEqual(ad['sender_date_suggested_iso'], '2025-03-06')
+        self.assertEqual(ad['sender_date_final'], '2025-03-06')
+        self.assertEqual(ad['sender_date_entry'], '2025-03-09',
+                         'تاريخُ القيد يُرشّح الذهب لاحقاً (فارقٌ صفر = ختمُنا مُحتمَل)')
+        self.assertEqual(ad['sender_date_geometry'], 'x1',
+                         'بلا وسم الهندسة يختلط توزيعان في مجموعةٍ واحدة')
+        self.assertEqual(ad['sender_date_provenance'], 'confirmed')
+
+    def test_iso_with_time_component_is_not_a_false_correction(self):
+        """الفخّ الذي عطّل الحقل: نصّان مختلفان وتاريخٌ واحد."""
+        res, _ = self._capture(self._sug(iso='2025-03-06'),
+                               {'sender_date': '2025-03-06T00:00:00'})
+        self.assertEqual(res.feedbacks.filter(field_name='sender_date').count(), 0)
+
+    def test_real_correction_creates_feedback(self):
+        res, _ = self._capture(self._sug(iso='2025-03-06'),
+                               {'sender_date': '2025-03-16'})
+        fb = res.feedbacks.get(field_name='sender_date')
+        self.assertEqual((fb.original_value, fb.corrected_value),
+                         ('2025-03-06', '2025-03-16'))
+
+    def test_abstained_parse_never_claims_a_correction(self):
+        """لا يصحّ ادّعاءُ «تصحيحِ» اقتراحٍ لم يُنطق — والزوجُ يبقى ذهباً."""
+        res, _ = self._capture(self._sug(iso='', parse='ambiguous'),
+                               {'sender_date': '2025-03-16'})
+        self.assertEqual(res.feedbacks.filter(field_name='sender_date').count(), 0)
+        self.assertEqual(res.additional_data['sender_date_parse'], 'ambiguous')
+
+    def test_outgoing_captures_no_date_block(self):
+        res, _ = self._capture(self._sug(), {'sender_date': '2025-03-06'},
+                               kind='outgoing_external')
+        self.assertNotIn('sender_date_suggested_iso', res.additional_data)
+        self.assertEqual(res.feedbacks.filter(field_name='sender_date').count(), 0)

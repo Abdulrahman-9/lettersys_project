@@ -380,7 +380,13 @@ def save_book_api(request):
                                'secret_level': book.secret_level, 'kind': book.kind,
                                # العدد النهائي = حقيقة التدريب لحلقة العدد الجديدة
                                'sender_number': book.sender_number or '',
-                               'sender_date': str(book.sender_date or '')},
+                               'sender_date': str(book.sender_date or ''),
+                               # تاريخُ القيد ومصدرُ قيمة تاريخ الجهة — يُرشِّحان
+                               # ذهبَ التدريب لاحقاً (فارقٌ صفر = قراءةُ ختمنا
+                               # مُحتمَلة · ومؤكَّدٌ بنقرةٍ ≠ مكتوبٌ بيد).
+                               'date': str(book.date or ''),
+                               'sender_date_provenance': (
+                                   request.POST.get('sender_date_provenance') or '')},
                         user=request.user)
             except Exception as cap_err:
                 logger.warning('[capture] تعذّر التقاط التدريب: %s', cap_err)

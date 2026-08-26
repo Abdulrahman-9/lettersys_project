@@ -120,6 +120,36 @@ def persist_extraction_capture(*, book, attachment, suggested, final, user=None)
         return None
 
 
+
+def _capture_date_feedback(extraction, suggested, final, user, is_incoming):
+    """إشارةُ تعلّمٍ لتاريخ الجهة — بمقارنة **كائنَي تاريخ** لا نصّين.
+
+    فخّان يُتفاديان هنا بالبناء:
+      1. `'2025-03-06T00:00:00' != '2025-03-06'` نصّيّاً بينما التاريخ واحد —
+         وهذا كان سببَ استثناء الحقل أصلاً.
+      2. المقارنةُ على `raw` (السلسلة كما رُسمت «2025/3/6») تُنتج تصحيحاً كاذباً
+         في كلّ مرّة — المقارنةُ على `iso` وحده.
+    وحين يمتنع المحلّل (`parse != 'ok'`) فلا إشارةَ إطلاقاً: لا يصحّ ادّعاء
+    «تصحيحِ» اقتراحٍ لم يُنطق. والزوجُ يبقى ذهباً في `additional_data`.
+    """
+    if not is_incoming:
+        return
+    sd = suggested.get('sender_date_suggestion') or {}
+    if (sd.get('parse') or '') != 'ok':
+        return
+    original = _parse_iso_date(sd.get('iso'))
+    corrected = _parse_iso_date(final.get('sender_date'))
+    if not original or original == corrected:
+        return
+    ExtractionFeedback.objects.create(
+        extraction=extraction,
+        field_name='sender_date',
+        feedback_type='incorrect' if corrected else 'partial',
+        original_value=original.isoformat(),
+        corrected_value=corrected.isoformat() if corrected else '',
+        created_by=user,
+    )
+
 def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text):
     """جسم الالتقاط داخل savepoint — الاستثناءات تصعد إلى المُغلِّف (لا تُبلَع هنا)."""
     is_incoming = (book.kind or '') in _INCOMING_KINDS
@@ -138,6 +168,34 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
             'sender_number_bbox_source': suggested.get('sender_number_bbox_source') or '',
             'sender_number_bbox_dims': suggested.get('sender_number_bbox_dims') or None,
         })
+        # ── تاريخ الجهة: الاقتراحُ البصريّ ونهائيُّ الكاتب ──────────────────
+        # كان الحقل مستثنى بحجّة «فرق صيغة ISO/Date يعطي إيجابيّاتٍ كاذبة» —
+        # وتلك علّةُ **مقارنةٍ** عولجت بمقارنة كائناتِ تاريخٍ لا نصوص، لا سبباً
+        # لإهدار الذهب: كلُّ تصحيحٍ للتاريخ كان يضيع.
+        sd = suggested.get('sender_date_suggestion') or {}
+        if sd:
+            add_data.update({
+                'sender_date_suggested_raw': str(sd.get('raw') or '')[:32],
+                'sender_date_suggested_iso': str(sd.get('iso') or '')[:10],
+                'sender_date_parse': str(sd.get('parse') or '')[:16],
+                'sender_date_confidence': _to_float(sd.get('confidence')),
+                'sender_date_bbox': sd.get('bbox') or None,
+                'sender_date_bbox_source': str(sd.get('source') or '')[:24],
+                # وسمُ إصدار الهندسة: بدونه لا يُعرف مستقبلاً بأيّ قصٍّ جُمع هذا
+                # الذهب حين تتبدّل الهندسة — فيختلط توزيعان في مجموعةٍ واحدة.
+                'sender_date_geometry': str(sd.get('geometry') or '')[:8],
+            })
+        if sd or final.get('sender_date'):
+            add_data.update({
+                'sender_date_final': str(final.get('sender_date') or '')[:10],
+                # تاريخُ القيد لحظةَ الحفظ: يمكّن ترشيحَ الفارق عند بناء مجموعة
+                # التدريب التالية (قراءةُ ختمنا بدل حبر الجهة تعطي فارقاً صفراً).
+                'sender_date_entry': str(final.get('date') or '')[:10],
+                # مصدرُ القيمة: ما أكّده الكاتب بنقرةٍ ليس شاهدَ تقييمٍ مستقلّاً
+                # (قد يختم بلا تدقيق)، وما كتبه بيده شاهدٌ نظيف. التدريب يأكل
+                # الاثنين، والتقييم لا يثق إلّا بالثاني.
+                'sender_date_provenance': str(final.get('sender_date_provenance') or '')[:12],
+            })
 
     ocr = OCRResult.objects.create(
         attachment=attachment,
@@ -174,6 +232,7 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
     )
 
     # تصحيحات المستخدم: حيث اختلف المُقترَح عن النهائي → إشارة تعلّم
+    _capture_date_feedback(extraction, suggested, final, user, is_incoming)
     for sug_key, final_key in _FIELD_MAP:
         if final_key == 'sender_number' and not is_incoming:
             continue   # الصادر: لا عدد جهةٍ يُستخرَج — لا إشارة تصحيح

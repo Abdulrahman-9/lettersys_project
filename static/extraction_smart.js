@@ -4712,6 +4712,15 @@ class ExtractionSmartSystem {
         formData.append('date', document.getElementById('date').value);
         formData.append('sender_number', senderNumber);
         formData.append('sender_date', senderDate);
+        // مصدرُ قيمة التاريخ: مؤكَّدةٌ بنقرةٍ على الاقتراح أم مكتوبةٌ بيد الكاتب.
+        // المؤكَّدةُ ليست شاهدَ تقييمٍ مستقلّاً (قد تُختم بلا تدقيق) — والفصلُ
+        // يُتيح لاحقاً تدريباً على الاثنين وتقييماً على المكتوبة وحدها.
+        {
+            const _sdEl2 = document.getElementById('senderDate');
+            const _prov = (_sdEl2 && _sdEl2.dataset.sdProvenance) ||
+                          (senderDate ? 'typed' : '');
+            if (_prov) formData.append('sender_date_provenance', _prov);
+        }
         formData.append('secret_level', document.getElementById('secretLevel')?.value || 'normal');
         formData.append('document_type', documentTypeValue || '');
         formData.append('margin', document.getElementById('margin')?.value || '');
