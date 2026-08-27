@@ -47,9 +47,14 @@ def mail_hub(request):
 @login_required
 def mail_sent(request):
     from core.models import BookEmailLog, Entity
+    from core.messaging.scoping import scope_sent_logs
 
-    qs = BookEmailLog.objects.select_related('book', 'entity', 'sent_by', 'thread') \
-                             .order_by('-sent_at')
+    # النطاق أوّلاً ثم المرشّحات، والإحصاءات أدناه على المصفَّى نفسه — كي لا
+    # يُسرّب العدّادُ ما تُخفيه القائمة.
+    qs = scope_sent_logs(
+        BookEmailLog.objects.select_related('book', 'entity', 'sent_by', 'thread'),
+        request.user,
+    ).order_by('-sent_at')
 
     status_filter  = request.GET.get('status', '')
     entity_filter  = request.GET.get('entity', '')
@@ -70,11 +75,12 @@ def mail_sent(request):
     page      = paginator.get_page(request.GET.get('page'))
     entities  = Entity.objects.filter(is_active=True).order_by('name')
 
+    visible = scope_sent_logs(BookEmailLog.objects.all(), request.user)
     stats = {
-        'total':   BookEmailLog.objects.count(),
-        'sent':    BookEmailLog.objects.filter(status='sent').count(),
-        'failed':  BookEmailLog.objects.filter(status='failed').count(),
-        'pending': BookEmailLog.objects.filter(status='pending').count(),
+        'total':   visible.count(),
+        'sent':    visible.filter(status='sent').count(),
+        'failed':  visible.filter(status='failed').count(),
+        'pending': visible.filter(status='pending').count(),
     }
 
     return render(request, 'core/mail/hub.html', {
@@ -131,11 +137,14 @@ def _autosync_inbox_if_due():
 @login_required
 def mail_inbox(request):
     from core.models import IncomingEmail
+    from core.messaging.scoping import scope_incoming
 
     _autosync_inbox_if_due()
 
-    qs = IncomingEmail.objects.select_related('thread', 'thread__book', 'thread__entity') \
-                              .order_by('-received_at')
+    qs = scope_incoming(
+        IncomingEmail.objects.select_related('thread', 'thread__book', 'thread__entity'),
+        request.user,
+    ).order_by('-received_at')
 
     read_filter = request.GET.get('read', '')
     search      = request.GET.get('q', '').strip()
@@ -150,7 +159,9 @@ def mail_inbox(request):
 
     paginator    = Paginator(qs, 25)
     page         = paginator.get_page(request.GET.get('page'))
-    unread_count = IncomingEmail.objects.filter(is_read=False).count()
+    unread_count = scope_incoming(
+        IncomingEmail.objects.filter(is_read=False), request.user
+    ).count()
 
     return render(request, 'core/mail/hub.html', {
         'active_tab':   'inbox',
@@ -168,10 +179,13 @@ def mail_inbox(request):
 @login_required
 def mail_compose(request, book_id=None):
     from core.models import Book, Entity, EmailTemplate, EmailSettings
+    from core.messaging.scoping import scope_books
 
     book = None
     if book_id:
-        book = get_object_or_404(Book, pk=book_id)
+        # النطاق داخل الاستعلام لا بعده: كتابُ غيرِك «غير موجود» لا «ممنوع»،
+        # فلا يُسرَّب وجودُه من فرق الرمزين.
+        book = get_object_or_404(scope_books(Book.objects.all(), request.user), pk=book_id)
 
     entities  = Entity.objects.filter(is_active=True, email__gt='').order_by('name')
     templates = EmailTemplate.objects.filter(is_active=True).order_by('name')
@@ -206,11 +220,17 @@ def mail_compose(request, book_id=None):
 @login_required
 def mail_thread(request, thread_id):
     from core.models import EmailThread
+    from core.messaging.scoping import can_view_thread
 
     thread = get_object_or_404(
         EmailThread.objects.select_related('book', 'entity', 'created_by'),
         pk=thread_id
     )
+    if not can_view_thread(thread, request.user):
+        # 403 لا 404 هنا عن قصد — على خلاف الكتب أعلاه: الخيط يُفتح من رابطٍ
+        # قديم أو مشارَك، فرسالةٌ صريحة أنفع من «غير موجود»، ووجودُ رقم خيطٍ
+        # ليس سرّاً. النمط نفسه في صفحة تفاصيل الكتاب (books_detail.py).
+        return HttpResponseForbidden("غير مصرح لك بالاطّلاع على هذه المراسلة")
 
     sent_emails = thread.sent_emails.select_related('sent_by').order_by('sent_at')
     received    = thread.incoming_emails.order_by('received_at')

@@ -244,12 +244,39 @@ def network_settings_page(request):
 
 # ─── Public health-check endpoint ────────────────────────────────────────────
 
+def _is_lan_peer(request) -> bool:
+    """أهذا الطلب من جارٍ على شبكة خاصة؟
+
+    نعتمد ``REMOTE_ADDR`` مباشرةً ولا نقرأ ``X-Forwarded-For``: قرارُ كشفٍ أمنيّ
+    لا يُبنى على ترويسةٍ يتحكّم بها العميل.
+    """
+    import ipaddress
+
+    raw = (request.META.get('REMOTE_ADDR') or '').strip()
+    try:
+        addr = ipaddress.ip_address(raw)
+    except ValueError:
+        return False
+    return addr.is_private or addr.is_loopback
+
+
 @require_GET
 def network_ping(request):
     """
-    نقطة الفحص الصحي — مفتوحة بلا تسجيل دخول.
-    تُستخدم من أجهزة أخرى لاكتشاف هذه النسخة والتحقق منها.
+    نقطة الفحص الصحي — البصمة الدنيا مفتوحة، والتفاصيل لجيران الشبكة الخاصة فقط.
+
+    كانت تكشف الدور واسم الجهاز والإصدار وعدد الجلسات النشطة **لأي طارق**: مسحٌ
+    مجّانيّ لخريطة النشر وحجم الاستعمال. اكتشافُ الأقران يحتاج الهوية فعلاً
+    (``_ping_node`` يقرأ name/role/version لجدول الأجهزة)، لكنه يجري دائماً داخل
+    الشبكة المحلّية — فنقصر التفاصيل عليها. و``active_users`` أُسقط من هنا نهائياً:
+    مستهلكه الوحيد صفحة الأجهزة، وهي تأخذه من ``network_devices`` المحميّة.
+
+    ملاحظة لمرحلة ز0: خلف وكيلٍ عكسيّ يصير ``REMOTE_ADDR`` عنوان الوكيل (خاصّ
+    دائماً) فيسقط أثر هذا الحارس — عندها تُعطَّل النقطة في وضع الخادم المركزي.
     """
+    if not (_is_lan_peer(request) or request.user.is_staff):
+        return JsonResponse({'lettersys': True, 'status': 'ok'})
+
     cfg = NetworkSettings.get()
     return JsonResponse({
         'lettersys':    True,
@@ -258,7 +285,6 @@ def network_ping(request):
         'name':         device_identity.get_device_name(),
         'version':      APP_VERSION,
         'ip':           _get_local_ip(),
-        'active_users': _active_sessions_count(),
         'timestamp':    timezone.now().isoformat(),
     })
 

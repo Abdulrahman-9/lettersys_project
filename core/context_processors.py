@@ -41,15 +41,23 @@ def embed_mode(request):
 
 
 def mail_unread(request):
-    """عدد الإيميلات الواردة غير المقروءة — يظهر في badge الـ sidebar."""
+    """عدد الإيميلات الواردة غير المقروءة — يظهر في badge الـ sidebar.
+
+    كان يُحسب على النظام كلّه بمفتاح كاشٍ **واحد مشترك**، فيرى كلّ مستخدمٍ عدّاد
+    بريد الجميع في كلّ صفحة (سجلّ العيوب ح1). صار على مجموعته المرئيّة نفسها،
+    والمفتاح لكلّ مستخدم كي لا يتسرّب العدّ عبر الكاش.
+    """
     if not request.user.is_authenticated:
         return {'mail_inbox_unread': 0}
-    cache_key = 'mail_inbox_unread'
+    cache_key = f'mail_inbox_unread_{request.user.pk}'
     count = cache.get(cache_key)
     if count is None:
         try:
             from .models import IncomingEmail
-            count = IncomingEmail.objects.filter(is_read=False).count()
+            from .messaging.scoping import scope_incoming
+            count = scope_incoming(
+                IncomingEmail.objects.filter(is_read=False), request.user
+            ).count()
         except Exception:
             count = 0
         cache.set(cache_key, count, 60)  # كاش لمدة دقيقة

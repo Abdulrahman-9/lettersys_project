@@ -341,9 +341,12 @@ _AGENT_PORT = os.environ.get('LETTERSYS_AGENT_PORT', '17865')
 _AGENT_ORIGINS = f"http://127.0.0.1:{_AGENT_PORT} http://localhost:{_AGENT_PORT}"
 SECURE_CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
-    "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
+    # صفر CDN: كل الأصول محليّة (static/vendor) — أيّ مصدرٍ خارجيٍّ هنا سماحٌ ميت
+    # يوسّع سطح الهجوم بلا مقابل. 'unsafe-inline' باقٍ لأنّ base.html يحمل سكربتاً
+    # مضمَّناً فعلاً؛ إسقاطه يحتاج ورشة nonce مستقلّة.
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self' data:; "
     "img-src 'self' data: blob:; "
     f"connect-src 'self' {_AGENT_ORIGINS}; "
     "worker-src 'self' blob:; "

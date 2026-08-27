@@ -126,6 +126,26 @@ class Tag(models.Model):
 # ما جعله 2020 في موضع و2000 في آخر، فتُقرأ كتب 2000/2007/2014 قراءتين متناقضتين.
 
 
+class SoftDeleteManager(models.Manager):
+    """المدير الافتراضي للنماذج ذات الحذف الناعم — لا يرى المحذوف.
+
+    كان الحذف الناعم قاعدةً منسوخة يدويّاً: ``is_deleted=False`` مكتوبة **73
+    مرّة** في كود الإنتاج وصفر managers مخصّصة. قاعدةٌ بهذا الانتشار تفشل
+    بالصمت: استعلامٌ واحد ينسى الشرط يُظهر ما حُذف، ولا اختبارَ يلتقطه لأنّ
+    النسيان لا يُخطئ — يُظهر فقط.
+
+    الافتراض الآن آمن، و``all_objects`` هو المخرج **الصريح** لسلّة المحذوفات
+    والاستعادة والتفريغ. وسمُ الصراحة مقصود: من يريد المحذوف يقوله.
+
+    ملاحظة: ``_base_manager`` يبقى مديراً عادياً غير مُرشَّح (جانغو يُنشئه
+    تلقائيّاً ما لم يُضبط ``Meta.base_manager_name``) — فاجتياز المفتاح الأجنبي
+    إلى صفٍّ محذوف (``attachment.book``) يظلّ يعمل ولا ينكسر.
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+
+
 class Book(models.Model):
     """
     نموذج الكتاب - تخزين معلومات الكتب الواردة والصادرة
@@ -242,6 +262,7 @@ class Book(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
+
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="deleted_books")
 
@@ -412,6 +433,11 @@ class Book(models.Model):
     def __str__(self):
         return f"{self.our_number} - {self.title}"
 
+
+    #: الافتراضيّ لا يرى المحذوف؛ ``all_objects`` مخرجٌ صريح للسلّة والاستعادة.
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
+
     class Meta:
         verbose_name = "كتاب"
         verbose_name_plural = "الكتب"
@@ -467,8 +493,14 @@ class Attachment(models.Model):
     file = models.FileField(upload_to=book_attachment_path)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
+
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="deleted_attachments")
+
+
+    #: الافتراضيّ لا يرى المحذوف؛ ``all_objects`` مخرجٌ صريح للسلّة والاستعادة.
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
 
     class Meta:
         indexes = [
@@ -1110,10 +1142,66 @@ class SuggestionItem(models.Model):
 # =============================
 # AI Integration Settings
 # =============================
-class AIIntegrationSettings(models.Model):
+class EncryptedFieldsMixin(models.Model):
+    """تشفيرٌ شفّاف لحقولٍ نصّيّة حسّاسة — مصدرٌ واحد للقاعدة.
+
+    كان النمط مكتوباً داخل ``EmailSettings`` وحدها، بينما ``azure_key`` نصٌّ صريح
+    في القاعدة — ازدواجُ معيارٍ في الملف نفسه. نسخُ النمط مرّةً ثانية كان
+    سيُثبّت الازدواج بدل أن يرفعه، فوُحِّد هنا.
+
+    العقد: القيمة في الذاكرة **دائماً** نصّ صريح، وفي القاعدة **دائماً** مشفّرة
+    ببادئة ``enc::``؛ والمشفَّر مسبقاً لا يُشفَّر مرّتين.
+
+    حدٌّ مقيس (``encrypt_text``): مدخلُ 32 محرفاً ⟵ 145، و84 ⟵ 209، و120 ⟵ 253.
+    فـ``max_length=255`` يسع كلّ مفاتيح Azure الواقعيّة (32 أو 84) بهامش، ويضيق
+    عند ~121 محرفاً فأكثر — عندها يلزم توسيع العمود بهجرة.
+    """
+
+    #: أسماء الحقول التي تُشفَّر — يعرّفها كل نموذج.
+    ENCRYPTED_FIELDS: tuple = ()
+
+    class Meta:
+        abstract = True
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        from .encryption import decrypt_text, is_encrypted
+
+        instance = super().from_db(db, field_names, values)
+        for name in cls.ENCRYPTED_FIELDS:
+            value = getattr(instance, name, '')
+            if is_encrypted(value):
+                try:
+                    setattr(instance, name, decrypt_text(value))
+                except Exception:
+                    # مفتاحٌ مفقود أو مُبدَّل: نترك القيمة مشفّرة كما هي ليظهر
+                    # العطل عند الاستعمال، لا أن يُبتلع صامتاً هنا.
+                    pass
+        return instance
+
+    def save(self, *args, **kwargs):
+        from .encryption import encrypt_text, is_encrypted
+
+        plaintexts = {}
+        for name in self.ENCRYPTED_FIELDS:
+            value = getattr(self, name, '') or ''
+            if value and not is_encrypted(value):
+                plaintexts[name] = value
+                setattr(self, name, encrypt_text(value))
+
+        super().save(*args, **kwargs)
+
+        # نُعيد النصّ الصريح إلى الكائن كي يبقى صالحاً للاستعمال بعد الحفظ.
+        for name, plaintext in plaintexts.items():
+            setattr(self, name, plaintext)
+
+
+class AIIntegrationSettings(EncryptedFieldsMixin):
     """إعدادات ربط مزودات الذكاء الاصطناعي عبر الإنترنت.
     نخزّن اختيار المزود والمفاتيح ونمط العمل (تعطيل/تمكين/بديل عند ثقة منخفضة).
     """
+
+    ENCRYPTED_FIELDS = ('azure_key',)
 
     PROVIDER_CHOICES = (
         ('offline', 'Offline (EasyOCR)'),
@@ -1610,7 +1698,10 @@ class BookEmailLog(models.Model):
         (STATUS_PENDING, 'في الانتظار'),
     ]
 
-    book       = models.ForeignKey('Book', on_delete=models.CASCADE,
+    # اختياريّ عمداً: رسالةٌ إداريّةٌ قد لا تخصّ كتاباً بعينه. كان الحقل إلزاميّاً
+    # فسقط مسار الإنشاء إلى **أوّل كتابٍ في القاعدة** (``Book.objects.order_by('id')
+    # .first()``) لمجرّد إرضاء القيد — فيُسجَّل بريدٌ على كتابٍ لا صلة له به.
+    book       = models.ForeignKey('Book', null=True, blank=True, on_delete=models.CASCADE,
                                    related_name='email_logs', verbose_name='الكتاب')
     sent_by    = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,
                                    verbose_name='أرسله')
@@ -1802,11 +1893,13 @@ class BackupSettings(models.Model):
 # ══════════════════════════════════════════════════════════════════
 #  إعدادات البريد الإلكتروني للمؤسسة (Singleton)
 # ══════════════════════════════════════════════════════════════════
-class EmailSettings(models.Model):
+class EmailSettings(EncryptedFieldsMixin):
     """
     إعدادات SMTP الخاصة بالمؤسسة — سجل وحيد (Singleton).
     يُفعَّل/يُعطَّل الإرسال من هنا دون تعديل settings.py.
     """
+
+    ENCRYPTED_FIELDS = ('smtp_password', 'imap_password')
 
     # ── هوية المؤسسة (تُستخدم في ترويسة التقارير المطبوعة + البريد) ──
     org_name        = models.CharField("اسم الشركة/المؤسسة", max_length=200, default="")
@@ -1857,49 +1950,6 @@ class EmailSettings(models.Model):
     def __str__(self):
         status = "مفعّل" if self.is_active else "معطّل"
         return f"إعدادات البريد ({status})"
-
-    @classmethod
-    def from_db(cls, db, field_names, values):
-        """
-        Auto-decrypt sensitive fields when loading from DB.
-        Transparent decryption: if value starts with enc::, decrypt it into memory.
-        """
-        from .encryption import decrypt_text, is_encrypted
-        
-        instance = super().from_db(db, field_names, values)
-        for field_name in ('smtp_password', 'imap_password'):
-            if hasattr(instance, field_name):
-                encrypted_val = getattr(instance, field_name, '')
-                if is_encrypted(encrypted_val):
-                    try:
-                        decrypted = decrypt_text(encrypted_val)
-                        setattr(instance, field_name, decrypted)
-                    except Exception:
-                        # If decryption fails, leave as-is (will likely error on use).
-                        pass
-        return instance
-
-    def save(self, *args, **kwargs):
-        """
-        Auto-encrypt sensitive fields before saving to DB.
-        Plaintext values are encrypted; already-encrypted values are left as-is.
-        After save, plaintext is restored in the instance for in-memory use.
-        """
-        from .encryption import encrypt_text, is_encrypted
-        
-        plaintexts = {}
-        for field_name in ('smtp_password', 'imap_password'):
-            if hasattr(self, field_name):
-                val = getattr(self, field_name, '') or ''
-                if val and not is_encrypted(val):
-                    plaintexts[field_name] = val
-                    setattr(self, field_name, encrypt_text(val))
-        
-        super().save(*args, **kwargs)
-        
-        # Restore plaintext in instance for in-memory use after save.
-        for field_name, plaintext in plaintexts.items():
-            setattr(self, field_name, plaintext)
 
     @classmethod
     def get(cls):

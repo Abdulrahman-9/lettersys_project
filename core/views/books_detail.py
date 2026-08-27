@@ -18,6 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from ..forms import AttachmentForm
 from ..models import Attachment, Book, BookHistory
+from core.scoping import can_view_book, is_privileged
 
 logger = logging.getLogger(__name__)
 
@@ -236,7 +237,7 @@ def book_report(request, pk):
         is_deleted=False,
     )
 
-    if not (request.user.is_superuser or request.user.is_staff or book.created_by == request.user):
+    if not can_view_book(book, request.user):
         logger.warning(
             f"Unauthorized book report attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
