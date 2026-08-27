@@ -29,6 +29,12 @@ _STRIP_H, _MAX_W = 64, 512
 # (بروكسي: الحجز قصاصاتُ كاشفٍ لا أشرطةُ المُموضِع — والقارئ واحدٌ في المسارين.)
 CONF_GATE = 0.90
 
+# إعادةُ تسعير الخانة المكرَّرة (S2): يُقبل المرشَّح المضاعَف فقط بفائض دليلٍ
+# لوغاريتميّ ≥ ln(1.2) — أي أرجحُ بـ20% على الأقلّ. القيمةُ مبدئيّةٌ تُنتخب على
+# شقّ dev وحده ثمّ تُتحقَّق مرّةً واحدةً على الحجز (سجلّ التقييم · S2).
+_REPEAT_MARGIN = float(np.log(1.2))
+_MAX_DIGITS = 6          # قيدُ المجال القائم — لا يتمدّد المرشَّح بلا حدّ
+
 
 class HandwrittenNumberReader:
     """قارئ مفرد كسول: `read(صورة PIL رمادية) → (نص أو None، ثقة)`."""
@@ -150,12 +156,80 @@ class HandwrittenNumberReader:
             total = (float(np.logaddexp(alpha[-1], alpha[-2])) if n_states > 1
                      else float(alpha[0]))
             return float(np.exp(total / max(1, len(text))))
+
         except Exception as exc:
             # تدهورٌ رشيقٌ **نحو الصمت**: ثقةٌ صفريّة ترفضها البوّابة. الارتدادُ إلى
             # الصيغة القديمة كان سيُعيد العمى عن الحذف من الباب الخلفيّ بلا أثرٍ ظاهر.
             logger.warning('[handwriting] ثقةُ السلسلة تعذّرت (%s) — ثقةٌ صفريّة',
                            type(exc).__name__)
             return 0.0
+
+    def _ctc_logp(self, probs, text) -> float:
+        """اللوغُ الخام غيرُ المُطبَّع لسلسلةٍ بعينها — مُسعِّرُ إعادة الترشيح.
+
+        **لماذا خامٌّ لا مُطبَّع:** التطبيعُ الهندسيّ بالطول يخدم *الثقة* (يمنع
+        انحياز القراءة القصيرة)، لكنّه هنا يقلب المقارنة: مرشّحٌ أطولُ بخانةٍ
+        سيُقسَّم على طولٍ أكبر فيُظلَم. والسؤالُ هنا **أيُّ سلسلةٍ أرجحُ فعلاً**
+        (MAP)، لا أيُّها أوثقُ لكلّ رمز.
+        """
+        try:
+            ext = [self.blank]
+            for ch in text:
+                ext.append(self.charset.index(ch) + 1)
+                ext.append(self.blank)
+            n_states = len(ext)
+            lp = np.log(np.maximum(probs, 1e-12))
+            neg = -1e30
+            alpha = np.full(n_states, neg)
+            alpha[0] = lp[0, ext[0]]
+            if n_states > 1:
+                alpha[1] = lp[0, ext[1]]
+            for t in range(1, lp.shape[0]):
+                prev_a, cur = alpha, np.full(n_states, neg)
+                for i in range(n_states):
+                    best = prev_a[i]
+                    if i > 0:
+                        best = np.logaddexp(best, prev_a[i - 1])
+                    if i > 1 and ext[i] != self.blank and ext[i] != ext[i - 2]:
+                        best = np.logaddexp(best, prev_a[i - 2])
+                    cur[i] = best + lp[t, ext[i]]
+                alpha = cur
+            return (float(np.logaddexp(alpha[-1], alpha[-2])) if n_states > 1
+                    else float(alpha[0]))
+        except Exception:
+            return float('-inf')
+
+    def _rescore_repeats(self, probs, text) -> str:
+        """إعادةُ تسعيرٍ ضدّ انهيار الخانة المكرَّرة — **بلا مساسٍ بالطيّ** (S2).
+
+        العطبُ المقيس: الفكُّ الجشع يختار أفضلَ مسارٍ **إطاريّ**، وهو ليس أفضلَ
+        **سلسلة**. حين تتجاور نسختان من رقمٍ بلا إطارِ فراغٍ واضحٍ بينهما ينهار
+        «٤٤» إلى «٤» — والثقةُ لا ترى الخلل لأنّ كلّ إطارٍ صحيحٌ والعطبُ في الطيّ.
+        مقيسٌ على e2e-C: **13 خطأَ طولٍ مقابل 7 إبدالاً**، منها `14483⟵1483`
+        و`3381⟵381` و`3050⟵305`.
+
+        **ثلاثةُ أسيجةٍ ضدّ الإدراج الكاذب** (خطّة فيبل):
+          1. الفارغُ لا يُرشَّح منه شيء — الامتناعُ لا يُخترَع منه رقم.
+          2. عتبةُ الهامش τ تنحاز للسلوك القائم: الانقلابُ يحتاج فائضَ دليلٍ ≥20%.
+          3. سقفُ الطول 6 (قيدُ المجال القائم) فلا يتمدّد بلا حدّ.
+        """
+        if not text or len(text) >= _MAX_DIGITS:
+            return text
+        base = self._ctc_logp(probs, text)
+        if base == float('-inf'):
+            return text
+        best_txt, best_lp = text, base
+        for i in range(len(text)):
+            cand = text[:i] + text[i] + text[i:]      # مضاعفةُ المحرف i
+            if len(cand) > _MAX_DIGITS:
+                continue
+            lp = self._ctc_logp(probs, cand)
+            if lp - base >= _REPEAT_MARGIN and lp > best_lp:
+                best_txt, best_lp = cand, lp
+        if best_txt != text:
+            logger.info('[handwriting] إعادةُ تسعير: %r ⟵ %r (فائض %.3f)',
+                        text, best_txt, best_lp - base)
+        return best_txt
 
     @staticmethod
     def _ink_bbox(pil_gray, pad: int = 8):
