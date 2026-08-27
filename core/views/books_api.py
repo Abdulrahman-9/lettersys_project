@@ -297,6 +297,11 @@ def save_book_api(request):
         # المنطق الموحّد: due_date موجود ⇒ نشط (is_archived=False)، غير ذلك ⇒ مؤرشف
         effective_due_date = due_date if needs_followup else None
         attachment = None  # يُلتقط من create_attachment لربط حلقة التدريب لاحقاً
+        # قسمُ الكتاب = قسمُ مُنشئه، وإلّا القسم الافتراضيّ. وهو ما يحدّد
+        # العدّاد الذي يُستهلَك منه الرقم — لكلّ قسمٍ دفترُه.
+        book_department = (getattr(getattr(request.user, 'profile', None), 'department', None)
+                           or BookSequence.resolve_department())
+
         try:
             with transaction.atomic():
                 # تعيين الرقم التلقائي داخل المعاملة (B2): لا يُستهلك رقم السجل الرسمي
@@ -304,11 +309,14 @@ def save_book_api(request):
                 if numberless_internal:
                     # «بلا رقم»: الحقل يبقى فارغاً ولا يُستهلك رقمٌ من السلسلة —
                     # منحُه رقماً كان يبتلع رقماً لا يظهر على أي ورقة.
-                    our_number = BookSequence.consume_next(kind_value, numberless=True)['formatted']
+                    our_number = BookSequence.consume_next(
+                        kind_value, numberless=True, department=book_department)['formatted']
                 elif auto_number and not reservation_id:
-                    our_number = BookSequence.consume_next(kind_value)['formatted']
+                    our_number = BookSequence.consume_next(
+                        kind_value, department=book_department)['formatted']
 
                 book = Book.objects.create(
+                    department=book_department,
                     our_number=our_number,
                     sender_number=sender_number,
                     title=title,

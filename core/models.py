@@ -535,12 +535,12 @@ class Book(models.Model):
             #  • المحذوف لا يحجز رقمه: كتابٌ حُذف كان يمنع إعادة إدخال رقمه
             #    الشرعي، فيعجز الموظّف عن تصحيح خطئه.
             models.UniqueConstraint(
-                fields=['our_number', 'kind'],
+                fields=['department', 'our_number', 'kind'],
                 condition=(~models.Q(our_number='')
                            & models.Q(source_ref='')
                            & ~models.Q(kind='outgoing_external')
                            & models.Q(is_deleted=False)),
-                name='uniq_book_our_number_kind',
+                name='uniq_book_number_kind_dept',
             ),
         ]
 
@@ -1503,8 +1503,12 @@ class BookSequence(models.Model):
     #: السجلّات التي يمنحها النظام أرقاماً من سلسلته
     SERIES_KINDS = numbering.SERIES_KINDS
 
+    # عدّادٌ لكلّ (قسم، نوع): كلّ قسمٍ يمسك دفتر ختمه الورقيّ الخاصّ به، وعدّادٌ
+    # واحدٌ للشركة كان سيُجبر قسمين على تقاسم سلسلةٍ لا يتقاسمانها على الورق.
+    department = models.ForeignKey('Department', null=True, on_delete=models.PROTECT,
+                                   related_name='sequences', verbose_name='القسم')
     kind = models.CharField(
-        max_length=20, choices=BOOK_KIND_CHOICES, unique=True, verbose_name='نوع الكتاب'
+        max_length=20, choices=BOOK_KIND_CHOICES, verbose_name='نوع الكتاب'
     )
     prefix = models.CharField(
         max_length=20, blank=True, default='', verbose_name='البادئة (مهملة)',
@@ -1520,6 +1524,7 @@ class BookSequence(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        unique_together = ('department', 'kind')
         verbose_name = 'عدّاد تسلسلي'
         verbose_name_plural = 'العدّادات التسلسلية'
 
@@ -1537,10 +1542,25 @@ class BookSequence(models.Model):
         return numbering.format_series(number)
 
     @classmethod
-    def get_next(cls, kind):
+    def resolve_department(cls, department=None):
+        """القسمُ المقصود بالعدّاد — والافتراضيّ حين لا يُمرَّر.
+
+        التوقيعُ متساهلٌ عمداً: مسارات الاستدعاء القديمة (الاستخراج، الحجز،
+        شاشة العدّادات) لا تعرف القسم بعد، وإجبارها عليه اليوم يعني تعديلاً
+        متزامناً في ملفّاتٍ تعمل عليها جلسةٌ أخرى. فتُسقَط إلى القسم الافتراضيّ
+        — وهو الصواب حرفيّاً في وضع «قسم واحد».
+        """
+        if department is not None:
+            return department
+        from core.models import Department
+        return Department.objects.filter(is_active=True).order_by('id').first()
+
+    @classmethod
+    def get_next(cls, kind, department=None):
         """إرجاع الرقم التالي دون استهلاكه (لا نهائي — لا تصفير سنوي)."""
         obj, _ = cls.objects.get_or_create(
-            kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
+            kind=kind, department=cls.resolve_department(department),
+            defaults={'next_number': 1, 'year': timezone.now().year}
         )
         n = obj.next_number
         return {
@@ -1549,7 +1569,7 @@ class BookSequence(models.Model):
         }
 
     @classmethod
-    def consume_next(cls, kind, numberless=False):
+    def consume_next(cls, kind, numberless=False, department=None):
         """
         استهلاك الرقم الحالي — آمن من التسابق (SELECT FOR UPDATE)، بلا تصفير سنوي.
 
@@ -1562,7 +1582,8 @@ class BookSequence(models.Model):
         from django.db import transaction
         with transaction.atomic():
             obj = cls.objects.select_for_update().get_or_create(
-                kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
+                kind=kind, department=cls.resolve_department(department),
+                defaults={'next_number': 1, 'year': timezone.now().year}
             )[0]
             current = obj.next_number
             obj.next_number += 1
@@ -1716,12 +1737,15 @@ class BookNumberReservation(models.Model):
         self.save(update_fields=['status', 'void_reason', 'cooldown_until', 'voided_at'])
 
     @classmethod
-    def get_active_for_user(cls, user, kind):
+    def get_active_for_user(cls, user, kind, department=None):
         """إرجاع الحجز النشط للمستخدم لنوع معين، أو None."""
-        return cls.objects.filter(
+        qs = cls.objects.filter(
             user=user, kind=kind,
             status__in=[cls.STATUS_ACTIVE, cls.STATUS_REACTIVATED]
-        ).order_by('-reserved_at').first()
+        )
+        if department is not None:
+            qs = qs.filter(department=department)
+        return qs.order_by('-reserved_at').first()
 
     @classmethod
     def reserve(cls, user, kind, expire_minutes=45):
