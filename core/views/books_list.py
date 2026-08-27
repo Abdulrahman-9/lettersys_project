@@ -17,6 +17,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from ..models import Attachment, Book, Entity
+from core.scoping import can_view_book, is_privileged
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +133,7 @@ def book_unified(request):
 
     base_qs = (
         Book.objects.filter(is_deleted=False)
-        if request.user.is_superuser or request.user.is_staff
+        if is_privileged(request.user)
         else Book.objects.filter(created_by=request.user, is_deleted=False)
     ).select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
 
@@ -262,7 +263,7 @@ def api_unified_data(request):
 
     base_qs = (
         Book.objects.filter(is_deleted=False)
-        if request.user.is_superuser or request.user.is_staff
+        if is_privileged(request.user)
         else Book.objects.filter(created_by=request.user, is_deleted=False)
     ).select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
 
@@ -338,10 +339,11 @@ def api_unified_data(request):
 @login_required
 def trash_list(request):
     """عرض سلة المهملات - الكتب والمرفقات المحذوفة."""
-    books_qs = Book.objects.filter(is_deleted=True)
-    attachments_qs = Attachment.objects.filter(is_deleted=True).select_related("book")
+    # ‏all_objects: المدير الافتراضي لا يرى المحذوف — والسلّة كلّها محذوف.
+    books_qs = Book.all_objects.filter(is_deleted=True)
+    attachments_qs = Attachment.all_objects.filter(is_deleted=True).select_related("book")
 
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not is_privileged(request.user):
         books_qs = books_qs.filter(created_by=request.user)
         attachments_qs = attachments_qs.filter(book__created_by=request.user)
 
@@ -360,7 +362,7 @@ def api_export_csv(request):
 
     base_qs = (
         Book.objects.filter(is_deleted=False)
-        if request.user.is_superuser or request.user.is_staff
+        if is_privileged(request.user)
         else Book.objects.filter(created_by=request.user, is_deleted=False)
     ).prefetch_related("issuing_entities", "receiving_entities")
 

@@ -83,8 +83,11 @@ def send_email(request):
     if invalid:
         return JsonResponse({'success': False, 'message': f'عناوين بريد غير صالحة: {invalid}'}, status=400)
 
+    from core.messaging.scoping import scope_books
+
+    # الإرسال باسم كتابٍ يضع سجلّه في تاريخ ذلك الكتاب — فيلزم أن يكون ضمن نطاقك.
     try:
-        book = Book.objects.get(pk=book_id)
+        book = scope_books(Book.objects.all(), request.user).get(pk=book_id)
     except Book.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 
@@ -118,9 +121,13 @@ def send_email(request):
 @require_http_methods(['GET'])
 def book_email_logs(request, book_id):
     from core.models import Book, BookEmailLog
+    from core.messaging.scoping import scope_books
 
+    # كانت النقطة تُعيد سجلّات بريد **أيّ** كتاب برقمه (عناوين المستلمين
+    # والمواضيع) لأيّ مستخدمٍ مسجَّل. النطاق داخل الاستعلام: كتابُ غيرك
+    # «غير موجود» لا «ممنوع».
     try:
-        book = Book.objects.get(pk=book_id)
+        book = scope_books(Book.objects.all(), request.user).get(pk=book_id)
     except Book.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 
@@ -250,7 +257,11 @@ def book_email_preview(request, book_id):
     from core.models import Book, EmailSettings
     from core.attachment_sharing import MAX_EMAIL_ATTACH_BYTES, human_size, plan_book_attachments
 
-    book = Book.objects.filter(pk=book_id, is_deleted=False).first()
+    from core.messaging.scoping import scope_books
+
+    book = scope_books(
+        Book.objects.filter(is_deleted=False), request.user
+    ).filter(pk=book_id).first()
     if book is None:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 
@@ -299,7 +310,11 @@ def send_book_to_entity(request, book_id):
     from core.attachment_sharing import collect_book_attachments, human_size
     from core.messaging.engines.smtp import SMTPEngine
 
-    book = Book.objects.filter(pk=book_id, is_deleted=False).first()
+    from core.messaging.scoping import scope_books
+
+    book = scope_books(
+        Book.objects.filter(is_deleted=False), request.user
+    ).filter(pk=book_id).first()
     if book is None:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 

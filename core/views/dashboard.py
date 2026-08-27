@@ -26,6 +26,7 @@ from ..extraction.kinds import get_kind_label
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       RestoreJob)
 from .helpers import staff_required
+from core.scoping import can_view_book, is_privileged
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ def followup_activity_report(request):
     cutoff = timezone.now() - timedelta(days=days)
     base_history = BookHistory.objects.filter(created_at__gte=cutoff).select_related('book', 'by')
 
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not is_privileged(request.user):
         base_history = base_history.filter(book__created_by=request.user)
 
     became_overdue = list(
@@ -362,15 +363,15 @@ def restore_book(request, pk):
     Returns:
         Redirect to trash list with success message
     """
-    book = get_object_or_404(Book, pk=pk, is_deleted=True)
-    if not (request.user.is_superuser or request.user.is_staff or book.created_by == request.user):
+    book = get_object_or_404(Book.all_objects, pk=pk, is_deleted=True)
+    if not can_view_book(book, request.user):
         messages.error(request, "غير مصرح بالاستعادة.")
         return redirect("trash_list")
     book.is_deleted = False
     book.deleted_at = None
     book.deleted_by = None
     book.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
-    Attachment.objects.filter(book=book, is_deleted=True).update(is_deleted=False, deleted_at=None, deleted_by=None)
+    Attachment.all_objects.filter(book=book, is_deleted=True).update(is_deleted=False, deleted_at=None, deleted_by=None)
     BookHistory.objects.create(book=book, action="restore", by=request.user)
     messages.success(request, "تمت استعادة الكتاب من سلة المهملات.")
     return redirect("trash_list")
@@ -389,7 +390,7 @@ def purge_book(request, pk):
         Redirect to trash list with success message
     """
     book = get_object_or_404(Book, pk=pk)
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not is_privileged(request.user):
         messages.error(request, "غير مصرح بالحذف النهائي.")
         return redirect("trash_list")
     if request.method != "POST":
@@ -424,11 +425,11 @@ def restore_attachment(request, attachment_id):
     Returns:
         Redirect to trash list with success message
     """
-    att = get_object_or_404(Attachment, id=attachment_id, is_deleted=True)
+    att = get_object_or_404(Attachment.all_objects, id=attachment_id, is_deleted=True)
     if att.book.is_deleted:
         messages.error(request, "لا يمكن استعادة مرفق لكتاب محذوف.")
         return redirect("trash_list")
-    if not (request.user.is_superuser or request.user.is_staff or att.book.created_by == request.user):
+    if not can_view_book(att.book, request.user):
         messages.error(request, "غير مصرح بالاستعادة.")
         return redirect("trash_list")
     att.is_deleted = False
@@ -453,7 +454,7 @@ def purge_attachment(request, attachment_id):
         Redirect to trash list with success message
     """
     att = get_object_or_404(Attachment, id=attachment_id)
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not is_privileged(request.user):
         messages.error(request, "غير مصرح بالحذف النهائي.")
         return redirect("trash_list")
     if request.method != "POST":

@@ -196,7 +196,7 @@ class SMTPEngine:
             log.status = BookEmailLog.STATUS_FAILED
             log.error_msg = 'إرسال الإيميل معطّل من إعدادات النظام'
             log.save(update_fields=['status', 'error_msg'])
-            logger.warning(f'[SMTPEngine] Skipped — email disabled. Book={book.pk}')
+            logger.warning(f'[SMTPEngine] Skipped — email disabled. Book={book.pk if book else "—"}')
             return log
         
         try:
@@ -238,13 +238,13 @@ class SMTPEngine:
             log.smtp_message_id = message_id
             log.delivered_at = timezone.now()
             log.save(update_fields=['status', 'smtp_message_id', 'delivered_at'])
-            logger.info(f'[SMTPEngine] Sent to={to_str} subject="{subject}" book={book.pk} mid={message_id}')
+            logger.info(f'[SMTPEngine] Sent to={to_str} subject="{subject}" book={book.pk if book else "—"} mid={message_id}')
         
         except Exception as exc:
             log.status = BookEmailLog.STATUS_FAILED
             log.error_msg = str(exc)[:1000]
             log.save(update_fields=['status', 'error_msg'])
-            logger.error(f'[SMTPEngine] Failed book={book.pk}: {exc}', exc_info=True)
+            logger.error(f'[SMTPEngine] Failed book={book.pk if book else "—"}: {exc}', exc_info=True)
         
         return log
     

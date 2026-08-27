@@ -33,6 +33,7 @@ from django.views.decorators.http import require_http_methods
 from ..document_types import get_document_type_options, normalize_document_type_value
 from ..models import Book, Entity
 from .filter_helpers import FOLLOWUP_LABELS, BookFilterEngine, BookSortEngine
+from core.scoping import can_view_book, is_privileged
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ _REPORT_FIELDS = _DETAIL_FIELDS + ("margin",)
 def _book_base_filter(user):
     """قاعدة الرؤية المؤمَّنة: المشرف/الموظّف = الكل؛ غيرهما = كتبه فقط."""
     f = Q(is_deleted=False)
-    if not (user.is_superuser or user.is_staff):
+    if not is_privileged(user):
         f &= Q(created_by=user)
     return f
 

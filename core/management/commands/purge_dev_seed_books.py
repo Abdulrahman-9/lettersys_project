@@ -46,7 +46,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        dev = Book.objects.filter(is_training=True)
+        # التفريغ يطال المحذوف ناعماً أيضاً — وإلاّ بقيت كتب التدريب في القاعدة.
+        dev = Book.all_objects.filter(is_training=True)
         total = dev.count()
 
         w = self.stdout.write
@@ -62,7 +63,7 @@ class Command(BaseCommand):
             return
 
         dev_ids = list(dev.values_list('id', flat=True))
-        att_count = Attachment.objects.filter(book_id__in=dev_ids).count()
+        att_count = Attachment.all_objects.filter(book_id__in=dev_ids).count()
         lm_linked = LetterheadMemory.objects.filter(book_id__in=dev_ids).count()
         der_linked = DataExtractionResult.objects.filter(book_id__in=dev_ids).count()
         w('-' * 60)

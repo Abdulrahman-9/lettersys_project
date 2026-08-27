@@ -32,6 +32,7 @@ from ..models import (
     BookHistory,
     BookSequence,
 )
+from core.scoping import can_view_book, is_privileged
 from .books_helpers import (
     _normalize_secret_level_value,
     _resolve_entities,
@@ -79,7 +80,7 @@ def _duplicate_guard(request, data, *, kind, title, sender_number,
         return None
 
     confirm = (data.get('confirm_duplicate') or 'false').lower() in ('true', '1', 'on')
-    is_admin = bool(request.user.is_superuser or request.user.is_staff)
+    is_admin = bool(is_privileged(request.user))
     top = candidates[0]['match_count']
 
     if top >= 4 and not (confirm and is_admin):
@@ -432,7 +433,7 @@ def api_delete_book(request, book_id):
 
     book = get_object_or_404(Book, id=book_id)
 
-    if not (request.user.is_superuser or request.user.is_staff or book.created_by == request.user):
+    if not can_view_book(book, request.user):
         return JsonResponse({"error": "Unauthorized"}, status=403)
 
     try:
@@ -474,7 +475,7 @@ def api_bulk_delete_books(request):
 
         now = timezone.now()
         books_qs = Book.objects.filter(id__in=book_ids, is_deleted=False)
-        if not (request.user.is_superuser or request.user.is_staff):
+        if not is_privileged(request.user):
             books_qs = books_qs.filter(created_by=request.user)
 
         allowed_ids = list(books_qs.values_list('id', flat=True))
@@ -535,7 +536,7 @@ def api_bulk_update_status_books(request):
             return JsonResponse({"error": "book_ids must be integers"}, status=400)
 
         books_qs = Book.objects.filter(id__in=clean_ids, is_deleted=False)
-        if not (request.user.is_superuser or request.user.is_staff):
+        if not is_privileged(request.user):
             books_qs = books_qs.filter(created_by=request.user)
 
         if action == "archived":
@@ -580,9 +581,9 @@ def api_undo_delete_book(request, book_id):
         return JsonResponse({"error": "Only POST allowed"}, status=405)
 
     try:
-        book = get_object_or_404(Book, id=book_id, is_deleted=True)
+        book = get_object_or_404(Book.all_objects, id=book_id, is_deleted=True)
 
-        if not (request.user.is_superuser or request.user.is_staff or book.created_by == request.user):
+        if not can_view_book(book, request.user):
             return JsonResponse({"error": "Unauthorized"}, status=403)
 
         book.is_deleted = False
@@ -590,7 +591,7 @@ def api_undo_delete_book(request, book_id):
         book.deleted_by = None
         book.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
 
-        book.attachments.filter(is_deleted=True).update(
+        Attachment.all_objects.filter(book=book, is_deleted=True).update(
             is_deleted=False,
             deleted_at=None,
             deleted_by=None
@@ -626,7 +627,7 @@ def api_book_detail_json(request, pk):
         return JsonResponse({'error': 'الكتاب غير موجود'}, status=404)
 
     has_permission = (
-        request.user.is_superuser or request.user.is_staff or book.created_by == request.user
+        can_view_book(book, request.user)
     )
     if not has_permission:
         return JsonResponse({'error': 'ليس لديك صلاحية'}, status=403)
