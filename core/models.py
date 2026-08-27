@@ -84,6 +84,63 @@ def book_attachment_path(instance, filename):
     return f"books/{y}/{our_number}_{filename}"
 
 
+class Department(models.Model):
+    """قسمٌ داخليٌّ في الشركة — بُعدُ النطاق الذي يقوم عليه التعميم.
+
+    لم يكن للنظام كيانُ «قسم» إطلاقاً: الأقسام كانت جهاتِ مراسلةٍ (``Entity``)
+    في فضاءٍ واحدٍ مع الوزارات والشركات الأجنبيّة، والرؤية بمُنشئ الكتاب وحده.
+
+    **حدُّ القسم بقرار المالك:** الوحداتُ الداخليّة المرمّزة برموز السجلّ
+    العربيّة (ش13 المتابعة، ش5 العقود، د الموارد البشرية…) — 42 وحدةً مقيسةً
+    في القاعدة الحيّة. أمّا الجهات بلا رمز (364) فتبقى أطرافَ مراسلةٍ لا أقساماً
+    مالكة، والرموز اللاتينيّة شركاتٌ خارجيّة.
+
+    ``entity`` يربط القسم بجهته في الدليل — وهو ما يجعله **طرف مراسلةٍ** أيضاً
+    (الإحالات والبريد الداخليّ في المرحلة ج)، ويحسم سؤال الأضابير المؤجَّل:
+    الجهةُ الداخليّة هي التي لها قسم.
+    """
+
+    name       = models.CharField("اسم القسم", max_length=200, unique=True)
+    code       = models.CharField("رمز السجلّ", max_length=20, unique=True,
+                                  help_text="رمز الوارد المطبوع على الختم — مثل ش13")
+    parent     = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT,
+                                   related_name='children', verbose_name="يتبع")
+    entity     = models.OneToOneField('Entity', null=True, blank=True, on_delete=models.SET_NULL,
+                                      related_name='department', verbose_name="الجهة المقابلة")
+    is_active  = models.BooleanField("نشط", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'قسم'
+        verbose_name_plural = 'الأقسام'
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} — {self.name}"
+
+
+class UserProfile(models.Model):
+    """امتدادُ المستخدم: قسمُه وصفتُه فيه.
+
+    كان ``UserPassword`` الامتدادَ الوحيد لـ``User``، ولا شيء يربط موظّفاً بقسم.
+    """
+
+    user       = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.PROTECT,
+                                   related_name='members', verbose_name="القسم")
+    job_title  = models.CharField("المسمّى الوظيفي", max_length=120, blank=True, default="")
+    # رئيس القسم يرى سرّيّات قسمه — انظر ``core.scoping``.
+    is_department_head = models.BooleanField("رئيس القسم", default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'ملف مستخدم'
+        verbose_name_plural = 'ملفات المستخدمين'
+
+    def __str__(self):
+        return f"{self.user.get_username()} — {self.department or 'بلا قسم'}"
+
+
 class Tag(models.Model):
     """وَسم مرن للكتب — يسمح بتصنيف ديناميكي بدون إضافة حقول جديدة."""
 
@@ -1772,6 +1829,18 @@ class SystemSettings(models.Model):
 
     singleton      = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
     app_name       = models.CharField("اسم النظام", max_length=100, default="نظام الكتب")
+
+    # وضعا تشغيلٍ من الكود نفسه: تنصيبُ قسمٍ واحد لا يرى تعقيد الأقسام أصلاً،
+    # وتنصيبُ الشركة يُظهرها. القاعدة: كلّ سلوكٍ جديدٍ خلف ``company``.
+    PROFILE_SINGLE  = 'single'
+    PROFILE_COMPANY = 'company'
+    PROFILE_CHOICES = [
+        (PROFILE_SINGLE,  'قسم واحد'),
+        (PROFILE_COMPANY, 'الشركة كاملةً'),
+    ]
+    deployment_profile = models.CharField(
+        "وضع التشغيل", max_length=10, choices=PROFILE_CHOICES, default=PROFILE_SINGLE,
+    )
     brand_subtitle = models.CharField(
         "سطر الوصف في الترويسة", max_length=200, blank=True,
         default="أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة",
