@@ -106,3 +106,46 @@ class ZeroAutofillSourceGuardTests(SimpleTestCase):
     def test_renderer_is_the_single_entry_point_for_all_three_paths(self):
         """مسارات الملء الثلاثة (كاش المسح · البثّ · الرفع) تمرّ بنقطةٍ واحدة."""
         self.assertGreaterEqual(self._src().count('applySenderDateSuggestion('), 3)
+
+
+class PrintedNumberEmissionTests(SimpleTestCase):
+    """S4: المطبوعُ يُفتح سقوطاً ثانياً — **والمرآةُ تبقى crnn-فقط**.
+
+    الفخُّ الذي تقفله هذه الاختبارات (تحذيرُ فيبل 2026-08-26): لو عُدّ المطبوعُ
+    ناجياً في `_sender_number_survives_emission`، لمنع شرطُ `not _survives`
+    المحاولةَ البصريّة — **فيُنقض S3′ صامتاً** بلا خطأٍ ولا اختبارٍ أحمر.
+    """
+
+    def _r(self, **kw):
+        r = AIExtractionResult()
+        for k, v in kw.items():
+            setattr(r, k, v)
+        return r
+
+    def test_printed_anchor_survives_emission(self):
+        from core.extraction.pipeline import _suppress_sender_number_emission
+        r = self._r(sender_number='NK-20260350', sender_number_confidence=0.70,
+                    sender_number_source='printed_anchor')
+        _suppress_sender_number_emission(r)
+        self.assertEqual(r.sender_number, 'NK-20260350')
+
+    def test_other_text_writers_stay_silenced(self):
+        from core.extraction.pipeline import _suppress_sender_number_emission
+        r = self._r(sender_number='1942', sender_number_confidence=0.65,
+                    sender_number_source='ref_num')
+        _suppress_sender_number_emission(r)
+        self.assertFalsy = self.assertFalse(r.sender_number)
+
+    def test_mirror_stays_crnn_only(self):
+        """**الحرزُ الأهمّ**: المطبوعُ لا ينجو في المرآة — وإلّا مُنعت المحاولةُ البصريّة."""
+        from core.extraction.pipeline import _sender_number_survives_emission
+        printed = self._r(sender_number='NK-1', sender_number_source='printed_anchor')
+        visual = self._r(sender_number='7099', sender_number_bbox_source='crnn')
+        self.assertFalse(_sender_number_survives_emission(printed),
+                         'المطبوعُ نجا في المرآة ⟵ المحاولةُ البصريّة ستُمنع وS3′ يُنقض صامتاً')
+        self.assertTrue(_sender_number_survives_emission(visual))
+
+    def test_printed_confidence_below_confident_wrong_threshold(self):
+        """0.70 دون 0.90 بنائيّاً — فلا يستطيع هذا المسار خرقَ الحارس رياضيّاً."""
+        from core.extraction.handwriting.reader import CONF_GATE
+        self.assertLess(0.70, CONF_GATE)

@@ -288,6 +288,54 @@ e2e-B ببوّابةٍ مُسجَّلةٍ مسبقاً. لا يُفتح بقلب
 """
 
 
+def _sender_number_survives_emission(result) -> bool:
+    """مرآةُ سياسة الكتم: هل تبلغ القيمةُ الحاليّةُ الكاتبَ لو صدرت الآن؟
+
+    **لماذا مرآةٌ لا شرطٌ حرفيّ** (خطّة فيبل 2026-08-26): كان المسارُ البصريّ
+    محكوماً بـ`if not result.sender_number` — فقيمةٌ نصّيّةٌ **محكومٌ عليها بالكتم**
+    تمنع القراءةَ البصريّة من أن تُحاوَل أصلاً، ثمّ تُسكَت هي نفسُها، فنخسر
+    الاثنين معاً. مقيسٌ على e2e-C: **15 من 19 صامتاً** حُجبوا هكذا، والقارئُ
+    يقرأ صناديقَهم 14/14 ويصيب 10 بثقاتٍ 0.95–1.00.
+
+    وربطُ الشرط بالسياسة (لا بقيمةٍ حرفيّة مثل `== 'crnn'`) يجعله يصحّ يومَ
+    تتغيّر السياسة: لو رُفع الكتمُ النصّيّ غداً، لن يدهس البصريُّ قيمةً ناجية.
+    """
+    if not getattr(result, 'sender_number', None):
+        return False
+    if NUMBER_EMISSION_ENABLED:
+        return True
+    return getattr(result, 'sender_number_bbox_source', '') == 'crnn'
+
+
+def _printed_number_vetoed(result) -> bool:
+    """نقضٌ بنيويٌّ لتشويه OCR — **نقضٌ لا كاتب**: يمنع، ولا يقترح ولا يرفع ثقة.
+
+    مقيسٌ على إيميلات الإنتاج: `llK-20260257` بدل `NK-…` — حرفٌ مشوَّهٌ في مرجعٍ
+    مطبوعٍ معروفِ القالب. فإن كانت للجهة بصمةُ قالبٍ محفوظة وخالفها المرشَّح،
+    يُكتَم ويبقى في `additional_data` مادّةَ تعلّم.
+
+    وما لا تكشفه بنيةٌ يُترك للتأشير: `20260503` مقابل `20260603` إبدالُ خانةٍ
+    **داخل نمطٍ صحيح** — لا بنيةَ ولا checksum يُميّزه، وهو صنفُ الخطأ المقبول
+    نفسُه في بقايا القارئ البصريّ.
+    """
+    val = getattr(result, 'sender_number', None)
+    ent = getattr(result, 'issuing_entity_id', None)
+    if not val or not ent:
+        return False
+    try:
+        from core.extraction.matchers.profile import SenderNumberProfiles
+        prof = SenderNumberProfiles()
+        tpl = prof.template_for(ent) if hasattr(prof, 'template_for') else None
+        if not tpl:
+            return False
+        if not prof.matches(val, tpl) if hasattr(prof, 'matches') else False:
+            logger.info('[emission] نقضٌ بنيويّ: %r يخالف قالبَ الجهة %s', val, tpl)
+            return True
+    except Exception:
+        return False
+    return False
+
+
 def _suppress_sender_number_emission(result) -> None:
     """يمنع أيّ قيمةِ عددٍ من بلوغ الكاتب — **من كلّ الكُتّاب الخمسة**.
 
@@ -298,6 +346,17 @@ def _suppress_sender_number_emission(result) -> None:
     الصندوق ومقاسه ومصدره **تبقى**: هي مادّة التدريب لا مادّة العرض.
     """
     if NUMBER_EMISSION_ENABLED:
+        return
+    # **S4 (2026-08-26):** كاتبُ مرساة الرأس المطبوعة يُفتح وحده بثقةٍ ثابتة 0.70
+    # ووسمٍ صريح. قياسُ الإيميلات: العدد يُستخرَج صحيحاً في 7 من 12 مستنداً
+    # رقميّاً ثمّ يُكتَم — خسارةٌ بقرارِ سياسةٍ لا بعجزِ قراءة. و0.70 **دون عتبة
+    # «الواثق» (0.90) بنائيّاً**، فلا يستطيع هذا المسار خرقَ الحارس رياضيّاً.
+    # ⚠️ ولا يُضاف هذا المنشأ إلى `_sender_number_survives_emission` أبداً: تلك
+    # المرآةُ تحرس **محاولةَ** المسار البصريّ، ولو نجا فيها المطبوعُ لمُنعت
+    # المحاولةُ ونُقض S3′ صامتاً. البصريُّ يُجرَّب دائماً ويُزيح المطبوع إن كتب.
+    if (getattr(result, 'sender_number_source', '') == 'printed_anchor'
+            and getattr(result, 'sender_number', None)
+            and not _printed_number_vetoed(result)):
         return
     # **إعادةُ نطاقٍ بأمر المالك (2026-08-19):** القراءة البصريّة (CRNN على قصاصة
     # الكاشف أو شريط المُموضِع، `bbox_source == 'crnn'`) **تُعرض بثقتها الحقيقيّة**
@@ -1103,6 +1162,11 @@ class AIExtractionService:
                     if result.sender_date else 0.0
                 result.sender_number = patterns.get('sender_number')
                 result.sender_number_confidence = patterns.get('sender_number_confidence') or 0.0
+                # **منشأُ القيمة** — يفصل كاتبَ مرساة الرأس (المفتوحُ في S4) عن
+                # بقيّة الكُتّاب النصّيّين (احتياطُ ref_num والبصمات) الذين يبقون
+                # مكتومين. الوسمُ هنا عند الكتابة لا عند العرض، فلا يلتبس مصدران.
+                if result.sender_number:
+                    result.sender_number_source = 'printed_anchor'
                 result.title = patterns.get('title') or ''
                 # ثقةٌ صادقةٌ بحسب المسار (فيبل 2026-08-17): كانت تبقى 0.0 دائماً فتُظهر
                 # الواجهة 0% لكلّ عنوان — بما فيه مسار العلامة المقيس 64% صالحاً.
@@ -1261,7 +1325,7 @@ class AIExtractionService:
             # عليها). يعمل في مسارَي OCR والكاش كليهما (يحتاج ملف الصورة فقط).
             # ويركب نفسَ الرسم+TSV قصاصةُ «التأريخ» اليدويّ للواجهة (خيار F) حين خلا
             # تاريخُ الجهة من الطبقات المطبوعة — بلا مسحٍ ثانٍ (فيبل16).
-            if not result.sender_number and result.image_path:
+            if result.image_path and not _sender_number_survives_emission(result):
                 _progress('handwritten_number')
                 want_crop = not result.sender_date
                 (num_res, date_crop, date_suggestion,
@@ -1269,8 +1333,12 @@ class AIExtractionService:
                     result.image_path, getattr(result, 'issuing_entity_id', None),
                     want_date_crop=want_crop)
                 if num_res:
+                    _displaced = getattr(result, 'sender_number', None)
                     result.sender_number, result.sender_number_confidence, result.sender_number_bbox = num_res
                     result.sender_number_bbox_source = 'crnn'
+                    if _displaced:
+                        logger.info('[handwriting] البصريُّ أزاح قيمةً نصّيّةً مكتومة: '
+                                    '%r ⟵ %r', _displaced, result.sender_number)
                     logger.info('[handwriting] رقم الجهة من خط اليد: %r (ثقة %.2f)',
                                 result.sender_number, result.sender_number_confidence)
                 elif det_box:
