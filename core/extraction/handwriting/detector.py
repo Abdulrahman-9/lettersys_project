@@ -49,6 +49,13 @@ _session = None
 _sess_lock = threading.Lock()
 _load_failed = False
 
+# الاحتياطُ: أوزانُ det1 كاشفاً ثانياً حين يصمت det2 (خطّة فيبل S1).
+# تصحيحُ تسميةٍ مُقيَّد: الصفحتان اللتان تراجعتا كانتا إصابتَي **صندوق det1**
+# لا مسارِ الشريط — فالعلاجُ كاشفٌ احتياطيّ، ولو نُفِّذ بالاسم القديم لعُولج
+# المسارُ الخطأ وضاعت الصفحتان.
+_fb_session = None
+_fb_failed = False
+
 
 def _model_path() -> str:
     from django.conf import settings as dj
@@ -84,6 +91,45 @@ def _get_session():
     return _session
 
 
+def _fallback_path() -> str:
+    from django.conf import settings as dj
+    p = getattr(dj, 'NUMBER_DETECTOR_FALLBACK_ONNX', '') or ''
+    if p:
+        return p
+    return os.path.join(getattr(dj, 'BASE_DIR', ''), 'var', 'models',
+                        'number_detector_det1_backup.onnx')
+
+
+def _get_fallback_session():
+    """تُحمَّل **كسولاً عند أوّل صمتٍ فعليّ** — لا عند إقلاع الخادم.
+
+    كلفتُها ~60–90 ميغابايت ولا تُدفع إلّا على الصفحات التي يصمت فيها det2
+    (~8–20%)، وبنفس `intra_op_num_threads=1` كي لا تُنافس عامل OCR على 8GB.
+    """
+    global _fb_session, _fb_failed
+    if _fb_session is not None or _fb_failed:
+        return _fb_session
+    with _sess_lock:
+        if _fb_session is not None or _fb_failed:
+            return _fb_session
+        path = _fallback_path()
+        if not os.path.exists(path):
+            logger.info('[detector] لا كاشفَ احتياطيّ في %s', path)
+            _fb_failed = True
+            return None
+        try:
+            import onnxruntime as ort
+            so = ort.SessionOptions()
+            so.intra_op_num_threads = 1
+            so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            _fb_session = ort.InferenceSession(path, so, providers=['CPUExecutionProvider'])
+            logger.info('[detector] حُمِّل الاحتياطيّ %s', path)
+        except Exception as exc:
+            logger.warning('[detector] تعذّر تحميلُ الاحتياطيّ (%s)', type(exc).__name__)
+            _fb_failed = True
+    return _fb_session
+
+
 def _letterbox(arr: np.ndarray, size: int) -> Tuple[np.ndarray, float, int, int]:
     """يُلبِّد إلى مربّعٍ بحفظ النسبة (كما يفعل ultralytics). يُعيد (الصورة، المقياس، dx, dy)."""
     h, w = arr.shape[:2]
@@ -97,20 +143,9 @@ def _letterbox(arr: np.ndarray, size: int) -> Tuple[np.ndarray, float, int, int]
     return canvas, r, dx, dy
 
 
-def detect_boxes(pil_img) -> dict:
-    """يُعيد `{'number': (box, conf)|None, 'subject': (box, conf)|None}`.
-
-    المُدخَل صفحةٌ كاملة (PIL). القصُّ إلى أعلى 55% يجري هنا داخليّاً كي لا يستطيع
-    أيّ مُستدعٍ أن يخطئ في تكرار تحضير التدريب، والإحداثيّاتُ الخارجة مُطبَّعةٌ على
-    **الصفحة الكاملة** لا على القصاصة — هذا نصّ العقد.
-
-    مع أوزانٍ خماسيّة القنوات يكون `subject` دائماً None — وهو **مسارُ التراجع**:
-    إعادةُ ملفّ الأوزان القديم تكفي، بلا لمس سطرٍ واحد.
-    """
+def _decode(sess, pil_img) -> dict:
+    """فكُّ ترميزٍ مشترك — تستعمله جلسةُ det2 والاحتياطيّةُ معاً بلا تكرار."""
     empty = {n: None for n in _CLS_NAMES}
-    sess = _get_session()
-    if sess is None:
-        return empty
     try:
         W, H = pil_img.size
         ch = max(1, int(TRAIN_CROP * H))
@@ -119,7 +154,6 @@ def detect_boxes(pil_img) -> dict:
         x = canvas.astype(np.float32).transpose(2, 0, 1)[None] / 255.0
         out = sess.run(None, {sess.get_inputs()[0].name: x})[0]
         arr = out[0] if out.ndim == 3 else out
-        # المحورُ يُحدَّد بعضويّة الشكل في الخريطة لا بمقارنة أبعاد
         if arr.shape[0] in _NC_BY_CHANNELS:
             pred, nc = arr.T, _NC_BY_CHANNELS[arr.shape[0]]
         elif arr.shape[-1] in _NC_BY_CHANNELS:
@@ -150,6 +184,33 @@ def detect_boxes(pil_img) -> dict:
     except Exception as exc:
         logger.warning('[detector] فشل الاستدلال (%s) — تدهور رشيق', type(exc).__name__)
         return empty
+
+
+def detect_boxes(pil_img) -> dict:
+    """يُعيد `{'number': (box, conf)|None, 'subject': (box, conf)|None}`.
+
+    المُدخَل صفحةٌ كاملة (PIL). القصُّ إلى أعلى 55% يجري داخليّاً كي لا يستطيع أيّ
+    مُستدعٍ أن يخطئ في تكرار تحضير التدريب، والإحداثيّاتُ الخارجة مُطبَّعةٌ على
+    **الصفحة الكاملة** لا على القصاصة — هذا نصّ العقد.
+
+    مع أوزانٍ خماسيّة القنوات يكون `subject` دائماً None — وهو **مسارُ التراجع**.
+    """
+    sess = _get_session()
+    if sess is None:
+        return {n: None for n in _CLS_NAMES}
+    return _decode(sess, pil_img)
+
+
+def detect_number_box_fallback(pil_img):
+    """كاشفُ det1 احتياطيّاً — يُستدعى **فقط** حين يصمت det2 عن العدد.
+
+    خطرُه محدودٌ بالبناء: لا يعمل إلّا على صفحةٍ كانت ستبقى صامتة، وأسوأُ حالاته
+    صندوقٌ زائفٌ ⟵ قراءةٌ دون بوّابة الثقة لا تمسّ حارس «واثقٌ‑ومخطئ».
+    """
+    sess = _get_fallback_session()
+    if sess is None:
+        return None
+    return _decode(sess, pil_img).get('number')
 
 
 def detect_number_box(pil_img) -> Optional[Tuple[list, float]]:

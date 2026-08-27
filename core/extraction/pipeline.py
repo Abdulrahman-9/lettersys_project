@@ -649,6 +649,8 @@ class AIExtractionService:
         except Exception:
             return None
 
+    _last_detector_arm = 'det2'   # يُحدَّث في `_detector_box_from_file`
+
     @staticmethod
     def _detector_box_from_file(image_path):
         """صندوق «العدد» من **الملفّ الأصليّ** مرسوماً بوصفة التدريب حرفيّاً (175dpi، RGB).
@@ -676,10 +678,21 @@ class AIExtractionService:
             else:
                 im = PILImage.open(image_path).convert('RGB')
             got = detect_number_box(im)
+            arm = 'det2'
+            if not got:
+                # **S1**: حين يصمت det2 يُجرَّب det1 احتياطيّاً. لا يعمل إلّا على
+                # صفحةٍ كانت ستبقى صامتة، فأسوأُ حالاته صندوقٌ زائفٌ ⟵ قراءةٌ دون
+                # بوّابة الثقة لا تمسّ حارس «واثقٌ‑ومخطئ».
+                from core.extraction.handwriting.detector import detect_number_box_fallback
+                got = detect_number_box_fallback(im)
+                arm = 'det1' if got else 'none'
             del im
             if not got:
                 return None
             box, _conf = got
+            # ذراعُ المصدر يُنشر مع الصندوق — بدونه يتسمّم الحصادُ القادم
+            # بهندساتٍ مختلطة (درسُ recrop المدفوعُ ثمنُه مرّةً).
+            AIExtractionService._last_detector_arm = arm
             # نفس حارس الارتفاع: صندوقٌ منخفض اقتباسُ متنٍ يخنق حقلَ التاريخ فوقه
             return box if box[1] <= 0.45 else None
         except Exception as exc:
