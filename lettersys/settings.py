@@ -277,6 +277,13 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'core.tasks.sync_inbox_task',
         'schedule': crontab(minute='*/10'),
     },
+    # لم تُجدوَل قبل اليوم — وكان ذلك سترًا عرضيّاً لا تصميماً: المهمّة كانت
+    # تُعيد إرسال الصفّ الفاشل في **كلّ** تشغيلة بلا نهاية. جُدولت بعد أن صار
+    # لها عدّاد محاولاتٍ وحالةُ ترْكٍ وقفلٌ ذرّيّ (سجلّ العيوب ح2).
+    'retry-failed-emails-every-30-minutes': {
+        'task': 'core.tasks.retry_failed_emails_task',
+        'schedule': crontab(minute='*/30'),
+    },
 }
 
 # ─── إعدادات الذكاء الاصطناعي والاستخراج ────────────────────────────────────

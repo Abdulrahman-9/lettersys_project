@@ -253,44 +253,87 @@ def sync_inbox_task():
 @shared_task(name='core.tasks.retry_failed_emails_task', ignore_result=True)
 def retry_failed_emails_task():
     """
-    إعادة إرسال الإيميلات الفاشلة أو المعلّقة — تُشغَّل كل 30 دقيقة.
-    تحاول مرة واحدة فقط لكل سجل (تجنب حلقة لانهائية).
+    إعادة إرسال الإيميلات الفاشلة أو المعلّقة — مجدولةٌ كلّ 30 دقيقة.
+
+    كان توثيق هذه المهمّة يدّعي «محاولةً واحدةً فقط لكلّ سجلّ (تجنّب حلقة
+    لانهائية)» **والكود لا ينفّذ ذلك إطلاقاً**: ``send_book_notification``
+    يُنشئ صفّاً جديداً لكلّ محاولة ولا يمسّ حالة الصفّ الأصلي، فيبقى الأصل
+    ``failed`` أبداً ويُعاد إرساله في كلّ تشغيل — وكلّ محاولةٍ فاشلة تُضيف
+    مرشَّحاً جديداً فينمو الحشد. عدمُ جدولتها كان سترًا عرضيّاً لا تصميماً.
+
+    ثلاثة حرّاسٍ يجعلون الوعد صادقاً:
+
+    * ``retry_of__isnull=True`` — صفوف المحاولات نفسها لا تدخل الطابور.
+    * ``retry_count`` على **الأصل** يُزاد بعد كلّ محاولة، وعند بلوغ الحدّ
+      يصير الأصل ``abandoned`` فيخرج نهائيّاً.
+    * قفلٌ ذرّيّ يمنع تراكب تشغيلتين من beat.
     """
     from datetime import timedelta
+
+    from django.core.cache import cache
     from django.utils import timezone
+
     from .models import BookEmailLog, EmailSettings
     from .messaging.engines.smtp import send_book_notification
 
-    cfg = EmailSettings.get()
-    if not cfg.is_active:
-        return {'skipped': 'email not active'}
+    # تشغيلتان متراكبتان تعنيان إرسالاً مزدوجاً لكلّ سجلّ.
+    # ملاحظة: على LocMemCache القفل لكلّ عمليّة لا لكلّ الخادم — الضمان الكامل
+    # يأتي مع Redis (مرحلة ز0).
+    lock = 'lock:retry_failed_emails'
+    if not cache.add(lock, 1, timeout=600):
+        return {'skipped': 'already running'}
 
-    # إيميلات فاشلة أو معلّقة منذ أكثر من 5 دقائق
-    cutoff = timezone.now() - timedelta(minutes=5)
-    qs = BookEmailLog.objects.filter(
-        status__in=['failed', 'pending'],
-        sent_at__lt=cutoff,
-    ).select_related('book', 'entity', 'sent_by')[:20]
+    try:
+        cfg = EmailSettings.get()
+        if not cfg.is_active:
+            return {'skipped': 'email not active'}
 
-    retried = 0
-    for log in qs:
-        try:
-            send_book_notification(
-                book=log.book,
-                recipients=[log.to_address],
-                subject=log.subject,
-                html_body=log.body_html,
-                cc=[x.strip() for x in log.cc_addresses.split(',') if x.strip()],
-                trigger=log.trigger,
-                sent_by=log.sent_by,
-                entity=log.entity,
-            )
-            retried += 1
-        except Exception as e:
-            logger.warning(f"retry_failed_emails: فشل إعادة إرسال log#{log.pk}: {e}")
+        # فاشلة أو معلّقة منذ أكثر من 5 دقائق، وأصولٌ لم تستنفد محاولاتها.
+        cutoff = timezone.now() - timedelta(minutes=5)
+        candidates = list(
+            BookEmailLog.objects.filter(
+                status__in=[BookEmailLog.STATUS_FAILED, BookEmailLog.STATUS_PENDING],
+                sent_at__lt=cutoff,
+                retry_of__isnull=True,
+                retry_count__lt=BookEmailLog.MAX_RETRIES,
+            ).select_related('book', 'entity', 'sent_by')[:20]
+        )
 
-    logger.info(f"retry_failed_emails: أعدت إرسال {retried}/{qs.count()} إيميل")
-    return {'retried': retried}
+        retried = 0
+        for log in candidates:
+            log.retry_count += 1
+            log.last_retry_at = timezone.now()
+            if log.retry_count >= BookEmailLog.MAX_RETRIES:
+                log.status = BookEmailLog.STATUS_ABANDONED
+            log.save(update_fields=['retry_count', 'last_retry_at', 'status'])
+
+            try:
+                attempt = send_book_notification(
+                    book=log.book,
+                    recipients=[log.to_address],
+                    subject=log.subject,
+                    html_body=log.body_html,
+                    cc=[x.strip() for x in log.cc_addresses.split(',') if x.strip()],
+                    trigger=log.trigger,
+                    sent_by=log.sent_by,
+                    entity=log.entity,
+                )
+                # وسمُ الصفّ الجديد محاولةً — هو ما يمنعه من دخول الطابور لاحقاً.
+                if attempt is not None and attempt.pk != log.pk:
+                    attempt.retry_of = log
+                    attempt.save(update_fields=['retry_of'])
+                    if attempt.status == BookEmailLog.STATUS_SENT:
+                        # نجحت: يُغلق الأصل ولو لم يستنفد محاولاته.
+                        log.status = BookEmailLog.STATUS_SENT
+                        log.save(update_fields=['status'])
+                retried += 1
+            except Exception as e:
+                logger.warning(f"retry_failed_emails: فشل إعادة إرسال log#{log.pk}: {e}")
+
+        logger.info(f"retry_failed_emails: أعدت إرسال {retried}/{len(candidates)} إيميل")
+        return {'retried': retried, 'candidates': len(candidates)}
+    finally:
+        cache.delete(lock)
 
 
 @shared_task(name='core.tasks.network_heartbeat', ignore_result=True)

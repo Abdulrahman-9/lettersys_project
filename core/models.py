@@ -1689,14 +1689,19 @@ class BookEmailLog(models.Model):
         (TRIGGER_REMINDER, 'تذكير متابعة'),
     ]
 
-    STATUS_SENT    = 'sent'
-    STATUS_FAILED  = 'failed'
-    STATUS_PENDING = 'pending'
+    STATUS_SENT      = 'sent'
+    STATUS_FAILED    = 'failed'
+    STATUS_PENDING   = 'pending'
+    STATUS_ABANDONED = 'abandoned'
     STATUS_CHOICES = [
-        (STATUS_SENT,    'أُرسِل'),
-        (STATUS_FAILED,  'فشل'),
-        (STATUS_PENDING, 'في الانتظار'),
+        (STATUS_SENT,      'أُرسِل'),
+        (STATUS_FAILED,    'فشل'),
+        (STATUS_PENDING,   'في الانتظار'),
+        (STATUS_ABANDONED, 'مُتروك بعد محاولات'),
     ]
+
+    #: أقصى محاولاتٍ لإعادة الإرسال قبل الترك.
+    MAX_RETRIES = 3
 
     # اختياريّ عمداً: رسالةٌ إداريّةٌ قد لا تخصّ كتاباً بعينه. كان الحقل إلزاميّاً
     # فسقط مسار الإنشاء إلى **أوّل كتابٍ في القاعدة** (``Book.objects.order_by('id')
@@ -1728,6 +1733,19 @@ class BookEmailLog(models.Model):
 
     sent_at     = models.DateTimeField("أُرسِل في", auto_now_add=True)
     delivered_at = models.DateTimeField("تأكيد التسليم", null=True, blank=True)
+
+    # ── إعادة الإرسال ──
+    # كانت مهمّة الإعادة تدّعي في توثيقها «محاولةً واحدةً لكلّ سجلّ» ولا تنفّذه:
+    # المُرسِل يُنشئ **صفّاً جديداً** لكلّ محاولة ولا يمسّ الأصل، فيبقى الأصل
+    # `failed` أبداً ويُعاد إرساله كلّ تشغيل — والصفوف الجديدة تدخل الطابور
+    # بدورها فينمو الحشد. هذه الحقول هي ما يجعل «مرّةً واحدة» صادقةً فعلاً.
+    retry_count   = models.PositiveSmallIntegerField("عدد المحاولات", default=0)
+    last_retry_at = models.DateTimeField("آخر محاولة", null=True, blank=True)
+    retry_of      = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='retries', verbose_name='محاولةٌ لـ',
+        help_text='غير فارغ ⟵ هذا الصفّ محاولةُ إعادةٍ لا أصلاً: لا يدخل الطابور.',
+    )
 
     class Meta:
         verbose_name = 'سجل إيميل'
