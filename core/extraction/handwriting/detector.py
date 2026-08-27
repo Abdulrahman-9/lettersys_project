@@ -31,7 +31,19 @@ logger = logging.getLogger(__name__)
 IMGSZ = 1280          # مقاس التدريب — تغييره يُبطل الأوزان
 TRAIN_CROP = 0.55     # أعلى 55% من الصفحة (نفس pack_detector_dataset.py)
 CONF_MIN = 0.15       # نفس عتبة قياس البوّابة M1 في الدفتر
-_CHANNELS = 5         # [cx, cy, w, h, conf] — صنفٌ واحد
+
+# فكُّ الترميز **يقوده الشكل** لا ثابتٌ مُستبدَل (خطّة فيبل 2026-08-26):
+#   5 قنوات ⟵ [cx,cy,w,h,conf]           صنفٌ واحد (أوزانُ det-b القديمة)
+#   6 قنوات ⟵ [cx,cy,w,h,c_number,c_subj] صنفان (أوزانُ det2)
+# علّةُ الثابت الصارم كانت التباسَ محورٍ عند مرشَّحٍ واحد (5,1) — والتباسُ {5,6}
+# مع محور المراسي (33,600) **مستحيلٌ بالبناء**. والمكسب: **التراجعُ يصير ملفَّ
+# أوزانٍ فقط بلا revert كود**، والخطرُ الأصليّ (قراءةُ c0 على أنّها objectness
+# فيُسقَط الصنفُ الثاني صامتاً) يموت في الحالتين.
+_NC_BY_CHANNELS = {5: 1, 6: 2}
+# ترتيبُ الصنفين **مُتحقَّقٌ منه لا مفترَض** — `package_det2_ds.py`:
+#     CLASSES = ('number', 'subject')  # 0, 1 — الترتيب عقد
+CLS_NUMBER, CLS_SUBJECT = 0, 1
+_CLS_NAMES = ('number', 'subject')
 
 _session = None
 _sess_lock = threading.Lock()
@@ -85,16 +97,20 @@ def _letterbox(arr: np.ndarray, size: int) -> Tuple[np.ndarray, float, int, int]
     return canvas, r, dx, dy
 
 
-def detect_number_box(pil_img) -> Optional[Tuple[list, float]]:
-    """يُعيد `([x0, y0, x1, y1] مُطبَّعاً على **الصفحة الكاملة**, ثقة)` أو None.
+def detect_boxes(pil_img) -> dict:
+    """يُعيد `{'number': (box, conf)|None, 'subject': (box, conf)|None}`.
 
-    المُدخَل صفحةٌ كاملة (PIL). القصّ إلى أعلى 55% يجري هنا داخليّاً كي لا يستطيع أيّ
-    مُستدعٍ أن يخطئ في تكرار تحضير التدريب. الإحداثيّات الخارجة مُطبَّعة على الصفحة
-    الكاملة لا على القصاصة — هذا نصّ العقد.
+    المُدخَل صفحةٌ كاملة (PIL). القصُّ إلى أعلى 55% يجري هنا داخليّاً كي لا يستطيع
+    أيّ مُستدعٍ أن يخطئ في تكرار تحضير التدريب، والإحداثيّاتُ الخارجة مُطبَّعةٌ على
+    **الصفحة الكاملة** لا على القصاصة — هذا نصّ العقد.
+
+    مع أوزانٍ خماسيّة القنوات يكون `subject` دائماً None — وهو **مسارُ التراجع**:
+    إعادةُ ملفّ الأوزان القديم تكفي، بلا لمس سطرٍ واحد.
     """
+    empty = {n: None for n in _CLS_NAMES}
     sess = _get_session()
     if sess is None:
-        return None
+        return empty
     try:
         W, H = pil_img.size
         ch = max(1, int(TRAIN_CROP * H))
@@ -102,35 +118,40 @@ def detect_number_box(pil_img) -> Optional[Tuple[list, float]]:
         canvas, r, dx, dy = _letterbox(crop, IMGSZ)
         x = canvas.astype(np.float32).transpose(2, 0, 1)[None] / 255.0
         out = sess.run(None, {sess.get_inputs()[0].name: x})[0]
-        # yolov8 يُخرج (1, 4+nc, N). صنفٌ واحد ⟵ القنوات **خمسٌ بالتعريف**
-        # [cx, cy, w, h, conf]. نُحدّد محور القنوات بالمساواة بـ_CHANNELS لا بمقارنة
-        # الأبعاد: المقارنة تنهار حين يكون المرشَّح واحداً (5,1) فتُقرأ مقلوبةً بصمت.
         arr = out[0] if out.ndim == 3 else out
-        if arr.shape[0] == _CHANNELS:
-            pred = arr.T
-        elif arr.shape[-1] == _CHANNELS:
-            pred = arr
+        # المحورُ يُحدَّد بعضويّة الشكل في الخريطة لا بمقارنة أبعاد
+        if arr.shape[0] in _NC_BY_CHANNELS:
+            pred, nc = arr.T, _NC_BY_CHANNELS[arr.shape[0]]
+        elif arr.shape[-1] in _NC_BY_CHANNELS:
+            pred, nc = arr, _NC_BY_CHANNELS[arr.shape[-1]]
         else:
             logger.warning('[detector] شكل مخرجاتٍ غير متوقّع %s — تخطٍّ', arr.shape)
-            return None
+            return empty
         if pred.size == 0:
-            return None
-        conf = pred[:, 4]
-        i = int(conf.argmax())
-        if float(conf[i]) < CONF_MIN:
-            return None
-        cx, cy, bw, bh = (float(v) for v in pred[i, :4])
-        # فكّ التلبيد ⟵ إحداثيّات القصاصة بالبكسل
-        x0 = (cx - bw / 2 - dx) / r
-        y0 = (cy - bh / 2 - dy) / r
-        x1 = (cx + bw / 2 - dx) / r
-        y1 = (cy + bh / 2 - dy) / r
-        # ⟵ ثمّ إلى الصفحة الكاملة مُطبَّعةً (المرجع W×H لا القصاصة)
-        box = [max(0.0, x0 / W), max(0.0, y0 / H),
-               min(1.0, x1 / W), min(1.0, y1 / H)]
-        if not (box[0] < box[2] and box[1] < box[3]):
-            return None
-        return box, float(conf[i])
+            return empty
+
+        res = dict(empty)
+        for cls in range(nc):
+            score = pred[:, 4 + cls]           # عمودُ الصنف — لا objectness
+            i = int(score.argmax())
+            c = float(score[i])
+            if c < CONF_MIN:                   # صمتُ صنفٍ لا يُسكت الآخر
+                continue
+            cx, cy, bw, bh = (float(v) for v in pred[i, :4])
+            x0 = (cx - bw / 2 - dx) / r
+            y0 = (cy - bh / 2 - dy) / r
+            x1 = (cx + bw / 2 - dx) / r
+            y1 = (cy + bh / 2 - dy) / r
+            box = [max(0.0, x0 / W), max(0.0, y0 / H),
+                   min(1.0, x1 / W), min(1.0, y1 / H)]
+            if box[0] < box[2] and box[1] < box[3]:
+                res[_CLS_NAMES[cls]] = (box, c)
+        return res
     except Exception as exc:
         logger.warning('[detector] فشل الاستدلال (%s) — تدهور رشيق', type(exc).__name__)
-        return None
+        return empty
+
+
+def detect_number_box(pil_img) -> Optional[Tuple[list, float]]:
+    """غلافٌ رقيقٌ يحفظ التوقيع القائم — فلا يتغيّر حرفٌ في `pipeline.py` بالإيداع 1."""
+    return detect_boxes(pil_img).get('number')

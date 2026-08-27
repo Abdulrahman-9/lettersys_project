@@ -201,3 +201,84 @@ class NumberEmissionSuppressedTests(TestCase):
         # ومع ذلك يبقى زوجُ التدريب كاملاً
         self.assertEqual(res.additional_data['sender_number_final'], '1754')
         self.assertTrue(res.additional_data['sender_number_bbox'])
+
+
+class TwoClassDecodeTests(SimpleTestCase):
+    """فكُّ ترميزٍ يقوده الشكل — والتراجعُ ملفُّ أوزانٍ فقط (خطّة فيبل 2026-08-26).
+
+    الخطرُ الذي تقفله هذه الاختبارات: مع `nc=2` صار ذيلُ ONNX `[c0, c1]` لا
+    objectness، فقراءةُ `pred[:,4]` وحدها تُعيد درجةَ صنف العدد **وتُسقط الصنف
+    الثاني صامتاً** — عطبٌ لا يُصدر خطأً ولا يظهر إلّا في غياب ميزةٍ كاملة.
+    """
+
+    class _FakeSess:
+        """جلسةٌ تُخرج مرشَّحاً واحداً بقنواتٍ يحدّدها المُنشئ."""
+
+        def __init__(self, channels, scores):
+            import numpy as np
+            n = 8
+            a = np.zeros((channels, n), dtype=np.float32)
+            a[0, :] = 640.0        # cx وسطَ اللوحة
+            a[1, :] = 320.0
+            a[2, :] = 120.0        # w
+            a[3, :] = 40.0         # h
+            for k, sc in enumerate(scores):
+                a[4 + k, 0] = sc
+            if channels == 6 and len(scores) > 1:
+                a[1, 1] = 700.0    # مرشَّحٌ ثانٍ أخفضُ للموضوع
+                a[5, 1] = scores[1]
+                a[5, 0] = 0.0
+            self._out = a[None]
+
+        def run(self, _o, _f):
+            return [self._out]
+
+        def get_inputs(self):
+            class _I:
+                name = 'images'
+            return [_I()]
+
+    def _detect(self, channels, scores):
+        from PIL import Image
+        from core.extraction.handwriting import detector as det
+        prev, prev_failed = det._session, det._load_failed
+        det._session, det._load_failed = self._FakeSess(channels, scores), False
+        try:
+            return det.detect_boxes(Image.new('RGB', (1000, 1400), 'white'))
+        finally:
+            det._session, det._load_failed = prev, prev_failed
+
+    def test_two_classes_yield_two_independent_boxes(self):
+        r = self._detect(6, [0.9, 0.8])
+        self.assertIsNotNone(r['number'], 'صنفُ العدد ضاع')
+        self.assertIsNotNone(r['subject'], 'صنفُ الموضوع أُسقط صامتاً — العطبُ المقصود')
+        self.assertNotEqual(r['number'][0], r['subject'][0], 'الصندوقان متطابقان')
+
+    def test_old_single_class_weights_still_work(self):
+        """مسارُ التراجع: أوزانٌ خماسيّة ⟵ العدد يعمل والموضوع None."""
+        r = self._detect(5, [0.9])
+        self.assertIsNotNone(r['number'])
+        self.assertIsNone(r['subject'])
+
+    def test_one_class_below_gate_does_not_silence_the_other(self):
+        r = self._detect(6, [0.9, 0.05])
+        self.assertIsNotNone(r['number'])
+        self.assertIsNone(r['subject'])
+
+    def test_unknown_channel_count_degrades_quietly(self):
+        r = self._detect(7, [0.9, 0.8, 0.7])
+        self.assertIsNone(r['number'])
+        self.assertIsNone(r['subject'])
+
+    def test_legacy_wrapper_signature_unchanged(self):
+        from PIL import Image
+        from core.extraction.handwriting import detector as det
+        prev, prev_failed = det._session, det._load_failed
+        det._session, det._load_failed = self._FakeSess(6, [0.9, 0.8]), False
+        try:
+            got = det.detect_number_box(Image.new('RGB', (1000, 1400), 'white'))
+        finally:
+            det._session, det._load_failed = prev, prev_failed
+        self.assertIsInstance(got, tuple)
+        self.assertEqual(len(got), 2)
+        self.assertIsInstance(got[0], list)
