@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""مسارات WebSocket — تُوصَل من lettersys/asgi.py عند تفعيل channels (دورمانت افتراضياً)."""
+"""مسارات WebSocket — موصولةٌ فعلاً من ``lettersys/asgi.py`` (لا دورمانت)."""
 from django.urls import re_path
 
 from . import consumers

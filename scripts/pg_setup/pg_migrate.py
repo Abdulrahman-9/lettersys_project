@@ -4,8 +4,13 @@ PostgreSQL Migration Helper - أداة استيراد البيانات إلى Po
 
 الاستخدام (بعد الانتهاء من الترحيل عن SQLite):
   1. تصدير البيانات (من قاعدة بيانات django dumpdata):
-       python manage.py dumpdata --natural-primary --natural-foreign --indent=2 \\
+       python manage.py dumpdata --all --natural-primary --natural-foreign --indent=2 \\
            -e contenttypes -e auth.Permission -o data_backup.json
+
+     ⚠️ ``--all`` **إلزاميّ**: منذ صار للحذف الناعم مديرٌ افتراضيّ
+     (``SoftDeleteManager`` على Book وAttachment)، يقرأ ``dumpdata`` المديرَ
+     الافتراضيّ فيُسقط كلّ المحذوف ناعماً **بصمت** — أي تُفقد سلّة
+     المحذوفات كاملةً في النقل. ``--all`` يُجبره على ``_base_manager``.
 
   2. تثبيت PostgreSQL 16 وإنشاء قاعدة البيانات (مرة واحدة):
        شغّل activate_postgresql.bat

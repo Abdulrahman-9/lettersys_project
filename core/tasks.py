@@ -241,9 +241,6 @@ def sync_inbox_task():
         from .messaging.engines.imap import sync_inbox
         stats = sync_inbox()
         logger.info(f"IMAP sync task: {stats}")
-        # مسح كاش badge الوارد
-        from django.core.cache import cache
-        cache.delete('mail_inbox_unread')
         return stats
     except Exception as e:
         logger.exception(f"sync_inbox_task error: {e}")

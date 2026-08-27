@@ -277,3 +277,18 @@ class BooklessMailTests(MailScopeTestCase):
         self.client.force_login(self.bob)
         page = self.client.get('/books/mail/sent/').context['page_obj']
         self.assertNotIn('رسالة أليس', {log.subject for log in page.object_list})
+
+    def test_foreign_book_id_is_refused_not_silently_dropped(self):
+        """كتابٌ طُلب وهو خارج نطاقك: رفضٌ صريح لا سقوطٌ صامتٌ إلى «بلا كتاب».
+
+        السقوط الصامت يجعل المستخدم يظنّ رسالته عُلّقت على كتابه.
+        """
+        self.client.force_login(self.alice)
+        resp = self.client.post(
+            '/books/mail/api/compose/',
+            data=('{"to": "x@example.com", "subject": "س", "body": "ب", '
+                  f'"book_id": {self.book_b.pk}}}'),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertFalse(BookEmailLog.objects.filter(subject='س').exists())
