@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.conf import settings
 from django.utils import timezone
 
 from .models import Attachment, DataExtractionResult, Book, ExtractionFeedback
@@ -388,27 +389,65 @@ def _backup_is_due(cfg, now):
 def scheduled_backup():
     """
     نسخ احتياطي مجدول — يُشغَّل ساعياً عبر Celery beat، ويقرّر التنفيذ من BackupSettings.
-    ينشئ نسخة مشفّرة، يحذف النسخ الأقدم من مدة الاحتفاظ، ويحدّث آخر تشغيل.
+
+    كان يغطّي ``pg_dump`` وحده (سجلّ العيوب ح8): استعادةٌ «ناجحة» كانت تُعيد
+    نظاماً بكتبٍ **بلا مستنداتها** — 15.8 غيغا من المرفقات لا يحميها شيء —
+    وبلا ``.env`` فلا تقوم على جهازٍ نظيف أصلاً.
+
+    فصار ثلاثة أجزاء: القاعدة مشفَّرةً، وملفّات الإعداد مشفَّرةً، ومرآةً
+    تدريجيّةً للوسائط وأوزان النماذج. فشلُ جزءٍ لا يُسقط البقيّة — نسخةٌ
+    ناقصةٌ خيرٌ من لا شيء، والتقرير يقول أيّها نقص.
     """
     from .models import BackupSettings
-    from .backup_service import create_encrypted_pg_backup, default_backup_dir, prune_old_backups
+    from .backup_service import (
+        create_encrypted_config_backup,
+        create_encrypted_pg_backup,
+        default_backup_dir,
+        encryption_key_status,
+        mirror_tree,
+        prune_old_backups,
+    )
 
     cfg = BackupSettings.get()
     now = timezone.localtime()
     if not _backup_is_due(cfg, now):
         return {'skipped': True}
 
-    try:
-        path = create_encrypted_pg_backup()
-    except Exception as exc:
-        logger.exception('[scheduled_backup] فشل إنشاء النسخة: %s', exc)
-        return {'error': str(exc)}
+    directory = default_backup_dir()
+    report = {}
 
-    removed = prune_old_backups(default_backup_dir(), cfg.retention_days)
+    try:
+        report['database'] = str(create_encrypted_pg_backup())
+    except Exception as exc:
+        logger.exception('[scheduled_backup] فشل نسخ القاعدة: %s', exc)
+        report['database_error'] = str(exc)
+
+    try:
+        config_path = create_encrypted_config_backup()
+        report['config'] = str(config_path) if config_path else None
+    except Exception as exc:
+        logger.exception('[scheduled_backup] فشل نسخ ملفّات الإعداد: %s', exc)
+        report['config_error'] = str(exc)
+
+    for label, source in (('media', settings.MEDIA_ROOT),
+                          ('models', settings.BASE_DIR / 'var' / 'models')):
+        try:
+            report[label] = mirror_tree(source, directory / f'{label}_mirror')
+        except Exception as exc:
+            logger.exception('[scheduled_backup] فشل مرآة %s: %s', label, exc)
+            report[f'{label}_error'] = str(exc)
+
+    # لا يُنسخ المفتاح تلقائيّاً — لكن يُنبَّه إن كان مفقوداً أو مُلقىً هنا.
+    key = encryption_key_status(directory)
+    report['encryption_key'] = key
+    if not key['exists']:
+        logger.error('[scheduled_backup] .encryption_key مفقود — النسخ المشفّرة لن تُفتح!')
+
+    report['pruned'] = prune_old_backups(directory, cfg.retention_days)
     cfg.last_run_at = timezone.now()
     cfg.save(update_fields=['last_run_at', 'updated_at'])
-    logger.info('[scheduled_backup] أُنشئت %s؛ حُذفت %s نسخة قديمة', path, removed)
-    return {'backup': str(path), 'pruned': removed}
+    logger.info('[scheduled_backup] %s', report)
+    return report
 
 
 def get_task_status(task_id: str) -> dict:
