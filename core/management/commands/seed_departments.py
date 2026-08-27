@@ -82,6 +82,15 @@ class Command(BaseCommand):
                 Department.objects.create(name=e.name, code=e.code, entity=e)
                 created += 1
 
+            # قسمٌ أنشأته الهجرة (ش13) يأتي بلا جهة — نربطه هنا حين تظهر جهتُه.
+            linked = 0
+            for e in entities:
+                dept = Department.objects.filter(code=e.code, entity__isnull=True).first()
+                if dept is not None:
+                    dept.entity = e
+                    dept.save(update_fields=['entity'])
+                    linked += 1
+
             default_dept = Department.objects.filter(code=default_code).first()
             if default_dept is None:
                 default_dept = Department.objects.create(
@@ -90,5 +99,5 @@ class Command(BaseCommand):
                 created += 1
 
         self.stdout.write(self.style.SUCCESS(
-            f'أُنشئ {created} قسماً. الافتراضيّ: {default_dept}'
+            f'أُنشئ {created} قسماً · رُبِط {linked} بجهته. الافتراضيّ: {default_dept}'
         ))

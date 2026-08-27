@@ -67,7 +67,7 @@ class TrashFlowStillWorksTests(TestCase):
     """المدير الجديد لا يعمي سلّة المحذوفات ولا الاستعادة."""
 
     def setUp(self):
-        self.staff = User.objects.create_user('boss2', password='pw-boss-22', is_staff=True)
+        self.staff = User.objects.create_superuser('boss2', 'boss2@x.com', 'pw-boss-22')
         self.client.force_login(self.staff)
         self.book = Book.objects.create(
             kind='incoming_internal', title='للحذف', created_by=self.staff,

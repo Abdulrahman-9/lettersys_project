@@ -318,6 +318,10 @@ class Book(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # بُعدُ النطاق. اختياريّ في المخطّط ومُعبَّأ بالكامل في الواقع (هجرة 0064):
+    # تنصيبٌ جديدٌ قبل بذر الأقسام يجب أن يعمل، وصفٌّ بلا قسمٍ يراه المدير فقط.
+    department = models.ForeignKey('Department', null=True, blank=True, on_delete=models.PROTECT,
+                                   related_name='books', verbose_name='القسم')
     is_deleted = models.BooleanField(default=False)
 
     deleted_at = models.DateTimeField(null=True, blank=True)

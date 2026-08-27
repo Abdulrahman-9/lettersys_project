@@ -32,6 +32,7 @@ class InternalCodeTests(TestCase):
 class SeedDepartmentsTests(TestCase):
 
     def setUp(self):
+        self.before = Department.objects.count()
         Entity.objects.create(name='قسم المتابعة', code='ش13')
         Entity.objects.create(name='قسم العقود', code='ش5')
         Entity.objects.create(name='شركة أجنبية', code='ADE')
@@ -45,7 +46,8 @@ class SeedDepartmentsTests(TestCase):
     def test_dry_run_writes_nothing(self):
         output = self._run()
         self.assertIn('عرضٌ فقط', output)
-        self.assertEqual(Department.objects.count(), 0)
+        # الهجرة تُنشئ القسم الافتراضيّ — فالتحقّق أنّ الجافّ لم يزد عليه.
+        self.assertEqual(Department.objects.count(), self.before)
 
     def test_apply_creates_only_internal_units(self):
         self._run('--apply')
@@ -72,7 +74,7 @@ class SeedDepartmentsTests(TestCase):
 class UserProfileTests(TestCase):
 
     def test_profile_links_user_to_department(self):
-        dept = Department.objects.create(name='المتابعة', code='ش13')
+        dept = Department.objects.create(name='وحدة اختبار', code='ش99')
         user = User.objects.create_user('emp', password='pw-emp-1111')
         profile = UserProfile.objects.create(user=user, department=dept)
         self.assertEqual(user.profile.department, dept)
@@ -81,7 +83,7 @@ class UserProfileTests(TestCase):
     def test_department_is_protected_from_deletion(self):
         from django.db.models import ProtectedError
 
-        dept = Department.objects.create(name='المتابعة', code='ش13')
+        dept = Department.objects.create(name='وحدة اختبار', code='ش98')
         UserProfile.objects.create(
             user=User.objects.create_user('emp2', password='pw-emp-2222'), department=dept)
         with self.assertRaises(ProtectedError):
@@ -99,3 +101,30 @@ class DeploymentProfileTests(TestCase):
         cfg.deployment_profile = SystemSettings.PROFILE_COMPANY
         cfg.save()
         self.assertEqual(SystemSettings.get().deployment_profile, 'company')
+
+
+class EnsureProfileTests(TestCase):
+    """المستخدم الجديد بعد الهجرة كان يبقى بلا ملفّ فيسقط إلى «كتبي أنا»."""
+
+    def test_single_mode_joins_the_default_department(self):
+        from core.scoping import ensure_profile
+
+        user = User.objects.create_user('newbie', password='pw-newbie-1')
+        profile = ensure_profile(user)
+        self.assertIsNotNone(profile.department, 'الموظّف الجديد بقي بلا قسم')
+
+    def test_company_mode_leaves_department_unset(self):
+        """لا نُخمّن القسم حين تتعدّد الأقسام — إسنادٌ خاطئٌ صامت أسوأ من مؤجَّل."""
+        from core.scoping import ensure_profile
+
+        cfg = SystemSettings.get()
+        cfg.deployment_profile = SystemSettings.PROFILE_COMPANY
+        cfg.save()
+        user = User.objects.create_user('newbie2', password='pw-newbie-2')
+        self.assertIsNone(ensure_profile(user).department)
+
+    def test_is_idempotent(self):
+        from core.scoping import ensure_profile
+
+        user = User.objects.create_user('newbie3', password='pw-newbie-3')
+        self.assertEqual(ensure_profile(user).pk, ensure_profile(user).pk)

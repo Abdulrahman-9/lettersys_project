@@ -22,7 +22,9 @@ class MailScopeTestCase(TestCase):
     def setUpTestData(cls):
         cls.alice = User.objects.create_user('alice', password='pw-alice-1')
         cls.bob   = User.objects.create_user('bob',   password='pw-bob-111')
-        cls.staff = User.objects.create_user('boss',  password='pw-boss-11', is_staff=True)
+        # مدير النظام هو من يرى الكلّ الآن — `is_staff` صارت صفةً إداريّةً
+        # لواجهات الإدارة لا توسيعاً للرؤية (المرحلة أ).
+        cls.staff = User.objects.create_superuser('boss', 'boss@x.com', 'pw-boss-11')
 
         cls.book_a = Book.objects.create(
             kind='incoming_internal', title='كتاب أليس', created_by=cls.alice,
