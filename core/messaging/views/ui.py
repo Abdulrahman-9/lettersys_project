@@ -105,6 +105,10 @@ def mail_sent(request):
 INBOX_SYNC_COOLDOWN_SECONDS = 120
 
 
+#: قفلٌ يمنع مزامنتين متزامنتين — انظر ``_autosync_inbox_if_due``.
+INBOX_SYNC_LOCK_KEY = 'lock:inbox_autosync'
+
+
 def _autosync_inbox_if_due():
     """يجلب الردود عند فتح صفحة الوارد — بلا Celery ولا Redis.
 
@@ -112,9 +116,20 @@ def _autosync_inbox_if_due():
     تكن مُدرَجة في ``CELERY_BEAT_SCHEDULE``، وCelery يحتاج Redis غير المتاح على
     كل نشر. فنجلب هنا عند الفتح — وهو الوقت الذي يهمّ فيه المستخدم فعلاً.
 
-    مهلة تبريد كي لا يُقصف خادم IMAP مع كل تحديث للصفحة، وسقف الرسائل وبوّابة
-    الصلة يحدّان الكلفة. وأي فشل لا يجوز أن يمنع عرض الصندوق.
+    **القطيع (سجلّ العيوب م1):** كانت البوّابة تقرأ ``imap_last_sync`` وهو ختمٌ
+    لا يُكتب إلّا **بعد** انتهاء المزامنة. فكلّ الطلبات الواصلة أثناء مزامنةٍ
+    جارية (وهي ثوانٍ على شبكةٍ بطيئة) تجتاز البوّابة معاً وتفتح اتصالات IMAP
+    متوازية. لا يظهر ذلك بمستخدمٍ واحد، ويظهر يقيناً بقسمٍ كامل — وهذا بالضبط
+    ما يرفع التعميمُ سترَه.
+
+    فحارسان: قفلٌ ذرّيّ يُؤخَذ **قبل** العمل (``cache.add`` عمليّةٌ ذرّيّة
+    بخلاف ``get`` ثمّ ``set``)، وختمُ تبريدٍ يُكتب عند **البدء** لا عند الانتهاء.
+
+    قيدٌ موثَّق: على LocMemCache القفل لكلّ عمليّة لا لكلّ الخادم — الضمان
+    الكامل يأتي مع Redis (مرحلة ز0). وأيّ فشلٍ لا يجوز أن يمنع عرض الصندوق.
     """
+    from django.core.cache import cache
+
     from core.models import EmailSettings
     from core.messaging.engines.imap import IMAPEngine
 
@@ -127,8 +142,18 @@ def _autosync_inbox_if_due():
         if last and (timezone.now() - last).total_seconds() < INBOX_SYNC_COOLDOWN_SECONDS:
             return
 
-        stats = IMAPEngine(cfg).sync_inbox()
-        logger.info(f"[mail_inbox] مزامنة عند الفتح: {stats}")
+        if not cache.add(INBOX_SYNC_LOCK_KEY, 1, timeout=INBOX_SYNC_COOLDOWN_SECONDS):
+            return   # مزامنةٌ جارية الآن — لا نفتح ثانيةً بجانبها.
+
+        try:
+            # الختم عند البدء: يُغلق نافذة القطيع حتى لو تعثّرت المزامنة.
+            cfg.imap_last_sync = timezone.now()
+            cfg.save(update_fields=['imap_last_sync'])
+
+            stats = IMAPEngine(cfg).sync_inbox()
+            logger.info(f"[mail_inbox] مزامنة عند الفتح: {stats}")
+        finally:
+            cache.delete(INBOX_SYNC_LOCK_KEY)
     except Exception as e:
         # الصندوق يُعرَض من قاعدة البيانات على أي حال — لا نُسقط الصفحة لأجل IMAP.
         logger.warning(f"[mail_inbox] تعذّرت المزامنة عند الفتح — {e}")
