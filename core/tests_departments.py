@@ -128,3 +128,46 @@ class EnsureProfileTests(TestCase):
 
         user = User.objects.create_user('newbie3', password='pw-newbie-3')
         self.assertEqual(ensure_profile(user).pk, ensure_profile(user).pk)
+
+
+class RolesAndDossiersTests(TestCase):
+    """المرحلة أ/4-5: دورُ رئيس القسم، والأضابير تميّز الداخليّ."""
+
+    def test_department_head_gets_its_own_role(self):
+        from core.roles import get_user_role, role_capabilities
+
+        dept = Department.objects.create(name='وحدة أدوار', code='ر-1')
+        head = User.objects.create_user('h1', password='pw-h1-11111')
+        UserProfile.objects.create(user=head, department=dept, is_department_head=True)
+        self.assertEqual(get_user_role(head), 'dept_head')
+        self.assertTrue(role_capabilities('dept_head')['can_view_reports'])
+
+    def test_staff_flag_no_longer_grants_entry_role(self):
+        """كانت `is_staff` تمنح دور «مُدخِل» ضمناً — وتوسّع الصلاحية بلا قصد."""
+        from core.roles import get_user_role
+
+        staff = User.objects.create_user('st1', password='pw-st1-1111', is_staff=True)
+        self.assertEqual(get_user_role(staff), 'viewer')
+
+    def test_superuser_is_still_admin(self):
+        from core.roles import get_user_role
+
+        root = User.objects.create_superuser('root2', 'r2@x.com', 'pw-root2-11')
+        self.assertEqual(get_user_role(root), 'admin')
+
+    def test_dossiers_can_filter_internal_units(self):
+        from core.models import Book, Entity
+
+        internal = Entity.objects.create(name='قسم داخلي', code='د-1')
+        Department.objects.create(name='قسم داخلي', code='د-1', entity=internal)
+        foreign = Entity.objects.create(name='شركة أجنبية', code='XYZ')
+
+        owner = User.objects.create_superuser('root3', 'r3@x.com', 'pw-root3-11')
+        for ent in (internal, foreign):
+            book = Book.objects.create(kind='incoming_internal', title='ك', created_by=owner)
+            book.issuing_entities.add(ent)
+
+        self.client.force_login(owner)
+        body = self.client.get('/books/dossiers/?internal=1').content.decode('utf-8')
+        self.assertIn('قسم داخلي', body)
+        self.assertNotIn('شركة أجنبية', body)

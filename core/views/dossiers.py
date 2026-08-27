@@ -3,7 +3,10 @@
 الأضابير (Dossiers) — مجلّدات مراسلات الأقسام.
 
 طبقة عرض/استعلام فوق النماذج القائمة:
-  - "القسم" = Entity.
+  - "القسم" = Entity — والداخليّةُ منها هي المرتبطة بـ``Department``
+    (سؤالٌ كان مؤجَّلاً في ADABIR_DESIGN حتى وصل بُعد القسم: كانت الشاشة تعرض
+    الشركات الأجنبيّة كأقسام لأنّ ``Entity`` لم يكن يميّز داخليّاً من خارجيّ).
+    المرشّح ``?internal=1`` يقصر العرض على الوحدات الداخليّة.
   - كتب القسم = اتحاد issuing_entities/receiving_entities (M2M).
   - التقسيم = Book.document_type (مع كتالوج document_types.py + سلّة "متفرقة").
 
@@ -233,6 +236,10 @@ def dossier_list(request):
         )
         .filter(Q(issued_count__gt=0) | Q(received_count__gt=0))
     )
+    # الداخليّة = التي لها قسم. لا حقلَ جديدٌ على ``Entity``: الربط نفسه هو
+    # التصنيف، فلا يوجد مصدرا حقيقةٍ يتعارضان.
+    if request.GET.get('internal') == '1':
+        qs = qs.filter(department__isnull=False)
     if search_q:
         qs = qs.filter(Q(name__icontains=search_q) | Q(code__icontains=search_q))
 

@@ -16,6 +16,10 @@ ROLE_DEFINITIONS = {
         'label': 'قارئ فقط',
         'description': 'عرض البيانات المتاحة دون أي إمكانية للتعديل.'
     },
+    'dept_head': {
+        'label': 'رئيس القسم',
+        'description': 'صلاحيات إدارية داخل قسمه وحده — ومنها الاطّلاع على سرّيّات القسم.'
+    },
     'admin': {
         'label': 'مدير النظام',
         'description': 'إدارة المستخدمين والإعدادات وجميع الصلاحيات المتقدمة.'
@@ -47,9 +51,14 @@ def get_user_role(user):
         return 'anonymous'
     if user.is_superuser:
         return 'admin'
+    # رئاسةُ القسم صفةٌ في ملفّ المستخدم لا مجموعةٌ في جانغو: هي علاقةٌ بقسمٍ
+    # بعينه، والمجموعاتُ عالميّة لا تعرف الأقسام.
+    profile = getattr(user, 'profile', None)
+    if profile is not None and profile.is_department_head:
+        return 'dept_head'
     if user.groups.filter(name=CONTROLLER_GROUP_NAME).exists():
         return 'controller'
-    if user.groups.filter(name=ENTRY_GROUP_NAME).exists() or user.is_staff:
+    if user.groups.filter(name=ENTRY_GROUP_NAME).exists():
         return 'entry'
     return 'viewer'
 
@@ -70,6 +79,13 @@ def role_capabilities(role):
     if role == 'admin':
         for key in caps:
             caps[key] = True
+    elif role == 'dept_head':
+        caps.update({
+            'can_manage_books': True,
+            'can_manage_entities': True,
+            'can_view_notifications': True,
+            'can_view_reports': True,
+        })
     elif role == 'controller':
         caps.update({
             'can_manage_books': True,
