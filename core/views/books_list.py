@@ -17,7 +17,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from ..models import Attachment, Book, Entity
-from core.scoping import can_view_book, is_privileged
+from core.scoping import is_privileged, present_book_payload, scope_books_for
 
 logger = logging.getLogger(__name__)
 
@@ -131,11 +131,7 @@ def book_unified(request):
     """
     from .filter_helpers import BookFilterEngine, BookSortEngine
 
-    base_qs = (
-        Book.objects.filter(is_deleted=False)
-        if is_privileged(request.user)
-        else Book.objects.filter(created_by=request.user, is_deleted=False)
-    ).select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
+    base_qs = scope_books_for(request.user, Book.objects.filter(is_deleted=False)).select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
 
     tab = (request.GET.get("tab") or "incoming").strip()
     search_text = (request.GET.get("q") or "").strip()
@@ -165,6 +161,7 @@ def book_unified(request):
 
     qs = BookFilterEngine.apply_all_filters(
         base_qs,
+        user=request.user,
         tab=tab,
         search_text=search_text,
         date_from=date_from,
@@ -261,11 +258,7 @@ def api_unified_data(request):
     """
     from .filter_helpers import BookFilterEngine, BookSortEngine
 
-    base_qs = (
-        Book.objects.filter(is_deleted=False)
-        if is_privileged(request.user)
-        else Book.objects.filter(created_by=request.user, is_deleted=False)
-    ).select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
+    base_qs = scope_books_for(request.user, Book.objects.filter(is_deleted=False)).select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
 
     tab = (request.GET.get('tab') or 'incoming').strip()
     search_text = (request.GET.get('q') or '').strip()
@@ -289,6 +282,7 @@ def api_unified_data(request):
 
     qs = BookFilterEngine.apply_all_filters(
         base_qs,
+        user=request.user,
         tab=tab, search_text=search_text,
         date_from=date_from, date_to=date_to,
         entity_id=entity_id, followup=followup,
@@ -302,7 +296,10 @@ def api_unified_data(request):
         page_obj = paginator.page(1)
 
     books_qs = list(page_obj.object_list)
-    books_data = [_serialize_book(b) for b in books_qs]
+    # المُقدِّم بعد المُسلسِل: نقطةُ اختناقٍ واحدة يمرّ منها كلُّ حقلٍ يُضاف
+    # مستقبلاً، فلا يتسرّب محتوى كتابٍ سرّيّ من حقلٍ نُسي (سجلّ العيوب ح1).
+    books_data = [present_book_payload(_serialize_book(b), b, request.user)
+                  for b in books_qs]
 
     # رسم صفوف الجدول من القالب نفسه المستخدَم في الرسم الأولي (book_unified_row.html) —
     # مصدر حقيقة واحد للصف بدل إعادة بنائه في JS (buildRow)، فلا يتباعد المساران. #13
@@ -344,8 +341,9 @@ def trash_list(request):
     attachments_qs = Attachment.all_objects.filter(is_deleted=True).select_related("book")
 
     if not is_privileged(request.user):
-        books_qs = books_qs.filter(created_by=request.user)
-        attachments_qs = attachments_qs.filter(book__created_by=request.user)
+        books_qs = scope_books_for(request.user, books_qs)
+        attachments_qs = attachments_qs.filter(book__in=scope_books_for(
+            request.user, Book.all_objects.all()))
 
     context = {
         "deleted_books": books_qs.order_by("-deleted_at"),
@@ -360,11 +358,7 @@ def api_export_csv(request):
     """تصدير الكتب المفلترة كـ CSV — يستخدم نفس فلاتر api_unified_data."""
     from .filter_helpers import BookFilterEngine, BookSortEngine
 
-    base_qs = (
-        Book.objects.filter(is_deleted=False)
-        if is_privileged(request.user)
-        else Book.objects.filter(created_by=request.user, is_deleted=False)
-    ).prefetch_related("issuing_entities", "receiving_entities")
+    base_qs = scope_books_for(request.user, Book.objects.filter(is_deleted=False)).prefetch_related("issuing_entities", "receiving_entities")
 
     from datetime import datetime as _dt
     tab = (request.GET.get("tab") or "all").strip()
@@ -385,6 +379,7 @@ def api_export_csv(request):
 
     qs = BookFilterEngine.apply_all_filters(
         base_qs,
+        user=request.user,
         tab=tab, search_text=search_text,
         date_from=date_from, date_to=date_to,
         entity_id=entity_id, followup=followup,

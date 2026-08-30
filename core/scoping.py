@@ -5,27 +5,28 @@
 أو مالك الكتاب). قاعدةٌ بهذا الانتشار لا تُغيَّر: كلّ نسخةٍ منسيّة تصير ثغرةً
 أو تراجعاً. وهذا الملفّ هو ما جعل الانتقال إلى بُعد القسم تعديلَ دالّتين.
 
-**العقد بعد المرحلة أ (قرارات المالك 2026-08-27):**
+**العقد (قرارات المالك 2026-08-27):**
 
 * **مدير النظام** (``is_superuser``) يرى كلّ شيء.
 * **الموظّف** يرى كتب **قسمه** — لا كتبه هو وحدها. الكتاب ملكُ القسم لا مُدخِله.
-* **طبقة السرّيّة:** الكتاب المصنَّف سرّيّاً لا يراه إلّا مُنشئُه ورئيسُ قسمه
-  (ومدير النظام). قِيس في القاعدة الحيّة: **487 كتاباً سرّيّاً** من 13,236 —
-  ولذلك تُنشر هذه الطبقة **مع** بُعد القسم لا بعده: تفعيلُ النطاق وحده كان
-  سيكشفها لكلّ موظّفي القسم، وهي نافذةُ تسريبٍ تصنعها الخطّة نفسها.
+* **السرّيّة حجبُ محتوىً لا حجبُ صفّ** — انظر ``secret_access`` أدناه.
 * **مستخدمٌ بلا ملفٍّ أو بلا قسم** يرى ما أنشأه هو — سلوكُ ما قبل الأقسام،
   فلا ينكسر تنصيبٌ لم تُبذَر أقسامُه بعد.
 
-**`is_staff` لم تعد تُوسّع الرؤية.** كانت تمنح حاملها رؤيةَ كلّ الكتب ضمناً،
-وإبقاؤها مع نطاق القسم يقوّضه من يومه الأوّل: أيّ staff يرى كلّ الأقسام. صارت
-صفةً إداريّةً لواجهات الإدارة فحسب — وهي ما يحرسه ``staff_required``. حسابان
-مقيسان تأثّرا، وكلاهما في القسم الافتراضيّ فلا يفقدان شيئاً اليوم.
+**`is_staff` لا تُوسّع الرؤية.** كانت تمنح حاملها رؤيةَ كلّ الكتب ضمناً،
+وإبقاؤها مع نطاق القسم يقوّضه من يومه الأوّل. صارت صفةً إداريّةً لواجهات
+الإدارة فحسب — وهي ما يحرسه ``staff_required``.
 """
 
 from django.db.models import Q
+from django.utils import timezone
 
-#: تصنيفاتٌ تُقيَّد رؤيتها داخل القسم.
+#: تصنيفاتٌ يُحجب محتواها داخل القسم.
 RESTRICTED_SECRET_LEVELS = ('secret', 'topsecret')
+
+#: مستويا الوصول إلى الكتاب السرّي.
+ACCESS_FULL = 'full'
+ACCESS_STUB = 'stub'
 
 
 def is_privileged(user) -> bool:
@@ -44,20 +45,80 @@ def is_department_head(user) -> bool:
     return bool(profile and profile.is_department_head)
 
 
+def _is_mail_officer(user) -> bool:
+    """أهو مختصُّ البريد والأرشفة في قسمه؟
+
+    شهادةُ موظّف البريد: «السرّي يُحفظ في السجلّ عاديّ، لكن فقط **مسؤول إدارة
+    البريد والأرشفة** يحقّ لهم الاطّلاع». فهو أمينُ السرّيّ فعليّاً — يمسكه
+    بيده ويفرّقه — فيُخوَّل بدوره لا بمنحةٍ فرديّة.
+    """
+    from core.roles import get_user_role
+
+    return get_user_role(user) == 'controller'
+
+
+def secret_access(user, book) -> str:
+    """مستوى وصول المستخدم إلى كتابٍ سرّيّ: ``full`` أو ``stub``.
+
+    **حجبُ محتوىً لا حجبُ صفّ** — وهذه مطابقةٌ للورق حرفيّاً: قال الكاتب «السرّي
+    يُحفظ في **السجلّ عاديّ**»، أي أنّ الدفتر يكشف الرقم والتاريخ للجميع
+    والمظروفَ مغلق. وكان الكود يُخفي الصفَّ كلَّه — فيكسر تسلسلَ الدفتر عند
+    الكاتب ويجعله يعدّ الأرقام الناقصة.
+
+    ``full`` لخمسة: مدير النظام · رئيس قسم الكتاب · **مختصّ بريد قسمه** ·
+    مُنشئه · حاملُ تفويضٍ ساري. وما عداهم ``stub``.
+    """
+    if book.secret_level not in RESTRICTED_SECRET_LEVELS:
+        return ACCESS_FULL
+    if is_privileged(user) or book.created_by_id == user.id:
+        return ACCESS_FULL
+
+    same_department = book.department_id and book.department_id == user_department_id(user)
+    if same_department and (is_department_head(user) or _is_mail_officer(user)):
+        return ACCESS_FULL
+
+    if _has_live_grant(user, book):
+        return ACCESS_FULL
+    return ACCESS_STUB
+
+
+def _has_live_grant(user, book) -> bool:
+    """أعنده تفويضٌ سارٍ على هذا الكتاب بعينه؟"""
+    if not getattr(user, 'pk', None):
+        return False
+    from core.models import SecretAccessGrant
+
+    now = timezone.now()
+    return SecretAccessGrant.objects.filter(
+        book=book, user=user, revoked_at__isnull=True,
+    ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now)).exists()
+
+
 def can_view_book(book, user) -> bool:
-    """أيحقّ للمستخدم الاطّلاع على هذا الكتاب (أو التصرّف به)؟"""
+    """أيحقّ للمستخدم أن يرى هذا الكتاب في قوائمه؟
+
+    **صارت تُجيب عن الصفّ لا عن المحتوى:** السرّيُّ يظهر لأهل القسم بسجلّه
+    (رقمٌ وتاريخ)، ومحتواه يحكمه ``secret_access``. فمن أراد المحتوى فليسأل
+    عنه، ولا يُخلط السؤالان.
+    """
     if is_privileged(user):
         return True
 
     is_owner = book.created_by_id == user.id
-    if book.secret_level in RESTRICTED_SECRET_LEVELS:
-        return is_owner or (is_department_head(user)
-                            and book.department_id == user_department_id(user))
-
     dept_id = user_department_id(user)
     if dept_id is None:
         return is_owner
     return is_owner or book.department_id == dept_id
+
+
+def can_open_content(book, user) -> bool:
+    """أيحقّ له **فتحُ محتوى** الكتاب: مرفقاته ونصّه وهوامشه وتعليقاته؟
+
+    تفترق عن ``can_view_book`` عند السرّيّ وحده — وهذا هو الفرق الذي وُجدت
+    الطبقةُ لأجله: الصفُّ يُرى، والمظروفُ يُفتح بإذن. وكلُّ عمليّةٍ على مرفقٍ
+    (خدمةً أو رفعاً أو حذفاً أو دمجاً) تمرّ من هنا لا من ``can_view_book``.
+    """
+    return can_view_book(book, user) and secret_access(user, book) == ACCESS_FULL
 
 
 def scope_books_for(user, qs=None):
@@ -77,13 +138,47 @@ def scope_books_for(user, qs=None):
     if dept_id is None:
         return qs.filter(created_by=user)
 
-    # كتبُ قسمك، ومعها ما أنشأته أنت دائماً (ولو انتقلتَ بين الأقسام).
-    visible = qs.filter(Q(department_id=dept_id) | Q(created_by=user))
-    if is_department_head(user):
-        return visible
-    return visible.exclude(
-        Q(secret_level__in=RESTRICTED_SECRET_LEVELS) & ~Q(created_by=user)
-    )
+    # كتبُ قسمك — بما فيها السرّيّة — ومعها ما أنشأته أنت (ولو انتقلتَ بين
+    # الأقسام). والسرّيُّ يظهر صفّاً ويُحجب محتواه في طبقة العرض.
+    return qs.filter(Q(department_id=dept_id) | Q(created_by=user))
+
+
+def guard_secret_text_search(qs, user, search_text):
+    """يمنع البحثَ **النصّيّ** من كشف السرّيّ لغير المخوَّل.
+
+    أخطرُ قناةِ تسريبٍ في المنظومة كلّها: حجبُ العنوان في صفحة التفاصيل بلا
+    قيمةٍ إن كان البحثُ بكلمةٍ من ذلك العنوان يُعيد الكتاب — عندها يصير البحثُ
+    **أداةَ استنطاق**: تُجرّب الكلمات حتى تعرف الموضوع.
+
+    والقاعدة: السرّيُّ يُطابَق **برقمه وتاريخه** — وهما ظاهران في الدفتر أصلاً —
+    ولا يُطابَق بعنوانٍ ولا جهةٍ ولا هامش. فالبحثُ الرقميّ يمرّ، والنصّيُّ
+    يستثنيه.
+
+    (يُطبَّق في ``BookFilterEngine`` بعد البحث مباشرةً — نقطةُ اختناقٍ واحدة.)
+    """
+    text = (search_text or '').strip()
+    if not text or is_privileged(user):
+        return qs
+    if _is_numeric_query(text):
+        return qs
+    return qs.exclude(_unauthorized_secret_q(user))
+
+
+def _is_numeric_query(text) -> bool:
+    """أبحثٌ برقمٍ هو؟ — يطابق فرعَي ``apply_search_filters`` الرقميّين."""
+    import re
+
+    return bool(text.isdigit() or re.match(r'^(\d+)[-/](\d+)$', text))
+
+
+def _unauthorized_secret_q(user):
+    """الكتبُ السرّيّة التي لا يملك هذا المستخدم محتواها."""
+    q = Q(secret_level__in=RESTRICTED_SECRET_LEVELS) & ~Q(created_by=user)
+    dept_id = user_department_id(user)
+    if dept_id and (is_department_head(user) or _is_mail_officer(user)):
+        # مخوَّلٌ بالدور داخل قسمه — فلا يُستثنى منه إلّا سرّيُّ غيره.
+        q &= ~Q(department_id=dept_id)
+    return q
 
 
 def ensure_profile(user):
@@ -106,3 +201,43 @@ def ensure_profile(user):
     if SystemSettings.get().deployment_profile == SystemSettings.PROFILE_SINGLE:
         department = Department.objects.filter(is_active=True).order_by('id').first()
     return UserProfile.objects.create(user=user, department=department)
+
+
+#: الحقولُ التي يُصفَّر محتواها في العرض المقيَّد — والباقي يمرّ كما هو.
+#: تُبقى **الأربعةُ الظاهرة في الدفتر الورقيّ**: الرقم والتاريخ والنوع والقسم.
+STUB_BLANK_FIELDS = (
+    'sender_number', 'sender_date', 'sender_date_display', 'margin',
+    'document_type', 'attachment_url', 'legacy_number',
+)
+
+#: عنوانُ الكتاب المقيَّد كما يُعرض.
+STUB_TITLE = '— سرّي —'
+
+
+def stub_book_payload(payload):
+    """يحجب محتوى كتابٍ سرّيّ من حمولةٍ **مُسلسَلةٍ سلفاً**.
+
+    يعمل على القاموس لا على النموذج عمداً: مُسلسِلُ القائمة واحدٌ ويُستدعى في
+    موضعٍ واحد، فالحجبُ بعده يضمن أنّ **كلّ حقلٍ يُضاف مستقبلاً إلى الحمولة
+    يمرّ من هنا** — بينما الحجبُ داخل المُسلسِل كان سيُنسى مع أوّل حقلٍ جديد.
+
+    ولا يُحجب: الرقمُ والتاريخُ والنوعُ والقسم — لأنّ **الدفتر الورقيّ يكشفها
+    للجميع**، وإخفاؤها يكسر تسلسل الدفتر عند الكاتب.
+    """
+    payload = dict(payload)
+    payload['title'] = STUB_TITLE
+    payload['is_secret_stub'] = True
+    for field in STUB_BLANK_FIELDS:
+        if field in payload:
+            payload[field] = '' if isinstance(payload.get(field), str) else None
+    payload['issuing_entities'] = []
+    payload['receiving_entities'] = []
+    return payload
+
+
+def present_book_payload(payload, book, user):
+    """يمرّر الحمولة كما هي، أو مقيَّدةً إن لم يملك المستخدمُ محتواها."""
+    if secret_access(user, book) == ACCESS_FULL:
+        payload['is_secret_stub'] = False
+        return payload
+    return stub_book_payload(payload)

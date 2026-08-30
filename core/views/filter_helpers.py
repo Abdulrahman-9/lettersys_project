@@ -114,15 +114,23 @@ class BookFilterEngine:
 
     # ── واجهة موحَّدة لتطبيق كل الفلاتر ────────────────────────────────
     @staticmethod
-    def apply_all_filters(queryset, **filters):
+    def apply_all_filters(queryset, user=None, **filters):
         """
         كل الفلاتر تعمل معاً (orthogonal):
             - tab: نوع الكتاب (incoming/outgoing/all/...)
             - followup: حالة المتابعة (pending/due_today/overdue/archived)
             - search_text / date_from / date_to / entity_id
+
+        ``user`` يلزم لحارس البحث السرّي: البحث النصّي لا يكشف كتاباً سرّياً
+        لمن لا يملك محتواه (``core.scoping.guard_secret_text_search``). تركُه
+        فارغاً يعني «بلا حارس» — ولا يجوز إلّا في مسارٍ لا مستخدمَ فيه.
         """
+        search_text = filters.get("search_text", "")
         queryset = BookFilterEngine.apply_tab_filter(queryset, filters.get("tab", "all"))
-        queryset = BookFilterEngine.apply_search_filter(queryset, filters.get("search_text", ""))
+        queryset = BookFilterEngine.apply_search_filter(queryset, search_text)
+        if user is not None:
+            from core.scoping import guard_secret_text_search
+            queryset = guard_secret_text_search(queryset, user, search_text)
         queryset = BookFilterEngine.apply_date_filter(
             queryset, filters.get("date_from"), filters.get("date_to")
         )

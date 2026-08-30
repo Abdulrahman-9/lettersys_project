@@ -24,7 +24,7 @@ from pypdf import PdfReader, PdfWriter
 
 from ..attachment_service import ensure_pdf, validate_attachment_file
 from ..models import Attachment, AttachmentVersion, BookHistory
-from core.scoping import can_view_book, is_privileged
+from core.scoping import can_open_content, is_privileged
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def serve_media(request, path):
             owner_book = ver.attachment.book
 
     if owner_book is not None:
-        if not can_view_book(owner_book, request.user):
+        if not can_open_content(owner_book, request.user):
             return HttpResponseForbidden("غير مصرح بالوصول لهذا الملف")
 
     return FileResponse(open(full_path, "rb"))
@@ -174,7 +174,7 @@ def attachment_delete(request, pk):
     book = att.book
     
     # فحص الصلاحيات: صاحب المستند أو الموظف
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         return _mgmt_result(request, book, ok=False, message="غير مصرح بحذف هذا المرفق.", status=403)
 
     if request.method != "POST":
@@ -213,7 +213,7 @@ def attachment_replace(request, pk):
     book = att.book
     
     # فحص الصلاحيات
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         return _mgmt_result(request, book, ok=False, message="غير مصرح باستبدال هذا المرفق.", status=403)
 
     if not (request.method == "POST" and request.FILES.get("file")):
@@ -269,7 +269,7 @@ def attachment_merge_pages(request, pk):
     book = att.book
     
     # فحص الصلاحيات
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         return _mgmt_result(request, book, ok=False, message="غير مصرح بدمج الملفات.", status=403)
 
     # التحقق من أن الملف PDF (الموديل لا يملك حقل file_type — نفحص الامتداد)
@@ -357,7 +357,7 @@ def attachment_remove_pages(request, pk):
     book = att.book
     
     # فحص الصلاحيات
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         return _mgmt_result(request, book, ok=False, message="غير مصرح بحذف الصفحات.", status=403)
 
     # التحقق من أن الملف PDF (الموديل لا يملك حقل file_type — نفحص الامتداد)

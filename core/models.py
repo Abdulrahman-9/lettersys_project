@@ -1759,6 +1759,43 @@ class BookNumberReservation(models.Model):
 # ══════════════════════════════════════════════════════════════════
 #  سجل إرسال الإيميل للكتب
 # ══════════════════════════════════════════════════════════════════
+class SecretAccessGrant(models.Model):
+    """تفويضُ الاطّلاع على كتابٍ سرّيٍّ **بعينه**.
+
+    شهادةُ موظّف البريد: «فقط مسؤول إدارة البريد والأرشفة يحقّ لهم الاطّلاع،
+    **أو تفويضُ موظّفٍ معيّنٍ للاطّلاع**». فالتفويضُ واقعةٌ في العمل لا ترفٌ
+    تقنيّ.
+
+    **لكتابٍ واحدٍ فقط — لا تفويضَ شامل:** أقلُّ امتيازٍ ممكن. ومن احتاج
+    السرّيّ كلَّه فترقيتُه إلى دور مختصّ البريد قرارُ إنسانٍ أثقل، وهو الصواب:
+    صلاحيةٌ دائمةٌ تُمنح بوعيٍ لا بضغطة زرّ في صفحة كتاب.
+    """
+
+    book       = models.ForeignKey('Book', on_delete=models.CASCADE, related_name='secret_grants')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='secret_grants')
+    granted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   related_name='secret_grants_given')
+    granted_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField("ينتهي في", null=True, blank=True)
+    revoked_at = models.DateTimeField("سُحب في", null=True, blank=True)
+    reason     = models.CharField("السبب", max_length=255, blank=True, default="")
+
+    class Meta:
+        verbose_name = 'تفويض اطّلاع'
+        verbose_name_plural = 'تفويضات الاطّلاع'
+        constraints = [
+            # منحةٌ ساريةٌ واحدة لكلّ (كتاب، مستخدم) — والمسحوبةُ تبقى للتاريخ.
+            models.UniqueConstraint(
+                fields=['book', 'user'], condition=models.Q(revoked_at__isnull=True),
+                name='uniq_live_secret_grant',
+            ),
+        ]
+        indexes = [models.Index(fields=['user'], name='secret_grant_user_idx')]
+
+    def __str__(self):
+        return f"{self.user.get_username()} ⟵ {self.book_id}"
+
+
 class BookEmailLog(models.Model):
     """
     يسجّل كل إيميل يُرسَل مرتبطاً بكتاب —

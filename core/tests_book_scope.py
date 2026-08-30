@@ -58,8 +58,15 @@ class ScopeContractTests(TestCase):
         self.assertEqual(len(self.titles(self.root)), 4)
 
     # ── طبقة السرّيّة ──
-    def test_secret_hidden_from_plain_member(self):
-        self.assertNotIn('سرّيّ المتابعة', self.titles(self.emp1))
+    def test_secret_row_is_visible_but_content_is_not(self):
+        """العقدُ الجديد: الصفُّ يُرى كما في الدفتر الورقيّ، والمحتوى يُحجب.
+
+        (كان هذا الاختبار يحرس القاعدةَ المشحونة خطأً: إخفاءَ الصفّ كلِّه.)
+        """
+        from core.scoping import can_open_content
+
+        self.assertIn('سرّيّ المتابعة', self.titles(self.emp1))
+        self.assertFalse(can_open_content(self.b1_sec, self.emp1))
 
     def test_secret_visible_to_its_creator(self):
         self.assertIn('سرّيٌّ أنشأتُه', self.titles(self.emp1))
@@ -80,7 +87,9 @@ class ScopeContractTests(TestCase):
         (لا نقارنه بـ``emp1`` لأنّ الأخير أنشأ كتاباً سرّيّاً فيراه بحقّ الملكيّة.)
         """
         self.assertFalse(is_privileged(self.emp1b))
-        self.assertEqual(self.titles(self.emp1b), {'كتاب المتابعة'})
+        # يرى صفوفَ قسمه كلَّها (والسرّيُّ محجوبُ المحتوى لا الصفّ)، ولا يرى قسماً آخر.
+        self.assertEqual(self.titles(self.emp1b), self.titles(self.emp1))
+        self.assertNotIn('كتاب العقود', self.titles(self.emp1b))
 
     # ── التوافق ──
     def test_user_without_profile_falls_back_to_own_books(self):

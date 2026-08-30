@@ -18,7 +18,9 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from ..forms import AttachmentForm
 from ..models import Attachment, Book, BookHistory
-from core.scoping import can_view_book, is_privileged
+from core.scoping import (
+    ACCESS_STUB, can_open_content, can_view_book, is_privileged, secret_access,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,18 +47,20 @@ def book_detail(request, pk):
         is_deleted=False
     )
 
-    has_permission = (
-        request.user.is_superuser or
-        request.user.is_staff or
-        book.created_by == request.user
-    )
-
-    if not has_permission:
+    # كانت هذه نسخةً يدويّةً ثامنةً وعشرين من قاعدة الرؤية، نجت من التوحيد لأنّها
+    # موزَّعةٌ على أربعة أسطر — فبقيت الصفحةُ الرئيسة على القاعدة القديمة
+    # (staff يرى الكلّ، والقسمُ لا أثر له). صارت من المصدر الوحيد.
+    if not can_view_book(book, request.user):
         logger.warning(
             f"Unauthorized book access attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
         )
         raise PermissionDenied("ليس لديك صلاحية الوصول لهذا الكتاب")
+
+    # الصفُّ مرئيٌّ والمحتوى قد لا يكون: قالبٌ مقيَّدٌ مستقلّ بدل رشّ الشروط في
+    # قالبٍ من خمسمئة سطر — قائمةٌ بيضاء لا استثناءاتٌ من سوداء.
+    if secret_access(request.user, book) == ACCESS_STUB:
+        return render(request, 'core/book_detail_secret.html', {'book': book})
 
     if request.method == 'POST' and 'file' in request.FILES:
         _ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
@@ -237,7 +241,7 @@ def book_report(request, pk):
         is_deleted=False,
     )
 
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         logger.warning(
             f"Unauthorized book report attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"

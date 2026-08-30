@@ -32,7 +32,7 @@ from ..models import (
     BookHistory,
     BookSequence,
 )
-from core.scoping import can_view_book, is_privileged
+from core.scoping import can_open_content, is_privileged
 from .books_helpers import (
     _normalize_secret_level_value,
     _resolve_entities,
@@ -441,7 +441,7 @@ def api_delete_book(request, book_id):
 
     book = get_object_or_404(Book, id=book_id)
 
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         return JsonResponse({"error": "Unauthorized"}, status=403)
 
     try:
@@ -591,7 +591,7 @@ def api_undo_delete_book(request, book_id):
     try:
         book = get_object_or_404(Book.all_objects, id=book_id, is_deleted=True)
 
-        if not can_view_book(book, request.user):
+        if not can_open_content(book, request.user):
             return JsonResponse({"error": "Unauthorized"}, status=403)
 
         book.is_deleted = False
@@ -635,7 +635,7 @@ def api_book_detail_json(request, pk):
         return JsonResponse({'error': 'الكتاب غير موجود'}, status=404)
 
     has_permission = (
-        can_view_book(book, request.user)
+        can_open_content(book, request.user)
     )
     if not has_permission:
         return JsonResponse({'error': 'ليس لديك صلاحية'}, status=403)

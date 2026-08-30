@@ -26,7 +26,7 @@ from ..extraction.kinds import get_kind_label
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       RestoreJob)
 from .helpers import staff_required
-from core.scoping import can_view_book, is_privileged
+from core.scoping import can_open_content, is_privileged
 
 logger = logging.getLogger(__name__)
 
@@ -364,7 +364,7 @@ def restore_book(request, pk):
         Redirect to trash list with success message
     """
     book = get_object_or_404(Book.all_objects, pk=pk, is_deleted=True)
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         messages.error(request, "غير مصرح بالاستعادة.")
         return redirect("trash_list")
     book.is_deleted = False
@@ -429,7 +429,7 @@ def restore_attachment(request, attachment_id):
     if att.book.is_deleted:
         messages.error(request, "لا يمكن استعادة مرفق لكتاب محذوف.")
         return redirect("trash_list")
-    if not can_view_book(att.book, request.user):
+    if not can_open_content(att.book, request.user):
         messages.error(request, "غير مصرح بالاستعادة.")
         return redirect("trash_list")
     att.is_deleted = False
