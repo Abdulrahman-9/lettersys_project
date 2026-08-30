@@ -45,7 +45,7 @@ def is_department_head(user) -> bool:
     return bool(profile and profile.is_department_head)
 
 
-def _is_mail_officer(user) -> bool:
+def is_mail_officer(user) -> bool:
     """أهو مختصُّ البريد والأرشفة في قسمه؟
 
     شهادةُ موظّف البريد: «السرّي يُحفظ في السجلّ عاديّ، لكن فقط **مسؤول إدارة
@@ -55,6 +55,15 @@ def _is_mail_officer(user) -> bool:
     from core.roles import get_user_role
 
     return get_user_role(user) == 'controller'
+
+
+def can_use_desk(user) -> bool:
+    """أيحقّ له فتحُ **طاولة البريد** (كشفُ التسليم ودفترُ الوارد المطبوع)؟
+
+    مختصُّ البريد ورئيسُ القسم ومديرُ النظام. وهي ليست بوّابةَ سرّيّةٍ بل
+    بوّابةُ **سطحٍ يخرج من الجهاز**: ورقةٌ تحمل خريطةَ عمل القسم كاملةً.
+    """
+    return is_privileged(user) or is_department_head(user) or is_mail_officer(user)
 
 
 def secret_access(user, book) -> str:
@@ -74,7 +83,7 @@ def secret_access(user, book) -> str:
         return ACCESS_FULL
 
     same_department = book.department_id and book.department_id == user_department_id(user)
-    if same_department and (is_department_head(user) or _is_mail_officer(user)):
+    if same_department and (is_department_head(user) or is_mail_officer(user)):
         return ACCESS_FULL
 
     if _has_live_grant(user, book):
@@ -255,7 +264,7 @@ def _unauthorized_secret_q(user):
     """الكتبُ السرّيّة التي لا يملك هذا المستخدم محتواها."""
     q = Q(secret_level__in=RESTRICTED_SECRET_LEVELS) & ~Q(created_by=user)
     dept_id = user_department_id(user)
-    if dept_id and (is_department_head(user) or _is_mail_officer(user)):
+    if dept_id and (is_department_head(user) or is_mail_officer(user)):
         # مخوَّلٌ بالدور داخل قسمه — فلا يُستثنى منه إلّا سرّيُّ غيره.
         q &= ~Q(department_id=dept_id)
     return q

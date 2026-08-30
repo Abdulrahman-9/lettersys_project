@@ -1,0 +1,105 @@
+{% load static %}<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>كشف التسليم{% if chosen %} — {{ chosen }}{% endif %}</title>
+{% include "core/_sheet_style.html" %}
+</head>
+<body>
+
+<div class="toolbar">
+  <form method="get" action="">
+    <label for="to" class="muted">الوحدة:</label>
+    <select name="to" id="to" onchange="this.form.submit()">
+      <option value="">— اختر وحدةً —</option>
+      {% for unit, count in targets %}
+        <option value="{{ unit.pk }}" {% if chosen and chosen.pk == unit.pk %}selected{% endif %}>
+          {{ unit }} ({{ count }})
+        </option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit" class="back">عرض</button></noscript>
+  </form>
+  {% if rows %}<button class="print" onclick="window.print()">🖨️ طباعة</button>{% endif %}
+  <a class="btn back" href="/books/">رجوع</a>
+</div>
+
+<div class="sheet">
+  <div class="rep-head">
+    <div class="rep-org">
+      شركة نفط ميسان
+      <small>{{ department|default:"—" }}</small>
+    </div>
+    <div class="rep-meta">
+      كشف تسليم<br>
+      طُبع في {% now "Y/m/d — H:i" %}<br>
+      بمعرفة {{ request.user.get_full_name|default:request.user.username }}
+    </div>
+  </div>
+
+  <div class="rep-title">
+    كشف تسليم كتب{% if chosen %} إلى «{{ chosen }}»{% endif %}
+  </div>
+
+  {% if not chosen %}
+    <div class="empty">
+      {% if targets %}
+        اختر وحدةً من الأعلى لطباعة كشف تسليمها.
+      {% else %}
+        لا توجد كتبٌ مُفرَّقةٌ بانتظار توقيع الاستلام — الطاولة نظيفة.
+      {% endif %}
+    </div>
+  {% elif not rows %}
+    <div class="empty">لا شيء بانتظار توقيع «{{ chosen }}».</div>
+  {% else %}
+    <table class="rep">
+      <thead>
+        <tr>
+          <th style="width:3rem">ت</th>
+          <th style="width:6.5rem">الرقم</th>
+          <th style="width:6.5rem">التاريخ</th>
+          <th>الموضوع</th>
+          <th style="width:5rem">الغرض</th>
+          <th style="width:6.5rem">موعد الإنجاز</th>
+          <th style="width:8rem">توقيع المستلم</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="num">{{ forloop.counter }}</td>
+            <td class="num">{{ row.number }}</td>
+            <td class="num">{{ row.date|date:"Y/m/d"|default:"—" }}</td>
+            <td>
+              <span {% if row.restricted %}class="stub"{% endif %}>{{ row.title }}</span>
+              {% if row.margin %}<div class="muted" style="font-size:.78rem">↩ {{ row.margin }}</div>{% endif %}
+            </td>
+            <td>{{ row.purpose }}</td>
+            <td class="num">{{ row.due_date|date:"Y/m/d"|default:"—" }}</td>
+            <td class="sign-cell"></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="sig-block">
+      <div>
+        سلّم — {{ request.user.get_full_name|default:request.user.username }}
+        <div class="sig-line">التوقيع</div>
+      </div>
+      <div>
+        استلم عن «{{ chosen }}»
+        <div class="sig-line">الاسم والتوقيع والتاريخ</div>
+      </div>
+    </div>
+
+    <div class="rep-foot">
+      <span>عدد الكتب المسلَّمة: <b>{{ rows|length }}</b></span>
+      <span>تُرتجع هذه الورقة موقَّعةً وتُقيَّد بها العهدة في النظام.</span>
+    </div>
+  {% endif %}
+</div>
+
+</body>
+</html>

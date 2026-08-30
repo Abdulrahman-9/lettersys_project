@@ -55,7 +55,8 @@ class RecordCustodyTests(CustodyTestCase):
                                 to_department=self.dept, by=self.clerk)
         self.book.refresh_from_db()
         self.assertEqual(self.book.current_custody, moment)
-        self.assertEqual(self.book.current_custody.holder_name, str(self.dept))
+        # الاسمُ وحده بلا رمزِ السجلّ — الرمزُ ضجيجٌ حين يتكرّر في كلّ خليّة
+        self.assertEqual(self.book.current_custody.holder_name, self.dept.name)
 
     def test_leaves_a_trace_in_the_book_history(self):
         record_custody(self.book, CustodyEvent.ARCHIVE_DONE, to_department=self.dept,

@@ -1,7 +1,7 @@
 from django.urls import path, include
 from django.views.generic import RedirectView
 from . import views
-from core.views import linking
+from core.views import desk, linking
 from . import logging_views
 from . import api as api_views
 from . import reservation_api
@@ -61,6 +61,9 @@ urlpatterns = [
     path("api/book/<int:pk>/preview/", views.api_book_detail_json, name="api_book_detail_json"),
 
     # -- نسيجُ الوثائق: منتقي الربط والأضلاع --
+    # طاولةُ البريد — الورقتان اللتان يطلبهما الكاتبُ ليترك دفترَه
+    path("desk/handover/", desk.desk_handover, name="desk_handover"),
+    path("desk/ledger/", desk.desk_ledger, name="desk_ledger"),
     path("api/links/picker/", linking.api_link_picker, name="api_link_picker"),
     path("api/book/<int:pk>/links/add/", linking.api_add_link, name="api_add_link"),
     path("api/book/<int:pk>/links/<int:link_id>/remove/", linking.api_remove_link,

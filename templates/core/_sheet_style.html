@@ -1,0 +1,60 @@
+{% comment %}
+نمطُ «الورقة» المشترك لصفحات الطاولة المطبوعة (كشفُ التسليم · دفترُ الوارد).
+
+قوالبُ الطباعة القائمة (`book_report` · `dossier_report` ·
+`followup_activity_report`) تكرّر الفكرةَ نفسها بصياغاتٍ متباينة — ثلاثةُ أسطرٍ
+متطابقةٍ فقط من نحو سبعين. فلم أُعِد كتابتها (مخاطرةٌ بلا مقابل)، لكنّي لا
+أصنع نسختين جديدتين: صفحتا الطاولة تشتركان في هذا الملفّ.
+
+**لماذا نمطٌ مضمَّنٌ لا ملفُّ static؟** لأنّ صفحاتِ الطباعة قائمةٌ بذاتها لا
+تمتدّ من `base.html`، وربطُها بملفٍّ خارجيّ يُدخلها في فخّ رفعِ نسختَي الكاش
+(القالب + service worker) بلا داعٍ — وهو أكثرُ أخطاء هذا المشروع تكراراً.
+{% endcomment %}
+<style>
+  :root { --ink:#1e293b; --muted:#64748b; --line:#cbd5e1; --teal:#0f766e; --amber:#b45309; --paper:#f1f5f9; }
+  * { box-sizing:border-box; }
+  body { font-family:"Cairo","Segoe UI",Tahoma,sans-serif; color:var(--ink); margin:0; background:var(--paper); }
+  .sheet { background:#fff; max-width:980px; margin:1rem auto; padding:2rem 2.2rem; box-shadow:0 2px 12px rgba(0,0,0,.08); }
+
+  /* شريطُ الأدوات — شاشةٌ فقط */
+  .toolbar { max-width:980px; margin:1rem auto 0; display:flex; gap:.5rem; justify-content:flex-end; flex-wrap:wrap; align-items:center; }
+  .toolbar form { display:flex; gap:.4rem; align-items:center; margin:0; }
+  .toolbar input, .toolbar select { border:1px solid var(--line); border-radius:8px; padding:.45rem .6rem; font-family:inherit; font-size:.85rem; }
+  .toolbar button, .toolbar a.btn { border:none; border-radius:8px; padding:.55rem 1.2rem; font-weight:700; font-size:.9rem; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; font-family:inherit; }
+  .toolbar .print { background:var(--teal); color:#fff; }
+  .toolbar .back { background:#fff; color:#475569; border:1px solid var(--line); }
+
+  .rep-head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px double var(--ink); padding-bottom:.9rem; margin-bottom:1.1rem; }
+  .rep-org { font-size:1.05rem; font-weight:800; }
+  .rep-org small { display:block; font-weight:500; color:var(--muted); font-size:.78rem; margin-top:.15rem; }
+  .rep-meta { text-align:left; font-size:.76rem; color:var(--muted); line-height:1.7; }
+  .rep-title { text-align:center; font-size:1.25rem; font-weight:800; margin:.4rem 0 1rem; }
+
+  table.rep { width:100%; border-collapse:collapse; font-size:.82rem; }
+  table.rep th { background:#f1f5f9; border:1px solid var(--line); padding:.45rem .5rem; text-align:right; font-weight:700; }
+  table.rep td { border:1px solid var(--line); padding:.42rem .5rem; vertical-align:top; }
+  table.rep tr:nth-child(even) td { background:#fafbfc; }
+  /* أرقامٌ قابلةٌ للمقارنة بالعين في عمودٍ واحد */
+  .num { font-variant-numeric:tabular-nums; font-weight:700; letter-spacing:.02em; }
+  .muted { color:var(--muted); }
+  .empty { color:var(--muted); padding:1.2rem; font-size:.9rem; text-align:center; border:1px dashed var(--line); border-radius:8px; }
+
+  /* خانةُ التوقيع — عمودُ الحبر في الكشف الورقيّ */
+  .sign-cell { min-width:120px; height:2.4rem; }
+  .stub { color:var(--muted); font-style:italic; }
+
+  .rep-foot { margin-top:1.5rem; border-top:1px solid var(--line); padding-top:.7rem; display:flex; justify-content:space-between; font-size:.78rem; color:var(--muted); }
+  .sig-block { margin-top:2.2rem; display:flex; justify-content:space-between; gap:2rem; font-size:.85rem; }
+  .sig-block div { flex:1; text-align:center; }
+  .sig-line { margin-top:2.6rem; border-top:1px solid var(--ink); padding-top:.35rem; }
+
+  @media print {
+    body { background:#fff; }
+    .toolbar { display:none !important; }
+    .sheet { box-shadow:none; margin:0; max-width:none; padding:0; }
+    table.rep th { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    thead { display:table-header-group; }
+    tr { page-break-inside:avoid; }
+    @page { size:A4; margin:1.4cm; }
+  }
+</style>

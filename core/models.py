@@ -1926,9 +1926,16 @@ class BookReferral(models.Model):
         return f"{self.book_id} ⟵ {self.target_name} ({self.get_status_display()})"
 
     @property
+    def target(self):
+        """الهدفُ كائناً أيّاً كان نوعُه — القيدُ يضمن أنّ أحدَهما موجودٌ حتماً."""
+        return self.to_department if self.to_department_id else self.to_entity
+
+    @property
     def target_name(self):
-        """اسمُ الهدف أيّاً كان نوعُه — القيدُ يضمن أنّ أحدَهما موجودٌ حتماً."""
-        return str(self.to_department) if self.to_department_id else str(self.to_entity)
+        """**الاسمُ وحده بلا رمز.** ``Department.__str__`` يُصدّر «ش13 — المتابعة»
+        وهو نافعٌ في قائمةٍ منسدلة، لكنّه ضجيجٌ حين يتكرّر في كلّ خليّةٍ من ورقةٍ
+        يقارنها الكاتبُ بدفتره سطراً بسطر — والرمزُ في ترويسة الورقة أصلاً."""
+        return self.target.name
 
     @property
     def is_open(self):
@@ -2034,7 +2041,7 @@ class CustodyEvent(models.Model):
         if self.to_holder_user_id:
             return self.to_holder_user.get_full_name() or self.to_holder_user.get_username()
         if self.to_holder_department_id:
-            return str(self.to_holder_department)
+            return self.to_holder_department.name
         return self.to_holder_name
 
 

@@ -1,0 +1,83 @@
+{% load static %}<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>دفتر الوارد — {{ department|default:"" }}</title>
+{% include "core/_sheet_style.html" %}
+</head>
+<body>
+
+<div class="toolbar">
+  <form method="get" action="">
+    <label for="date_from" class="muted">من:</label>
+    <input type="date" name="date_from" id="date_from" value="{{ date_from }}">
+    <label for="date_to" class="muted">إلى:</label>
+    <input type="date" name="date_to" id="date_to" value="{{ date_to }}">
+    <button type="submit" class="back">عرض</button>
+  </form>
+  {% if rows %}<button class="print" onclick="window.print()">🖨️ طباعة</button>{% endif %}
+  <a class="btn back" href="/books/">رجوع</a>
+</div>
+
+<div class="sheet">
+  <div class="rep-head">
+    <div class="rep-org">
+      شركة نفط ميسان
+      <small>{{ department|default:"—" }}</small>
+    </div>
+    <div class="rep-meta">
+      دفتر الوارد<br>
+      طُبع في {% now "Y/m/d — H:i" %}<br>
+      {% if date_from or date_to %}
+        المدّة: {{ date_from|default:"…" }} ← {{ date_to|default:"…" }}
+      {% else %}
+        كامل الدفتر
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="rep-title">دفتر الوارد</div>
+
+  {% if not rows %}
+    <div class="empty">لا قيود في هذه المدّة.</div>
+  {% else %}
+    {% comment %}
+      أعمدةُ الكاتب الخمسة حرفيّاً كما أملاها: الرقم · التاريخ · الموضوع ·
+      إلى مَن وُزِّع · مَن استلم. لا عمودَ سادسَ من عندنا — هذه الورقةُ جسرُ
+      الثقة، ويقارنها بدفتره سطراً بسطر.
+    {% endcomment %}
+    <table class="rep">
+      <thead>
+        <tr>
+          <th style="width:3rem">ت</th>
+          <th style="width:7rem">الرقم</th>
+          <th style="width:6.5rem">التاريخ</th>
+          <th>الموضوع</th>
+          <th style="width:15rem">إلى مَن وُزِّع</th>
+          <th style="width:14rem">مَن استلم</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="num">{{ forloop.counter }}</td>
+            <td class="num">{{ row.number }}</td>
+            <td class="num">{{ row.date|date:"Y/m/d"|default:"—" }}</td>
+            <td><span {% if row.restricted %}class="stub"{% endif %}>{{ row.title }}</span></td>
+            <td>{{ row.distributed }}</td>
+            <td>{{ row.received }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="rep-foot">
+      <span>مجموع القيود: <b>{{ rows|length }}</b></span>
+      <span>{{ department }}</span>
+    </div>
+  {% endif %}
+</div>
+
+</body>
+</html>
