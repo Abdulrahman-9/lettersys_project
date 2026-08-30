@@ -136,6 +136,42 @@ def send_reminder(referral, *, by):
     return referral
 
 
+def close_by_reply(book, link, reply_book, *, by):
+    """يُقفل الالتزامَ المفتوح الذي **أجابه** هذا الكتاب — إن وُجد.
+
+    «المطابق» = التزامٌ مفتوحٌ على الأصل هدفُه القسمُ الذي صدر عنه الجواب.
+    وإن لم يوجد فلا يُختلق إقفال: صفٌّ يُقفل بلا مطابقةٍ صحيحة يُخفي التزاماً
+    قائماً — وإخفاءُ التزامٍ أسوأُ من تركه مفتوحاً.
+
+    يعيش هنا لا في وحدة القيد لأنّ ``status`` **لا يُكتب إلّا في هذا الملفّ**.
+    """
+    from core.models import BookReferral
+
+    answering = reply_book.department_id
+    if not answering:
+        return None
+    row = BookReferral.objects.filter(
+        book=book, to_department_id=answering,
+        status__in=BookReferral.OPEN_STATUSES,
+    ).order_by('created_at').first()
+    if row is None:
+        return None
+
+    with transaction.atomic():
+        row.status = BookReferral.DONE
+        row.closed_by_link = link
+        row.save(update_fields=['status', 'closed_by_link'])
+        _record(book, 'referral-done', by,
+                'أُقفل التزامُ «%s» بالجواب %s' % (row.target_name, _ref(reply_book)))
+    return row
+
+
+def _ref(book):
+    """إشارةٌ قصيرةٌ للكتاب في نصّ الحدث."""
+    number = book.our_number_display or '(بلا رقم)'
+    return '%s%s' % (number, ' في %s' % book.date.strftime('%Y/%m/%d') if book.date else '')
+
+
 def open_referrals_for(department, qs=None):
     """طابورُ وحدةٍ: التزاماتُها المفتوحة — الأسخنُ استعلاماً في الطاولة."""
     from core.models import BookReferral

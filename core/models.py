@@ -801,6 +801,8 @@ class BookHistory(models.Model):
         ('reminder',           'تنبيه'),
         # ── العهدة (CustodyEvent) ──
         ('custody',            'انتقال عهدة'),
+        # ── القيدُ في دفترِ قسم (BookRegistration) ──
+        ('registered',         'قُيّد في دفتر قسم'),
     )
 
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="history")
@@ -2034,6 +2036,60 @@ class CustodyEvent(models.Model):
         if self.to_holder_department_id:
             return str(self.to_holder_department)
         return self.to_holder_name
+
+
+class BookRegistration(models.Model):
+    """قيدُ الكتاب الواحد في **دفترِ أكثرَ من قسم** — ولكلٍّ رقمُ واردِه.
+
+    تصحيحُ المالك حرفيّاً: «عندما تأتي من الوزارة جهةٌ أعلى تخاطب الشركة
+    بعنوانها فيوقّع المديرُ العامّ ويهمّش ويوجّه الكتاب… **ويدخل مرّةً بوارد
+    مكتب المدير العامّ ثمّ مرّةً أخرى بوارد الأقسام المختصّة**»، و«ندخله برقم
+    الكتاب الأصليّ… **ورقمِ واردٍ خاصٍّ بنا**».
+
+    فالورقةُ الواحدة لها أرقامُ واردٍ بعددِ الدفاتر التي مرّت بها. وحقلُ
+    ``Book.our_number`` يبقى **رقمَ القسم المالك** — وهذه الصفوفُ هي البقيّة،
+    كلٌّ في دفتره. ولا يُختلق شيءٌ للماضي: القيدُ يُنشأ حين يُقيَّد فعلاً.
+    """
+
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='registrations',
+                             verbose_name="الكتاب")
+    department = models.ForeignKey(Department, on_delete=models.PROTECT,
+                                   related_name='registrations', verbose_name="القسم")
+    #: من منظور **المقيِّد**: الكتابُ صادرٌ عند مُرسِله ووارِدٌ عند مُستلمه.
+    direction = models.CharField("النوع", max_length=20, default='incoming_internal',
+                                 choices=(('incoming_internal', 'وارد داخلي'),
+                                          ('incoming_external', 'وارد خارجي')))
+    number = models.CharField("رقم الوارد", max_length=20, blank=True)
+    registered_at = models.DateTimeField("تاريخ القيد", default=timezone.now)
+    registered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                      related_name='registrations_made')
+    via_referral = models.ForeignKey('BookReferral', on_delete=models.SET_NULL,
+                                     null=True, blank=True, related_name='registrations',
+                                     verbose_name="عن إحالة")
+
+    class Meta:
+        verbose_name = 'قيد في دفتر'
+        verbose_name_plural = 'القيود'
+        ordering = ['-registered_at']
+        constraints = [
+            # رقمٌ واحدٌ لا يتكرّر في دفترِ القسم الواحد — و«بلا رقم» مستثنىً
+            # (استثناءٌ مدعومٌ في `numbering.py` ولا يستهلك عدّاداً).
+            models.UniqueConstraint(
+                fields=['department', 'direction', 'number'],
+                condition=~models.Q(number=''),
+                name='uniq_registration_per_department',
+            ),
+            models.UniqueConstraint(
+                fields=['book', 'department'],
+                name='uniq_registration_book_department',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['department', 'direction'], name='registration_dept_idx'),
+        ]
+
+    def __str__(self):
+        return '%s: %s' % (self.department.code, self.number or '(بلا رقم)')
 
 
 class SecretAccessGrant(models.Model):
