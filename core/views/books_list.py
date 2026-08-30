@@ -361,7 +361,9 @@ def api_export_csv(request):
     base_qs = scope_books_for(request.user, Book.objects.filter(is_deleted=False)).prefetch_related("issuing_entities", "receiving_entities")
 
     from datetime import datetime as _dt
-    tab = (request.GET.get("tab") or "all").strip()
+    # `incoming` كالصفحة والنقطة تماماً: زرُّ التصدير ينسخ `window.location.search`
+    # وأوّلُ تحميلٍ بلا `tab` — فافتراضُ «الكلّ» هنا كان يُصدّر أكثرَ ممّا يُرى.
+    tab = (request.GET.get("tab") or "incoming").strip()
     search_text = (request.GET.get("q") or "").strip()
     entity_id = (request.GET.get("entity_id") or "").strip()
     followup = _resolve_followup_param(request)
@@ -389,6 +391,10 @@ def api_export_csv(request):
     HEADERS = ["رقم الكتاب", "التاريخ", "الموضوع", "النوع", "الحالة", "الجهات", "تاريخ الاستحقاق"]
 
     def _rows():
+        # القرارُ من المصدر الوحيد (`secret_access`)؛ وأعمدةُ المحتوى هنا
+        # هي العنوانُ والجهات — كما تُفرَّغ في `stub_book_payload` للقائمة.
+        from core.scoping import ACCESS_STUB, STUB_TITLE, secret_access
+
         buf = io.StringIO()
         writer = csv.writer(buf)
         writer.writerow(HEADERS)
@@ -398,13 +404,14 @@ def api_export_csv(request):
             writer = csv.writer(buf)
             kind_label = _KIND_DISPLAY.get(book.kind, (book.kind,))[0]
             status_label = _STATUS_DISPLAY.get(book.followup_state, (book.followup_state,))[0]
-            entities = ", ".join(
+            restricted = secret_access(request.user, book) == ACCESS_STUB
+            entities = "" if restricted else ", ".join(
                 e.name for e in list(book.issuing_entities.all()) + list(book.receiving_entities.all())
             )
             writer.writerow([
                 book.our_number or "",
                 book.date.isoformat() if book.date else "",
-                book.title,
+                STUB_TITLE if restricted else book.title,
                 kind_label,
                 status_label,
                 entities,

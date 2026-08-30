@@ -195,9 +195,16 @@ class DetailAndAttachmentsAreClosedTests(SecrecyTestCase):
         self.assertContains(resp, 'مناقصةُ الحفر السرّيّة')
 
     def test_modal_json_is_refused(self):
+        """المسارُ الحقيقيّ `preview/` — كان الاختبار يمرّ على مسارٍ لا وجود له
+        فيأتيه 404 من التوجيه لا من الحارس: نجاحٌ كاذب."""
         self.client.force_login(self.clerk)
-        resp = self.client.get(f'/books/api/book/{self.secret.pk}/detail/')
-        self.assertIn(resp.status_code, (403, 404))
+        resp = self.client.get(f'/books/api/book/{self.secret.pk}/preview/')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_modal_json_opens_for_the_officer(self):
+        self.client.force_login(self.officer)
+        resp = self.client.get(f'/books/api/book/{self.secret.pk}/preview/')
+        self.assertEqual(resp.status_code, 200)
 
     def test_printable_report_is_refused(self):
         self.client.force_login(self.clerk)
@@ -213,3 +220,36 @@ class DetailAndAttachmentsAreClosedTests(SecrecyTestCase):
         """حارسُ عدم الانحدار: التصحيحُ لا يُغلق العلنيّ."""
         self.client.force_login(self.clerk)
         self.assertEqual(self.client.get(f'/books/{self.plain.pk}/').status_code, 200)
+
+
+class ExportIsNotABackDoorTests(SecrecyTestCase):
+    """قناةُ تسريبٍ كانت مفتوحة: التصديرُ كان يكتب العنوانَ والجهاتِ خامّاً.
+
+    كلُّ سطحٍ يُخرج محتوىً يجب أن يمرّ بالقرار نفسه — والقائمةُ وحدَها لا تكفي.
+    """
+
+    def _csv(self, user, **params):
+        self.client.force_login(user)
+        resp = self.client.get('/books/api/unified/export/csv/', params)
+        self.assertEqual(resp.status_code, 200)
+        return b''.join(resp.streaming_content).decode('utf-8')
+
+    def test_secret_title_is_not_exported_to_a_plain_member(self):
+        body = self._csv(self.clerk, tab='all')
+        self.assertNotIn('مناقصةُ الحفر السرّيّة', body)
+        self.assertIn('— سرّي —', body)
+        self.assertIn('2437', body)          # الرقمُ في الدفتر — يبقى
+
+    def test_officer_exports_the_real_title(self):
+        self.assertIn('مناقصةُ الحفر السرّيّة', self._csv(self.officer, tab='all'))
+
+    def test_plain_book_is_exported_intact(self):
+        self.assertIn('كتابٌ علنيّ', self._csv(self.clerk, tab='all'))
+
+    def test_export_defaults_to_the_same_tab_as_the_screen(self):
+        """الزرُّ ينسخ عنوانَ الصفحة، وأوّلُ تحميلٍ بلا `tab`: «صدّر ما أراه»."""
+        outgoing = Book.objects.create(
+            kind='outgoing_internal', title='صادرٌ لا يظهر في تبويب الوارد',
+            created_by=self.clerk, department=self.dept, our_number='2401',
+        )
+        self.assertNotIn(outgoing.title, self._csv(self.clerk))

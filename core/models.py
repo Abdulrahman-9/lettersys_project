@@ -783,6 +783,9 @@ class BookHistory(models.Model):
         ('merge',              'دمج ملفات'),
         ('merge-pages',        'دمج صفحات'),
         ('remove-pages',       'إزالة صفحات'),
+        # ── نسيجُ الوثائق (BookLink) ──
+        ('link-added',         'ربط بكتاب'),
+        ('link-removed',       'فكّ ربط'),
     )
 
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="history")
@@ -1759,6 +1762,63 @@ class BookNumberReservation(models.Model):
 # ══════════════════════════════════════════════════════════════════
 #  سجل إرسال الإيميل للكتب
 # ══════════════════════════════════════════════════════════════════
+class BookLink(models.Model):
+    """ضلعٌ في نسيج الوثائق: هذا الكتاب **جوابُ** ذاك، أو **إلحاقٌ** به.
+
+    كان النظام **عاجزاً بنيويّاً** عن التعبير عن هذا: مسحُ ``core/models.py``
+    أظهر صفرَ علاقةٍ من كتابٍ إلى كتاب — كلُّ المفاتيح إلى ``Book`` تأتي من
+    نماذجَ أخرى (مرفقات، تعليقات، تاريخ، بريد). فسؤالُ الكاتب «إلحاقاً
+    بمذكّرتكم المرقّمة…» لم يكن له جواب.
+
+    **حقيقةٌ ثابتةٌ لا حالةَ لها** — وهذا ما يفصلها عن الإحالة (سيرِ العمل):
+    الضلعُ يقول «هذان متّصلان» ولا يقول «ما زال معلّقاً». الجدولان لا يُدمجان:
+    خلطُ الدلالتين هو «الجدول الغامض».
+
+    و``PROTECT`` على ``to_book`` مقصود: تفريغُ أصلٍ من السلّة **وهو مرجعُ
+    غيرِه** يُرفض حتى يُفكّ الربط — حمايةُ سلسلة الإحالات من الانقطاع.
+    """
+
+    REPLY        = 'reply'
+    FOLLOWUP     = 'followup'
+    REFERS       = 'refers'
+    CONFIRMATION = 'confirmation'
+    RELATION_CHOICES = (
+        (REPLY,        'جواب على'),
+        (FOLLOWUP,     'إلحاقاً بـ'),
+        (REFERS,       'إشارة إلى'),
+        (CONFIRMATION, 'تأكيد على'),
+    )
+
+    from_book  = models.ForeignKey('Book', on_delete=models.CASCADE,
+                                   related_name='links_out', verbose_name='من كتاب')
+    to_book    = models.ForeignKey('Book', on_delete=models.PROTECT,
+                                   related_name='links_in', verbose_name='إلى كتاب')
+    relation   = models.CharField('العلاقة', max_length=16, choices=RELATION_CHOICES)
+    note       = models.CharField('ملاحظة', max_length=255, blank=True, default='')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   related_name='book_links')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'رابط بين كتابين'
+        verbose_name_plural = 'روابط الكتب'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['from_book', 'to_book', 'relation'],
+                                    name='uniq_book_link'),
+            models.CheckConstraint(check=~models.Q(from_book=models.F('to_book')),
+                                   name='book_link_not_self'),
+        ]
+        indexes = [
+            # «مَن يجيب هذا الكتاب؟» — استعلامُ مصفوفة الردود ولوحة العلاقات
+            models.Index(fields=['to_book', 'relation'], name='booklink_to_idx'),
+            models.Index(fields=['from_book', 'relation'], name='booklink_from_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.from_book_id} {self.get_relation_display()} {self.to_book_id}"
+
+
 class SecretAccessGrant(models.Model):
     """تفويضُ الاطّلاع على كتابٍ سرّيٍّ **بعينه**.
 

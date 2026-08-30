@@ -1,6 +1,7 @@
 from django.urls import path, include
 from django.views.generic import RedirectView
-from . import views
+from . import views
+from core.views import linking
 from . import logging_views
 from . import api as api_views
 from . import reservation_api
@@ -58,6 +59,12 @@ urlpatterns = [
     path("api/books/bulk-status/", views.api_bulk_update_status_books, name="api_bulk_update_status_books"),
     path("api/book/<int:book_id>/undo-delete/", views.api_undo_delete_book, name="api_undo_delete_book"),
     path("api/book/<int:pk>/preview/", views.api_book_detail_json, name="api_book_detail_json"),
+
+    # -- نسيجُ الوثائق: منتقي الربط والأضلاع --
+    path("api/links/picker/", linking.api_link_picker, name="api_link_picker"),
+    path("api/book/<int:pk>/links/add/", linking.api_add_link, name="api_add_link"),
+    path("api/book/<int:pk>/links/<int:link_id>/remove/", linking.api_remove_link,
+         name="api_remove_link"),
     path("backup/", views.backup_database, name="backup_database"),
     path("restore-data/", views.data_restore, name="data_restore"),
     path("restore-data/browse/", views.bak_browse, name="bak_browse"),
