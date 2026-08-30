@@ -8,7 +8,7 @@
 """
 import datetime
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from core.extraction.handwriting.date_parse import parse_drawn_date
 from core.extraction.pipeline import AIExtractionResult, result_to_scan_data
@@ -149,3 +149,39 @@ class PrintedNumberEmissionTests(SimpleTestCase):
         """0.70 دون 0.90 بنائيّاً — فلا يستطيع هذا المسار خرقَ الحارس رياضيّاً."""
         from core.extraction.handwriting.reader import CONF_GATE
         self.assertLess(0.70, CONF_GATE)
+
+
+class StructuralVetoTests(TestCase):
+    """حرزُ النقض البنيويّ — يفشل **صاخباً** إن انجرفت واجهةُ البصمات.
+
+    النسخةُ الأولى حرست نفسَها بـ`hasattr` على واجهتين غير موجودتين، فتدهورت
+    إلى **صفر نقضٍ صامت**: لا خطأٌ ولا تنبيهٌ ولا أثر. هذه الاختبارات تستدعي
+    الواجهةَ الحقيقيّة مباشرةً فلا يمكن أن يتكرّر الصمت.
+    """
+
+    def test_profiles_expose_the_interface_the_veto_uses(self):
+        from core.extraction.matchers.profile import SenderNumberProfiles
+        p = SenderNumberProfiles()
+        self.assertTrue(callable(getattr(p, 'repair', None)),
+                        'واجهةُ repair اختفت — النقضُ البنيويّ سيصمت')
+        self.assertTrue(callable(getattr(p, '_ensure_index', None)))
+        self.assertIsInstance(getattr(p, '_profiles', None), dict)
+
+    def test_known_prefix_set_builds(self):
+        from core.extraction.matchers.profile import SenderNumberProfiles
+        from core.extraction.pipeline import _known_prefixes
+        self.assertIsInstance(_known_prefixes(SenderNumberProfiles()), set)
+
+    def test_no_entity_means_no_veto(self):
+        from core.extraction.pipeline import _printed_number_vetoed
+        r = AIExtractionResult()
+        r.sender_number = 'llK-20260257'
+        self.assertFalse(_printed_number_vetoed(r))
+
+    def test_plain_digits_are_never_vetoed(self):
+        """النقضُ يخصّ البادئات الألفبائيّة وحدها — الأرقامُ المجرّدة خارجه."""
+        from core.extraction.pipeline import _printed_number_vetoed
+        r = AIExtractionResult()
+        r.sender_number = '7099'
+        r.issuing_entity_id = 1
+        self.assertFalse(_printed_number_vetoed(r))

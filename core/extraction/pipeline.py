@@ -307,33 +307,65 @@ def _sender_number_survives_emission(result) -> bool:
     return getattr(result, 'sender_number_bbox_source', '') == 'crnn'
 
 
+def _known_prefixes(prof) -> set:
+    """كلُّ بادئةٍ مؤكَّدةٍ لأيّ جهةٍ في الفهرس — حارسُ النقض العالميّ.
+
+    الجهةُ **مقترحةٌ لا مؤكَّدة** (تعرّفُ top-1 مقيسٌ 60%)، فنقضٌ يعتمد قالبَ
+    جهةٍ واحدةٍ قد يكتم قيمةً صحيحةً نُسبت لجهةٍ خاطئة. والحارس: لا يُنقَض إلّا
+    ما لم يكن بادئةً مؤكَّدةً **لأحدٍ إطلاقاً** — فـ`llK` المشوَّهة تسقط، و`MF`
+    السليمةُ على جهةٍ خاطئة تنجو.
+    """
+    prof._ensure_index()
+    out = set()
+    for profile in prof._profiles.values():
+        for bucket in (profile.get('prefixes') or {}, profile.get('ctx_prefixes') or {}):
+            for px in bucket.values():
+                out.update(p.upper() for p, c in px.items() if c >= 2)
+    return out
+
+
 def _printed_number_vetoed(result) -> bool:
     """نقضٌ بنيويٌّ لتشويه OCR — **نقضٌ لا كاتب**: يمنع، ولا يقترح ولا يرفع ثقة.
 
-    مقيسٌ على إيميلات الإنتاج: `llK-20260257` بدل `NK-…` — حرفٌ مشوَّهٌ في مرجعٍ
-    مطبوعٍ معروفِ القالب. فإن كانت للجهة بصمةُ قالبٍ محفوظة وخالفها المرشَّح،
-    يُكتَم ويبقى في `additional_data` مادّةَ تعلّم.
+    الإشارة (استشارة فيبل 2026-08-27): `repair()` لا يُعيد قيمةً إلّا حين تكون
+    البادئةُ الملتقطة تشويهاً بمسافة تحرير 1–2 من بادئةٍ مؤكَّدةٍ **لنفس الجهة**
+    والقالبُ المُصحَّح معروفٌ لها — ويُعيد None للسليمة. فوجودُ اقتراحِ إصلاحٍ
+    **هو** دليلُ التشويه. مقيسٌ على إيميلات الإنتاج: `llK-20260257` بدل `NK-…`.
 
-    وما لا تكشفه بنيةٌ يُترك للتأشير: `20260503` مقابل `20260603` إبدالُ خانةٍ
-    **داخل نمطٍ صحيح** — لا بنيةَ ولا checksum يُميّزه، وهو صنفُ الخطأ المقبول
-    نفسُه في بقايا القارئ البصريّ.
+    ولا `hasattr` هنا: الحراسةُ بها هي التي جعلت النسخةَ الأولى **خاملةً صامتة**
+    (صفرُ نقضٍ بلا خطأٍ ولا تنبيه). الواجهةُ تُستدعى مباشرةً، واختبارُ حرزٍ يفشل
+    صاخباً إن انجرفت.
+
+    والقيمةُ المكتومة واقتراحُ إصلاحها يُحفظان في `additional_data` — مادّةُ
+    تعلّمٍ لأنماط OCR لا تُهدَر بالتصفير.
     """
     val = getattr(result, 'sender_number', None)
     ent = getattr(result, 'issuing_entity_id', None)
     if not val or not ent:
         return False
     try:
+        import re as _re
         from core.extraction.matchers.profile import SenderNumberProfiles
         prof = SenderNumberProfiles()
-        tpl = prof.template_for(ent) if hasattr(prof, 'template_for') else None
-        if not tpl:
+        m = _re.match(r'([A-Za-z]{1,7})([-/].+)$', str(val).strip())
+        if not m:
             return False
-        if not prof.matches(val, tpl) if hasattr(prof, 'matches') else False:
-            logger.info('[emission] نقضٌ بنيويّ: %r يخالف قالبَ الجهة %s', val, tpl)
-            return True
-    except Exception:
+        if m.group(1).upper() in _known_prefixes(prof):
+            return False                      # بادئةٌ مؤكَّدةٌ لأحدٍ ⟵ لا نقض
+        fixed = prof.repair(val, ent)
+        if not fixed:
+            return False
+        logger.info('[emission] نقضٌ بنيويّ: %r بادئةٌ مشوَّهة (الإصلاحُ المرجَّح %r)',
+                    val, fixed)
+        extra = getattr(result, 'additional_data', None)
+        if isinstance(extra, dict):
+            extra['sender_number_vetoed'] = str(val)[:50]
+            extra['sender_number_veto_fix'] = str(fixed)[:50]
+        return True
+    except Exception as exc:
+        logger.warning('[emission] النقضُ البنيويّ تعذّر (%s) — لا نقض',
+                       type(exc).__name__)
         return False
-    return False
 
 
 def _suppress_sender_number_emission(result) -> None:
