@@ -11,6 +11,9 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
+from core.scoping import can_open_content
+
+
 from ..models import Book, BookComment
 
 logger = logging.getLogger(__name__)
@@ -49,11 +52,10 @@ def add_book_comment(request, book_id):
         book = Book.objects.get(pk=book_id, is_deleted=False)
         
         # Check permission
-        has_permission = (
-            request.user.is_superuser or
-            request.user.is_staff or
-            book.created_by == request.user
-        )
+        # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
+        # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
+        # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
+        has_permission = can_open_content(book, request.user)
         
         if not has_permission:
             return JsonResponse({

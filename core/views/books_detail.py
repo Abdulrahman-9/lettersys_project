@@ -138,11 +138,10 @@ def book_edit(request, pk):
     """تعديل كتاب قائم."""
     book = get_object_or_404(Book, pk=pk, is_deleted=False)
 
-    has_permission = (
-        request.user.is_superuser or
-        request.user.is_staff or
-        book.created_by == request.user
-    )
+    # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
+    # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
+    # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
+    has_permission = can_open_content(book, request.user)
 
     if not has_permission:
         logger.warning(
@@ -168,11 +167,10 @@ def book_change_status(request, pk):
     """
     book = get_object_or_404(Book, pk=pk, is_deleted=False)
 
-    has_permission = (
-        request.user.is_superuser or
-        request.user.is_staff or
-        book.created_by == request.user
-    )
+    # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
+    # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
+    # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
+    has_permission = can_open_content(book, request.user)
 
     if not has_permission:
         logger.warning(

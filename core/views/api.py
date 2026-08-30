@@ -22,6 +22,9 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
+from core.scoping import can_open_content
+
+
 from ..models import Attachment, Book, BookHistory
 
 logger = logging.getLogger(__name__)
@@ -119,11 +122,10 @@ def update_book_notes(request, book_id):
         book = Book.objects.select_related('created_by').get(id=book_id, is_deleted=False)
         
         # Enhanced permission check
-        has_permission = (
-            request.user.is_superuser or
-            request.user.is_staff or
-            book.created_by == request.user
-        )
+        # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
+        # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
+        # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
+        has_permission = can_open_content(book, request.user)
         
         if not has_permission:
             logger.warning(

@@ -774,11 +774,10 @@ def update_book_api(request):
             return JsonResponse({'success': False, 'message': 'edit_pk مطلوب', 'error_code': 'MISSING_EDIT_PK'}, status=400)
 
         book = get_object_or_404(Book, pk=edit_pk, is_deleted=False)
-        has_permission = (
-            request.user.is_superuser or
-            request.user.is_staff or
-            book.created_by == request.user
-        )
+        # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
+        # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
+        # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
+        has_permission = can_open_content(book, request.user)
         if not has_permission:
             return JsonResponse({'success': False, 'message': 'ليس لديك صلاحية تعديل هذا الكتاب', 'error_code': 'PERMISSION_DENIED'}, status=403)
 
