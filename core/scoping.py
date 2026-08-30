@@ -108,7 +108,12 @@ def can_view_book(book, user) -> bool:
     dept_id = user_department_id(user)
     if dept_id is None:
         return is_owner
-    return is_owner or book.department_id == dept_id
+    if is_owner or book.department_id in subtree_ids(dept_id):
+        return True
+    # **توأمُ الشقّ الثالث في `scope_books_for`** — وانفراجُهما هو صنفُ العيب
+    # الذي كلّفنا مرّتين: مسندٌ يتّسع وقرينُه لا، فيظهر الكتابُ في القائمة
+    # ويُرفض عند فتحه (أو العكس، وهو أسوأ).
+    return _referred_to(dept_id).filter(book_id=book.pk).exists()
 
 
 def can_open_content(book, user) -> bool:
@@ -138,9 +143,84 @@ def scope_books_for(user, qs=None):
     if dept_id is None:
         return qs.filter(created_by=user)
 
-    # كتبُ قسمك — بما فيها السرّيّة — ومعها ما أنشأته أنت (ولو انتقلتَ بين
-    # الأقسام). والسرّيُّ يظهر صفّاً ويُحجب محتواه في طبقة العرض.
-    return qs.filter(Q(department_id=dept_id) | Q(created_by=user))
+    # كتبُ قسمك **وشُعبِه** — بما فيها السرّيّة — ومعها ما أنشأته أنت (ولو
+    # انتقلتَ بين الأقسام)، **وما فُرِّق إليك**. والسرّيُّ يظهر صفّاً ويُحجب
+    # محتواه في طبقة العرض.
+    #
+    # الشقُّ الثالث هو ما يجعل التفريقَ عملاً لا صفوفاً في جدول: الكتابُ يبقى
+    # مملوكاً لقسمٍ واحد، والوحدةُ المُحال إليها تراه بلا نقلِ ملكيّة. وهو
+    # **استعلامٌ فرعيّ لا وصلة** عمداً: الوصلةُ تُكرّر الصفَّ بعدد إحالاته
+    # فيلزم `distinct()` على كلّ قائمةٍ في النظام.
+    return qs.filter(
+        Q(department_id__in=subtree_ids(dept_id))
+        | Q(created_by=user)
+        | Q(pk__in=_referred_to(dept_id))
+    )
+
+
+def subtree_ids(department_id):
+    """معرِّفاتُ القسم وكلِّ ما تحته — **الشجرةُ تسيل نزولاً لا صعوداً**.
+
+    رئيسُ القسم ومختصُّ بريده يريان دفاترَ الشُّعب (وإلّا كان القسمُ أعمى عن
+    عمله)، والشعبةُ لا ترى دفترَ القسم الأمّ: «للوحدات مستخدمون يستطيعون
+    الوصول **لأضابيرهم** والاستعلام داخلها ومراجعة **بريدهم** الذي أرسلوه»
+    — نصُّ المالك. وما يخصّ الشعبةَ من كتب القسم يصلها **بالتفريق** لا
+    بالنطاق: التزامٌ صريحٌ لا اطّلاعٌ عامّ.
+
+    استعلامٌ واحد: الجدولُ عشراتُ الصفوف (42 وحدةً مقيسة)، والمشي في بايثون
+    أرخصُ من استعلامٍ متكرّرٍ لكلّ مستوى.
+    """
+    from core.models import Department
+
+    if department_id is None:
+        return []
+
+    parents = dict(Department.objects.values_list('id', 'parent_id'))
+    found, frontier = {department_id}, {department_id}
+    while frontier:
+        frontier = {cid for cid, pid in parents.items()
+                    if pid in frontier and cid not in found}
+        found |= frontier
+    return sorted(found)
+
+
+def _referred_to(department_id):
+    """معرِّفاتُ الكتب المُفرَّقة إلى قسمٍ بعينه — أيّاً كانت حالةُ الالتزام.
+
+    **حتى المنجَزة**: الوحدةُ التي نفّذت كتاباً قبل شهرٍ يجب أن تجده حين تُسأل
+    عنه، وإخفاؤه بإغلاق الالتزام يُضيع المستند من حيث أُنجز.
+    """
+    from core.models import BookReferral
+
+    return BookReferral.objects.filter(
+        to_department_id=department_id
+    ).values('book_id')
+
+
+def scope_referrals_for(user, qs=None):
+    """صفوفُ الإحالة المرئيّة للمستخدم — النطاقُ في الاستعلام لا في القالب.
+
+    ثلاثةُ أطراف لكلّ صفّ، ولكلٍّ منها حقٌّ مشروعٌ في رؤيته: **قسمُ الكتاب**
+    (المالك يتابع أين وصل)، و**القسمُ المُرسِل** (وقد يكون غيرَ المالك في
+    السلسلة)، و**القسمُ المستقبِل** (الالتزامُ عليه). وما عدا ذلك لا يراه.
+    """
+    from core.models import BookReferral
+
+    if qs is None:
+        qs = BookReferral.objects.all()
+    if is_privileged(user):
+        return qs
+
+    dept_id = user_department_id(user)
+    if dept_id is None:
+        return qs.filter(book__created_by=user)
+    mine = subtree_ids(dept_id)
+    return qs.filter(
+        Q(book__department_id__in=mine)
+        | Q(to_department_id__in=mine)
+        | Q(from_department_id__in=mine)
+        | Q(book__created_by=user)
+    )
 
 
 def guard_secret_text_search(qs, user, search_text):

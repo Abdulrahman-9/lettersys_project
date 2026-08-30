@@ -786,6 +786,12 @@ class BookHistory(models.Model):
         # ── نسيجُ الوثائق (BookLink) ──
         ('link-added',         'ربط بكتاب'),
         ('link-removed',       'فكّ ربط'),
+        # ── عمودُ التسيير (BookReferral) ──
+        ('referral',           'تفريق/إحالة'),
+        ('referral-received',  'استلام الإحالة'),
+        ('referral-done',      'إنجاز الإحالة'),
+        ('referral-returned',  'إعادة الإحالة'),
+        ('reminder',           'تنبيه'),
     )
 
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="history")
@@ -1817,6 +1823,115 @@ class BookLink(models.Model):
 
     def __str__(self):
         return f"{self.from_book_id} {self.get_relation_display()} {self.to_book_id}"
+
+
+class BookReferral(models.Model):
+    """**التفريق** — الكتابُ يمشي إلى وحدةٍ أو قسمٍ أو جهةٍ خارجيّة، ومعه توجيه.
+
+    شهادةُ موظّف البريد قلبت هذا من استثناءٍ إلى قاعدةٍ يوميّة: «نمسك الكتاب
+    نذهب به للمدير ويكتب إمّا هامشَ الاطّلاع والحفظ أو إجابةً مباشرةً بالهامش
+    أو **التوجيهَ للوحدات بأوامر مداولة**». فالكتابُ الواحد يُفرَّق على وحداتٍ
+    عدّة، ولكلّ وحدةٍ توجيهُها ومدّتُها ومَن يتابعها.
+
+    **لماذا صفٌّ لكلّ هدفٍ لا حقلٌ في الكتاب؟** لأنّ ما نطارده هو **حالةُ كلّ
+    قفزةٍ على حدة**: سبعُ قفزاتٍ = سبعةُ هوامشَ مؤرَّخةٍ بأصحابها، وحقلٌ واحدٌ
+    لا يبلغ ذلك إلّا بالكشط والإلحاق النصّيّ — وهو ما يُضيع المستند.
+
+    **والمرساةُ دائماً ``book``:** الكتابُ يبقى لقسمٍ مالكٍ واحد، والصفوفُ
+    نسخُ إحالةٍ لا نقلُ ملكيّة.
+    """
+
+    #: الهدفُ الواحد بالضبط — قسمٌ داخليّ أو جهةٌ خارجيّة، لا كلاهما ولا لا شيء.
+    ACTION = 'action'
+    INFO = 'info'
+    PURPOSE_CHOICES = (
+        (ACTION, 'للتنفيذ'),
+        (INFO,   'للعلم'),
+    )
+
+    SENT = 'sent'
+    RECEIVED = 'received'
+    DONE = 'done'
+    RETURNED = 'returned'
+    STATUS_CHOICES = (
+        (SENT,     'مُرسَل'),
+        (RECEIVED, 'مستلَم'),
+        (DONE,     'منجَز'),
+        (RETURNED, 'مُعاد'),
+    )
+    #: الحالاتُ التي ما زال الصفُّ فيها التزاماً مفتوحاً يُطارَد.
+    OPEN_STATUSES = (SENT, RECEIVED)
+
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='referrals',
+                             verbose_name="الكتاب")
+    from_department = models.ForeignKey(Department, on_delete=models.PROTECT,
+                                        related_name='referrals_out', verbose_name="من قسم")
+    to_department = models.ForeignKey(Department, on_delete=models.PROTECT, null=True, blank=True,
+                                      related_name='referrals_in', verbose_name="إلى قسم/وحدة")
+    to_entity = models.ForeignKey('Entity', on_delete=models.PROTECT, null=True, blank=True,
+                                  related_name='referrals_in', verbose_name="إلى جهة خارجيّة")
+    assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='referrals_assigned', verbose_name="المكلَّف")
+
+    purpose = models.CharField("الغرض", max_length=8, choices=PURPOSE_CHOICES, default=ACTION)
+    margin = models.TextField("التوجيه/الهامش", blank=True)
+    #: قصاصةُ الهامش المكتوب بخطّ اليد: {attachment_id, page, bbox} — التوجيهُ
+    #: يُكتب على وجه المعاملة بخطّ المدير، ونسخُه يدويّاً يُضيع الحجّة.
+    margin_crop = models.JSONField("قصاصة الهامش", null=True, blank=True)
+    via_book = models.ForeignKey(Book, on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='referrals_via', verbose_name="المذكّرة الصادرة")
+
+    status = models.CharField("الحالة", max_length=10, choices=STATUS_CHOICES,
+                              default=SENT, db_index=True)
+    due_date = models.DateField("موعد الإنجاز", null=True, blank=True)
+    last_reminder_at = models.DateTimeField("آخر تنبيه", null=True, blank=True)
+    closed_by_link = models.ForeignKey('BookLink', on_delete=models.SET_NULL, null=True, blank=True,
+                                       related_name='closes_referrals', verbose_name="أُقفل بالجواب")
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='referrals_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'إحالة'
+        verbose_name_plural = 'الإحالات'
+        ordering = ['-created_at']
+        constraints = [
+            # هدفٌ واحدٌ بالضبط: صفٌّ بلا هدفٍ التزامٌ لا يطارده أحد، وصفٌّ
+            # بهدفين يُحتسب مرّتين في مصفوفة الردود.
+            models.CheckConstraint(
+                check=(models.Q(to_department__isnull=False, to_entity__isnull=True)
+                       | models.Q(to_department__isnull=True, to_entity__isnull=False)),
+                name='referral_exactly_one_target',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['to_department', 'status'], name='referral_dept_status_idx'),
+            models.Index(fields=['status', 'purpose', 'due_date'], name='referral_queue_idx'),
+            models.Index(fields=['book'], name='referral_book_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.book_id} ⟵ {self.target_name} ({self.get_status_display()})"
+
+    @property
+    def target_name(self):
+        """اسمُ الهدف أيّاً كان نوعُه — القيدُ يضمن أنّ أحدَهما موجودٌ حتماً."""
+        return str(self.to_department) if self.to_department_id else str(self.to_entity)
+
+    @property
+    def is_open(self):
+        return self.status in self.OPEN_STATUSES
+
+    @property
+    def is_overdue(self):
+        """متأخّرٌ **للتنفيذ فقط**: «للعلم» لا يُطارَد ولا يُحتسب تأخيراً."""
+        from django.utils import timezone as _tz
+
+        return bool(
+            self.is_open and self.purpose == self.ACTION
+            and self.due_date and self.due_date < _tz.localdate()
+        )
 
 
 class SecretAccessGrant(models.Model):
