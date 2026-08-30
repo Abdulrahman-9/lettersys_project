@@ -129,10 +129,14 @@ class RegistrationVisibilityTests(RegistrationTestCase):
         register_book_here(self.book, self.dept, by=self.gm_clerk)
         register_book_here(self.book, self.contracts, by=self.gm_clerk)
 
-    def test_a_department_sees_only_its_own_register_entry(self):
-        """قائمةُ الدفاتر التي مرّ بها الكتابُ خريطةُ توزيعٍ لا يملكها غيرُ الطرف."""
+    def test_the_whole_journey_of_the_paper_is_shown(self):
+        """غرضُ القائمة أن تُظهر رحلةَ الورقة — ومَن يرى نصفَها لا يرى شيئاً.
+
+        (قصرتُها أوّلاً على شجرة المستخدم فحجبتُ الميزةَ نفسَها؛ كشفته لقطةٌ
+        بصريّةٌ للوحة دورة الحياة: «لم يُقيَّد في دفتر قسمٍ آخر» وهو مُقيَّد.)
+        """
         rows = registrations_of(self.book, self.clerk)
-        self.assertEqual([r.department for r in rows], [self.dept])
+        self.assertEqual({r.department for r in rows}, {self.dept, self.contracts})
 
     def test_a_superuser_sees_them_all(self):
         root = User.objects.create_superuser('qroot', 'q@x.com', 'pw-qroot-111')

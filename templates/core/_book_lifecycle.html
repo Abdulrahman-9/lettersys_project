@@ -1,0 +1,228 @@
+{% comment %}
+دورةُ حياة الكتاب — أين مشى، وبعهدة مَن، ومَن ردّ، وفي أيّ دفترٍ قُيّد.
+
+الترتيبُ مقصود: **«بعهدة مَن» أوّلاً** لأنّها الميزةُ الحاكمة بشهادة الكاتب
+(«المهمّ الشفافيّة: لا يضيع مستندٌ أبداً»)، ثمّ التفريقُ ومَن ردّ، ثمّ السلسلةُ
+الكاملة للمدقّق، ثمّ الروابطُ والقيود.
+
+لا شرطَ سرّيّةٍ هنا: هذا القالبُ لا يُصيَّر إلّا لمن يملك محتوى الكتاب
+(`book_detail` تُحوّل غيرَه إلى `book_detail_secret.html`)، والقوائمُ الأربع
+جاءت من مساراتٍ تحمل بوّابتَها معها.
+{% endcomment %}
+
+{% comment %}
+كتبُ الورق المنقولة (11,183 منها) لا تفريقَ لها ولا عهدةَ ولا روابط: عرضُ أربع
+حالاتٍ فارغةٍ عليها ضجيجٌ في أكثرِ الصفحات فتحاً. فتنكمش اللوحةُ إلى سطرٍ واحد
+صادق — ولا تُخفى تماماً كي يبقى مكانُها معروفاً حين يبدأ التسيير.
+{% endcomment %}
+{% if not referrals and not custody and not links and not registrations %}
+  <div class="card border-0 shadow-sm rounded-4 mb-3" id="lifecycleCard">
+    <div class="card-body p-3 d-flex align-items-center gap-2 text-muted"
+         style="font-size:.88rem">
+      <i class="bi bi-diagram-3"></i>
+      <span>لا حركةَ تسييرٍ على هذا الكتاب — لم يُفرَّق ولم تُسجَّل له عهدة.</span>
+    </div>
+  </div>
+{% else %}
+<div class="card border-0 shadow-sm rounded-4 mb-3" id="lifecycleCard">
+  <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-bold">
+      <i class="bi bi-diagram-3 text-primary me-2"></i>دورة حياة الكتاب
+    </h6>
+    {% if overdue_referrals %}
+      <span class="badge rounded-pill text-bg-danger">
+        {{ overdue_referrals|length }} متأخّر
+      </span>
+    {% elif open_referrals %}
+      <span class="badge rounded-pill text-bg-warning">
+        {{ open_referrals|length }} قيد الإنجاز
+      </span>
+    {% endif %}
+  </div>
+
+  <div class="card-body p-3">
+
+    {# ── بعهدة مَن — الميزةُ الحاكمة، فأوّلُ ما تقع عليه العين ───────────── #}
+    <div class="d-flex align-items-center gap-3 p-3 rounded-3 mb-3"
+         style="background:color-mix(in srgb, var(--bs-primary) 6%, transparent);
+                border:1px solid color-mix(in srgb, var(--bs-primary) 18%, transparent)">
+      <i class="bi bi-person-badge fs-3 text-primary"></i>
+      <div class="flex-grow-1">
+        <div class="text-muted" style="font-size:.78rem">بعهدة</div>
+        {% if book.current_custody %}
+          <div class="fw-bold">{{ book.current_custody.holder_name }}</div>
+          <div class="text-muted" style="font-size:.78rem">
+            {{ book.current_custody.get_event_display }}
+            — {{ book.current_custody.signed_at|date:"Y/m/d H:i" }}
+            {% if book.current_custody.note %}· {{ book.current_custody.note }}{% endif %}
+          </div>
+        {% else %}
+          <div class="fw-bold text-muted">لم تُسجَّل عهدة</div>
+          <div class="text-muted" style="font-size:.78rem">
+            الكتبُ المنقولة من الورق لا عهدةَ لها — ولا تُختلق لها واحدة.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ── التفريقُ ومَن ردّ ──────────────────────────────────────────────── #}
+    <div class="mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="fw-semibold" style="font-size:.9rem">
+          <i class="bi bi-arrow-left-right text-secondary me-1"></i>
+          التفريق والردود
+          {% if book.sent_to_group %}
+            <span class="badge rounded-pill text-bg-light border ms-1"
+                  title="عُمِّم على عنقود">{{ book.sent_to_group }}</span>
+          {% endif %}
+        </span>
+      </div>
+
+      {% if referrals %}
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0" style="font-size:.85rem">
+            <thead>
+              <tr class="text-muted" style="font-size:.78rem">
+                <th>إلى</th>
+                <th style="width:5rem">الغرض</th>
+                <th style="width:6rem">الحالة</th>
+                <th style="width:7rem">موعد الإنجاز</th>
+                <th style="width:8rem">الجواب</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in referrals %}
+                <tr {% if row.is_overdue %}class="table-danger"{% endif %}>
+                  <td>
+                    <span class="fw-semibold">{{ row.target }}</span>
+                    {% if row.referral.assignee %}
+                      <span class="text-muted">— {{ row.referral.assignee.get_full_name|default:row.referral.assignee.username }}</span>
+                    {% endif %}
+                    {% if row.referral.margin %}
+                      <div class="text-muted" style="font-size:.78rem">↩ {{ row.referral.margin }}</div>
+                    {% endif %}
+                  </td>
+                  <td>{{ row.purpose }}</td>
+                  <td>
+                    {% if row.is_overdue %}
+                      <span class="badge text-bg-danger">متأخّر</span>
+                    {% elif row.is_open %}
+                      <span class="badge text-bg-warning">{{ row.status }}</span>
+                    {% else %}
+                      <span class="badge text-bg-success">{{ row.status }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-nowrap" style="font-variant-numeric:tabular-nums">
+                    {{ row.due_date|date:"Y/m/d"|default:"—" }}
+                    {% if row.reminded_at %}
+                      <i class="bi bi-bell-fill text-warning ms-1"
+                         title="نُبِّه في {{ row.reminded_at|date:'Y/m/d H:i' }}"></i>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if row.reply_id %}
+                      <a href="/books/{{ row.reply_id }}/" class="text-decoration-none"
+                         style="font-variant-numeric:tabular-nums">
+                        <i class="bi bi-reply-fill me-1"></i>{{ row.reply_number }}
+                      </a>
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted text-center py-3 rounded-3"
+             style="border:1px dashed var(--bs-border-color); font-size:.85rem">
+          لم يُفرَّق هذا الكتاب على أحد بعد.
+        </div>
+      {% endif %}
+    </div>
+
+    {# ── الروابطُ والقيود جنباً إلى جنب ─────────────────────────────────── #}
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="fw-semibold mb-2" style="font-size:.9rem">
+          <i class="bi bi-link-45deg text-secondary me-1"></i>كتبٌ مرتبطة
+        </div>
+        {% if links %}
+          <ul class="list-unstyled mb-0">
+            {% for link in links %}
+              <li class="d-flex align-items-center gap-2 py-1" style="font-size:.85rem">
+                <i class="bi {% if link.direction == 'in' %}bi-box-arrow-in-left{% else %}bi-box-arrow-right{% endif %} text-muted"></i>
+                <span class="badge text-bg-light border">{{ link.relation_label }}</span>
+                {% if link.book_id %}
+                  <a href="/books/{{ link.book_id }}/" class="text-decoration-none"
+                     style="font-variant-numeric:tabular-nums">{{ link.number }}</a>
+                  <span class="text-truncate">{{ link.title }}</span>
+                {% else %}
+                  <span style="font-variant-numeric:tabular-nums">{{ link.number }}</span>
+                  <span class="text-muted fst-italic">{{ link.title }}</span>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-muted" style="font-size:.85rem">لا روابط.</div>
+        {% endif %}
+      </div>
+
+      <div class="col-md-6">
+        <div class="fw-semibold mb-2" style="font-size:.9rem">
+          <i class="bi bi-journal-bookmark text-secondary me-1"></i>قُيّد في الدفاتر
+        </div>
+        {% if registrations %}
+          <ul class="list-unstyled mb-0">
+            {% for reg in registrations %}
+              <li class="py-1" style="font-size:.85rem">
+                <span class="fw-semibold">{{ reg.department.name }}</span>
+                <span class="text-muted">—</span>
+                <span style="font-variant-numeric:tabular-nums">{{ reg.number|default:"بلا رقم" }}</span>
+                <span class="text-muted" style="font-size:.78rem">
+                  ({{ reg.registered_at|date:"Y/m/d" }})
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-muted" style="font-size:.85rem">
+            لم يُقيَّد في دفترِ قسمٍ آخر.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ── سلسلةُ العهدة الكاملة — للمدقّق، مطويّةً كي لا تزاحم ───────────── #}
+    {% if custody %}
+      <div class="mt-3 pt-3 border-top">
+        <a class="text-decoration-none fw-semibold" data-bs-toggle="collapse"
+           href="#custodyChain" role="button" aria-expanded="false"
+           aria-controls="custodyChain" style="font-size:.9rem">
+          <i class="bi bi-chevron-down me-1"></i>
+          سلسلة العهدة الكاملة ({{ custody|length }})
+        </a>
+        <div class="collapse mt-2" id="custodyChain">
+          <ul class="list-unstyled mb-0">
+            {% for event in custody %}
+              <li class="d-flex gap-2 py-1" style="font-size:.85rem">
+                <span class="text-muted text-nowrap"
+                      style="font-variant-numeric:tabular-nums">{{ event.signed_at|date:"Y/m/d H:i" }}</span>
+                <span class="badge text-bg-light border">{{ event.get_event_display }}</span>
+                <span class="fw-semibold">{{ event.holder_name }}</span>
+                {% if event.note %}<span class="text-muted">— {{ event.note }}</span>{% endif %}
+                {% if event.signature_mode == 'paper' %}
+                  <i class="bi bi-pen text-muted" title="توقيعٌ ورقيّ"></i>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endif %}

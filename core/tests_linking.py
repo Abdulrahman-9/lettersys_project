@@ -114,6 +114,15 @@ class LinksOfPresentationTests(LinkingTestCase):
         self.assertEqual(links_of(self.original, self.clerk)[0]['direction'], 'in')
         self.assertEqual(links_of(self.reply, self.clerk)[0]['direction'], 'out')
 
+    def test_the_label_carries_its_direction(self):
+        """الضلعُ الواحد يُقرأ من طرفيه بمعنيين — و«جواب على» على كتابٍ *أجابه*
+        غيرُه تُقرأ عكسَ معناها. كشفته العينُ في لوحة دورة الحياة."""
+        add_link(self.reply, self.original, BookLink.REPLY, by=self.clerk)
+        outgoing = links_of(self.reply, self.clerk)[0]
+        incoming = links_of(self.original, self.clerk)[0]
+        self.assertEqual(outgoing['relation_label'], 'جواب على')
+        self.assertEqual(incoming['relation_label'], 'أجابه')
+
     def test_edge_to_a_secret_book_is_restricted_not_revealed(self):
         secret = Book.objects.create(
             kind='incoming_internal', title='سرٌّ لا يُقرأ', created_by=self.outsider,

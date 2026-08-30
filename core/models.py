@@ -1840,6 +1840,21 @@ class BookLink(models.Model):
             models.Index(fields=['from_book', 'relation'], name='booklink_from_idx'),
         ]
 
+    #: الوسمُ مكتوبٌ من طرف ``from_book``؛ وعرضُه كما هو على الطرف الآخر
+    #: **يقلب المعنى**: «جواب على 2455» على كتابٍ *أجابه* 2455 تُقرأ عكسَها.
+    INBOUND_LABELS = {
+        REPLY:        'أجابه',
+        FOLLOWUP:     'أُلحق به',
+        REFERS:       'مُشارٌ إليه من',
+        CONFIRMATION: 'أُكِّد بـ',
+    }
+
+    def label_for(self, direction):
+        """وسمُ الضلع من منظور الطرف الذي نعرضه عنده."""
+        if direction == 'in':
+            return self.INBOUND_LABELS.get(self.relation, self.get_relation_display())
+        return self.get_relation_display()
+
     def __str__(self):
         return f"{self.from_book_id} {self.get_relation_display()} {self.to_book_id}"
 

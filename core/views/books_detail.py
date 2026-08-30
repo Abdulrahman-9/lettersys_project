@@ -128,9 +128,33 @@ def book_detail(request, pk):
             "attachments": attachments,
             "comments": comments,
             "back_url": back_url,
-            "back_label": back_label
+            "back_label": back_label,
+            **_lifecycle_context(book, request.user),
         },
     )
+
+
+def _lifecycle_context(book, user):
+    """دورةُ حياة الكتاب — أين مشى، وبعهدة مَن، ومَن ردّ، وفي أيّ دفترٍ قُيّد.
+
+    كلُّ قطعةٍ منها مبنيّةٌ على **مسار قراءةٍ واحد** يحمل بوّابتَه معه
+    (`links_of` · `reply_matrix` · `registrations_of`)، فلا تُرشّ الشروطُ
+    في قالبٍ من ستّمئة سطر — وهو الدرسُ الذي كلّفنا نسختين من قاعدة الرؤية.
+    """
+    from core.custody_service import custody_chain
+    from core.linking_service import links_of
+    from core.referral_service import reply_matrix
+    from core.registration_service import registrations_of
+
+    matrix = reply_matrix(book, user)
+    return {
+        "links": links_of(book, user),
+        "referrals": matrix,
+        "open_referrals": [row for row in matrix if row["is_open"]],
+        "overdue_referrals": [row for row in matrix if row["is_overdue"]],
+        "custody": list(custody_chain(book)),
+        "registrations": registrations_of(book, user),
+    }
 
 
 @login_required

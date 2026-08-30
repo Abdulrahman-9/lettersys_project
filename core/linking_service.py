@@ -95,7 +95,7 @@ def _present(link, other, direction, user, can_view, can_open, stub_title):
     return {
         'id': link.id,
         'relation': link.relation,
-        'relation_label': link.get_relation_display(),
+        'relation_label': link.label_for(direction),
         'direction': direction,
         'note': link.note,
         'book_id': other.id if openable else None,

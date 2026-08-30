@@ -78,18 +78,16 @@ def register_reply(original, reply_book, *, by, note=''):
 
 
 def registrations_of(book, user):
-    """قيودُ الكتاب في الدفاتر — **مقصورةً على ما يراه المستخدم**.
+    """قيودُ الكتاب في الدفاتر كلِّها — **وبوّابةُ الكتاب هي البوّابة**.
 
-    رقمُ واردِ قسمٍ آخر ليس سرّاً بذاته، لكنّ إظهارَ قائمةِ الدفاتر التي مرّ بها
-    الكتابُ يرسم خريطةَ توزيعٍ لا يملكها من ليس طرفاً — فتُقصَر على شجرته.
+    قصرتُها أوّلاً على شجرة المستخدم ثمّ تراجعت: **التضييقُ حجب الميزةَ نفسَها**.
+    غرضُ هذه القائمة أن تُظهر رحلةَ الورقة («يدخل مرّةً بوارد مكتب المدير العامّ
+    ثمّ مرّةً أخرى بوارد الأقسام المختصّة») — ومَن يرى نصفَها لا يرى شيئاً.
+
+    ولا تسريبَ فيها: مَن يفتح الكتابَ يرى صفوفَ تفريقه أصلاً، فمعرفةُ أنّ قسماً
+    قيّده لا تضيف علماً جديداً — والرقمُ في دفترٍ ورقيٍّ مفتوحٍ على أيّ حال.
     """
-    from core.scoping import is_privileged, subtree_ids, user_department_id
-
-    rows = book.registrations.select_related('department').all()
-    if is_privileged(user):
-        return list(rows)
-    mine = subtree_ids(user_department_id(user))
-    return [r for r in rows if r.department_id in mine]
+    return list(book.registrations.select_related('department').all())
 
 
 # ───────────────────────────── الداخليّات ─────────────────────────────
