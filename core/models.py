@@ -322,6 +322,13 @@ class Book(models.Model):
     # تنصيبٌ جديدٌ قبل بذر الأقسام يجب أن يعمل، وصفٌّ بلا قسمٍ يراه المدير فقط.
     department = models.ForeignKey('Department', null=True, blank=True, on_delete=models.PROTECT,
                                    related_name='books', verbose_name='القسم')
+    # «بعهدة مَن» الآن — **مؤشّرٌ إلى آخر صفّ عهدة، لا نسخةٌ ثانيةٌ للحقيقة.**
+    # الاسمُ والقسمُ والوقتُ كلُّها في `CustodyEvent`؛ ولو نُسخت هنا لانفرجت
+    # عنه عند أوّل كتابةٍ على جنب — وهو ما يُضيع المستند. يكتبه
+    # `custody_service.record_custody` وحدَه.
+    current_custody = models.ForeignKey('CustodyEvent', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='+',
+                                        verbose_name='بعهدة')
     is_deleted = models.BooleanField(default=False)
 
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -792,6 +799,8 @@ class BookHistory(models.Model):
         ('referral-done',      'إنجاز الإحالة'),
         ('referral-returned',  'إعادة الإحالة'),
         ('reminder',           'تنبيه'),
+        # ── العهدة (CustodyEvent) ──
+        ('custody',            'انتقال عهدة'),
     )
 
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="history")
@@ -1932,6 +1941,99 @@ class BookReferral(models.Model):
             self.is_open and self.purpose == self.ACTION
             and self.due_date and self.due_date < _tz.localdate()
         )
+
+
+class CustodyEvent(models.Model):
+    """**بعهدة مَن** — سجلُّ انتقال المستند من يدٍ إلى يد.
+
+    سُئل الكاتبُ ما الذي يجعله يترك دفترَ التواقيع الورقيَّ فأجاب: «إذا كانت
+    المهامُّ والمسؤوليّاتُ واضحةً ومقسّمةً على اليوزريّة وظاهرةً لي **كلُّ
+    تفاصيل الاستلام وبعهدة مَن**: مَن استلم، ومَن أكّد، ومَن أعدّ… لاستغنينا
+    عنه. **المهمّ الشفافيّة: لا يضيع مستندٌ أبداً ولا تفاصيله.**»
+
+    فهذا الجدولُ هو **الميزةُ الحاكمة** في المشروع كلّه، ومقياسُ نجاحه بسيطٌ
+    وقاسٍ: مستندٌ واحدٌ يضيع يُبطل الثقةَ كلَّها.
+
+    **صفٌّ لكلّ انتقال — لا حقلٌ يُكشط:** «آخرُ عهدة» تُقرأ من الصفّ الأخير،
+    والخطُّ الزمنيّ كلُّه محفوظ. وحقلُ ``Book.current_custody`` مؤشّرٌ إلى هذا
+    الصفّ لا **نسخةٌ ثانيةٌ للحقيقة**.
+    """
+
+    INTAKE = 'intake'
+    UNIT_RECEIPT = 'unit_receipt'
+    ARCHIVE_DONE = 'archive_done'
+    COURIER_PICKUP = 'courier_pickup'
+    RETURN = 'return'
+    EVENT_CHOICES = (
+        (INTAKE,         'قيدٌ في السجلّ'),
+        (UNIT_RECEIPT,   'استلامُ وحدة'),
+        (ARCHIVE_DONE,   'تمامُ أرشفة'),
+        (COURIER_PICKUP, 'تسليمٌ لمتعهّد البريد'),
+        (RETURN,         'إعادة'),
+    )
+
+    PAPER = 'paper'
+    DIGITAL = 'digital'
+    SIGNATURE_MODES = (
+        (PAPER,   'توقيعٌ ورقيّ'),
+        (DIGITAL, 'إقرارٌ في النظام'),
+    )
+
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='custody_events',
+                             verbose_name="الكتاب")
+    referral = models.ForeignKey('BookReferral', on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='custody_events', verbose_name="الإحالة")
+    event = models.CharField("الحدث", max_length=20, choices=EVENT_CHOICES, db_index=True)
+
+    to_holder_department = models.ForeignKey(Department, on_delete=models.PROTECT,
+                                             null=True, blank=True,
+                                             related_name='custody_held',
+                                             verbose_name="بعهدة قسم/وحدة")
+    to_holder_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                       related_name='custody_held', verbose_name="بعهدة موظّف")
+    #: نصٌّ حرٌّ لأنّ **متعهّد البريد ليس مستخدماً في النظام** — ولا يصحّ أن
+    #: تنقطع سلسلةُ العهدة عند أوّل حاملٍ من خارج الحسابات.
+    to_holder_name = models.CharField("بعهدة (اسم)", max_length=120, blank=True)
+
+    signed_at = models.DateTimeField("وقت التوقيع", db_index=True)
+    recorded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='custody_recorded', verbose_name="سجّله")
+    signature_mode = models.CharField("نوعُ التوقيع", max_length=10,
+                                      choices=SIGNATURE_MODES, default=PAPER)
+    #: يحمل **مكانَ الحفظ** عند الأرشفة — وهو ما يسأل عنه الكاتبُ بعد سنة.
+    note = models.CharField("ملاحظة", max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'حدث عهدة'
+        verbose_name_plural = 'سجلّ العهدة'
+        ordering = ['-signed_at', '-id']
+        constraints = [
+            # حاملٌ واحدٌ على الأقلّ: صفٌّ بلا حاملٍ يقول «انتقلت العهدة إلى
+            # لا أحد» — وهو تماماً الضياعُ الذي وُجد الجدولُ لمنعه.
+            models.CheckConstraint(
+                check=(models.Q(to_holder_department__isnull=False)
+                       | models.Q(to_holder_user__isnull=False)
+                       | ~models.Q(to_holder_name='')),
+                name='custody_has_a_holder',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['book', '-signed_at'], name='custody_book_idx'),
+            models.Index(fields=['event', 'signed_at'], name='custody_event_idx'),
+        ]
+
+    def __str__(self):
+        return '%s ⟵ %s' % (self.get_event_display(), self.holder_name)
+
+    @property
+    def holder_name(self):
+        """اسمُ الحامل أيّاً كان نوعُه — القيدُ يضمن أنّ أحدَها موجود."""
+        if self.to_holder_user_id:
+            return self.to_holder_user.get_full_name() or self.to_holder_user.get_username()
+        if self.to_holder_department_id:
+            return str(self.to_holder_department)
+        return self.to_holder_name
 
 
 class SecretAccessGrant(models.Model):
