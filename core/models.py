@@ -329,6 +329,12 @@ class Book(models.Model):
     current_custody = models.ForeignKey('CustodyEvent', null=True, blank=True,
                                         on_delete=models.SET_NULL, related_name='+',
                                         verbose_name='بعهدة')
+    # واقعةُ المخاطبة: «إلى: جميع الهيئات والأقسام» — **بدل رشّ 42 صفَّ M2M**.
+    # التعميمُ يحمل رقمَ صادرٍ واحداً (هذا هو الورقُ نفسه)، ورقمٌ لكلّ عضوٍ
+    # يفجّر الدفتر ويناقض الممارسة.
+    sent_to_group = models.ForeignKey('EntityGroup', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='books',
+                                      verbose_name='عُمِّم على')
     is_deleted = models.BooleanField(default=False)
 
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -803,6 +809,8 @@ class BookHistory(models.Model):
         ('custody',            'انتقال عهدة'),
         # ── القيدُ في دفترِ قسم (BookRegistration) ──
         ('registered',         'قُيّد في دفتر قسم'),
+        # ── التعميم (EntityGroup) ──
+        ('circular',           'تعميم على عنقود'),
     )
 
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="history")
@@ -2097,6 +2105,54 @@ class BookRegistration(models.Model):
 
     def __str__(self):
         return '%s: %s' % (self.department.code, self.number or '(بلا رقم)')
+
+
+class EntityGroup(models.Model):
+    """عنقودُ جهات — «جميع الهيئات والأقسام» بضغطةٍ واحدة.
+
+    طلبُ المالك: «لو كنتُ أستطيع أن أحدّد عنقوداً من الجهات بمسمّىً واحد… ومباشرةً
+    يذهب إلى كلّ الأقسام بهذا الاسم دفعةً واحدة بعد ضغط حفظ وإرسال».
+
+    **ولماذا ليس `Entity` بنوعٍ خاصّ؟** لأنّ العنقود **ليس طرفَ مراسلة**: لا
+    أضبارةَ له ولا يُرسِل ولا يُحصى في تقارير الجهات. وجعلُه جهةً يعني حراسةَ
+    «إلّا العناقيد» في كلّ مستهلكي الجهات إلى الأبد — **والجهاتُ الوهميّة الأربع
+    في القاعدة الحيّة دليلٌ حيٌّ** على أنّ الناس ستختاره كأنّه جهة.
+    """
+
+    #: القاعدةُ الديناميكيّةُ **الوحيدة**: عضويّةٌ ثابتةٌ باسم «جميع الهيئات
+    #: والأقسام» **ستتيبّس حتماً** عند دخول القسم الثالث والأربعين — فخٌّ
+    #: مضمونُ الوقوع فلا يُترك. وأيُّ لغةِ قواعدَ أوسع: لا.
+    ALL_REGISTRY_DEPARTMENTS = 'all_registry_departments'
+    AUTO_RULE_CHOICES = (
+        (ALL_REGISTRY_DEPARTMENTS, 'كلُّ الأقسام المسجّلة النشطة'),
+    )
+
+    name = models.CharField("اسم العنقود", max_length=200, unique=True)
+    members = models.ManyToManyField('Entity', blank=True, related_name='groups',
+                                     verbose_name="الأعضاء")
+    auto_rule = models.CharField("قاعدة ديناميكيّة", max_length=32, blank=True,
+                                 choices=AUTO_RULE_CHOICES)
+    is_active = models.BooleanField("نشط", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'عنقود جهات'
+        verbose_name_plural = 'عناقيد الجهات'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def resolved_members(self):
+        """أعضاءُ العنقود الآن — محسوبةً إن كانت له قاعدةٌ ديناميكيّة.
+
+        **لقطةُ العضويّة ليست هنا:** صفوفُ الإحالة التي تُنشأ لحظةَ الإرسال هي
+        اللقطة، فتغييرُ الأعضاء لاحقاً لا يمسّ تعميماً مضى — بلا جدولِ لقطاتٍ
+        إضافيّ.
+        """
+        if self.auto_rule == self.ALL_REGISTRY_DEPARTMENTS:
+            return Entity.objects.filter(department__is_active=True).order_by('name')
+        return self.members.all().order_by('name')
 
 
 class SecretAccessGrant(models.Model):

@@ -136,6 +136,85 @@ def send_reminder(referral, *, by):
     return referral
 
 
+def send_circular(book, group, *, by, purpose=None, margin='', due_date=None,
+                  member_overrides=None):
+    """يُعمّم كتاباً على عنقودٍ كاملٍ بضغطةٍ واحدة — «حفظ وإرسال».
+
+    **رقمُ صادرٍ واحدٌ للكتاب كلّه** — هذا هو الورقُ نفسه: التعميمُ يحمل رقماً
+    واحداً، ورقمٌ لكلّ عضوٍ يفجّر الدفتر ويناقض الممارسة. وواقعةُ المخاطبة
+    تُسجَّل في ``Book.sent_to_group`` بدل رشّ اثنين وأربعين صفَّ M2M.
+
+    **والجسرُ بين الطبقتين هنا:** عضوُ العنقود جهةٌ في الدليل، فإن كانت لها
+    **عقدةُ قسمٍ توأم** صار الهدفُ القسمَ (فتعمل طاولةُ وارده وعدّاداته)،
+    وإلّا بقي جهةً خارجيّة. فالوحدةُ كلا الأمرين بإسقاطيها.
+
+    ``member_overrides`` قاموسٌ ``{entity_id: {...}}`` لما يخصّ عضواً بعينه —
+    «أحياناً إلى قسمين أو ثلاثة» بتوجيهاتٍ مختلفة.
+    """
+    from core.models import Book
+
+    members = list(group.resolved_members())
+    if not members:
+        raise ValidationError('العنقودُ «%s» بلا أعضاء.' % group)
+
+    overrides = member_overrides or {}
+    targets = []
+    for entity in members:
+        item = dict(overrides.get(entity.pk, {}))
+        item['target'] = _bridge(entity)
+        targets.append(item)
+
+    created = distribute(book, targets, by=by, purpose=purpose, margin=margin,
+                         due_date=due_date, allow_repeat=True)
+
+    with transaction.atomic():
+        # كتابةٌ ضيّقةٌ لا `save()`: التعميمُ لا يمسّ بقيّةَ حقول الكتاب
+        Book.objects.filter(pk=book.pk).update(sent_to_group=group)
+        book.sent_to_group = group      # والكائنُ في يد المستدعي يوافق القاعدة
+        _record(book, 'circular', by,
+                'عُمِّم على «%s» — %d جهة' % (group, len(created)))
+    return created
+
+
+def reply_matrix(book, user):
+    """مَن ردّ ومَن تأخّر — مصفوفةُ التعميم.
+
+    **«للعلم» لا يُعدّ متأخّراً أبداً**: المطاردةُ على «للتنفيذ» فقط، وإلّا
+    امتلأ الطابورُ بما لا إجابةَ له فأهمله قارئُه.
+    """
+    from core.scoping import scope_referrals_for
+
+    rows = scope_referrals_for(user, book.referrals.select_related(
+        'to_department', 'to_entity', 'assignee', 'closed_by_link__from_book'
+    )).order_by('created_at')
+
+    matrix = []
+    for row in rows:
+        reply = row.closed_by_link.from_book if row.closed_by_link_id else None
+        matrix.append({
+            'referral': row,
+            'target': row.target_name,
+            'purpose': row.get_purpose_display(),
+            'status': row.get_status_display(),
+            'is_open': row.is_open,
+            'is_overdue': row.is_overdue,
+            'due_date': row.due_date,
+            'reminded_at': row.last_reminder_at,
+            'reply_id': reply.pk if reply else None,
+            'reply_number': reply.our_number_display if reply else '',
+        })
+    return matrix
+
+
+def _bridge(entity):
+    """جسرُ الطبقتين: الجهةُ التي لها عقدةُ قسمٍ توأم **هدفُها القسم**.
+
+    وهو ما يجعل التعميمَ يصل طاولةَ وارد الوحدة لا كتالوجَ الجهات وحده.
+    """
+    department = getattr(entity, 'department', None)
+    return department if department is not None and department.is_active else entity
+
+
 def close_by_reply(book, link, reply_book, *, by):
     """يُقفل الالتزامَ المفتوح الذي **أجابه** هذا الكتاب — إن وُجد.
 
