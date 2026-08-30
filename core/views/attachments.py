@@ -55,6 +55,11 @@ def serve_shared_attachment(request, token):
         raise Http404("الملف غير موجود.")
 
     logger.info("serve_shared_attachment: served attachment %s", attachment_id)
+    # رابطٌ موقَّعٌ يفتحه مَن لا حسابَ له — يُسجَّل بلا مستخدمٍ وبعنوانه
+    from core.audit_service import record_event
+    record_event(request, 'SHARED_LINK_OPEN', book=attachment.book,
+                 metadata={'attachment_id': attachment.pk})
+
     return FileResponse(handle, as_attachment=True, filename=attachment.filename)
 
 
@@ -91,7 +96,20 @@ def serve_media(request, path):
         if not can_open_content(owner_book, request.user):
             return HttpResponseForbidden("غير مصرح بالوصول لهذا الملف")
 
-    return FileResponse(open(full_path, "rb"))
+        # **التمييزُ حاسم:** عارضُ المستند يطلب عشرات صور الصفحات لكلّ فتحة،
+        # فتسجيلُها خامّاً يعني ثلاثين صفّاً للفتحة الواحدة. العرضُ يُطوى على
+        # مستوى الكتاب، والتحميلُ الصريح (`?download=1`) واقعةٌ لا تُطوى.
+        from core.audit_service import record_event, record_view
+        from core.logging_models import UserActivityLog
+
+        if request.GET.get('download'):
+            record_event(request, 'DOWNLOAD_ATTACHMENT', book=owner_book,
+                         metadata={'path': path[:200]})
+        else:
+            record_view(request, owner_book, action=UserActivityLog.VIEW_ATTACHMENT)
+
+    return FileResponse(open(full_path, "rb"),
+                        as_attachment=bool(request.GET.get('download')))
 
 
 def _save_attachment_version(attachment, user, note="", merge_type="none", page_count=None):

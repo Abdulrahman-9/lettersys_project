@@ -388,6 +388,10 @@ def api_export_csv(request):
     )
     qs = BookSortEngine.apply_sort(qs, sort)
 
+    # ملفٌّ يخرج من الجهاز بصفوفٍ كثيرة — أثقلُ واقعةِ إخراجٍ في النظام
+    from core.audit_service import record_event
+    record_event(request, 'EXPORT_DATA', metadata={'tab': tab, 'q': bool(search_text)})
+
     HEADERS = ["رقم الكتاب", "التاريخ", "الموضوع", "النوع", "الحالة", "الجهات", "تاريخ الاستحقاق"]
 
     def _rows():

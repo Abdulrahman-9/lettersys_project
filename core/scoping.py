@@ -57,6 +57,37 @@ def is_mail_officer(user) -> bool:
     return get_user_role(user) == 'controller'
 
 
+def can_view_audit(user) -> bool:
+    """أيحقّ له فتحُ **سجلّ الحركات**؟ رئيسُ القسم والسوبر أدمن حصراً.
+
+    **ومختصُّ البريد لا يراه** رغم أنّه أمينُ السرّيّ تشغيليّاً: سجلُّ القراءة
+    أداةُ **مراقبةِ أشخاص** لا أداةُ بريد، ومَن يحاسِب موظّفي القسم هو رئيسُه.
+    """
+    return is_privileged(user) or is_department_head(user)
+
+
+def scope_activity_for(user, qs=None):
+    """صفوفُ سجلّ الحركات المرئيّة — النطاقُ في الاستعلام لا في القالب.
+
+    أدمنُ القسم يرى: ما فاعلُه من **شجرته** (بلقطة `department` وقتَ الحدث لا
+    بقسمه الحيّ — المستخدم ينتقل)، **أو** ما كتابُه من شجرته — فيرى أيضاً
+    غريباً قرأ كتابَ قسمه عبر إحالة، وهو حقُّ تدقيقٍ مشروع.
+    """
+    from core.logging_models import UserActivityLog
+
+    if qs is None:
+        qs = UserActivityLog.objects.all()
+    if is_privileged(user):
+        return qs
+    if not is_department_head(user):
+        return qs.none()
+
+    mine = subtree_ids(user_department_id(user))
+    if not mine:
+        return qs.none()
+    return qs.filter(Q(department_id__in=mine) | Q(book__department_id__in=mine))
+
+
 def can_use_desk(user) -> bool:
     """أيحقّ له فتحُ **طاولة البريد** (كشفُ التسليم ودفترُ الوارد المطبوع)؟
 

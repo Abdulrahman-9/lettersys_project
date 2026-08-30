@@ -640,6 +640,10 @@ def api_book_detail_json(request, pk):
     if not has_permission:
         return JsonResponse({'error': 'ليس لديك صلاحية'}, status=403)
 
+    # فتحُ المعاينة فتحٌ متعمَّدٌ كفتح الصفحة — يُطوى في صفّ اليوم نفسِه
+    from core.audit_service import record_view
+    record_view(request, book)
+
     image_exts = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff')
 
     def _safe_size(att):

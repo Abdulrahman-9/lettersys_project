@@ -45,3 +45,40 @@ def invalidate_book_m2m_cache(sender, action, **kwargs):
     """أبطل كاش العناوين عند تعديل M2M للجهات (يؤثّر على فلترة بحث العناوين بـ entity_id)."""
     if action in ('post_add', 'post_remove', 'post_clear'):
         _bump(BOOK_CACHE_VERSION_KEY)
+
+
+# ── سجلُّ الحسابات: دخولٌ وخروجٌ وفشلُ دخول ──────────────────────────────────
+#
+# إشاراتُ جانغو نفسُها هي نقطةُ الالتقاط الصحيحة: تُطلَق من كلّ مسارِ مصادقة
+# (الواجهة، الإدارة، أيُّ نقطةٍ مستقبليّة) فلا يفوتنا مسارٌ نسيناه.
+
+from django.contrib.auth.signals import (user_logged_in, user_logged_out,
+                                         user_login_failed)
+
+
+@receiver(user_logged_in)
+def _log_login(sender, request, user, **kwargs):
+    from core.audit_service import record_login
+
+    record_login(user, request, action='LOGIN')
+
+
+@receiver(user_logged_out)
+def _log_logout(sender, request, user, **kwargs):
+    from core.audit_service import record_login
+
+    record_login(user, request, action='LOGOUT')
+
+
+@receiver(user_login_failed)
+def _log_login_failed(sender, credentials, request=None, **kwargs):
+    """محاولةٌ فاشلة — بالاسم المُحاوَل والعنوان.
+
+    **ولا يُسجَّل شيءٌ من حقل كلمة المرور إطلاقاً** — ولا طولُه ولا وجودُه:
+    ``credentials`` يحمل كلمةَ السرّ نصّاً، وقراءةُ أيّ شيءٍ منها سوى اسم
+    المستخدم فتحُ بابٍ لا يُغلق.
+    """
+    from core.audit_service import record_login
+
+    record_login(None, request, action='LOGIN_FAILED',
+                 username=(credentials or {}).get('username', '') or '')

@@ -19,7 +19,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from ..forms import AttachmentForm
 from ..models import Attachment, Book, BookHistory
 from core.scoping import (
-    ACCESS_STUB, can_open_content, can_view_book, is_privileged, secret_access,
+    ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_open_content, can_view_book,
+    is_privileged, secret_access,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,8 +60,17 @@ def book_detail(request, pk):
 
     # الصفُّ مرئيٌّ والمحتوى قد لا يكون: قالبٌ مقيَّدٌ مستقلّ بدل رشّ الشروط في
     # قالبٍ من خمسمئة سطر — قائمةٌ بيضاء لا استثناءاتٌ من سوداء.
+    from core.audit_service import record_event, record_view
+
     if secret_access(request.user, book) == ACCESS_STUB:
+        record_view(request, book)
         return render(request, 'core/book_detail_secret.html', {'book': book})
+
+    # فتحٌ متعمَّدٌ يُطوى في صفٍّ لليوم؛ وفتحُ السرّيّ **واقعةٌ لا تُطوى**:
+    # عددُ مرّاته ومواقيتُه هي الدليل.
+    record_view(request, book)
+    if book.secret_level in RESTRICTED_SECRET_LEVELS:
+        record_event(request, 'SECRET_VIEW', book=book)
 
     if request.method == 'POST' and 'file' in request.FILES:
         _ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
@@ -269,6 +279,10 @@ def book_report(request, pk):
             f"username={request.user.username} book_id={pk}"
         )
         raise PermissionDenied("ليس لديك صلاحية عرض تقرير هذا الكتاب")
+
+    # ورقةٌ تُطبع وتخرج من الجهاز — واقعةٌ لا تُطوى
+    from core.audit_service import record_event
+    record_event(request, 'PRINT', book=book)
 
     comments = book.comments.select_related("created_by").order_by("created_at")
     email_logs = BookEmailLog.objects.filter(book=book).order_by("sent_at")
