@@ -1,7 +1,7 @@
 from django.urls import path, include
 from django.views.generic import RedirectView
 from . import views
-from core.views import audit, desk, linking
+from core.views import admin_panel, audit, desk, linking
 from . import logging_views
 from . import api as api_views
 from . import reservation_api
@@ -61,6 +61,8 @@ urlpatterns = [
     path("api/book/<int:pk>/preview/", views.api_book_detail_json, name="api_book_detail_json"),
 
     # -- نسيجُ الوثائق: منتقي الربط والأضلاع --
+    # لوحةُ الإدارة — الأقسام والأدوار والعناقيد (مديرُ النظام)
+    path("admin/", admin_panel.admin_panel, name="admin_panel"),
     # سجلُّ الحركات — رئيسُ القسم ومديرُ النظام حصراً
     path("audit/", audit.audit_log, name="audit_log"),
     # طاولةُ البريد — الورقتان اللتان يطلبهما الكاتبُ ليترك دفترَه

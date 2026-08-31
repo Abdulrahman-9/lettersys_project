@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}لوحة الإدارة{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  <h5 class="fw-bold mb-3">
+    <i class="bi bi-sliders text-primary me-2"></i>لوحة الإدارة
+  </h5>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}success{% endif %} py-2"
+           role="alert" style="font-size:.9rem">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <ul class="nav nav-pills mb-3" style="font-size:.9rem">
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'departments' %}active{% endif %}" href="?tab=departments">
+        <i class="bi bi-diagram-2 me-1"></i>الأقسام
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'users' %}active{% endif %}" href="?tab=users">
+        <i class="bi bi-people me-1"></i>المستخدمون
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'groups' %}active{% endif %}" href="?tab=groups">
+        <i class="bi bi-collection me-1"></i>العناقيد
+      </a>
+    </li>
+  </ul>
+
+  {% comment %}────────────────────────── الأقسام ──────────────────────────{% endcomment %}
+  {% if tab == 'departments' %}
+    <div class="row g-3">
+      <div class="col-lg-4">
+        <div class="card border-0 shadow-sm rounded-4">
+          <div class="card-header bg-white border-bottom p-3">
+            <h6 class="mb-0 fw-bold" style="font-size:.92rem">
+              <i class="bi bi-plus-circle text-success me-1"></i>قسم جديد
+            </h6>
+          </div>
+          <form method="post" class="card-body p-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_department">
+            <input type="hidden" name="tab" value="departments">
+
+            <div class="mb-2">
+              <label for="dep-name" class="form-label" style="font-size:.82rem">اسم القسم</label>
+              <input type="text" class="form-control form-control-sm" id="dep-name"
+                     name="name" required maxlength="200">
+            </div>
+            <div class="mb-2">
+              <label for="dep-code" class="form-label" style="font-size:.82rem">رمز السجلّ</label>
+              <input type="text" class="form-control form-control-sm" id="dep-code"
+                     name="code" required maxlength="20" placeholder="ش13">
+              <div class="form-text" style="font-size:.75rem">
+                الرمز المطبوع على ختم الوارد — يظهر في الترويسات لا في الجداول.
+              </div>
+            </div>
+            <div class="mb-2">
+              <label for="dep-parent" class="form-label" style="font-size:.82rem">يتبع</label>
+              <select class="form-select form-select-sm" id="dep-parent" name="parent">
+                <option value="">— قسمٌ مستقلّ —</option>
+                {% for d in all_departments %}
+                  {% if d.is_active %}<option value="{{ d.pk }}">{{ d.code }} — {{ d.name }}</option>{% endif %}
+                {% endfor %}
+              </select>
+              <div class="form-text" style="font-size:.75rem">
+                الشعبةُ تتبع قسمَها — والقسمُ يرى دفاتر شُعبه، والشعبةُ لا ترى دفتر الأمّ.
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="dep-entity" class="form-label" style="font-size:.82rem">الجهة المقابلة</label>
+              <select class="form-select form-select-sm" id="dep-entity" name="entity">
+                <option value="">— تُنشأ تلقائيّاً باسم القسم —</option>
+                {% for e in entities %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}
+              </select>
+              <div class="form-text" style="font-size:.75rem">
+                اربطه بجهةٍ قائمةٍ إن كانت في الدليل أصلاً — وإلّا فقد يظهر مرّتين.
+              </div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-success w-100">
+              <i class="bi bi-check2 me-1"></i>أنشئ
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div class="card border-0 shadow-sm rounded-4">
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0" style="font-size:.86rem">
+                <thead class="table-light">
+                  <tr>
+                    <th scope="col">القسم</th>
+                    <th scope="col" style="width:6rem">الرمز</th>
+                    <th scope="col" style="width:5rem">كتب</th>
+                    <th scope="col" style="width:6rem">موظّفون</th>
+                    <th scope="col" style="width:8rem">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in departments %}
+                    <tr {% if not row.department.is_active %}class="opacity-50"{% endif %}>
+                      <td>
+                        <span style="display:inline-block;width:{{ row.depth }}rem"></span>
+                        {% if row.depth %}<span class="text-muted">↳</span>{% endif %}
+                        <span class="fw-semibold">{{ row.department.name }}</span>
+                        {% if not row.department.entity_id %}
+                          <span class="badge text-bg-warning ms-1" title="لا جهةَ في الدليل — لا يُخاطَب">بلا جهة</span>
+                        {% endif %}
+                      </td>
+                      <td style="font-variant-numeric:tabular-nums">{{ row.department.code }}</td>
+                      <td style="font-variant-numeric:tabular-nums">{{ row.department.book_count }}</td>
+                      <td style="font-variant-numeric:tabular-nums">{{ row.department.member_count }}</td>
+                      <td>
+                        <form method="post" class="d-inline">
+                          {% csrf_token %}
+                          <input type="hidden" name="action" value="update_department">
+                          <input type="hidden" name="tab" value="departments">
+                          <input type="hidden" name="id" value="{{ row.department.pk }}">
+                          <input type="hidden" name="is_active"
+                                 value="{% if row.department.is_active %}0{% else %}1{% endif %}">
+                          <button type="submit"
+                                  class="btn btn-sm {% if row.department.is_active %}btn-outline-secondary{% else %}btn-outline-success{% endif %}"
+                                  style="font-size:.78rem">
+                            {% if row.department.is_active %}تعطيل{% else %}تفعيل{% endif %}
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-4">لا أقسام بعد.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  {% comment %}────────────────────────── المستخدمون ──────────────────────────{% endcomment %}
+  {% elif tab == 'users' %}
+    <div class="card border-0 shadow-sm rounded-4">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" style="font-size:.86rem">
+            <thead class="table-light">
+              <tr>
+                <th scope="col" style="width:12rem">الموظّف</th>
+                <th scope="col" style="width:16rem">القسم</th>
+                <th scope="col" style="width:10rem">رئيس القسم</th>
+                <th scope="col" style="width:10rem">مختصّ البريد</th>
+                <th scope="col" style="width:7rem"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in people %}
+                <tr>
+                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="assign_user">
+                    <input type="hidden" name="tab" value="users">
+                    <input type="hidden" name="user_id" value="{{ row.user.pk }}">
+                    <td>
+                      <span class="fw-semibold">{{ row.user.get_full_name|default:row.user.username }}</span>
+                      {% if row.user.is_superuser %}
+                        <span class="badge text-bg-dark ms-1" style="font-size:.7rem">مدير نظام</span>
+                      {% endif %}
+                      <div class="text-muted" style="font-size:.76rem">{{ row.user.username }}</div>
+                    </td>
+                    <td>
+                      <label class="visually-hidden" for="dep-{{ row.user.pk }}">قسم {{ row.user.username }}</label>
+                      <select class="form-select form-select-sm" name="department" id="dep-{{ row.user.pk }}">
+                        <option value="">— بلا قسم —</option>
+                        {% for d in all_departments %}
+                          <option value="{{ d.pk }}" {% if row.department and row.department.pk == d.pk %}selected{% endif %}>
+                            {{ d.code }} — {{ d.name }}
+                          </option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="1"
+                               name="is_department_head" id="head-{{ row.user.pk }}"
+                               {% if row.is_head %}checked{% endif %}>
+                        <label class="form-check-label" for="head-{{ row.user.pk }}"
+                               style="font-size:.78rem">يرى السجلّ والسرّي</label>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="1"
+                               name="is_controller" id="ctrl-{{ row.user.pk }}"
+                               {% if row.is_controller %}checked{% endif %}>
+                        <label class="form-check-label" for="ctrl-{{ row.user.pk }}"
+                               style="font-size:.78rem">طاولة البريد</label>
+                      </div>
+                    </td>
+                    <td>
+                      <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem">حفظ</button>
+                    </td>
+                  </form>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-footer bg-white text-muted py-2" style="font-size:.78rem">
+        <i class="bi bi-info-circle me-1"></i>
+        <b>رئيس القسم</b> يرى سجلّ مَن قرأ ماذا وكتبَ قسمه السرّية ودفاتر شُعبه ·
+        <b>مختصّ البريد</b> يفتح طاولة البريد والكتب السرّية ولا يرى سجلّ القراءة.
+      </div>
+    </div>
+
+  {% comment %}────────────────────────── العناقيد ──────────────────────────{% endcomment %}
+  {% else %}
+    <div class="row g-3">
+      <div class="col-lg-4">
+        <div class="card border-0 shadow-sm rounded-4">
+          <div class="card-header bg-white border-bottom p-3">
+            <h6 class="mb-0 fw-bold" style="font-size:.92rem">
+              <i class="bi bi-plus-circle text-success me-1"></i>عنقود جديد
+            </h6>
+          </div>
+          <form method="post" class="card-body p-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_group">
+            <input type="hidden" name="tab" value="groups">
+
+            <div class="mb-2">
+              <label for="grp-name" class="form-label" style="font-size:.82rem">اسم العنقود</label>
+              <input type="text" class="form-control form-control-sm" id="grp-name"
+                     name="name" required maxlength="200" placeholder="جميع الهيئات والأقسام">
+            </div>
+            <div class="mb-2">
+              <label for="grp-rule" class="form-label" style="font-size:.82rem">قاعدة ديناميكيّة</label>
+              <select class="form-select form-select-sm" id="grp-rule" name="auto_rule">
+                <option value="">— عضويّة ثابتة أختارها —</option>
+                {% for value, label in auto_rules %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+              </select>
+              <div class="form-text" style="font-size:.75rem">
+                العضويّة الثابتة باسم «جميع الأقسام» <b>تتيبّس</b> عند دخول قسمٍ جديد —
+                والقاعدة الديناميكيّة تتّسع له وحدها.
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="grp-members" class="form-label" style="font-size:.82rem">الأعضاء</label>
+              <select class="form-select form-select-sm" id="grp-members" name="members"
+                      multiple size="10">
+                {% for e in entities %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}
+              </select>
+              <div class="form-text" style="font-size:.75rem">تُهمَل إن اخترتَ قاعدةً ديناميكيّة.</div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-success w-100">
+              <i class="bi bi-check2 me-1"></i>احفظ
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div class="card border-0 shadow-sm rounded-4">
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0" style="font-size:.86rem">
+                <thead class="table-light">
+                  <tr>
+                    <th scope="col">العنقود</th>
+                    <th scope="col" style="width:14rem">النوع</th>
+                    <th scope="col" style="width:6rem">أعضاء</th>
+                    <th scope="col" style="width:8rem">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for g in groups %}
+                    <tr {% if not g.is_active %}class="opacity-50"{% endif %}>
+                      <td class="fw-semibold">{{ g.name }}</td>
+                      <td>
+                        {% if g.auto_rule %}
+                          <span class="badge text-bg-info">{{ g.get_auto_rule_display }}</span>
+                        {% else %}
+                          <span class="text-muted">عضويّة ثابتة</span>
+                        {% endif %}
+                      </td>
+                      <td style="font-variant-numeric:tabular-nums">{{ g.resolved_members.count }}</td>
+                      <td>
+                        <form method="post" class="d-inline">
+                          {% csrf_token %}
+                          <input type="hidden" name="action" value="save_group">
+                          <input type="hidden" name="tab" value="groups">
+                          <input type="hidden" name="id" value="{{ g.pk }}">
+                          <input type="hidden" name="name" value="{{ g.name }}">
+                          <input type="hidden" name="auto_rule" value="{{ g.auto_rule }}">
+                          <input type="hidden" name="is_active" value="{% if g.is_active %}0{% else %}1{% endif %}">
+                          <button type="submit"
+                                  class="btn btn-sm {% if g.is_active %}btn-outline-secondary{% else %}btn-outline-success{% endif %}"
+                                  style="font-size:.78rem">
+                            {% if g.is_active %}تعطيل{% else %}تفعيل{% endif %}
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="4" class="text-center text-muted py-4">لا عناقيد بعد.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -45,6 +45,12 @@ class UserActivityLog(models.Model):
         ('SHARED_LINK_OPEN', 'فتح رابط مشاركة'),
         ('SECRET_VIEW', 'اطّلاع على سرّي'),
         ('VIEW_AUDIT_LOG', 'فتح سجلّ الحركات'),
+        # ── إدارة: تغييرُ صلاحيّةٍ واقعةٌ تُسجَّل، ومنحٌ بلا أثرٍ يُبطل السجلّ ──
+        ('CREATE_DEPARTMENT', 'إنشاء قسم'),
+        ('EDIT_DEPARTMENT', 'تعديل قسم'),
+        ('ASSIGN_USER', 'إسناد موظّف/دور'),
+        ('CREATE_GROUP', 'إنشاء عنقود'),
+        ('EDIT_GROUP', 'تعديل عنقود'),
         # ── حسابات ──
         ('LOGIN', 'تسجيل دخول'),
         ('LOGOUT', 'تسجيل خروج'),
