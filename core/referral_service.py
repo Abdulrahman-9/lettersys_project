@@ -325,9 +325,6 @@ def _guard(referral, by):
 
     if can_open_content(referral.book, by):
         return
-    dept_id = user_department_id(by)
-    if dept_id and dept_id in (referral.to_department_id, referral.from_department_id):
-        return
     raise PermissionDenied('لا تملك صلاحيةً على هذه الإحالة.')
 
 

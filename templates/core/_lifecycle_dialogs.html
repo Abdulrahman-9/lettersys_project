@@ -1,0 +1,151 @@
+{% comment %}
+حواريّتا التفريق والعهدة.
+
+الحقولُ مرتَّبةٌ على تسلسل عمل الكاتب لا على ترتيب النموذج: يختار الوحداتِ
+أوّلاً (أو العنقودَ)، ثمّ يكتب توجيهَ المدير، ثمّ المدّة. و«الغرض» افتراضُه
+«للتنفيذ» لأنّه الغالب، و«للعلم» اختيارٌ صريح — فصفوفُ «للعلم» لا تُطارَد،
+وجعلُها الافتراضَ يُفرغ طابورَ المتابعة صامتاً.
+{% endcomment %}
+
+<div class="modal fade" id="distributeModal" tabindex="-1"
+     aria-labelledby="distributeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="distributeModalLabel">
+          <i class="bi bi-arrow-left-right text-primary me-2"></i>تفريق الكتاب
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+      <div class="modal-body">
+
+        <div class="mb-3">
+          <label for="distGroup" class="form-label" style="font-size:.85rem">
+            عنقود <span class="text-muted">(يُغني عن الاختيار اليدويّ)</span>
+          </label>
+          <select class="form-select form-select-sm" id="distGroup">
+            <option value="">— لا عنقود —</option>
+          </select>
+        </div>
+
+        <fieldset class="mb-3">
+          <legend class="form-label" style="font-size:.85rem">الجهات</legend>
+          <div id="distTargets"
+               style="max-height:14rem;overflow-y:auto;border:1px solid var(--bs-border-color);
+                      border-radius:.5rem;padding:.6rem">
+            <span class="text-muted" style="font-size:.85rem">جارٍ التحميل…</span>
+          </div>
+        </fieldset>
+
+        <div class="mb-3">
+          <label for="distMargin" class="form-label" style="font-size:.85rem">
+            التوجيه / الهامش
+          </label>
+          <textarea class="form-control form-control-sm" id="distMargin" rows="2"
+                    placeholder="أعدّوا مذكّرةً بالتخصيصات المطلوبة"></textarea>
+          <div class="form-text" style="font-size:.75rem">
+            هامشُ المدير كما كتبه — يظهر تحت اسم كلّ وحدةٍ في اللوحة.
+          </div>
+        </div>
+
+        <div class="row g-2">
+          <div class="col-sm-4">
+            <label for="distPurpose" class="form-label" style="font-size:.85rem">الغرض</label>
+            <select class="form-select form-select-sm" id="distPurpose">
+              <option value="action" selected>للتنفيذ</option>
+              <option value="info">للعلم</option>
+            </select>
+            <div class="form-text" style="font-size:.75rem">«للعلم» لا يُطارَد.</div>
+          </div>
+          <div class="col-sm-4">
+            <label for="distDue" class="form-label" style="font-size:.85rem">موعد الإنجاز</label>
+            <input type="date" class="form-control form-control-sm" id="distDue">
+          </div>
+          <div class="col-sm-4">
+            <label for="distAssignee" class="form-label" style="font-size:.85rem">المكلَّف</label>
+            <select class="form-select form-select-sm" id="distAssignee">
+              <option value="">— بلا مكلَّف —</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-sm btn-primary" id="distSubmit">
+          <i class="bi bi-send me-1"></i>حفظ وإرسال
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="custodyModal" tabindex="-1"
+     aria-labelledby="custodyModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="custodyModalLabel">
+          <i class="bi bi-person-badge text-primary me-2"></i>تسجيل عهدة
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+      <div class="modal-body">
+
+        <div class="mb-3">
+          <label for="custEvent" class="form-label" style="font-size:.85rem">الحدث</label>
+          <select class="form-select form-select-sm" id="custEvent"></select>
+        </div>
+
+        <div class="mb-2">
+          <label for="custDepartment" class="form-label" style="font-size:.85rem">
+            بعهدة قسم/وحدة
+          </label>
+          <select class="form-select form-select-sm" id="custDepartment">
+            <option value="">— لا قسم —</option>
+          </select>
+        </div>
+
+        <div class="mb-2">
+          <label for="custUser" class="form-label" style="font-size:.85rem">أو بعهدة موظّف</label>
+          <select class="form-select form-select-sm" id="custUser">
+            <option value="">— لا موظّف —</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label for="custName" class="form-label" style="font-size:.85rem">أو باسمٍ حرّ</label>
+          <input type="text" class="form-control form-control-sm" id="custName"
+                 maxlength="120" placeholder="مُتعهّد البريد — أبو أحمد">
+          <div class="form-text" style="font-size:.75rem">
+            لمن ليس له حسابٌ عندنا — فسلسلةُ العهدة لا تنقطع عند أوّل حاملٍ من خارج النظام.
+          </div>
+        </div>
+
+        <div class="row g-2">
+          <div class="col-sm-6">
+            <label for="custSignedAt" class="form-label" style="font-size:.85rem">
+              وقت التوقيع
+            </label>
+            <input type="datetime-local" class="form-control form-control-sm" id="custSignedAt">
+            <div class="form-text" style="font-size:.75rem">اتركه فارغاً = الآن.</div>
+          </div>
+          <div class="col-sm-6">
+            <label for="custNote" class="form-label" style="font-size:.85rem">ملاحظة</label>
+            <input type="text" class="form-control form-control-sm" id="custNote"
+                   maxlength="255" placeholder="بموجب كشف التسليم 14 · الرفّ ب/12">
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-sm btn-primary" id="custSubmit">
+          <i class="bi bi-check2 me-1"></i>سجّل
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

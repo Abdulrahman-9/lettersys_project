@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: Cairo, "Segoe UI", system-ui, sans-serif; direction: rtl; }
+    a { color: #b45309; } a:hover { color: #8a3f08; }
+    .num { font-variant-numeric: tabular-nums; }
+    .btn { display:inline-flex;align-items:center;gap:6px;border-radius:10px;padding:7px 13px;
+           font-size:12.5px;font-weight:700;border:1px solid transparent;cursor:pointer;min-height:36px; }
+    th, td { text-align: right; }
+  </style>
+</helmet>
+
+<div style="background:linear-gradient(180deg,#fff4e4,#ffe2c7);padding:26px;color:#362014;">
+  <div style="background:#fff;border:1px solid rgba(111,70,40,.18);border-radius:1.1rem;
+              box-shadow:0 12px 28px rgba(77,44,25,.1);overflow:hidden;">
+
+    <div style="padding:15px 20px;border-bottom:1px solid rgba(111,70,40,.14);
+                display:flex;align-items:center;justify-content:space-between;gap:14px;">
+      <div>
+        <h6 style="margin:0 0 3px;font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d87b44" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+          ردودُ التعميم
+        </h6>
+        <div style="font-size:12px;color:#6f4631;font-weight:600;">
+          الصادر <span class="num" style="font-weight:800;">1188</span> — «جميع الهيئات والأقسام» · رقمٌ واحدٌ للجميع
+        </div>
+      </div>
+      <button class="btn" style="background:linear-gradient(180deg,#b45309,#8a3f08);color:#fff;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        تأكيدٌ للمتأخّرين (4)
+      </button>
+    </div>
+
+    <!-- شريط التقدّم -->
+    <div style="padding:16px 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(111,70,40,.1);">
+      <div style="flex-grow:1;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:7px;">
+          <span style="color:#6f4631;">أجاب 14 من 22 مُلزَماً بالإجابة</span>
+          <span class="num" style="color:#047857;">64%</span>
+        </div>
+        <div style="height:9px;border-radius:999px;background:#f0e6da;overflow:hidden;display:flex;">
+          <div style="width:64%;background:linear-gradient(90deg,#059669,#34d399);"></div>
+          <div style="width:18%;background:#d97706;"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:18px;">
+        <div style="text-align:center;"><div class="num" style="font-size:19px;font-weight:800;color:#047857;">14</div><div style="font-size:11px;color:#9c7a63;font-weight:700;">أجاب</div></div>
+        <div style="text-align:center;"><div class="num" style="font-size:19px;font-weight:800;color:#b45309;">4</div><div style="font-size:11px;color:#9c7a63;font-weight:700;">متأخّر</div></div>
+        <div style="text-align:center;"><div class="num" style="font-size:19px;font-weight:800;color:#6f4631;">4</div><div style="font-size:11px;color:#9c7a63;font-weight:700;">بانتظار</div></div>
+        <div style="text-align:center;"><div class="num" style="font-size:19px;font-weight:800;color:#1e40af;">20</div><div style="font-size:11px;color:#9c7a63;font-weight:700;">للعلم</div></div>
+      </div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="background:#fdf6ec;color:#6f4631;font-size:11.5px;font-weight:800;">
+          <th style="padding:9px 20px;">الجهة</th>
+          <th style="padding:9px 8px;">الصفة</th>
+          <th style="padding:9px 8px;">الاستلام</th>
+          <th style="padding:9px 8px;">الردّ</th>
+          <th style="padding:9px 20px;">الكتاب</th>
+        </tr>
+      </thead>
+      <tbody>
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+          <tr style="border-top:1px solid rgba(111,70,40,.1);background:{{r.rowBg}};">
+            <td style="padding:11px 20px;font-weight:700;">{{r.name}}</td>
+            <td style="padding:11px 8px;">
+              <span style="border-radius:999px;padding:3px 10px;font-size:11px;font-weight:800;
+                           background:{{r.pBg}};color:{{r.pFg}};">{{r.purpose}}</span>
+            </td>
+            <td class="num" style="padding:11px 8px;color:#6f4631;font-weight:600;">{{r.received}}</td>
+            <td style="padding:11px 8px;">
+              <span style="border-radius:999px;padding:3px 10px;font-size:11px;font-weight:800;
+                           background:{{r.sBg}};color:{{r.sFg}};">{{r.status}}</span>
+            </td>
+            <td style="padding:11px 20px;">
+              <sc-if value="{{r.reply}}" hint-placeholder-val="{{ true }}">
+                <a href="#" class="num" style="font-weight:800;">{{r.reply}}</a>
+              </sc-if>
+              <sc-if value="{{r.chase}}" hint-placeholder-val="{{ true }}">
+                <button class="btn" style="background:#fff;color:#b45309;border-color:rgba(180,83,9,.35);
+                        padding:4px 10px;min-height:30px;font-size:11.5px;">تأكيد</button>
+              </sc-if>
+            </td>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+
+    <div style="padding:12px 20px;background:#fdf6ec;font-size:12px;color:#6f4631;font-weight:600;">
+      صفوفُ «للعلم» لا تُطارَد ولا تُعدّ متأخّرة — القراءةُ ليست ردّاً.
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const A = { purpose: 'للتنفيذ', pBg: 'rgba(217,119,6,.18)', pFg: '#b45309' };
+    const I = { purpose: 'للعلم',  pBg: 'rgba(37,99,235,.12)', pFg: '#1e40af' };
+    const done = { status: 'أجاب', sBg: 'rgba(5,150,105,.15)', sFg: '#047857' };
+    const late = { status: 'متأخّر', sBg: 'rgba(220,38,38,.14)', sFg: '#b91c1c' };
+    const wait = { status: 'بانتظار', sBg: '#f2ece4', sFg: '#6f4631' };
+    return {
+      rows: [
+        { name: 'الهيئة المالية', ...A, received: '2026/08/25', ...done, reply: 'الكتاب 3120', chase: false, rowBg: '#fff' },
+        { name: 'هيئة الحقول', ...A, received: '2026/08/25', ...done, reply: 'الكتاب 2984', chase: false, rowBg: '#fff' },
+        { name: 'القسم القانوني — ش3', ...A, received: '2026/08/26', ...late, reply: '', chase: true, rowBg: '#fffaf3' },
+        { name: 'قسم العقود — ش5', ...A, received: '2026/08/26', ...late, reply: '', chase: true, rowBg: '#fffaf3' },
+        { name: 'قسم تقنية المعلومات — ش12', ...A, received: '—', ...wait, reply: '', chase: false, rowBg: '#fff' },
+        { name: 'وحدة التقارير', ...I, received: '2026/08/25', status: 'اطّلع',
+          sBg: 'rgba(37,99,235,.12)', sFg: '#1e40af', reply: '', chase: false, rowBg: '#fff' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

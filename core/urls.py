@@ -1,7 +1,7 @@
 from django.urls import path, include
 from django.views.generic import RedirectView
 from . import views
-from core.views import admin_panel, audit, desk, linking
+from core.views import admin_panel, audit, desk, lifecycle_api, linking
 from . import logging_views
 from . import api as api_views
 from . import reservation_api
@@ -61,6 +61,13 @@ urlpatterns = [
     path("api/book/<int:pk>/preview/", views.api_book_detail_json, name="api_book_detail_json"),
 
     # -- نسيجُ الوثائق: منتقي الربط والأضلاع --
+    # دورةُ حياة الكتاب — نقاطُ الكتابة (تفريق · عهدة · قيد · تنبيه)
+    path("api/lifecycle/targets/", lifecycle_api.api_targets, name="api_lifecycle_targets"),
+    path("api/book/<int:pk>/distribute/", lifecycle_api.api_distribute, name="api_distribute"),
+    path("api/book/<int:pk>/referral/<int:referral_id>/act/",
+         lifecycle_api.api_referral_action, name="api_referral_action"),
+    path("api/book/<int:pk>/custody/", lifecycle_api.api_record_custody, name="api_record_custody"),
+    path("api/book/<int:pk>/register-here/", lifecycle_api.api_register_here, name="api_register_here"),
     # لوحةُ الإدارة — الأقسام والأدوار والعناقيد (مديرُ النظام)
     path("admin/", admin_panel.admin_panel, name="admin_panel"),
     # سجلُّ الحركات — رئيسُ القسم ومديرُ النظام حصراً

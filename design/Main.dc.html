@@ -1,0 +1,359 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: Cairo, "Segoe UI", system-ui, sans-serif; direction: rtl; }
+    a { color: #b45309; text-decoration: none; }
+    a:hover { color: #8a3f08; }
+    .card { background: #fff; border: 1px solid rgba(111,70,40,.18); border-radius: 1.1rem;
+            box-shadow: 0 12px 28px rgba(77,44,25,.10); overflow: hidden; }
+    .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+          padding: 14px 18px; border-bottom: 1px solid rgba(111,70,40,.14); }
+    .hd h6 { margin: 0; font-size: 15px; font-weight: 800; color: #362014;
+             display: flex; align-items: center; gap: 8px; }
+    .bd { padding: 18px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
+            padding: 4px 12px; font-size: 12px; font-weight: 700; }
+    .kv { display: grid; grid-template-columns: 128px 1fr; gap: 6px 12px; font-size: 14px; }
+    .kv dt { color: #9c7a63; font-weight: 600; }
+    .kv dd { margin: 0; color: #362014; font-weight: 600; }
+    .num { font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 10px;
+           padding: 8px 14px; font-size: 13px; font-weight: 700; border: 1px solid transparent;
+           cursor: pointer; min-height: 40px; }
+    .btn-primary { background: linear-gradient(180deg,#b45309,#8a3f08); color: #fff; }
+    .btn-ghost { background: #fff; color: #b45309; border-color: rgba(180,83,9,.35); }
+    th, td { text-align: right; }
+  </style>
+</helmet>
+
+<div style="background: linear-gradient(180deg,#fff4e4 0%,#ffe2c7 55%,#fcd4ab 100%); padding: 24px 28px 40px; color: #362014;">
+
+  <!-- ═══ ترويسة الكتاب ═══ -->
+  <div class="card" style="margin-bottom: 18px;">
+    <div class="bd" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;">
+      <div style="display: flex; flex-direction: column; gap: 10px; flex-grow: 1;">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <span class="pill num" style="background:#362014;color:#fff;font-size:15px;padding:6px 16px;">2433</span>
+          <span class="pill" style="background:rgba(37,99,235,.12);color:#1e40af;">وارد داخلي</span>
+          <span class="pill" style="background:rgba(216,123,68,.16);color:#8a3f08;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6z"/></svg>
+            سري
+          </span>
+          <span class="pill" style="background:rgba(217,119,6,.18);color:#b45309;">مستحق اليوم</span>
+        </div>
+        <h1 style="margin:0;font-size:22px;font-weight:800;line-height:1.5;">
+          بشأن تنفيذ الموازنة الاستثمارية للربع الثالث ومتابعة عقود التراخيص
+        </h1>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:#6f4631;font-weight:600;">
+          <span>من: هيئة التخطيط والدراسات</span>
+          <span>التاريخ: 2026/08/24</span>
+          <span>رقم الجهة: ش/12 1556</span>
+          <span>القسم: ش13 — المتابعة</span>
+        </div>
+
+        <!-- القيود: المستندُ واحدٌ والقيدُ متعدّد -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:2px;
+                    background:#fdf6ec;border:1px dashed rgba(180,83,9,.3);border-radius:12px;padding:9px 13px;">
+          <span style="font-size:11px;font-weight:800;color:#9c7a63;letter-spacing:.03em;">قُيِّد في</span>
+          <sc-for list="{{registrations}}" as="g" hint-placeholder-count="2">
+            <span style="display:inline-flex;align-items:center;gap:7px;background:#fff;
+                         border:1px solid {{g.border}};border-radius:999px;padding:4px 12px;">
+              <span class="num" style="font-size:13px;font-weight:800;color:#362014;">{{g.number}}</span>
+              <span style="font-size:11.5px;color:#6f4631;font-weight:700;">{{g.dept}}</span>
+              <sc-if value="{{g.mine}}" hint-placeholder-val="{{ true }}">
+                <span style="font-size:10px;font-weight:800;color:#b45309;">دفترُنا</span>
+              </sc-if>
+            </span>
+          </sc-for>
+          <button class="btn btn-ghost" style="padding:4px 11px;min-height:30px;font-size:11.5px;">قيِّده عندنا</button>
+        </div>
+      </div>
+
+      <!-- بطاقة العهدة: الميزة الحاكمة -->
+      <div style="min-width: 268px; background:#fffaf3; border:1px solid rgba(180,83,9,.28);
+                  border-radius: 14px; padding: 14px;">
+        <div style="font-size:11px;font-weight:800;color:#9c7a63;letter-spacing:.04em;margin-bottom:8px;">العهدة الآن</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#f9a826,#d87b44);
+                      display:flex;align-items:center;justify-content:center;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg>
+          </div>
+          <div>
+            <div style="font-size:14px;font-weight:800;">شعبة متابعة تنفيذ الموازنة</div>
+            <div style="font-size:12px;color:#6f4631;font-weight:600;">المكلَّف: زينب عبد الحسين</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px dashed rgba(111,70,40,.25);
+                    font-size:12px;color:#6f4631;font-weight:600;display:flex;justify-content:space-between;">
+          <span>استُلم بتوقيع</span><span class="num">2026/08/25 — 09:14</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:minmax(0,1.62fr) minmax(0,1fr);gap:18px;">
+
+    <!-- ═══════════ العمود الرئيس ═══════════ -->
+    <div style="display:flex;flex-direction:column;gap:18px;">
+
+      <!-- دورة الحياة -->
+      <div class="card">
+        <div class="hd">
+          <h6>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d87b44" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            دورة حياة الكتاب
+          </h6>
+          <span style="font-size:12px;color:#9c7a63;font-weight:700;">7 أحداث · آخرها قبل ساعتين</span>
+        </div>
+        <div class="bd" style="padding-top:8px;">
+          <div style="position:relative;padding-right:20px;">
+            <div style="position:absolute;right:7px;top:12px;bottom:12px;width:2px;background:rgba(111,70,40,.18);"></div>
+
+            <sc-for list="{{events}}" as="ev" hint-placeholder-count="5">
+              <div style="position:relative;padding:10px 22px 10px 0;">
+                <div style="position:absolute;right:-6px;top:16px;width:16px;height:16px;border-radius:50%;
+                            border:3px solid #fff;background:{{ev.color}};box-shadow:0 0 0 1px rgba(111,70,40,.2);"></div>
+                <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+                  <span style="font-size:14px;font-weight:800;">{{ev.title}}</span>
+                  <span class="num" style="font-size:12px;color:#9c7a63;font-weight:600;">{{ev.when}}</span>
+                  <span style="font-size:12px;color:#6f4631;font-weight:600;">— {{ev.who}}</span>
+                </div>
+                <sc-if value="{{ev.note}}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:6px;background:#fffaf3;border-right:3px solid #d87b44;
+                              border-radius:0 10px 10px 0;padding:8px 12px;font-size:13px;
+                              line-height:1.7;color:#4a2f1e;">{{ev.note}}</div>
+                </sc-if>
+                <sc-if value="{{ev.link}}" hint-placeholder-val="{{ true }}">
+                  <a href="#" style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;font-size:12px;font-weight:700;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+                    {{ev.link}}
+                  </a>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <!-- التفريق والإحالات -->
+      <div class="card">
+        <div class="hd">
+          <h6>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d87b44" stroke-width="2"><path d="M12 3v6"/><path d="M5 21v-4a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v4"/><circle cx="12" cy="3" r="0"/></svg>
+            التفريق والإحالات
+          </h6>
+          <button class="btn btn-primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            تفريق جديد
+          </button>
+        </div>
+        <div class="bd" style="padding:0;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#fdf6ec;color:#6f4631;font-size:12px;font-weight:800;">
+                <th style="padding:10px 18px;">إلى</th>
+                <th style="padding:10px 8px;">الصفة</th>
+                <th style="padding:10px 8px;">الحالة</th>
+                <th style="padding:10px 8px;">المهلة</th>
+                <th style="padding:10px 18px;">الهامش</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{referrals}}" as="r" hint-placeholder-count="3">
+                <tr style="border-top:1px solid rgba(111,70,40,.12);">
+                  <td style="padding:12px 18px;font-weight:700;">{{r.to}}</td>
+                  <td style="padding:12px 8px;">
+                    <span class="pill" style="background:{{r.purposeBg}};color:{{r.purposeFg}};font-size:11px;">{{r.purpose}}</span>
+                  </td>
+                  <td style="padding:12px 8px;">
+                    <span class="pill" style="background:{{r.statusBg}};color:{{r.statusFg}};font-size:11px;">{{r.status}}</span>
+                  </td>
+                  <td class="num" style="padding:12px 8px;color:#6f4631;font-weight:600;">{{r.due}}</td>
+                  <td style="padding:12px 18px;color:#4a2f1e;line-height:1.6;">{{r.margin}}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- الكتب المرتبطة -->
+      <div class="card">
+        <div class="hd">
+          <h6>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d87b44" stroke-width="2"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+            الكتب المرتبطة
+          </h6>
+          <button class="btn btn-ghost">
+            <span class="num" style="font-weight:800;">@</span>
+            ربط بكتاب
+          </button>
+        </div>
+        <div class="bd" style="display:flex;flex-direction:column;gap:10px;">
+          <sc-for list="{{links}}" as="l" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#fffaf3;
+                        border:1px solid rgba(111,70,40,.14);border-radius:12px;">
+              <span class="pill" style="background:{{l.relBg}};color:{{l.relFg}};font-size:11px;min-width:74px;justify-content:center;">{{l.rel}}</span>
+              <span class="num" style="font-weight:800;font-size:14px;min-width:76px;">{{l.number}}</span>
+              <span style="flex-grow:1;font-size:13px;color:#4a2f1e;">{{l.title}}</span>
+              <span style="font-size:12px;color:#9c7a63;font-weight:600;">{{l.dept}}</span>
+              <button class="btn btn-ghost" style="padding:5px 10px;min-height:32px;font-size:12px;">فتح</button>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- الهوامش -->
+      <div class="card">
+        <div class="hd">
+          <h6>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d87b44" stroke-width="2"><path d="M4 5h16M4 12h10M4 19h7"/></svg>
+            هوامش المدير
+          </h6>
+          <span style="font-size:12px;color:#9c7a63;font-weight:700;">قُصَّت من مسحة التسجيل</span>
+        </div>
+        <div class="bd" style="display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:14px;">
+          <div>
+            <div style="border:1px solid rgba(111,70,40,.2);border-radius:12px;overflow:hidden;background:#fdfaf5;">
+              <div style="height:104px;background:repeating-linear-gradient(178deg,#fdfaf5 0 15px,#f3ece2 15px 16px);
+                          display:flex;align-items:center;justify-content:center;color:#c9b6a3;font-size:12px;font-weight:700;">
+                قصاصةُ الهامش — صفحة 1
+              </div>
+            </div>
+            <div style="margin-top:8px;font-size:12px;color:#6f4631;font-weight:600;">مدير القسم · 2026/08/24</div>
+          </div>
+          <div style="background:#fffaf3;border-right:3px solid #d87b44;border-radius:0 12px 12px 0;padding:12px 14px;">
+            <div style="font-size:13px;line-height:1.9;color:#4a2f1e;">
+              «يُحال إلى شعبة متابعة تنفيذ الموازنة للإجراء اللازم، ويُجاب خلال أسبوع. مع إشعار وحدة التقارير للعلم.»
+            </div>
+            <div style="margin-top:10px;font-size:12px;color:#9c7a63;font-weight:700;">النصّ المُدخَل يدويّاً — عند الحاجة إليه</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════ العمود الجانبي ═══════════ -->
+    <div style="display:flex;flex-direction:column;gap:18px;">
+
+      <!-- المستند -->
+      <div class="card">
+        <div class="hd">
+          <h6>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d87b44" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+            المستند
+          </h6>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost" style="padding:6px 10px;min-height:34px;">طباعة</button>
+            <button class="btn btn-ghost" style="padding:6px 10px;min-height:34px;">تكبير</button>
+          </div>
+        </div>
+        <div style="height:288px;background:#f3ece2;display:flex;align-items:center;justify-content:center;
+                    border-bottom:1px solid rgba(111,70,40,.14);">
+          <div style="width:186px;height:250px;background:#fff;border:1px solid rgba(111,70,40,.2);
+                      border-radius:4px;box-shadow:0 6px 18px rgba(77,44,25,.12);padding:16px;">
+            <div style="height:10px;width:62%;background:#e8ddd0;border-radius:2px;margin-bottom:14px;"></div>
+            <div style="height:6px;background:#eee5da;border-radius:2px;margin-bottom:7px;"></div>
+            <div style="height:6px;background:#eee5da;border-radius:2px;margin-bottom:7px;"></div>
+            <div style="height:6px;width:78%;background:#eee5da;border-radius:2px;margin-bottom:18px;"></div>
+            <div style="height:44px;border:1px dashed #d87b44;border-radius:6px;"></div>
+          </div>
+        </div>
+        <div class="bd" style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#6f4631;">
+          <span>3 مرفقات · 5 صفحات</span>
+          <a href="#">عرض الكلّ</a>
+        </div>
+      </div>
+
+      <!-- البيانات الأساسية -->
+      <div class="card">
+        <div class="hd"><h6>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d87b44" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          البيانات الأساسية
+        </h6></div>
+        <div class="bd">
+          <dl class="kv">
+            <dt>رقم القيد</dt><dd class="num">2433</dd>
+            <dt>رقم الجهة</dt><dd class="num">ش/12 1556</dd>
+            <dt>تاريخ الجهة</dt><dd class="num">2026/08/22</dd>
+            <dt>تاريخ الورود</dt><dd class="num">2026/08/24</dd>
+            <dt>نوع المستند</dt><dd>أمر إداري</dd>
+            <dt>الاستحقاق</dt><dd class="num">2026/08/31</dd>
+            <dt>الحفظ الورقي</dt><dd>مضبارة الأوامر — رفّ 3</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- الإجراءات -->
+      <div class="card">
+        <div class="hd"><h6>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d87b44" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          إجراءات
+        </h6></div>
+        <div class="bd" style="display:flex;flex-direction:column;gap:8px;">
+          <button class="btn btn-primary" style="justify-content:center;">تسجيل جواب</button>
+          <button class="btn btn-ghost" style="justify-content:center;">إرسال تأكيد</button>
+          <button class="btn btn-ghost" style="justify-content:center;">كشف تسليم</button>
+          <button class="btn btn-ghost" style="justify-content:center;">تأشير الإنجاز</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      registrations: [
+        { number: '2433', dept: 'ش13 — المتابعة', mine: true, border: '#d87b44' },
+        { number: '881', dept: 'مكتب المدير العام', mine: false, border: 'rgba(111,70,40,.22)' },
+      ],
+      events: [
+        { title: 'قُيِّد بالوارد', when: '2026/08/24 08:41', who: 'أحمد — قلم البريد',
+          color: '#2563eb', note: '', link: '' },
+        { title: 'هامش المدير', when: '2026/08/24 09:05', who: 'مدير القسم',
+          color: '#d87b44',
+          note: 'يُحال إلى شعبة متابعة تنفيذ الموازنة للإجراء اللازم، ويُجاب خلال أسبوع.', link: '' },
+        { title: 'فُرِّق إلى شعبة متابعة تنفيذ الموازنة', when: '2026/08/24 09:20',
+          who: 'أحمد — قلم البريد', color: '#d97706', note: '', link: '' },
+        { title: 'استلام موقَّع', when: '2026/08/25 09:14', who: 'زينب — الشعبة',
+          color: '#059669', note: '', link: '' },
+        { title: 'صدرت مذكّرة إحالة إلى القسم القانوني', when: '2026/08/26 11:02',
+          who: 'زينب — الشعبة', color: '#7c3aed', note: '', link: 'الكتاب 2451 — مذكّرة إحالة' },
+      ],
+      referrals: [
+        { to: 'شعبة متابعة تنفيذ الموازنة', purpose: 'للتنفيذ', purposeBg: 'rgba(217,119,6,.18)',
+          purposeFg: '#b45309', status: 'مستلَم', statusBg: 'rgba(5,150,105,.15)', statusFg: '#047857',
+          due: '2026/08/31', margin: 'للإجراء اللازم والإجابة' },
+        { to: 'وحدة التقارير', purpose: 'للعلم', purposeBg: 'rgba(37,99,235,.12)',
+          purposeFg: '#1e40af', status: 'مُرسَل', statusBg: 'rgba(111,70,40,.12)', statusFg: '#6f4631',
+          due: '—', margin: 'للاطّلاع والحفظ' },
+        { to: 'القسم القانوني', purpose: 'للتنفيذ', purposeBg: 'rgba(217,119,6,.18)',
+          purposeFg: '#b45309', status: 'متأخّر', statusBg: 'rgba(220,38,38,.14)', statusFg: '#b91c1c',
+          due: '2026/08/28', margin: 'لبيان الرأي القانوني' },
+      ],
+      links: [
+        { rel: 'إلحاقاً بـ', relBg: 'rgba(124,58,237,.13)', relFg: '#6d28d9', number: '2311',
+          title: 'مذكّرتنا بشأن الموازنة الاستثمارية', dept: 'ش13' },
+        { rel: 'جواب', relBg: 'rgba(5,150,105,.15)', relFg: '#047857', number: '2451',
+          title: 'إجابة شعبة متابعة تنفيذ الموازنة', dept: 'ش13' },
+        { rel: 'تأكيد', relBg: 'rgba(217,119,6,.18)', relFg: '#b45309', number: '2470',
+          title: 'تأكيد على كتابنا المرقّم 2433', dept: 'ش13' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

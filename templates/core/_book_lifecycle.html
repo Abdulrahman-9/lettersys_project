@@ -15,29 +15,38 @@
 حالاتٍ فارغةٍ عليها ضجيجٌ في أكثرِ الصفحات فتحاً. فتنكمش اللوحةُ إلى سطرٍ واحد
 صادق — ولا تُخفى تماماً كي يبقى مكانُها معروفاً حين يبدأ التسيير.
 {% endcomment %}
+<div id="lifecycleAlert" hidden></div>
+
 {% if not referrals and not custody and not links and not registrations %}
-  <div class="card border-0 shadow-sm rounded-4 mb-3" id="lifecycleCard">
-    <div class="card-body p-3 d-flex align-items-center gap-2 text-muted"
-         style="font-size:.88rem">
-      <i class="bi bi-diagram-3"></i>
-      <span>لا حركةَ تسييرٍ على هذا الكتاب — لم يُفرَّق ولم تُسجَّل له عهدة.</span>
+  <div class="card border-0 shadow-sm rounded-4 mb-3" id="lifecycleCard"
+       data-book-id="{{ book.pk }}">
+    <div class="card-body p-3 d-flex align-items-center gap-2 flex-wrap">
+      <i class="bi bi-diagram-3 text-muted"></i>
+      <span class="text-muted flex-grow-1" style="font-size:.88rem">
+        لا حركةَ تسييرٍ على هذا الكتاب — لم يُفرَّق ولم تُسجَّل له عهدة.
+      </span>
+      {% include "core/_lifecycle_actions.html" %}
     </div>
   </div>
 {% else %}
-<div class="card border-0 shadow-sm rounded-4 mb-3" id="lifecycleCard">
+<div class="card border-0 shadow-sm rounded-4 mb-3" id="lifecycleCard"
+     data-book-id="{{ book.pk }}">
   <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
     <h6 class="mb-0 fw-bold">
       <i class="bi bi-diagram-3 text-primary me-2"></i>دورة حياة الكتاب
     </h6>
-    {% if overdue_referrals %}
-      <span class="badge rounded-pill text-bg-danger">
-        {{ overdue_referrals|length }} متأخّر
-      </span>
-    {% elif open_referrals %}
-      <span class="badge rounded-pill text-bg-warning">
-        {{ open_referrals|length }} قيد الإنجاز
-      </span>
-    {% endif %}
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% if overdue_referrals %}
+        <span class="badge rounded-pill text-bg-danger">
+          {{ overdue_referrals|length }} متأخّر
+        </span>
+      {% elif open_referrals %}
+        <span class="badge rounded-pill text-bg-warning">
+          {{ open_referrals|length }} قيد الإنجاز
+        </span>
+      {% endif %}
+      {% include "core/_lifecycle_actions.html" %}
+    </div>
   </div>
 
   <div class="card-body p-3">
@@ -125,6 +134,30 @@
                          style="font-variant-numeric:tabular-nums">
                         <i class="bi bi-reply-fill me-1"></i>{{ row.reply_number }}
                       </a>
+                    {% elif row.is_open %}
+                      <div class="btn-group btn-group-sm" role="group"
+                           aria-label="إجراءات {{ row.target }}">
+                        {% if row.referral.status == 'sent' %}
+                          <button type="button" class="btn btn-outline-secondary"
+                                  data-referral-act="received"
+                                  data-referral-id="{{ row.referral.pk }}"
+                                  title="استلمته الوحدة">استلم</button>
+                        {% endif %}
+                        <button type="button" class="btn btn-outline-success"
+                                data-referral-act="done"
+                                data-referral-id="{{ row.referral.pk }}"
+                                title="أُنجز ما وُجّه">أُنجز</button>
+                        <button type="button" class="btn btn-outline-warning"
+                                data-referral-act="remind"
+                                data-referral-id="{{ row.referral.pk }}"
+                                title="تنبيهٌ على الوحدة">
+                          <i class="bi bi-bell"></i><span class="visually-hidden">تنبيه</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-danger"
+                                data-referral-act="returned"
+                                data-referral-id="{{ row.referral.pk }}"
+                                title="أُعيد بلا إنجاز">أُعيد</button>
+                      </div>
                     {% else %}
                       <span class="text-muted">—</span>
                     {% endif %}
@@ -226,3 +259,5 @@
   </div>
 </div>
 {% endif %}
+
+{% include "core/_lifecycle_dialogs.html" %}
