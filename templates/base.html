@@ -105,6 +105,19 @@
               <i class="bi bi-upc-scan"></i>
               <span>الإدخال الذكي</span>
             </a>
+            {% comment %}
+              الطابورُ الشخصيّ أوّلاً: هو ما يفتحه الموظّفُ صباحاً. وطاولةُ
+              الوارد تحته لأنّ جمهورَها أضيق (مختصُّ البريد ورئيسُ القسم) —
+              وحارسُها في العرض لا في القالب، فالرابطُ ظاهرٌ والدخولُ محروس.
+            {% endcomment %}
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'my_today' %} active{% endif %}" href="{% url 'my_today' %}" title="ما يخصّني اليوم">
+              <i class="bi bi-person-check"></i>
+              <span>ما يخصّني اليوم</span>
+            </a>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'desk_board' or request.resolver_match.url_name == 'desk_ledger' or request.resolver_match.url_name == 'desk_handover' %} active{% endif %}" href="{% url 'desk_board' %}" title="طاولة الوارد">
+              <i class="bi bi-inboxes"></i>
+              <span>طاولة الوارد</span>
+            </a>
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' %} active{% endif %}" href="{% url 'book_unified' %}" title="قائمة الكتب">
               <i class="bi bi-list-ul"></i>
               <span>قائمة الكتب</span>

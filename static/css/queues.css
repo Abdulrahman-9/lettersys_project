@@ -1,0 +1,76 @@
+/* ══ لوحةُ الطوابير — طاولةُ الوارد و«ما يخصّني اليوم» ══════════════
+   الشاشتان تتشاركان القالبَ والنمط. الألوانُ من متغيّرات الهويّة
+   (`--brand`) لا بقيمٍ مُصلَّبة، فتتبع الصفحةَ التي تُدرَج فيها. */
+
+.queues-page { padding: 1rem 0; }
+
+.queues-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem;
+}
+.queues-head h4 { margin: 0 0 .25rem; font-weight: 800; }
+.queues-sub { margin: 0; color: #64748b; font-size: .9rem; }
+.queues-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+.qb-grid {
+  display: grid; gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.qb-card {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+  padding: 1rem 1.1rem; display: flex; flex-direction: column;
+  border-top: 3px solid var(--qb-tone, #cbd5e1);
+}
+.qb-danger { --qb-tone: #dc2626; }
+.qb-warn   { --qb-tone: #d97706; }
+.qb-accent { --qb-tone: var(--brand, #0f766e); }
+.qb-muted  { --qb-tone: #94a3b8; }
+.qb-secret { --qb-tone: #7c3aed; }
+
+.qb-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; margin-bottom: .15rem;
+}
+.qb-head h3 { margin: 0; font-size: 1rem; font-weight: 800; }
+.qb-count {
+  font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1.35rem;
+  color: #94a3b8; line-height: 1;
+}
+.qb-count[data-has] { color: var(--qb-tone); }
+
+.qb-hint { margin: 0 0 .75rem; font-size: .78rem; color: #94a3b8; }
+
+.qb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; }
+.qb-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: .6rem; padding: .4rem .5rem; border-radius: 8px; background: #f8fafc;
+}
+.qb-row.is-overdue { background: color-mix(in srgb, #dc2626 7%, #f8fafc); }
+
+.qb-link { display: flex; align-items: baseline; gap: .5rem; min-width: 0; text-decoration: none; }
+.qb-num {
+  font-variant-numeric: tabular-nums; font-weight: 700; font-size: .85rem;
+  color: var(--brand, #0f766e); flex: none;
+}
+.qb-title {
+  font-size: .85rem; color: #334155;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qb-title.is-restricted { color: #7c3aed; font-style: italic; }
+.qb-link:hover .qb-title { text-decoration: underline; }
+.qb-link:focus-visible { outline: 2px solid var(--brand, #0f766e); outline-offset: 2px; border-radius: 4px; }
+
+.qb-meta {
+  display: flex; gap: .5rem; align-items: baseline; flex: none;
+  font-size: .72rem; color: #94a3b8; font-variant-numeric: tabular-nums;
+}
+.qb-to { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.qb-more { margin: .5rem 0 0; font-size: .75rem; color: #94a3b8; }
+.qb-empty { margin: 0; font-size: .82rem; color: #94a3b8; }
+
+@media (max-width: 640px) {
+  .qb-grid { grid-template-columns: 1fr; }
+  .qb-meta { display: none; }   /* الشاشةُ الضيّقة: العنوانُ أهمُّ من الوجهة */
+}

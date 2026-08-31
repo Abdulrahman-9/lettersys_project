@@ -1,7 +1,8 @@
 from django.urls import path, include
 from django.views.generic import RedirectView
-from . import views
-from core.views import admin_panel, audit, desk, lifecycle_api, linking
+from . import views
+
+from core.views import admin_panel, audit, desk, lifecycle_api, linking, queues
 from . import logging_views
 from . import api as api_views
 from . import reservation_api
@@ -72,7 +73,9 @@ urlpatterns = [
     path("admin/", admin_panel.admin_panel, name="admin_panel"),
     # سجلُّ الحركات — رئيسُ القسم ومديرُ النظام حصراً
     path("audit/", audit.audit_log, name="audit_log"),
-    # طاولةُ البريد — الورقتان اللتان يطلبهما الكاتبُ ليترك دفترَه
+    # طاولةُ البريد — اللوحةُ والورقتان اللتان يطلبهما الكاتبُ ليترك دفترَه
+    path("desk/", queues.desk_board, name="desk_board"),
+    path("my/today/", queues.my_today, name="my_today"),
     path("desk/handover/", desk.desk_handover, name="desk_handover"),
     path("desk/ledger/", desk.desk_ledger, name="desk_ledger"),
     path("api/links/picker/", linking.api_link_picker, name="api_link_picker"),

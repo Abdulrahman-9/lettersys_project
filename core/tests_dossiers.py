@@ -12,6 +12,10 @@ from django.urls import reverse
 
 from .models import Book, Entity
 
+#: تبويبُ «الشعب والوحدات والأفراد» — جهاتُ هذه الاختبارات كلُّها «وحدة …»،
+#: والصفحةُ صارت مبوَّبةً بثلاثةِ أصنافٍ افتراضُها «الجهات الداخلية».
+UNIT_TAB = {'kind': 'unit'}
+
 
 class DossierBaseSetup(TestCase):
     def setUp(self):
@@ -50,7 +54,7 @@ class DossierListTests(DossierBaseSetup):
         self.assertEqual(r.status_code, 302)
 
     def test_lists_only_entities_with_books(self):
-        rows = self.client.get(reverse('dossier_list')).context['page_obj'].object_list
+        rows = self.client.get(reverse('dossier_list'), UNIT_TAB).context['page_obj'].object_list
         names = {e.name for e in rows}
         self.assertIn('وحدة اللجان', names)
         self.assertIn('وحدة الإدارة', names)
@@ -58,18 +62,18 @@ class DossierListTests(DossierBaseSetup):
         self.assertNotIn('قسم معطّل', names)         # غير نشط → مُستبعَد
 
     def test_counts_split_issued_received(self):
-        rows = {e.name: e for e in self.client.get(reverse('dossier_list')).context['page_obj'].object_list}
+        rows = {e.name: e for e in self.client.get(reverse('dossier_list'), UNIT_TAB).context['page_obj'].object_list}
         self.assertEqual(rows['وحدة اللجان'].issued_count, 2)
         self.assertEqual(rows['وحدة اللجان'].received_count, 1)
         self.assertEqual(rows['وحدة الإدارة'].received_count, 1)
         self.assertEqual(rows['وحدة الإدارة'].issued_count, 0)
 
     def test_ordered_by_total_desc(self):
-        rows = list(self.client.get(reverse('dossier_list')).context['page_obj'].object_list)
+        rows = list(self.client.get(reverse('dossier_list'), UNIT_TAB).context['page_obj'].object_list)
         self.assertEqual(rows[0].name, 'وحدة اللجان')   # 3 كتب > 1
 
     def test_search_by_name(self):
-        rows = self.client.get(reverse('dossier_list'), {'q': 'الإدارة'}).context['page_obj'].object_list
+        rows = self.client.get(reverse('dossier_list'), dict(UNIT_TAB, q='الإدارة')).context['page_obj'].object_list
         names = {e.name for e in rows}
         self.assertEqual(names, {'وحدة الإدارة'})
 
@@ -113,7 +117,7 @@ class DossierAccessControlTests(DossierBaseSetup):
 
     def test_clerk_sees_only_own_books_in_counts(self):
         self.client.force_login(self.clerk)
-        rows = {e.name: e for e in self.client.get(reverse('dossier_list')).context['page_obj'].object_list}
+        rows = {e.name: e for e in self.client.get(reverse('dossier_list'), UNIT_TAB).context['page_obj'].object_list}
         self.assertEqual(rows['وحدة اللجان'].issued_count, 1)   # كتابه فقط
 
     def test_clerk_detail_excludes_others(self):
@@ -374,6 +378,31 @@ class DossierFilterBarTests(DossierBaseSetup):
 
     def test_list_totals_aggregate(self):
         self._mk('t1', self.admin, issuing=[self.lijan])
-        t = self.client.get(reverse('dossier_list')).context['totals']
+        t = self.client.get(reverse('dossier_list'), UNIT_TAB).context['totals']
         self.assertGreaterEqual(t['departments'], 1)
         self.assertGreaterEqual(t['issued'], 1)
+
+
+class DossierDefaultTabTests(DossierBaseSetup):
+    """التبويبُ الافتراضيّ عقدٌ صريح لا أثرٌ جانبيّ."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.admin)
+        self._mk('u1', self.admin, issuing=[self.lijan])
+
+    def test_default_tab_is_internal_bodies(self):
+        from core.entity_kinds import INTERNAL
+
+        res = self.client.get(reverse('dossier_list'))
+
+        self.assertEqual(res.context['kind'], INTERNAL)
+
+    def test_units_are_reachable_through_their_own_tab(self):
+        """ما لا يظهر في الافتراضيّ ليس مفقوداً — له تبويبُه وعدّادُه."""
+        res = self.client.get(reverse('dossier_list'), UNIT_TAB)
+        names = {e.name for e in res.context['page_obj'].object_list}
+        counts = {t['key']: t['count'] for t in res.context['tabs']}
+
+        self.assertIn('وحدة اللجان', names)
+        self.assertEqual(counts['unit'], 1)

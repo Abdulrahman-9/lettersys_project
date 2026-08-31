@@ -1,0 +1,36 @@
+{% comment %}
+  لوحةُ الطوابير — قالبٌ واحدٌ تستعمله طاولةُ الوارد و«ما يخصّني اليوم».
+  الشاشتان تعرضان الشكلَ نفسَه لجمهورين مختلفين، فنسخُه مرّتين يعني إصلاحَ
+  كلّ عيبٍ مرّتين. المتغيّرُ المطلوب: `queues`.
+{% endcomment %}
+<div class="qb-grid">
+  {% for q in queues %}
+  <section class="qb-card qb-{{ q.tone }}" aria-labelledby="qb-h-{{ q.key }}">
+    <header class="qb-head">
+      <h3 id="qb-h-{{ q.key }}">{{ q.label }}</h3>
+      <span class="qb-count" {% if q.total %}data-has="1"{% endif %}>{{ q.total }}</span>
+    </header>
+    <p class="qb-hint">{{ q.hint }}</p>
+
+    {% if q.rows %}
+    <ul class="qb-list">
+      {% for r in q.rows %}
+      <li class="qb-row{% if r.overdue %} is-overdue{% endif %}">
+        <a href="{% url 'book_detail' r.book.pk %}" class="qb-link">
+          <span class="qb-num">{{ r.book.our_number_display|default:"—" }}</span>
+          <span class="qb-title{% if r.restricted %} is-restricted{% endif %}">{{ r.title }}</span>
+        </a>
+        <span class="qb-meta">
+          {% if r.referral.to_department %}<span class="qb-to">{{ r.referral.to_department.name }}</span>{% endif %}
+          {% if r.referral.due_date %}<time datetime="{{ r.referral.due_date|date:'Y-m-d' }}">{{ r.referral.due_date|date:"Y-m-d" }}</time>{% endif %}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if q.more %}<p class="qb-more">و{{ q.more }} غيرها</p>{% endif %}
+    {% else %}
+    <p class="qb-empty">لا شيء هنا — وهذا خبرٌ جيّد.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}ما يخصّني اليوم{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20260831">{% endblock %}
+
+{% block content %}
+<div class="queues-page">
+  <div class="queues-head">
+    <div>
+      <h4><i class="bi bi-person-check"></i> ما يخصّني اليوم</h4>
+      <p class="queues-sub">
+        {% if assigned_total %}
+          {{ assigned_total }} التزاماً مفتوحاً باسمك.
+        {% else %}
+          لا التزامَ مفتوحاً باسمك الآن.
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% include "core/_queue_board.html" %}
+</div>
+{% endblock %}
