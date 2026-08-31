@@ -32,9 +32,18 @@ def is_internal_code(code: str) -> bool:
 
 
 def internal_entities():
-    """الجهات التي تُمثّل وحداتٍ داخليّة، مرتّبةً بالرمز."""
+    """الجهات التي تُمثّل وحداتٍ داخليّة، مرتّبةً بالرمز.
+
+    **المعطَّلةُ مستثناةٌ** — والقاعدةُ تحمل الحقيقةَ سلفاً فلا تُملى بقائمة:
+    الجهةُ المدموجة (``merged_into``) صارت صيغةً إملائيّةً لغيرها، وبذرُ قسمٍ
+    لها يُنشئ وحدةً تنظيميّةً لا وجودَ لها. مقيسٌ على القاعدة الحيّة: من 42
+    مرمّزةً **اثنتان معطّلتان** — «ش ج ادارة الجودة» (مدموجةٌ في «ش.ج شعبة
+    ادارة الجودة») و«س صادر سري» (**نوعُ سجلٍّ لا وحدة**). بلا هذا المرشِّح
+    كان البذرُ يُنشئ لهما قسمين بعدّادين وقيدَي تفرّد.
+    """
     return sorted(
-        (e for e in Entity.objects.exclude(code='').exclude(code__isnull=True)
+        (e for e in Entity.objects.filter(is_active=True)
+                                  .exclude(code='').exclude(code__isnull=True)
          if is_internal_code(e.code)),
         key=lambda e: e.code,
     )
