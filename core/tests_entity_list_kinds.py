@@ -14,10 +14,11 @@ class EntityListKindFilterTests(TestCase):
         self.staff = User.objects.create_user('clerk', 'c@x.co', 'pw', is_staff=True)
         self.client.force_login(self.staff)
 
-        self.body = Entity.objects.create(name='هيئة العمليات', code='ع')
+        self.body = Entity.objects.create(name='هيئة العمليات', code='ع',
+                                          kind=INTERNAL)
         Department.objects.create(name='هيئة العمليات', code='ع', entity=self.body)
-        Entity.objects.create(name='شعبة المتابعة الفنية')
-        Entity.objects.create(name='وزارة النفط')
+        Entity.objects.create(name='شعبة المتابعة الفنية', kind=UNIT)
+        Entity.objects.create(name='وزارة النفط', kind=EXTERNAL)
 
     def _names(self, **params):
         res = self.client.get(reverse('entity_list'), params)
@@ -41,7 +42,7 @@ class EntityListKindFilterTests(TestCase):
 
     def test_kind_and_language_filters_compose(self):
         """المرشِّحان مستقلّان ويعملان معاً — لا يُلغي أحدهما الآخر."""
-        Entity.objects.create(name='Baker Hughes')
+        Entity.objects.create(name='Baker Hughes', kind=EXTERNAL)
 
         self.assertEqual(self._names(kind=EXTERNAL, lang='en'), ['Baker Hughes'])
         self.assertEqual(self._names(kind=EXTERNAL, lang='ar'), ['وزارة النفط'])

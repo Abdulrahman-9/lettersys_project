@@ -201,12 +201,42 @@ body:not(.dd-js) .dd-pane-title { display:block; }
 /* ── تبويبات صفحة الأضابير الثلاثة ─────────────────────────────
    تُعيد استعمال .dd-tab نفسِها (صفحة التفاصيل) — لا نمطَ ثانٍ لشيءٍ واحد.
    `.dd-tab.active.out/.in` أخصُّ (ثلاثةُ أصناف) فتبقى لتبويبَي الاتّجاه. */
-.dossier-kinds { flex-wrap: wrap; }
-/* تبويباتُ التفاصيل تُدار بـJS فتُخفى بدونه (`body:not(.dd-js) .dd-tabs`).
-   وتبويباتُ هذه الصفحة **روابطُ خادمٍ** تعمل بلا سطر JS واحد — فتُستثنى.
-   بلا هذا السطر كانت في الـDOM وتمرّ عليها التأكيدات و**لا تُرى**: كشفته
-   اللقطةُ البصريّة لا الاختبار. */
-body:not(.dd-js) .dd-tabs.dossier-kinds { display: flex; }
+/* ── تبويباتُ الأضابير الثلاثة ─────────────────────────────────
+   الترميزُ من `book_unified_tabs.css` (tabs-split/tab-main) — لا نمطَ ثانٍ
+   لشيءٍ واحد. وهنا الفرقان فقط: ثلاثةُ أعمدةٍ بدل عمودين، ولونُ كلّ تبويب. */
+.tabs-split-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* تبويباتُ الكتب أزرارٌ وهذه روابط — فيلزم كبحُ تسطير الرابط ولونِه.
+   (كشفته اللقطةُ: النصُّ كان مسطَّراً تحت كلّ تبويب.) */
+.tabs-split-3 .tab-main { text-decoration: none; color: #475569; }
+.tabs-split-3 .tab-main:hover { text-decoration: none; }
+.tabs-split-3 .tab-main:focus-visible { outline: 2px solid #0f766e; outline-offset: -2px; }
+
+.tab-main.tab-kind-external.active {
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%); color: #fff;
+}
+.tab-main.tab-kind-external.active .tab-icon,
+.tab-main.tab-kind-external.active .tab-count { color: #ccfbf1; }
+.tab-main.tab-kind-external.active::after { background: #fbbf24; }
+
+.tab-main.tab-kind-internal.active {
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #fff;
+}
+.tab-main.tab-kind-internal.active .tab-icon,
+.tab-main.tab-kind-internal.active .tab-count { color: #dbeafe; }
+.tab-main.tab-kind-internal.active::after { background: #fbbf24; }
+
+.tab-main.tab-kind-unit.active {
+  background: linear-gradient(135deg, #7c2d12 0%, #c2410c 100%); color: #fff;
+}
+.tab-main.tab-kind-unit.active .tab-icon,
+.tab-main.tab-kind-unit.active .tab-count { color: #ffedd5; }
+.tab-main.tab-kind-unit.active::after { background: #fbbf24; }
+
+/* الشاشةُ الضيّقة: عمودٌ واحدٌ وإلّا انسحق النصّ. */
+@media (max-width: 720px) {
+  .tabs-split-3 { grid-template-columns: 1fr; }
+}
 .dd-tab.kind.active {
   background: var(--brand, #0f766e);
   border-color: var(--brand, #0f766e);

@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from ..forms import EntityForm
-from core.entity_kinds import KIND_LABELS, KINDS, kind_q, twin_names
+from core.entity_kinds import KIND_HINTS, KIND_LABELS, KINDS
 from ..models import Book, Entity
 from .helpers import staff_required
 
@@ -108,15 +108,13 @@ def entity_list(request):
     # مرشِّحاً مستقلّاً: كانت تُستعمل بديلاً عن التصنيف («الإنجليزيّ خارجيّ»)
     # وهو تقريبٌ يخطئ — «هيئة العمليات / قسم حقول الانبار» عربيّةٌ وخارجيّةٌ
     # بالتقريب، وداخليّةٌ بالحقيقة.
-    kind_heads = twin_names()
     kind_counts = {
-        k: Entity.objects.filter(is_active=viewing_active)
-                         .filter(kind_q(k, kind_heads)).distinct().count()
+        k: Entity.objects.filter(is_active=viewing_active, kind=k).count()
         for k in KINDS
     }
     kind_filter = (request.GET.get('kind') or '').strip()
     if kind_filter in KINDS:
-        entities_qs = entities_qs.filter(kind_q(kind_filter, kind_heads)).distinct()
+        entities_qs = entities_qs.filter(kind=kind_filter)
     else:
         kind_filter = ''
 
@@ -173,7 +171,8 @@ def entity_list(request):
             "totals": totals,
             "lang_filter": lang_filter,
             "kind_filter": kind_filter,
-            "kind_tabs": [{"key": k, "label": KIND_LABELS[k], "count": kind_counts[k]}
+            "kind_tabs": [{"key": k, "label": KIND_LABELS[k],
+                           "hint": KIND_HINTS[k], "count": kind_counts[k]}
                           for k in KINDS],
             "search_q": search_q,
             "status_filter": status_filter,
@@ -334,6 +333,42 @@ def entity_bulk_delete(request):
         request,
         f"تم تعطيل {count} جهة — أُخفيت من القوائم مع الحفاظ على سجلّاتها وروابطها بالكتب.",
     )
+    return redirect("entity_list")
+
+
+@staff_required
+@require_http_methods(["POST"])
+def entity_set_kind(request):
+    """نقلُ الجهات المحدَّدة إلى تبويب — **هذه هي الأداةُ التي يشكّل بها المالك مجموعاته**.
+
+    التبويبُ قرارٌ بشريٌّ لا استنتاج، فيلزمه مسارُ كتابةٍ صريح: تُحدَّد الأسماءُ
+    في الجدول ويُختار التبويب. والعودةُ إلى المرشِّح الذي جاء منه المستخدم كي
+    لا يضيع مكانُه بعد كلّ نقلة.
+    """
+    kind = (request.POST.get("kind") or "").strip()
+    selected = request.POST.getlist("selected")
+
+    if kind not in KINDS:
+        messages.error(request, "تبويب غير معروف.")
+        return redirect("entity_list")
+    if not selected:
+        messages.info(request, "لم يتم تحديد أي جهة.")
+        return redirect("entity_list")
+
+    count = Entity.objects.filter(id__in=selected).exclude(kind=kind).update(kind=kind)
+    logger.info("entity_set_kind: kind=%s ids=%s changed=%s by=%s",
+                kind, selected, count, request.user)
+    if count:
+        messages.success(request, f"نُقلت {count} جهة إلى «{KIND_LABELS[kind]}».")
+    else:
+        messages.info(request, "الجهات المحدَّدة في هذا التبويب أصلاً.")
+
+    # العودةً إلى المرشِّح الذي جاء منه المستخدم — وسلسلةُ استعلامٍ فقط:
+    # قبولُ عنوانٍ كاملاً هنا يفتح تحويلاً مفتوحاً (open redirect)، وسطرٌ
+    # ثانٍ فيه يفتح حقنَ ترويسة.
+    back = (request.POST.get("back") or "").strip()
+    if back.startswith("?") and len(back.splitlines()) == 1:
+        return redirect(reverse("entity_list") + back)
     return redirect("entity_list")
 
 

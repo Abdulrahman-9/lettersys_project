@@ -59,6 +59,7 @@ from .entities import (
     entity_edit,
     entity_delete,
     entity_bulk_delete,
+    entity_set_kind,
     entity_restore,
     entity_bulk_restore,
     entity_merge,

@@ -34,10 +34,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from ..document_types import get_document_type_options, normalize_document_type_value
-from core.entity_kinds import INTERNAL, KIND_LABELS, KINDS, kind_q, twin_names
+from core.entity_kinds import EXTERNAL, KIND_HINTS, KIND_LABELS, KINDS
 from ..models import Book, Entity
 from .filter_helpers import FOLLOWUP_LABELS, BookFilterEngine, BookSortEngine
-from core.scoping import can_view_book, is_privileged
+from core.scoping import can_view_book, is_privileged, scope_books_for
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +56,15 @@ _REPORT_FIELDS = _DETAIL_FIELDS + ("margin",)
 
 
 # ════════════ أساس مؤمَّن (هزيل — الـprefetch يُضاف عند العرض فقط) ════════════
-def _book_base_filter(user):
-    """قاعدة الرؤية المؤمَّنة: المشرف/الموظّف = الكل؛ غيرهما = كتبه فقط."""
-    f = Q(is_deleted=False)
-    if not is_privileged(user):
-        f &= Q(created_by=user)
-    return f
-
-
 def _visible_books(request):
-    return Book.objects.filter(_book_base_filter(request.user))
+    """الكتبُ المرئيّة — من **المصدر الوحيد** ``scope_books_for``.
+
+    كانت هنا نسخةٌ خاصّةٌ من القاعدة («المشرف الكلّ، وغيرُه كتبَه فقط») سبقت
+    بُعدَ القسم ولم تلحق به: فكانت أضبارةُ الوحدة تُفتح **فارغةً** لموظّفها
+    لأنّه لم يُنشئ كتبَها بيده. وهي النسخةُ التي تُبطلها هذه الدفعة كلَّما
+    وجدتها — والقاعدةُ الآن واحدةٌ للقائمة والتفاصيل والأضبارة.
+    """
+    return scope_books_for(request.user, Book.objects.filter(is_deleted=False))
 
 
 def _direction_bases(base, pk):
@@ -219,14 +218,14 @@ def _ordered_type_groups(scan_books, meta, row_limit=_GROUP_ROW_LIMIT):
 def dossier_list(request):
     """المستوى 1: الأقسام التي لها كتب (مع أعداد صادر/وارد)، مرتّبة بالأكثر."""
     search_q = (request.GET.get("q") or "").strip()
-    base_filter = _book_base_filter(request.user)
+    visible = _visible_books(request)
 
     issued_sq = (
-        Book.objects.filter(base_filter, issuing_entities=OuterRef("pk"))
+        visible.filter(issuing_entities=OuterRef("pk"))
         .order_by().values("issuing_entities").annotate(c=Count("id")).values("c")
     )
     received_sq = (
-        Book.objects.filter(base_filter, receiving_entities=OuterRef("pk"))
+        visible.filter(receiving_entities=OuterRef("pk"))
         .order_by().values("receiving_entities").annotate(c=Count("id")).values("c")
     )
     qs = (
@@ -240,12 +239,11 @@ def dossier_list(request):
     # التبويباتُ الثلاثة — القاعدةُ في ``core.entity_kinds`` مصدراً وحيداً
     # تشترك فيه هذه الصفحةُ وصفحةُ الجهات. والتصفيةُ **في الاستعلام**: الصفحة
     # مُرقَّمة، وتصفيةٌ في بايثون تكسر العدَّ والصفحات معاً.
-    heads = twin_names()
-    counts = {k: qs.filter(kind_q(k, heads)).distinct().count() for k in KINDS}
-    kind = request.GET.get('kind') or INTERNAL
+    counts = {k: qs.filter(kind=k).count() for k in KINDS}
+    kind = request.GET.get('kind') or EXTERNAL
     if kind not in KINDS:
-        kind = INTERNAL
-    qs = qs.filter(kind_q(kind, heads)).distinct()
+        kind = EXTERNAL
+    qs = qs.filter(kind=kind)
 
     if search_q:
         qs = qs.filter(Q(name__icontains=search_q) | Q(code__icontains=search_q))
@@ -271,7 +269,8 @@ def dossier_list(request):
     return render(request, "core/dossier_list.html", {
         "page_obj": page, "paginator": paginator, "search_q": search_q,
         "kind": kind,
-        "tabs": [{"key": k, "label": KIND_LABELS[k], "count": counts[k]} for k in KINDS],
+        "tabs": [{"key": k, "label": KIND_LABELS[k], "hint": KIND_HINTS[k],
+                  "count": counts[k]} for k in KINDS],
         "totals": {"departments": agg["departments"], "issued": agg["issued"], "received": agg["received"]},
     })
 

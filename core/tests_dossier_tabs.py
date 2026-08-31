@@ -14,10 +14,12 @@ class DossierKindTabTests(TestCase):
         self.user = User.objects.create_superuser('boss', 'b@x.co', 'pw')
         self.client.force_login(self.user)
 
-        self.body = Entity.objects.create(name='هيئة العمليات', code='ع')
+        # التبويبُ قرارٌ مخزَّنٌ لا استنتاج — فيُصرَّح به في التهيئة.
+        self.body = Entity.objects.create(name='هيئة العمليات', code='ع',
+                                          kind=INTERNAL)
         Department.objects.create(name='هيئة العمليات', code='ع', entity=self.body)
-        self.section = Entity.objects.create(name='شعبة المتابعة الفنية')
-        self.outside = Entity.objects.create(name='وزارة النفط')
+        self.section = Entity.objects.create(name='شعبة المتابعة الفنية', kind=UNIT)
+        self.outside = Entity.objects.create(name='وزارة النفط', kind=EXTERNAL)
 
         # الأضبارةُ لا تظهر إلّا لجهةٍ لها كتب.
         for ent in (self.body, self.section, self.outside):
@@ -42,11 +44,11 @@ class DossierKindTabTests(TestCase):
         self.assertEqual(counts, {INTERNAL: 1, EXTERNAL: 1, UNIT: 1})
         self.assertEqual(len(res.context['tabs']), 3)
 
-    def test_unknown_kind_falls_back_to_internal(self):
+    def test_unknown_kind_falls_back_to_the_default_tab(self):
         """قيمةٌ ملفّقةٌ في الرابط لا تُفرغ الصفحة ولا ترفع خطأً."""
         res = self.client.get(reverse('dossier_list'), {'kind': 'nonsense'})
 
-        self.assertEqual(res.context['kind'], INTERNAL)
+        self.assertEqual(res.context['kind'], EXTERNAL)
 
     def test_search_keeps_the_active_tab(self):
         """البحثُ داخل التبويب لا يقذف المستخدمَ إلى تبويبٍ آخر."""

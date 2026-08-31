@@ -158,9 +158,12 @@ class RolesAndDossiersTests(TestCase):
     def test_dossiers_can_filter_internal_units(self):
         from core.models import Book, Entity
 
-        internal = Entity.objects.create(name='قسم داخلي', code='د-1')
+        # التبويبُ صار حقلاً يملكه المالك (هجرة 0074) — يُصرَّح به هنا.
+        internal = Entity.objects.create(name='قسم داخلي', code='د-1',
+                                         kind=Entity.KIND_INTERNAL)
         Department.objects.create(name='قسم داخلي', code='د-1', entity=internal)
-        foreign = Entity.objects.create(name='شركة أجنبية', code='XYZ')
+        foreign = Entity.objects.create(name='شركة أجنبية', code='XYZ',
+                                        kind=Entity.KIND_EXTERNAL)
 
         owner = User.objects.create_superuser('root3', 'r3@x.com', 'pw-root3-11')
         for ent in (internal, foreign):
@@ -168,6 +171,6 @@ class RolesAndDossiersTests(TestCase):
             book.issuing_entities.add(ent)
 
         self.client.force_login(owner)
-        body = self.client.get('/books/dossiers/?internal=1').content.decode('utf-8')
+        body = self.client.get('/books/dossiers/?kind=internal').content.decode('utf-8')
         self.assertIn('قسم داخلي', body)
         self.assertNotIn('شركة أجنبية', body)

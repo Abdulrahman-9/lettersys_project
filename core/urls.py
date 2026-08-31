@@ -132,6 +132,8 @@ urlpatterns = [
     path("entities/<int:pk>/edit/", views.entity_edit, name="entity_edit"),
     path("entities/<int:pk>/delete/", views.entity_delete, name="entity_delete"),
     path("entities/bulk-delete/", views.entity_bulk_delete, name="entity_bulk_delete"),
+    # نقلُ جهاتٍ محدَّدةٍ إلى تبويب — أداةُ المالك ليشكّل مجموعاته بنفسه
+    path("entities/set-kind/", views.entity_set_kind, name="entity_set_kind"),
     path("entities/<int:pk>/restore/", views.entity_restore, name="entity_restore"),
     path("entities/bulk-restore/", views.entity_bulk_restore, name="entity_bulk_restore"),
     # ── الأضابير (مجلّدات مراسلات الأقسام) ──

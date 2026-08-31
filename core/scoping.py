@@ -191,10 +191,18 @@ def scope_books_for(user, qs=None):
     # مملوكاً لقسمٍ واحد، والوحدةُ المُحال إليها تراه بلا نقلِ ملكيّة. وهو
     # **استعلامٌ فرعيّ لا وصلة** عمداً: الوصلةُ تُكرّر الصفَّ بعدد إحالاته
     # فيلزم `distinct()` على كلّ قائمةٍ في النظام.
+    #
+    # والشقُّ الرابع هو **الأضبارة**: «يتدفّق لها الكتبُ من ذكر اسمها في
+    # الجهات — الصادر والوارد» (نصُّ المالك). وبلا هذا الشقّ تُفتح أضبارةُ
+    # الشعبة **فارغةً من كلّ ماضيها**: التفريقُ يسكن `BookReferral` وهو جدولٌ
+    # جديدٌ لا صفَّ فيه للتاريخ، بينما الذكرُ يسكن الـM2M ومعه آلافُ الصفوف.
+    # والشقّان يتكاملان: الإحالةُ التزامٌ يُطارَد، والذكرُ انتماءٌ يُؤرشَف.
+    mine = subtree_ids(dept_id)
     return qs.filter(
-        Q(department_id__in=subtree_ids(dept_id))
+        Q(department_id__in=mine)
         | Q(created_by=user)
         | Q(pk__in=_referred_to(dept_id))
+        | Q(pk__in=_mentioned_in(mine))
     )
 
 
@@ -235,6 +243,26 @@ def _referred_to(department_id):
     return BookReferral.objects.filter(
         to_department_id=department_id
     ).values('book_id')
+
+
+def _mentioned_in(department_ids):
+    """الكتبُ التي ذُكرت فيها وحدةٌ من شجرتي — صادراً أو وارداً.
+
+    الجسرُ هو **توأمُ الجهة** (``Department.entity``): الكتابُ يذكر جهةً،
+    والجهةُ تُقابل قسماً. فوحدةٌ بلا توأمٍ لا تملك أضبارةً بعد — وهذا صحيحٌ
+    لا نقص: لا اسمَ لها في دليل الجهات لتُذكر به.
+
+    استعلامٌ فرعيٌّ لا وصلة، كشقِّ التفريق تماماً: وصلُ علاقتَي M2M يُنتج
+    ضرباً ديكارتيّاً (صادر × وارد) لكلّ كتاب.
+    """
+    from core.models import Book, Department
+
+    entity_ids = (Department.objects.filter(pk__in=department_ids,
+                                            entity__isnull=False)
+                  .values('entity_id'))
+    return Book.objects.filter(
+        Q(issuing_entities__in=entity_ids) | Q(receiving_entities__in=entity_ids)
+    ).values('pk')
 
 
 def scope_referrals_for(user, qs=None):

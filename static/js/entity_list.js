@@ -14,6 +14,7 @@
   const selectAllRows = document.getElementById('selectAllRows');
   const mergeBtn    = document.getElementById('mergeSelectedBtn');
   const mergeCountSpan = document.getElementById('mergeCount');
+  const kindMoveGroup = document.getElementById('kindMoveGroup');
 
   // ── تبديل العرض (جدول / بطاقات) ──
   function setView(mode) {
@@ -52,6 +53,8 @@
     // زر "دمج المحدد" — يلزمه جهتان على الأقل
     if (mergeBtn) mergeBtn.style.display = checked >= 2 ? 'inline-block' : 'none';
     if (mergeCountSpan) mergeCountSpan.textContent = checked;
+    // نقلُ التبويب — واحدةٌ تكفي، بخلاف الدمج الذي يلزمه اثنتان.
+    if (kindMoveGroup) kindMoveGroup.style.display = checked > 0 ? 'inline-flex' : 'none';
   }
   document.addEventListener('change', e => {
     if (e.target && e.target.classList && e.target.classList.contains('row-check')) {

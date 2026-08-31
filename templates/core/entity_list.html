@@ -150,11 +150,13 @@
           {% if search_q %}<div class="small text-muted mt-1">نتائج البحث عن "<strong>{{ search_q }}</strong>": {{ entities.paginator.count }} جهة</div>{% endif %}
         </div>
         {% if not showing_inactive %}
-        <div class="col-md-4 d-flex align-items-center gap-2 flex-wrap">
+        <div class="col-12 d-flex align-items-center gap-2 flex-wrap mt-2">
           {% comment %}
-            تصنيفُ الجهة — القاعدةُ نفسُها التي تُبوّب صفحةَ الأضابير
-            (core/entity_kinds.py). اللغةُ تحتَه مرشِّحٌ مستقلّ.
+            تبويبُ الجهة — الحقلُ نفسُه الذي يُبوّب صفحةَ الأضابير، وهو قرارُ
+            المالك لا استنتاج. سطرٌ كاملٌ له: ثلاثةُ عناوينَ طويلةٍ تنكسر في
+            عمودٍ ضيّق (كشفته اللقطة). واللغةُ تحته مرشِّحٌ مستقلّ.
           {% endcomment %}
+          <span class="text-muted small">التبويب:</span>
           {% for t in kind_tabs %}
           <a href="?kind={{ t.key }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}{% if lang_filter and lang_filter != 'all' %}&lang={{ lang_filter }}{% endif %}"
              class="filter-chip {% if kind_filter == t.key %}active{% endif %}"
@@ -206,6 +208,8 @@
   {% endcomment %}
   <form method="post" id="entitiesForm" action="{% if showing_inactive %}{% url 'entity_bulk_restore' %}{% else %}{% url 'entity_bulk_delete' %}{% endif %}">
     {% csrf_token %}
+    {# العودةُ إلى المرشِّح نفسِه بعد النقل — سلسلةُ استعلامٍ لا عنوانٌ كامل #}
+    <input type="hidden" name="back" value="?{{ request.GET.urlencode }}">
   </form>
 
   <div class="d-flex justify-content-between align-items-center mb-3">
@@ -225,6 +229,21 @@
       <button type="submit" form="entitiesForm" class="btn btn-sm btn-outline-danger" id="deleteSelectedBtn" style="display: none;" onclick="return confirm('تعطيل الجهات المحددة؟ ستُخفى من القوائم مع الحفاظ على سجلّاتها.');">
         <i class="bi bi-archive me-1"></i>تعطيل المحدد (<span id="selectedCount">0</span>)
       </button>
+      {% comment %}
+        نقلُ المحدَّد إلى تبويب — بها يشكّل المالكُ مجموعاته بالأسماء التي يريد.
+        `formaction` يُحوّل النموذجَ نفسَه إلى نقطةٍ أخرى، فالتحديدُ واحدٌ ولا
+        نموذجَ ثانٍ ولا سطرَ JS: خانةُ الاختيار تُربط بنموذجٍ واحدٍ فقط في HTML.
+      {% endcomment %}
+      <div class="btn-group btn-group-sm" id="kindMoveGroup" style="display: none;" role="group"
+           aria-label="نقل الجهات المحددة إلى تبويب">
+        <span class="btn btn-sm btn-light disabled">نقل إلى:</span>
+        {% for t in kind_tabs %}
+        <button type="submit" form="entitiesForm" formaction="{% url 'entity_set_kind' %}"
+                name="kind" value="{{ t.key }}" class="btn btn-sm btn-outline-secondary">
+          {{ t.label }}
+        </button>
+        {% endfor %}
+      </div>
       {% endif %}
     </div>
   </div>
@@ -436,5 +455,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/entity_list.js' %}"></script>
+<script src="{% static 'js/entity_list.js' %}?v=20260831"></script>
 {% endblock %}

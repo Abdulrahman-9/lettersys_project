@@ -3,7 +3,10 @@
 
 {% block title %}الأضابير{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20260831">{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20260831">
+<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20260831c">
+{% endblock %}
 
 {% block content %}
 <div class="dossiers-page">
@@ -20,12 +23,21 @@
     </div>
   </div>
 
-  <nav class="dd-tabs dossier-kinds" aria-label="تصنيف الجهات">
+  {% comment %}
+    التبويباتُ الثلاثة — على غرار تبويبَي «وارد/صادر» في قائمة الكتب:
+    الترميزُ نفسُه (`tabs-split` / `tab-main`) وثلاثةُ أعمدةٍ بدل عمودين.
+    وهي **روابطُ خادمٍ** لا أزرار: تعمل بلا JS، وكلٌّ منها عنوانٌ يُنسخ.
+  {% endcomment %}
+  <nav class="tabs-split tabs-split-3" role="tablist" aria-label="تبويب الجهات">
     {% for t in tabs %}
-    <a class="dd-tab kind{% if t.key == kind %} active{% endif %}"
-       href="?kind={{ t.key }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}"
-       {% if t.key == kind %}aria-current="page"{% endif %}>
-      {{ t.label }}<span class="cnt">{{ t.count }}</span>
+    <a class="tab-main tab-kind-{{ t.key }}{% if t.key == kind %} active{% endif %}"
+       role="tab" aria-selected="{% if t.key == kind %}true{% else %}false{% endif %}"
+       href="?kind={{ t.key }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}">
+      <i class="bi {% if t.key == 'external' %}bi-globe2{% elif t.key == 'internal' %}bi-building{% else %}bi-diagram-3{% endif %} tab-icon"></i>
+      <div class="tab-text">
+        <span class="tab-label">{{ t.label }}</span>
+        <span class="tab-count">{{ t.hint }} · {{ t.count }}</span>
+      </div>
     </a>
     {% endfor %}
   </nav>

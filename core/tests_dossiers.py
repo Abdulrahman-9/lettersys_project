@@ -23,10 +23,15 @@ class DossierBaseSetup(TestCase):
         self.clerk = User.objects.create_user('clerk', 'c@x.com', 'pass1234')
         self.today = date.today()
 
-        self.lijan = Entity.objects.create(name='وحدة اللجان', code='LJ')
-        self.idara = Entity.objects.create(name='وحدة الإدارة', code='ID')
-        self.empty = Entity.objects.create(name='قسم بلا كتب', code='EM')   # 0 كتب
-        self.inactive = Entity.objects.create(name='قسم معطّل', is_active=False)
+        # التبويبُ حقلٌ يملكه المالك (هجرة 0074) — تُهيَّأ هذه في «الشعب والوحدات».
+        self.lijan = Entity.objects.create(name='وحدة اللجان', code='LJ',
+                                           kind=Entity.KIND_UNIT)
+        self.idara = Entity.objects.create(name='وحدة الإدارة', code='ID',
+                                           kind=Entity.KIND_UNIT)
+        self.empty = Entity.objects.create(name='قسم بلا كتب', code='EM',
+                                           kind=Entity.KIND_UNIT)   # 0 كتب
+        self.inactive = Entity.objects.create(name='قسم معطّل', is_active=False,
+                                              kind=Entity.KIND_UNIT)
 
     def _mk(self, num, owner, issuing=None, receiving=None, dtype='', kind='outgoing_internal'):
         b = Book.objects.create(our_number=num, title='كتاب ' + num, date=self.today,
@@ -391,12 +396,13 @@ class DossierDefaultTabTests(DossierBaseSetup):
         self.client.force_login(self.admin)
         self._mk('u1', self.admin, issuing=[self.lijan])
 
-    def test_default_tab_is_internal_bodies(self):
-        from core.entity_kinds import INTERNAL
+    def test_default_tab_is_external_parties(self):
+        """الافتراضيُّ أوّلُ التبويبات كما سمّاها المالك: «جهات خارجية»."""
+        from core.entity_kinds import EXTERNAL
 
         res = self.client.get(reverse('dossier_list'))
 
-        self.assertEqual(res.context['kind'], INTERNAL)
+        self.assertEqual(res.context['kind'], EXTERNAL)
 
     def test_units_are_reachable_through_their_own_tab(self):
         """ما لا يظهر في الافتراضيّ ليس مفقوداً — له تبويبُه وعدّادُه."""

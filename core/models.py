@@ -27,6 +27,22 @@ class Entity(models.Model):
     etype    = models.CharField(max_length=10, choices=TYPE_CHOICES, default="both")
     is_active = models.BooleanField(default=True)
 
+    #: تبويبُ الجهة في الأضابير — **يدويٌّ بقرار المالك لا مستنتَجٌ من الاسم**.
+    #: الاستنتاجُ من صدر الاسم كان تقريباً يخطئ («هيئة العمليات / قسم حقول
+    #: الانبار» داخليّةٌ ويقرؤها التقريبُ خارجيّة)، والمالكُ يشكّل المجموعات
+    #: بالأسماء والأقسام التي يريد. ``suggest_kind`` تبقى **اقتراحاً** للجهة
+    #: الجديدة وللبذر الأوّل فقط — ولا تكتب فوق قرارٍ بشريّ أبداً.
+    KIND_EXTERNAL = 'external'
+    KIND_INTERNAL = 'internal'
+    KIND_UNIT = 'unit'
+    KIND_CHOICES = (
+        (KIND_EXTERNAL, 'جهة خارجية'),
+        (KIND_INTERNAL, 'قسم داخلي'),
+        (KIND_UNIT, 'شعبة/وحدة/فرد'),
+    )
+    kind = models.CharField("التبويب", max_length=10, choices=KIND_CHOICES,
+                            default=KIND_EXTERNAL, db_index=True)
+
     # عند دمج جهة مكرّرة ضمن جهة أمّ: تشير إلى الأمّ وتُضبط is_active=False.
     merged_into = models.ForeignKey(
         'self', null=True, blank=True, on_delete=models.SET_NULL,
