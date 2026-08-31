@@ -196,3 +196,20 @@ body:not(.dd-js) .dd-pane-title { display:block; }
 @media (prefers-reduced-motion: reduce) {
     .folder-card { animation:none; transition:none; }
 }
+
+
+/* ── تبويبات صفحة الأضابير الثلاثة ─────────────────────────────
+   تُعيد استعمال .dd-tab نفسِها (صفحة التفاصيل) — لا نمطَ ثانٍ لشيءٍ واحد.
+   `.dd-tab.active.out/.in` أخصُّ (ثلاثةُ أصناف) فتبقى لتبويبَي الاتّجاه. */
+.dossier-kinds { flex-wrap: wrap; }
+/* تبويباتُ التفاصيل تُدار بـJS فتُخفى بدونه (`body:not(.dd-js) .dd-tabs`).
+   وتبويباتُ هذه الصفحة **روابطُ خادمٍ** تعمل بلا سطر JS واحد — فتُستثنى.
+   بلا هذا السطر كانت في الـDOM وتمرّ عليها التأكيدات و**لا تُرى**: كشفته
+   اللقطةُ البصريّة لا الاختبار. */
+body:not(.dd-js) .dd-tabs.dossier-kinds { display: flex; }
+.dd-tab.kind.active {
+  background: var(--brand, #0f766e);
+  border-color: var(--brand, #0f766e);
+  color: #fff;
+}
+.dd-tab.kind:focus-visible { outline: 2px solid var(--brand, #0f766e); outline-offset: 2px; }

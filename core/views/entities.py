@@ -16,6 +16,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from ..forms import EntityForm
+from core.entity_kinds import KIND_LABELS, KINDS, kind_q, twin_names
 from ..models import Book, Entity
 from .helpers import staff_required
 
@@ -67,6 +68,7 @@ def entity_list(request):
     search_q = (request.GET.get('q') or '').strip()
     status_filter = (request.GET.get('status') or 'active').strip()
     showing_inactive = status_filter == 'inactive'
+    viewing_active = not showing_inactive
 
     # عدّ كتب كل جهة عبر استعلامين فرعيين مستقلّين بدل ضمّ علاقتَي M2M
     # (issued/received) في استعلام واحد — الضمّ المزدوج يُنتج ضرباً ديكارتياً
@@ -100,6 +102,23 @@ def entity_list(request):
         entities_qs = entities_qs.filter(name__regex=r'^[؀-ۿ]')
     elif lang_filter == 'en':
         entities_qs = entities_qs.filter(name__regex=r'^[A-Za-z0-9]')
+
+    # تصنيفُ الجهة (داخليّة · خارجيّة · شعبٌ ووحداتٌ وأفراد) — القاعدةُ في
+    # ``core.entity_kinds`` وهي نفسُها التي تُبوّب صفحةَ الأضابير. اللغةُ تبقى
+    # مرشِّحاً مستقلّاً: كانت تُستعمل بديلاً عن التصنيف («الإنجليزيّ خارجيّ»)
+    # وهو تقريبٌ يخطئ — «هيئة العمليات / قسم حقول الانبار» عربيّةٌ وخارجيّةٌ
+    # بالتقريب، وداخليّةٌ بالحقيقة.
+    kind_heads = twin_names()
+    kind_counts = {
+        k: Entity.objects.filter(is_active=viewing_active)
+                         .filter(kind_q(k, kind_heads)).distinct().count()
+        for k in KINDS
+    }
+    kind_filter = (request.GET.get('kind') or '').strip()
+    if kind_filter in KINDS:
+        entities_qs = entities_qs.filter(kind_q(kind_filter, kind_heads)).distinct()
+    else:
+        kind_filter = ''
 
     # ── بحث: name أو code ──
     if search_q:
@@ -153,6 +172,9 @@ def entity_list(request):
             "paginator": paginator,
             "totals": totals,
             "lang_filter": lang_filter,
+            "kind_filter": kind_filter,
+            "kind_tabs": [{"key": k, "label": KIND_LABELS[k], "count": kind_counts[k]}
+                          for k in KINDS],
             "search_q": search_q,
             "status_filter": status_filter,
             "showing_inactive": showing_inactive,

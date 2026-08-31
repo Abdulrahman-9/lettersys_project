@@ -34,6 +34,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from ..document_types import get_document_type_options, normalize_document_type_value
+from core.entity_kinds import INTERNAL, KIND_LABELS, KINDS, kind_q, twin_names
 from ..models import Book, Entity
 from .filter_helpers import FOLLOWUP_LABELS, BookFilterEngine, BookSortEngine
 from core.scoping import can_view_book, is_privileged
@@ -236,10 +237,16 @@ def dossier_list(request):
         )
         .filter(Q(issued_count__gt=0) | Q(received_count__gt=0))
     )
-    # الداخليّة = التي لها قسم. لا حقلَ جديدٌ على ``Entity``: الربط نفسه هو
-    # التصنيف، فلا يوجد مصدرا حقيقةٍ يتعارضان.
-    if request.GET.get('internal') == '1':
-        qs = qs.filter(department__isnull=False)
+    # التبويباتُ الثلاثة — القاعدةُ في ``core.entity_kinds`` مصدراً وحيداً
+    # تشترك فيه هذه الصفحةُ وصفحةُ الجهات. والتصفيةُ **في الاستعلام**: الصفحة
+    # مُرقَّمة، وتصفيةٌ في بايثون تكسر العدَّ والصفحات معاً.
+    heads = twin_names()
+    counts = {k: qs.filter(kind_q(k, heads)).distinct().count() for k in KINDS}
+    kind = request.GET.get('kind') or INTERNAL
+    if kind not in KINDS:
+        kind = INTERNAL
+    qs = qs.filter(kind_q(kind, heads)).distinct()
+
     if search_q:
         qs = qs.filter(Q(name__icontains=search_q) | Q(code__icontains=search_q))
 
@@ -256,13 +263,15 @@ def dossier_list(request):
 
     # الإجماليات: تجميع DB واحد (بلا بثّ صفوف الأقسام إلى بايثون ولا حلقة مُفسَّرة)
     agg = qs.aggregate(
-        departments=Count("id"),
+        departments=Count("id", distinct=True),
         issued=Coalesce(Sum("issued_count"), 0),
         received=Coalesce(Sum("received_count"), 0),
     )
 
     return render(request, "core/dossier_list.html", {
         "page_obj": page, "paginator": paginator, "search_q": search_q,
+        "kind": kind,
+        "tabs": [{"key": k, "label": KIND_LABELS[k], "count": counts[k]} for k in KINDS],
         "totals": {"departments": agg["departments"], "issued": agg["issued"], "received": agg["received"]},
     })
 
