@@ -228,3 +228,33 @@
 .bd-page .badge.text-bg-light { background: var(--paper-tint) !important; color: var(--ink-soft) !important; }
 
 /* الشريطُ الجانبيّ للسياق يبقى كما هو — خارج `.bd-page`. */
+
+/* ═══ نافذةُ قصاصة الهامش ═════════════════════════════════════════
+   تعرض جزءاً من صورة الصفحة بلا قصٍّ على القرص: الصورةُ تُكبَّر بمقلوب
+   عرضِ القصاصة ثمّ تُزاح، والنافذةُ تحجب ما عداها.
+
+   `--page-aspect` افتراضُه A4 عموديّ (0.707). انحرافُ نسبةِ صفحةٍ نادرةٍ عنه
+   يُظهر هامشاً أوسعَ أو أضيقَ قليلاً — وهو مقبولٌ لمعاينةٍ يفتحها النقرُ
+   كاملةً. وحسابُ النسبة لكلّ صفٍّ يعني فتحَ المستند مرّةً لكلّ إحالة. */
+.mc-window {
+  --page-aspect: .707;
+  position: relative; overflow: hidden;
+  width: 100%; max-width: 20rem;
+  border: 1px solid var(--rule-hard, rgba(180, 83, 9, .3));
+  border-radius: .5rem; background: #fdfaf5;
+}
+.mc-window::before {
+  content: ''; display: block;
+  padding-top: calc(var(--h) / (var(--w) * var(--page-aspect)) * 100%);
+}
+.mc-window img {
+  position: absolute;
+  width: calc(100% / var(--w));
+  max-width: none;
+  /* النسبةُ المئويّة على عنصرٍ مُطلَقٍ تُحسب من **النافذة** لا من الصورة:
+     الأفقيّةُ من عرضها والرأسيّةُ من ارتفاعها — وهو ما نريده بالضبط، فلا
+     `transform` ولا حسابَ بكسلات. */
+  left: calc(var(--x) / var(--w) * -100%);
+  top:  calc(var(--y) / var(--h) * -100%);
+}
+.mc-window:hover { border-color: var(--amber, #b45309); }

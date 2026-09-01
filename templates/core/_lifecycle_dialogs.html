@@ -48,6 +48,48 @@
           </div>
         </div>
 
+        {% comment %}
+          قصاصةُ الهامش — الأصلُ بخطّ اليد. النصُّ أعلاه نسخةٌ يقرؤها البحث،
+          والقصاصةُ هي **الأصل**: توقيعُ المدير وخطُّه لا يُنسخان حرفاً.
+          و«الهامشُ يسبق الرقم» في لوح التصميم لأنّ الكاتب يقرأ التوجيه أوّلاً.
+          تظهر فقط حين يكون للكتاب مرفقٌ يُصيَّر.
+        {% endcomment %}
+        {% if crop_source %}
+        <div class="mb-3" data-margin-crop
+             data-attachment="{{ crop_source.pk }}"
+             data-page-url="{% url 'attachment_page_image' crop_source.pk 1 %}">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+            <label class="form-label mb-0" style="font-size:.85rem">
+              قصاصةُ الهامش — من صورة الصفحة
+            </label>
+            <div class="d-flex align-items-center gap-2">
+              <label for="cropPage" class="form-label mb-0" style="font-size:.75rem">صفحة</label>
+              <input type="number" id="cropPage" data-crop-page value="1" min="1" max="50"
+                     class="form-control form-control-sm" style="width:4.5rem">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-crop-clear>
+                مسح
+              </button>
+            </div>
+          </div>
+
+          <div data-crop-stage
+               style="position:relative;overflow:hidden;border:2px solid #d87b44;border-radius:.7rem;
+                      background:#fdfaf5;cursor:crosshair;touch-action:none;max-height:22rem">
+            <img data-crop-image alt="صفحة المستند — اسحب لتحديد الهامش"
+                 src="{% url 'attachment_page_image' crop_source.pk 1 %}"
+                 style="display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none">
+            <div data-crop-rect hidden
+                 style="position:absolute;border:2px dashed #b45309;border-radius:.4rem;
+                        background:rgba(249,168,38,.16);pointer-events:none"></div>
+          </div>
+
+          <input type="hidden" id="distMarginCrop" data-crop-value>
+          <div class="form-text" data-crop-hint style="font-size:.75rem">
+            اسحب لتحديد الهامش على الصفحة.
+          </div>
+        </div>
+        {% endif %}
+
         <div class="row g-2">
           <div class="col-sm-4">
             <label for="distPurpose" class="form-label" style="font-size:.85rem">الغرض</label>

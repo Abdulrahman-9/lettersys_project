@@ -41,6 +41,9 @@ urlpatterns = [
     path("trash/attachment/<int:attachment_id>/purge/", views.purge_attachment, name="purge_attachment"),
     path("attachment/<int:pk>/delete/", views.attachment_delete, name="attachment_delete"),
     path("attachment/<int:pk>/replace/", views.attachment_replace, name="attachment_replace"),
+    # صورةُ صفحةٍ من مرفق — لتحديد قصاصة الهامش عليها
+    path("attachment/<int:pk>/page/<int:page>.webp", views.attachment_page_image,
+         name="attachment_page_image"),
     path("attachment/<int:pk>/merge/", views.attachment_merge_pages, name="attachment_merge_pages"),
     path("attachment/<int:pk>/remove-pages/", views.attachment_remove_pages, name="attachment_remove_pages"),
     path("<int:pk>/", views.book_detail, name="book_detail"),

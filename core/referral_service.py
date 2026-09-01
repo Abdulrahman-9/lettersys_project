@@ -136,8 +136,8 @@ def send_reminder(referral, *, by):
     return referral
 
 
-def send_circular(book, group, *, by, purpose=None, margin='', due_date=None,
-                  member_overrides=None):
+def send_circular(book, group, *, by, purpose=None, margin='', margin_crop=None,
+                  due_date=None, member_overrides=None):
     """يُعمّم كتاباً على عنقودٍ كاملٍ بضغطةٍ واحدة — «حفظ وإرسال».
 
     **رقمُ صادرٍ واحدٌ للكتاب كلّه** — هذا هو الورقُ نفسه: التعميمُ يحمل رقماً
@@ -165,6 +165,7 @@ def send_circular(book, group, *, by, purpose=None, margin='', due_date=None,
         targets.append(item)
 
     created = distribute(book, targets, by=by, purpose=purpose, margin=margin,
+                         margin_crop=margin_crop,
                          due_date=due_date, allow_repeat=True)
 
     with transaction.atomic():

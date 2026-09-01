@@ -164,7 +164,20 @@ def _lifecycle_context(book, user):
         "overdue_referrals": [row for row in matrix if row["is_overdue"]],
         "custody": list(custody_chain(book)),
         "registrations": registrations_of(book, user),
+        # مصدرُ قصاصة الهامش: أوّلُ مرفقٍ يُصيَّر. غيابُه يُخفي الأداةَ كلَّها
+        # بدل أن يعرض صندوقاً فارغاً — 11,183 كتاباً منقولاً من الورق بلا مرفق.
+        "crop_source": _crop_source(book),
     }
+
+
+def _crop_source(book):
+    """أوّلُ مرفقٍ صالحٍ للتصيير — أو ``None``.
+
+    نكتفي بالأوّل: الهامشُ على الصفحة الأولى في الغالب، ومنتقي الصفحة يتيح
+    الانتقال داخل المرفق نفسِه. وقائمةُ مرفقاتٍ للاختيار تعقيدٌ بلا حاجةٍ مقيسة.
+    """
+    return (book.attachments.filter(is_deleted=False)
+            .order_by('uploaded_at').first())
 
 
 @login_required

@@ -137,6 +137,12 @@
         group: groupSelect.value || null,
         targets: checked,
         margin: document.getElementById('distMargin').value,
+        // القصاصةُ اختياريّة: كتابٌ بلا مرفقٍ لا حقلَ له، فلا تُرسَل مفتاحاً فارغاً.
+        margin_crop: (function () {
+          var el = document.getElementById('distMarginCrop');
+          if (!el || !el.value) return null;
+          try { return JSON.parse(el.value); } catch (_) { return null; }
+        })(),
         purpose: document.getElementById('distPurpose').value,
         due_date: document.getElementById('distDue').value,
         assignee: document.getElementById('distAssignee').value || null

@@ -20,6 +20,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from core.decorators import rate_limit
+from core.page_render import normalise_crop
 from core.models import Book, BookReferral, CustodyEvent, Department, Entity
 from core.scoping import scope_books_for, scope_referrals_for
 
@@ -38,6 +39,10 @@ def api_distribute(request, pk):
     data = _json(request)
     common = {
         'margin': (data.get('margin') or '').strip(),
+        # قصاصةُ الهامش: كسورٌ من 0 إلى 1 تُطهَّر في مصدرٍ واحد. الواردُ من
+        # العميل لا يُصدَّق — المستطيلُ المقلوب أو الخارجُ عن الصفحة يُسقَط
+        # بصمتٍ بدل أن يُخزَّن فيُصيَّر لاحقاً قصاصةً بلا معنى.
+        'margin_crop': normalise_crop(data.get('margin_crop')),
         'due_date': _date(data.get('due_date')),
         'purpose': data.get('purpose') or BookReferral.ACTION,
         'assignee': _user_in_scope(request, data.get('assignee')),

@@ -101,6 +101,7 @@ from .attachments import (
     attachment_delete,
     attachment_replace,
     attachment_merge_pages,
+    attachment_page_image,
     attachment_remove_pages,
     serve_shared_attachment,
 )

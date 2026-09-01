@@ -12,10 +12,12 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
 from django.core.exceptions import SuspiciousOperation, ValidationError
 from django.core.files import File
 from django.core.files.base import ContentFile
-from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
+from django.http import (FileResponse, Http404, HttpResponse,
+                         HttpResponseForbidden, JsonResponse)
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.utils._os import safe_join
@@ -437,3 +439,31 @@ def attachment_remove_pages(request, pk):
             return _mgmt_result(request, book, ok=False, message=f"فشل حذف الصفحات: {e}", status=500)
 
     return _mgmt_result(request, book, ok=False, message="طريقة غير مسموحة.", status=405)
+
+@login_required
+@require_http_methods(["GET"])
+def attachment_page_image(request, pk, page):
+    """صورةُ صفحةٍ من مرفق — لأجل تحديد قصاصة الهامش عليها.
+
+    **بوّابةُ المحتوى هي البوّابة**: الصفحةُ صورةٌ من المستند نفسِه، فمن لا
+    يفتح المستندَ لا يرى صفحتَه. و404 لا 403: وجودُ المرفق لا يُسرَّب.
+    """
+    from core.page_render import render_page
+
+    attachment = get_object_or_404(Attachment, id=pk, is_deleted=False)
+    if not can_open_content(attachment.book, request.user):
+        raise Http404
+
+    try:
+        path = attachment.file.path
+    except (ValueError, AttributeError):
+        raise Http404
+
+    data, mimetype = render_page(path, int(page))
+    if data is None:
+        raise Http404
+
+    response = HttpResponse(data, content_type=mimetype)
+    # الصفحةُ لا تتغيّر بعد رفعها — فالكاشُ الخاصّ طويلٌ بلا خطر.
+    response['Cache-Control'] = 'private, max-age=86400'
+    return response

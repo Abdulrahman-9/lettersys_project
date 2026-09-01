@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/book_detail_design.css' %}?v=20260831b">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/book_detail_design.css' %}?v=20260831c">{% endblock %}
 
 {% block title %}{{ book.title }} - كتاب {{ book.our_number_display }}{% endblock %}
 
@@ -652,7 +652,9 @@
 
 {% block extra_js %}
 <script src="{% static 'book_detail.js' %}?v=20260629-r2"></script>
-<script src="{% static 'js/book_lifecycle.js' %}?v=20260830-r1"></script>
+{# قصاصةُ الهامش تُحمَّل قبل مُرسِل التفريق: الأخيرُ يقرأ حقلَها #}
+<script src="{% static 'js/margin_crop.js' %}?v=20260831"></script>
+<script src="{% static 'js/book_lifecycle.js' %}?v=20260831-crop"></script>
 <script>
 // ── تحميل إيميلات الكتاب في البطاقة الجانبية ──
 (function() {

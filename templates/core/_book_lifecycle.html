@@ -94,6 +94,22 @@
                     {% if row.referral.margin %}
                       <div class="text-muted" style="font-size:.78rem">↩ {{ row.referral.margin }}</div>
                     {% endif %}
+                    {% if row.referral.margin_crop %}
+                      {% with c=row.referral.margin_crop %}
+                      {% comment %}
+                        نافذةُ القصاصة: الصورةُ نفسُها مكبّرةً ومُزاحة — لا ملفَّ
+                        مقصوصٌ على القرص. القصاصةُ **مؤشّرٌ لا نسخة**.
+                      {% endcomment %}
+                      <a class="mc-window d-block mt-1"
+                         href="{% url 'attachment_page_image' c.attachment c.page %}"
+                         target="_blank" rel="noopener"
+                         title="هامشُ المدير — انقر لفتح الصفحة كاملة"
+                         style="--x:{{ c.x }};--y:{{ c.y }};--w:{{ c.w }};--h:{{ c.h }}">
+                        <img src="{% url 'attachment_page_image' c.attachment c.page %}"
+                             alt="قصاصةُ هامش المدير" loading="lazy">
+                      </a>
+                      {% endwith %}
+                    {% endif %}
                   </td>
                   <td>{{ row.purpose }}</td>
                   <td>
