@@ -26,7 +26,7 @@ from ..extraction.kinds import get_kind_label
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       RestoreJob)
 from .helpers import staff_required
-from core.scoping import can_open_content, is_privileged
+from core.scoping import can_open_content, is_privileged, scope_books_for
 
 logger = logging.getLogger(__name__)
 
@@ -38,22 +38,18 @@ class _NoJob:
 
 @login_required
 def dashboard(request):
+    """لوحةُ التحكّم — **لكلّ دورٍ لوحتُه**.
+
+    الأقسامُ تُبنى من `core/dashboard_sections.py`: مسجّلٌ واحدٌ فيه لكلّ قسمٍ
+    بوّابتُه وبانيه، فما يراه المستخدمُ حاصلُ صلاحيّاته لا قائمةٌ مكتوبةٌ في
+    القالب. موظّفُ الوحدة يرى «ما يخصّني» و«أضبارتَنا»؛ ومختصُّ البريد يرى
+    معهما «طاولةَ الوارد» و«البريد»؛ ومديرُ النظام يرى «الإدارة» فوقها.
+
+    **والنظرةُ العامّة صارت على المصدر الوحيد**: كانت هنا نسخةٌ خاصّةٌ من قاعدة
+    الرؤية («المشرف الكلّ، وغيرُه كتبَه فقط») سبقت بُعدَ القسم ولم تلحق به —
+    فلوحةُ موظّفِ الوحدة كانت تُظهر أصفاراً وهو يعمل كلَّ يوم.
     """
-    لوحة تحكم مختصرة تعرض إحصائيات أساسية
-    
-    المميزات:
-    - إجمالي الكتب
-    - كتب اليوم والأسبوع
-    - الكتب المتأخرة
-    - إحصائيات الكتب الواردة والصادرة
-    
-    Args:
-        request: HTTP request
-    
-    Returns:
-        Rendered dashboard template with statistics
-    """
-    books = Book.objects.filter(is_deleted=False) if request.user.is_superuser else Book.objects.filter(created_by=request.user, is_deleted=False)
+    books = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
     today = timezone.localdate()
 
     # المنطق الموحَّد: نشط = is_archived=False AND due_date IS NOT NULL
@@ -74,7 +70,17 @@ def dashboard(request):
         pending=Count('id', filter=active_q & Q(due_date__gt=today)),
     )
 
+    from core.dashboard_sections import sections_for
+    from core.roles import ROLE_DEFINITIONS, get_user_role
+
+    role = get_user_role(request.user)
+    profile = getattr(request.user, 'profile', None)
+
     ctx = {
+        "sections":         sections_for(request.user),
+        "role_key":         role,
+        "role_label":       ROLE_DEFINITIONS.get(role, {}).get('label', role),
+        "my_department":    profile.department if profile else None,
         "total":            stats['total'],
         "today_count":      stats['today_count'],
         "week_count":       stats['week_count'],

@@ -1,0 +1,117 @@
+/* ═══════════════════════════════════════════════════════════════════
+   لوحةُ التحكّم بالأدوار — «مكتبُ الأرشيف الدافئ»
+
+   القسمُ الأوّلُ («ما يخصّني») يأخذ وزناً بصريّاً أكبر: هو ما يفتحه الموظّفُ
+   صباحاً، وما عداه سياق. والعدّادُ **رابطٌ لا رقمٌ ساكن** — رقمٌ لا يُنقر
+   يترك المستخدمَ يبحث عن الطريق بنفسه.
+
+   مقصورةٌ على `.db-page`.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.db-page {
+  --ink:        #362014;
+  --ink-soft:   #6f4631;
+  --ink-faint:  #9c7a63;
+  --amber:      #b45309;
+  --amber-deep: #8a3f08;
+  --gold:       #f9a826;
+  --paper:      #fff;
+  --paper-tint: #fdf6ec;
+  --rule:       rgba(111, 70, 40, .16);
+  --rule-hard:  rgba(180, 83, 9, .30);
+  color: var(--ink);
+}
+
+/* ── ترويسةُ الهويّة: مَن أنا وأين أعمل ─────────────────────────── */
+.db-hero {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 1rem; padding: 1rem 1.15rem; margin-bottom: 1.1rem;
+  box-shadow: 0 10px 24px rgba(77, 44, 25, .08);
+}
+.db-hero h4 { margin: 0 0 .15rem; font-weight: 800; font-size: 1.15rem; }
+.db-hero p  { margin: 0; font-size: .84rem; color: var(--ink-soft); font-weight: 600; }
+.db-role {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: var(--ink); color: #fff; border-radius: 999px;
+  padding: .3rem .9rem; font-size: .78rem; font-weight: 800;
+}
+.db-dept {
+  display: inline-flex; align-items: center; gap: .35rem;
+  background: var(--paper-tint); color: var(--ink-soft);
+  border: 1px solid var(--rule); border-radius: 999px;
+  padding: .28rem .8rem; font-size: .76rem; font-weight: 700;
+}
+
+/* ── الأقسام ──────────────────────────────────────────────────── */
+.db-sections { display: grid; gap: 1.1rem; }
+
+.db-section {
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 1rem; padding: 1rem 1.15rem;
+  box-shadow: 0 10px 24px rgba(77, 44, 25, .08);
+  border-top: 3px solid var(--rule);
+}
+/* القسمُ الأوّلُ أثقلُ وزناً — هو الغرضُ من فتح الصفحة. */
+.db-section:first-child { border-top-color: var(--gold); }
+
+.db-section-hd {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: .8rem; flex-wrap: wrap; margin-bottom: .8rem;
+}
+.db-section-hd h5 { margin: 0; font-size: .98rem; font-weight: 800; color: var(--ink); }
+.db-section-hd p  { margin: .1rem 0 0; font-size: .76rem; color: var(--ink-faint); font-weight: 600; }
+
+.db-links { display: flex; gap: .4rem; flex-wrap: wrap; }
+.db-link {
+  display: inline-flex; align-items: center; gap: .35rem;
+  border: 1px solid var(--rule); border-radius: .55rem;
+  padding: .25rem .7rem; font-size: .76rem; font-weight: 700;
+  color: var(--ink-soft); text-decoration: none; background: var(--paper);
+}
+.db-link:hover { border-color: var(--rule-hard); color: var(--amber); }
+.db-link:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* ── العدّاد: رابطٌ لا رقمٌ ساكن ────────────────────────────────── */
+.db-counters {
+  display: grid; gap: .7rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+}
+.db-counter {
+  display: flex; flex-direction: column; gap: .1rem;
+  padding: .7rem .85rem; border-radius: .8rem;
+  border: 1px solid var(--rule); background: var(--paper-tint);
+  text-decoration: none; color: var(--ink-soft);
+  transition: transform .16s ease, border-color .16s ease;
+  border-inline-start: 3px solid var(--tone, var(--rule));
+}
+.db-counter:hover { transform: translateY(-2px); border-color: var(--rule-hard); }
+.db-counter:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.db-tone-danger { --tone: #dc2626; }
+.db-tone-warn   { --tone: #d97706; }
+.db-tone-accent { --tone: var(--amber); }
+.db-tone-secret { --tone: #7c3aed; }
+.db-tone-calm   { --tone: #94a3b8; }
+
+.db-n {
+  font-size: 1.5rem; font-weight: 800; line-height: 1.1;
+  font-variant-numeric: tabular-nums; color: var(--ink-faint);
+}
+/* الصفرُ يبقى رماديّاً: لونُ التنبيه لِما يستحقّ التنبيه وحده. */
+.db-n[data-has] { color: var(--tone, var(--ink)); }
+.db-l { font-size: .78rem; font-weight: 700; }
+
+.db-note {
+  margin: .8rem 0 0; font-size: .78rem; color: var(--ink-faint);
+  padding-top: .7rem; border-top: 1px dashed var(--rule);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .db-section { animation: db-rise .45s cubic-bezier(.22, .8, .3, 1) backwards; }
+  .db-section:nth-child(2) { animation-delay: .06s; }
+  .db-section:nth-child(3) { animation-delay: .12s; }
+  .db-section:nth-child(4) { animation-delay: .18s; }
+}
+@keyframes db-rise { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
