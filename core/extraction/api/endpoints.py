@@ -361,6 +361,8 @@ def smart_extract_direct(request):
                 'sender_number_confidence': result.sender_number_confidence,
                 'title': result.title,
                 'title_confidence': result.title_confidence,
+                # اقتراحُ الموضوع الضعيف — المسارات الثلاثة تتساوى حمولةً
+                'title_suggestion': getattr(result, 'title_suggestion', None),
                 'issuing_entity': result.issuing_entity_name,
                 'issuing_entity_confidence': result.issuing_entity_confidence,
                 'issuing_entity_matches': slim_entity_matches(result.issuing_entity_matches),

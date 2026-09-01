@@ -80,8 +80,13 @@ class SuggestionPayloadTests(SimpleTestCase):
 class ZeroAutofillSourceGuardTests(SimpleTestCase):
     """حرزٌ بنيويٌّ على مصدر الواجهة — لا مُشغّلَ اختباراتٍ لـJS في المشروع.
 
-    يقفل قانون «صفرُ ملءٍ تلقائيٍّ صامت» عند حدّه الحقيقيّ: الموضعُ **الوحيد**
-    الذي يكتب قيمةً في حقل تاريخ الجهة من الاقتراح هو دالّةُ التأكيد.
+    **القانونُ بعد قرار المالك (2026-09-01)**: الملءُ التلقائيّ مسموحٌ للقراءة
+    الخضراء وحدَها وموسوماً — لا مكتوماً ولا صامتاً. فالمحروسُ هنا شيئان:
+      1. كاتبا الحقل **اثنان لا غير**: التأكيدُ بنقرة، والملءُ الأخضر.
+      2. شرطُ الملء مجموعٌ في موضعٍ واحد (`_sdAutofillEligible`) يضمّ العتبةَ
+         المقيسة وسلامةَ التحليل وحارسَ الفارق — فارتخاءُ أحدها يفشل صاخباً.
+    وجذرُ التسميم الأصليّ (ملءُ **تاريخ اليوم** بلا قراءة) يبقى ممنوعاً بالبناء:
+    القيمةُ المكتوبة هي `iso` القادمُ من القارئ لا تاريخٌ مُختلَق.
     """
 
     JS = 'static/extraction_smart.js'
@@ -92,16 +97,41 @@ class ZeroAutofillSourceGuardTests(SimpleTestCase):
         with open(os.path.join(settings.BASE_DIR, self.JS), encoding='utf-8') as f:
             return f.read()
 
-    def test_only_the_confirm_function_writes_the_field(self):
+    def _body(self, src, header):
+        body = src[src.index(header):]
+        return body[:body.index(chr(10) + '}')]
+
+    def test_only_two_named_functions_write_the_field(self):
         src = self._src()
-        body = src[src.index('function _confirmSenderDateSuggestion'):]
-        body = body[:body.index('\n}')]
-        self.assertIn("el.value = card.dataset.iso", body)
-        # خارج دالّة التأكيد: لا كتابةَ قيمةٍ في العنصر من الاقتراح
-        rest = src.replace(body, '')
+        confirm = self._body(src, 'function _confirmSenderDateSuggestion')
+        autofill = self._body(src, 'function _autofillSenderDate')
+        self.assertIn("el.value = card.dataset.iso", confirm)
+        self.assertIn("el.value = iso", autofill)
+        # خارجهما: لا كتابةَ قيمةٍ في العنصر من الاقتراح
+        rest = src.replace(confirm, '').replace(autofill, '')
         for forbidden in ("senderDate').value =", 'senderDate").value =',
                           "setVal('senderDate', data.sender_date_suggestion"):
             self.assertNotIn(forbidden, rest)
+
+    def test_autofill_requires_green_and_parse_and_gap_guard(self):
+        """الشروطُ الثلاثة في موضعٍ واحد — ارتخاءُ أيّها يفشل هنا لا في الإنتاج."""
+        eligible = self._body(self._src(), 'function _sdAutofillEligible')
+        self.assertIn("conf >= green", eligible)
+        self.assertIn("sug.parse === 'ok'", eligible)
+        self.assertIn("guard.state === 'ok'", eligible)
+
+    def test_autofill_marks_provenance_and_never_overwrites(self):
+        """المملوءُ آليّاً يُستبعَد من ذهب التدريب، وقيمةُ الكاتب لا تُدهَس."""
+        autofill = self._body(self._src(), 'function _autofillSenderDate')
+        self.assertIn('PROV_AUTOFILLED', autofill)
+        self.assertIn("if (String(el.value || '').trim()) return false;", autofill)
+
+    def test_autofill_is_reached_only_through_the_eligibility_gate(self):
+        """لا نداءَ ثانياً للملء يلتفّ على الشرط."""
+        src = self._src()
+        self.assertEqual(src.count('_autofillSenderDate('), 2)   # تعريفٌ + نداءٌ واحد
+        renderer = self._body(src, 'function applySenderDateSuggestion')
+        self.assertIn('_sdAutofillEligible(sug, conf, green, guard)', renderer)
 
     def test_renderer_is_the_single_entry_point_for_all_three_paths(self):
         """مسارات الملء الثلاثة (كاش المسح · البثّ · الرفع) تمرّ بنقطةٍ واحدة."""

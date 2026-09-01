@@ -124,6 +124,9 @@ class AIExtractionResult:
 
         self.title: str = ""
         self.title_confidence: float = 0.0
+        # اقتراحُ الموضوع ضعيفِ المسار — قاموسٌ منفصلٌ **لا يُملأ في الحقل**
+        # (انظر `_route_title_emission`): {value, confidence, source}.
+        self.title_suggestion: Optional[dict] = None
 
         self.margin_text: str = ""
         self.margin_confidence: float = 0.0
@@ -392,6 +395,55 @@ def _strict_ref_skips_visual(result) -> bool:
     return (getattr(result, 'sender_number_source', '') == 'strict_ref'
             and bool(getattr(result, 'sender_number', None))
             and bool(getattr(result, 'sender_date', None)))
+
+
+TITLE_DIRECT_FILL_SOURCES = ('marker',)
+"""مسارُ الموضوع الذي يُملأ في حقل الكاتب مباشرةً — وما عداه **اقتراحٌ مؤشَّر**.
+
+قياسٌ على المجموعة المختومة subject-200 (النظرة 1، n=190، مصنوعتُها
+`subject_probe/quad200.json`؛ صالحٌ = توكن-F1 ≥ 0.5 مقابل عنوان الكاتب):
+
+    marker    (ثقة 0.75) · 118 = 62% · صالحٌ **72.9%** · خاطئٌ فاحشاً (F1<0.3) 21%
+    fallback  (ثقة 0.35) ·  46 = 24% · صالحٌ **6.5%**  · خاطئٌ فاحشاً **91.3%**
+    bracket_* (ثقة 0.00) ·   5 =  3% · صالحٌ **0%**    · خاطئٌ فاحشاً 100%
+    صمتٌ                 ·  21 = 11%
+
+أي أنّ **ربعَ المستندات** كان يُملأ حقلُها بقيمةٍ خاطئةٍ تسعَ مرّاتٍ من عشر،
+لأنّ الثقةَ في هذه الواجهة تُلوّن الشارة ولا تحجب القيمة. وقرارُ المالك
+(2026-09-01) ليس الكتم بل **التحويل إلى اقتراحٍ مؤشَّر**: تبقى فائدتُه حين
+يصيب (ثلاثةٌ من 46 صالحة) ولا يُثقل المراجعةَ حين يخطئ.
+
+**التوجيهُ على المنشأ لا على عتبة**: الفصلُ المقيس بين المسارين عشرةُ أضعاف
+وثقتُهما مشتقّةٌ من المنشأ أصلاً (`_TITLE_SOURCE_CONF`)، فعتبةٌ رقميّةٌ هنا
+انتخابٌ على المجموعة المختومة بلا زيادةِ معلومة.
+
+⚠️ ولا يُضاف مسارٌ إلى هذه المجموعة إلّا بقياسٍ على مجموعةٍ مختومةٍ ببوّابةٍ
+مُسجَّلةٍ قبل النظر — الأرقامُ أعلاه هي المرجع.
+"""
+
+
+def _route_title_emission(result, source: str) -> None:
+    """يفصل موضوعَ المسار القويّ (يُملأ الحقل) عن الضعيف (اقتراحٌ مؤشَّر).
+
+    الاقتراحُ يعيش في مفتاحٍ منفصل — نفسُ بناء `sender_date_suggestion` — كي
+    تعجز الواجهةُ عن ملئه سهواً: مسارات الملء تكتب `data.title` في الحقل بلا
+    شرط، فإبقاءُ القيمة هناك مع «تأشيرٍ» بالثقة هو الحال الذي قِيس خاطئاً 91%.
+
+    وثقةُ الاقتراح تخرج من `field_confidences` مع القيمة: قيمةٌ لا تبلغ الكاتبَ
+    لا يصحّ أن تجرّ `overall_confidence` فتقلب كتباً إلى `manual_review`.
+    """
+    title = (result.title or '').strip()
+    if not title:
+        return
+    if source in TITLE_DIRECT_FILL_SOURCES:
+        return
+    result.title_suggestion = {
+        'value': title,
+        'confidence': round(float(result.title_confidence or 0.0), 4),
+        'source': source or 'unknown',
+    }
+    result.title = ''
+    result.title_confidence = 0.0
 
 
 def _suppress_sender_number_emission(result) -> None:
@@ -1248,6 +1300,9 @@ class AIExtractionService:
                         if not result.sender_number:
                             result.sender_number = ref_num
                             result.sender_number_confidence = 0.65
+                # **توجيهُ انبعاث الموضوع** — بعد قصّ المرجع كي يُنظَّف الاقتراحُ
+                # أيضاً، وقبل `field_confidences` كي لا تدخل ثقةُ ما لا يُملأ.
+                _route_title_emission(result, patterns.get('title_source') or '')
                 # ── «النصُّ يسبق البصريّ» (أمر المالك 2026-08-30) ───────────────
                 # مطابقةٌ صارمةٌ على **طبقة النصّ الخامّة** لا على `probe`: بنيةُ
                 # السطور هي الدليل (`clean_text` تطوي `\n` فتُلغي كلَّ الطبقات).
@@ -1686,6 +1741,8 @@ def partial_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         if value not in (None, '', []):
             snap[field] = value
             snap[conf] = getattr(result, conf, 0.0)
+    if getattr(result, 'title_suggestion', None):
+        snap['title_suggestion'] = result.title_suggestion
     if getattr(result, 'document_type', ''):
         snap['document_type'] = result.document_type
     if getattr(result, 'issuing_entity_name', ''):
@@ -1776,6 +1833,9 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         'sender_number_bbox_dims': getattr(result, 'sender_number_bbox_dims', None),
         'title': result.title,
         'title_confidence': result.title_confidence,
+        # اقتراحُ الموضوع ضعيفِ المسار — منفصلاً عن `title` بالبناء: الواجهةُ
+        # القديمة تتجاهله فلا تملأ به حقلاً (نفسُ عقد `sender_date_suggestion`).
+        'title_suggestion': getattr(result, 'title_suggestion', None),
         'issuing_entity': result.issuing_entity_name,
         'issuing_entity_confidence': result.issuing_entity_confidence,
         'issuing_entity_matches': slim_entity_matches(result.issuing_entity_matches),

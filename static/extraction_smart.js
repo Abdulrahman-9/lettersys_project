@@ -15,12 +15,19 @@
  */
 const CONFIDENCE_THRESHOLDS = { high: 0.85, medium: 0.65 };
 
-/* ===== اقتراحُ تاريخ الجهة (قارئ D2) — تصديقٌ بنقرة، لا ملءٌ تلقائيّ ==========
+/* ===== اقتراحُ تاريخ الجهة (قارئ D2) — ملءٌ للأخضر وحدَه، والقصاصةُ شاهدة =====
  *
- * **القانون الذي يحكم هذا كلّه:** الحقل لا يُملأ إلا بفعلٍ من الكاتب. جذرُ تسميم
- * التواريخ (آلافُ الصفوف حملت تاريخ الإدخال بدل حبر الجهة) كان ملءً تلقائيّاً
- * صامتاً؛ فالاقتراحُ يصل في مفتاحٍ منفصل (`sender_date_suggestion`) ولا يُكتب
- * في `senderDate` أبداً إلا بضغطة تأكيد.
+ * **القانون بعد قرار المالك (2026-09-01):** الحقلُ يُملأ تلقائيّاً **من قراءةٍ
+ * خضراء وحدَها** (ثقة ≥ 0.98 · تحليلٌ `ok` · حارسُ الفارق سالم)، والقصاصةُ تبقى
+ * معروضةً للمطابقة بنظرة. وما دون ذلك يبقى كما كان: اقتراحٌ لا يمسّ الحقل.
+ *
+ * **وهذا ليس عودةَ جذر التسميم**: ذاك كان ملءَ **تاريخِ اليوم** بلا قراءةٍ أصلاً
+ * (`resetDateFields`)، أمّا هنا فالقيمةُ قراءةُ حبرِ الجهة نفسِه من قصاصةٍ
+ * معروضة، فوق عتبةٍ مقيسةٍ دقّتُها 91.7% على مسار الإنتاج (n=150). وثلاثةُ
+ * حرّاسٍ تبقى قائمة: (١) الخادمُ لا يكتب `sender_date` أبداً — الاقتراحُ في
+ * مفتاحٍ منفصل؛ (٢) القيمةُ المملوءةُ تُوسَم `autofilled` فتُستبعَد من ذهب
+ * التدريب ما لم يلمسها الكاتب؛ (٣) ما لم يُملأ لا يُلمَس: الأصفرُ والغامضُ
+ * وفارقُ اليوم الصفر تبقى بانتظار نقرةٍ صريحة.
  *
  * **العتبة 0.98 وليست 0.65:** مقيسةٌ على حجز القارئ (n=360): فوقها دقّةُ 93.5%
  * بتغطية 68%، وما دونها ~24% — فلا شريحة «صفراء» صادقة. و0.65 معايرةُ نموذج
@@ -51,7 +58,9 @@ const SENDER_DATE_GAP_MAX = 45;
 const PROV_TYPED = 'typed';
 const PROV_CONFIRMED = 'confirmed';
 const PROV_AUTOFILLED = 'autofilled';
-const PROVENANCE_FIELD_IDS = ['senderNumber', 'senderDate'];
+// الموضوعُ منها لأنّ حقيقةَ تدريبه هي `Book.title` نفسُه: عنوانٌ مُلئ آليّاً
+// وحُفظ بلا لمسٍ يعود وسماً يدرّب المُنتقي على مخرجه هو.
+const PROVENANCE_FIELD_IDS = ['senderNumber', 'senderDate', 'title'];
 // معرّف الحقل في الواجهة ⟵ اسمه في عقد الالتقاط الخادميّ
 const CAPTURE_FIELD_BY_ID = {
     senderNumber: 'sender_number', senderDate: 'sender_date',
@@ -120,6 +129,29 @@ function _senderDateGuard(iso) {
     return { state: 'ok', gap };
 }
 
+/** شرطُ الملء التلقائيّ — الموضعُ الوحيد الذي يقرّره (يحرسه اختبارُ مصدر). */
+function _sdAutofillEligible(sug, conf, green, guard) {
+    return !!(sug && sug.iso && sug.parse === 'ok'
+              && conf >= green && guard && guard.state === 'ok');
+}
+
+/** يكتب القراءةَ الخضراء في الحقل — ولا يدهس قيمةً موجودة أبداً. */
+function _autofillSenderDate(iso) {
+    const el = _sdEl('senderDate');
+    if (!el || !iso) return false;
+    if (String(el.value || '').trim()) return false;   // قيمةُ الكاتب أعلى من كلّ قراءة
+    codeFill(() => {
+        el.value = iso;
+        try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+        try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+    });
+    // مُلئ آليّاً وحُفظ بلا لمس ⟵ يُستبعَد من ذهب التدريب. لمسةُ الكاتب ترفعه
+    // إلى `confirmed` تلقائيّاً عبر `_onHumanTouch`.
+    el.dataset.provenance = PROV_AUTOFILLED;
+    markSuggestionDisplayed('sender_date');
+    return true;
+}
+
 /** يعرض القصاصة والاقتراح معاً — نقطةُ الدخول الوحيدة لمسارات الملء الثلاثة. */
 function applySenderDateSuggestion(data) {
     const fig = _sdEl('senderDateCrop');
@@ -153,6 +185,12 @@ function applySenderDateSuggestion(data) {
     const btnText = _sdEl('senderDateApplyText');
     const kbd = _sdEl('senderDateKbd');
     const guard = _senderDateGuard(sug.iso);
+    // الملءُ هنا — بعد الحارس وقبل الرسالة: الرسالةُ تصف ما حدث فعلاً.
+    let autofilled = false;
+    if (_sdAutofillEligible(sug, conf, green, guard)) {
+        const el = _sdEl('senderDate');
+        autofilled = _autofillSenderDate(sug.iso) || (el && el.value === sug.iso);
+    }
     let msg = '', blocked = false, enterOk = true;
 
     if (!sug.iso) {
@@ -171,12 +209,14 @@ function applySenderDateSuggestion(data) {
             ? 'التاريخ بعد تاريخ القيد — راجعه.'
             : 'أقدمُ من ' + SENDER_DATE_GAP_MAX + ' يوماً من تاريخ القيد — راجعه.';
         enterOk = false;
+    } else if (autofilled) {
+        msg = 'مُلئ تلقائيّاً من القصاصة — طابِقه بنظرة ثمّ أكّد.';
     }
     warn.textContent = msg;
     warn.hidden = !msg;
     warn.classList.toggle('is-blocked', blocked);
     btn.disabled = blocked;
-    btnText.textContent = blocked ? 'تعذّر الاقتراح' : 'تأكيد';
+    btnText.textContent = blocked ? 'تعذّر الاقتراح' : (autofilled ? 'مطابِق' : 'تأكيد');
     kbd.hidden = !enterOk;
     card.dataset.iso = sug.iso || '';
     card.dataset.enter = enterOk ? '1' : '';
@@ -208,6 +248,75 @@ document.addEventListener('keydown', (e) => {
     if (_confirmSenderDateSuggestion()) e.preventDefault();
 });
 window.applySenderDateSuggestion = applySenderDateSuggestion;
+
+/* ===== اقتراحُ الموضوع ضعيفِ المسار — يُعرَض ولا يُملأ =======================
+ *
+ * **لماذا بطاقةٌ لا ملء** (قرار المالك 2026-09-01، على قياس المجموعة المختومة
+ * subject-200، n=190): مُنتقي الموضوع مساران لا مسارٌ واحد —
+ *   مسارُ العلامة («م/» · «الموضوع») 62% من المستندات · صالحٌ **72.9%** ⟵ يملأ
+ *   المسارُ الاحتياطيّ والقوس        27% منها        · صالحٌ **6.5%**  ⟵ بطاقة
+ * فالقيمةُ الضعيفة كانت تُكتب في نصّ الكاتب كالقويّة تماماً (الثقةُ تلوّن
+ * الشارة ولا تحجب القيمة)، أي ربعُ المستندات بموضوعٍ خاطئٍ يجب أن يُمحى يدويّاً.
+ * وهي **لا تُكتَم** لأنّ ثلاثاً من كلّ 46 صحيحة، والبطاقةُ تُبقي مكسبَها
+ * بنقرةٍ وتُلغي كلفتَها.
+ *
+ * والقيمةُ المؤكَّدةُ تُوسَم `confirmed` لا `typed`: نقرةٌ ليست شهادةَ تقييمٍ
+ * مستقلّة — وحقيقةُ تدريب الموضوع هي `Book.title` عينُه، فبلا الوسم يتعلّم
+ * المُنتقي من مخرجه هو.
+ */
+function _tsEl(id) { return document.getElementById(id); }
+
+function applyTitleSuggestion(data) {
+    const card = _tsEl('titleSuggest');
+    if (!card) return;
+    const sug = data && data.title_suggestion;
+    if (!sug || !sug.value) { card.hidden = true; card.dataset.value = ''; return; }
+    card.hidden = false;
+    // هنا — وهنا فقط — رأى الكاتبُ اقتراحَ الموضوع فعلاً.
+    markSuggestionDisplayed('title');
+    const val = _tsEl('titleSuggestValue');
+    const badge = _tsEl('titleSuggestConf');
+    const warn = _tsEl('titleSuggestWarn');
+    if (val) val.textContent = sug.value;
+    if (badge) {
+        badge.textContent = Math.round(Number(sug.confidence || 0) * 100) + '%';
+        badge.className = 'confidence-badge low';
+    }
+    if (warn) {
+        warn.textContent = (sug.source === 'fallback')
+            ? 'أوّلُ سطرٍ فوق التحيّة — أصاب 7 مرّاتٍ من 100 على مجموعةٍ مختومة.'
+            : 'سطرٌ بين المُرسَل إليه والتحيّة — لم يصب مرّةً على المجموعة المختومة.';
+    }
+    card.dataset.value = sug.value;
+}
+
+/** الموضعُ **الوحيد** الذي يكتب اقتراحَ الموضوع في الحقل (يحرسه اختبارُ مصدر). */
+function _confirmTitleSuggestion() {
+    const card = _tsEl('titleSuggest');
+    const el = _tsEl('title');
+    if (!card || card.hidden || !el || !card.dataset.value) return false;
+    el.value = card.dataset.value;
+    codeFill(() => {
+        try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+        try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+    });
+    el.dataset.provenance = PROV_CONFIRMED;
+    card.hidden = true;
+    return true;
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target || !e.target.closest) return;
+    if (e.target.closest('#titleSuggestApply')) {
+        e.preventDefault();
+        _confirmTitleSuggestion();
+    } else if (e.target.closest('#titleSuggestDismiss')) {
+        e.preventDefault();
+        const card = _tsEl('titleSuggest');
+        if (card) card.hidden = true;
+    }
+});
+window.applyTitleSuggestion = applyTitleSuggestion;
 
 
 class ExtractionSmartSystem {
@@ -1031,6 +1140,7 @@ class ExtractionSmartSystem {
         applySenderDateSuggestion(data);
         setVal('senderNumber', data.sender_number);
         setVal('title', data.title);
+        applyTitleSuggestion(data);
         setVal('secretLevel', data.secret_level);
         if (data.book_kind) {
             setVal('bookKind', data.book_kind);
@@ -3829,6 +3939,7 @@ class ExtractionSmartSystem {
     _applyPartialFields(fields) {
         if (!fields) return;
         applySenderDateSuggestion(fields);
+        applyTitleSuggestion(fields);
         const filled = this._streamFilled || (this._streamFilled = new Set());
         [
             ['bookNumber', 'book_number', 'book_number_confidence'],
@@ -3990,6 +4101,9 @@ class ExtractionSmartSystem {
                 }
             }
         });
+
+        // بطاقةُ الموضوع الضعيف — نفسُ نقطة الدخول للمسارات الثلاثة.
+        applyTitleSuggestion(data);
 
         const extractedDocumentType = (data.document_type || data.book_type_name || '').trim();
         if (extractedDocumentType) {
@@ -4813,6 +4927,10 @@ class ExtractionSmartSystem {
             if (_sdProv) formData.append('sender_date_provenance', _sdProv);
             const _snProv = fieldProvenance('senderNumber');
             if (_snProv) formData.append('sender_number_provenance', _snProv);
+            // الموضوع: مسارُ العلامة يملؤه آليّاً وحقيقةُ تدريبه هي القيمةُ
+            // المحفوظة نفسُها — فبلا الوسم يصير الحصادُ تعزيزاً ذاتيّاً.
+            const _tProv = fieldProvenance('title');
+            if (_tProv) formData.append('title_provenance', _tProv);
             // ما عُرض على الكاتب فعلاً — لا يُخمَّن خادميّاً من وجود الاقتراح.
             formData.append('displayed_fields', displayedFieldsList().join(','));
         }

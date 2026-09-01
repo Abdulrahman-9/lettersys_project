@@ -393,6 +393,11 @@ def save_book_api(request):
                                # صامتاً، فيتغذّى النموذج على خطئه هو.
                                'sender_number_provenance': (
                                    request.POST.get('sender_number_provenance') or ''),
+                               # الموضوعُ يُملأ آليّاً في مسار العلامة، وحقيقةُ
+                               # تدريبه هي `Book.title` نفسُه ⟵ بلا الوسم يصير
+                               # الحصادُ تعزيزاً ذاتيّاً لخطأ المُنتقي.
+                               'title_provenance': (
+                                   request.POST.get('title_provenance') or ''),
                                # ما عُرض على الكاتب فعلاً — الواجهةُ وحدها تعرفه
                                # (اقتراحٌ موجود ≠ اقتراحٌ معروض).
                                'displayed_fields': [

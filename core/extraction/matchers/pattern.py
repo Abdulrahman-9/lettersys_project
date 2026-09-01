@@ -1054,6 +1054,11 @@ class PatternMatcher:
             'entities': entities,
             'title': title,
             'title_confidence': title_conf,
+            # منشأُ الموضوع (marker / bracket_ar / bracket_en / fallback) — الأنبوب
+            # يوجّه به الانبعاث: القويُّ يُملأ والضعيفُ يصير اقتراحاً مؤشَّراً.
+            # التوجيهُ على المنشأ لا على عتبةِ ثقةٍ مُنتخَبة: الثقةُ هنا **مشتقّةٌ**
+            # من المنشأ أصلاً (_TITLE_SOURCE_CONF)، فقراءتُها حكماً دورانٌ.
+            'title_source': (getattr(self, 'last_title_source', '') if title else ''),
             'raw_text': text[:500],  # أول 500 حرف
         }
 
