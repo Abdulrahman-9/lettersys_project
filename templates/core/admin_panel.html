@@ -79,7 +79,7 @@
               <label for="dep-entity" class="form-label" style="font-size:.82rem">الجهة المقابلة</label>
               <select class="form-select form-select-sm" id="dep-entity" name="entity">
                 <option value="">— تُنشأ تلقائيّاً باسم القسم —</option>
-                {% for e in entities %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}
+                {% for e in entities %}<option value="{{ e.pk }}"{% if e.pk in member_ids %} selected{% endif %}>{{ e.name }}{% if e.code %} · {{ e.code }}{% endif %}</option>{% endfor %}
               </select>
               <div class="form-text" style="font-size:.75rem">
                 اربطه بجهةٍ قائمةٍ إن كانت في الدليل أصلاً — وإلّا فقد يظهر مرّتين.
@@ -230,24 +230,32 @@
         <div class="card border-0 shadow-sm rounded-4">
           <div class="card-header bg-white border-bottom p-3">
             <h6 class="mb-0 fw-bold" style="font-size:.92rem">
-              <i class="bi bi-plus-circle text-success me-1"></i>عنقود جديد
+              {% if editing %}
+                <i class="bi bi-pencil-square text-primary me-1"></i>تعديل «{{ editing.name }}»
+              {% else %}
+                <i class="bi bi-plus-circle text-success me-1"></i>عنقود جديد
+              {% endif %}
             </h6>
           </div>
           <form method="post" class="card-body p-3">
             {% csrf_token %}
             <input type="hidden" name="action" value="save_group">
             <input type="hidden" name="tab" value="groups">
+            {% if editing %}<input type="hidden" name="id" value="{{ editing.pk }}">{% endif %}
+            {# علامةٌ صريحة: «الأعضاءُ في هذا الطلب» — تفصلها عن «لا حقلَ أعضاءَ أصلاً» #}
+            <input type="hidden" name="members_submitted" value="1">
 
             <div class="mb-2">
               <label for="grp-name" class="form-label" style="font-size:.82rem">اسم العنقود</label>
               <input type="text" class="form-control form-control-sm" id="grp-name"
-                     name="name" required maxlength="200" placeholder="جميع الهيئات والأقسام">
+                     name="name" required maxlength="200" placeholder="جميع الهيئات والأقسام"
+                     value="{% if editing %}{{ editing.name }}{% endif %}">
             </div>
             <div class="mb-2">
               <label for="grp-rule" class="form-label" style="font-size:.82rem">قاعدة ديناميكيّة</label>
               <select class="form-select form-select-sm" id="grp-rule" name="auto_rule">
                 <option value="">— عضويّة ثابتة أختارها —</option>
-                {% for value, label in auto_rules %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                {% for value, label in auto_rules %}<option value="{{ value }}"{% if editing and editing.auto_rule == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
               </select>
               <div class="form-text" style="font-size:.75rem">
                 العضويّة الثابتة باسم «جميع الأقسام» <b>تتيبّس</b> عند دخول قسمٍ جديد —
@@ -258,13 +266,18 @@
               <label for="grp-members" class="form-label" style="font-size:.82rem">الأعضاء</label>
               <select class="form-select form-select-sm" id="grp-members" name="members"
                       multiple size="10">
-                {% for e in entities %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}
+                {% for e in entities %}<option value="{{ e.pk }}"{% if e.pk in member_ids %} selected{% endif %}>{{ e.name }}{% if e.code %} · {{ e.code }}{% endif %}</option>{% endfor %}
               </select>
-              <div class="form-text" style="font-size:.75rem">تُهمَل إن اخترتَ قاعدةً ديناميكيّة.</div>
+              <div class="form-text" style="font-size:.75rem">
+                Ctrl+نقر لإضافة عضوٍ أو إزالته. تُهمَل إن اخترتَ قاعدةً ديناميكيّة.
+              </div>
             </div>
-            <button type="submit" class="btn btn-sm btn-success w-100">
-              <i class="bi bi-check2 me-1"></i>احفظ
+            <button type="submit" class="btn btn-sm {% if editing %}btn-primary{% else %}btn-success{% endif %} w-100">
+              <i class="bi bi-check2 me-1"></i>{% if editing %}احفظ التعديل{% else %}احفظ{% endif %}
             </button>
+            {% if editing %}
+            <a href="?tab=groups" class="btn btn-sm btn-link w-100 mt-1">إلغاء التعديل</a>
+            {% endif %}
           </form>
         </div>
       </div>
@@ -309,6 +322,22 @@
                             {% if g.is_active %}تعطيل{% else %}تفعيل{% endif %}
                           </button>
                         </form>
+                        <a href="?tab=groups&edit={{ g.pk }}"
+                           class="btn btn-sm btn-outline-primary" style="font-size:.78rem">تعديل</a>
+                        {% if not g.books.exists %}
+                        <form method="post" class="d-inline"
+                              onsubmit="return confirm('حذف العنقود «{{ g.name|escapejs }}» نهائياً؟');">
+                          {% csrf_token %}
+                          <input type="hidden" name="action" value="delete_group">
+                          <input type="hidden" name="tab" value="groups">
+                          <input type="hidden" name="id" value="{{ g.pk }}">
+                          <button type="submit" class="btn btn-sm btn-outline-danger"
+                                  style="font-size:.78rem">حذف</button>
+                        </form>
+                        {% else %}
+                        <span class="text-muted" style="font-size:.72rem"
+                              title="عُمِّم به كتابٌ — التعطيلُ يحفظ أثرَه">لا يُحذف</span>
+                        {% endif %}
                       </td>
                     </tr>
                   {% empty %}

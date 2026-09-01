@@ -16,7 +16,8 @@ from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect, render
 
-from core.admin_service import (assign_user, create_department, save_group,
+from core.admin_service import (assign_user, create_department, delete_group,
+                                save_group,
                                 update_department)
 from core.models import Department, Entity, EntityGroup
 from core.roles import CONTROLLER_GROUP_NAME
@@ -43,8 +44,13 @@ def admin_panel(request):
         'all_departments': Department.objects.order_by('code'),
         'people': _user_rows(),
         'groups': EntityGroup.objects.prefetch_related('members').order_by('name'),
-        'entities': Entity.objects.order_by('name')[:500],
+        'entities': Entity.objects.filter(is_active=True).order_by('name'),
         'auto_rules': EntityGroup.AUTO_RULE_CHOICES,
+        # `?edit=<id>` يملأ النموذجَ بعنقودٍ قائم — تعديلٌ بصفر JS، ورابطٌ
+        # يُنسخ ويُشارَك. وسقفُ الـ500 على الجهات أُسقط: عنقودٌ لا يجد عضوَه
+        # في القائمة عيبٌ صامت (674 جهةً في القاعدة).
+        'editing': _editing_group(request),
+        'member_ids': _editing_member_ids(request),
     })
 
 
@@ -112,14 +118,29 @@ def _assign_user(request):
 
 def _save_group(request):
     group = EntityGroup.objects.filter(pk=request.POST.get('id')).first()
+
+    # **الفرقُ بين «لم أرسل الأعضاء» و«أرسلتُهم فارغين»**: القائمةُ المتعدّدة في
+    # HTML لا ترسل شيئاً حين لا يُحدَّد أحد، فزرُّ التعطيل — ولا حقلَ أعضاءَ فيه
+    # — كان يُمرّر `[]` فتمسح `members.set([])` عضويّةَ العنقود **صامتاً**.
+    # العلامةُ الصريحة تفصل الحالتين.
+    members = ([int(v) for v in request.POST.getlist('members') if v.isdigit()]
+               if request.POST.get('members_submitted') else None)
+
     saved = save_group(
         by=request.user, group=group,
         name=request.POST.get('name', ''),
         auto_rule=request.POST.get('auto_rule', ''),
-        member_ids=[int(v) for v in request.POST.getlist('members') if v.isdigit()],
+        member_ids=members,
         is_active=_flag(request.POST.get('is_active')),
     )
     return 'حُفظ العنقود «%s» — %d جهة.' % (saved.name, saved.resolved_members().count())
+
+
+def _delete_group(request):
+    group = EntityGroup.objects.filter(pk=request.POST.get('id')).first()
+    if group is None:
+        raise ValidationError('العنقودُ غير موجود.')
+    return 'حُذف العنقود «%s».' % delete_group(by=request.user, group=group)
 
 
 _HANDLERS = {
@@ -127,7 +148,22 @@ _HANDLERS = {
     'update_department': _update_department,
     'assign_user': _assign_user,
     'save_group': _save_group,
+    'delete_group': _delete_group,
 }
+
+
+def _editing_group(request):
+    """العنقودُ المطلوب تعديلُه عبر `?edit=<id>` — أو لا شيء."""
+    raw = (request.GET.get('edit') or '').strip()
+    if not raw.isdigit():
+        return None
+    return EntityGroup.objects.filter(pk=int(raw)).first()
+
+
+def _editing_member_ids(request):
+    """معرِّفاتُ أعضائه — لتأشير `selected` في القائمة المتعدّدة."""
+    group = _editing_group(request)
+    return set(group.members.values_list('pk', flat=True)) if group else set()
 
 
 # ───────────────────────────── القراءة ─────────────────────────────

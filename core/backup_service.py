@@ -16,20 +16,74 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+#: وجهةُ النسخ الافتراضيّة — قرصٌ منفصلٌ عن قرص النظام بقرار المالك.
+DEFAULT_BACKUP_DIR = Path("D:/trackbackup")
+
+
 def default_backup_dir() -> Path:
-    """المجلد الافتراضي للنسخ الاحتياطية (D:/trackbackup أو backups/ داخل المشروع)."""
-    directory = Path("D:/trackbackup")
+    """مجلّدُ النسخ — ``BACKUP_DIR`` في البيئة، وإلّا ``D:/trackbackup``.
+
+    **والسقوطُ إلى داخل المشروع يصرخ ولا يصمت**: قرصُ النظام هنا مقيسٌ على
+    حافّة الامتلاء (بَتَر ملفّاً فعلاً)، فنسخةٌ تُكتب عليه بهدوءٍ بدل القرص
+    المنفصل هي أسوأ من فشلٍ صريح — تبدو ناجحةً حتى يوم الحاجة.
+    """
+    configured = os.environ.get("BACKUP_DIR", "").strip()
+    directory = Path(configured) if configured else DEFAULT_BACKUP_DIR
+
     if not directory.exists():
-        directory = settings.BASE_DIR / "backups"
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            fallback = settings.BASE_DIR / "backups"
+            logger.error(
+                "وجهةُ النسخ %s غيرُ متاحة — السقوطُ إلى %s على قرص النظام. "
+                "اضبط BACKUP_DIR أو أعِد توصيل القرص.", directory, fallback)
+            fallback.mkdir(parents=True, exist_ok=True)
+            return fallback
+
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 
 
+def _find_pg_dump():
+    """مسارُ ``pg_dump`` — من البيئة، أو المسار، أو تنصيبِ PostgreSQL على ويندوز.
+
+    **مقيسٌ على هذا الجهاز:** ``pg_dump`` ليس في PATH و``PG_DUMP_BIN`` غيرُ
+    مضبوط — فكانت كلُّ نسخةٍ ترمي ``FileNotFoundError``. البحثُ عن التنصيب
+    يجعل الميزةَ تعمل بلا إعدادٍ يدويّ، وأحدثُ إصدارٍ أوّلاً لأنّ ``pg_dump``
+    الأقدم يرفض قاعدةً أحدث منه.
+    """
+    explicit = os.environ.get("PG_DUMP_BIN")
+    if explicit and Path(explicit).exists():
+        return explicit
+
+    found = shutil.which("pg_dump")
+    if found:
+        return found
+
+    roots = [Path(r"C:/Program Files/PostgreSQL"),
+             Path(r"C:/Program Files (x86)/PostgreSQL")]
+    candidates = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for child in root.iterdir():
+            binary = child / "bin" / "pg_dump.exe"
+            if binary.exists():
+                # الترتيبُ بالرقم لا بالنصّ: "9" > "16" نصّيّاً.
+                version = int(child.name) if child.name.isdigit() else 0
+                candidates.append((version, str(binary)))
+    if candidates:
+        return max(candidates)[1]
+    return None
+
+
 def _build_pg_dump_command(db_config, output_path):
     """يبني أمر pg_dump (صيغة custom مشفّرة لاحقاً)."""
-    pg_dump_bin = os.environ.get("PG_DUMP_BIN") or shutil.which("pg_dump")
+    pg_dump_bin = _find_pg_dump()
     if not pg_dump_bin:
-        raise FileNotFoundError("pg_dump was not found. Install PostgreSQL client tools or set PG_DUMP_BIN.")
+        raise FileNotFoundError(
+            "تعذّر العثور على pg_dump — ثبّت أدوات PostgreSQL أو اضبط PG_DUMP_BIN.")
 
     command = [
         pg_dump_bin,

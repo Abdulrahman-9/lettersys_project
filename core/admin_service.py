@@ -167,6 +167,29 @@ def save_group(*, by, name, member_ids=None, auto_rule='', group=None, is_active
     return group
 
 
+def delete_group(*, by, group):
+    """يحذف عنقوداً **لا كتابَ يشير إليه** — وإلّا يُعطَّل.
+
+    `Book.sent_to_group` بـ``SET_NULL``: فحذفُ عنقودٍ عُمِّم به كتابٌ يمحو
+    «عُمِّم على: 42 جهة» من سجلٍّ تاريخيٍّ صامتاً — حقيقةٌ حدثت ولا تُستعاد.
+    والقاعدةُ نفسُها التي حكمت الجهاتِ الوهميّة: **لا حذفَ لما له تاريخ.**
+    """
+    from core.models import Book
+
+    _guard_admin(by)
+    used = Book.all_objects.filter(sent_to_group=group).count()
+    if used:
+        raise ValidationError(
+            'لا يُحذف عنقودٌ عُمِّم به %d كتاباً — عطّله بدل حذفه ليبقى أثرُه '
+            'في سجلّ تلك الكتب.' % used)
+
+    name = group.name
+    with transaction.atomic():
+        group.delete()
+        _log(by, 'DELETE_GROUP', {'group': name})
+    return name
+
+
 # ───────────────────────────── الداخليّات ─────────────────────────────
 
 def _guard_admin(by):

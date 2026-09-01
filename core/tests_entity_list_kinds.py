@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from core.entity_kinds import EXTERNAL, INTERNAL, UNIT
-from core.models import Department, Entity
+from core.models import Book, Department, Entity
 
 
 class EntityListKindFilterTests(TestCase):
@@ -52,3 +52,35 @@ class EntityListKindFilterTests(TestCase):
         counts = {t['key']: t['count'] for t in res.context['kind_tabs']}
 
         self.assertEqual(counts, {INTERNAL: 1, EXTERNAL: 1, UNIT: 1})
+
+
+class EntityReviewSortTests(TestCase):
+    """ترتيبُ المراجعة — التبويبُ يُراجَع بالأثر لا بالأبجديّة."""
+
+    def setUp(self):
+        self.staff = User.objects.create_user('rev', 'r@x.co', 'pw', is_staff=True)
+        self.client.force_login(self.staff)
+        self.busy = Entity.objects.create(name='ياء كثيرة الكتب')
+        self.quiet = Entity.objects.create(name='ألف بلا كتب')
+        for i in range(3):
+            book = Book.objects.create(kind='incoming_external', title='ك',
+                                       created_by=self.staff)
+            book.issuing_entities.add(self.busy)
+
+    def _names(self, **params):
+        res = self.client.get(reverse('entity_list'), params)
+        return [e.name for e in res.context['entities'].object_list]
+
+    def test_sort_by_books_puts_the_busiest_first(self):
+        self.assertEqual(self._names(sort='books')[0], 'ياء كثيرة الكتب')
+
+    def test_default_order_is_unchanged(self):
+        """الترتيبُ الافتراضيّ أبجديّ كما كان — الفرزُ إضافةٌ لا استبدال."""
+        self.assertEqual(self._names()[0], 'ألف بلا كتب')
+
+    def test_sort_composes_with_the_kind_filter(self):
+        self.busy.kind = UNIT
+        self.busy.save(update_fields=['kind'])
+
+        self.assertEqual(self._names(sort='books', kind=UNIT),
+                         ['ياء كثيرة الكتب'])

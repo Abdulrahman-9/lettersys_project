@@ -8,7 +8,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Case, Count, IntegerField, OuterRef, Q, Subquery, Value, When
+from django.db.models import Case, Count, F, IntegerField, OuterRef, Q, Subquery, Value, When
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -132,7 +132,17 @@ def entity_list(request):
                        default=Value(0), output_field=IntegerField()),
         _is_arabic=Case(When(name__regex=r'^[؀-ۿ]', then=Value(1)),
                         default=Value(0), output_field=IntegerField()),
-    ).order_by('-_has_code', '-_is_arabic', 'name')
+    )
+
+    # **ترتيبُ المراجعة**: التبويبُ بُذر آليّاً مرّةً واحدة، ومراجعتُه بالأثر لا
+    # بالأبجديّة — جهةٌ عليها 1090 كتاباً تستحقّ النظرَ قبل جهةٍ بلا كتاب.
+    # `?sort=books` يقلب الترتيب إلى الأكثر تداولاً أوّلاً.
+    if (request.GET.get('sort') or '').strip() == 'books':
+        entities_qs = entities_qs.annotate(
+            _total=F('issued_count') + F('received_count')
+        ).order_by('-_total', 'name')
+    else:
+        entities_qs = entities_qs.order_by('-_has_code', '-_is_arabic', 'name')
     # Pagination — 100 لكل صفحة (كان 50 صغيراً وضيّعت العربية بعد الإنجليزية)
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
     paginator = Paginator(entities_qs, 100)
@@ -171,6 +181,7 @@ def entity_list(request):
             "totals": totals,
             "lang_filter": lang_filter,
             "kind_filter": kind_filter,
+            "sort": (request.GET.get('sort') or '').strip(),
             "kind_tabs": [{"key": k, "label": KIND_LABELS[k],
                            "hint": KIND_HINTS[k], "count": kind_counts[k]}
                           for k in KINDS],
