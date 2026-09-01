@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Setup
 cp .env.example .env          # then edit .env with DB credentials
 python manage.py db_healthcheck
+python manage.py models_healthcheck --strict --load   # الأوزان والأطقم و tesseract
 python manage.py migrate
 python manage.py create_admin_user
 
@@ -24,6 +25,10 @@ $env:PYTHONIOENCODING="utf-8"; python manage.py test core.tests_security --setti
 # Celery (requires Redis)
 celery -A lettersys worker -l info
 celery -A lettersys beat -l info
+
+# عتادُ النماذج (var/ خارج git — النسخةُ الجديدة تصل عمياء وتبدو سليمة)
+python manage.py models_healthcheck            # تحذيرٌ وخروج 0
+python manage.py models_healthcheck --strict --load --hash   # بوّابةُ نشر
 
 # Management commands
 python manage.py seed_demo_books          # populate demo data
