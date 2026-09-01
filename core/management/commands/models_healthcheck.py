@@ -36,6 +36,20 @@ def _sha256(path):
     return h.hexdigest()[:16]
 
 
+_LFS_MAGIC = b'version https://git-lfs.github.com/spec/'
+
+
+def _is_lfs_pointer(path):
+    """مؤشّرُ LFS: ملفٌّ نصّيٌّ صغيرٌ يبدأ بسطر النسخة القياسيّ."""
+    try:
+        if os.path.getsize(path) > 1024:      # المؤشّرُ ~130 بايتاً دائماً
+            return False
+        with open(path, 'rb') as f:
+            return f.read(len(_LFS_MAGIC)) == _LFS_MAGIC
+    except OSError:
+        return False
+
+
 def _human(n):
     return '%.1f MB' % (n / 1048576.0) if n >= 1048576 else '%d B' % n
 
@@ -70,6 +84,13 @@ class Command(BaseCommand):
         extra = ''
         if size == 0:
             hard.append('%s — ملفٌّ فارغ (%s)' % (art.label, path))
+            return False
+        if _is_lfs_pointer(path):
+            # الأوزانُ تُشحَن عبر Git LFS: استنساخٌ بلا `git lfs pull` يترك
+            # **مؤشّراً نصّيّاً من ثلاثة أسطر** باسم الملفّ نفسِه ومقاسٍ ببضعة
+            # بايتات. الوجودُ وحدَه يقول «سليم» كذباً — فيُمسَك بالمضمون.
+            hard.append('%s — مؤشّرُ Git LFS لا الملفّ (%s) ⟵ شغّل: git lfs pull'
+                        % (art.label, path))
             return False
         if art.kind in ('charset', 'json'):
             try:

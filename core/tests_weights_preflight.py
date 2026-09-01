@@ -157,6 +157,27 @@ class ModelsHealthcheckCommandTests(SimpleTestCase):
                 with self.assertRaises(CommandError):
                     self._run()
 
+    def test_unpulled_lfs_pointer_is_caught(self):
+        """استنساخٌ بلا `git lfs pull` يترك مؤشّراً باسم النموذج — لا يمرّ «سليماً»."""
+        with tempfile.TemporaryDirectory() as d:
+            ptr = os.path.join(d, 'number_detector.onnx')
+            with open(ptr, 'wb') as f:
+                f.write(b'version https://git-lfs.github.com/spec/v1\n'
+                        b'oid sha256:00000000\nsize 12770345\n')
+            with override_settings(NUMBER_DETECTOR_ONNX=ptr):
+                with self.assertRaises(CommandError):
+                    self._run()
+                self.assertIn('git lfs pull', self._run_capturing_failure())
+
+    def _run_capturing_failure(self):
+        from io import StringIO
+        out = StringIO()
+        try:
+            call_command('models_healthcheck', stdout=out, stderr=out)
+        except CommandError:
+            pass
+        return out.getvalue()
+
     def test_every_artifact_is_reported(self):
         """لا ملفَّ يمرّ بلا سطر — تقريرٌ ناقصٌ يوهم بأنّ المفقود غيرُ مفحوص."""
         out = self._run()

@@ -1,0 +1,7 @@
+{
+ "charset": "0123456789",
+ "blank": 0,
+ "strip_h": 64,
+ "arabic_indic": "ظ ظ،ظ¢ظ£ظ¤ظ¥ظ¦ظ§ظ¨ظ©",
+ "preprocess": "invert(255-x) â†’ resize h=64 â†’ standardize (ط§ظ†ط¸ط± preprocess_strip)"
+}
