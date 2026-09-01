@@ -1,0 +1,56 @@
+# نشرٌ تلقائيّ: كلُّ دفعٍ إلى main يُشغّل سكربتَ النشر على الخادم.
+#
+# **لماذا SSH خامٌّ لا إجراءٌ جاهز**: إجراءاتُ الطرف الثالث تُنفَّذ بصلاحيّات
+# سير العمل وتصل إلى الأسرار — وتحديثُ وسمٍ عندهم يغيّر ما يعمل عندنا بلا
+# مراجعة. خطوتان من ssh لا تحتاجان وسيطاً.
+#
+# **وبصمةُ الخادم مثبَّتة** (`DEPLOY_KNOWN_HOSTS`) لا `StrictHostKeyChecking=no`:
+# بدونها يقبل السيرُ أيَّ خادمٍ يجيب على العنوان، فيسلّم مفتاحَ النشر لمن اعترض.
+#
+# **ولا `checkout` هنا عمداً**: الوظيفةُ لا تحتاج الشيفرة، والسحبُ مع
+# `lfs: true` كان سيستهلك حصّةَ LFS (~35 ميغا) في كلّ تشغيل بلا مقابل.
+#
+# الأسرارُ الأربعة المطلوبة في إعدادات المستودع:
+#   DEPLOY_HOST         عنوانُ الخادم أو IP
+#   DEPLOY_USER         المستخدمُ الذي يملك سكربت lettersys-deploy
+#   DEPLOY_SSH_KEY      المفتاحُ الخاصّ كاملاً (ed25519 مُفضَّل، بلا عبارة مرور)
+#   DEPLOY_KNOWN_HOSTS  مخرَجُ: ssh-keyscan -H <العنوان>
+
+name: نشر إلى الخادم
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:          # تشغيلٌ يدويٌّ عند الحاجة
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false   # نشرٌ نصفَ منفَّذٍ أسوأُ من نشرٍ متأخّر
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: تهيئةُ مفتاح النشر وبصمة الخادم
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: تشغيلُ سكربت النشر
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "::notice::نشرُ ${SHA:0:7} إلى ${HOST}"
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ConnectTimeout=20 \
+              "${USER_NAME}@${HOST}" 'lettersys-deploy'
+
+      - name: محوُ المفتاح
+        if: always()
+        run: rm -f ~/.ssh/id_deploy

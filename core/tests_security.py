@@ -1,7 +1,7 @@
 """
 اختبارات التحسينات الأمنية Phase 1 — محدّث
 """
-from django.test import TestCase, Client, override_settings
+from django.test import TestCase, Client, SimpleTestCase, override_settings
 from django.test import RequestFactory
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -208,3 +208,51 @@ class AzureKeyEncryptionTests(TestCase):
             azure_endpoint='https://x.cognitiveservices.azure.com', azure_key=self.KEY_84,
         )
         self.assertEqual(AIIntegrationSettings.get_active_settings()['AI_AZURE_KEY'], self.KEY_84)
+
+
+class ProductionCookiePolicyTests(SimpleTestCase):
+    """عقدُ النشر: الافتراضُ آمنٌ، والإرخاءُ قرارٌ صريحٌ بمتغيّر بيئة.
+
+    **لماذا وُجدت هذه الاختبارات** (2026-09-01): كان `SESSION_COOKIE_SECURE`
+    و`CSRF_COOKIE_SECURE` مثبَّتَين `True`، فقبل إصدار شهادة TLS يستحيل الدخولُ
+    على http — فرُقّعت القيمُ **يدويّاً على الخادم بعد كلّ سحب**. ترقيعٌ خفيٌّ
+    يعني أنّ ما في المستودع ليس ما يعمل، وهو أسوأُ من الإعداد نفسِه.
+
+    تُحمَّل `settings.py` هنا **مستقلّةً ببيئةٍ مُرقَّعة** — لا قراءةَ مصدرٍ
+    نصّيّة: الاختبارُ يقيس القيمةَ الناتجة فعلاً كما يراها Django.
+    """
+
+    def _load(self, **env):
+        import importlib.util
+        import os as _os
+        from unittest import mock
+        from django.conf import settings as dj
+        path = _os.path.join(str(dj.BASE_DIR), 'lettersys', 'settings.py')
+        with mock.patch.dict(_os.environ, env, clear=False):
+            spec = importlib.util.spec_from_file_location('probe_settings', path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+
+    def test_production_defaults_are_secure(self):
+        m = self._load(DEBUG='False')
+        self.assertTrue(m.SESSION_COOKIE_SECURE)
+        self.assertTrue(m.CSRF_COOKIE_SECURE)
+        self.assertTrue(m.SECURE_SSL_REDIRECT)
+
+    def test_proxy_header_is_set_for_reverse_proxy_deployments(self):
+        """بدونه يرى Django كلَّ طلبٍ http خلف nginx فيدور التوجيهُ بلا نهاية."""
+        m = self._load(DEBUG='False')
+        self.assertEqual(m.SECURE_PROXY_SSL_HEADER,
+                         ('HTTP_X_FORWARDED_PROTO', 'https'))
+
+    def test_proxy_header_can_be_disabled_when_app_is_directly_exposed(self):
+        """الترويسةُ تُزوَّر إن كان التطبيقُ مكشوفاً — فالإطفاءُ لازمٌ لا زينة."""
+        m = self._load(DEBUG='False', USE_X_FORWARDED_PROTO='False')
+        self.assertIsNone(getattr(m, 'SECURE_PROXY_SSL_HEADER', None))
+
+    def test_cookies_can_be_relaxed_before_tls_is_issued(self):
+        m = self._load(DEBUG='False', SESSION_COOKIE_SECURE='False',
+                       CSRF_COOKIE_SECURE='False')
+        self.assertFalse(m.SESSION_COOKIE_SECURE)
+        self.assertFalse(m.CSRF_COOKIE_SECURE)

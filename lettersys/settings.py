@@ -331,8 +331,26 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    # ── كوكيّا الجلسة وCSRF: مضبوطان لا مثبَّتان (2026-09-01) ────────────────
+    # **لماذا تغيّرا**: كانا `True` صلباً، فقبل إصدار شهادة TLS يصير الدخولُ
+    # مستحيلاً على http — المتصفّح لا يرسل كوكيّاً `Secure` على اتّصالٍ غيرِ
+    # مؤمَّن، فتدور الصفحةُ على نفسها بلا رسالةِ خطأٍ مفهومة. كان الحلُّ على
+    # الخادم **ترقيعاً يدويّاً يُعاد بعد كلّ سحب**، أي أنّ ما في المستودع ليس
+    # ما يعمل. الافتراضُ يبقى `True` — الإرخاءُ قرارٌ صريحٌ بمتغيّر بيئةٍ
+    # يُرفَع فورَ إصدار الشهادة، لا سهوٌ يتسلّل.
+    SESSION_COOKIE_SECURE = os.environ.get(
+        'SESSION_COOKIE_SECURE', 'True').lower() in ('true', '1')
+    CSRF_COOKIE_SECURE = os.environ.get(
+        'CSRF_COOKIE_SECURE', 'True').lower() in ('true', '1')
+    # ── إنهاءُ TLS عند وكيلٍ عكسيّ ───────────────────────────────────────────
+    # بلا هذا يرى Django كلَّ طلبٍ `http` (لأنّ nginx يفكّ TLS ويمرّر عادياً)،
+    # فيُعيد التوجيه إلى https بلا نهاية مع `SECURE_SSL_REDIRECT`.
+    # ⚠️ **شرطُ الأمان**: لا يُفعَّل إلّا والتطبيقُ **غيرُ قابلٍ للوصول مباشرةً**
+    # (يستمع على 127.0.0.1 أو محجوبٌ بجدار ناريّ) والوكيلُ يكتب الترويسة بنفسه
+    # ولا يمرّر واردةً من العميل — وإلّا زوّرها أيُّ عميلٍ فادّعى https.
+    # اضبط `USE_X_FORWARDED_PROTO=False` إن كان التطبيقُ مكشوفاً مباشرةً.
+    if os.environ.get('USE_X_FORWARDED_PROTO', 'True').lower() in ('true', '1'):
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # ─── Content Security Policy (يطبّقها CSPMiddleware) ─────────────────────────
 # وكيل المسح المحلي يعمل على منفذ خاص (افتراضياً 17865) — يجب السماح للصفحة بالاتصال به.
