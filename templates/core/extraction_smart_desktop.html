@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260826a">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260901a">
 <style>
 .scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
 .scan-agent-status:hover{filter:brightness(.97)}
@@ -269,8 +269,10 @@
                             <label class="field-label" id="senderDateLabel">تاريخ الجهة المرسلة</label>
                             <input type="date" class="form-control-smart" id="senderDate">
                             <div class="input-hint" id="senderDateHint">لتوثيق تاريخ الكتاب لدى الجهة التي أرسلته.</div>
-                            <!-- قصاصة «التأريخ» اليدويّ من المستند (خيار F): مساعدةٌ بصريّة —
-                                 الكاتب ينسخها بنظرة. لا تملأ الحقل آلياً (تاريخ الجهة يدويّ 95%). -->
+                            <!-- قصاصة «التأريخ» اليدويّ من المستند (خيار F): شاهدُ المطابقة.
+                                 القراءةُ الخضراء (≥0.98 · تحليلٌ سليم · حارسُ الفارق سالم)
+                                 تملأ الحقل تلقائيّاً موسومةً `autofilled`، وما دونها يبقى
+                                 اقتراحاً بانتظار نقرة (قرار المالك 2026-09-01). -->
                             <figure class="sender-date-crop" id="senderDateCrop" hidden>
                                 <img id="senderDateCropImg" alt="قصاصة تاريخ الجهة كما ورد في المستند" loading="lazy">
                                 <figcaption><i class="bi bi-eye"></i> تاريخ الجهة كما ورد في المستند — تحقّق منه بنظرة</figcaption>
@@ -306,6 +308,27 @@
                             </span>
                         </div>
                         <textarea class="form-control-smart title-autogrow" id="title" rows="1" placeholder="موضوع الكتاب أو خلاصة المراسلة" dir="rtl"></textarea>
+                        <!-- اقتراحُ الموضوع ضعيفِ المسار: يُعرَض ولا يُملأ. مسارُ العلامة
+                             («م/») وحده يملأ الحقل — صالحٌ 72.9% على مجموعةٍ مختومة —
+                             أمّا الاحتياطيّ والقوس (27% من المستندات) فصالحٌ 6.5% فقط،
+                             فيصير بطاقةً يؤكّدها الكاتب بنقرة. -->
+                        <div class="title-suggest" id="titleSuggest" role="group"
+                             aria-label="اقتراحُ موضوعٍ ضعيفُ الثقة" hidden>
+                            <div class="title-suggest__head">
+                                <span class="title-suggest__label">قراءةٌ ضعيفة</span>
+                                <span class="confidence-badge low" id="titleSuggestConf"></span>
+                            </div>
+                            <bdi class="title-suggest__value" id="titleSuggestValue"></bdi>
+                            <div class="title-suggest__warn" id="titleSuggestWarn"></div>
+                            <div class="title-suggest__actions">
+                                <button type="button" class="title-suggest__btn" id="titleSuggestApply">
+                                    <i class="bi bi-check2" aria-hidden="true"></i> استعمِله
+                                </button>
+                                <button type="button" class="title-suggest__btn title-suggest__btn--ghost" id="titleSuggestDismiss">
+                                    <i class="bi bi-x" aria-hidden="true"></i> تجاهُل
+                                </button>
+                            </div>
+                        </div>
                         <div class="input-hint">اكتب عنواناً واضحاً يسهل البحث عنه لاحقاً في الأرشيف.</div>
                     </div>
 
@@ -591,7 +614,7 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260826b"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260901a"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
@@ -948,7 +971,7 @@
     };
 
     // قصاصة تاريخ الجهة (خيار F): تُظهِر شريط «التأريخ» اليدويّ من المستند بجوار الحقل
-    // ليقرأه الكاتب بنظرة (تاريخ الجهة يدويّ 95% — لا يُملأ آلياً). غيابُ القصاصة =
+    // ليطابقه الكاتب بنظرة (الأخضرُ وحده يملأ الحقل — انظر extraction_smart.js). غيابُ القصاصة =
     // إخفاءٌ صامت (صفر تراجع). حارسٌ ضدّ data URL فقط (لا مصادر خارجية).
     function _updateSenderDateCrop(dataUrl) {
       const fig = document.getElementById('senderDateCrop');

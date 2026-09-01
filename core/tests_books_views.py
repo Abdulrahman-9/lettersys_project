@@ -710,6 +710,80 @@ class BookUnifiedTests(BookViewsBase):
         self.assertNotIn(self.book.pk, ids)
 
 
+class DeskPagesAreWiredTests(BookViewsBase):
+    """كانت هياكلَ واجهةٍ فصارت صفحاتٍ موصولةً — والحارسُ يُقلب لا يُحذف.
+
+    الحارسُ الأصليّ (من فرع `main`) كان يتأكّد أنّ الصفحات **تُعلن أنّها
+    هياكل**، خشيةَ أن تُزال البطاقةُ يوماً بلا وصلِ بياناتٍ حقيقيّة فتبدو
+    الأرقامُ المفبركةُ تقريراً. وقد وُصلت فعلاً في البند ③د (`core/views/desk.py`)
+    فأدّى الحارسُ غرضَه — ويُقلب الآن ليحرس العقدَ الجديد: **لا بطاقةَ هيكلٍ
+    ولا رقمَ مفبرك**.
+
+    وصفحةُ التدقيق: `book_audit` الهيكليّة أُزيلت في دمج 2026-08-31، ومكانُها
+    `audit_log` الحقيقيّة على المسار نفسِه (`/books/audit/`).
+    """
+
+    PAGES = (('desk_ledger', 'core/desk_ledger.html'),
+             ('desk_handover', 'core/desk_handover.html'))
+
+    def test_pages_render_for_the_desk(self):
+        self._login(self.superuser)
+        for name, template in self.PAGES:
+            with self.subTest(page=name):
+                resp = self.client.get(reverse(name))
+                self.assertEqual(resp.status_code, 200)
+                self.assertTemplateUsed(resp, template)
+
+    def test_the_pages_are_now_guarded(self):
+        """**فرقٌ جوهريٌّ عن الهيكل**: كانت مفتوحةً لأنّها لا تعرض شيئاً.
+
+        وصارت تعرض خريطةَ عملِ القسم في ورقةٍ تخرج من الجهاز — فحُرست
+        بـ`can_use_desk` (مختصُّ البريد · رئيسُ القسم · مديرُ النظام).
+        """
+        self._login()                       # موظّفٌ عاديّ
+        for name, _t in self.PAGES:
+            with self.subTest(page=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 403)
+
+    def test_no_page_still_declares_itself_a_skeleton(self):
+        """العقدُ انقلب: وجودُ البطاقة الآن يعني أنّ أحداً أعاد الهيكلَ."""
+        self._login(self.superuser)
+        for name, _t in self.PAGES:
+            with self.subTest(page=name):
+                body = self.client.get(reverse(name)).content.decode('utf-8')
+                self.assertNotIn('هيكلُ واجهةٍ لا ميزة', body)
+                self.assertNotIn('ثابتٌ في الكود', body)
+
+    def test_the_audit_page_is_the_real_one(self):
+        """المسارُ `/books/audit/` يصل السجلَّ الحقيقيّ لا الهيكل."""
+        from django.urls import NoReverseMatch
+
+        with self.assertRaises(NoReverseMatch):
+            reverse('book_audit')
+        self.assertEqual(reverse('audit_log'), '/books/audit/')
+
+
+class DevLoginGuardTests(BookViewsBase):
+    """أداةُ الدخول التطويريّة: حارسُها DEBUG، وإعادةُ توجيهها محروسة."""
+
+    @override_settings(DEBUG=False)
+    def test_disabled_outside_debug(self):
+        self.assertEqual(self.client.get('/dev-login/').status_code, 404)
+        self.assertEqual(self.client.post('/dev-login/', {}).status_code, 404)
+
+    @override_settings(DEBUG=True)
+    def test_external_next_is_refused(self):
+        """`?next=https://evil.example` كانت تُتبَع حرفيّاً — إعادةُ توجيهٍ مفتوحة."""
+        resp = self.client.post('/dev-login/', {'next': 'https://evil.example/x'})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp['Location'], '/')
+
+    @override_settings(DEBUG=True)
+    def test_internal_next_is_honoured(self):
+        resp = self.client.post('/dev-login/', {'next': reverse('dashboard')})
+        self.assertEqual(resp['Location'], reverse('dashboard'))
+
+
 # ===========================================================================
 # books_list.py — api_unified_data
 # ===========================================================================

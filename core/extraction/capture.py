@@ -173,6 +173,9 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
     }
     for _f in ALWAYS_CAPTURED_FIELDS:
         add_data[displayed_key(_f)] = _f in displayed
+    # مصدرُ قيمة الموضوع: مسارُ العلامة يملأ الحقل تلقائيّاً وحقيقةُ التدريب هي
+    # `Book.title` عينُه — فبلا هذا الوسم يتغذّى المُنتقي على مخرجه هو.
+    add_data['title_provenance'] = normalize_provenance(final.get('title_provenance'))
     if is_incoming:
         add_data.update({
             'sender_number_suggested': (suggested.get('sender_number') or '')[:50],

@@ -47,6 +47,8 @@ from core.models import AIIntegrationSettings
 from core.extraction.matchers.pattern import PatternMatcher, DateParser
 from core.extraction.matchers.entity import EntityMatcher
 from core.extraction.matchers.profile import SenderNumberProfiles
+from core.extraction.matchers.strict_ref import (canonical_sender_number,
+                                                 strict_ref_match)
 from core.models import (
     OCRResult, DataExtractionResult, ExtractionFeedback,
     ExtractionStatistics, ExtractionCache, Attachment, Book, Entity
@@ -122,6 +124,9 @@ class AIExtractionResult:
 
         self.title: str = ""
         self.title_confidence: float = 0.0
+        # اقتراحُ الموضوع ضعيفِ المسار — قاموسٌ منفصلٌ **لا يُملأ في الحقل**
+        # (انظر `_route_title_emission`): {value, confidence, source}.
+        self.title_suggestion: Optional[dict] = None
 
         self.margin_text: str = ""
         self.margin_confidence: float = 0.0
@@ -288,6 +293,177 @@ e2e-B ببوّابةٍ مُسجَّلةٍ مسبقاً. لا يُفتح بقلب
 """
 
 
+def _sender_number_survives_emission(result) -> bool:
+    """مرآةُ سياسة الكتم: هل تبلغ القيمةُ الحاليّةُ الكاتبَ لو صدرت الآن؟
+
+    **لماذا مرآةٌ لا شرطٌ حرفيّ** (خطّة فيبل 2026-08-26): كان المسارُ البصريّ
+    محكوماً بـ`if not result.sender_number` — فقيمةٌ نصّيّةٌ **محكومٌ عليها بالكتم**
+    تمنع القراءةَ البصريّة من أن تُحاوَل أصلاً، ثمّ تُسكَت هي نفسُها، فنخسر
+    الاثنين معاً. مقيسٌ على e2e-C: **15 من 19 صامتاً** حُجبوا هكذا، والقارئُ
+    يقرأ صناديقَهم 14/14 ويصيب 10 بثقاتٍ 0.95–1.00.
+
+    وربطُ الشرط بالسياسة (لا بقيمةٍ حرفيّة مثل `== 'crnn'`) يجعله يصحّ يومَ
+    تتغيّر السياسة: لو رُفع الكتمُ النصّيّ غداً، لن يدهس البصريُّ قيمةً ناجية.
+    """
+    if not getattr(result, 'sender_number', None):
+        return False
+    if NUMBER_EMISSION_ENABLED:
+        return True
+    return getattr(result, 'sender_number_bbox_source', '') == 'crnn'
+
+
+def _known_prefixes(prof) -> set:
+    """كلُّ بادئةٍ مؤكَّدةٍ لأيّ جهةٍ في الفهرس — حارسُ النقض العالميّ.
+
+    الجهةُ **مقترحةٌ لا مؤكَّدة** (تعرّفُ top-1 مقيسٌ 60%)، فنقضٌ يعتمد قالبَ
+    جهةٍ واحدةٍ قد يكتم قيمةً صحيحةً نُسبت لجهةٍ خاطئة. والحارس: لا يُنقَض إلّا
+    ما لم يكن بادئةً مؤكَّدةً **لأحدٍ إطلاقاً** — فـ`llK` المشوَّهة تسقط، و`MF`
+    السليمةُ على جهةٍ خاطئة تنجو.
+    """
+    prof._ensure_index()
+    out = set()
+    for profile in prof._profiles.values():
+        for bucket in (profile.get('prefixes') or {}, profile.get('ctx_prefixes') or {}):
+            for px in bucket.values():
+                out.update(p.upper() for p, c in px.items() if c >= 2)
+    return out
+
+
+def _printed_number_vetoed(result) -> bool:
+    """نقضٌ بنيويٌّ لتشويه OCR — **نقضٌ لا كاتب**: يمنع، ولا يقترح ولا يرفع ثقة.
+
+    الإشارة (استشارة فيبل 2026-08-27): `repair()` لا يُعيد قيمةً إلّا حين تكون
+    البادئةُ الملتقطة تشويهاً بمسافة تحرير 1–2 من بادئةٍ مؤكَّدةٍ **لنفس الجهة**
+    والقالبُ المُصحَّح معروفٌ لها — ويُعيد None للسليمة. فوجودُ اقتراحِ إصلاحٍ
+    **هو** دليلُ التشويه. مقيسٌ على إيميلات الإنتاج: `llK-20260257` بدل `NK-…`.
+
+    ولا `hasattr` هنا: الحراسةُ بها هي التي جعلت النسخةَ الأولى **خاملةً صامتة**
+    (صفرُ نقضٍ بلا خطأٍ ولا تنبيه). الواجهةُ تُستدعى مباشرةً، واختبارُ حرزٍ يفشل
+    صاخباً إن انجرفت.
+
+    والقيمةُ المكتومة واقتراحُ إصلاحها يُحفظان في `additional_data` — مادّةُ
+    تعلّمٍ لأنماط OCR لا تُهدَر بالتصفير.
+    """
+    val = getattr(result, 'sender_number', None)
+    ent = getattr(result, 'issuing_entity_id', None)
+    if not val or not ent:
+        return False
+    try:
+        import re as _re
+        from core.extraction.matchers.profile import SenderNumberProfiles
+        prof = SenderNumberProfiles()
+        m = _re.match(r'([A-Za-z]{1,7})([-/].+)$', str(val).strip())
+        if not m:
+            return False
+        if m.group(1).upper() in _known_prefixes(prof):
+            return False                      # بادئةٌ مؤكَّدةٌ لأحدٍ ⟵ لا نقض
+        fixed = prof.repair(val, ent)
+        if not fixed:
+            return False
+        logger.info('[emission] نقضٌ بنيويّ: %r بادئةٌ مشوَّهة (الإصلاحُ المرجَّح %r)',
+                    val, fixed)
+        extra = getattr(result, 'additional_data', None)
+        if isinstance(extra, dict):
+            extra['sender_number_vetoed'] = str(val)[:50]
+            extra['sender_number_veto_fix'] = str(fixed)[:50]
+        return True
+    except Exception as exc:
+        logger.warning('[emission] النقضُ البنيويّ تعذّر (%s) — لا نقض',
+                       type(exc).__name__)
+        return False
+
+
+def _strict_ref_skips_visual(result) -> bool:
+    """هل يُغني المرجعُ المطبوعُ الصارم عن استدعاء المسار البصريّ كلِّه؟
+
+    **شرطان معاً، وكلاهما لازم:**
+      ١. منشأُ القيمة `strict_ref` — المقيسُ 32 إصابةً وصفرَ خطأٍ على صفّه مقابل
+         11 إصابةً وخطأين للبصريّ على نفس المستندات.
+      ٢. `sender_date` مملوء — فـ`want_date_crop` يصير `False`، وعندها **كلُّ جسم
+         `_read_handwritten_sender_number` عملٌ ضائع** إلّا صندوقَ التدريب. أمّا
+         حين يصمت التاريخُ فالنداءُ يبقى: تخطّيه يقتل قصاصةَ التاريخ واقتراحَه
+         (سبعةُ مفاتيح التقاطٍ في `capture.py`) — ثمنٌ لا يُدفع مقابل ثوانٍ.
+
+    **ولا تُمسّ `_sender_number_survives_emission`**: تلك المرآةُ تحرس **محاولةَ**
+    البصريّ، ولو نجا فيها منشأٌ نصّيٌّ لامتنعت المحاولةُ فانتُقض S3′ صامتاً.
+    الشرطُ هنا منفصلٌ عنها عمداً، فيبقى حرزُ `test_mirror_stays_crnn_only` صادقاً
+    بلا التفافٍ عليه.
+
+    والمكسبُ المقيس حين يتحقّق الشرطان: **3.9 ث/مستند** (رسمان بـ300/175dpi +
+    `pytesseract.image_to_data` على صفحةٍ كاملة + استدلالا YOLO) مقابل 0.094 ث.
+    """
+    return (getattr(result, 'sender_number_source', '') == 'strict_ref'
+            and bool(getattr(result, 'sender_number', None))
+            and bool(getattr(result, 'sender_date', None)))
+
+
+TITLE_DIRECT_FILL_SOURCES = ('marker',)
+"""مسارُ الموضوع الذي يُملأ في حقل الكاتب مباشرةً — وما عداه **اقتراحٌ مؤشَّر**.
+
+قياسٌ على المجموعة المختومة subject-200 (النظرة 1، n=190، مصنوعتُها
+`subject_probe/quad200.json`؛ صالحٌ = توكن-F1 ≥ 0.5 مقابل عنوان الكاتب):
+
+    marker    (ثقة 0.75) · 118 = 62% · صالحٌ **72.9%** · خاطئٌ فاحشاً (F1<0.3) 21%
+    fallback  (ثقة 0.35) ·  46 = 24% · صالحٌ **6.5%**  · خاطئٌ فاحشاً **91.3%**
+    bracket_* (ثقة 0.00) ·   5 =  3% · صالحٌ **0%**    · خاطئٌ فاحشاً 100%
+    صمتٌ                 ·  21 = 11%
+
+أي أنّ **ربعَ المستندات** كان يُملأ حقلُها بقيمةٍ خاطئةٍ تسعَ مرّاتٍ من عشر،
+لأنّ الثقةَ في هذه الواجهة تُلوّن الشارة ولا تحجب القيمة. وقرارُ المالك
+(2026-09-01) ليس الكتم بل **التحويل إلى اقتراحٍ مؤشَّر**: تبقى فائدتُه حين
+يصيب (ثلاثةٌ من 46 صالحة) ولا يُثقل المراجعةَ حين يخطئ.
+
+**التوجيهُ على المنشأ لا على عتبة**: الفصلُ المقيس بين المسارين عشرةُ أضعاف
+وثقتُهما مشتقّةٌ من المنشأ أصلاً (`_TITLE_SOURCE_CONF`)، فعتبةٌ رقميّةٌ هنا
+انتخابٌ على المجموعة المختومة بلا زيادةِ معلومة.
+
+⚠️ ولا يُضاف مسارٌ إلى هذه المجموعة إلّا بقياسٍ على مجموعةٍ مختومةٍ ببوّابةٍ
+مُسجَّلةٍ قبل النظر — الأرقامُ أعلاه هي المرجع.
+"""
+
+
+def _route_title_emission(result, source: str) -> None:
+    """يفصل موضوعَ المسار القويّ (يُملأ الحقل) عن الضعيف (اقتراحٌ مؤشَّر).
+
+    الاقتراحُ يعيش في مفتاحٍ منفصل — نفسُ بناء `sender_date_suggestion` — كي
+    تعجز الواجهةُ عن ملئه سهواً: مسارات الملء تكتب `data.title` في الحقل بلا
+    شرط، فإبقاءُ القيمة هناك مع «تأشيرٍ» بالثقة هو الحال الذي قِيس خاطئاً 91%.
+
+    وثقةُ الاقتراح تخرج من `field_confidences` مع القيمة: قيمةٌ لا تبلغ الكاتبَ
+    لا يصحّ أن تجرّ `overall_confidence` فتقلب كتباً إلى `manual_review`.
+    """
+    title = (result.title or '').strip()
+    if not title:
+        return
+    if source in TITLE_DIRECT_FILL_SOURCES:
+        return
+    result.title_suggestion = {
+        'value': title,
+        'confidence': round(float(result.title_confidence or 0.0), 4),
+        'source': source or 'unknown',
+    }
+    result.title = ''
+    result.title_confidence = 0.0
+
+
+_WARNED_ARTIFACTS = set()
+
+
+def _warn_missing_artifact(key: str, path: str, effect: str) -> None:
+    """يصرخ **مرّةً واحدةً لكل عمليّة** حين يغيب وزنٌ — لا صمتَ ولا إغراقَ سجلّ.
+
+    كان المساران يعودان مبكراً بلا سطرِ سجلٍّ أصلاً، ومُسجّلات `core.*` كانت
+    بلا مُعالِج أساساً (أُصلح في `settings.LOGGING`) — فغيابُ الأوزان كان
+    يمرّ بلا أثرٍ في أيّ ملفّ سجلّ. وتكرارُ السطر لكلّ مستندٍ يُغرق السجلّ،
+    فمرّةً واحدةً لكلّ مفتاحٍ ثمّ صمت.
+    """
+    if key in _WARNED_ARTIFACTS:
+        return
+    _WARNED_ARTIFACTS.add(key)
+    logger.error('[artifacts] وزنٌ مفقود: %s (%s) ⟵ %s. شغّل: '
+                 'manage.py models_healthcheck', key, path, effect)
+
+
 def _suppress_sender_number_emission(result) -> None:
     """يمنع أيّ قيمةِ عددٍ من بلوغ الكاتب — **من كلّ الكُتّاب الخمسة**.
 
@@ -298,6 +474,27 @@ def _suppress_sender_number_emission(result) -> None:
     الصندوق ومقاسه ومصدره **تبقى**: هي مادّة التدريب لا مادّة العرض.
     """
     if NUMBER_EMISSION_ENABLED:
+        return
+    # **S4 (2026-08-26):** كاتبُ مرساة الرأس المطبوعة يُفتح وحده بثقةٍ ثابتة 0.70
+    # ووسمٍ صريح. قياسُ الإيميلات: العدد يُستخرَج صحيحاً في 7 من 12 مستنداً
+    # رقميّاً ثمّ يُكتَم — خسارةٌ بقرارِ سياسةٍ لا بعجزِ قراءة. و0.70 **دون عتبة
+    # «الواثق» (0.90) بنائيّاً**، فلا يستطيع هذا المسار خرقَ الحارس رياضيّاً.
+    # ⚠️ ولا يُضاف هذا المنشأ إلى `_sender_number_survives_emission` أبداً: تلك
+    # المرآةُ تحرس **محاولةَ** المسار البصريّ، ولو نجا فيها المطبوعُ لمُنعت
+    # المحاولةُ ونُقض S3′ صامتاً. البصريُّ يُجرَّب دائماً ويُزيح المطبوع إن كتب.
+    if (getattr(result, 'sender_number_source', '') == 'printed_anchor'
+            and getattr(result, 'sender_number', None)
+            and not _printed_number_vetoed(result)):
+        return
+    # **المرجعُ المطبوعُ الصارم (2026-08-30)** — منشأٌ مستقلٌّ عن `printed_anchor`
+    # عمداً: ذاك يقبل أيَّ التقاطِ مرساةٍ بثقة 0.70، وهذا يشترط بادئةً معتمدةً
+    # ومنطقةً رأسيّةً وسطرَ حقلٍ لا نثر — فقِيس 32 إصابةً **وصفرَ خطأ**، وعلى
+    # المجموعة الرقميّة المختومة يُطلق مرّةً واحدةً صحيحة. والنقضُ البنيويُّ
+    # يسري عليه كما يسري على المطبوع.
+    # ⚠️ ولا يُضاف إلى `_sender_number_survives_emission` أبداً — فخُّ المرآة.
+    if (getattr(result, 'sender_number_source', '') == 'strict_ref'
+            and getattr(result, 'sender_number', None)
+            and not _printed_number_vetoed(result)):
         return
     # **إعادةُ نطاقٍ بأمر المالك (2026-08-19):** القراءة البصريّة (CRNN على قصاصة
     # الكاشف أو شريط المُموضِع، `bbox_source == 'crnn'`) **تُعرض بثقتها الحقيقيّة**
@@ -433,7 +630,8 @@ class AIExtractionService:
         تموضعٌ بمرساة «العدد» وبصمة تخطيط الجهة ← قصّ الشريط ← قراءة CRNN (v5:
         94.5% على شرائط محجوزة) ← بوابة الثقة المُعايَرة.
 
-        يعيد `(number_result, date_crop)`: `number_result` = (نص، ثقة، bbox) أو None؛
+        يعيد `(number_result, date_crop, date_suggestion, (det_box, W, H))`:
+        `number_result` = (نص، ثقة، bbox) أو None؛
         و`date_crop` = data URL لشريط «التأريخ» اليدويّ (خيار F) أو None. القصاصةُ تركب
         نفس الرسم+TSV (بلا مسحٍ ثانٍ — فيبل16) وتُحسَب **باستقلالٍ عن ارتدادات العدد**.
         أيّ فشلٍ داخليّ يتدهور بصمت — القارئ لا يُسقط الأنبوب أبداً."""
@@ -443,13 +641,23 @@ class AIExtractionService:
 
             if self._hw_reader is None:
                 self._hw_reader = HandwrittenNumberReader()
-                priors = EntityLayoutPriors(os.path.join('var', 'handwriting_layout_priors.json'))
+                from core.extraction.artifacts import layout_priors_path
+                priors = EntityLayoutPriors(layout_priors_path())
                 self._hw_locator = NumberStripLocator(priors)
                 # مُموضِع «التأريخ» بلا priors: لا بصمةَ تاريخٍ لكل جهةٍ بعد (فيبل16)،
                 # فمرساةُ التسمية المطبوعة وحدها تقود — ونقبل source='label' فقط.
                 self._hw_date_locator = NumberStripLocator(None, field='date')
             if not self._hw_reader.available:
-                return None, None
+                _warn_missing_artifact('number_model', self._hw_reader.model_path,
+                                       'لا قراءةَ عددٍ يدويّ — الحقلُ يبقى فارغاً')
+                # **رباعيّةٌ لا ثنائيّة**: النداءُ يفكّ أربعةً، وثنائيّةٌ هنا ترفع
+                # ValueError يبتلعها except العام فيعود المستندُ كلُّه `failed` —
+                # لا «تدهوراً رشيقاً». عاشت منذ توصيل قارئ التاريخ (c961ed3)
+                # لأنّها لا تُطلَق إلّا حين تغيب الأوزان: على جهاز التطوير هي
+                # حاضرةٌ دائماً، والمسارُ **نسبيٌّ لمجلّد العمل** — فتكفي خدمةٌ
+                # تُقلَع من مجلّدٍ آخر ليسقط الاستخراجُ كلُّه. يحرسها اختبارٌ في
+                # `core/tests_weights_preflight.py`.
+                return None, None, None, (None, 0, 0)
 
             from PIL import Image as PILImage
             if image_path.lower().endswith('.pdf'):
@@ -598,6 +806,8 @@ class AIExtractionService:
                 DATE_CONF_GREEN, get_date_reader)
             rd = get_date_reader()
             if not rd.available:
+                _warn_missing_artifact('date_model', rd.model_path,
+                                       'لا اقتراحَ تاريخ — القصاصةُ وحدها للكاتب')
                 return None
             raw, conf = rd.read(crop.convert('L'))
             if not raw:
@@ -649,6 +859,8 @@ class AIExtractionService:
         except Exception:
             return None
 
+    _last_detector_arm = 'det2'   # يُحدَّث في `_detector_box_from_file`
+
     @staticmethod
     def _detector_box_from_file(image_path):
         """صندوق «العدد» من **الملفّ الأصليّ** مرسوماً بوصفة التدريب حرفيّاً (175dpi، RGB).
@@ -676,10 +888,21 @@ class AIExtractionService:
             else:
                 im = PILImage.open(image_path).convert('RGB')
             got = detect_number_box(im)
+            arm = 'det2'
+            if not got:
+                # **S1**: حين يصمت det2 يُجرَّب det1 احتياطيّاً. لا يعمل إلّا على
+                # صفحةٍ كانت ستبقى صامتة، فأسوأُ حالاته صندوقٌ زائفٌ ⟵ قراءةٌ دون
+                # بوّابة الثقة لا تمسّ حارس «واثقٌ‑ومخطئ».
+                from core.extraction.handwriting.detector import detect_number_box_fallback
+                got = detect_number_box_fallback(im)
+                arm = 'det1' if got else 'none'
             del im
             if not got:
                 return None
             box, _conf = got
+            # ذراعُ المصدر يُنشر مع الصندوق — بدونه يتسمّم الحصادُ القادم
+            # بهندساتٍ مختلطة (درسُ recrop المدفوعُ ثمنُه مرّةً).
+            AIExtractionService._last_detector_arm = arm
             # نفس حارس الارتفاع: صندوقٌ منخفض اقتباسُ متنٍ يخنق حقلَ التاريخ فوقه
             return box if box[1] <= 0.45 else None
         except Exception as exc:
@@ -1090,6 +1313,11 @@ class AIExtractionService:
                     if result.sender_date else 0.0
                 result.sender_number = patterns.get('sender_number')
                 result.sender_number_confidence = patterns.get('sender_number_confidence') or 0.0
+                # **منشأُ القيمة** — يفصل كاتبَ مرساة الرأس (المفتوحُ في S4) عن
+                # بقيّة الكُتّاب النصّيّين (احتياطُ ref_num والبصمات) الذين يبقون
+                # مكتومين. الوسمُ هنا عند الكتابة لا عند العرض، فلا يلتبس مصدران.
+                if result.sender_number:
+                    result.sender_number_source = 'printed_anchor'
                 result.title = patterns.get('title') or ''
                 # ثقةٌ صادقةٌ بحسب المسار (فيبل 2026-08-17): كانت تبقى 0.0 دائماً فتُظهر
                 # الواجهة 0% لكلّ عنوان — بما فيه مسار العلامة المقيس 64% صالحاً.
@@ -1103,6 +1331,31 @@ class AIExtractionService:
                         if not result.sender_number:
                             result.sender_number = ref_num
                             result.sender_number_confidence = 0.65
+                # **توجيهُ انبعاث الموضوع** — بعد قصّ المرجع كي يُنظَّف الاقتراحُ
+                # أيضاً، وقبل `field_confidences` كي لا تدخل ثقةُ ما لا يُملأ.
+                _route_title_emission(result, patterns.get('title_source') or '')
+                # ── «النصُّ يسبق البصريّ» (أمر المالك 2026-08-30) ───────────────
+                # مطابقةٌ صارمةٌ على **طبقة النصّ الخامّة** لا على `probe`: بنيةُ
+                # السطور هي الدليل (`clean_text` تطوي `\n` فتُلغي كلَّ الطبقات).
+                # المقاس على e2e-E (34 حقيقةً محكَّمةً بالعين): الصارمُ 32 إصابةً
+                # وصفرَ خطأٍ بـ0.094 ث، مقابل البصريّ 11 إصابةً وخطأين بـ3.92 ث.
+                # وعلى e2e-D المختومة يُطلق **مرّةً واحدةً صحيحة** — حارسُ التعميم.
+                # الثقةُ 0.85: عاليةٌ لأنّها مقيسة، ودون عتبة «الواثق» (0.90)
+                # بنائيّاً لأنّ الأدلّة كلَّها من مجموعةِ تطويرٍ حتّى تُبنى e2e-F.
+                if pdf_text:
+                    _strict_raw = strict_ref_match(pdf_text)
+                    _strict_val = canonical_sender_number(_strict_raw) if _strict_raw else ''
+                    if _strict_val:
+                        if result.sender_number and result.sender_number != _strict_val:
+                            logger.info('[strict_ref] أزاح %r ⟵ %r (مطبوعٌ خامّ %r)',
+                                        result.sender_number, _strict_val, _strict_raw)
+                        result.sender_number = _strict_val
+                        result.sender_number_confidence = 0.85
+                        result.sender_number_source = 'strict_ref'
+                        # المرجعُ المطبوع كاملاً أثراً (`NK-20260233`). لا يُمرَّر إلى
+                        # `result_to_scan_data`: كلُّ مفتاحٍ هناك عقدٌ في
+                        # `capture_schema` وحرزُه يفشل صاخباً — ولا حاجةَ قِيست بعد.
+                        result.sender_number_printed_ref = _strict_raw
                 result.secret_level = patterns.get('secret_level') or ''
                 result.secret_level_confidence = patterns.get('secret_level_confidence') or 0.0
                 result.book_kind = patterns.get('book_kind') or ''
@@ -1227,12 +1480,19 @@ class AIExtractionService:
             # (مثل «195» بدل «MF-2026-195»).
             if getattr(result, 'issuing_entity_id', None) and result.cleaned_text:
                 hit = self.number_profiles.find(result.cleaned_text, result.issuing_entity_id)
-                if hit and hit.value != (result.sender_number or ''):
+                _strict_held = getattr(result, 'sender_number_source', '') == 'strict_ref'
+                if hit and hit.value != (result.sender_number or '') and not _strict_held:
                     if not result.sender_number or hit.confidence >= (result.sender_number_confidence or 0.0):
                         logger.info('[profile] sender_number %r → %r (قالب %s)',
                                     result.sender_number, hit.value, hit.template)
                         result.sender_number = hit.value
                         result.sender_number_confidence = hit.confidence
+                        # **تسريبٌ مقيسٌ أُغلق**: كان `sender_number_source` يُكتب
+                        # مرّةً واحدةً عند كاتب مرساة الرأس ولا يُحدَّث — فقيمةُ
+                        # البصمة هذه ترث وسمَ `printed_anchor` **فتنجو من الكتم
+                        # بوسمٍ ليس لها** (شوهد في e2e-E: قيمةٌ بثقة 0.85 وصلت
+                        # المخرَجَ عبر هذا المسار). الوسمُ الآن عند كلّ كتابة.
+                        result.sender_number_source = 'entity_profile'
                 # إصلاح بادئة شوّهها OCR (llK-20260257 → NK-20260257) ببادئات
                 # الجهة المؤكَّدة نفسها — معيار الجهات الخمس، كتاب 11237.
                 if result.sender_number:
@@ -1242,22 +1502,39 @@ class AIExtractionService:
                         logger.info('[profile] إصلاح بادئة: %r → %r',
                                     result.sender_number, repaired)
                         result.sender_number = repaired
+                        result.sender_number_source = 'entity_profile'
 
             # Step 5.5: رقم الجهة المخربش بخط اليد — الملاذ الأخير حين تصمت كل
             # الطبقات المطبوعة (قياس الأرشيف: أغلبية الأرقام يدوية، Tesseract ≈ 0%
             # عليها). يعمل في مسارَي OCR والكاش كليهما (يحتاج ملف الصورة فقط).
             # ويركب نفسَ الرسم+TSV قصاصةُ «التأريخ» اليدويّ للواجهة (خيار F) حين خلا
             # تاريخُ الجهة من الطبقات المطبوعة — بلا مسحٍ ثانٍ (فيبل16).
-            if not result.sender_number and result.image_path:
+            if (result.image_path and not _sender_number_survives_emission(result)
+                    and not _strict_ref_skips_visual(result)):
                 _progress('handwritten_number')
                 want_crop = not result.sender_date
                 (num_res, date_crop, date_suggestion,
                  (det_box, _pw, _ph)) = self._read_handwritten_sender_number(
                     result.image_path, getattr(result, 'issuing_entity_id', None),
                     want_date_crop=want_crop)
+                # المرجعُ المطبوعُ الصارم **لا يُزاح**: قِيس 32/32 على صفّه مقابل
+                # 11 إصابةً وخطأين للبصريّ على نفس المستندات. والنداءُ هنا لم
+                # يُتخطَّ إلّا لأنّ التاريخ صامتٌ ونحتاج قصاصتَه — فيُؤخذ التاريخُ
+                # ويُترك العدد، ويُسجَّل الخلافُ مادّةً للدراسة.
+                _strict_holds = getattr(result, 'sender_number_source', '') == 'strict_ref'
+                if num_res and _strict_holds:
+                    if num_res[0] and num_res[0] != result.sender_number:
+                        logger.info('[strict_ref] خلافٌ مع البصريّ: نصّيّ %r · بصريّ '
+                                    '%r (ثقة %.2f) — النصّيُّ يبقى',
+                                    result.sender_number, num_res[0], num_res[1] or 0.0)
+                    num_res = None
                 if num_res:
+                    _displaced = getattr(result, 'sender_number', None)
                     result.sender_number, result.sender_number_confidence, result.sender_number_bbox = num_res
                     result.sender_number_bbox_source = 'crnn'
+                    if _displaced:
+                        logger.info('[handwriting] البصريُّ أزاح قيمةً نصّيّةً مكتومة: '
+                                    '%r ⟵ %r', _displaced, result.sender_number)
                     logger.info('[handwriting] رقم الجهة من خط اليد: %r (ثقة %.2f)',
                                 result.sender_number, result.sender_number_confidence)
                 elif det_box:
@@ -1495,6 +1772,8 @@ def partial_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         if value not in (None, '', []):
             snap[field] = value
             snap[conf] = getattr(result, conf, 0.0)
+    if getattr(result, 'title_suggestion', None):
+        snap['title_suggestion'] = result.title_suggestion
     if getattr(result, 'document_type', ''):
         snap['document_type'] = result.document_type
     if getattr(result, 'issuing_entity_name', ''):
@@ -1585,6 +1864,9 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         'sender_number_bbox_dims': getattr(result, 'sender_number_bbox_dims', None),
         'title': result.title,
         'title_confidence': result.title_confidence,
+        # اقتراحُ الموضوع ضعيفِ المسار — منفصلاً عن `title` بالبناء: الواجهةُ
+        # القديمة تتجاهله فلا تملأ به حقلاً (نفسُ عقد `sender_date_suggestion`).
+        'title_suggestion': getattr(result, 'title_suggestion', None),
         'issuing_entity': result.issuing_entity_name,
         'issuing_entity_confidence': result.issuing_entity_confidence,
         'issuing_entity_matches': slim_entity_matches(result.issuing_entity_matches),

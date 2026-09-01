@@ -5,6 +5,7 @@
 ONNX/torch 98.2%) — بل العقدُ الذي يجعل تلك الدقّة تصل سليمةً إلى الأنبوب:
 الإحداثيّات مُطبَّعةٌ على **الصفحة الكاملة** لا على قصاصة الـ55%، وغيابُ الملفّ
 يُصمِت الكاشف بدل أن يكسر استخراجاً."""
+import os
 from unittest import mock
 
 from django.contrib.auth.models import User
@@ -31,12 +32,26 @@ class DetectorGracefulTests(SimpleTestCase):
 
     @override_settings(NUMBER_DETECTOR_ONNX=r'/nonexistent/x.onnx')
     def test_missing_model_probed_once_only(self):
-        """الفشل يُخزَّن: لا نضرب القرص لكلّ صفحة."""
+        """الفشل يُخزَّن: لا نضرب القرص لكلّ صفحة.
+
+        **يُعدّ فحصُ مسار النموذج وحدَه**: كان العدّ على كلّ `os.path.exists`،
+        فلمّا صار مُسجّل `core` موصولاً بمُعالِج ملفٍّ (إصلاح صمت 2026-09-01)
+        دخل في العدّ لمسُ `logs/lettersys.log` عند كتابة السطر — أي أنّ
+        **الإصلاحَ نفسَه** كان يُسقط الاختبار بلا عطبٍ في المقصود.
+        """
         img = Image.new('RGB', (400, 600), 'white')
-        with mock.patch('os.path.exists', return_value=False) as ex:
+        real_exists = os.path.exists
+        probes = []
+
+        def spy(path):
+            if str(path).endswith('x.onnx'):
+                probes.append(path)
+            return real_exists(path)
+
+        with mock.patch('os.path.exists', side_effect=spy):
             D.detect_number_box(img)
             D.detect_number_box(img)
-        self.assertEqual(ex.call_count, 1, 'الفحص يجب أن يقع مرّةً واحدة')
+        self.assertEqual(len(probes), 1, 'فحصُ مسار النموذج يجب أن يقع مرّةً واحدة')
 
 
 class DetectorGeometryContractTests(SimpleTestCase):

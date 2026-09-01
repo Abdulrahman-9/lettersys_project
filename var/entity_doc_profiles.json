@@ -1,0 +1,4821 @@
+{
+ "7": {
+  "entity_id": 7,
+  "entity_name": "قسم الصحة والسلامة المهنية والبيئة",
+  "entity_code": "ش8",
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 4,
+    "x": 0.674,
+    "y": 0.362
+   },
+   "date": {
+    "marker": "التاريخ:‎",
+    "seen_in_docs": 3,
+    "x": 0.257,
+    "y": 0.191
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 7,
+    "x": 0.648,
+    "y": 0.262
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 8,
+    "x": 0.717,
+    "y": 0.272
+   }
+  }
+ },
+ "32": {
+  "entity_id": 32,
+  "entity_name": "هياة ادارة وتنمية الموارد البشرية",
+  "entity_code": "د",
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.469,
+    "y": 0.303
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 5,
+    "x": 0.506,
+    "y": 0.171
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.549,
+    "y": 0.255
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 1,
+    "x": 0.926,
+    "y": 0.205
+   }
+  }
+ },
+ "37": {
+  "entity_id": 37,
+  "entity_name": "قسم شؤون التراخيص البترولية",
+  "entity_code": "ش4",
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.371,
+    "y": 0.239
+   },
+   "date": {
+    "marker": "التأريخ:.4>‎",
+    "seen_in_docs": 6,
+    "x": 0.346,
+    "y": 0.246
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.688,
+    "y": 0.265
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 10,
+    "x": 0.616,
+    "y": 0.306
+   }
+  }
+ },
+ "38": {
+  "entity_id": 38,
+  "entity_name": "قسم العقود",
+  "entity_code": "ش5",
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "No.1",
+    "seen_in_docs": 1,
+    "x": 0.23,
+    "y": 0.233
+   },
+   "date": {
+    "marker": "التأريخ",
+    "seen_in_docs": 1,
+    "x": 0.216,
+    "y": 0.207
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.486,
+    "y": 0.31
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 6,
+    "x": 0.806,
+    "y": 0.31
+   }
+  }
+ },
+ "56": {
+  "entity_id": 56,
+  "entity_name": "وحدة الموارد البشرية",
+  "entity_code": "و.م.ب",
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": null,
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 5,
+    "x": 0.257,
+    "y": 0.152
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 5,
+    "x": 0.254,
+    "y": 0.172
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.611,
+    "y": 0.282
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 11,
+    "x": 0.73,
+    "y": 0.308
+   }
+  }
+ },
+ "89": {
+  "entity_id": 89,
+  "entity_name": "قسم الموارد البشرية",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 8,
+    "x": 0.536,
+    "y": 0.198
+   },
+   "date": {
+    "marker": "DATE",
+    "seen_in_docs": 6,
+    "x": 0.538,
+    "y": 0.203
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 3,
+    "x": 0.639,
+    "y": 0.225
+   }
+  }
+ },
+ "187": {
+  "entity_id": 187,
+  "entity_name": "هيئة ادارة و تنمية الموارد البشرية / قسم التدريب والتطوير",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 5,
+    "x": 0.41,
+    "y": 0.241
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 4,
+    "x": 0.327,
+    "y": 0.171
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.742,
+    "y": 0.353
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 6,
+    "x": 0.772,
+    "y": 0.325
+   }
+  }
+ },
+ "272": {
+  "entity_id": 272,
+  "entity_name": "هيئة ادارة و تنمية الموارد البشرية / شعبة تمكين المراه",
+  "entity_code": null,
+  "docs": 2,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D2",
+  "fields": {
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 1,
+    "x": 0.178,
+    "y": 0.203
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 3,
+    "x": 0.477,
+    "y": 0.353
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 3,
+    "x": 0.857,
+    "y": 0.282
+   }
+  }
+ },
+ "387": {
+  "entity_id": 387,
+  "entity_name": "وزارة النفط / الدائرة الاقتصادية / قسم العقود والاتفاقيات",
+  "entity_code": null,
+  "docs": 1,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.665,
+    "y": 0.236
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 1,
+    "x": 0.365,
+    "y": 0.106
+   }
+  }
+ },
+ "424": {
+  "entity_id": 424,
+  "entity_name": "هيئة ادارة و تنمية الموارد البشرية / شعبة شؤون المرأة",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 4,
+    "x": 0.213,
+    "y": 0.178
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 1,
+    "x": 0.228,
+    "y": 0.205
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.644,
+    "y": 0.318
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 2,
+    "x": 0.901,
+    "y": 0.265
+   }
+  }
+ },
+ "13": {
+  "entity_id": 13,
+  "entity_name": "شعبة متابعة تنفيذ الموازنة",
+  "entity_code": "ش.ت",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 6,
+    "x": 0.382,
+    "y": 0.196
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.38,
+    "y": 0.164
+   },
+   "subject": {
+    "marker": "م/تقرير",
+    "seen_in_docs": 3,
+    "x": 0.549,
+    "y": 0.281
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 17,
+    "x": 0.689,
+    "y": 0.297
+   }
+  }
+ },
+ "39": {
+  "entity_id": 39,
+  "entity_name": "قسم رقابة عقود التراخيص البترولية",
+  "entity_code": "ش6",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 5,
+    "x": 0.464,
+    "y": 0.198
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 3,
+    "x": 0.471,
+    "y": 0.182
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 5,
+    "x": 0.63,
+    "y": 0.304
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 7,
+    "x": 0.703,
+    "y": 0.329
+   }
+  }
+ },
+ "55": {
+  "entity_id": 55,
+  "entity_name": "وحدة التقارير",
+  "entity_code": "و.ت",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": null,
+  "fields": {
+   "number": {
+    "marker": "العدد:‎",
+    "seen_in_docs": 6,
+    "x": 0.269,
+    "y": 0.195
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.386,
+    "y": 0.161
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 6,
+    "x": 0.563,
+    "y": 0.272
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 15,
+    "x": 0.622,
+    "y": 0.278
+   }
+  }
+ },
+ "661": {
+  "entity_id": 661,
+  "entity_name": "وحدة مشاريع المساهمة الاجتماعية والمادة 26",
+  "entity_code": "و.م",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": null,
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 2,
+    "x": 0.502,
+    "y": 0.247
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.267,
+    "y": 0.176
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.591,
+    "y": 0.279
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 12,
+    "x": 0.778,
+    "y": 0.281
+   }
+  }
+ },
+ "526": {
+  "entity_id": 526,
+  "entity_name": "الادارة",
+  "entity_code": "follow-up2@mdoc.oil.gov.iq",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": null,
+  "fields": {
+   "number": {
+    "marker": "العدد‎",
+    "seen_in_docs": 5,
+    "x": 0.223,
+    "y": 0.178
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.207,
+    "y": 0.201
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.455,
+    "y": 0.318
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 6,
+    "x": 0.871,
+    "y": 0.245
+   }
+  }
+ },
+ "43": {
+  "entity_id": 43,
+  "entity_name": "لجنة الادارة المشتركة لحقل بدرة النفطي",
+  "entity_code": "ل ب",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 10,
+    "x": 0.445,
+    "y": 0.206
+   },
+   "date": {
+    "marker": "التأريخ:‎",
+    "seen_in_docs": 7,
+    "x": 0.548,
+    "y": 0.164
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.72,
+    "y": 0.255
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 10,
+    "x": 0.644,
+    "y": 0.245
+   }
+  }
+ },
+ "50": {
+  "entity_id": 50,
+  "entity_name": "اللجان",
+  "entity_code": "ل",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 4,
+    "x": 0.238,
+    "y": 0.165
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 4,
+    "x": 0.227,
+    "y": 0.186
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.742,
+    "y": 0.305
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 7,
+    "x": 0.799,
+    "y": 0.302
+   }
+  }
+ },
+ "34": {
+  "entity_id": 34,
+  "entity_name": "هيئة نفط واسط",
+  "entity_code": "و",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.414,
+    "y": 0.257
+   },
+   "date": {
+    "marker": "التأريخ:‎",
+    "seen_in_docs": 3,
+    "x": 0.214,
+    "y": 0.2
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 6,
+    "x": 0.591,
+    "y": 0.344
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 8,
+    "x": 0.771,
+    "y": 0.329
+   }
+  }
+ },
+ "46": {
+  "entity_id": 46,
+  "entity_name": "لجنة الادارة المشتركة المنطقة الجنوبية",
+  "entity_code": "ل ج",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 13,
+    "x": 0.474,
+    "y": 0.228
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 9,
+    "x": 0.478,
+    "y": 0.158
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.506,
+    "y": 0.262
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 11,
+    "x": 0.676,
+    "y": 0.303
+   }
+  }
+ },
+ "90": {
+  "entity_id": 90,
+  "entity_name": "لجنة الادارة المشتركة لحقل الاحدب",
+  "entity_code": "ل ح",
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 13,
+    "x": 0.562,
+    "y": 0.239
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 9,
+    "x": 0.33,
+    "y": 0.204
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.592,
+    "y": 0.282
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 18,
+    "x": 0.505,
+    "y": 0.31
+   }
+  }
+ },
+ "92": {
+  "entity_id": 92,
+  "entity_name": "لجنة الادارة المشتركة لحقلي (خشم الاحمر/انجانة)",
+  "entity_code": "ل خ",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 12,
+    "x": 0.483,
+    "y": 0.204
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 8,
+    "x": 0.508,
+    "y": 0.147
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 5,
+    "x": 0.458,
+    "y": 0.268
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 17,
+    "x": 0.581,
+    "y": 0.296
+   }
+  }
+ },
+ "87": {
+  "entity_id": 87,
+  "entity_name": "لجنة الادارة المشتركة لرقعة نفط خانة",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 12,
+    "x": 0.409,
+    "y": 0.191
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 7,
+    "x": 0.336,
+    "y": 0.146
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 7,
+    "x": 0.589,
+    "y": 0.326
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 14,
+    "x": 0.63,
+    "y": 0.293
+   }
+  }
+ },
+ "49": {
+  "entity_id": 49,
+  "entity_name": "لجنة الادارة المشتركة لحقل المنصورية الغازي",
+  "entity_code": "ل م",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 11,
+    "x": 0.457,
+    "y": 0.268
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 6,
+    "x": 0.314,
+    "y": 0.148
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 7,
+    "x": 0.463,
+    "y": 0.265
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 14,
+    "x": 0.611,
+    "y": 0.275
+   }
+  }
+ },
+ "290": {
+  "entity_id": 290,
+  "entity_name": "EBS PETROLEUM COMPANY LIMITED",
+  "entity_code": "ebs",
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "L3-L4-D8",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 9,
+    "x": 0.431,
+    "y": 0.296
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 6,
+    "x": 0.489,
+    "y": 0.242
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 5,
+    "x": 0.185,
+    "y": 0.312
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 9,
+    "x": 0.366,
+    "y": 0.36
+   }
+  }
+ },
+ "4": {
+  "entity_id": 4,
+  "entity_name": "القسم القانوني",
+  "entity_code": "ش3",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد:.ش",
+    "seen_in_docs": 7,
+    "x": 0.296,
+    "y": 0.201
+   },
+   "date": {
+    "marker": "التأريخ:‎",
+    "seen_in_docs": 2,
+    "x": 0.233,
+    "y": 0.183
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 2,
+    "x": 0.178,
+    "y": 0.246
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 10,
+    "x": 0.623,
+    "y": 0.318
+   }
+  }
+ },
+ "178": {
+  "entity_id": 178,
+  "entity_name": "شركة نفط الواحة المحدودة",
+  "entity_code": "nw",
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 5,
+    "x": 0.217,
+    "y": 0.203
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 6,
+    "x": 0.27,
+    "y": 0.226
+   },
+   "subject": {
+    "marker": "subject",
+    "seen_in_docs": 2,
+    "x": 0.661,
+    "y": 0.308
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 17,
+    "x": 0.32,
+    "y": 0.336
+   }
+  }
+ },
+ "127": {
+  "entity_id": 127,
+  "entity_name": "لجنة الادارة المشتركة للرقعة السابعة",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 21,
+    "x": 0.509,
+    "y": 0.251
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 12,
+    "x": 0.399,
+    "y": 0.206
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.799,
+    "y": 0.231
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 20,
+    "x": 0.373,
+    "y": 0.3
+   }
+  }
+ },
+ "122": {
+  "entity_id": 122,
+  "entity_name": "لجنة الادارة المشتركة لرقعة خليصية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 14,
+    "x": 0.472,
+    "y": 0.223
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 12,
+    "x": 0.458,
+    "y": 0.155
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.652,
+    "y": 0.246
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 11,
+    "x": 0.801,
+    "y": 0.303
+   }
+  }
+ },
+ "320": {
+  "entity_id": 320,
+  "entity_name": "BADRA",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 3,
+    "x": 0.553,
+    "y": 0.338
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 1,
+    "x": 0.297,
+    "y": 0.184
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 4,
+    "x": 0.147,
+    "y": 0.393
+   },
+   "recipient": {
+    "marker": "To",
+    "seen_in_docs": 2,
+    "x": 0.187,
+    "y": 0.147
+   }
+  }
+ },
+ "525": {
+  "entity_id": 525,
+  "entity_name": "سارة",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": null,
+  "fields": {
+   "number": {
+    "marker": "العدد‎",
+    "seen_in_docs": 6,
+    "x": 0.347,
+    "y": 0.239
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 5,
+    "x": 0.268,
+    "y": 0.176
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.598,
+    "y": 0.32
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 12,
+    "x": 0.696,
+    "y": 0.319
+   }
+  }
+ },
+ "135": {
+  "entity_id": 135,
+  "entity_name": "لجنة الادارة المشتركة (رقعة القرنين)",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 9,
+    "x": 0.359,
+    "y": 0.134
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 8,
+    "x": 0.495,
+    "y": 0.156
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 7,
+    "x": 0.457,
+    "y": 0.271
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 12,
+    "x": 0.849,
+    "y": 0.256
+   }
+  }
+ },
+ "6": {
+  "entity_id": 6,
+  "entity_name": "مكتب السيد المدير العام",
+  "entity_code": "ش",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 5,
+    "x": 0.48,
+    "y": 0.278
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.478,
+    "y": 0.292
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.686,
+    "y": 0.353
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 8,
+    "x": 0.743,
+    "y": 0.342
+   }
+  }
+ },
+ "306": {
+  "entity_id": 306,
+  "entity_name": "NK Petroleum Company Limited",
+  "entity_code": "nk",
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "L2-D8",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 12,
+    "x": 0.513,
+    "y": 0.255
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 9,
+    "x": 0.276,
+    "y": 0.222
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 6,
+    "x": 0.324,
+    "y": 0.248
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 14,
+    "x": 0.355,
+    "y": 0.299
+   }
+  }
+ },
+ "95": {
+  "entity_id": 95,
+  "entity_name": "هيئة العمليات / قسم حقول الانبار",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 4,
+    "x": 0.371,
+    "y": 0.284
+   },
+   "date": {
+    "marker": "التأريخ",
+    "seen_in_docs": 2,
+    "x": 0.21,
+    "y": 0.195
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.459,
+    "y": 0.265
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 12,
+    "x": 0.716,
+    "y": 0.348
+   }
+  }
+ },
+ "5": {
+  "entity_id": 5,
+  "entity_name": "الهيأة المالية",
+  "entity_code": "م",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.469,
+    "y": 0.316
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.381,
+    "y": 0.182
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.587,
+    "y": 0.314
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 7,
+    "x": 0.788,
+    "y": 0.331
+   }
+  }
+ },
+ "224": {
+  "entity_id": 224,
+  "entity_name": "هيئة التخطيط و الدراسات",
+  "entity_code": "ت",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 12,
+    "x": 0.326,
+    "y": 0.301
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 2,
+    "x": 0.127,
+    "y": 0.253
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.636,
+    "y": 0.261
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 11,
+    "x": 0.681,
+    "y": 0.293
+   }
+  }
+ },
+ "115": {
+  "entity_id": 115,
+  "entity_name": "لجنة الادارة المشتركة لحقل شرقي بغداد الامتدادات الشمالية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 15,
+    "x": 0.385,
+    "y": 0.282
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 11,
+    "x": 0.357,
+    "y": 0.205
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.79,
+    "y": 0.294
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 9,
+    "x": 0.723,
+    "y": 0.286
+   }
+  }
+ },
+ "123": {
+  "entity_id": 123,
+  "entity_name": "لجنة الادارة المشتركة لمشروع الظفرية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 8,
+    "x": 0.492,
+    "y": 0.146
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 10,
+    "x": 0.443,
+    "y": 0.174
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.487,
+    "y": 0.296
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 7,
+    "x": 0.887,
+    "y": 0.248
+   }
+  }
+ },
+ "318": {
+  "entity_id": 318,
+  "entity_name": "وزارة النفط / دائرة العقود والتراخيص البترولية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 15,
+    "x": 0.396,
+    "y": 0.233
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 10,
+    "x": 0.473,
+    "y": 0.137
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 7,
+    "x": 0.68,
+    "y": 0.282
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 7,
+    "x": 0.482,
+    "y": 0.34
+   }
+  }
+ },
+ "132": {
+  "entity_id": 132,
+  "entity_name": "لجنة الادارة المشتركة لمنطقة عقد زرباطية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "Ref:‏",
+    "seen_in_docs": 7,
+    "x": 0.442,
+    "y": 0.159
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 9,
+    "x": 0.441,
+    "y": 0.221
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.939,
+    "y": 0.276
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 11,
+    "x": 0.457,
+    "y": 0.286
+   }
+  }
+ },
+ "28": {
+  "entity_id": 28,
+  "entity_name": "هيأة الحقول",
+  "entity_code": "ح",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 10,
+    "x": 0.545,
+    "y": 0.316
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 2,
+    "x": 0.455,
+    "y": 0.191
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 3,
+    "x": 0.411,
+    "y": 0.3
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 13,
+    "x": 0.697,
+    "y": 0.319
+   }
+  }
+ },
+ "369": {
+  "entity_id": 369,
+  "entity_name": "Zhongman",
+  "entity_code": "zm",
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "L3-D4-D3",
+  "fields": {
+   "number": {
+    "marker": "Reference",
+    "seen_in_docs": 6,
+    "x": 0.458,
+    "y": 0.181
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 9,
+    "x": 0.445,
+    "y": 0.195
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 9,
+    "x": 0.368,
+    "y": 0.198
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 32,
+    "x": 0.527,
+    "y": 0.321
+   }
+  }
+ },
+ "507": {
+  "entity_id": 507,
+  "entity_name": "ado digital energy dmcc",
+  "entity_code": "ADE",
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 12,
+    "x": 0.345,
+    "y": 0.275
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 6,
+    "x": 0.189,
+    "y": 0.22
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 22,
+    "x": 0.328,
+    "y": 0.282
+   }
+  }
+ },
+ "31": {
+  "entity_id": 31,
+  "entity_name": "هيئة العمليات",
+  "entity_code": "ع",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 8,
+    "x": 0.412,
+    "y": 0.225
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 4,
+    "x": 0.175,
+    "y": 0.19
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.567,
+    "y": 0.29
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 11,
+    "x": 0.694,
+    "y": 0.323
+   }
+  }
+ },
+ "231": {
+  "entity_id": 231,
+  "entity_name": "لجنة الادارة المشتركة للرقعة الاستكشافية السابعة",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 20,
+    "x": 0.483,
+    "y": 0.251
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 16,
+    "x": 0.409,
+    "y": 0.215
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.713,
+    "y": 0.288
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 16,
+    "x": 0.51,
+    "y": 0.293
+   }
+  }
+ },
+ "41": {
+  "entity_id": 41,
+  "entity_name": "قسم الاخراج الكمركي",
+  "entity_code": "ش10",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 13,
+    "x": 0.555,
+    "y": 0.354
+   },
+   "date": {
+    "marker": "التأريخ:‎",
+    "seen_in_docs": 4,
+    "x": 0.347,
+    "y": 0.186
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 3,
+    "x": 0.701,
+    "y": 0.334
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 12,
+    "x": 0.65,
+    "y": 0.335
+   }
+  }
+ },
+ "121": {
+  "entity_id": 121,
+  "entity_name": "لجنة الادارة المشتركة لحقل الفرات الاوسط",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 10,
+    "x": 0.508,
+    "y": 0.123
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 9,
+    "x": 0.473,
+    "y": 0.145
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 4,
+    "x": 0.481,
+    "y": 0.371
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 8,
+    "x": 0.824,
+    "y": 0.295
+   }
+  }
+ },
+ "3": {
+  "entity_id": 3,
+  "entity_name": "مكتب معاون المدير العام للشؤون الفنية",
+  "entity_code": "ش.م.ف",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 11,
+    "x": 0.42,
+    "y": 0.224
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 5,
+    "x": 0.455,
+    "y": 0.214
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.734,
+    "y": 0.293
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 12,
+    "x": 0.613,
+    "y": 0.298
+   }
+  }
+ },
+ "53": {
+  "entity_id": 53,
+  "entity_name": "شعبة ادارة الجودة",
+  "entity_code": "ش.ج",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 8,
+    "x": 0.48,
+    "y": 0.252
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 1,
+    "x": 0.251,
+    "y": 0.225
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 8,
+    "x": 0.645,
+    "y": 0.299
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 9,
+    "x": 0.827,
+    "y": 0.294
+   }
+  }
+ },
+ "485": {
+  "entity_id": 485,
+  "entity_name": "الارشفة",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": null,
+  "fields": {
+   "number": {
+    "marker": "العدد:‎",
+    "seen_in_docs": 5,
+    "x": 0.402,
+    "y": 0.24
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 5,
+    "x": 0.261,
+    "y": 0.178
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.624,
+    "y": 0.29
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 8,
+    "x": 0.86,
+    "y": 0.244
+   }
+  }
+ },
+ "2": {
+  "entity_id": 2,
+  "entity_name": "مكتب معاون المدير العام للشؤون الادارية",
+  "entity_code": "ش.م.د",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 4,
+    "x": 0.594,
+    "y": 0.311
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 1,
+    "x": 0.265,
+    "y": 0.353
+   },
+   "subject": {
+    "marker": "م/طلب",
+    "seen_in_docs": 4,
+    "x": 0.527,
+    "y": 0.328
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 7,
+    "x": 0.726,
+    "y": 0.318
+   }
+  }
+ },
+ "52": {
+  "entity_id": 52,
+  "entity_name": "قسم حماية المنشات النفطية",
+  "entity_code": "ح.م",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.286,
+    "y": 0.311
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 5,
+    "x": 0.294,
+    "y": 0.226
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.685,
+    "y": 0.278
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 5,
+    "x": 0.926,
+    "y": 0.224
+   }
+  }
+ },
+ "54": {
+  "entity_id": 54,
+  "entity_name": "قسم تقنية المعلومات",
+  "entity_code": "ش12",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 10,
+    "x": 0.511,
+    "y": 0.24
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 6,
+    "x": 0.299,
+    "y": 0.178
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.631,
+    "y": 0.279
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 11,
+    "x": 0.813,
+    "y": 0.278
+   }
+  }
+ },
+ "675": {
+  "entity_id": 675,
+  "entity_name": "وحدة التعاقدات",
+  "entity_code": "و.ت.ش",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": null,
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 5,
+    "x": 0.379,
+    "y": 0.126
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 5,
+    "x": 0.265,
+    "y": 0.157
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.556,
+    "y": 0.285
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 15,
+    "x": 0.801,
+    "y": 0.28
+   }
+  }
+ },
+ "9": {
+  "entity_id": 9,
+  "entity_name": "قسم الرقابة والتدقيق الداخلي",
+  "entity_code": "ش2",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "No.1",
+    "seen_in_docs": 5,
+    "x": 0.224,
+    "y": 0.151
+   },
+   "date": {
+    "marker": "التأريخ",
+    "seen_in_docs": 3,
+    "x": 0.231,
+    "y": 0.19
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.686,
+    "y": 0.323
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 12,
+    "x": 0.769,
+    "y": 0.329
+   }
+  }
+ },
+ "29": {
+  "entity_id": 29,
+  "entity_name": "الهيأة الهندسية",
+  "entity_code": "ه",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.506,
+    "y": 0.301
+   },
+   "date": {
+    "marker": "التأريخ:.‎",
+    "seen_in_docs": 2,
+    "x": 0.24,
+    "y": 0.225
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.544,
+    "y": 0.254
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 6,
+    "x": 0.824,
+    "y": 0.284
+   }
+  }
+ },
+ "10": {
+  "entity_id": 10,
+  "entity_name": "قسم الفحص الهندسي",
+  "entity_code": "ش7",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.426,
+    "y": 0.311
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.201,
+    "y": 0.214
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.503,
+    "y": 0.323
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 11,
+    "x": 0.793,
+    "y": 0.333
+   }
+  }
+ },
+ "310": {
+  "entity_id": 310,
+  "entity_name": "qurnain petroleum",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "L3-L4-D8",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 8,
+    "x": 0.544,
+    "y": 0.292
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 5,
+    "x": 0.553,
+    "y": 0.224
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 5,
+    "x": 0.186,
+    "y": 0.338
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 6,
+    "x": 0.325,
+    "y": 0.352
+   }
+  }
+ },
+ "288": {
+  "entity_id": 288,
+  "entity_name": "ZPEC",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 6,
+    "x": 0.574,
+    "y": 0.23
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 4,
+    "x": 0.345,
+    "y": 0.244
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 4,
+    "x": 0.159,
+    "y": 0.221
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 13,
+    "x": 0.424,
+    "y": 0.268
+   }
+  }
+ },
+ "553": {
+  "entity_id": 553,
+  "entity_name": "علا",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": null,
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 8,
+    "x": 0.277,
+    "y": 0.143
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 8,
+    "x": 0.319,
+    "y": 0.204
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.192,
+    "y": 0.039
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 14,
+    "x": 0.769,
+    "y": 0.261
+   }
+  }
+ },
+ "105": {
+  "entity_id": 105,
+  "entity_name": "قسم عمليات المنطقة الجنوبية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 15,
+    "x": 0.387,
+    "y": 0.255
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 10,
+    "x": 0.416,
+    "y": 0.209
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.641,
+    "y": 0.261
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 16,
+    "x": 0.538,
+    "y": 0.323
+   }
+  }
+ },
+ "326": {
+  "entity_id": 326,
+  "entity_name": "وزارة النفط / الدائرة الاقتصادية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 15,
+    "x": 0.444,
+    "y": 0.266
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 6,
+    "x": 0.387,
+    "y": 0.175
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 2,
+    "x": 0.847,
+    "y": 0.303
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 1,
+    "x": 0.812,
+    "y": 0.378
+   }
+  }
+ },
+ "96": {
+  "entity_id": 96,
+  "entity_name": "هيئة العمليات /قسم عمليات المنطقة الجنوبية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 11,
+    "x": 0.52,
+    "y": 0.257
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.288,
+    "y": 0.196
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.601,
+    "y": 0.215
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 11,
+    "x": 0.779,
+    "y": 0.288
+   }
+  }
+ },
+ "315": {
+  "entity_id": 315,
+  "entity_name": "nmf",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D6",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 11,
+    "x": 0.495,
+    "y": 0.263
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 8,
+    "x": 0.273,
+    "y": 0.184
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 6,
+    "x": 0.249,
+    "y": 0.275
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 14,
+    "x": 0.354,
+    "y": 0.365
+   }
+  }
+ },
+ "351": {
+  "entity_id": 351,
+  "entity_name": "Geo - Jade",
+  "entity_code": "geo",
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D7",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 9,
+    "x": 0.614,
+    "y": 0.25
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 5,
+    "x": 0.164,
+    "y": 0.154
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 7,
+    "x": 0.292,
+    "y": 0.263
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 15,
+    "x": 0.248,
+    "y": 0.286
+   }
+  }
+ },
+ "145": {
+  "entity_id": 145,
+  "entity_name": "الهيئة المالية / قسم حسابات العامة",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.419,
+    "y": 0.318
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 2,
+    "x": 0.294,
+    "y": 0.217
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.545,
+    "y": 0.305
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 12,
+    "x": 0.84,
+    "y": 0.325
+   }
+  }
+ },
+ "151": {
+  "entity_id": 151,
+  "entity_name": "هيئة التخطيط و المتابعة / قسم التخطيط ودراسات المشاريع",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.45,
+    "y": 0.331
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 1,
+    "x": 0.179,
+    "y": 0.298
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.508,
+    "y": 0.327
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 8,
+    "x": 0.652,
+    "y": 0.297
+   }
+  }
+ },
+ "299": {
+  "entity_id": 299,
+  "entity_name": "GAZPROM",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 3,
+    "x": 0.437,
+    "y": 0.346
+   },
+   "date": {
+    "marker": "Dated",
+    "seen_in_docs": 1,
+    "x": 0.274,
+    "y": 0.281
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 4,
+    "x": 0.104,
+    "y": 0.304
+   },
+   "recipient": {
+    "marker": "To",
+    "seen_in_docs": 3,
+    "x": 0.07,
+    "y": 0.144
+   }
+  }
+ },
+ "156": {
+  "entity_id": 156,
+  "entity_name": "الهيئة المالية / قسم التكاليف والموازنة",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 2,
+    "x": 0.476,
+    "y": 0.424
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 7,
+    "x": 0.852,
+    "y": 0.334
+   }
+  }
+ },
+ "119": {
+  "entity_id": 119,
+  "entity_name": "نفط واسط",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 8,
+    "x": 0.42,
+    "y": 0.241
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.738,
+    "y": 0.156
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.567,
+    "y": 0.287
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 10,
+    "x": 0.776,
+    "y": 0.288
+   }
+  }
+ },
+ "106": {
+  "entity_id": 106,
+  "entity_name": "عمليات المنطقة الجنوبية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "NO",
+    "seen_in_docs": 17,
+    "x": 0.348,
+    "y": 0.253
+   },
+   "date": {
+    "marker": "التاريخ:‎",
+    "seen_in_docs": 14,
+    "x": 0.496,
+    "y": 0.227
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 17,
+    "x": 0.375,
+    "y": 0.279
+   }
+  }
+ },
+ "30": {
+  "entity_id": 30,
+  "entity_name": "هيئة الخدمات والمواد",
+  "entity_code": "خ",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 4,
+    "x": 0.389,
+    "y": 0.217
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.479,
+    "y": 0.273
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 2,
+    "x": 0.591,
+    "y": 0.282
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 11,
+    "x": 0.665,
+    "y": 0.3
+   }
+  }
+ },
+ "229": {
+  "entity_id": 229,
+  "entity_name": "لجنة الادارة المشتركة لرقعة زرباطية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 10,
+    "x": 0.417,
+    "y": 0.169
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 9,
+    "x": 0.368,
+    "y": 0.143
+   },
+   "subject": {
+    "marker": "م/بيانات",
+    "seen_in_docs": 4,
+    "x": 0.611,
+    "y": 0.298
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 15,
+    "x": 0.462,
+    "y": 0.288
+   }
+  }
+ },
+ "370": {
+  "entity_id": 370,
+  "entity_name": "Slb",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 21,
+    "x": 0.305,
+    "y": 0.292
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 2,
+    "x": 0.06,
+    "y": 0.316
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 4,
+    "x": 0.128,
+    "y": 0.361
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 30,
+    "x": 0.325,
+    "y": 0.344
+   }
+  }
+ },
+ "40": {
+  "entity_id": 40,
+  "entity_name": "قسم قياسات نقل الملكية",
+  "entity_code": "ش9",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 12,
+    "x": 0.539,
+    "y": 0.314
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 6,
+    "x": 0.34,
+    "y": 0.198
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.402,
+    "y": 0.264
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 13,
+    "x": 0.732,
+    "y": 0.352
+   }
+  }
+ },
+ "159": {
+  "entity_id": 159,
+  "entity_name": "هيئة حقول ديالى",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 8,
+    "x": 0.491,
+    "y": 0.29
+   },
+   "date": {
+    "marker": "التأريخ",
+    "seen_in_docs": 3,
+    "x": 0.215,
+    "y": 0.096
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 6,
+    "x": 0.448,
+    "y": 0.254
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 7,
+    "x": 0.809,
+    "y": 0.258
+   }
+  }
+ },
+ "226": {
+  "entity_id": 226,
+  "entity_name": "هيئة التخطيط و الدراسات / قسم التخطيط ودراسات المشاريع",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.334,
+    "y": 0.307
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 1,
+    "x": 0.186,
+    "y": 0.283
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.491,
+    "y": 0.273
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 10,
+    "x": 0.686,
+    "y": 0.334
+   }
+  }
+ },
+ "295": {
+  "entity_id": 295,
+  "entity_name": "cnooc",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "reference",
+    "seen_in_docs": 2,
+    "x": 0.331,
+    "y": 0.377
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 1,
+    "x": 0.632,
+    "y": 0.225
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 3,
+    "x": 0.302,
+    "y": 0.341
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 22,
+    "x": 0.386,
+    "y": 0.333
+   }
+  }
+ },
+ "185": {
+  "entity_id": 185,
+  "entity_name": "الهيئة المالية / قسم الحسابات العامة",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 1,
+    "x": 0.2,
+    "y": 0.158
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 1,
+    "x": 0.242,
+    "y": 0.317
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.661,
+    "y": 0.306
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 10,
+    "x": 0.784,
+    "y": 0.356
+   }
+  }
+ },
+ "8": {
+  "entity_id": 8,
+  "entity_name": "قسم المتابعة",
+  "entity_code": "ش13",
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 8,
+    "x": 0.39,
+    "y": 0.269
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.271,
+    "y": 0.186
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 2,
+    "x": 0.488,
+    "y": 0.318
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 5,
+    "x": 0.834,
+    "y": 0.3
+   }
+  }
+ },
+ "186": {
+  "entity_id": 186,
+  "entity_name": "هيئة الخدمات و المواد / قسم المخازن والسيطرة المخزنية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 2,
+    "x": 0.181,
+    "y": 0.247
+   },
+   "date": {
+    "marker": "التأريخ",
+    "seen_in_docs": 1,
+    "x": 0.222,
+    "y": 0.207
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 2,
+    "x": 0.534,
+    "y": 0.275
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 12,
+    "x": 0.738,
+    "y": 0.326
+   }
+  }
+ },
+ "411": {
+  "entity_id": 411,
+  "entity_name": "فريق التحليل الفني لعطاءات عقود التراخيص البترولية (الفريق الثاني)",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 2,
+    "x": 0.22,
+    "y": 0.104
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.28,
+    "y": 0.151
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.518,
+    "y": 0.155
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 6,
+    "x": 0.655,
+    "y": 0.228
+   }
+  }
+ },
+ "99": {
+  "entity_id": 99,
+  "entity_name": "فريق التحليل الفني لعطاءات عقود التراخيص البترولية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد/‎",
+    "seen_in_docs": 1,
+    "x": 0.232,
+    "y": 0.075
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.255,
+    "y": 0.097
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.589,
+    "y": 0.208
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 12,
+    "x": 0.713,
+    "y": 0.279
+   }
+  }
+ },
+ "233": {
+  "entity_id": 233,
+  "entity_name": "ادارة مشروع حقل عكاس بالجهد الوطني",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.418,
+    "y": 0.189
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.249,
+    "y": 0.121
+   },
+   "subject": {
+    "marker": "م/العقد",
+    "seen_in_docs": 3,
+    "x": 0.515,
+    "y": 0.261
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 10,
+    "x": 0.639,
+    "y": 0.242
+   }
+  }
+ },
+ "146": {
+  "entity_id": 146,
+  "entity_name": "قسم حقول الانبار",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "NO",
+    "seen_in_docs": 7,
+    "x": 0.323,
+    "y": 0.153
+   },
+   "date": {
+    "marker": "DATE",
+    "seen_in_docs": 8,
+    "x": 0.509,
+    "y": 0.14
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 7,
+    "x": 0.675,
+    "y": 0.257
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 8,
+    "x": 0.81,
+    "y": 0.238
+   }
+  }
+ },
+ "148": {
+  "entity_id": 148,
+  "entity_name": "هيئة العمليات / قسم الخطوط وحركة النفط",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.557,
+    "y": 0.347
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.348,
+    "y": 0.23
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 2,
+    "x": 0.555,
+    "y": 0.372
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 7,
+    "x": 0.812,
+    "y": 0.354
+   }
+  }
+ },
+ "291": {
+  "entity_id": 291,
+  "entity_name": "محافظة ديالى /قسم التخطيط والمتابعة",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.508,
+    "y": 0.276
+   },
+   "date": {
+    "marker": "التاريخ/‎",
+    "seen_in_docs": 4,
+    "x": 0.228,
+    "y": 0.182
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 6,
+    "x": 0.544,
+    "y": 0.247
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 6,
+    "x": 0.756,
+    "y": 0.298
+   }
+  }
+ },
+ "396": {
+  "entity_id": 396,
+  "entity_name": "لجنة المساهمة الاجتماعية والبنى التحتية لرقعة نفط خانة",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 5,
+    "x": 0.509,
+    "y": 0.239
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 7,
+    "x": 0.263,
+    "y": 0.125
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.632,
+    "y": 0.268
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 6,
+    "x": 0.766,
+    "y": 0.281
+   }
+  }
+ },
+ "289": {
+  "entity_id": 289,
+  "entity_name": "Anton Specialist Oilfield DMCC",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 14,
+    "x": 0.39,
+    "y": 0.286
+   },
+   "date": {
+    "marker": "date",
+    "seen_in_docs": 2,
+    "x": 0.26,
+    "y": 0.369
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 4,
+    "x": 0.228,
+    "y": 0.273
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 19,
+    "x": 0.393,
+    "y": 0.288
+   }
+  }
+ },
+ "117": {
+  "entity_id": 117,
+  "entity_name": "العقود",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "NO",
+    "seen_in_docs": 3,
+    "x": 0.404,
+    "y": 0.112
+   },
+   "date": {
+    "marker": "DATE:‏",
+    "seen_in_docs": 4,
+    "x": 0.368,
+    "y": 0.088
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.607,
+    "y": 0.026
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 10,
+    "x": 0.77,
+    "y": 0.252
+   }
+  }
+ },
+ "143": {
+  "entity_id": 143,
+  "entity_name": "الهيئة الهندسية / قسم المشاريع",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 2,
+    "x": 0.575,
+    "y": 0.16
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 4,
+    "x": 0.458,
+    "y": 0.175
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.698,
+    "y": 0.23
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 4,
+    "x": 0.895,
+    "y": 0.25
+   }
+  }
+ },
+ "263": {
+  "entity_id": 263,
+  "entity_name": "السيد رئيس لجنة الادارة المشتركة لحقل الاحدب النفطي",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "REF",
+    "seen_in_docs": 2,
+    "x": 0.181,
+    "y": 0.147
+   },
+   "date": {
+    "marker": "التاريخ:‎",
+    "seen_in_docs": 6,
+    "x": 0.268,
+    "y": 0.179
+   },
+   "subject": {
+    "marker": "الموضوع.‎",
+    "seen_in_docs": 4,
+    "x": 0.699,
+    "y": 0.322
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 13,
+    "x": 0.702,
+    "y": 0.277
+   }
+  }
+ },
+ "283": {
+  "entity_id": 283,
+  "entity_name": "الامانة العامة لمجلس الوزراء",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.863,
+    "y": 0.248
+   },
+   "date": {
+    "marker": "التأريخ",
+    "seen_in_docs": 3,
+    "x": 0.857,
+    "y": 0.293
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 2,
+    "x": 0.564,
+    "y": 0.216
+   }
+  }
+ },
+ "192": {
+  "entity_id": 192,
+  "entity_name": "محافظة ديالى",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.593,
+    "y": 0.286
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.388,
+    "y": 0.169
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.754,
+    "y": 0.278
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 10,
+    "x": 0.793,
+    "y": 0.312
+   }
+  }
+ },
+ "285": {
+  "entity_id": 285,
+  "entity_name": "شركة توزيع المنتجات النفطية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 1,
+    "x": 0.357,
+    "y": 0.049
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 1,
+    "x": 0.356,
+    "y": 0.069
+   },
+   "subject": {
+    "marker": "مُذكرتنا",
+    "seen_in_docs": 5,
+    "x": 0.552,
+    "y": 0.285
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 8,
+    "x": 0.672,
+    "y": 0.323
+   }
+  }
+ },
+ "108": {
+  "entity_id": 108,
+  "entity_name": "لجنة الادارة المشتركة لرقعة الخليصية",
+  "entity_code": null,
+  "docs": 6,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 17,
+    "x": 0.43,
+    "y": 0.251
+   },
+   "date": {
+    "marker": "التاريخ:‎",
+    "seen_in_docs": 11,
+    "x": 0.534,
+    "y": 0.173
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 8,
+    "x": 0.584,
+    "y": 0.295
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 15,
+    "x": 0.63,
+    "y": 0.297
+   }
+  }
+ },
+ "409": {
+  "entity_id": 409,
+  "entity_name": "فريق التحليل الفني لعقود جولات التراخيص البترولية(الفريق الاول )",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D2",
+  "fields": {
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 2,
+    "x": 0.285,
+    "y": 0.103
+   },
+   "subject": {
+    "marker": "م/المناقصة",
+    "seen_in_docs": 3,
+    "x": 0.685,
+    "y": 0.301
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 9,
+    "x": 0.774,
+    "y": 0.311
+   }
+  }
+ },
+ "19": {
+  "entity_id": 19,
+  "entity_name": "وحدة الارشفة",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": null,
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.34,
+    "y": 0.212
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 4,
+    "x": 0.267,
+    "y": 0.175
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 6,
+    "x": 0.588,
+    "y": 0.299
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 7,
+    "x": 0.81,
+    "y": 0.272
+   }
+  }
+ },
+ "101": {
+  "entity_id": 101,
+  "entity_name": "هيئة عمليات قسم حقول الانبار",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 6,
+    "x": 0.443,
+    "y": 0.18
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 9,
+    "x": 0.406,
+    "y": 0.173
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.635,
+    "y": 0.277
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 9,
+    "x": 0.759,
+    "y": 0.279
+   }
+  }
+ },
+ "157": {
+  "entity_id": 157,
+  "entity_name": "السيد رئيس لجنة الادارة المشتركة لحقل نفط خانه",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 9,
+    "x": 0.353,
+    "y": 0.219
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 5,
+    "x": 0.427,
+    "y": 0.156
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.668,
+    "y": 0.273
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 13,
+    "x": 0.633,
+    "y": 0.254
+   }
+  }
+ },
+ "184": {
+  "entity_id": 184,
+  "entity_name": "رئيس لجنة الادارة المشتركة لحقلي الخشم الاحمر - انجانة",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 11,
+    "x": 0.36,
+    "y": 0.307
+   },
+   "date": {
+    "marker": "dated",
+    "seen_in_docs": 7,
+    "x": 0.282,
+    "y": 0.265
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 7,
+    "x": 0.634,
+    "y": 0.29
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 20,
+    "x": 0.411,
+    "y": 0.301
+   }
+  }
+ },
+ "205": {
+  "entity_id": 205,
+  "entity_name": "الهيئات والاقسام المركزية كافة",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 4,
+    "x": 0.255,
+    "y": 0.244
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 5,
+    "x": 0.383,
+    "y": 0.2
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.668,
+    "y": 0.282
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 5,
+    "x": 0.884,
+    "y": 0.252
+   }
+  }
+ },
+ "265": {
+  "entity_id": 265,
+  "entity_name": "لجنة احتساب النقاط للموظفين غير المستفيدين من قطع الاراضي",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.527,
+    "y": 0.254
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 4,
+    "x": 0.232,
+    "y": 0.096
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 4,
+    "x": 0.575,
+    "y": 0.36
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 6,
+    "x": 0.892,
+    "y": 0.248
+   }
+  }
+ },
+ "319": {
+  "entity_id": 319,
+  "entity_name": "وزارة النفط / قسم التصاريح الامنية",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.481,
+    "y": 0.227
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 5,
+    "x": 0.358,
+    "y": 0.168
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 6,
+    "x": 0.566,
+    "y": 0.236
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 2,
+    "x": 0.834,
+    "y": 0.256
+   }
+  }
+ },
+ "322": {
+  "entity_id": 322,
+  "entity_name": "crescent petroleum dlyalawest llmltad",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "Ref#",
+    "seen_in_docs": 5,
+    "x": 0.273,
+    "y": 0.267
+   },
+   "date": {
+    "marker": "التاريخ:‎",
+    "seen_in_docs": 6,
+    "x": 0.527,
+    "y": 0.245
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 7,
+    "x": 0.45,
+    "y": 0.348
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 16,
+    "x": 0.517,
+    "y": 0.366
+   }
+  }
+ },
+ "334": {
+  "entity_id": 334,
+  "entity_name": "شركة خطوط الانابيب النفطية",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 12,
+    "x": 0.752,
+    "y": 0.286
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.874,
+    "y": 0.189
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 9,
+    "x": 0.743,
+    "y": 0.336
+   }
+  }
+ },
+ "338": {
+  "entity_id": 338,
+  "entity_name": "مكتب رئيس مجلس الوزراء",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D7",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 6,
+    "x": 0.84,
+    "y": 0.193
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.894,
+    "y": 0.21
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 1,
+    "x": 0.551,
+    "y": 0.263
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 1,
+    "x": 0.628,
+    "y": 0.211
+   }
+  }
+ },
+ "347": {
+  "entity_id": 347,
+  "entity_name": "وزارة النفط / دائرة المكائن وتطوير الحقول",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 10,
+    "x": 0.504,
+    "y": 0.217
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 6,
+    "x": 0.497,
+    "y": 0.149
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.571,
+    "y": 0.254
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 5,
+    "x": 0.741,
+    "y": 0.354
+   }
+  }
+ },
+ "394": {
+  "entity_id": 394,
+  "entity_name": "فريق التحليل الفني لعقود جولات التراخيص البترولية(الفريق الثاني)",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.299,
+    "y": 0.089
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 4,
+    "x": 0.247,
+    "y": 0.108
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 5,
+    "x": 0.386,
+    "y": 0.196
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 8,
+    "x": 0.839,
+    "y": 0.269
+   }
+  }
+ },
+ "438": {
+  "entity_id": 438,
+  "entity_name": "فريق المشاهدة",
+  "entity_code": null,
+  "docs": 5,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D1",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 10,
+    "x": 0.562,
+    "y": 0.191
+   },
+   "date": {
+    "marker": "التأريخ‎",
+    "seen_in_docs": 3,
+    "x": 0.562,
+    "y": 0.118
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 10,
+    "x": 0.697,
+    "y": 0.286
+   }
+  }
+ },
+ "377": {
+  "entity_id": 377,
+  "entity_name": "mdoc.dg@mdoc.oil .gov.iq",
+  "entity_code": null,
+  "docs": 4,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 2,
+    "x": 0.477,
+    "y": 0.365
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 3,
+    "x": 0.089,
+    "y": 0.228
+   },
+   "recipient": {
+    "marker": "To",
+    "seen_in_docs": 4,
+    "x": 0.219,
+    "y": 0.193
+   }
+  }
+ },
+ "321": {
+  "entity_id": 321,
+  "entity_name": "وزارة النفط / الدائرة القانونية",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 8,
+    "x": 0.363,
+    "y": 0.324
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 4,
+    "x": 0.489,
+    "y": 0.288
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 2,
+    "x": 0.65,
+    "y": 0.294
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 1,
+    "x": 0.828,
+    "y": 0.401
+   }
+  }
+ },
+ "166": {
+  "entity_id": 166,
+  "entity_name": "لجنة الادارة المشتركة للرقعة الاستكشافية الثامنة",
+  "entity_code": null,
+  "docs": 4,
+  "lang": "en",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 6,
+    "x": 0.43,
+    "y": 0.169
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 11,
+    "x": 0.417,
+    "y": 0.202
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 6,
+    "x": 0.577,
+    "y": 0.266
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 9,
+    "x": 0.484,
+    "y": 0.278
+   }
+  }
+ },
+ "35": {
+  "entity_id": 35,
+  "entity_name": "هيئة تشغيل حقل المنصورية الغازي",
+  "entity_code": "ت.م",
+  "docs": 4,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.342,
+    "y": 0.243
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 2,
+    "x": 0.241,
+    "y": 0.095
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 3,
+    "x": 0.872,
+    "y": 0.217
+   }
+  }
+ },
+ "364": {
+  "entity_id": 364,
+  "entity_name": "Zurbatiya",
+  "entity_code": null,
+  "docs": 4,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 4,
+    "x": 0.098,
+    "y": 0.179
+   },
+   "recipient": {
+    "marker": "To",
+    "seen_in_docs": 6,
+    "x": 0.274,
+    "y": 0.228
+   }
+  }
+ },
+ "354": {
+  "entity_id": 354,
+  "entity_name": "CRESCENT PETROLEUM",
+  "entity_code": null,
+  "docs": 4,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "الرقم:‎",
+    "seen_in_docs": 7,
+    "x": 0.495,
+    "y": 0.235
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 8,
+    "x": 0.662,
+    "y": 0.183
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 7,
+    "x": 0.404,
+    "y": 0.367
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 8,
+    "x": 0.357,
+    "y": 0.389
+   }
+  }
+ },
+ "305": {
+  "entity_id": 305,
+  "entity_name": "وزارة النفط / الدائرة الفنية",
+  "entity_code": null,
+  "docs": 4,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 2,
+    "x": 0.507,
+    "y": 0.222
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 3,
+    "x": 0.455,
+    "y": 0.201
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.618,
+    "y": 0.253
+   }
+  }
+ },
+ "331": {
+  "entity_id": 331,
+  "entity_name": "وزارة الكهرباء",
+  "entity_code": null,
+  "docs": 4,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.45,
+    "y": 0.286
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.565,
+    "y": 0.258
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 7,
+    "x": 0.724,
+    "y": 0.334
+   }
+  }
+ },
+ "332": {
+  "entity_id": 332,
+  "entity_name": "دائرة المكامن",
+  "entity_code": null,
+  "docs": 4,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 6,
+    "x": 0.388,
+    "y": 0.166
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 6,
+    "x": 0.514,
+    "y": 0.157
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.804,
+    "y": 0.067
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 2,
+    "x": 0.873,
+    "y": 0.304
+   }
+  }
+ },
+ "304": {
+  "entity_id": 304,
+  "entity_name": "NORTH  PETROLEUM",
+  "entity_code": null,
+  "docs": 4,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 4,
+    "x": 0.176,
+    "y": 0.371
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 2,
+    "x": 0.524,
+    "y": 0.304
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 5,
+    "x": 0.238,
+    "y": 0.299
+   },
+   "recipient": {
+    "marker": "To",
+    "seen_in_docs": 8,
+    "x": 0.376,
+    "y": 0.292
+   }
+  }
+ },
+ "402": {
+  "entity_id": 402,
+  "entity_name": "لجنة دعم عوائل شهداء وجرحى الحشد الشعبي والمبادرات المجتعية",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 5,
+    "x": 0.309,
+    "y": 0.219
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.194,
+    "y": 0.227
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.553,
+    "y": 0.334
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 5,
+    "x": 0.763,
+    "y": 0.344
+   }
+  }
+ },
+ "249": {
+  "entity_id": 249,
+  "entity_name": "رئيس لجنة الادارة المشتركة لحقل بدرة النفطي",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.288,
+    "y": 0.057
+   },
+   "date": {
+    "marker": "التاريخ:‎",
+    "seen_in_docs": 2,
+    "x": 0.267,
+    "y": 0.086
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 4,
+    "x": 0.36,
+    "y": 0.252
+   }
+  }
+ },
+ "214": {
+  "entity_id": 214,
+  "entity_name": "قسم التدريب و التطوير",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 6,
+    "x": 0.264,
+    "y": 0.213
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 2,
+    "x": 0.729,
+    "y": 0.29
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 1,
+    "x": 0.905,
+    "y": 0.234
+   }
+  }
+ },
+ "206": {
+  "entity_id": 206,
+  "entity_name": "شركة الاستكشافات النفطية",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 5,
+    "x": 0.445,
+    "y": 0.343
+   },
+   "date": {
+    "marker": "التأريخ‎",
+    "seen_in_docs": 1,
+    "x": 0.887,
+    "y": 0.176
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 5,
+    "x": 0.706,
+    "y": 0.309
+   }
+  }
+ },
+ "203": {
+  "entity_id": 203,
+  "entity_name": "وكيل الوزارة لشؤون الاستخراج",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 4,
+    "x": 0.414,
+    "y": 0.368
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 1,
+    "x": 0.893,
+    "y": 0.161
+   },
+   "subject": {
+    "marker": "مَوَإفققة-التحيد-الوزيُر",
+    "seen_in_docs": 1,
+    "x": 0.426,
+    "y": 0.34
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 4,
+    "x": 0.683,
+    "y": 0.326
+   }
+  }
+ },
+ "511": {
+  "entity_id": 511,
+  "entity_name": "وزارة البيئة / الدائرة الفنية",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 5,
+    "x": 0.757,
+    "y": 0.285
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 2,
+    "x": 0.905,
+    "y": 0.23
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.829,
+    "y": 0.215
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 3,
+    "x": 0.698,
+    "y": 0.36
+   }
+  }
+ },
+ "516": {
+  "entity_id": 516,
+  "entity_name": "KAR",
+  "entity_code": "kar",
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 3,
+    "x": 0.686,
+    "y": 0.147
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 2,
+    "x": 0.556,
+    "y": 0.2
+   },
+   "subject": {
+    "marker": "الموضوع",
+    "seen_in_docs": 3,
+    "x": 0.621,
+    "y": 0.304
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 5,
+    "x": 0.675,
+    "y": 0.323
+   }
+  }
+ },
+ "518": {
+  "entity_id": 518,
+  "entity_name": "معمل البلاد لطحن الكبريت للاغراض الزراعية",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D2",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 2,
+    "x": 0.908,
+    "y": 0.221
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 3,
+    "x": 0.644,
+    "y": 0.257
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 3,
+    "x": 0.865,
+    "y": 0.313
+   }
+  }
+ },
+ "191": {
+  "entity_id": 191,
+  "entity_name": "السيد رئيس لجنة الادارة المشتركة لرقعة القرنين",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد:‎",
+    "seen_in_docs": 1,
+    "x": 0.277,
+    "y": 0.05
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 2,
+    "x": 0.29,
+    "y": 0.143
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 7,
+    "x": 0.513,
+    "y": 0.247
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 6,
+    "x": 0.859,
+    "y": 0.252
+   }
+  }
+ },
+ "544": {
+  "entity_id": 544,
+  "entity_name": "تنفيذموازنة",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": null,
+  "fields": {
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.292,
+    "y": 0.166
+   },
+   "subject": {
+    "marker": "م‎",
+    "seen_in_docs": 6,
+    "x": 0.485,
+    "y": 0.272
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 6,
+    "x": 0.775,
+    "y": 0.277
+   }
+  }
+ },
+ "144": {
+  "entity_id": 144,
+  "entity_name": "مكتب لجنة الادارة المشتركة لحقلي (خشم الاحمر _ انجانة)",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D3",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 1,
+    "x": 0.336,
+    "y": 0.118
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.449,
+    "y": 0.124
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 2,
+    "x": 0.5,
+    "y": 0.182
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 4,
+    "x": 0.788,
+    "y": 0.252
+   }
+  }
+ },
+ "328": {
+  "entity_id": 328,
+  "entity_name": "وزارة النفط / شركة خطوط الانابيب النفطية",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 5,
+    "x": 0.534,
+    "y": 0.274
+   },
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 2,
+    "x": 0.593,
+    "y": 0.179
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 2,
+    "x": 0.654,
+    "y": 0.334
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 1,
+    "x": 0.896,
+    "y": 0.246
+   }
+  }
+ },
+ "329": {
+  "entity_id": 329,
+  "entity_name": "North Petroleum International Company Limited",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "en",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "No",
+    "seen_in_docs": 3,
+    "x": 0.342,
+    "y": 0.269
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 5,
+    "x": 0.482,
+    "y": 0.185
+   },
+   "subject": {
+    "marker": "Subject",
+    "seen_in_docs": 5,
+    "x": 0.352,
+    "y": 0.224
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 7,
+    "x": 0.378,
+    "y": 0.293
+   }
+  }
+ },
+ "336": {
+  "entity_id": 336,
+  "entity_name": "وزارة النفط / الدائرة الادارية والمالية",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 7,
+    "x": 0.697,
+    "y": 0.226
+   },
+   "date": {
+    "marker": "التاريخ‎",
+    "seen_in_docs": 2,
+    "x": 0.873,
+    "y": 0.123
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.527,
+    "y": 0.332
+   }
+  }
+ },
+ "658": {
+  "entity_id": 658,
+  "entity_name": "شعبة المتابعة الفنية / عكاس",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": null,
+  "fields": {
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.271,
+    "y": 0.196
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.557,
+    "y": 0.242
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 6,
+    "x": 0.817,
+    "y": 0.275
+   }
+  }
+ },
+ "339": {
+  "entity_id": 339,
+  "entity_name": "وزارة النفط / مكتب ناب رئيس الوزراء لشؤون الطاقة وزير النفط",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 2,
+    "x": 0.512,
+    "y": 0.214
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 2,
+    "x": 0.511,
+    "y": 0.234
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.54,
+    "y": 0.327
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 1,
+    "x": 0.798,
+    "y": 0.296
+   }
+  }
+ },
+ "668": {
+  "entity_id": 668,
+  "entity_name": "وحدة لجان",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": null,
+  "fields": {
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.292,
+    "y": 0.166
+   },
+   "subject": {
+    "marker": "م‎",
+    "seen_in_docs": 6,
+    "x": 0.485,
+    "y": 0.272
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 6,
+    "x": 0.775,
+    "y": 0.277
+   }
+  }
+ },
+ "348": {
+  "entity_id": 348,
+  "entity_name": "وزارة النفط / دائرة الدراسات والتخطيط والمتابعة",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "العدد",
+    "seen_in_docs": 4,
+    "x": 0.485,
+    "y": 0.171
+   },
+   "date": {
+    "marker": "DATE",
+    "seen_in_docs": 4,
+    "x": 0.316,
+    "y": 0.157
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 1,
+    "x": 0.621,
+    "y": 0.248
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 1,
+    "x": 0.912,
+    "y": 0.225
+   }
+  }
+ },
+ "363": {
+  "entity_id": 363,
+  "entity_name": "شركة المشاريع النفطية",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "Ref.P3",
+    "seen_in_docs": 3,
+    "x": 0.331,
+    "y": 0.132
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 4,
+    "x": 0.476,
+    "y": 0.15
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 2,
+    "x": 0.905,
+    "y": 0.21
+   }
+  }
+ },
+ "367": {
+  "entity_id": 367,
+  "entity_name": "وزارة النفط / دائرة التدريب والتطوير",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 3,
+    "x": 0.106,
+    "y": 0.217
+   },
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 5,
+    "x": 0.453,
+    "y": 0.114
+   },
+   "recipient": {
+    "marker": "to",
+    "seen_in_docs": 7,
+    "x": 0.397,
+    "y": 0.328
+   }
+  }
+ },
+ "378": {
+  "entity_id": 378,
+  "entity_name": "الدائرة الاقتصادية",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": "D4",
+  "fields": {
+   "date": {
+    "marker": "Date",
+    "seen_in_docs": 1,
+    "x": 0.143,
+    "y": 0.136
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 1,
+    "x": 0.144,
+    "y": 0.351
+   }
+  }
+ },
+ "670": {
+  "entity_id": 670,
+  "entity_name": "وحدة مساهمة",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "printed",
+  "db_template": null,
+  "fields": {
+   "date": {
+    "marker": "التاريخ",
+    "seen_in_docs": 3,
+    "x": 0.292,
+    "y": 0.166
+   },
+   "subject": {
+    "marker": "م‎",
+    "seen_in_docs": 6,
+    "x": 0.485,
+    "y": 0.272
+   },
+   "recipient": {
+    "marker": "إلى",
+    "seen_in_docs": 6,
+    "x": 0.775,
+    "y": 0.277
+   }
+  }
+ },
+ "293": {
+  "entity_id": 293,
+  "entity_name": "وزارة النفط",
+  "entity_code": null,
+  "docs": 3,
+  "lang": "ar",
+  "number_style": "handwritten",
+  "db_template": "D5",
+  "fields": {
+   "number": {
+    "marker": "Ref",
+    "seen_in_docs": 1,
+    "x": 0.12,
+    "y": 0.16
+   },
+   "date": {
+    "marker": "التاريخ:‎",
+    "seen_in_docs": 1,
+    "x": 0.85,
+    "y": 0.169
+   },
+   "subject": {
+    "marker": "م",
+    "seen_in_docs": 2,
+    "x": 0.581,
+    "y": 0.291
+   },
+   "recipient": {
+    "marker": "الى",
+    "seen_in_docs": 1,
+    "x": 0.831,
+    "y": 0.383
+   }
+  }
+ }
+}

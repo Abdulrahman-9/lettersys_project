@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from core import views as core_views
 from core.auth_views import CustomLoginView
+from core.views.dev_login import dev_login
 from core.views.attachments import serve_media, serve_shared_attachment
 
 urlpatterns = [
@@ -9,6 +10,7 @@ urlpatterns = [
     path('login/', CustomLoginView.as_view(template_name='core/login.html'), name='login'),  # ✅ Custom Login with Remember Me
     path('logout/', core_views.custom_logout, name='logout'),
     path('', core_views.dashboard, name='dashboard'),
+    path('dev-login/', dev_login, name='dev_login'),
     path('books/', include('core.urls')),
     # Service Worker at root scope for PWA - direct serve without redirect
     path('service-worker.js', core_views.serve_service_worker, name='service_worker_root'),

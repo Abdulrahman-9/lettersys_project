@@ -13,19 +13,25 @@
 ونقلُها خطأٌ بالبناء).
 
 **ما لا يفعله هذا القارئ:** لا يكتب في `sender_date` أبداً — مخرجُه اقتراحٌ
-منفصل يؤكّده الكاتب. القانون المُلزم (جذر تسميم التواريخ): صفرُ ملءٍ تلقائيٍّ
-صامت. ولا يُطعَم إلا قصاصةَ `date_geometry.crop_below_box` (هندسةُ تدريبه).
+في مفتاحٍ منفصل، والخادمُ لا يملأ الحقل بحالٍ. القانون المُلزم (جذر تسميم
+التواريخ): صفرُ ملءٍ **صامت**. وبقرار المالك (2026-09-01) تملأ **الواجهةُ**
+الحقلَ من القراءة الخضراء وحدَها (≥0.98 · تحليلٌ `ok` · حارسُ الفارق سالم)،
+موسومةً `autofilled` والقصاصةُ معروضةٌ للمطابقة — فالمملوءُ بلا لمسٍ يُستبعَد
+من ذهب التدريب. وما دون الأخضر يبقى بانتظار نقرة.
+ولا يُطعَم إلا قصاصةَ `date_geometry.crop_below_box` (هندسةُ تدريبه).
 """
 import logging
 import os
 from typing import Optional, Tuple
 
+from core.extraction.artifacts import date_charset_path, date_model_path
+
 from .reader import HandwrittenNumberReader
 
 logger = logging.getLogger(__name__)
 
-_DATE_MODEL = os.path.join('var', 'models', 'handwritten_dates_crnn.onnx')
-_DATE_CHARSET = os.path.join('var', 'models', 'handwritten_dates_charset.json')
+_DATE_MODEL = date_model_path()
+_DATE_CHARSET = date_charset_path()
 
 # فوقها يُعرض الاقتراح أخضرَ، وتحتها أحمرُ «يجب التصحيح يدوياً».
 # مُشتقّةٌ من مسحٍ محليٍّ بصيغة الإنتاج على الحجز — لا منقولةٌ عن حقلٍ آخر.
