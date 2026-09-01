@@ -7,7 +7,7 @@
 وجعلُها الافتراضَ يُفرغ طابورَ المتابعة صامتاً.
 {% endcomment %}
 
-<div class="modal fade" id="distributeModal" tabindex="-1"
+<div class="modal fade lc-scope" id="distributeModal" tabindex="-1"
      aria-labelledby="distributeModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content rounded-4">
@@ -123,7 +123,7 @@
   </div>
 </div>
 
-<div class="modal fade" id="custodyModal" tabindex="-1"
+<div class="modal fade lc-scope" id="custodyModal" tabindex="-1"
      aria-labelledby="custodyModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content rounded-4">
@@ -191,3 +191,5 @@
     </div>
   </div>
 </div>
+
+{% include "core/_link_picker.html" %}

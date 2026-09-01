@@ -11,36 +11,50 @@
 (القالب + service worker) بلا داعٍ — وهو أكثرُ أخطاء هذا المشروع تكراراً.
 {% endcomment %}
 <style>
-  :root { --ink:#1e293b; --muted:#64748b; --line:#cbd5e1; --teal:#0f766e; --amber:#b45309; --paper:#f1f5f9; }
+  /* لوحُ التصميم (DeliverySheet · Ledger): ورقةٌ رسميّةٌ تُطبع وتُوقَّع وتُرتجع.
+     الحبرُ أسودُ على الورق لا بنّيّ — الطابعةُ ليست شاشة، والتباينُ هو الغرض.
+     والدفءُ يبقى على الشاشة وحدها: إطارُ الورقة وشريطُ الأدوات. */
+  :root {
+    --ink:#241409; --muted:#6f4631; --line:#c9b8a8; --line-hard:#241409;
+    --teal:#0f766e; --amber:#b45309; --amber-deep:#8a3f08;
+    --paper:#fdf3e6; --head:#f3e6d5;
+  }
   * { box-sizing:border-box; }
   body { font-family:"Cairo","Segoe UI",Tahoma,sans-serif; color:var(--ink); margin:0; background:var(--paper); }
-  .sheet { background:#fff; max-width:980px; margin:1rem auto; padding:2rem 2.2rem; box-shadow:0 2px 12px rgba(0,0,0,.08); }
+  /* عرضُ A4 لا 980px: الورقةُ على الشاشة يجب أن تُري ما ستُريه الطابعةُ
+     بالضبط — وإلّا فوجئ الكاتبُ بعمودٍ قُطع بعد الطباعة. */
+  .sheet {
+    background:#fff; width:21cm; max-width:100%; margin:1rem auto;
+    padding:1.4cm 1.2cm; border:1px solid var(--line);
+    box-shadow:0 12px 30px rgba(77,44,25,.14);
+  }
 
   /* شريطُ الأدوات — شاشةٌ فقط */
   .toolbar { max-width:980px; margin:1rem auto 0; display:flex; gap:.5rem; justify-content:flex-end; flex-wrap:wrap; align-items:center; }
   .toolbar form { display:flex; gap:.4rem; align-items:center; margin:0; }
   .toolbar input, .toolbar select { border:1px solid var(--line); border-radius:8px; padding:.45rem .6rem; font-family:inherit; font-size:.85rem; }
   .toolbar button, .toolbar a.btn { border:none; border-radius:8px; padding:.55rem 1.2rem; font-weight:700; font-size:.9rem; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; font-family:inherit; }
-  .toolbar .print { background:var(--teal); color:#fff; }
+  .toolbar .print { background:linear-gradient(180deg,var(--amber),var(--amber-deep)); color:#fff; }
   .toolbar .back { background:#fff; color:#475569; border:1px solid var(--line); }
 
-  .rep-head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px double var(--ink); padding-bottom:.9rem; margin-bottom:1.1rem; }
+  .rep-head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid var(--line-hard); padding-bottom:.7rem; margin-bottom:.9rem; }
   .rep-org { font-size:1.05rem; font-weight:800; }
   .rep-org small { display:block; font-weight:500; color:var(--muted); font-size:.78rem; margin-top:.15rem; }
   .rep-meta { text-align:left; font-size:.76rem; color:var(--muted); line-height:1.7; }
   .rep-title { text-align:center; font-size:1.25rem; font-weight:800; margin:.4rem 0 1rem; }
 
   table.rep { width:100%; border-collapse:collapse; font-size:.82rem; }
-  table.rep th { background:#f1f5f9; border:1px solid var(--line); padding:.45rem .5rem; text-align:right; font-weight:700; }
-  table.rep td { border:1px solid var(--line); padding:.42rem .5rem; vertical-align:top; }
-  table.rep tr:nth-child(even) td { background:#fafbfc; }
+  table.rep th { background:var(--head); border:1px solid var(--line-hard); padding:.42rem .5rem; text-align:right; font-weight:800; font-size:.76rem; letter-spacing:.02em; }
+  table.rep td { border:1px solid var(--line-hard); padding:.42rem .5rem; vertical-align:top; }
+  /* بلا تظليلِ صفوفٍ متناوب: الورقةُ تُصوَّر وتُرسَل، والرماديُّ يخرج وسخاً. */
   /* أرقامٌ قابلةٌ للمقارنة بالعين في عمودٍ واحد */
   .num { font-variant-numeric:tabular-nums; font-weight:700; letter-spacing:.02em; }
   .muted { color:var(--muted); }
   .empty { color:var(--muted); padding:1.2rem; font-size:.9rem; text-align:center; border:1px dashed var(--line); border-radius:8px; }
 
   /* خانةُ التوقيع — عمودُ الحبر في الكشف الورقيّ */
-  .sign-cell { min-width:120px; height:2.4rem; }
+  /* خانةُ التوقيع تُملأ بقلم — فارتفاعُها بالسنتيمتر لا بالبكسل. */
+  .sign-cell { min-width:4.2cm; height:1.4cm; }
   .stub { color:var(--muted); font-style:italic; }
 
   .rep-foot { margin-top:1.5rem; border-top:1px solid var(--line); padding-top:.7rem; display:flex; justify-content:space-between; font-size:.78rem; color:var(--muted); }
@@ -51,10 +65,12 @@
   @media print {
     body { background:#fff; }
     .toolbar { display:none !important; }
-    .sheet { box-shadow:none; margin:0; max-width:none; padding:0; }
+    .sheet { box-shadow:none; margin:0; width:auto; max-width:none; padding:0; border:0; }
     table.rep th { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     thead { display:table-header-group; }
     tr { page-break-inside:avoid; }
+    /* كتلةُ التوقيع لا تُقتطع بين صفحتين — ورقةٌ بلا توقيعٍ لا تُرتجع. */
+    .sig-block, .rep-foot { page-break-inside:avoid; }
     @page { size:A4; margin:1.4cm; }
   }
 </style>

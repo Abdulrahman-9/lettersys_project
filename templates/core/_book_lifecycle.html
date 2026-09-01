@@ -16,6 +16,8 @@
 صادق — ولا تُخفى تماماً كي يبقى مكانُها معروفاً حين يبدأ التسيير.
 {% endcomment %}
 <div id="lifecycleAlert" hidden></div>
+{# لوحةُ التسيير تستعمل مفرداتِ ألواح التصميم (lc-matrix · lc-state) #}
+<div class="lc-scope">
 
 {% if not referrals and not custody and not links and not registrations %}
   <div class="card border-0 shadow-sm rounded-4 mb-3" id="lifecycleCard"
@@ -73,19 +75,19 @@
 
       {% if referrals %}
         <div class="table-responsive">
-          <table class="table table-sm align-middle mb-0" style="font-size:.85rem">
+          <table class="lc-matrix mb-0">
             <thead>
-              <tr class="text-muted" style="font-size:.78rem">
-                <th>إلى</th>
-                <th style="width:5rem">الغرض</th>
-                <th style="width:6rem">الحالة</th>
+              <tr>
+                <th>الجهة</th>
+                <th style="width:5rem">الصفة</th>
+                <th style="width:7rem">الاستلام</th>
                 <th style="width:7rem">موعد الإنجاز</th>
                 <th style="width:8rem">الجواب</th>
               </tr>
             </thead>
             <tbody>
               {% for row in referrals %}
-                <tr {% if row.is_overdue %}class="table-danger"{% endif %}>
+                <tr>
                   <td>
                     <span class="fw-semibold">{{ row.target }}</span>
                     {% if row.referral.assignee %}
@@ -111,14 +113,22 @@
                       {% endwith %}
                     {% endif %}
                   </td>
-                  <td>{{ row.purpose }}</td>
+                  <td>
+                    <span class="lc-state {% if row.referral.purpose == 'info' %}lc-state-info{% else %}lc-state-wait{% endif %}">
+                      {{ row.purpose }}
+                    </span>
+                  </td>
                   <td>
                     {% if row.is_overdue %}
-                      <span class="badge text-bg-danger">متأخّر</span>
+                      <span class="lc-state lc-state-late">
+                        <i class="bi bi-exclamation-circle"></i>متأخّر
+                      </span>
                     {% elif row.is_open %}
-                      <span class="badge text-bg-warning">{{ row.status }}</span>
+                      <span class="lc-state lc-state-wait">
+                        <i class="bi bi-hourglass-split"></i>{{ row.status }}</span>
                     {% else %}
-                      <span class="badge text-bg-success">{{ row.status }}</span>
+                      <span class="lc-state lc-state-done">
+                        <i class="bi bi-check-circle-fill"></i>{{ row.status }}</span>
                     {% endif %}
                   </td>
                   <td class="text-nowrap" style="font-variant-numeric:tabular-nums">
@@ -181,6 +191,11 @@
         <div class="fw-semibold mb-2" style="font-size:.9rem">
           <i class="bi bi-link-45deg text-secondary me-1"></i>كتبٌ مرتبطة
         </div>
+        <button type="button" class="btn btn-sm btn-outline-primary"
+                data-bs-toggle="modal" data-bs-target="#linkPickerModal"
+                style="font-size:.76rem;padding:.15rem .6rem">
+          <i class="bi bi-plus-lg"></i> اربط
+        </button>
         {% if links %}
           <ul class="list-unstyled mb-0">
             {% for link in links %}
@@ -261,3 +276,4 @@
 {% endif %}
 
 {% include "core/_lifecycle_dialogs.html" %}
+</div>{# lc-scope #}

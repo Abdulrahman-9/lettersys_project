@@ -154,6 +154,7 @@ def _lifecycle_context(book, user):
     from core.custody_service import custody_chain
     from core.linking_service import links_of
     from core.referral_service import reply_matrix
+    from core.models import BookLink
     from core.registration_service import registrations_of
 
     matrix = reply_matrix(book, user)
@@ -167,6 +168,8 @@ def _lifecycle_context(book, user):
         # مصدرُ قصاصة الهامش: أوّلُ مرفقٍ يُصيَّر. غيابُه يُخفي الأداةَ كلَّها
         # بدل أن يعرض صندوقاً فارغاً — 11,183 كتاباً منقولاً من الورق بلا مرفق.
         "crop_source": _crop_source(book),
+        # صفاتُ الربط من النموذج لا من قائمةٍ في القالب — مصدرٌ واحد.
+        "relation_choices": BookLink.RELATION_CHOICES,
     }
 
 

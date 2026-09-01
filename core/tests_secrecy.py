@@ -185,7 +185,10 @@ class DetailAndAttachmentsAreClosedTests(SecrecyTestCase):
         self.client.force_login(self.clerk)
         resp = self.client.get(f'/books/{self.secret.pk}/')
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, '— سرّي —')
+        # علامةُ القالب المقيَّد لا عنوانٌ بعينه: العنوانُ نصٌّ يتبدّل بالتصميم،
+        # و`lc-stub` هي العقدُ — إن غابت فالقالبُ الكاملُ هو الذي صُيِّر.
+        self.assertContains(resp, 'lc-stub')
+        self.assertContains(resp, 'المظروفُ مغلق')
         self.assertNotContains(resp, 'مناقصةُ الحفر السرّيّة')
         self.assertContains(resp, self.secret.our_number)      # الدفترُ يكشف الرقم
 
