@@ -1,6 +1,6 @@
 # دليل التدشين — من نسخة التدريب إلى العمل الفعليّ
 
-آخر تحديث: 2026-08-17 · بعد إعادة بناء الأرقام على سلسلة ختم الوارد.
+آخر تحديث: 2026-09-01 · أُضيف قسمُ عتاد النموذج وفحصُه قبل الإقلاع.
 
 ---
 
@@ -45,6 +45,39 @@
 python manage.py rebase_book_numbers --undo var/rebase_book_numbers_applied_20260817.csv        # معاينة
 python manage.py rebase_book_numbers --undo var/rebase_book_numbers_applied_20260817.csv --yes  # تنفيذ
 ```
+
+---
+
+## عتادُ النموذج — ما لا ينتقل بـgit
+
+`var/` كلُّه مستثنىً (`.gitignore:107`) و`git ls-files var/` فارغ: **النسخةُ
+المستنسَخةُ تصل عمياء**، وتبدو سليمةً تماماً — الصفحاتُ تُفتح، والاختباراتُ
+تخضرّ (لا تلمس `var/models` إطلاقاً)، والاستخراجُ يعيد حقولاً فارغةً كأنّ
+المستند رديء. عشرةُ ملفّاتٍ تُنسَخ يدويّاً اليوم من `D:\migration\lettersys_models\`
+(قناةٌ ضعيفةٌ مُعترَفٌ بها — البديلُ المخطَّط في `COMPANY_ROLLOUT_PLAN_2026-08-24.md:202`).
+
+| الملفّ | الأثرُ عند الغياب |
+|---|---|
+| `var/models/number_detector.onnx` | لا صندوقَ عددٍ ولا تاريخ ⟵ المسارُ البصريُّ كلُّه صامت |
+| `var/models/handwritten_digits_crnn.onnx` | لا قراءةَ عددٍ يدويّ |
+| `var/models/handwritten_dates_crnn.onnx` | لا اقتراحَ تاريخ |
+| `var/models/handwritten_dates_charset.json` | **أخطرُها**: النموذجُ يعمل والطقمُ ناقصٌ «/» ⟵ فكُّ الترميز يرفع `IndexError` فيسقط الاقتراحُ صامتاً |
+| `var/entity_*.json` · `var/handwriting_layout_priors.json` | ترجيحُ نوع الوثيقة ومطابقةُ الجهة يضعفان |
+| `.encryption_key` | يُسَكُّ مفتاحٌ جديدٌ بلا صوت ⟵ كلماتُ مرور البريد المخزّنة لا تُفكّ |
+
+وثلاثةٌ خارج المستودع لا تقلّ لزوماً: **حزمة `onnxruntime`** (كانت غائبةً عن
+`requirements.txt` حتّى 2026-09-01 — أيُّ نسخةٍ مبنيّةٍ قبلها بلا قراءةٍ يدويّةٍ
+إطلاقاً)، ومحرّك **tesseract**، وبياناتُ لغته (`ara`+`eng`).
+
+```powershell
+# انسخ العتاد ثمّ تحقّق — البصمةُ تُثبت أنّ النسخة تامّة
+robocopy D:\migration\lettersys_models\deploy var\models /E
+python manage.py models_healthcheck --strict --load --hash
+```
+
+**المساراتُ مثبَّتةٌ على جذر المشروع** منذ 2026-09-01 (`core/extraction/artifacts.py`)
+فلا يعود يهمّ من أين تُقلَع الخدمة؛ وقبل ذلك كانت ستّةٌ منها نسبيّةً لمجلّد العمل
+وكان الإقلاعُ من مجلّدٍ آخر **يُسقط الاستخراجَ كلَّه** لا القراءةَ اليدويّة وحدها.
 
 ---
 
@@ -93,6 +126,9 @@ python manage.py purge_dev_seed_books --yes      # تنفيذ
 
 ### ٥. التحقّق النهائي
 ```powershell
+# العتادُ أوّلاً: مجموعةُ الاختبار تخضرّ على جهازٍ بلا أوزانٍ إطلاقاً،
+# فلا تصلح بوّابةً لهذا الصنف من العطب.
+python manage.py models_healthcheck --strict --load
 python manage.py test --settings=lettersys.settings_test
 ```
 ثم بالعين على الواجهة: افتح قائمة الكتب وتأكّد أنّ الرقم يُعرض مجرّداً، وأنّ

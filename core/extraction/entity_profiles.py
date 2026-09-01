@@ -17,8 +17,11 @@ import os
 import re
 from collections import Counter
 
+from core.extraction.artifacts import (entity_doc_profiles_path,
+                                       entity_profiles_path, layout_priors_path)
+
 MIN_BOOKS = 3
-PROFILES_PATH = os.path.join('var', 'entity_extraction_profiles.json')
+PROFILES_PATH = entity_profiles_path()
 _AR_DIGITS = {0x0660 + i: 48 + i for i in range(10)}
 
 
@@ -56,8 +59,8 @@ def learn_profiles(min_books=MIN_BOOKS, out_path=PROFILES_PATH):
     """المكتشف: يبني بروفايل كل جهةٍ نشطة لها ≥ min_books كتب مؤكَّدة. يعيد
     (profiles, stats). آمنٌ للذاكرة: استعلاماتٌ خفيفة، بلا تحميل صور."""
     from core.models import Book, Entity
-    doc_prof = _load_json(os.path.join('var', 'entity_doc_profiles.json'))
-    priors = _load_json(os.path.join('var', 'handwriting_layout_priors.json'))
+    doc_prof = _load_json(entity_doc_profiles_path())
+    priors = _load_json(layout_priors_path())
 
     profiles = {}
     n_gram = self_ok = self_n = 0
@@ -156,7 +159,7 @@ class EntityResolver:
 
     def __init__(self):
         from core.models import Entity
-        doc = _load_json(os.path.join('var', 'entity_doc_profiles.json'))
+        doc = _load_json(entity_doc_profiles_path())
         name_code = {}
         for v in doc.values():
             c = str(v.get('entity_code') or '').strip()

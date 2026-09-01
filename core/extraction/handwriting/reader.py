@@ -15,10 +15,14 @@ from typing import Optional, Tuple
 
 import numpy as np
 
+from core.extraction.artifacts import number_charset_path, number_model_path
+
 logger = logging.getLogger(__name__)
 
-_MODEL_PATH = os.path.join('var', 'models', 'handwritten_digits_crnn.onnx')
-_CHARSET_PATH = os.path.join('var', 'models', 'handwritten_digits_charset.json')
+# المساران من عقد العتاد (`core/extraction/artifacts.py`) — تجاوزُ الإعدادات ثمّ
+# جذرُ المشروع؛ كانا نسبيَّين لمجلّد العمل فتعمى الخدمةُ المُقلَعة من مجلّدٍ آخر.
+_MODEL_PATH = number_model_path()
+_CHARSET_PATH = number_charset_path()
 _STRIP_H, _MAX_W = 64, 512
 
 # بوابة الثقة — تحرس **مسار الشريط القديم وحده** (pipeline). مسار قصاصة الكاشف
@@ -52,6 +56,14 @@ class HandwrittenNumberReader:
                 self.blank = int(meta.get('blank', 0))
             except (OSError, ValueError) as exc:
                 logger.warning('[handwriting] تعذّر قراءة charset: %s', exc)
+        elif os.path.exists(self.model_path):
+            # **أخطرُ حالةِ غياب**: نموذجٌ حاضرٌ وطقمُه غائب ⟵ يبقى الافتراضيُّ
+            # `'0123456789'` فتنزاح خريطةُ المحارف (قارئُ التاريخ طقمُه فيه «/»)،
+            # فيخرج نصٌّ **واثقٌ وخاطئ** لا صمت. تُصرَخ لا تُبلَع.
+            logger.error('[handwriting] طقمُ المحارف مفقود (%s) والنموذجُ حاضر — '
+                         'القراءةُ ستستعمل طقماً افتراضيّاً وتُخرج قيماً خاطئةً '
+                         'بثقةٍ عالية. شغّل: manage.py models_healthcheck',
+                         charset_path)
         self._session = session          # حقن للاختبارات
         self._input_name = 'image'
 

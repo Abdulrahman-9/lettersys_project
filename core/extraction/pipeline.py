@@ -446,6 +446,24 @@ def _route_title_emission(result, source: str) -> None:
     result.title_confidence = 0.0
 
 
+_WARNED_ARTIFACTS = set()
+
+
+def _warn_missing_artifact(key: str, path: str, effect: str) -> None:
+    """يصرخ **مرّةً واحدةً لكل عمليّة** حين يغيب وزنٌ — لا صمتَ ولا إغراقَ سجلّ.
+
+    كان المساران يعودان مبكراً بلا سطرِ سجلٍّ أصلاً، ومُسجّلات `core.*` كانت
+    بلا مُعالِج أساساً (أُصلح في `settings.LOGGING`) — فغيابُ الأوزان كان
+    يمرّ بلا أثرٍ في أيّ ملفّ سجلّ. وتكرارُ السطر لكلّ مستندٍ يُغرق السجلّ،
+    فمرّةً واحدةً لكلّ مفتاحٍ ثمّ صمت.
+    """
+    if key in _WARNED_ARTIFACTS:
+        return
+    _WARNED_ARTIFACTS.add(key)
+    logger.error('[artifacts] وزنٌ مفقود: %s (%s) ⟵ %s. شغّل: '
+                 'manage.py models_healthcheck', key, path, effect)
+
+
 def _suppress_sender_number_emission(result) -> None:
     """يمنع أيّ قيمةِ عددٍ من بلوغ الكاتب — **من كلّ الكُتّاب الخمسة**.
 
@@ -623,12 +641,15 @@ class AIExtractionService:
 
             if self._hw_reader is None:
                 self._hw_reader = HandwrittenNumberReader()
-                priors = EntityLayoutPriors(os.path.join('var', 'handwriting_layout_priors.json'))
+                from core.extraction.artifacts import layout_priors_path
+                priors = EntityLayoutPriors(layout_priors_path())
                 self._hw_locator = NumberStripLocator(priors)
                 # مُموضِع «التأريخ» بلا priors: لا بصمةَ تاريخٍ لكل جهةٍ بعد (فيبل16)،
                 # فمرساةُ التسمية المطبوعة وحدها تقود — ونقبل source='label' فقط.
                 self._hw_date_locator = NumberStripLocator(None, field='date')
             if not self._hw_reader.available:
+                _warn_missing_artifact('number_model', self._hw_reader.model_path,
+                                       'لا قراءةَ عددٍ يدويّ — الحقلُ يبقى فارغاً')
                 # **رباعيّةٌ لا ثنائيّة**: النداءُ يفكّ أربعةً، وثنائيّةٌ هنا ترفع
                 # ValueError يبتلعها except العام فيعود المستندُ كلُّه `failed` —
                 # لا «تدهوراً رشيقاً». عاشت منذ توصيل قارئ التاريخ (c961ed3)
@@ -785,6 +806,8 @@ class AIExtractionService:
                 DATE_CONF_GREEN, get_date_reader)
             rd = get_date_reader()
             if not rd.available:
+                _warn_missing_artifact('date_model', rd.model_path,
+                                       'لا اقتراحَ تاريخ — القصاصةُ وحدها للكاتب')
                 return None
             raw, conf = rd.read(crop.convert('L'))
             if not raw:

@@ -391,6 +391,17 @@ LOGGING = {
             'level': _log_level,
             'propagate': False,
         },
+        # **جذرُ الصمت** (2026-09-01): وحدات `core.*` تُسجّل بـ`__name__`، ولا
+        # مُسجّلَ `core` ولا جذريَّ هنا — فكلُّ `logger.info` فيها يُرمى قبل
+        # التنسيق (المستوى الفعّال WARNING بلا مُعالِج)، وكلُّ `warning`/`error`
+        # يذهب إلى `lastResort` على stderr ولا يبلغ `logs/lettersys.log` أبداً.
+        # فسطرُ «لا نموذج — الكاشفُ صامت» لم يكن يُكتب في أيّ مكان: النظامُ
+        # يعمى ولا أثرَ في السجلّ. هذا السطرُ هو ما يجعل التدهورَ مسموعاً.
+        'core': {
+            'handlers': ['console', 'file'],
+            'level': _log_level,
+            'propagate': False,
+        },
         'django': {
             'handlers': ['console', 'file'],
             'level': 'WARNING',
@@ -412,3 +423,14 @@ LOGGING = {
 # مع الإصدار إلى المسار أدناه، وغيابه يُصمِت الكاشف بلا كسر أيّ استخراج.
 NUMBER_DETECTOR_ONNX = os.environ.get(
     'NUMBER_DETECTOR_ONNX', str(BASE_DIR / 'var' / 'models' / 'number_detector.onnx'))
+
+# بقيّةُ عتاد النماذج — تجاوزاتٌ بيئيّةٌ اختياريّة. الافتراضُ (فارغ) يعني
+# «جذرُ المشروع + المسار المعتاد» عبر `core/extraction/artifacts.py`، وهو
+# **العقدُ الوحيد** لهذه المسارات: كانت ستّةٌ منها نسبيّةً لمجلّد العمل فتعمى
+# الخدمةُ المُقلَعة من مجلّدٍ آخر (وشغّالُ المشروع نفسُه يفعل ذلك:
+# scripts/run_server_background.py). فحصُها: `manage.py models_healthcheck`.
+NUMBER_DETECTOR_FALLBACK_ONNX = os.environ.get('NUMBER_DETECTOR_FALLBACK_ONNX', '')
+HANDWRITTEN_NUMBER_ONNX = os.environ.get('HANDWRITTEN_NUMBER_ONNX', '')
+HANDWRITTEN_NUMBER_CHARSET = os.environ.get('HANDWRITTEN_NUMBER_CHARSET', '')
+HANDWRITTEN_DATE_ONNX = os.environ.get('HANDWRITTEN_DATE_ONNX', '')
+HANDWRITTEN_DATE_CHARSET = os.environ.get('HANDWRITTEN_DATE_CHARSET', '')

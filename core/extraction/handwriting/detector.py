@@ -26,6 +26,11 @@ from typing import Optional, Tuple
 
 import numpy as np
 
+# استيرادٌ في الرأس لا داخل الدالّة: استيرادٌ كسولٌ داخل `_model_path` يستدعي
+# `os.path.exists` عبر آلة الاستيراد عند أوّل نداء، فيكذب على أيّ اختبارٍ يعدّ
+# ضرباتِ القرص (سقط `test_missing_model_probed_once_only` بذلك حرفيّاً).
+from core.extraction.artifacts import detector_fallback_path, detector_path
+
 logger = logging.getLogger(__name__)
 
 IMGSZ = 1280          # مقاس التدريب — تغييره يُبطل الأوزان
@@ -58,11 +63,7 @@ _fb_failed = False
 
 
 def _model_path() -> str:
-    from django.conf import settings as dj
-    p = getattr(dj, 'NUMBER_DETECTOR_ONNX', '') or ''
-    if p:
-        return p
-    return os.path.join(getattr(dj, 'BASE_DIR', ''), 'var', 'models', 'number_detector.onnx')
+    return detector_path()
 
 
 def _get_session():
@@ -92,12 +93,7 @@ def _get_session():
 
 
 def _fallback_path() -> str:
-    from django.conf import settings as dj
-    p = getattr(dj, 'NUMBER_DETECTOR_FALLBACK_ONNX', '') or ''
-    if p:
-        return p
-    return os.path.join(getattr(dj, 'BASE_DIR', ''), 'var', 'models',
-                        'number_detector_det1_backup.onnx')
+    return detector_fallback_path()
 
 
 def _get_fallback_session():

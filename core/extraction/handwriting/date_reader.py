@@ -24,12 +24,14 @@ import logging
 import os
 from typing import Optional, Tuple
 
+from core.extraction.artifacts import date_charset_path, date_model_path
+
 from .reader import HandwrittenNumberReader
 
 logger = logging.getLogger(__name__)
 
-_DATE_MODEL = os.path.join('var', 'models', 'handwritten_dates_crnn.onnx')
-_DATE_CHARSET = os.path.join('var', 'models', 'handwritten_dates_charset.json')
+_DATE_MODEL = date_model_path()
+_DATE_CHARSET = date_charset_path()
 
 # فوقها يُعرض الاقتراح أخضرَ، وتحتها أحمرُ «يجب التصحيح يدوياً».
 # مُشتقّةٌ من مسحٍ محليٍّ بصيغة الإنتاج على الحجز — لا منقولةٌ عن حقلٍ آخر.

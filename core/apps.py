@@ -13,6 +13,9 @@ class CoreConfig(AppConfig):
     def ready(self):
         from . import signals  # noqa: F401
         from . import logging_models  # noqa: F401
+        # فحصُ عتاد النماذج (تحذيرٌ لا خطأ) — يجعل نسخةً بلا أوزانٍ تُعلن عن
+        # نفسها مع كلّ أمرٍ بدل أن تبدو سليمةً وهي عمياء.
+        from . import checks  # noqa: F401
 
         # في dev runserver يُشغّل Django process أصل ثم يُولّد child reloader.
         # ready() يُستدعى في كليهما — نُهمل process الأصل لمنع تحميل مزدوج.
