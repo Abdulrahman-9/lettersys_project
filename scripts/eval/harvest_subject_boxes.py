@@ -75,6 +75,28 @@ def _sealed_books():
     return ids
 
 
+def _autofilled_titles():
+    """كتبٌ عنوانُها **مملوءٌ آليّاً ولم يلمسه كاتب** — تُستبعَد من الحصاد.
+
+    **حلقةُ التسميم الذاتيّ**: حقيقةُ تدريب الموضوع هي `Book.title` عينُه. فلمّا
+    صار مسارُ العلامة يملأ الحقل تلقائيّاً، صار العنوانُ المحفوظُ بلا لمسٍ **مخرَجَ
+    المُنتقي نفسِه** — وحصادُه وسماً يُدرِّب النموذجَ على ما قاله هو، فيرسّخ خطأه
+    بدل أن يصحّحه (ضجيجٌ في اتّجاهٍ واحد لا تذيبه أرضيّةُ الدقّة).
+
+    الوسمُ يُكتب لحظةَ الحفظ في `additional_data.title_provenance`
+    (`core/extraction/capture.py:178`): `typed` كتابةُ الكاتب · `confirmed` لمسٌ
+    بعد ملء · `autofilled` ملءٌ بلا لمس. والاستبعادُ هنا **متحفّظ**: يكفي التقاطٌ
+    واحدٌ يقول `autofilled` كي يسقط الكتاب، لأنّ نقاءَ الوسم أغلى من حجم الدفعة.
+
+    الحصادُ السابقُ (6,462 صندوقاً) نظيفٌ بالبناء: سبقَ الملءَ التلقائيّ كلَّه.
+    """
+    from core.models import DataExtractionResult
+    return set(
+        DataExtractionResult.objects
+        .filter(additional_data__title_provenance='autofilled')
+        .values_list('book_id', flat=True))
+
+
 def render(p, dpi=175, cap=3500):
     if p.lower().endswith('.pdf'):
         import fitz
@@ -100,11 +122,14 @@ if os.path.exists(MANIFEST):
         except Exception:
             pass
 
+poisoned = _autofilled_titles()
 qs = (Book.objects.filter(is_deleted=False, attachments__isnull=False)
       .exclude(title='').exclude(title=None)
-      .exclude(id__in=sealed).order_by('id').distinct())
+      .exclude(id__in=sealed).exclude(id__in=poisoned)
+      .order_by('id').distinct())
 todo = [b for b in qs.values_list('id', 'title') if b[0] not in attempted][:CHUNK]
-print('مؤهَّلون %d · حوولوا %d · هذه الدفعة %d' % (qs.count(), len(attempted), len(todo)), flush=True)
+print('مؤهَّلون %d · حوولوا %d · مستبعَدٌ مملوءاً آليّاً %d · هذه الدفعة %d'
+      % (qs.count(), len(attempted), len(poisoned), len(todo)), flush=True)
 
 from core.extraction.ocr.providers import TesseractOCRProvider  # noqa: E402
 prov = TesseractOCRProvider()
