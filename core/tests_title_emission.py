@@ -8,7 +8,7 @@
 إلى مفتاحٍ منفصل، وبلا اختبارٍ هنا يعود الملءُ صامتاً بأيّ إعادةِ ترتيبٍ للأسطر
 (نفسُ فخّ المرآة في جبهة العدد).
 """
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from core.extraction.pipeline import (AIExtractionResult, TITLE_DIRECT_FILL_SOURCES,
                                       _route_title_emission, result_to_scan_data)
@@ -129,3 +129,71 @@ class TitleZeroAutofillSourceGuardTests(SimpleTestCase):
 
     def test_renderer_is_called_from_all_three_fill_paths(self):
         self.assertGreaterEqual(self._src().count('applyTitleSuggestion('), 4)
+
+
+class HarvestExcludesAutofilledTests(SimpleTestCase):
+    """الطرفُ المستهلِك من حلقة التسميم — الحاصدُ لا يأخذ عنواناً مملوءاً آليّاً.
+
+    الوسمُ وحدَه لا يكفي: `title_provenance` يُكتب عند الحفظ منذ 2026-09-01،
+    لكنّ `harvest_subject_boxes.py` ظلّ يقرأ `Book.title` بلا مُرشِّح — فيعود
+    الوسمُ حبراً بلا أثر. هذا الحرزُ يقرأ **مصدر السكربت** لأنّه لا يُستورَد
+    (شيفرتُه تُنفَّذ عند الاستيراد)، ويفشل صاخباً إن سقط المُرشِّح يوماً.
+    """
+
+    SCRIPT = 'scripts/eval/harvest_subject_boxes.py'
+
+    def _src(self):
+        import os
+        from django.conf import settings
+        with open(os.path.join(settings.BASE_DIR, self.SCRIPT), encoding='utf-8') as f:
+            return f.read()
+
+    def test_query_excludes_autofilled_books(self):
+        src = self._src()
+        self.assertIn('poisoned = _autofilled_titles()', src)
+        self.assertIn('.exclude(id__in=poisoned)', src)
+
+    def test_the_filter_keys_off_the_capture_contract(self):
+        """المفتاحُ نفسُه الذي يكتبه `capture.py` — لا اسمٌ موازٍ ينجرف."""
+        import ast
+        tree = ast.parse(self._src())
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == '_autofilled_titles')
+        body = ast.dump(fn)
+        self.assertIn('additional_data__title_provenance', body)
+        self.assertIn('autofilled', body)
+
+    def test_capture_writes_that_exact_key(self):
+        import os
+        from django.conf import settings
+        with open(os.path.join(settings.BASE_DIR, 'core', 'extraction', 'capture.py'),
+                  encoding='utf-8') as f:
+            cap = f.read()
+        self.assertIn("add_data['title_provenance']", cap)
+
+
+class AutofilledLookupTests(TestCase):
+    """الاستعلامُ نفسُه يعمل على قاعدةٍ حقيقيّة — لا صحّةَ صياغةٍ فقط.
+
+    الحرزُ البنيويُّ أعلاه يثبت أنّ السكربت يستعمل هذا التعبير؛ وهذا يثبت أنّ
+    التعبيرَ **يفرز فعلاً** (بحثُ JSON داخل `additional_data`)، فلا يمرّ استعلامٌ
+    صحيحُ الشكل يعيد صفراً دائماً ويبدو كأنّه يحرس.
+    """
+
+    def test_lookup_selects_only_autofilled(self):
+        from django.contrib.auth.models import User
+
+        from core.models import Book, DataExtractionResult
+        u = User.objects.create_user('kaatib', password='x')
+        poisoned = Book.objects.create(title='مملوءٌ آليّاً', kind='incoming_internal',
+                                       created_by=u)
+        clean = Book.objects.create(title='كتبه الكاتب', kind='incoming_internal',
+                                    created_by=u)
+        DataExtractionResult.objects.create(
+            book=poisoned, additional_data={'title_provenance': 'autofilled'})
+        DataExtractionResult.objects.create(
+            book=clean, additional_data={'title_provenance': 'typed'})
+        found = set(DataExtractionResult.objects
+                    .filter(additional_data__title_provenance='autofilled')
+                    .values_list('book_id', flat=True))
+        self.assertEqual(found, {poisoned.id})
