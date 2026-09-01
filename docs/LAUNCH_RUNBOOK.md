@@ -146,6 +146,32 @@ python manage.py test --settings=lettersys.settings_test
 
 ---
 
+## النشرُ التلقائيّ — كلُّ دفعٍ إلى main
+
+`.github/workflows/deploy.yml` يتّصل بالخادم عبر ssh ويشغّل `lettersys-deploy`.
+لا يعمل حتّى تُضبط **أربعةُ أسرارٍ** في إعدادات المستودع؛ وبدونها يسقط السيرُ
+برسالةٍ تُسمّي الناقص بالضبط (لا برسالة `ssh` عمياء).
+
+```bash
+gh secret set DEPLOY_HOST  --repo Abdulrahman-9/lettersys_project   # العنوان أو IP
+gh secret set DEPLOY_USER  --repo Abdulrahman-9/lettersys_project   # مالكُ lettersys-deploy
+ssh-keyscan -H <العنوان> | gh secret set DEPLOY_KNOWN_HOSTS --repo Abdulrahman-9/lettersys_project
+# DEPLOY_SSH_KEY مضبوطٌ منذ 2026-09-01 (مفتاحُ نشرٍ ed25519 مُولَّدٌ لهذا الغرض،
+# خاصُّه في أسرار GitHub وحدها). المطلوبُ على الخادم سطرٌ واحد:
+#   echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIACWfXpnaUmwnSTCiwNnHoZXs3QbOwErqotyzPaT2c79 github-actions@lettersys-deploy' >> ~/.ssh/authorized_keys
+```
+
+**ما يجب أن يفعله `lettersys-deploy` بعد كلّ سحب**: `git lfs pull` ثمّ `migrate`
+ثمّ `collectstatic` ثمّ إعادةُ تشغيل الخدمة — و`models_healthcheck --strict`
+بوّابةً قبل الإقلاع. ولا `makemigrations` في الإنتاج أبداً: توليدُ ترحيلٍ على
+قاعدةٍ حيّة بابُ تلفٍ لا إصلاح.
+
+**وبعد إصدار شهادة TLS**: احذف `SESSION_COOKIE_SECURE` و`CSRF_COOKIE_SECURE`
+و`SECURE_SSL_REDIRECT` من `.env` — لا تجعلها `True` يدويّاً. الافتراضُ في
+الشيفرة آمنٌ أصلاً، والحذفُ يعيدك إليه بلا سطرٍ منسيٍّ يرخي الأمانَ لاحقاً.
+
+---
+
 ## أمنٌ — إجراءٌ مطلوب من المالك
 
 كلمة سرّ SQL Server `Migrate@2026!` كانت مكتوبةً في
