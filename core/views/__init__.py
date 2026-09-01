@@ -74,6 +74,9 @@ from .dossiers import (
 # استيراد معالجات لوحة التحكم والتقارير
 from .dashboard import (
     dashboard,
+    desk_ledger,
+    desk_handover,
+    book_audit,
     reports,
     reports_export,
     followup_activity_report,

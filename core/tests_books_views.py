@@ -710,6 +710,63 @@ class BookUnifiedTests(BookViewsBase):
         self.assertNotIn(self.book.pk, ids)
 
 
+class DeskAndAuditPagesTests(BookViewsBase):
+    """هياكلُ واجهةٍ — تُختبَر أنّها تُعرض **وأنّها تُعلن أنّها هياكل**.
+
+    الحرزُ الثاني هو المقصود: بياناتُ هذه الصفحات ثابتةٌ في `dashboard.py` ولا
+    تمسّ القاعدة. فلو أزال أحدٌ البطاقةَ يوماً بلا أن يصل الصفحةَ ببياناتٍ
+    حقيقيّة، صارت أرقامٌ مفبركةٌ تبدو تقريراً — وهذا ما يفشل هنا صاخباً.
+    """
+
+    PAGES = (('desk_ledger', 'core/desk_ledger.html'),
+             ('desk_handover', 'core/desk_handover.html'),
+             ('book_audit', 'core/book_audit.html'))
+
+    def test_pages_render(self):
+        self._login()
+        for name, template in self.PAGES:
+            with self.subTest(page=name):
+                resp = self.client.get(reverse(name))
+                self.assertEqual(resp.status_code, 200)
+                self.assertTemplateUsed(resp, template)
+
+    def test_each_page_declares_itself_a_skeleton(self):
+        self._login()
+        for name, _t in self.PAGES:
+            with self.subTest(page=name):
+                body = self.client.get(reverse(name)).content.decode('utf-8')
+                self.assertIn('هيكلُ واجهةٍ لا ميزة', body)
+                self.assertIn('ثابتٌ في الكود', body)
+
+    def test_pages_are_not_linked_from_navigation(self):
+        """بيانٌ مفبركٌ خلف عنوانٍ مباشرٍ شيء، وفي قائمة التنقّل شيءٌ آخر."""
+        self._login()
+        nav = self.client.get(reverse('dashboard')).content.decode('utf-8')
+        for name, _t in self.PAGES:
+            self.assertNotIn(reverse(name), nav, name)
+
+
+class DevLoginGuardTests(BookViewsBase):
+    """أداةُ الدخول التطويريّة: حارسُها DEBUG، وإعادةُ توجيهها محروسة."""
+
+    @override_settings(DEBUG=False)
+    def test_disabled_outside_debug(self):
+        self.assertEqual(self.client.get('/dev-login/').status_code, 404)
+        self.assertEqual(self.client.post('/dev-login/', {}).status_code, 404)
+
+    @override_settings(DEBUG=True)
+    def test_external_next_is_refused(self):
+        """`?next=https://evil.example` كانت تُتبَع حرفيّاً — إعادةُ توجيهٍ مفتوحة."""
+        resp = self.client.post('/dev-login/', {'next': 'https://evil.example/x'})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp['Location'], '/')
+
+    @override_settings(DEBUG=True)
+    def test_internal_next_is_honoured(self):
+        resp = self.client.post('/dev-login/', {'next': reverse('dashboard')})
+        self.assertEqual(resp['Location'], reverse('dashboard'))
+
+
 # ===========================================================================
 # books_list.py — api_unified_data
 # ===========================================================================
