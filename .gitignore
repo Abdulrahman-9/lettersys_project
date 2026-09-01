@@ -55,6 +55,9 @@ releases.html
 .env.local
 .env.*.local
 
+# Per-device local identity (device name/uuid) — must NOT be shared/committed
+.device_identity.json
+
 # Coverage reports
 htmlcov/
 .coverage
@@ -77,3 +80,49 @@ docs/_build/
 backups/
 backup/
 *_backup/
+
+# Claude Code local files (worktrees, local settings, locks) — لا تُشارَك
+.claude/
+
+# Runtime logs
+logs/
+
+# Tesseract reference documentation (ليست كود التطبيق)
+tessdoc/
+
+# بصمات تخطيط خط اليد — المشتقّةُ للتاريخ تبقى خارجاً (لا قارئَ لها بعد)؛
+# وبصمةُ العدد تُودَع أدناه لأنّ عقد العتاد يفحصها.
+var/handwriting_layout_priors_date.json
+
+# عدّة تدريب خط اليد: شرائط حقيقية من الأرشيف + مخرجات كاغل + نماذج ثنائية —
+# بيانات حساسة/ضخمة لا تدخل git أبداً (تُبنى بأوامر الحصاد/التنقية/التعبئة)
+training/handwriting/harvest/
+training/handwriting/dataset_real*/
+training/handwriting/kaggle_out_*/
+training/handwriting/v5_fail_log/
+training/handwriting/v5_log_2/
+var/models/
+
+# بيانات تدريبٍ ومخرجاتُ تشغيلٍ محليّة — ليست كوداً ولا تُودَع
+training/handwriting/dataset_v6/
+# `var/*` لا `var/` — الاستثناءُ أدناه لا يعمل إن استُبعد المجلّدُ نفسُه:
+# git لا ينزل داخل مجلّدٍ مستبعَدٍ فلا يرى النفي (فخٌّ كلاسيكيّ، قِيس هنا).
+var/*
+
+# ── استثناءٌ: عتادُ التشغيل يُودَع (2026-09-01، بعد أن صار المستودع خاصّاً) ──
+# القاعدةُ العامّة تبقى «var/ خارج git»؛ المستثنى هو **ما يفحصه عقدُ العتاد**
+# (`core/extraction/artifacts.py`) وحدَه — أي ما تحتاجه نسخةٌ جديدةٌ لتعمل:
+# أربعةُ نماذجَ حيّة + احتياطيُّ det1 + طقما المحارف (عبر Git LFS)، وملفّاتُ
+# بصمات الجهات النصّيّة (صغيرة، git عاديّ). ولا يدخل: النماذجُ الميّتةُ
+# (v4/v5 rollback) ولا مخرجاتُ التدريب ولا `.encryption_key` (سرٌّ يُنسَخ يدويّاً).
+!var/models/
+var/models/*
+!var/models/handwritten_digits_crnn.onnx
+!var/models/handwritten_dates_crnn.onnx
+!var/models/number_detector.onnx
+!var/models/number_detector_det1_backup.onnx
+!var/models/handwritten_digits_charset.json
+!var/models/handwritten_dates_charset.json
+!var/entity_extraction_profiles.json
+!var/entity_doc_profiles.json
+!var/handwriting_layout_priors.json

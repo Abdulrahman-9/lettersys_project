@@ -5,20 +5,93 @@ Attachments Views - معالجات المرفقات
 """
 
 import logging
-import mimetypes
+import os
 from io import BytesIO
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import SuspiciousOperation, ValidationError
 from django.core.files import File
+from django.core.files.base import ContentFile
+from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
+from django.utils._os import safe_join
+from django.utils.http import url_has_allowed_host_and_scheme
 from pypdf import PdfReader, PdfWriter
 
+from ..attachment_service import ensure_pdf, validate_attachment_file
 from ..models import Attachment, AttachmentVersion, BookHistory
+from core.scoping import can_view_book, is_privileged
 
 logger = logging.getLogger(__name__)
+
+
+def serve_shared_attachment(request, token):
+    """يخدم مرفقاً واحداً عبر رابط موقّع محدود المدة — **بلا تسجيل دخول**.
+
+    هذا المسار الوحيد المفتوح على المرفقات، ووجوده ضروري: الجهة الخارجية التي
+    نراسلها لا حساب لها في النظام، والملفات الكبيرة لا تُرفَق بالبريد (حدّ ~25MB).
+
+    الحماية: الرمز موقّع بـSECRET_KEY (لا يُزوَّر)، ينتهي بعد مدّة، ويفتح مرفقاً
+    واحداً بعينه لا غير. والمرفق المحذوف لا يُخدَم ولو كان الرمز صالحاً.
+    """
+    from ..attachment_sharing import read_share_token
+
+    attachment_id = read_share_token(token)
+    if attachment_id is None:
+        raise Http404("رابط التحميل غير صالح أو انتهت صلاحيته.")
+
+    attachment = Attachment.objects.filter(pk=attachment_id, is_deleted=False).first()
+    if attachment is None:
+        raise Http404("الملف لم يعد متاحاً.")
+
+    try:
+        handle = attachment.file.open('rb')
+    except (FileNotFoundError, ValueError):
+        logger.warning("serve_shared_attachment: الملف مفقود على القرص — %s", attachment_id)
+        raise Http404("الملف غير موجود.")
+
+    logger.info("serve_shared_attachment: served attachment %s", attachment_id)
+    return FileResponse(handle, as_attachment=True, filename=attachment.filename)
+
+
+@login_required
+def serve_media(request, path):
+    """
+    خدمة ملفات MEDIA خلف مصادقة (يحلّ محلّ static(MEDIA_URL) المفتوح للجميع).
+
+    - يمنع اجتياز المسار (safe_join).
+    - ملفات المرفقات (Attachment/AttachmentVersion) تتطلّب ملكية الكتاب أو staff.
+    - أي media أخرى (شعارات…) تُخدَم لأي مستخدم مُصادَق فقط.
+
+    ملاحظة نشر: في الإنتاج يجب توجيه /media/ عبر هذا العرض (أو تكرار الفحص
+    على مستوى الويب-سيرفر) — لا تَخدمه مباشرةً دون مصادقة.
+    """
+    try:
+        full_path = safe_join(settings.MEDIA_ROOT, path)
+    except (ValueError, SuspiciousOperation):
+        raise Http404("ملف غير موجود")
+    if not os.path.isfile(full_path):
+        raise Http404("ملف غير موجود")
+
+    # حدّد الكتاب المالك إن كان الملف مرفقاً أو نسخة مرفق
+    owner_book = None
+    att = Attachment.objects.filter(file=path).select_related("book").first()
+    if att is not None:
+        owner_book = att.book
+    else:
+        ver = AttachmentVersion.objects.filter(file=path).select_related("attachment__book").first()
+        if ver is not None and ver.attachment_id:
+            owner_book = ver.attachment.book
+
+    if owner_book is not None:
+        if not can_view_book(owner_book, request.user):
+            return HttpResponseForbidden("غير مصرح بالوصول لهذا الملف")
+
+    return FileResponse(open(full_path, "rb"))
 
 
 def _save_attachment_version(attachment, user, note="", merge_type="none", page_count=None):
@@ -61,6 +134,30 @@ def _save_attachment_version(attachment, user, note="", merge_type="none", page_
         return None
 
 
+def _is_ajax(request):
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
+def _mgmt_result(request, book, *, ok=True, message="", status=None, **extra):
+    """
+    استجابة موحّدة لعمليات إدارة المرفقات:
+    - طلب AJAX (لوحة الإدارة في صفحة التعديل) → JSON {success, message, ...}.
+    - طلب عادي (توافق رجعي) → رسالة flash ثم توجيه لوجهة آمنة (next) أو تفاصيل الكتاب.
+    """
+    if _is_ajax(request):
+        payload = {"success": ok, "message": message}
+        payload.update(extra)
+        return JsonResponse(payload, status=status or (200 if ok else 400))
+    if message:
+        (messages.success if ok else messages.error)(request, message)
+    nxt = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    if nxt and url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return redirect(nxt)
+    return redirect("book_detail", pk=book.pk)
+
+
 @login_required
 def attachment_delete(request, pk):
     """
@@ -77,33 +174,27 @@ def attachment_delete(request, pk):
     book = att.book
     
     # فحص الصلاحيات: صاحب المستند أو الموظف
-    if not (request.user.is_superuser or request.user.is_staff or book.created_by == request.user):
-        messages.error(request, "غير مصرح بحذف هذا المرفق.")
-        return redirect("book_detail", pk=book.pk)
-    
-    if request.method == "POST":
-        # حفظ نسخة قبل الحذف
-        _save_attachment_version(att, request.user, note="Deleted from book_detail")
-        
-        # حذف ناعم
-        att.is_deleted = True
-        att.deleted_at = timezone.now()
-        att.deleted_by = request.user
-        att.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
-        
-        # تسجيل العملية
-        BookHistory.objects.create(
-            book=att.book,
-            action='delete-attachment',
-            by=request.user,
-            attachment=att,
-            notes=f"Deleted attachment: {att.file.name}"
-        )
-        
-        messages.success(request, "تم نقل المرفق إلى سلة المهملات.")
-    
-    # الرجوع إلى تفاصيل الكتاب
-    return redirect("book_detail", pk=book.pk)
+    if not can_view_book(book, request.user):
+        return _mgmt_result(request, book, ok=False, message="غير مصرح بحذف هذا المرفق.", status=403)
+
+    if request.method != "POST":
+        return _mgmt_result(request, book, ok=False, message="طريقة غير مسموحة.", status=405)
+
+    # حفظ نسخة قبل الحذف
+    _save_attachment_version(att, request.user, note="Deleted from book_detail")
+
+    # حذف ناعم
+    att.is_deleted = True
+    att.deleted_at = timezone.now()
+    att.deleted_by = request.user
+    att.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
+
+    BookHistory.objects.create(
+        book=att.book, action='delete-attachment', by=request.user, attachment=att,
+        notes=f"Deleted attachment: {att.file.name}",
+    )
+
+    return _mgmt_result(request, book, ok=True, message="تم نقل المرفق إلى سلة المهملات.", attachment_id=att.id)
 
 
 @login_required
@@ -122,35 +213,38 @@ def attachment_replace(request, pk):
     book = att.book
     
     # فحص الصلاحيات
-    if not (request.user.is_superuser or request.user.is_staff or book.created_by == request.user):
-        messages.error(request, "غير مصرح باستبدال هذا المرفق.")
-        return redirect("book_detail", pk=book.pk)
-    
-    if request.method == "POST" and request.FILES.get("file"):
-        # حفظ نسخة من الملف القديم
-        _save_attachment_version(att, request.user, note="Replaced with new file")
-        
-        # الحصول على الملف الجديد
-        new_file = request.FILES["file"]
-        
-        # تحديث المرفق بالملف الجديد
+    if not can_view_book(book, request.user):
+        return _mgmt_result(request, book, ok=False, message="غير مصرح باستبدال هذا المرفق.", status=403)
+
+    if not (request.method == "POST" and request.FILES.get("file")):
+        return _mgmt_result(request, book, ok=False, message="لم يُرفَع ملف للاستبدال.", status=400)
+
+    new_file = request.FILES["file"]
+
+    # تحقّق موحّد من الحجم والنوع قبل أي حفظ نسخة/كتابة — #12
+    try:
+        validate_attachment_file(new_file)
+    except ValidationError as ve:
+        return _mgmt_result(request, book, ok=False, message="؛ ".join(ve.messages), status=400)
+
+    # حفظ نسخة من الملف القديم
+    _save_attachment_version(att, request.user, note="Replaced with new file")
+
+    # توحيد الصيغة: الصور تُحوَّل إلى PDF، وملفات PDF تمرّ كما هي
+    try:
+        pdf_bytes, _converted, _orig = ensure_pdf(new_file)
+        base = Path(new_file.name).stem or "document"
+        att.file.save(f"{base}.pdf", ContentFile(pdf_bytes), save=True)
+    except ValueError:
+        # شبكة أمان: تعذّر التحويل ⇒ احفظ الأصل كما هو (لا نفقد المستند)
         att.file.save(new_file.name, new_file, save=True)
-        att.file_size = att.file.size or 0
-        att.file_type = mimetypes.guess_type(new_file.name)[0] or "application/octet-stream"
-        att.save()
-        
-        # تسجيل العملية
-        BookHistory.objects.create(
-            book=book,
-            action="replace-attachment",
-            by=request.user,
-            attachment=att,
-            notes=f"Replaced attachment: {new_file.name}"
-        )
-        
-        messages.success(request, "تم استبدال المرفق بنجاح.")
-    
-    return redirect("book_detail", pk=book.pk)
+
+    BookHistory.objects.create(
+        book=book, action="replace-attachment", by=request.user, attachment=att,
+        notes=f"Replaced attachment: {new_file.name}",
+    )
+
+    return _mgmt_result(request, book, ok=True, message="تم استبدال المرفق بنجاح.", attachment_id=att.id)
 
 
 @login_required
@@ -175,24 +269,33 @@ def attachment_merge_pages(request, pk):
     book = att.book
     
     # فحص الصلاحيات
-    if not (request.user.is_superuser or request.user.is_staff or book.created_by == request.user):
-        messages.error(request, "غير مصرح بدمج الملفات.")
-        return redirect("book_detail", pk=book.pk)
-    
-    # التحقق من أن الملف PDF
-    if not att.file_type or "pdf" not in att.file_type.lower():
-        messages.error(request, "يمكن دمج الملفات فقط مع ملفات PDF.")
-        return redirect("book_detail", pk=book.pk)
-    
+    if not can_view_book(book, request.user):
+        return _mgmt_result(request, book, ok=False, message="غير مصرح بدمج الملفات.", status=403)
+
+    # التحقق من أن الملف PDF (الموديل لا يملك حقل file_type — نفحص الامتداد)
+    if not (att.file and att.file.name.lower().endswith(".pdf")):
+        return _mgmt_result(request, book, ok=False, message="يمكن دمج الملفات فقط مع ملفات PDF.", status=400)
+
     if request.method == "POST" and request.FILES.getlist("merge_files"):
+        # تحقّق موحّد من كل ملف دمج (حجم + نوع) قبل أي حفظ — #12
+        try:
+            for _mf in request.FILES.getlist("merge_files"):
+                validate_attachment_file(_mf)
+        except ValidationError as ve:
+            return _mgmt_result(request, book, ok=False, message="؛ ".join(ve.messages), status=400)
         try:
             # حفظ نسخة قبل الدمج
             _save_attachment_version(att, request.user, note="Merged with other PDFs", merge_type="pdf")
             
-            # قراءة ملف PDF الرئيسي
+            # قراءة الملف الرئيسي إلى الذاكرة ثم إغلاق المقبض
+            # (تفادي قفل الملف على Windows عند الكتابة فوقه + منع تسرّب المقابض)
             att.file.open("rb")
+            try:
+                main_bytes = att.file.read()
+            finally:
+                att.file.close()
             writer = PdfWriter()
-            main_reader = PdfReader(att.file)
+            main_reader = PdfReader(BytesIO(main_bytes))
             
             # إضافة جميع الصفحات من ملف PDF الرئيسي
             for page in main_reader.pages:
@@ -224,12 +327,12 @@ def attachment_merge_pages(request, pk):
                 notes=f"Merged {len(merge_files)} PDFs"
             )
             
-            messages.success(request, f"تم دمج {len(merge_files)} ملفات بنجاح.")
+            return _mgmt_result(request, book, ok=True, message=f"تم دمج {len(merge_files)} ملفات بنجاح.", attachment_id=att.id)
         except Exception as e:
             logger.error("PDF merge failed: %s", e, exc_info=True)
-            messages.error(request, f"فشل دمج الملفات: {e}")
-    
-    return redirect("book_detail", pk=book.pk)
+            return _mgmt_result(request, book, ok=False, message=f"فشل دمج الملفات: {e}", status=500)
+
+    return _mgmt_result(request, book, ok=False, message="لم تُحدَّد ملفات للدمج.", status=400)
 
 
 @login_required
@@ -254,21 +357,18 @@ def attachment_remove_pages(request, pk):
     book = att.book
     
     # فحص الصلاحيات
-    if not (request.user.is_superuser or request.user.is_staff or book.created_by == request.user):
-        messages.error(request, "غير مصرح بحذف الصفحات.")
-        return redirect("book_detail", pk=book.pk)
-    
-    # التحقق من أن الملف PDF
-    if not att.file_type or "pdf" not in att.file_type.lower():
-        messages.error(request, "يمكن حذف الصفحات فقط من ملفات PDF.")
-        return redirect("book_detail", pk=book.pk)
-    
+    if not can_view_book(book, request.user):
+        return _mgmt_result(request, book, ok=False, message="غير مصرح بحذف الصفحات.", status=403)
+
+    # التحقق من أن الملف PDF (الموديل لا يملك حقل file_type — نفحص الامتداد)
+    if not (att.file and att.file.name.lower().endswith(".pdf")):
+        return _mgmt_result(request, book, ok=False, message="يمكن حذف الصفحات فقط من ملفات PDF.", status=400)
+
     if request.method == "POST":
         try:
             pages_to_remove = request.POST.get("pages_to_remove", "")
             if not pages_to_remove.strip():
-                messages.error(request, "يرجى تحديد الصفحات المراد حذفها.")
-                return redirect("book_detail", pk=book.pk)
+                return _mgmt_result(request, book, ok=False, message="يرجى تحديد الصفحات المراد حذفها.", status=400)
             
             # تحليل أرقام الصفحات
             page_numbers = []
@@ -283,9 +383,14 @@ def attachment_remove_pages(request, pk):
             # حفظ نسخة قبل التعديل
             _save_attachment_version(att, request.user, note=f"Removed pages: {pages_to_remove}")
             
-            # قراءة ملف PDF وحذف الصفحات
+            # قراءة الملف إلى الذاكرة ثم إغلاق المقبض
+            # (تفادي قفل الملف على Windows عند الكتابة فوقه + منع تسرّب المقابض)
             att.file.open("rb")
-            reader = PdfReader(att.file)
+            try:
+                pdf_bytes = att.file.read()
+            finally:
+                att.file.close()
+            reader = PdfReader(BytesIO(pdf_bytes))
             writer = PdfWriter()
             
             for idx, page in enumerate(reader.pages):
@@ -308,9 +413,9 @@ def attachment_remove_pages(request, pk):
                 notes=f"Removed pages: {pages_to_remove}"
             )
             
-            messages.success(request, "تم حذف الصفحات بنجاح.")
+            return _mgmt_result(request, book, ok=True, message="تم حذف الصفحات بنجاح.", attachment_id=att.id)
         except Exception as e:
             logger.error("Page removal failed: %s", e, exc_info=True)
-            messages.error(request, f"فشل حذف الصفحات: {e}")
-    
-    return redirect("book_detail", pk=book.pk)
+            return _mgmt_result(request, book, ok=False, message=f"فشل حذف الصفحات: {e}", status=500)
+
+    return _mgmt_result(request, book, ok=False, message="طريقة غير مسموحة.", status=405)

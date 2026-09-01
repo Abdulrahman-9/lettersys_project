@@ -27,11 +27,11 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from .models import NetworkNode, NetworkSettings
 from .decorators import rate_limit
+from . import device_identity
 
 logger = logging.getLogger('lettersys')
 
@@ -204,7 +204,7 @@ def _register_self(cfg: NetworkSettings):
         ip_address=local_ip,
         app_port=cfg.app_port,
         defaults={
-            'name':       cfg.device_name or _get_hostname(),
+            'name':       device_identity.get_device_name(),
             'role':       role,
             'is_online':  True,
             'is_current': True,
@@ -233,6 +233,7 @@ def network_settings_page(request):
         'nodes': nodes,
         'local_ip': local_ip,
         'hostname': hostname,
+        'device_name': device_identity.get_device_name(),
         'active_users': _active_sessions_count(),
         'current_db_host': db.get('HOST', 'localhost'),
         'current_db_port': db.get('PORT', '5432'),
@@ -243,21 +244,47 @@ def network_settings_page(request):
 
 # ─── Public health-check endpoint ────────────────────────────────────────────
 
+def _is_lan_peer(request) -> bool:
+    """أهذا الطلب من جارٍ على شبكة خاصة؟
+
+    نعتمد ``REMOTE_ADDR`` مباشرةً ولا نقرأ ``X-Forwarded-For``: قرارُ كشفٍ أمنيّ
+    لا يُبنى على ترويسةٍ يتحكّم بها العميل.
+    """
+    import ipaddress
+
+    raw = (request.META.get('REMOTE_ADDR') or '').strip()
+    try:
+        addr = ipaddress.ip_address(raw)
+    except ValueError:
+        return False
+    return addr.is_private or addr.is_loopback
+
+
 @require_GET
 def network_ping(request):
     """
-    نقطة الفحص الصحي — مفتوحة بلا تسجيل دخول.
-    تُستخدم من أجهزة أخرى لاكتشاف هذه النسخة والتحقق منها.
+    نقطة الفحص الصحي — البصمة الدنيا مفتوحة، والتفاصيل لجيران الشبكة الخاصة فقط.
+
+    كانت تكشف الدور واسم الجهاز والإصدار وعدد الجلسات النشطة **لأي طارق**: مسحٌ
+    مجّانيّ لخريطة النشر وحجم الاستعمال. اكتشافُ الأقران يحتاج الهوية فعلاً
+    (``_ping_node`` يقرأ name/role/version لجدول الأجهزة)، لكنه يجري دائماً داخل
+    الشبكة المحلّية — فنقصر التفاصيل عليها. و``active_users`` أُسقط من هنا نهائياً:
+    مستهلكه الوحيد صفحة الأجهزة، وهي تأخذه من ``network_devices`` المحميّة.
+
+    ملاحظة لمرحلة ز0: خلف وكيلٍ عكسيّ يصير ``REMOTE_ADDR`` عنوان الوكيل (خاصّ
+    دائماً) فيسقط أثر هذا الحارس — عندها تُعطَّل النقطة في وضع الخادم المركزي.
     """
+    if not (_is_lan_peer(request) or request.user.is_staff):
+        return JsonResponse({'lettersys': True, 'status': 'ok'})
+
     cfg = NetworkSettings.get()
     return JsonResponse({
         'lettersys':    True,
         'status':       'ok',
         'role':         cfg.role,
-        'name':         cfg.device_name or _get_hostname(),
+        'name':         device_identity.get_device_name(),
         'version':      APP_VERSION,
         'ip':           _get_local_ip(),
-        'active_users': _active_sessions_count(),
         'timestamp':    timezone.now().isoformat(),
     })
 
@@ -277,7 +304,9 @@ def network_save_config(request):
     cfg = NetworkSettings.get()
     role = data.get('role', 'standalone')
     cfg.role        = role
-    cfg.device_name = data.get('device_name', '').strip()[:100]
+    # اسم الجهاز يُخزَّن محلياً (لكل جهاز) — المصدر الموثوق؛ ونُبقي نسخة في cfg للتوافق.
+    device_name     = device_identity.set_device_name(data.get('device_name', ''))
+    cfg.device_name = device_name
     cfg.this_host   = data.get('this_host', '').strip() or None
     try:
         cfg.app_port = int(data.get('app_port', 8000))

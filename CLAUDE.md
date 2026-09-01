@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Setup
 cp .env.example .env          # then edit .env with DB credentials
 python manage.py db_healthcheck
+python manage.py models_healthcheck --strict --load   # الأوزان والأطقم و tesseract
 python manage.py migrate
 python manage.py create_admin_user
 
@@ -24,6 +25,10 @@ $env:PYTHONIOENCODING="utf-8"; python manage.py test core.tests_security --setti
 # Celery (requires Redis)
 celery -A lettersys worker -l info
 celery -A lettersys beat -l info
+
+# عتادُ النماذج (var/ خارج git — النسخةُ الجديدة تصل عمياء وتبدو سليمة)
+python manage.py models_healthcheck            # تحذيرٌ وخروج 0
+python manage.py models_healthcheck --strict --load --hash   # بوّابةُ نشر
 
 # Management commands
 python manage.py seed_demo_books          # populate demo data
@@ -54,7 +59,14 @@ Everything lives in `core/`. The two refactored sub-packages have their own inte
 - `matchers/` — `PatternMatcher` (dates, numbers), `EntityMatcher` (NER)
 - `helpers.py` — `ExtractionWorkflow`, `ConfidenceAnalyzer`, `QuickFillAssistant`
 - `api/endpoints.py` — REST views; `views/ui.py` — HTML views
-- `learning.py` + `core/continuous_learning.py` — feedback loop & model improvement
+- `learning.py` — feedback **analysis only** (patterns + per-field accuracy scores).
+  ⚠️ `core/continuous_learning.py` **does not exist** (removed); the old pointer here
+  misled several sessions. Capture state (corrected 2026-08-19 — the previous text here
+  was stale and said the opposite): `_FIELD_MAP` tracks `title`, `secret_level` **and
+  `sender_number`**; the detector bbox + reference dims + source are persisted in
+  `additional_data` even when the reader abstains, and the scan payload is durable in DB
+  (`ScanPayload`) so training gold survives cache loss. Count confirmed pairs with
+  `python manage.py capture_stats`.
 
 **`core/messaging/`** — email & IMAP (see `core/messaging/README.md` for full API)
 - `engines/smtp.py` — `SMTPEngine`; `engines/imap.py` — `IMAPEngine`
@@ -96,17 +108,77 @@ Everything lives in `core/`. The two refactored sub-packages have their own inte
 - `AI_PROVIDER=offline` uses EasyOCR locally; `azure` uses Azure Cognitive Services.
 - `pg_trgm` extension is required for full-text entity search; enabled by migration `0019`.
 
-### Book Number Format (critical — affects search logic)
-`our_number` has three formats after migrations 0033–0036:
-- **New** (9 chars): `YYYY R NNNN` — year + register(1-4) + 4-digit-padded sequence
-- **Old** (8 chars): `YYYY NNNN` — year + 4-digit-padded sequence (imported/legacy)
-- **Compound** (11 chars): `YYYY NNNN VVV` — deduplicated entries; also has `series_no` + `version` fields
+### Book Number Format — `core/numbering.py` is the SINGLE SOURCE
+Never re-implement a numbering rule anywhere else. Parse/format/display/search/sort
+all go through this module. (The rule used to live in eleven places and had already
+drifted: the year floor was 2020 in one and 2000 in another.)
 
-Register codes: `1`=incoming_internal, `2`=incoming_external, `3`=outgoing_internal, `4`=outgoing_external
+Rebased 2026-08-17 onto the number stamped inside the incoming stamp (ختم الوارد):
 
-Search logic lives entirely in `core/views/helpers.py::apply_search_filters()`.
-Key rule: `our_number__endswith=padded` (4-digit) matches both old and new formats correctly
-because the last 4 chars are always the sequence NNNN regardless of format.
+- **Current series** — bare, e.g. `2433`. One infinite series per register, **no
+  yearly reset**, based on 2026's numbers. After 2432 comes 2433 in 2027 and beyond.
+- **Tagged** — `{year}{seq:04d}`, e.g. `20250825`, for ledger year ≤ 2025. Displays
+  as `825` with a separate `2025` tag. The year is the **source table's** year
+  (`IIMAIL_2025`), not the document date.
+- **Manual** — `outgoing_external` has no series of ours; its number comes from the
+  Director General's office and is stored verbatim (duplicates allowed).
+- **Numberless** — empty string. Supported exception; consumes no counter.
+- **Training** — `T131`. Books entered during the training period; outside the
+  official space by construction (leading non-digit). Purged at launch.
+
+Source columns (measured, not guessed): incoming tables have both `WID` and `NUM` —
+`WID` is a dense 1.00 series (our stamp number), `NUM` is scattered 0.02 (the
+sender's number). Outgoing tables have **no `WID` column**; `NUM` is ours.
+
+Uniqueness is `(kind, our_number)` scoped by migration 0058 to app-issued rows only —
+paper-imported rows are exempt because the 2025 clerk really did stamp 825 twice.
+
+Commands: `rebase_book_numbers` (idempotent, `--dry-run` by default, `--undo CSV`),
+`purge_dev_seed_books` (keys off `is_training`). See `docs/LAUNCH_RUNBOOK.md`.
+
+### آخر تعديلات (2026-08-19) — جبهة العدد انقلبت
+- **إصدار العدد أُعيد فتحه بأمر المالك** (بصريٌّ فقط): CRNN على قصاصة الكاشف **بصفر
+  حشو** يُعرض بثقته الحقيقيّة والواجهة تؤشّر الضعيف (<0.65 أحمر). النصّيّ يبقى مكتوماً
+  (2 صواب/17 خطأ). منحنى مقيس: الكلّ 67% · ≥0.95 ⟵ 93%.
+- **صفرُ الحشو** هو المكسب الأكبر: 51.5⟵66.5% مطابقةً تامّة (عيّنتان مستقلّتان) —
+  الحشو الموروث كان يُدخل رمز السجلّ فيُفسد القراءة. حشوُ الحصاد وحشوُ الإنتاج
+  يتحرّكان معاً في إيداعٍ واحد.
+- **ثقةُ السلسلة** (CTC الأماميّة، `_sequence_confidence`): فصلُ الحذف 0.903 مقابل
+  0.734 للقديمة.
+- **جذرُ تسميم التواريخ وُجد**: الواجهة كانت تملأ «تاريخ الجهة» بتاريخ اليوم تلقائيّاً
+  (`resetDateFields`) — أُزيل الافتراضيّ، والقصاصة هي مسار النسخ (CRNN لا يقرأ
+  التواريخ — قِيس: None و«2027» مبتورة).
+
+### آخر تعديلات (2026-09-01) — سياستا الانبعاث (أمر المالك)
+- **الموضوع**: `TITLE_DIRECT_FILL_SOURCES = ('marker',)` — مسارُ العلامة وحدَه يملأ
+  الحقل (صالحٌ 72.9% مقيساً على subject-200)، والاحتياطيُّ والقوس (27% من
+  المستندات، صالحٌ 6.5%) يصيران **بطاقةَ اقتراحٍ** في `title_suggestion` يؤكّدها
+  الكاتب بنقرة. المنشأُ المجهولُ ضعيفٌ بالافتراض.
+- **تاريخ الجهة**: الواجهةُ تملأ الحقلَ من **الأخضر وحدَه** (≥0.98 · `parse ok` ·
+  حارسُ الفارق سالم · الحقلُ فارغ) موسوماً `autofilled`، والقصاصةُ تبقى للمطابقة.
+  **الخادمُ ما يزال لا يكتب `sender_date` أبداً** — لا تنقض هذا.
+- **`title_provenance`** دخل عقدَ الالتقاط ⟵ حلقةُ التسميم الذاتيّ للعنوان أُغلقت
+  (الحصادُ المقبل يستثني `autofilled`؛ `harvest_subject_boxes.py` لم يُعدَّل بعد).
+- التفصيلُ وحدودُ ما لا يُدَّعى في `docs/EVAL_REGISTRY.md` (قسم 2026-09-01).
+
+### آخر تعديلات (2026-08-23) — أوزان T2.4 في الإنتاج
+- **قارئ العدد الجديد رُكِّب**: تدريب كاغل على 13,200 قصاصة كاشفٍ حقيقيّة (صفر حشو،
+  ×2 للنحيل 0/1) ⟵ **88.0% مطابقةً تامّة على حجزٍ لم يُرَ** (يلامس سقف ضجيج الوسوم
+  ~86–90%). المنحنى: 44.6 (v5 مُحشوّ) ⟵ 66.5 (صفر حشو) ⟵ 88.0 (T2.4).
+- **العتبتان مُصادَقٌ عليهما بسُلَّم H6** (مصادقةٌ لا انتخاب): حدّ أحمر الواجهة 0.65 ⟵
+  فوقه 90.6% وتحته **0.0%**؛ `CONF_GATE=0.90` (مسار الشريط القديم فقط) ⟵ 94.5%/89%.
+- التراجع: `var/models/handwritten_digits_crnn_v5_backup.onnx`. **المتبقّي: نظرة
+  e2e-C الواحدة** (إصابة ≥25/100 · خاطئ ≤5 · واثقٌ‑ومخطئ ≤2) بعد فراغ الخانة الثقيلة.
+- حصاد صناديق الموضوع جارٍ (وسومٌ مجّانيّة F1≥0.70 من TSV) نحو كاشف صنفين عدد+موضوع.
+
+## أرقامٌ مسحوبة — لا تُقتبَس
+- **الجهة المُصدِرة ليست 77% ولا 85%.** ذلك كان تسريبَ مطابقةٍ ذاتيّة (المستند يتعرّف
+  على ترويسة نفسه المخزَّنة بتشابه 1.0). الصادق بعد إصلاح `exclude_book_id` (commit
+  `0494e81`): **top-1 60% · top-3 73%** على 30 نصّاً، و**49.0%** على عيّنةٍ مُجمَّدة
+  من 1000 استعلام بعد سقف الأصوات (`c53e1e7`). المتوسّط الكبير 21.4% فقط عبر 194 جهة.
+- **96% للكاشف = تموضُّعٌ لا قراءة** (مركزٌ داخل الصندوق الصحيح)، و**90% لقصاصة
+  التاريخ = ظهورُ قصاصةٍ لا صحّةُ تاريخ**. قراءة العدد من طرفٍ إلى طرف **لم تُقَس بعد**.
+- السجلّ الكامل للمدحوض في `docs/REFUTED.md`، ومجموعات التقييم في `docs/EVAL_REGISTRY.md`.
 
 ## Consultation Rule
 - إذا واجهت قراراً معمارياً أو خطأً غامضاً بعد محاولتين، استشر Opus عبر Agent tool قبل المتابعة.
@@ -115,6 +187,23 @@ because the last 4 chars are always the sequence NNNN regardless of format.
 
 ## Current State
 <!-- أحدِّث هذا القسم بعد كل جلسة عمل مهمة -->
+
+### آخر تعديلات (2026-08-17) — إعادة بناء الترقيم
+**11,183 رقماً أُعيد بناؤها على سلسلة ختم الوارد** (7,757 موسوم + 3,262 سلسلة جارية
++ 131 تدريب + 33 بلا رقم)، والعدّادات 2433/358/455 بلا عدّادٍ للصادر الخارجي.
+- `core/numbering.py` صار مصدراً وحيداً موصولاً بالعرض والبحث والفرز والمستورد وإعادة البذر
+- هجرة 0058: `is_training` + تضييق قيد التفرّد ليستثني المنقول من الورق
+- حُذف `normalize_book_numbers` (يفرض بادئاتٍ أُلغيت)، و`purge_dev_seed_books` صار على `is_training`
+- 229 حجزاً في الفضاء المُلغى حُذفت (حجزٌ واحد بالرقم 417 كان يبتلع 358–417)
+- 729 اختباراً أخضر + 29 تحقّقاً على البيانات الحيّة · دليل التدشين في `docs/LAUNCH_RUNBOOK.md`
+
+### آخر تعديلات (2026-08-11)
+**ملفات:** `core/extraction/matchers/pattern.py` + `profile.py` — تواريخ إيميلات الشركات
+- لاحقة ترتيبية بعد اليوم («July 29th, 2026» ومسوخها OCR «29"»/«5s») في `_DATE_VALUE_RE`/`_BARE_DATE_LINE_RE` + تجريدها قبل التحليل (`_DAY_SUFFIX_RE`)
+- تاريخ ذيل التوقيع (ADO: لا تاريخ في الرأس إطلاقاً) — مرساة توقيع إنكليزية + سطر تاريخ عارٍ باسم شهر، ثقة 0.70
+- عنوان: فاصلة كفاصل «Subject,» + بتّار ذيل الرموز («?-J.,I»)
+- بصمة الرقم: الشرطة بعد البادئة اختيارية («ADO627» طبقةُ ماسحٍ أسقطت الشرطة)
+- مُتحقَّق بالعين على مدخلات 11291–11295 الحقيقية + صفر تراجع على 35 نص كاش + 680 اختبار أخضر
 
 ### آخر تعديلات (2026-05-14)
 **ملف:** `core/views/helpers.py` — `apply_search_filters()`

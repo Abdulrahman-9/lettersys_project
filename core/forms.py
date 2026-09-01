@@ -12,15 +12,16 @@ from .models import Attachment, Book, Entity
 class EntityForm(forms.ModelForm):
     class Meta:
         model = Entity
+        # etype مُستبعَد عمداً — النوع (مُصدِرة/مستلِمة) يُشتَقّ آلياً من روابط
+        # الكتب الفعلية، لا من حقل يدوي لا يُحدَّث.
         fields = [
-            "name", "code", "etype", "is_active",
+            "name", "code", "is_active",
             "email", "email_cc", "phone", "address", "contact_person", "notes",
             "notify_on_receive", "notify_on_send",
         ]
         labels = {
             "name":             "اسم الجهة",
             "code":             "رمز الجهة",
-            "etype":            "نوع الجهة",
             "is_active":        "نشطة",
             "email":            "البريد الإلكتروني",
             "email_cc":         "نسخة إلى (CC)",
@@ -34,7 +35,6 @@ class EntityForm(forms.ModelForm):
         widgets = {
             "name":           forms.TextInput(attrs={"class": "form-control"}),
             "code":           forms.TextInput(attrs={"class": "form-control"}),
-            "etype":          forms.Select(attrs={"class": "form-select"}),
             "email":          forms.EmailInput(attrs={"class": "form-control", "dir": "ltr", "placeholder": "example@domain.com"}),
             "email_cc":       forms.TextInput(attrs={"class": "form-control", "dir": "ltr", "placeholder": "addr1@domain.com, addr2@domain.com"}),
             "phone":          forms.TextInput(attrs={"class": "form-control", "dir": "ltr"}),
@@ -124,6 +124,12 @@ class BookForm(forms.ModelForm):
         if len(margin) > 500:
             raise forms.ValidationError("هامش الكتاب يجب ألا يتجاوز 500 حرف.")
         return margin
+
+    def clean_document_type(self):
+        """تطبيع نوع المستند (طيّ المسافات) — يوحّد القيمة عند الكتابة فلا تنشأ
+        متغيّرات إملائية تُربك التجميع/الفلترة في الأضابير."""
+        from core.document_types import normalize_document_type_value
+        return normalize_document_type_value(self.cleaned_data.get('document_type', ''))
     
     def clean(self):
         """تحقق من منطقية التواريخ"""
@@ -144,44 +150,13 @@ class AttachmentForm(forms.ModelForm):
         labels = {"file": "إرفاق ملف (PDF/JPG/PNG)"}
 
     def clean_file(self):
-        import magic
+        # التحقّق الموحّد (الحجم + النوع عبر توقيع البايتات) في مصدر واحد —
+        # يُصلح العطل السابق: import magic كان خارج try (يتعطّل لغياب المكتبة)،
+        # و ValidationError للنوع كان يُبتلع في except Exception فلا يرفض شيئاً.
+        from .attachment_service import validate_attachment_file
         f = self.cleaned_data.get("file")
         if f:
-            # تحقق من الحجم
-            if f.size > 10 * 1024 * 1024:
-                raise forms.ValidationError("حجم الملف يتجاوز الحد الأقصى 10MB.")
-            
-            # تحقق من MIME type الفعلي (ليس فقط الامتداد)
-            try:
-                # قراءة أول 2048 بايت للتحقق من Magic Bytes
-                file_content = f.read(2048)
-                f.seek(0)  # إعادة المؤشر للبداية
-                
-                # استخدام python-magic للتحقق من النوع الحقيقي
-                mime = magic.from_buffer(file_content, mime=True)
-                
-                allowed_mimes = [
-                    'application/pdf',
-                    'image/jpeg',
-                    'image/png',
-                    'image/jpg'
-                ]
-                
-                if mime not in allowed_mimes:
-                    raise forms.ValidationError(
-                        f"نوع الملف غير مسموح ({mime}). الأنواع المسموحة: PDF, JPG, PNG فقط."
-                    )
-            except ImportError:
-                # إذا لم تكن مكتبة python-magic مثبتة، استخدم التحقق من الامتداد فقط
-                import os
-                ext = os.path.splitext(f.name)[1].lower()
-                if ext not in ['.pdf', '.jpg', '.jpeg', '.png']:
-                    raise forms.ValidationError("نوع الملف غير مسموح. الأنواع المسموحة: PDF, JPG, PNG فقط.")
-            except Exception as e:
-                # في حالة خطأ غير متوقع، سجله واستمر
-                import logging
-                logging.warning(f"File validation warning: {e}")
-        
+            validate_attachment_file(f)
         return f
 
 

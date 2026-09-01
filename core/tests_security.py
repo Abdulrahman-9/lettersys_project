@@ -1,7 +1,7 @@
 """
 اختبارات التحسينات الأمنية Phase 1 — محدّث
 """
-from django.test import TestCase, Client, override_settings
+from django.test import TestCase, Client, SimpleTestCase, override_settings
 from django.test import RequestFactory
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -139,3 +139,120 @@ class EncryptionTestCase(TestCase):
         
         # يجب أن يعطينا الوصول العادي القيمة فك التشفير (الواجهة الأمامية)
         self.assertEqual(reloaded.smtp_password, plaintext_pwd)
+
+
+class NetworkPingExposureTests(TestCase):
+    """نقطة الفحص الصحي لا تكشف خريطة النشر لغريبٍ عن الشبكة — سجل العيوب ح6.
+
+    كانت تُعيد الدور واسم الجهاز والإصدار وعدد الجلسات النشطة لأي طارق.
+    """
+
+    URL = '/books/api/network/ping/'
+    SENSITIVE = ('role', 'name', 'version', 'ip')
+
+    def test_stranger_gets_bare_fingerprint_only(self):
+        # عنوانٌ عامٌّ حقيقيّ عمداً: نطاقات التوثيق (203.0.113.0/24 وأخواتها)
+        # يعدّها ipaddress.is_private خاصّةً، فتُعطي الاختبارَ نجاحاً كاذباً.
+        resp = self.client.get(self.URL, REMOTE_ADDR='8.8.8.8')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get('lettersys'))
+        for field in self.SENSITIVE:
+            self.assertNotIn(field, data, f"{field} تسرّب لمتصلٍ خارج الشبكة الخاصة")
+        self.assertNotIn('active_users', data)
+
+    def test_lan_peer_still_gets_identity_for_discovery(self):
+        resp = self.client.get(self.URL, REMOTE_ADDR='192.168.1.50')
+        data = resp.json()
+        for field in self.SENSITIVE:
+            self.assertIn(field, data, f"{field} مفقود — اكتشاف الأقران على LAN ينكسر")
+
+    def test_active_users_never_exposed_even_on_lan(self):
+        """عدّاد الجلسات لا مستهلك له في مسار الأقران — مستهلكه صفحة الأجهزة المحميّة."""
+        for addr in ('192.168.1.50', '127.0.0.1', '8.8.8.8'):
+            self.assertNotIn('active_users', self.client.get(self.URL, REMOTE_ADDR=addr).json())
+
+
+class AzureKeyEncryptionTests(TestCase):
+    """مفتاح Azure يُخزَّن مشفَّراً كما كلمات سرّ البريد — سجل العيوب ح7."""
+
+    KEY_84 = 'k' * 84   # أطول شكلٍ واقعيّ لمفتاح Azure
+
+    def _raw(self, pk):
+        from core.models import AIIntegrationSettings
+        # values_list يقرأ العمود الخام بلا المرور بـfrom_db — أي بلا فكّ تشفير.
+        return AIIntegrationSettings.objects.values_list('azure_key', flat=True).get(pk=pk)
+
+    def test_key_is_encrypted_at_rest_and_plain_in_memory(self):
+        from core.models import AIIntegrationSettings
+
+        cfg = AIIntegrationSettings.objects.create(provider='azure', azure_key=self.KEY_84)
+        raw = self._raw(cfg.pk)
+        self.assertTrue(raw.startswith('enc::'), 'المفتاح خُزِّن نصّاً صريحاً')
+        self.assertLessEqual(len(raw), 255, 'الناتج المشفَّر يتجاوز عرض العمود')
+        self.assertEqual(AIIntegrationSettings.objects.get(pk=cfg.pk).azure_key, self.KEY_84)
+
+    def test_no_double_encryption_on_resave(self):
+        from core.models import AIIntegrationSettings
+
+        cfg = AIIntegrationSettings.objects.create(provider='azure', azure_key=self.KEY_84)
+        cfg.save()
+        cfg.save()
+        self.assertEqual(AIIntegrationSettings.objects.get(pk=cfg.pk).azure_key, self.KEY_84)
+
+    def test_consumer_receives_decrypted_key(self):
+        from core.models import AIIntegrationSettings
+
+        AIIntegrationSettings.objects.create(
+            provider='azure', enabled=True,
+            azure_endpoint='https://x.cognitiveservices.azure.com', azure_key=self.KEY_84,
+        )
+        self.assertEqual(AIIntegrationSettings.get_active_settings()['AI_AZURE_KEY'], self.KEY_84)
+
+
+class ProductionCookiePolicyTests(SimpleTestCase):
+    """عقدُ النشر: الافتراضُ آمنٌ، والإرخاءُ قرارٌ صريحٌ بمتغيّر بيئة.
+
+    **لماذا وُجدت هذه الاختبارات** (2026-09-01): كان `SESSION_COOKIE_SECURE`
+    و`CSRF_COOKIE_SECURE` مثبَّتَين `True`، فقبل إصدار شهادة TLS يستحيل الدخولُ
+    على http — فرُقّعت القيمُ **يدويّاً على الخادم بعد كلّ سحب**. ترقيعٌ خفيٌّ
+    يعني أنّ ما في المستودع ليس ما يعمل، وهو أسوأُ من الإعداد نفسِه.
+
+    تُحمَّل `settings.py` هنا **مستقلّةً ببيئةٍ مُرقَّعة** — لا قراءةَ مصدرٍ
+    نصّيّة: الاختبارُ يقيس القيمةَ الناتجة فعلاً كما يراها Django.
+    """
+
+    def _load(self, **env):
+        import importlib.util
+        import os as _os
+        from unittest import mock
+        from django.conf import settings as dj
+        path = _os.path.join(str(dj.BASE_DIR), 'lettersys', 'settings.py')
+        with mock.patch.dict(_os.environ, env, clear=False):
+            spec = importlib.util.spec_from_file_location('probe_settings', path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+
+    def test_production_defaults_are_secure(self):
+        m = self._load(DEBUG='False')
+        self.assertTrue(m.SESSION_COOKIE_SECURE)
+        self.assertTrue(m.CSRF_COOKIE_SECURE)
+        self.assertTrue(m.SECURE_SSL_REDIRECT)
+
+    def test_proxy_header_is_set_for_reverse_proxy_deployments(self):
+        """بدونه يرى Django كلَّ طلبٍ http خلف nginx فيدور التوجيهُ بلا نهاية."""
+        m = self._load(DEBUG='False')
+        self.assertEqual(m.SECURE_PROXY_SSL_HEADER,
+                         ('HTTP_X_FORWARDED_PROTO', 'https'))
+
+    def test_proxy_header_can_be_disabled_when_app_is_directly_exposed(self):
+        """الترويسةُ تُزوَّر إن كان التطبيقُ مكشوفاً — فالإطفاءُ لازمٌ لا زينة."""
+        m = self._load(DEBUG='False', USE_X_FORWARDED_PROTO='False')
+        self.assertIsNone(getattr(m, 'SECURE_PROXY_SSL_HEADER', None))
+
+    def test_cookies_can_be_relaxed_before_tls_is_issued(self):
+        m = self._load(DEBUG='False', SESSION_COOKIE_SECURE='False',
+                       CSRF_COOKIE_SECURE='False')
+        self.assertFalse(m.SESSION_COOKIE_SECURE)
+        self.assertFalse(m.CSRF_COOKIE_SECURE)

@@ -9,8 +9,12 @@ Book Filtering Helpers — مساعدات فلترة الكتب الموحَّد
     archived  : is_archived=True OR due_date IS NULL
 """
 
+from datetime import timedelta
+
 from django.db.models import Q, Count
 from django.utils import timezone
+
+from .. import numbering
 
 
 # تبويبات النوع (kind) — مستقلة عن حالة المتابعة
@@ -74,6 +78,18 @@ class BookFilterEngine:
             ).distinct()
         return queryset
 
+    # ── فلتر نوع المستند (اعمام/أمر إداري/مذكرة...) ────────────────────
+    @staticmethod
+    def apply_document_type_filter(queryset, document_type=None):
+        dt = (document_type or "").strip()
+        return queryset.filter(document_type=dt) if dt else queryset
+
+    # ── فلتر مستوى السرية ─────────────────────────────────────────────
+    @staticmethod
+    def apply_secret_filter(queryset, secret_level=None):
+        sl = (secret_level or "").strip()
+        return queryset.filter(secret_level=sl) if sl in {"normal", "secret", "topsecret"} else queryset
+
     # ── فلتر حالة المتابعة (الجوهر — مصدر حقيقة واحد) ────────────────
     @staticmethod
     def apply_followup_filter(queryset, state):
@@ -111,6 +127,8 @@ class BookFilterEngine:
             queryset, filters.get("date_from"), filters.get("date_to")
         )
         queryset = BookFilterEngine.apply_entity_filter(queryset, filters.get("entity_id"))
+        queryset = BookFilterEngine.apply_document_type_filter(queryset, filters.get("document_type"))
+        queryset = BookFilterEngine.apply_secret_filter(queryset, filters.get("secret_level"))
         queryset = BookFilterEngine.apply_followup_filter(queryset, filters.get("followup"))
         return queryset
 
@@ -143,6 +161,43 @@ class BookFilterEngine:
             "overdue":   counts.get("overdue", 0),
             "archived":  counts.get("archived", 0),
         }
+
+    @staticmethod
+    def get_dossier_counter_badges(out_qs, in_qs):
+        """عدّادات الأضبارة: aggregate واحد لكل اتجاه (على القائمتين المنفصلتين، بلا اتحاد
+        M2M) ثم جمع الرقمين لكل حالة. Count(distinct=True) يتفادى fan-out الكارتيزي للكتب
+        متعددة الجهات (distinct على مستوى الـqueryset تُتجاهَل داخل aggregate)."""
+        today = timezone.localdate()
+        archived_q = Q(is_archived=True) | Q(due_date__isnull=True)
+        active_q = Q(is_archived=False, due_date__isnull=False)
+        spec = {
+            "archived":  Count("id", distinct=True, filter=archived_q),
+            "overdue":   Count("id", distinct=True, filter=active_q & Q(due_date__lt=today)),
+            "due_today": Count("id", distinct=True, filter=active_q & Q(due_date=today)),
+            "pending":   Count("id", distinct=True, filter=active_q & Q(due_date__gt=today)),
+        }
+        o = out_qs.aggregate(**spec)
+        i = in_qs.aggregate(**spec)
+        return {k: (o.get(k) or 0) + (i.get(k) or 0) for k in spec}
+
+    @staticmethod
+    def resolve_period_preset(period, today):
+        """يُعيد (date_from, date_to) لاختصار فترة على تاريخ الكتاب. بداية الأسبوع = السبت
+        (تقويم إداري عربي). المدى من بداية الفترة حتى اليوم (لا تواريخ مستقبلية)."""
+        if period == "today":
+            return today, today
+        if period == "week":
+            # weekday(): الإثنين=0 … الأحد=6؛ السبت=5. أيام منذ آخر سبت:
+            offset = (today.weekday() - 5) % 7
+            return today - timedelta(days=offset), today
+        if period == "month":
+            return today.replace(day=1), today
+        if period == "quarter":
+            q_first_month = 3 * ((today.month - 1) // 3) + 1
+            return today.replace(month=q_first_month, day=1), today
+        if period == "year":
+            return today.replace(month=1, day=1), today
+        return None, None
 
     # ── ملخّص الفلاتر النشطة (للعرض في الـ AJAX) ──────────────────────
     @staticmethod
@@ -184,6 +239,22 @@ class BookSortEngine:
     @staticmethod
     def apply_sort(queryset, sort_field="-date"):
         sort_field = (sort_field or "-date").strip()
+        # «relevance»: لا نُعيد الترتيب — نحافظ على أولوية صلة البحث القادمة من
+        # apply_search_filters (_exact ثم _num_pri: قيدنا قبل رقم الجهة). بدونه كان
+        # فرز -date الافتراضي يطمس الأولوية فتظهر مطابقات رقم الجهة فوق مطابقات قيدنا.
+        if sort_field == "relevance":
+            return queryset
         if sort_field not in BookSortEngine.VALID_SORTS:
             sort_field = "-date"
-        return queryset.order_by(sort_field, "-id")
+        resolved = BookSortEngine.VALID_SORTS[sort_field]
+
+        # الفرز بالرقم **رقميّ لا نصّيّ**: نصّياً يأتي '10' قبل '9'، ويعلو
+        # الموسوم '20250825' على كل أرقام السلسلة الجارية لأنّ '2' > '1'.
+        # نفرز على (السنة الفعّالة، التسلسل) — والسلسلة الجارية تُعامَل بسنة
+        # الأساس فتأتي بعد الموسوم بسنته، وهو الترتيب الزمني الصحيح.
+        if resolved.lstrip('-') == 'our_number':
+            desc = resolved.startswith('-')
+            keys = ('-_num_year', '-_num_seq') if desc else ('_num_year', '_num_seq')
+            return queryset.annotate(**numbering.sort_key_sql()).order_by(*keys, "-id")
+
+        return queryset.order_by(resolved, "-id")

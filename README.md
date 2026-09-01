@@ -97,7 +97,7 @@ lettersys_project/
 │   ├── views.py              # المعالجات (محدّث)
 │   ├── forms.py              # النماذج
 │   ├── urls.py               # المسارات
-│   ├── exports.py            # تصدير Excel (جديد!)
+│   ├── numbering.py          # قواعد رقم القيد — المصدر الوحيد
 │   └── management/
 │       └── commands/
 │           └── check_overdue_books.py
@@ -205,16 +205,12 @@ lettersys_project/
 - يعمل في جميع الصفحات
 - تبديل سلس
 
-### 4. تصدير Excel
-```python
-from core.exports import export_books_to_excel
-
-# في view
-return export_books_to_excel(books, "books.xlsx")
-```
-- تنسيق احترافي
-- ألوان مخصصة
-- جاهز للطباعة
+### 4. تصدير التقارير (CSV)
+التصدير يمرّ عبر `reports_export` في `core/views/` ويشترك مع صفحة التقارير في
+نفس مُصفّي الاستعلام (`_reports_qs`) فلا يتباعد المعروض عن المُصدَّر.
+- ترميز UTF-8 بعلامة BOM ليفتح صحيحاً في Excel العربي
+- يحترم الفلاتر النشطة (الجهة، المدى الزمني، النوع، الحالة)
+- طباعة احترافية من الصفحة نفسها
 
 ---
 

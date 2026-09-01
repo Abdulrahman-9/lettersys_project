@@ -36,6 +36,14 @@ def _validate_email(addr: str) -> bool:
     return bool(EMAIL_REGEX.match(addr.strip()))
 
 
+def _json_body(request) -> dict:
+    """جسم JSON للطلب — قاموس فارغ إن كان غائباً أو تالفاً (الطلب قد يكون بلا جسم)."""
+    try:
+        return json.loads(request.body or b'{}')
+    except (json.JSONDecodeError, ValueError):
+        return {}
+
+
 # ── 1. Manual email send ────────────────────────────────────────
 @login_required
 @require_http_methods(['POST'])
@@ -75,8 +83,11 @@ def send_email(request):
     if invalid:
         return JsonResponse({'success': False, 'message': f'عناوين بريد غير صالحة: {invalid}'}, status=400)
 
+    from core.messaging.scoping import scope_books
+
+    # الإرسال باسم كتابٍ يضع سجلّه في تاريخ ذلك الكتاب — فيلزم أن يكون ضمن نطاقك.
     try:
-        book = Book.objects.get(pk=book_id)
+        book = scope_books(Book.objects.all(), request.user).get(pk=book_id)
     except Book.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 
@@ -110,9 +121,13 @@ def send_email(request):
 @require_http_methods(['GET'])
 def book_email_logs(request, book_id):
     from core.models import Book, BookEmailLog
+    from core.messaging.scoping import scope_books
 
+    # كانت النقطة تُعيد سجلّات بريد **أيّ** كتاب برقمه (عناوين المستلمين
+    # والمواضيع) لأيّ مستخدمٍ مسجَّل. النطاق داخل الاستعلام: كتابُ غيرك
+    # «غير موجود» لا «ممنوع».
     try:
-        book = Book.objects.get(pk=book_id)
+        book = scope_books(Book.objects.all(), request.user).get(pk=book_id)
     except Book.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 
@@ -134,12 +149,19 @@ def book_email_logs(request, book_id):
 
 
 # ── 3. SMTP connection test (CANONICAL — no duplicate in mail_endpoints) ──
+# هذه هي النقطة الوحيدة التي تحمل محدِّد المعدّل لهذا النطاق: الغلاف المفوِّض في
+# ``mail_endpoints.api_test_smtp`` كان يحمل محدّداً بنفس المفتاح، فكانت كل نقرة
+# تستهلك محاولتين وتنفد الحصّة بعد نقرتين ونصف. الحد هنا مقيس على واقع ضبط
+# البريد (تجربة وخطأ: منفذ، تشفير، كلمة مرور) لا على 5 محاولات خانقة.
 @login_required
 @require_http_methods(['POST'])
-@rate_limit('test_smtp', max_attempts=5, window_seconds=300, by='user')
+@rate_limit('test_smtp', max_attempts=20, window_seconds=300, by='user')
 def test_smtp(request):
     from core.models import EmailSettings
     from core.messaging.engines.smtp import test_smtp_connection
+
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
 
     cfg = EmailSettings.get()
     result = test_smtp_connection(cfg)
@@ -198,6 +220,164 @@ def email_settings(request):
         logger.info(f'[EmailSettings] Updated by {request.user.username}: {update_fields}')
 
     return JsonResponse({'success': True, 'message': 'تم حفظ الإعدادات'})
+
+
+# ── 4b. إرسال الكتاب بمرفقاته إلى الجهة المعنيّة ────────────────
+#
+# لماذا نقطة مستقلّة؟ لأن هذا التدفّق يعرف الجهة من الكتاب، ويُرفِق الملفات
+# فعلياً — وهو ما لا تفعله ``send_email`` (إرسال حرّ) ولا ``api_compose``.
+# محرّك SMTP يدعم المرفقات منذ البداية، لكن **لم يكن أحد يمرّرها**.
+
+def _resolve_book_recipient(book):
+    """الجهة المعنيّة بالكتاب + بريدها. وارد ⇒ المُصدِرة، صادر ⇒ المستقبِلة."""
+    qs = book.issuing_entities if book.is_incoming else book.receiving_entities
+    entity = qs.filter(is_active=True).exclude(email='').first()
+    if entity is None:
+        # قد توجد جهة بلا بريد — نميّز الحالتين برسالة صادقة
+        any_entity = qs.first()
+        if any_entity is not None:
+            return None, f'الجهة «{any_entity.name}» ليس لها بريد إلكتروني مسجّل.'
+        return None, 'لا توجد جهة معنيّة مرتبطة بهذا الكتاب.'
+    return entity, None
+
+
+def _book_email_defaults(book, entity):
+    direction = 'استلام' if book.is_incoming else 'إرسال'
+    subject = f'كتاب رقم {book.our_number} — {book.title[:80]}'
+    return subject, direction
+
+
+@login_required
+@require_http_methods(['GET'])
+def book_email_preview(request, book_id):
+    """معاينة ما سيُرسَل: الجهة، بريدها، وما سيُرفَق مقابل ما سيُحال إلى رابط.
+
+    لا تقرأ بايتات الملفات — الأحجام فقط (انظر ``plan_book_attachments``).
+    """
+    from core.models import Book, EmailSettings
+    from core.attachment_sharing import MAX_EMAIL_ATTACH_BYTES, human_size, plan_book_attachments
+
+    from core.messaging.scoping import scope_books
+
+    book = scope_books(
+        Book.objects.filter(is_deleted=False), request.user
+    ).filter(pk=book_id).first()
+    if book is None:
+        return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
+
+    cfg = EmailSettings.get()
+    entity, entity_error = _resolve_book_recipient(book)
+    plan = plan_book_attachments(book)
+    subject, _ = _book_email_defaults(book, entity)
+
+    def _row(item, mode):
+        return {'name': item['name'], 'size': item['size'],
+                'size_label': human_size(item['size']), 'mode': mode}
+
+    return JsonResponse({
+        'success': True,
+        'email_enabled': cfg.is_active,
+        'book': {'id': book.id, 'number': book.our_number, 'title': book.title},
+        'entity': None if entity is None else {
+            'id': entity.id, 'name': entity.name,
+            'email': entity.email, 'cc': entity.get_cc_list(),
+        },
+        'entity_error': entity_error,
+        'subject': subject,
+        'files': (
+            [_row(i, 'attach') for i in plan['attach']]
+            + [_row(i, 'link') for i in plan['link']]
+            + [{'name': f['name'], 'size': 0, 'size_label': '—',
+                'mode': 'failed', 'error': f['error']} for f in plan['failed']]
+        ),
+        'attach_bytes': plan['attach_bytes'],
+        'attach_label': human_size(plan['attach_bytes']),
+        'limit_label': human_size(MAX_EMAIL_ATTACH_BYTES),
+        'has_links': bool(plan['link']),
+    })
+
+
+@login_required
+@require_http_methods(['POST'])
+@rate_limit('send_book_to_entity', max_attempts=20, window_seconds=300, by='user')
+def send_book_to_entity(request, book_id):
+    """يرسل الكتاب إلى جهته المعنيّة **مع مرفقاته**.
+
+    ما يتجاوز ميزانية الإرفاق يُستبدَل برابط تحميل موقّع محدود المدة في متن
+    الرسالة (خوادم البريد ترفض الرسائل الكبيرة).
+    """
+    from core.models import Book, EmailSettings
+    from core.attachment_sharing import collect_book_attachments, human_size
+    from core.messaging.engines.smtp import SMTPEngine
+
+    from core.messaging.scoping import scope_books
+
+    book = scope_books(
+        Book.objects.filter(is_deleted=False), request.user
+    ).filter(pk=book_id).first()
+    if book is None:
+        return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
+
+    cfg = EmailSettings.get()
+    if not cfg.is_active:
+        return JsonResponse({
+            'success': False,
+            'message': 'إرسال البريد معطّل — فعّله من الإعدادات ← البريد الإلكتروني.',
+        }, status=400)
+
+    entity, entity_error = _resolve_book_recipient(book)
+    if entity is None:
+        return JsonResponse({'success': False, 'message': entity_error}, status=400)
+
+    data = _json_body(request)
+    subject = _sanitize_header((data.get('subject') or '').strip())
+    if not subject:
+        subject, _ = _book_email_defaults(book, entity)
+
+    collected = collect_book_attachments(book, request)
+
+    engine = SMTPEngine(cfg)
+    html = engine._render_notification_html(
+        book, entity, 'received' if book.is_incoming else 'sent',
+    )
+    if collected['linked']:
+        rows = ''.join(
+            f'<li><a href="{f["url"]}">{f["name"]}</a> — {human_size(f["size"])}</li>'
+            for f in collected['linked']
+        )
+        html += (
+            '<hr><p><strong>ملفات كبيرة لم تُرفَق بالرسالة</strong> '
+            '(تتجاوز حد البريد) — حمّلها من الروابط التالية '
+            '(صالحة لمدة محدودة):</p>'
+            f'<ul>{rows}</ul>'
+        )
+
+    log = engine.send_book_notification(
+        book=book,
+        recipients=[entity.email],
+        subject=subject,
+        html_body=html,
+        cc=entity.get_cc_list(),
+        trigger='manual',
+        sent_by=request.user,
+        entity=entity,
+        attachments=collected['attachments'],
+    )
+
+    sent_ok = getattr(log, 'status', '') == 'sent'
+    return JsonResponse({
+        'success': sent_ok,
+        'message': (
+            f'أُرسل الكتاب إلى {entity.name} <{entity.email}>'
+            if sent_ok else
+            f'فشل الإرسال: {getattr(log, "error_msg", "") or "سبب غير معروف"}'
+        ),
+        'attached': [name for name, _c, _m in collected['attachments']],
+        'linked': [{'name': f['name'], 'size_label': human_size(f['size'])}
+                   for f in collected['linked']],
+        'failed': collected['failed'],
+        'attached_label': human_size(collected['attached_bytes']),
+    }, status=200 if sent_ok else 502)
 
 
 # ── 5. Entity email info ────────────────────────────────────────

@@ -15,6 +15,7 @@ from django.shortcuts import redirect, render
 
 from ..extraction.kinds import BOOK_KIND_CHOICES, normalize_book_kind
 from ..models import BookSequence
+from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ def next_number_api(request):
 
 
 @login_required
+@staff_required
 def sequence_settings(request):
     """Sequence settings page for all book kinds."""
     sequences = []

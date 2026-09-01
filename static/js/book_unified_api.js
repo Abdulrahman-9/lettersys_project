@@ -58,7 +58,7 @@
   }
 
   function getRemainingVisibleBooksCount() {
-    // We treat desktop rows as source of truth; mobile cards mirror the same page data.
+    // صفوف سطح المكتب هي مصدر الحقيقة لعدّ هذه الصفحة (الجوال يُعاد تحميله خادمياً عند التنقّل).
     return document.querySelectorAll("tr.book-row").length;
   }
 
@@ -89,97 +89,45 @@
     showEmptyStateInline();
   }
 
-  function handlePreviewClick(target) {
-    const trigger = target.closest(".btn-preview, .btn-preview-mobile");
-    if (!trigger) return false;
+  // شارات الحالة الحيّة (book_unified_filter_bar.html) — مفتاحها حالة المتابعة
+  const PILL_BY_STATE = {
+    pending:   "pill-count-pending",
+    due_today: "pill-count-due-today",
+    overdue:   "pill-count-overdue",
+    archived:  "pill-count-archived",
+  };
 
-    const fileUrl = trigger.getAttribute("data-book-attachment");
-    const title = trigger.getAttribute("data-book-title") || "معاينة المستند";
-    if (!fileUrl) { showToast("لا يوجد ملف مرفق لهذا الكتاب", "warning"); return true; }
-
-    const modalEl = document.getElementById("previewModal");
-    const bodyEl = document.getElementById("previewModalBody");
-    const titleEl = document.getElementById("previewModalLabel");
-    if (!modalEl || !bodyEl || !titleEl) return true;
-
-    titleEl.textContent = title;
-    bodyEl.innerHTML = "";
-
-    const lower = fileUrl.toLowerCase();
-    if (lower.endsWith(".pdf")) {
-      bodyEl.innerHTML = `<iframe src="${fileUrl}" title="${title}" style="width:100%;height:75vh;border:0;"></iframe>`;
-    } else {
-      bodyEl.innerHTML = `<img src="${fileUrl}" alt="${title}" style="max-width:100%;height:auto;display:block;margin:auto;"/>`;
+  function _decrement(id) {
+    const el = document.getElementById(id);
+    if (el && el.textContent) {
+      el.textContent = Math.max(0, parseInt(el.textContent, 10) - 1);
     }
-
-    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-    modal.show();
-    return true;
   }
 
   function updateStatsAfterDelete(bookRow) {
-    // ✅ Smart DOM-only updates: decrement counters based on deleted row's attributes
-    
-    // Decrement total count
-    const totalEl = document.getElementById("statTotal");
-    const paginationTotalEl = document.getElementById("paginationTotal");
-    if (totalEl && totalEl.textContent) {
-      const currentTotal = parseInt(totalEl.textContent, 10);
-      const newTotal = Math.max(0, currentTotal - 1);
-      totalEl.textContent = newTotal;
-      if (paginationTotalEl) paginationTotalEl.textContent = newTotal;
-    }
+    // تحديث DOM فقط: أنقص إجمالي الترقيم + شارة الحالة المطابقة للصف المحذوف.
+    _decrement("paginationTotal");
 
-    // Determine time_state from row classes
-    const hasRowDone = bookRow.classList.contains("book-row-done");
-    const hasRowOverdue = bookRow.classList.contains("book-row-overdue");
-    const hasRowToday = bookRow.classList.contains("book-row-today");
+    const state = bookRow.getAttribute("data-followup-state") || bookRow.getAttribute("data-status") || "";
+    if (PILL_BY_STATE[state]) _decrement(PILL_BY_STATE[state]);
 
-    // Decrement done count if applicable
-    if (hasRowDone) {
-      const doneEl = document.getElementById("statDone");
-      if (doneEl && doneEl.textContent) {
-        doneEl.textContent = Math.max(0, parseInt(doneEl.textContent, 10) - 1);
-      }
-    }
-
-    // Decrement overdue count if applicable
-    if (hasRowOverdue) {
-      const overdueEl = document.getElementById("statOverdue");
-      if (overdueEl && overdueEl.textContent) {
-        overdueEl.textContent = Math.max(0, parseInt(overdueEl.textContent, 10) - 1);
-      }
-    }
-
-    // Decrement today count if applicable
-    if (hasRowToday) {
-      const todayEl = document.getElementById("statToday");
-      if (todayEl && todayEl.textContent) {
-        todayEl.textContent = Math.max(0, parseInt(todayEl.textContent, 10) - 1);
-      }
-    }
-
-    // Update pagination info
+    // تحديث نطاق الترقيم (from/to)
     const paginationFromEl = document.getElementById("paginationFrom");
     const paginationToEl = document.getElementById("paginationTo");
     if (paginationToEl && paginationToEl.textContent) {
-      const currentTo = parseInt(paginationToEl.textContent, 10);
-      const newTo = Math.max(0, currentTo - 1);
+      const newTo = Math.max(0, parseInt(paginationToEl.textContent, 10) - 1);
       paginationToEl.textContent = newTo;
-
       if (paginationFromEl && paginationFromEl.textContent) {
-        const currentFrom = parseInt(paginationFromEl.textContent, 10);
-        // Keep range valid locally until page fallback logic runs.
-        if (newTo === 0) {
-          paginationFromEl.textContent = 0;
-        } else if (currentFrom > newTo) {
-          paginationFromEl.textContent = newTo;
-        }
+        if (newTo === 0) paginationFromEl.textContent = 0;
+        else if (parseInt(paginationFromEl.textContent, 10) > newTo) paginationFromEl.textContent = newTo;
       }
     }
   }
 
-  async function handleDeleteClick(target) {
+  // حارس متزامن: يُعيد true/false فوراً ليعرف موجّه النقر هل التُقطت النقرة.
+  // العمل الشبكي يُنفَّذ في performDelete (async) دون انتظار — وإلا لأعادت الدالة Promise
+  // (truthy دائماً) فيتوقّف الموجّه عند كل نقرة ولا يصل لشارة الحالة/إغلاق الـ popover.
+  function handleDeleteClick(target) {
     const trigger = target.closest(".btn-delete, .btn-delete-mobile");
     if (!trigger) return false;
 
@@ -192,6 +140,11 @@
     const confirmed = window.confirm(`تأكيد حذف الكتاب ${bookNumber}؟ سيتم نقله إلى السلة.`);
     if (!confirmed) return true;
 
+    performDelete(trigger, deleteUrl, bookRow, bookId);
+    return true;
+  }
+
+  async function performDelete(trigger, deleteUrl, bookRow, bookId) {
     trigger.disabled = true;
 
     try {
@@ -223,8 +176,6 @@
       showToast(error.message || "حدث خطأ أثناء الحذف", "error");
       trigger.disabled = false;
     }
-
-    return true;
   }
 
   // الحالات الأربع الموحَّدة (مصدر واحد) — تطابق Book.FOLLOWUP_STATE_CHOICES
@@ -308,30 +259,44 @@
         throw new Error(payload.error || "فشل تحديث الحالة");
       }
 
-      const newState = payload.followup_state;
-      const display = STATE_DISPLAY[newState] || STATE_DISPLAY.archived;
-
-      badge.className = "status-badge status-badge-btn badge-status-" + newState;
-      badge.setAttribute("data-current-status", newState);
-      badge.innerHTML = `<i class="bi ${display.icon}"></i>${display.label}<i class="bi bi-chevron-down status-badge-caret"></i>`;
-
-      const row = badge.closest("tr, .book-card");
-      if (row) {
-        row.setAttribute("data-status", newState);
-        row.setAttribute("data-followup-state", newState);
-        ["pending", "due_today", "overdue", "archived"].forEach(function (s) {
-          row.classList.remove("book-row-" + s, "book-card-" + s);
-        });
-        const prefix = row.tagName === "TR" ? "book-row-" : "book-card-";
-        row.classList.add(prefix + newState);
-      }
-
+      syncRowStatus(badge.getAttribute("data-book-id"), payload.followup_state);
       showToast(payload.message || "تم تحديث الحالة", "success");
     } catch (error) {
       showToast(error.message || "حدث خطأ أثناء تحديث الحالة", "error");
     } finally {
       badge.disabled = false;
     }
+  }
+
+  // إعادة رسم شارة الحالة لكل صف/بطاقة تخصّ نفس الكتاب (تُستخدم من النقر المباشر ومن المودال)
+  function syncRowStatus(bookId, newState) {
+    if (!bookId || !newState) return;
+    const display = STATE_DISPLAY[newState] || STATE_DISPLAY.archived;
+    document
+      .querySelectorAll(`.status-badge-btn[data-book-id="${bookId}"]`)
+      .forEach(function (badge) {
+        badge.setAttribute("data-current-status", newState);
+        // زر بطاقة الجوال = تسمية فِعل + عرض كامل؛ شارة سطح المكتب = اسم الحالة + سهم
+        if (badge.closest(".card-status-toggle")) {
+          badge.className = "status-badge status-badge-btn badge-status-" + newState + " w-100";
+          badge.innerHTML = newState === "archived"
+            ? `<i class="bi bi-arrow-counterclockwise"></i> إعادة الفتح`
+            : `<i class="bi bi-archive-fill"></i> إنهاء المتابعة`;
+        } else {
+          badge.className = "status-badge status-badge-btn badge-status-" + newState;
+          badge.innerHTML = `<i class="bi ${display.icon}"></i>${display.label}<i class="bi bi-chevron-down status-badge-caret"></i>`;
+        }
+        const row = badge.closest("tr, .book-card");
+        if (row) {
+          row.setAttribute("data-status", newState);
+          row.setAttribute("data-followup-state", newState);
+          ["pending", "due_today", "overdue", "archived"].forEach(function (s) {
+            row.classList.remove("book-row-" + s, "book-card-" + s);
+          });
+          const prefix = row.tagName === "TR" ? "book-row-" : "book-card-";
+          row.classList.add(prefix + newState);
+        }
+      });
   }
 
   function handleStatusBadgeClick(target) {
@@ -341,8 +306,13 @@
     return true;
   }
 
+  // مزامنة صف القائمة عندما تُغيَّر الحالة من مودال المعاينة الموحّد
+  document.addEventListener("book:status-changed", function (event) {
+    const d = event.detail || {};
+    syncRowStatus(String(d.bookId || ""), d.followup_state);
+  });
+
   document.addEventListener("click", function (event) {
-    if (handlePreviewClick(event.target)) return;
     if (handleDeleteClick(event.target)) return;
     if (handleStatusBadgeClick(event.target)) return;
     if (!event.target.closest(".status-popover")) {

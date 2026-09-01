@@ -339,7 +339,8 @@
 
   el('refreshDevicesBtn')?.addEventListener('click', loadDevices);
 
-  // ─── فحص جميع الأجهزة ────────────────────────────────────────────────────────  el('pingAllBtn')?.addEventListener('click', async () => {
+  // ─── فحص جميع الأجهزة ────────────────────────────────────────────────────────
+  el('pingAllBtn')?.addEventListener('click', async () => {
     const btn = el('pingAllBtn');
     setBusy(btn, true, 'bi-broadcast', 'فحص الكل');
     try {

@@ -1,0 +1,146 @@
+/* ============================================================
+   مركز الإعدادات — شريط تبويبات علوي أنيق + لوحة تضمين
+   يُحمَّل فقط على صفحة hub.html. الأدوات الثقيلة تُعرَض داخل
+   لوحة iframe (وضع ?embed=1) فلا يغادر المستخدم المركز أبداً.
+   ============================================================ */
+.settings-hub {
+  --sh-accent:     #0f766e;
+  --sh-accent-2:   #0d9488;
+  --sh-accent-ink: #0b5c56;
+  --sh-accent-wash:#e8f3f1;
+  --sh-ink:        #14201f;
+  --sh-ink-soft:   #5c6b6a;
+  --sh-ink-faint:  #8a9998;
+  --sh-surface:    #ffffff;
+  --sh-surface-2:  #fbfcfc;
+  --sh-line:       #e6ecec;
+  --sh-line-2:     #eef2f2;
+  --sh-bg:         #f6f8f8;
+  --sh-tab-h:      46px;
+  max-width: 1160px;
+  margin-inline: auto;
+  padding: 24px 22px 56px;
+}
+
+/* ── الترويسة ── */
+.settings-hub-head { display:flex; align-items:center; gap:15px; margin-bottom:20px; flex-wrap:wrap; }
+.settings-hub-badge {
+  width:54px; height:54px; border-radius:17px; display:grid; place-items:center;
+  background:linear-gradient(135deg,var(--sh-accent),var(--sh-accent-2)); color:#fff; font-size:1.55rem;
+  box-shadow:0 10px 24px -10px color-mix(in srgb,var(--sh-accent) 70%,transparent); flex-shrink:0;
+}
+.settings-hub-head h4 { margin:0; font-weight:800; letter-spacing:-.01em; }
+.settings-hub-head p  { margin:2px 0 0; color:var(--sh-ink-soft); font-size:.9rem; }
+
+.settings-hub-search { margin-inline-start:auto; position:relative; min-width:210px; }
+.settings-hub-search i {
+  position:absolute; inset-inline-start:13px; top:50%; transform:translateY(-50%);
+  color:var(--sh-ink-faint); font-size:1rem; pointer-events:none;
+}
+.settings-hub-search input {
+  width:100%; height:42px; border:1px solid var(--sh-line); background:var(--sh-surface);
+  border-radius:12px; padding-inline:38px 14px; color:var(--sh-ink); font-family:inherit;
+  font-size:.9rem; transition:border-color .15s, box-shadow .15s;
+}
+.settings-hub-search input:focus {
+  outline:none; border-color:var(--sh-accent); box-shadow:0 0 0 4px var(--sh-accent-wash);
+}
+
+/* ── الشريط الأفقي بمؤشّر منزلق ── */
+.settings-tabstrip-shell { position:relative; margin-bottom:22px; }
+.settings-tabstrip-shell::before, .settings-tabstrip-shell::after {
+  content:""; position:absolute; top:0; bottom:11px; width:34px; z-index:3; pointer-events:none;
+  opacity:0; transition:opacity .2s;
+}
+.settings-tabstrip-shell::before { inset-inline-start:0; background:linear-gradient(to left,transparent,var(--sh-bg)); }
+.settings-tabstrip-shell::after  { inset-inline-end:0;  background:linear-gradient(to right,transparent,var(--sh-bg)); }
+.settings-tabstrip-shell.is-overflow-start::before { opacity:1; }
+.settings-tabstrip-shell.is-overflow-end::after   { opacity:1; }
+
+.settings-tabstrip {
+  display:flex; gap:2px; overflow-x:auto; scroll-behavior:smooth;
+  border-bottom:1.5px solid var(--sh-line); scrollbar-width:none; position:relative;
+}
+.settings-tabstrip::-webkit-scrollbar { display:none; }
+
+.settings-tab {
+  appearance:none; border:0; background:transparent; cursor:pointer; text-decoration:none;
+  display:inline-flex; align-items:center; gap:8px; white-space:nowrap;
+  height:var(--sh-tab-h); padding:0 16px; font-family:inherit; font-size:.92rem; font-weight:600;
+  color:var(--sh-ink-soft); position:relative; flex-shrink:0; transition:color .16s;
+}
+.settings-tab i { font-size:1.12rem; opacity:.8; transition:opacity .16s; }
+.settings-tab:hover { color:var(--sh-ink); }
+.settings-tab:hover i { opacity:1; }
+.settings-tab:focus-visible { outline:2px solid var(--sh-accent); outline-offset:-4px; border-radius:8px; }
+.settings-tab .settings-tab-cnt {
+  font-size:.72rem; font-weight:700; background:var(--sh-line-2); color:var(--sh-ink-soft);
+  border-radius:20px; padding:1px 7px; min-width:20px; text-align:center;
+}
+.settings-tab[aria-selected="true"] { color:var(--sh-accent); }
+.settings-tab[aria-selected="true"] i { opacity:1; }
+.settings-tab[aria-selected="true"] .settings-tab-cnt { background:var(--sh-accent-wash); color:var(--sh-accent-ink); }
+
+.settings-tab-indicator {
+  position:absolute; bottom:-1.5px; left:0; height:3px; width:0; border-radius:3px 3px 0 0;
+  background:linear-gradient(90deg,var(--sh-accent),var(--sh-accent-2)); pointer-events:none;
+  transition:left .32s cubic-bezier(.5,.05,.2,1), width .32s cubic-bezier(.5,.05,.2,1);
+}
+
+/* ── اللوحة ── */
+.settings-panes { position:relative; }
+.settings-pane { display:none; animation:sh-pane-in .28s ease; }
+.settings-pane.is-active { display:block; }
+@keyframes sh-pane-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+
+/* بطاقة إعدادات مُدمَجة (عام/إشعارات/أمان/نسخ) */
+.settings-pane-card {
+  background:var(--sh-surface); border:1px solid var(--sh-line-2); border-radius:16px; overflow:hidden;
+  box-shadow:0 2px 10px -6px rgba(15,23,42,.12);
+}
+.settings-pane-head { display:flex; align-items:flex-start; gap:14px; padding:22px 22px 8px; }
+.settings-pane-icon {
+  width:46px; height:46px; border-radius:13px; display:grid; place-items:center;
+  background:color-mix(in srgb, var(--accent, var(--sh-accent)) 12%, #fff);
+  color:var(--accent, var(--sh-accent)); font-size:1.35rem; flex-shrink:0;
+}
+.settings-pane-head h5 { color:#111827; margin:0 0 2px; }
+.settings-pane-body { padding:8px 22px 22px; }
+
+/* ── لوحة التضمين (iframe للأدوات الثقيلة) ── */
+.settings-embed-wrap {
+  position:relative; background:var(--sh-surface); border:1px solid var(--sh-line-2);
+  border-radius:16px; overflow:hidden; box-shadow:0 2px 10px -6px rgba(15,23,42,.12); min-height:340px;
+}
+.settings-embed-frame { display:block; width:100%; border:0; height:420px; transition:height .18s ease; }
+.settings-embed-wrap.is-loading .settings-embed-frame { visibility:hidden; }
+
+/* هيكل عظمي أثناء التحميل */
+.settings-embed-skeleton {
+  position:absolute; inset:0; padding:26px 24px; display:none; flex-direction:column; gap:15px;
+}
+.settings-embed-wrap.is-loading .settings-embed-skeleton { display:flex; }
+.settings-embed-skeleton .sk {
+  height:14px; border-radius:7px;
+  background:linear-gradient(90deg,var(--sh-line-2),var(--sh-line),var(--sh-line-2));
+  background-size:200% 100%; animation:sh-sk 1.2s infinite;
+}
+.settings-embed-skeleton .sk.sk-title { height:22px; width:38%; margin-bottom:6px; }
+@keyframes sh-sk { from { background-position:200% 0; } to { background-position:-200% 0; } }
+
+/* بطاقة إطلاق خارجي (الذكاء الاصطناعي → لوحة الأدمن) */
+.settings-launch-note {
+  display:flex; align-items:center; gap:8px; margin-top:14px; color:var(--sh-ink-faint); font-size:.82rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-pane, .settings-tab-indicator, .settings-embed-frame, .settings-embed-skeleton .sk { animation:none; transition:none; }
+}
+
+/* ── سمة داكنة (لو فُعِّلت على مستوى الجذر) ── */
+:root[data-theme="dark"] .settings-hub {
+  --sh-ink:#e8f0ef; --sh-ink-soft:#9fb2b0; --sh-ink-faint:#6f8482;
+  --sh-surface:#121c1b; --sh-surface-2:#0f1817; --sh-line:#20302e; --sh-line-2:#1a2827; --sh-bg:#0c1413;
+  --sh-accent:#2dd4bf; --sh-accent-2:#5eead4; --sh-accent-ink:#99f6e4; --sh-accent-wash:#12312d;
+}
+:root[data-theme="dark"] .settings-pane-head h5 { color:#e8f0ef; }

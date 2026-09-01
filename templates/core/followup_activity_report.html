@@ -103,7 +103,7 @@
         <div class="event-row">
           <div class="event-time">{{ h.created_at|date:"d/m/Y H:i" }}</div>
           <div class="event-book">
-            <a href="{% url 'book_detail' h.book_id %}">{{ h.book.our_number|default:'(بلا رقم)' }} — {{ h.book.title|truncatechars:60 }}</a>
+            <a href="{% url 'book_detail' h.book_id %}">{{ h.book.our_number_display|default:'(بلا رقم)' }} — {{ h.book.title|truncatechars:60 }}</a>
             <div class="event-by">{{ h.notes }}</div>
           </div>
         </div>
@@ -124,7 +124,7 @@
         <div class="event-row">
           <div class="event-time">{{ h.created_at|date:"d/m/Y H:i" }}</div>
           <div class="event-book">
-            <a href="{% url 'book_detail' h.book_id %}">{{ h.book.our_number|default:'(بلا رقم)' }} — {{ h.book.title|truncatechars:60 }}</a>
+            <a href="{% url 'book_detail' h.book_id %}">{{ h.book.our_number_display|default:'(بلا رقم)' }} — {{ h.book.title|truncatechars:60 }}</a>
             <div class="event-by">
               {% if h.by %}بواسطة: {{ h.by.get_full_name|default:h.by.username }}{% endif %}
             </div>
@@ -147,7 +147,7 @@
         <div class="event-row">
           <div class="event-time">{{ h.created_at|date:"d/m/Y H:i" }}</div>
           <div class="event-book">
-            <a href="{% url 'book_detail' h.book_id %}">{{ h.book.our_number|default:'(بلا رقم)' }} — {{ h.book.title|truncatechars:60 }}</a>
+            <a href="{% url 'book_detail' h.book_id %}">{{ h.book.our_number_display|default:'(بلا رقم)' }} — {{ h.book.title|truncatechars:60 }}</a>
             <div class="event-by">
               {% if h.by %}بواسطة: {{ h.by.get_full_name|default:h.by.username }}{% endif %}
             </div>

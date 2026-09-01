@@ -12,12 +12,14 @@ from .endpoints import (
     review_extraction,
     extraction_statistics,
     smart_extract_direct,
+    smart_extract_stream,
     scan_token_retrieve,
     suggestions_api,
 )
 
 urlpatterns = [
     path('extract/smart/',                         smart_extract_direct,    name='ai_smart_extract'),
+    path('extract/smart/stream/',                  smart_extract_stream,    name='ai_smart_extract_stream'),
     path('extract/scan-token/<str:token>/',        scan_token_retrieve,     name='ai_scan_token'),
     path('suggestions/',                           suggestions_api,          name='ai_suggestions'),
     path('extract/',                               start_extraction,         name='ai_start_extraction'),

@@ -8,9 +8,11 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db.models import Case, Count, IntegerField, OuterRef, Q, Subquery, Value, When
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from ..forms import EntityForm
@@ -18,29 +20,6 @@ from ..models import Book, Entity
 from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
-
-
-def _archive_entity_name_on_books(entity):
-    """
-    قبل حذف الجهة نهائياً، يُلصَق اسمها كنصّ في حقول الأرشيف JSON
-    لكل كتاب مرتبط بها (مُصدِراً أو مستلِماً)، ليبقى السجل التاريخي مقروءاً.
-    لا يلمس قائمة الكتب من حيث الوجود؛ فقط M2M المرتبط سيُقطع تلقائياً عند الحذف.
-    """
-    name = (entity.name or "").strip()
-    if not name:
-        return
-    issued_qs = Book.objects.filter(issuing_entities=entity)
-    for book in issued_qs.only("id", "archived_issuing_names"):
-        names = list(book.archived_issuing_names or [])
-        if name not in names:
-            names.append(name)
-            Book.objects.filter(pk=book.pk).update(archived_issuing_names=names)
-    received_qs = Book.objects.filter(receiving_entities=entity)
-    for book in received_qs.only("id", "archived_receiving_names"):
-        names = list(book.archived_receiving_names or [])
-        if name not in names:
-            names.append(name)
-            Book.objects.filter(pk=book.pk).update(archived_receiving_names=names)
 
 
 @login_required
@@ -83,24 +62,37 @@ def entity_list(request):
     Returns:
         Rendered template with entities list
     """
-    # فلتر اللغة (ar/en/all) + بحث server-side في الاسم أو الرمز
+    # فلتر اللغة (ar/en/all) + بحث server-side + حالة (نشطة/معطّلة)
     lang_filter = (request.GET.get('lang') or 'all').strip()
     search_q = (request.GET.get('q') or '').strip()
+    status_filter = (request.GET.get('status') or 'active').strip()
+    showing_inactive = status_filter == 'inactive'
 
+    # عدّ كتب كل جهة عبر استعلامين فرعيين مستقلّين بدل ضمّ علاقتَي M2M
+    # (issued/received) في استعلام واحد — الضمّ المزدوج يُنتج ضرباً ديكارتياً
+    # (I×R صفّاً لكل جهة) كان يستغرق ~17 ثانية. الاستعلام الفرعي يلغي الانفجار.
+    _issued_sq = (
+        Book.objects
+        .filter(issuing_entities=OuterRef('pk'), is_deleted=False)
+        .order_by()
+        .values('issuing_entities')
+        .annotate(c=Count('id'))
+        .values('c')
+    )
+    _received_sq = (
+        Book.objects
+        .filter(receiving_entities=OuterRef('pk'), is_deleted=False)
+        .order_by()
+        .values('receiving_entities')
+        .annotate(c=Count('id'))
+        .values('c')
+    )
     entities_qs = (
         Entity.objects
-        .filter(is_active=True)
+        .filter(is_active=not showing_inactive)
         .annotate(
-            issued_count=Count(
-                'issued_books',
-                filter=Q(issued_books__is_deleted=False),
-                distinct=True,
-            ),
-            received_count=Count(
-                'received_books',
-                filter=Q(received_books__is_deleted=False),
-                distinct=True,
-            ),
+            issued_count=Coalesce(Subquery(_issued_sq, output_field=IntegerField()), 0),
+            received_count=Coalesce(Subquery(_received_sq, output_field=IntegerField()), 0),
         )
     )
 
@@ -115,56 +107,15 @@ def entity_list(request):
             Q(name__icontains=search_q) | Q(code__icontains=search_q)
         )
 
-    # ترتيب: الجهات المرمّزة أولاً، ثم العربية، ثم الإنجليزية، كل قسم بالاسم
-    entities_qs = entities_qs.extra(
-        select={
-            'has_code': "CASE WHEN COALESCE(code, '') <> '' THEN 1 ELSE 0 END",
-            'is_arabic': "name ~ '^[؀-ۿ]'",
-        },
-    ).order_by('-has_code', '-is_arabic', 'name')
-    if request.method == "POST":
-        # ── حذف مفرد عبر النموذج المحلّي للجدول/البطاقة ──
-        if "delete_single" in request.POST:
-            eid = request.POST.get("delete_single")
-            logger.info("entity_list POST delete_single id=%r by user=%s", eid, request.user)
-            entity = Entity.objects.filter(id=eid).first()
-            if entity:
-                name = entity.name
-                _archive_entity_name_on_books(entity)
-                entity.delete()
-                messages.success(
-                    request,
-                    f"تم حذف الجهة '{name}' نهائياً (وتم حفظ اسمها كنصّ في الكتب المرتبطة بها).",
-                )
-            else:
-                logger.warning("entity_list delete_single: id=%r NOT FOUND", eid)
-                messages.warning(request, "الجهة غير موجودة (قد تكون محذوفة مسبقاً).")
-            return redirect("entity_list")
-
-        # ── حذف جماعي ──
-        if request.POST.get("delete_selected"):
-            selected = request.POST.getlist("selected")
-            logger.info("entity_list POST delete_selected ids=%s by user=%s", selected, request.user)
-            if selected:
-                qs = Entity.objects.filter(id__in=selected)
-                count = 0
-                for entity in list(qs):
-                    _archive_entity_name_on_books(entity)
-                    entity.delete()
-                    count += 1
-                messages.success(
-                    request,
-                    f"تم حذف {count} جهة نهائياً (مع حفظ أسمائها كنصّ في الكتب).",
-                )
-            else:
-                messages.info(request, "لم يتم تحديد أي جهة.")
-            return redirect("entity_list")
-
-        logger.warning(
-            "entity_list POST without recognized action; keys=%s",
-            list(request.POST.keys()),
-        )
-
+    # ترتيب: الجهات المرمّزة أولاً، ثم العربية، ثم الإنجليزية، كل قسم بالاسم.
+    # تعليقات ORM بدل .extra() المهجورة.
+    _has_code_q = ~Q(code__isnull=True) & ~Q(code='')
+    entities_qs = entities_qs.annotate(
+        _has_code=Case(When(_has_code_q, then=Value(1)),
+                       default=Value(0), output_field=IntegerField()),
+        _is_arabic=Case(When(name__regex=r'^[؀-ۿ]', then=Value(1)),
+                        default=Value(0), output_field=IntegerField()),
+    ).order_by('-_has_code', '-_is_arabic', 'name')
     # Pagination — 100 لكل صفحة (كان 50 صغيراً وضيّعت العربية بعد الإنجليزية)
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
     paginator = Paginator(entities_qs, 100)
@@ -176,16 +127,23 @@ def entity_list(request):
     except EmptyPage:
         entities = paginator.page(paginator.num_pages)
 
-    # إجماليات بسيطة (تحسب على القاعدة الكاملة قبل فلتر اللغة)
-    base_qs = Entity.objects.filter(is_active=True)
+    # كل الإجماليات في استعلام تجميعي واحد (بدل 8 استعلامات count منفصلة)
+    viewed = not showing_inactive
+    agg = Entity.objects.aggregate(
+        active_count=Count('id', filter=Q(is_active=True)),
+        inactive_count=Count('id', filter=Q(is_active=False)),
+        all=Count('id', filter=Q(is_active=viewed)),
+        with_code=Count('id', filter=Q(is_active=viewed) & _has_code_q),
+        no_code=Count('id', filter=Q(is_active=viewed) & ~_has_code_q),
+        arabic=Count('id', filter=Q(is_active=viewed, name__regex=r'^[؀-ۿ]')),
+        english=Count('id', filter=Q(is_active=viewed, name__regex=r'^[A-Za-z0-9]')),
+    )
     totals = {
-        'all': base_qs.count(),
-        'issuer': base_qs.filter(etype='issuer').count(),
-        'receiver': base_qs.filter(etype='receiver').count(),
-        'both': base_qs.filter(etype='both').count(),
-        'arabic': base_qs.filter(name__regex=r'^[؀-ۿ]').count(),
-        'english': base_qs.filter(name__regex=r'^[A-Za-z0-9]').count(),
+        'all': agg['all'], 'with_code': agg['with_code'], 'no_code': agg['no_code'],
+        'arabic': agg['arabic'], 'english': agg['english'],
     }
+    active_count = agg['active_count']
+    inactive_count = agg['inactive_count']
 
     return render(
         request,
@@ -196,6 +154,10 @@ def entity_list(request):
             "totals": totals,
             "lang_filter": lang_filter,
             "search_q": search_q,
+            "status_filter": status_filter,
+            "showing_inactive": showing_inactive,
+            "active_count": active_count,
+            "inactive_count": inactive_count,
         },
     )
 
@@ -313,22 +275,23 @@ def entity_edit(request, pk):
 @require_http_methods(["POST"])
 def entity_delete(request, pk):
     """
-    نقطة نهاية مخصّصة لحذف جهة واحدة نهائياً.
+    تعطيل جهة واحدة (حذف ناعم): تُضبط is_active=False فتُخفى من القوائم
+    وأدوات الاختيار، مع بقاء سجلّها وروابطها بالكتب سليمةً وقابلةً للاسترجاع.
     تُستدعى من نموذج مستقل (mini-form) لكل صف/بطاقة.
     """
-    logger.info("entity_delete POST pk=%s by user=%s", pk, request.user)
+    logger.info("entity_delete (soft) POST pk=%s by user=%s", pk, request.user)
     entity = Entity.objects.filter(pk=pk).first()
     if not entity:
         logger.warning("entity_delete: pk=%s NOT FOUND", pk)
-        messages.warning(request, "الجهة غير موجودة (قد تكون محذوفة مسبقاً).")
+        messages.warning(request, "الجهة غير موجودة.")
         return redirect("entity_list")
-    name = entity.name
-    _archive_entity_name_on_books(entity)
-    entity.delete()
-    logger.info("entity_delete: deleted pk=%s name=%r", pk, name)
+    if entity.is_active:
+        entity.is_active = False
+        entity.save(update_fields=["is_active"])
+    logger.info("entity_delete: deactivated pk=%s name=%r", pk, entity.name)
     messages.success(
         request,
-        f"تم حذف الجهة '{name}' نهائياً (وتم حفظ اسمها كنصّ في الكتب المرتبطة بها).",
+        f"تم تعطيل الجهة «{entity.name}» — أُخفيت من القوائم مع الحفاظ على سجلّها وروابطها بالكتب.",
     )
     return redirect("entity_list")
 
@@ -337,18 +300,98 @@ def entity_delete(request, pk):
 @require_http_methods(["POST"])
 def entity_bulk_delete(request):
     """
-    حذف جماعي لجهات محدّدة. يقبل قائمة `selected` من نموذج الجدول.
+    تعطيل جماعي (حذف ناعم) لجهات محدّدة. يقبل قائمة `selected` من نموذج الجدول.
     """
     selected = request.POST.getlist("selected")
-    logger.info("entity_bulk_delete POST ids=%s by user=%s", selected, request.user)
+    logger.info("entity_bulk_delete (soft) POST ids=%s by user=%s", selected, request.user)
     if not selected:
-        messages.info(request, "لم يتم تحديد أي جهة للحذف.")
+        messages.info(request, "لم يتم تحديد أي جهة.")
         return redirect("entity_list")
-    qs = Entity.objects.filter(id__in=selected)
-    count = 0
-    for entity in list(qs):
-        _archive_entity_name_on_books(entity)
-        entity.delete()
-        count += 1
-    messages.success(request, f"تم حذف {count} جهة نهائياً (مع حفظ أسمائها كنصّ في الكتب).")
+    count = Entity.objects.filter(id__in=selected, is_active=True).update(is_active=False)
+    messages.success(
+        request,
+        f"تم تعطيل {count} جهة — أُخفيت من القوائم مع الحفاظ على سجلّاتها وروابطها بالكتب.",
+    )
     return redirect("entity_list")
+
+
+@staff_required
+@require_http_methods(["POST"])
+def entity_restore(request, pk):
+    """استرجاع جهة معطّلة — تُضبط is_active=True فتعود للقوائم وأدوات الاختيار."""
+    entity = Entity.objects.filter(pk=pk).first()
+    if not entity:
+        messages.warning(request, "الجهة غير موجودة.")
+        return redirect("entity_list")
+    if not entity.is_active:
+        entity.is_active = True
+        entity.save(update_fields=["is_active"])
+    logger.info("entity_restore: pk=%s name=%r by user=%s", pk, entity.name, request.user)
+    messages.success(request, f"تم استرجاع الجهة «{entity.name}» — عادت للقوائم.")
+    return redirect(f"{reverse('entity_list')}?status=inactive")
+
+
+@staff_required
+@require_http_methods(["POST"])
+def entity_bulk_restore(request):
+    """استرجاع جماعي لجهات معطّلة محدّدة."""
+    selected = request.POST.getlist("selected")
+    logger.info("entity_bulk_restore POST ids=%s by user=%s", selected, request.user)
+    if not selected:
+        messages.info(request, "لم يتم تحديد أي جهة.")
+        return redirect(f"{reverse('entity_list')}?status=inactive")
+    count = Entity.objects.filter(id__in=selected, is_active=False).update(is_active=True)
+    messages.success(request, f"تم استرجاع {count} جهة — عادت للقوائم.")
+    return redirect(f"{reverse('entity_list')}?status=inactive")
+
+
+@staff_required
+def entity_merge(request):
+    """صفحة دمج الجهات المكرّرة — كشف إملائي + **مرشّحات ذكية** (تصحيف/التصاق/
+    تشريف) + عنقود يدوي + دمج مؤكَّد. المرشّحات اقتراحٌ للمراجعة لا دمجٌ آلي."""
+    from ..entity_dedup import (build_manual_cluster, find_duplicate_clusters,
+                                find_semantic_candidates, merge_entities)
+
+    if request.method == "POST":
+        canonical_id = (request.POST.get("canonical") or "").strip()
+        victim_ids = request.POST.getlist("victim")
+        if not canonical_id.isdigit() or not victim_ids:
+            messages.warning(request, "اختر الجهة الأمّ وجهةً واحدة على الأقل للدمج.")
+            return redirect("entity_merge")
+        try:
+            result = merge_entities(canonical_id, victim_ids)
+        except Entity.DoesNotExist:
+            messages.error(request, "تعذّر الدمج — إحدى الجهات غير موجودة.")
+            return redirect("entity_merge")
+        if result["merged"] == 0:
+            messages.info(request, "لم تُحدَّد جهات قابلة للدمج.")
+        else:
+            logger.info("entity_merge: canonical=%s victims=%s by user=%s",
+                        canonical_id, victim_ids, request.user)
+            messages.success(
+                request,
+                f"تم الدمج: استوعبت «{result['canonical'].name}» {result['merged']} "
+                f"جهة، ونُقل {result['moved_books']} ربط كتاب.",
+            )
+        return redirect("entity_merge")
+
+    clusters = find_duplicate_clusters()
+    smart_clusters = []
+    if request.GET.get("smart") == "1":
+        # مسحٌ أثقل (مقارنة أزواج) — يُشغَّل بطلب المستخدم لا في كل تحميل
+        smart_clusters = find_semantic_candidates()
+    manual_cluster = None
+    ids_raw = (request.GET.get("ids") or "").strip()
+    if ids_raw:
+        ids = [int(x) for x in ids_raw.split(",") if x.strip().isdigit()]
+        if len(ids) >= 2:
+            manual_cluster = build_manual_cluster(ids)
+        if ids_raw and manual_cluster is None:
+            messages.info(request, "تعذّر بناء عنقود يدوي — تأكّد من تحديد جهتين نشطتين على الأقل.")
+    return render(
+        request,
+        "core/entity_merge.html",
+        {"clusters": clusters, "smart_clusters": smart_clusters,
+         "smart_on": request.GET.get("smart") == "1",
+         "manual_cluster": manual_cluster},
+    )

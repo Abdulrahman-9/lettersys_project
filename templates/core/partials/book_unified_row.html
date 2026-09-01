@@ -12,65 +12,61 @@
   <td class="col-select">
     <input class="form-check-input row-checkbox" type="checkbox"
            value="{{ book.id }}" data-book-id="{{ book.id }}"
-           aria-label="تحديد كتاب رقم {{ book.our_number }}">
+           aria-label="تحديد كتاب رقم {{ book.our_number_display }}">
   </td>
 
-  {# 2: رقم القيد (+ نسخة، + رقم الجهة للوارد) #}
+  {# 2: رقم القيد (قيدنا) #}
   <td class="col-our-number">
-    <div class="our-number-cell">
-      <div class="our-number-line" title="{% if book.legacy_number %}الأصل: {{ book.legacy_number }} • {% endif %}رقم القيد لدينا: {{ book.our_number }}">
-        {% if book.is_incoming %}
-          <i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>
-        {% else %}
-          <i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>
-        {% endif %}
-        <span class="num-tag num-tag-ours">قيدنا</span>
-        {% if book.our_number_is_numberless %}
-          <span class="book-number-numberless" title="كتاب داخلي بلا رقم رسمي (استثناء)">بلا رقم</span>
-        {% elif book.our_number %}
-          {% if book.our_number_year %}
-            <span class="book-number-text"><span class="num-sequence">{{ book.our_number_sequence }}</span><span class="num-year">/{{ book.our_number_year }}</span></span>
-          {% else %}
-            <span class="book-number-text">{{ book.our_number }}</span>
-          {% endif %}
-        {% else %}
-          <span class="book-number-missing" title="لا يوجد رقم قيد">غير مسجل</span>
-        {% endif %}
-      </div>
+    <div class="num-cell" title="{{ book.our_number_explained }}{% if book.legacy_number %} — الرقم قبل التوحيد: {{ book.legacy_number }}{% endif %}">
       {% if book.is_incoming %}
-        <div class="sender-number-line" title="رقم الكتاب لدى الجهة المرسلة (رقم صادرهم)">
-          <span class="num-tag num-tag-sender">رقمهم</span>
-          {% if book.sender_number %}
-            <span class="sender-number-value">{{ book.sender_number }}</span>
-          {% else %}
-            <span class="sender-number-empty" title="لم يُستورد من النظام القديم — أضِفه عند التعديل">لم يُسجَّل</span>
-          {% endif %}
-        </div>
+        <i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>
+      {% else %}
+        <i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>
+      {% endif %}
+      {% if book.our_number_is_numberless %}
+        <span class="book-number-numberless" title="كتاب بلا رقم رسمي — استثناء معتمَد في النظام">بلا رقم</span>
+      {% else %}
+        {% comment %}
+        يُعرض **رقم الختم مجرّداً** كما كتبه الموظّف على الورقة — بلا بادئة سجلّ.
+        وسم السنة يظهر منفصلاً لكتب السجلّات السابقة وحدها، لأن الرقم نفسه كان
+        يتكرّر بين سنة وأخرى قبل أن تصير سلسلة 2026 أساساً لا نهائياً؛ أمّا كتب
+        السلسلة الجارية فتُعرض بلا وسم لأن رقمها فريدٌ إلى الأبد.
+        {% endcomment %}
+        <span class="book-number-text">
+          <span class="num-sequence">{{ book.our_number_sequence }}</span>{% if book.our_number_year %}<span class="num-year">/{{ book.our_number_year }}</span>{% endif %}
+        </span>
       {% endif %}
     </div>
   </td>
 
-  {# 3: التاريخ — للوارد: استلام (أعلى) + إرسال (أسفل) متوازٍ مع عمود الرقم #}
+  {# 3: تاريخ تسجيل الكتاب — استلام للوارد / إصدار للصادر — بجوار رقمنا (جانبنا) #}
   <td class="col-date">
+    <span class="date-val" title="{% if book.is_incoming %}تاريخ استلامنا للكتاب{% else %}تاريخ إصدار الكتاب{% endif %}">{{ book.date|date:"d/m/Y"|default:"—" }}</span>
+  </td>
+
+  {# 4: رقم الجهة (رقمهم) — للوارد فقط؛ يُخفى العمود كاملاً في الصادر #}
+  <td class="col-sender-number">
     {% if book.is_incoming %}
-      <div class="date-stack">
-        <div class="date-line date-line-ours" title="تاريخ استلامنا للكتاب">
-          <span class="num-tag num-tag-ours">استلام</span>
-          <span class="date-val">{{ book.date|date:"d/m/Y"|default:"—" }}</span>
-        </div>
-        {% if book.sender_date %}
-        <div class="date-line date-line-sender" title="تاريخ إرسال الجهة المرسلة">
-          <span class="num-tag num-tag-sender">إرسال</span>
-          <span class="date-val-sm">{{ book.sender_date|date:"d/m/Y" }}</span>
-        </div>
-        {% endif %}
-      </div>
-    {% else %}
-      <span class="date-val" title="تاريخ إصدار الكتاب">{{ book.date|date:"d/m/Y"|default:"—" }}</span>
+      {% if book.sender_number %}
+        <span class="sender-number-value" title="العدد الحقيقي المطبوع على المستند — رقم الكتاب لدى الجهة المرسِلة. لا علاقة له برقم قيدنا.">{{ book.sender_number }}</span>
+      {% else %}
+        <span class="sender-number-empty" title="العدد المطبوع على المستند لم يُسجَّل بعد — أضِفه عند التعديل">لم يُسجَّل</span>
+      {% endif %}
     {% endif %}
   </td>
 
-  {# 4: العنوان #}
+  {# 5: تاريخ الإرسال — للوارد فقط؛ يُخفى العمود كاملاً في الصادر #}
+  <td class="col-sender-date">
+    {% if book.is_incoming %}
+      {% if book.sender_date %}
+        <span class="date-val-sm" title="تاريخ إرسال الجهة المرسلة">{{ book.sender_date|date:"d/m/Y" }}</span>
+      {% else %}
+        <span class="date-empty" title="لم يُسجَّل تاريخ إرسال الجهة">—</span>
+      {% endif %}
+    {% endif %}
+  </td>
+
+  {# 6: العنوان #}
   <td class="col-title">
     <div class="book-title-cell">
       <div class="book-title-text" title="{{ book.title }}">
@@ -89,7 +85,7 @@
     </div>
   </td>
 
-  {# 5: الجهات #}
+  {# 7: الجهات #}
   <td class="col-entity">
     <div class="book-entity-cell">
       <div class="entity-primary">
@@ -113,7 +109,7 @@
     </div>
   </td>
 
-  {# 6: حالة المتابعة (badge قابل للنقر للأرشفة/إعادة الفتح) #}
+  {# 8: حالة المتابعة (badge قابل للنقر للأرشفة/إعادة الفتح) #}
   <td class="col-status">
     <div class="status-cell">
       <button type="button" class="status-badge status-badge-btn badge-status-{{ state }}"
@@ -145,23 +141,23 @@
     </div>
   </td>
 
-  {# 7: الإجراءات (صف واحد، 4 أزرار فقط) #}
+  {# 9: الإجراءات (عرض المستند / نظرة سريعة / تعديل / حذف) #}
   <td class="col-actions">
     <div class="action-row">
       {% if book.attachment and book.attachment.file %}
-        <button class="act-btn act-preview btn-preview"
-                data-book-id="{{ book.id }}"
-                data-book-attachment="{{ book.attachment.file.url }}"
-                data-book-title="{{ book.title|default:'بدون عنوان' }}"
-                title="معاينة المستند">
-          <i class="bi bi-file-earmark-pdf"></i>
-        </button>
-      {% else %}
-        <button class="act-btn act-disabled" disabled title="لا يوجد مرفق">
-          <i class="bi bi-file-earmark"></i>
-        </button>
+      {# عرض المستند: حوار منبثق أنيق يعرض الملف وحده بحجم كبير #}
+      <button type="button" class="act-btn act-preview"
+              data-doc-preview
+              data-doc-url="{{ book.attachment.file.url }}"
+              data-doc-title="{{ book.title|default:'بدون عنوان' }}"
+              title="عرض المستند">
+        <i class="bi bi-file-earmark-pdf"></i>
+      </button>
       {% endif %}
-      <a href="{% url 'book_detail' book.id %}" class="act-btn act-view" title="عرض التفاصيل">
+      {# نظرة سريعة: نقرة عادية تفتح الحوار (المستند + التفاصيل)؛ Ctrl/الزر الأوسط ينتقل للصفحة الكاملة #}
+      <a href="{% url 'book_detail' book.id %}" class="act-btn act-view"
+         data-book-preview="{{ book.id }}"
+         title="نظرة سريعة" aria-label="نظرة سريعة على الكتاب">
         <i class="bi bi-eye"></i>
       </a>
       <a href="{% url 'book_edit' book.id %}" class="act-btn act-edit" title="تعديل">

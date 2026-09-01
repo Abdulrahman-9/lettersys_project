@@ -24,7 +24,7 @@
     <div class="app-context-item">
       <div>
         <div class="app-context-meta">عدد النتائج</div>
-        <strong>{{ books|length }}</strong>
+        <strong>{{ total }}</strong>
       </div>
       <span class="app-context-chip is-success"><i class="bi bi-table"></i> نتائج</span>
     </div>
@@ -52,20 +52,6 @@
 
 {% block content %}
 <style>
-@media print {
-  .print-date::after {
-    content: "📅 تاريخ الطباعة: " attr(data-date);
-    display: block;
-    text-align: center;
-    font-size: 11pt;
-    margin-top: 15px;
-    color: #666;
-    padding-top: 10px;
-    border-top: 1px solid #ddd;
-  }
-  .no-print { display: none !important; }
-  
-}
 .chart-card {
   border: 2px solid #f1f5f9;
   border-radius: 16px;
@@ -73,12 +59,12 @@
   background: white;
 }
 .chart-card:hover {
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
-  border-color: #3b82f6;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--brand, #ff9233) 18%, transparent);
+  border-color: var(--brand, #ff9233);
 }
 .filter-card {
-  background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.95));
-  border: 2px solid #e2e8f0;
+  background: #ffffff;
+  border: 1px solid #e6eaf0;
   border-radius: 16px;
 }
 .stats-summary {
@@ -88,20 +74,115 @@
   margin-bottom: 1.5rem;
 }
 .stat-item {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(139, 92, 246, 0.05));
+  background: #ffffff;
   padding: 1rem;
   border-radius: 12px;
-  border: 2px solid rgba(59, 130, 246, 0.1);
+  border: 1px solid #e6eaf0;
   text-align: center;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
 }
 .stat-value {
   font-size: 2rem;
   font-weight: 800;
-  color: #000;
+  color: #0f172a;
+}
+
+/* ── حقل الجهة: بحث + اختيار (combobox) ── */
+.entity-combo { position: relative; }
+.entity-combo-field { position: relative; display: flex; align-items: center; }
+.entity-combo-ic { position: absolute; inset-inline-start: 12px; color: #94a3b8; font-size: .9rem; pointer-events: none; }
+.entity-combo-search { padding-inline-start: 34px; padding-inline-end: 30px; }
+.entity-combo-clear { position: absolute; inset-inline-end: 8px; border: none; background: transparent; color: #94a3b8; font-size: 1.35rem; line-height: 1; cursor: pointer; padding: 0 5px; border-radius: 6px; }
+.entity-combo-clear:hover { color: #dc2626; background: #fef2f2; }
+.entity-combo-list { position: absolute; z-index: 30; inset-inline: 0; top: calc(100% + 4px); max-height: 300px; overflow-y: auto; margin: 0; padding: 5px; list-style: none; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 12px 30px rgba(16,24,40,.16); scrollbar-width: thin; }
+.entity-combo-opt { padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: .9rem; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entity-combo-opt:hover, .entity-combo-opt.active { background: color-mix(in srgb, var(--brand, #ff9233) 12%, #fff); color: var(--brand-strong, #b45309); }
+.entity-combo-opt[aria-selected="true"] { font-weight: 700; color: var(--brand-strong, #b45309); }
+.entity-combo-opt.hidden { display: none; }
+.entity-combo-empty { padding: 10px 12px; color: #94a3b8; font-size: .85rem; text-align: center; }
+
+/* ── ترويسة التقرير الاحترافي (تظهر على الشاشة وتبرز في الطباعة) ── */
+.report-doc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 3px double #0f172a; padding-bottom: .9rem; margin-bottom: 1rem; }
+.rdh-org { display: flex; align-items: center; gap: 12px; }
+.rdh-logo { height: 46px; width: auto; }
+.rdh-org-txt { display: flex; flex-direction: column; line-height: 1.35; }
+.rdh-org-txt strong { font-size: 1.05rem; font-weight: 800; color: #0f172a; }
+.rdh-org-txt span { font-size: .78rem; color: #64748b; }
+.rdh-meta { text-align: left; }
+.rdh-title { font-size: 1.2rem; font-weight: 800; color: #0f172a; }
+.rdh-date { font-size: .78rem; color: #64748b; margin-top: .25rem; }
+.report-filter-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: .6rem .9rem; font-size: .82rem; color: #475569; margin-bottom: 1.25rem; }
+.report-filter-summary b { color: #0f172a; font-weight: 700; }
+
+/* ── الطباعة الاحترافية (A4) ── */
+@media print {
+  /* شريط التطبيق العلوي (التنبيهات/المستخدم) لا مكان له في وثيقة رسمية */
+  .no-print, .app-topbar, .app-sidebar, .app-sidebar-panel, nav.d-flex { display: none !important; }
+  /* حركات الدخول تُطبع في حالتها «قبل-الحركة» (إزاحة/شفافية) فتتراكب الترويسة
+     على العنوان — نجمّدها على حالتها النهائية (نفس مأزق fill-mode المعروف) */
+  [class*="animate-"] { animation: none !important; opacity: 1 !important; transform: none !important; }
+  body { background: #fff !important; }
+  /* روابط الكتب تُطبع نصاً رسمياً أسود بلا زخرفة */
+  .report-book-link { color: #000 !important; text-decoration: none !important; }
+  .container-fluid { padding: 0 !important; }
+  .card, .card.shadow-sm { box-shadow: none !important; border: none !important; }
+  .card-header { padding: 0 0 .4rem !important; }
+  .report-doc-head { margin-top: 0; }
+  .report-filter-summary { background: #fff; border: 1px solid #cbd5e1; }
+  /* ترويسة الوثيقة تلتفّ بدل أن تفيض عن عرض A4 (أضيق من الشاشة) */
+  .report-doc-head { flex-wrap: wrap; }
+  .rdh-title { font-size: 1.05rem; }
+  /* الورق لا يتمرّج: ألغِ قصّ الفائض، ولُفّ النصوص، وأبطل أي min-width شاشي
+     (!important يغلب الأنماط السطرية)، وبتخطيطٍ ثابتٍ بعروضٍ نسبية يُجبَر
+     الجدول كاملاً — بأعمدته التسعة — داخل عرض الصفحة مهما طالت المحتويات */
+  .table-responsive { overflow: visible !important; }
+  table.table { width: 100%; border-collapse: collapse; font-size: 8.5pt; table-layout: fixed; }
+  table.table td, table.table th { white-space: normal !important; min-width: 0 !important; overflow-wrap: break-word; }
+  /* الرؤوس تلتفّ عند الفراغات فقط — لا انشطار لكلمة («الملاحظات») في منتصفها */
+  table.table th { overflow-wrap: normal; word-break: keep-all; }
+  table.table td:nth-child(3) { white-space: nowrap !important; }  /* التاريخ لا يُشطر */
+  table.table th:nth-child(1) { width: 3.5%; }   /* # */
+  table.table th:nth-child(2) { width: 11%; }    /* رقم القيد */
+  table.table th:nth-child(3) { width: 11.5%; }  /* تاريخ القيد */
+  table.table th:nth-child(4) { width: 18.5%; }  /* العنوان */
+  table.table th:nth-child(5) { width: 8%; }     /* النوع */
+  table.table th:nth-child(6) { width: 18%; }    /* الجهات */
+  table.table th:nth-child(7) { width: 10.5%; }  /* كتاب الجهة */
+  table.table th:nth-child(8) { width: 10%; }    /* المتابعة */
+  table.table th:nth-child(9) { width: 9%; }     /* الملاحظات */
+  /* غلاف المحتوى يفرض ارتفاع شاشة كاملة فيدفع صفحة أخيرة بيضاء — أبطِله ورقياً */
+  html, body, .content-shell, main { min-height: 0 !important; height: auto !important; }
+  table.table th { background: #f1f5f9 !important; border: 1px solid #94a3b8 !important; padding: 5px 6px !important; text-align: right; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table.table td { border: 1px solid #cbd5e1 !important; padding: 4px 6px !important; vertical-align: top; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; }
+  .badge, .kind-badge, .due-badge, .status-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { size: A4; margin: 1.2cm; }
 }
 </style>
 <div class="container-fluid animate-fade-in">
-<div class="print-header mb-4 text-center">
+  <!-- ترويسة التقرير الاحترافي (شاشة + طباعة) -->
+  <div class="report-doc-head">
+    <div class="rdh-org">
+      <img src="{% static 'img/md-o-c-logo.png' %}" alt="" class="rdh-logo">
+      <div class="rdh-org-txt">
+        <strong>{{ org.org_name|default:'نظام إدارة الكتب والمراسلات' }}</strong>
+        {% if org.org_section %}<span>{{ org.org_section }}</span>{% endif %}
+        {% if org.org_unit %}<span>{{ org.org_unit }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="rdh-meta">
+      <div class="rdh-title">تقرير متابعة الكتب والمراسلات</div>
+      <div class="rdh-date">تاريخ الطباعة: <span id="printDateVal">—</span></div>
+    </div>
+  </div>
+  <!-- ملخّص الفلاتر المطبَّقة -->
+  <div class="report-filter-summary">
+    <span><b>النوع:</b> {{ selected_kind_label }}</span>
+    {% if selected_entity_name %}<span><b>الجهة:</b> {{ selected_entity_name }}</span>{% endif %}
+    <span><b>الحالة:</b> {{ bucket_label }}</span>
+    {% if due_start or due_end %}<span><b>الاستحقاق:</b> {{ due_start|default:'…' }} — {{ due_end|default:'…' }}</span>{% endif %}
+    <span><b>عدد النتائج:</b> {{ total }}</span>
   </div>
 </div>
 
@@ -122,15 +203,27 @@
       </select>
     </div>
     <div class="col-sm-3 col-6">
-      <label class="form-label fw-semibold mb-1">
+      <label class="form-label fw-semibold mb-1" for="entitySearch">
         <i class="bi bi-building me-1"></i>الجهة
       </label>
-      <select class="form-select" name="entity">
-        <option value="" {% if not selected_entity %}selected{% endif %}>كل الجهات</option>
-        {% for e in entities %}
-        <option value="{{ e.id }}" {% if selected_entity == e.id|stringformat:'s' %}selected{% endif %}>{{ e.name }}</option>
-        {% endfor %}
-      </select>
+      <div class="entity-combo" id="entityCombo">
+        <input type="hidden" name="entity" id="entityInput" value="{{ selected_entity }}">
+        <div class="entity-combo-field">
+          <i class="bi bi-search entity-combo-ic"></i>
+          <input type="text" class="form-control entity-combo-search" id="entitySearch"
+                 placeholder="ابحث أو اختر الجهة…" autocomplete="off" value="{{ selected_entity_name }}"
+                 role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="entityList">
+          <button type="button" class="entity-combo-clear" id="entityClear" title="مسح الجهة"
+                  aria-label="مسح الجهة"{% if not selected_entity %} hidden{% endif %}>&times;</button>
+        </div>
+        <ul class="entity-combo-list" id="entityList" role="listbox" hidden>
+          <li class="entity-combo-opt" data-id="" role="option">كل الجهات</li>
+          {% for e in entities %}
+          <li class="entity-combo-opt" data-id="{{ e.id }}" data-name="{{ e.name }}" role="option"
+              {% if selected_entity == e.id|stringformat:'s' %}aria-selected="true"{% endif %}>{{ e.name }}</li>
+          {% endfor %}
+        </ul>
+      </div>
     </div>
     <div class="col-sm-3 col-6">
       <label class="form-label fw-semibold mb-1">
@@ -164,6 +257,12 @@
       <a class="btn btn-outline-secondary" href="{% url 'reports' %}">
         <i class="bi bi-arrow-counterclockwise me-1"></i>إعادة التعيين
       </a>
+      <a class="btn btn-outline-success ms-auto" href="{% url 'reports_export' %}{% if querystring %}?{{ querystring }}{% endif %}">
+        <i class="bi bi-file-earmark-spreadsheet me-1"></i>تصدير Excel
+      </a>
+      <button class="btn btn-outline-primary" type="button" id="printReportBtn">
+        <i class="bi bi-printer me-1"></i>طباعة التقرير
+      </button>
     </div>
   </div>
 </form>
@@ -171,7 +270,7 @@
 <!-- Quick Stats Summary — حالات المتابعة الأربع الموحَّدة -->
 <div class="stats-summary no-print mb-4">
   <div class="stat-item animate-fade-in" style="animation-delay: 0.1s;">
-    <div class="stat-value" id="totalBooks">{{ books|length }}</div>
+    <div class="stat-value" id="totalBooks">{{ total }}</div>
     <div class="text-muted small fw-semibold">إجمالي النتائج</div>
   </div>
   <div class="stat-item animate-fade-in" style="animation-delay: 0.2s;">
@@ -228,67 +327,80 @@
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
+        {# أعمدة التقرير الرسمي: تسلسل للطباعة، رقم القيد (رابط)، تاريخا الكتاب #}
+        {# الرسميان (تاريخنا + كتاب الجهة رقماً وتاريخاً)، الأطراف باتجاهيها، #}
+        {# والمتابعة موحَّدة (حالة + مُهلة) — لا معرّفات داخلية ولا أعمدة مكررة. #}
         <thead>
           <tr>
-            <th>الرقم الفريد</th>
-            <th>رقم الكتاب</th>
-            <th>رقم الجهة المقابل</th>
+            <th class="text-muted">#</th>
+            <th>رقم القيد</th>
+            <th>تاريخ القيد</th>
             <th>العنوان</th>
             <th>النوع</th>
-            <th>الجهة المعنية</th>
-            <th>الاستحقاق</th>
-            <th>الحالة</th>
+            <th>الجهات (من ← إلى)</th>
+            <th title="رقم كتاب الجهة المقابلة وتاريخه">عدد/تاريخ الجهة</th>
+            <th>المتابعة</th>
             <th>الملاحظات</th>
           </tr>
         </thead>
         <tbody>
           {% for b in books %}
           <tr>
-            <td><span class="badge bg-info">{{ b.id }}</span></td>
-            <td>{{ b.our_number }}</td>
+            <td class="text-muted small">{{ page_obj.start_index|add:forloop.counter0 }}</td>
             <td>
-              <div>{{ b.sender_number|default:"-" }}</div>
-              {% if b.created_at %}
-              <small class="entry-date-badge" title="تاريخ إدخال الكتاب في النظام">
-                <i class="bi bi-calendar-check"></i> {{ b.created_at|date:"d/m/Y" }}
-              </small>
-              {% endif %}
+              <a href="{% url 'book_detail' b.pk %}" class="fw-bold text-decoration-none report-book-link"
+                 title="فتح الكتاب">{{ b.our_number_display|default:b.pk }}</a>
             </td>
+            <td class="text-nowrap">{{ b.date|date:"d/m/Y"|default:"—" }}</td>
             <td style="word-wrap: break-word; white-space: normal; min-width: 100px;">{{ b.title }}</td>
             <td>{% if b.is_outgoing %}<span class="kind-badge kind-outgoing">{{ b.kind_label }}</span>{% else %}<span class="kind-badge kind-incoming">{{ b.kind_label }}</span>{% endif %}</td>
-            <td>{{ b.first_issuing_entity|default:"-" }} / {{ b.first_receiving_entity|default:"-" }}</td>
-            <td>
-              {% if b.followup_state == 'overdue' %}
-                <span class="due-badge due-danger">{{ b.due_phrase }}</span>
-              {% elif b.followup_state == 'pending' %}
-                <span class="due-badge due-future">{{ b.due_phrase }}</span>
-              {% elif b.followup_state == 'due_today' %}
-                <span class="due-badge due-today">{{ b.due_phrase }}</span>
-              {% else %}
-                <span class="due-badge due-normal">{{ b.due_phrase }}</span>
-              {% endif %}
+            <td style="min-width: 140px;">
+              <div class="small"><span class="text-muted">من:</span> {{ b.first_issuing_entity|default:"—" }}</div>
+              <div class="small"><span class="text-muted">إلى:</span> {{ b.first_receiving_entity|default:"—" }}</div>
             </td>
-            <td>
+            <td class="text-nowrap">
+              <div>{{ b.sender_number|default:"—" }}</div>
+              {% if b.sender_date %}<small class="text-muted">{{ b.sender_date|date:"d/m/Y" }}</small>{% endif %}
+            </td>
+            <td style="min-width: 130px;">
               <span class="status-badge badge-status-{{ b.followup_state }}">
                 {% if b.followup_state == 'pending' %}<i class="bi bi-clock-history me-1"></i>قيد المتابعة
                 {% elif b.followup_state == 'due_today' %}<i class="bi bi-calendar-event-fill me-1"></i>مستحق اليوم
                 {% elif b.followup_state == 'overdue' %}<i class="bi bi-exclamation-triangle-fill me-1"></i>متأخر
                 {% else %}<i class="bi bi-archive-fill me-1"></i>مؤرشف{% endif %}
               </span>
+              {% if b.due_phrase != '-' %}<div><small class="text-muted">{{ b.due_phrase }}</small></div>{% endif %}
             </td>
-            <td style="word-wrap: break-word; white-space: normal; min-width: 80px;">{{ b.margin|default:"-" }}</td>
+            <td style="word-wrap: break-word; white-space: normal; min-width: 80px;">{{ b.margin|default:"—" }}</td>
           </tr>
           {% empty %}
           <tr><td colspan="9" class="text-center text-muted py-3">لا توجد سجلات</td></tr>
           {% endfor %}
         </tbody>
       </table>
+      {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="d-flex justify-content-between align-items-center mt-3 no-print" aria-label="ترقيم الصفحات">
+        <span class="text-muted small">صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }} — {{ total }} كتاب</span>
+        <div class="btn-group">
+          {% if page_obj.has_previous %}
+          <a class="btn btn-sm btn-outline-secondary" href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">السابق</a>
+          {% else %}
+          <span class="btn btn-sm btn-outline-secondary disabled">السابق</span>
+          {% endif %}
+          {% if page_obj.has_next %}
+          <a class="btn btn-sm btn-outline-secondary" href="?{{ querystring }}&page={{ page_obj.next_page_number }}">التالي</a>
+          {% else %}
+          <span class="btn btn-sm btn-outline-secondary disabled">التالي</span>
+          {% endif %}
+        </div>
+      </nav>
+      {% endif %}
     </div>
   </div>
 </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}?v=20260705a"></script>
 <script>
 (function() {
   // إحصائيات من الـ view مباشرة (server-rendered) — مصدر حقيقة واحد
@@ -298,43 +410,9 @@
   const dueTodayCount = {{ stats.due_today|default:0 }}; // مستحق اليوم
   const overdueCount  = {{ stats.overdue|default:0 }};   // متأخر
   const archivedCount = {{ stats.archived|default:0 }};  // مؤرشف
-  
-  // Update stat counters with animation
-  function animateCounter(id, target) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    let current = 0;
-    const increment = Math.ceil(target / 20);
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= target) {
-        el.textContent = target;
-        clearInterval(timer);
-      } else {
-        el.textContent = current;
-      }
-    }, 50);
-  }
-  
-  animateCounter('incomingCount', incomingCount);
-  animateCounter('outgoingCount', outgoingCount);
-  animateCounter('overdueCount', overdueCount);
-  
-  // Print button
-  const printBtn = document.getElementById('printReportBtn');
-  if (printBtn) {
-    printBtn.addEventListener('click', () => window.print());
-  }
-  
-  // Export Excel button
-  const exportBtn = document.getElementById('exportExcelBtn');
-  if (exportBtn) {
-    exportBtn.addEventListener('click', () => {
-      const params = new URLSearchParams(window.location.search);
-      window.location.href = '/books/export/?' + params.toString();
-    });
-  }
-  
+
+  if (typeof Chart === 'undefined') return;   // حارس: لو تعذّر تحميل chart.js لا نُعطّل الصفحة
+
   // Charts configuration
   const chartConfig = {
     responsive: true,
@@ -407,6 +485,8 @@
       },
       options: {
         ...chartConfig,
+        // سلسلة واحدة: العنوان يسمّيها — وسيلة الإيضاح ضجيج
+        plugins: { ...chartConfig.plugins, legend: { display: false } },
         scales: {
           y: {
             beginAtZero: true,
@@ -432,26 +512,73 @@
   }
 })();
 
-// معالج تاريخ الطباعة
-document.addEventListener('DOMContentLoaded', function() {
-  const today = new Date();
-  
-  // تنسيق ميلادي: DD/MM/YYYY
-  const day = String(today.getDate()).padStart(2, '0');
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const year = today.getFullYear();
-  const printDate = `${day}/${month}/${year}`;
-  
-  // تحديث الـ data-date بالتاريخ الميلادي
-  const printDateElement = document.querySelector('.print-date');
-  if (printDateElement) {
-    printDateElement.setAttribute('data-date', printDate);
-  }
-  
-  // عند طباعة الصفحة
-  document.getElementById('printReportBtn').addEventListener('click', function() {
-    window.print();
-  });
+// تاريخ الطباعة + زرّ الطباعة (معالج واحد، بلا أعطال)
+document.addEventListener('DOMContentLoaded', function () {
+  const t = new Date();
+  const d = String(t.getDate()).padStart(2, '0');
+  const m = String(t.getMonth() + 1).padStart(2, '0');
+  const el = document.getElementById('printDateVal');
+  if (el) el.textContent = `${d}/${m}/${t.getFullYear()}`;
+
+  const printBtn = document.getElementById('printReportBtn');
+  if (printBtn) printBtn.addEventListener('click', () => window.print());
 });
+
+// ── حقل الجهة: بحث + اختيار (combobox خفيف بلا مكتبات) ──
+(function () {
+  const combo = document.getElementById('entityCombo');
+  if (!combo) return;
+  const search = document.getElementById('entitySearch');
+  const hidden = document.getElementById('entityInput');
+  const list   = document.getElementById('entityList');
+  const clear  = document.getElementById('entityClear');
+  const opts   = Array.prototype.slice.call(list.querySelectorAll('.entity-combo-opt'));
+  let activeIdx = -1;
+
+  const norm = (s) => (s || '').toString().trim().toLowerCase();
+  function open()  { list.hidden = false; search.setAttribute('aria-expanded', 'true'); }
+  function close() { list.hidden = true; search.setAttribute('aria-expanded', 'false'); activeIdx = -1; opts.forEach(o => o.classList.remove('active')); }
+
+  function applyFilter() {
+    const q = norm(search.value);
+    let shown = 0;
+    opts.forEach(o => {
+      const isAll = o.dataset.id === '';
+      const txt = norm(o.dataset.name !== undefined ? o.dataset.name : o.textContent);
+      const show = isAll ? (q === '') : txt.indexOf(q) !== -1;
+      o.classList.toggle('hidden', !show);
+      if (show) shown++;
+    });
+    let empty = list.querySelector('.entity-combo-empty');
+    if (shown === 0) {
+      if (!empty) { empty = document.createElement('li'); empty.className = 'entity-combo-empty'; empty.textContent = 'لا جهة مطابقة'; list.appendChild(empty); }
+    } else if (empty) { empty.remove(); }
+  }
+
+  function pick(o) {
+    hidden.value = o.dataset.id || '';
+    search.value = o.dataset.id ? (o.dataset.name || o.textContent.trim()) : '';
+    clear.hidden = !hidden.value;
+    close();
+  }
+
+  search.addEventListener('focus', () => { applyFilter(); open(); });
+  search.addEventListener('input', () => { applyFilter(); open(); clear.hidden = !search.value; });
+  list.addEventListener('mousedown', (e) => { const o = e.target.closest('.entity-combo-opt'); if (o) { e.preventDefault(); pick(o); } });
+  clear.addEventListener('click', () => { hidden.value = ''; search.value = ''; clear.hidden = true; applyFilter(); search.focus(); });
+
+  search.addEventListener('keydown', (e) => {
+    const vis = opts.filter(o => !o.classList.contains('hidden'));
+    if (e.key === 'ArrowDown')      { e.preventDefault(); open(); activeIdx = Math.min(vis.length - 1, activeIdx + 1); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); activeIdx = Math.max(0, activeIdx - 1); }
+    else if (e.key === 'Enter')     { if (!list.hidden && vis[activeIdx]) { e.preventDefault(); pick(vis[activeIdx]); } return; }
+    else if (e.key === 'Escape')    { close(); return; }
+    else return;
+    opts.forEach(o => o.classList.remove('active'));
+    if (vis[activeIdx]) { vis[activeIdx].classList.add('active'); vis[activeIdx].scrollIntoView({ block: 'nearest' }); }
+  });
+
+  document.addEventListener('mousedown', (e) => { if (!combo.contains(e.target)) close(); });
+})();
 </script>
 {% endblock %}

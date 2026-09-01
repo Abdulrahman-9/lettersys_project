@@ -21,11 +21,13 @@
     
     <!-- Stylesheets -->
     <link href="{% static 'vendor/bootstrap/bootstrap.rtl.min.css' %}?v=20260419-shellfix" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css?v=20260419-shellfix" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}?v=20260705a" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'vendor/cairo/cairo.css' %}?v=20260705a">
     <!-- Design System (موحد للألوان والمسافات) -->
     <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260419-shellfix">
-    <link rel="stylesheet" href="{% static 'app.css' %}?v=20260419-shellfix">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20260707a">
+    <!-- مكوّنات واجهة محايدة اللون (مستوحاة من صفحة الدخول) — اختيارية عبر أصناف .btn-brand/.card-brand/.field-brand -->
+    <link rel="stylesheet" href="{% static 'css/brand-components.css' %}?v=20260705c">
     
     <style>
       /* ضمان طباعة الألوان في جميع المتصفحات */
@@ -36,6 +38,15 @@
           color-adjust: exact !important;
         }
       }
+      /* وضع التضمين (?embed=1): تُعرَض الأداة وحدها داخل لوحة مركز الإعدادات
+         بلا شريط علوي/جانبي — مع كامل CSS/JS الأصلي عاملاً كصفحة حقيقية. */
+      .settings-embed-body { background: transparent !important; }
+      .app-embed-main { display: block; padding: 20px 22px 28px; }
+      .settings-embed-body .settings-embed-hide { display: none !important; }
+      /* توحيد الهوية داخل المركز: الأدوات ذات لونها الخاص (البريد برتقالي) تُعاد
+         إلى تركوازي الإعدادات ما دامت معروضة داخل لوحته — وتحتفظ بهويتها كاملةً
+         حين تُفتح كتطبيق مستقل. */
+      .settings-embed-body { --warm-clay: #0f766e; }
     </style>
     
     {# Optional per-page CSS block (for legacy templates) #}
@@ -43,17 +54,19 @@
 
     {% block extra_head %}{% endblock %}
   </head>
-  <body class="bg-body{% if request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %} app-shell-body{% endif %}">
-    {% if request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
+  <body class="bg-body{% if is_embed %} settings-embed-body{% elif request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %} app-shell-body{% endif %}">
+    {% if is_embed %}
+    <main class="app-embed-main">
+    {% elif request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
     <main class="app-auth-main">
     {% else %}
     <header class="app-topbar">
       <div class="app-topbar-brand">
         <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'dashboard' %}">
           <img src="{% static 'img/md-o-c-logo.png' %}" alt="الشركة" style="height: 40px; width: auto;">
-          <span class="brand-text">نظام الكتب</span>
+          <span class="brand-text">{{ system_settings.app_name|default:'نظام الكتب' }}</span>
         </a>
-        <div class="app-topbar-copy">أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة</div>
+        <div class="app-topbar-copy">{{ system_settings.brand_subtitle|default:'أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة' }}</div>
       </div>
       <div class="app-topbar-actions">
         {% if request.user.is_authenticated %}
@@ -96,9 +109,9 @@
               <i class="bi bi-list-ul"></i>
               <span>قائمة الكتب</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' and request.GET.tab == 'overdue' %} active{% endif %}" href="{% url 'book_unified' %}?tab=overdue" title="الوصول السريع">
-              <i class="bi bi-lightning-charge-fill"></i>
-              <span>الوصول السريع</span>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dossier_list' or request.resolver_match.url_name == 'dossier_detail' %} active{% endif %}" href="{% url 'dossier_list' %}" title="الأضابير">
+              <i class="bi bi-folder2-open"></i>
+              <span>الأضابير</span>
             </a>
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'notifications' %} active{% endif %}" href="{% url 'notifications' %}" title="التنبيهات">
               <i class="bi bi-bell-fill"></i>
@@ -133,17 +146,9 @@
               <i class="bi bi-cloud-arrow-down-fill"></i>
               <span>النسخ الاحتياطي</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'sequence_settings' %} active{% endif %}" href="{% url 'sequence_settings' %}" title="العدّادات التسلسلية">
-              <i class="bi bi-gear"></i>
-              <span>العدّادات التسلسلية</span>
-            </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'network_settings' %} active{% endif %}" href="{% url 'network_settings' %}" title="الربط الشبكي">
-              <i class="bi bi-diagram-3"></i>
-              <span>الربط الشبكي</span>
-            </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'scan_settings' %} active{% endif %}" href="{% url 'scan_settings' %}" title="إعدادات الماسح">
-              <i class="bi bi-printer"></i>
-              <span>إعدادات الماسح</span>
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'settings_hub' or request.resolver_match.url_name == 'sequence_settings' or request.resolver_match.url_name == 'network_settings' or request.resolver_match.url_name == 'scan_settings' %} active{% endif %}" href="{% url 'settings_hub' %}" title="الإعدادات">
+              <i class="bi bi-sliders2"></i>
+              <span>الإعدادات</span>
             </a>
             {% endif %}
           </nav>
@@ -169,7 +174,7 @@
 
     {% block content %}{% endblock %}
 
-    {% if request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
+    {% if is_embed or request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
     </main>
     {% else %}
       </main>
@@ -209,11 +214,17 @@
     <!-- Bootstrap Bundle with Popper -->
     <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
 
+    <!-- عرض المستندات الموحّد (مصدر واحد لبناء العنصر + الحوار المنبثق) -->
+    <script src="{% static 'js/doc_view.js' %}?v=20260629-preview2"></script>
+
     <!-- مودال معاينة الكتاب الموحد (يعمل من أي صفحة) -->
     {% include "core/partials/book_preview_modal.html" %}
+
+    <!-- مودال معاينة المستند المنبثق (يعمل من أي صفحة) -->
+    {% include "core/partials/document_preview_modal.html" %}
     
-    <!-- jQuery (مطلوب لـ Smart Merge UI) -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- jQuery (مطلوب لـ Smart Merge UI) — مُستضاف محلياً (يعمل دون إنترنت + يحترم CSP) -->
+    <script src="{% static 'vendor/jquery.min.js' %}"></script>
     
     <!-- نظام الأكواد الخطأ الموحد -->
     <script src="{% static 'error-codes.js' %}"></script>
@@ -222,12 +233,8 @@
     <script src="{% static 'logging-system.js' %}"></script>
     
     <!-- نظام إدارة الكتب - JavaScript الحديث -->
-    <script src="{% static 'app.js' %}"></script>
-    
-    <!-- Smart Merge System -->
-    <script src="{% static 'pdf_viewer.js' %}"></script>
-    <script src="{% static 'smart_merge_ui.js' %}"></script>
-    
+    <script src="{% static 'app.js' %}?v=20260722a"></script>
+
     <!-- Sidebar Mini Toggle -->
     <script>
     (function () {
@@ -255,5 +262,74 @@
 
     <!-- Additional Page Scripts -->
     {% block extra_js %}{% endblock %}
+
+    {% if is_embed %}
+    <!-- وضع التضمين: (1) إبقاء كل تنقّل داخل الإطار مُضمَّناً، (2) تبليغ الارتفاع. -->
+    <script>
+    (function () {
+      'use strict';
+
+      // ── (1) وسم الروابط والنماذج بـ embed=1 ──
+      // بدونه: نقرة رابط داخل الإطار (مثل «إنشاء رسالة») تُحمّل الصفحة بلا embed،
+      // فتُرسَم قشرة التطبيق كاملة داخل لوحة الإعدادات — «تطبيق داخل تطبيق».
+      // نضع embed في *مسار* النموذج (query) لا كحقل مخفي، كي يراه request.GET
+      // حتى في طلبات POST.
+      function withEmbed(raw) {
+        try {
+          var u = new URL(raw, window.location.href);
+          if (u.origin !== window.location.origin) return null;  // خارجي — اتركه
+          u.searchParams.set('embed', '1');
+          return u.pathname + u.search + u.hash;
+        } catch (e) { return null; }
+      }
+
+      function markNavigation() {
+        document.querySelectorAll('a[href]').forEach(function (a) {
+          if (a.target === '_blank' || a.dataset.embedMarked) return;
+          var href = a.getAttribute('href');
+          if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) return;
+          var next = withEmbed(href);
+          if (next) { a.setAttribute('href', next); a.dataset.embedMarked = '1'; }
+        });
+        document.querySelectorAll('form').forEach(function (f) {
+          if (f.dataset.embedMarked) return;
+          var next = withEmbed(f.getAttribute('action') || window.location.href);
+          if (next) { f.setAttribute('action', next); f.dataset.embedMarked = '1'; }
+        });
+      }
+
+      // يُلاحَظ childList فقط (لا attributes) فلا يُعيد وسْمُنا إطلاق المراقب.
+      // ومع ذلك نؤجّل عبر rAF كي لا نمشي على الشجرة مع كل تغيّر في صفحة نشِطة.
+      var pending = false;
+      function scheduleMark() {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function () { pending = false; markNavigation(); });
+      }
+
+      markNavigation();
+      document.addEventListener('DOMContentLoaded', markNavigation);
+      if (window.MutationObserver) {
+        new MutationObserver(scheduleMark).observe(document.documentElement, {
+          childList: true, subtree: true,
+        });
+      }
+
+      // ── (2) تبليغ الارتفاع — يُبقي الإطار بارتفاع المحتوى بلا تمرير مزدوج ──
+      function report() {
+        var h = Math.max(
+          document.body.scrollHeight, document.documentElement.scrollHeight,
+          document.body.offsetHeight, document.documentElement.offsetHeight
+        );
+        try { parent.postMessage({ type: 'settings-embed-height', height: h }, window.location.origin); } catch (e) {}
+      }
+      window.addEventListener('load', report);
+      window.addEventListener('resize', report);
+      if (window.ResizeObserver) { new ResizeObserver(report).observe(document.body); }
+      else { setInterval(report, 700); }
+      document.addEventListener('DOMContentLoaded', report);
+    })();
+    </script>
+    {% endif %}
   </body>
 </html>

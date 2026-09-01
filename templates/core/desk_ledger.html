@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}دفتر المكتب{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
+    <i class="bi bi-cone-striped fs-5" aria-hidden="true"></i>
+    <div>
+      <strong>هيكلُ واجهةٍ لا ميزة.</strong>
+      كلُّ رقمٍ واسمٍ في هذه الصفحة <strong>ثابتٌ في الكود</strong> ولا يأتي من قاعدة
+      البيانات — تخطيطٌ للتصميم لا للعمل. لا تبنِ عليه قراراً ولا تقسه بشيء.
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="mb-1">دفتر المكتب</h2>
+      <p class="text-muted mb-0">متابعة القيد اليومي والعمل الجاري</p>
+    </div>
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">العودة</a>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card shadow-sm border-0 h-100"><div class="card-body"><div class="text-muted small">الوارد</div><h3 class="mb-0">{{ stats.incoming }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card shadow-sm border-0 h-100"><div class="card-body"><div class="text-muted small">الصادر</div><h3 class="mb-0">{{ stats.outgoing }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card shadow-sm border-0 h-100"><div class="card-body"><div class="text-muted small">قيد المتابعة</div><h3 class="mb-0">{{ stats.pending }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card shadow-sm border-0 h-100"><div class="card-body"><div class="text-muted small">اليوم</div><h3 class="mb-0">{{ stats.today }}</h3></div></div></div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-white"><strong>سجل اليوم</strong></div>
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>الرقم</th>
+            <th>العنوان</th>
+            <th>النوع</th>
+            <th>المستحق</th>
+            <th>المستخدم</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ row.number }}</td>
+            <td>{{ row.title }}</td>
+            <td>{{ row.kind }}</td>
+            <td>{{ row.due }}</td>
+            <td>{{ row.owner }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-4">لا توجد بيانات</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

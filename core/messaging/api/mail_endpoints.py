@@ -88,8 +88,12 @@ def api_compose(request):
     if not _valid_email(to_addr):
         return JsonResponse({'success': False, 'message': 'عنوان البريد الإلكتروني غير صالح'}, status=400)
 
-    # Fetch optional entities
-    book   = Book.objects.filter(pk=book_id).first()    if book_id   else None
+    # Fetch optional entities — الكتاب ضمن نطاق المستخدم لا مطلقاً: وإلاّ عُلّقت
+    # الرسالة على كتاب غيره وظهرت في سجلّه.
+    from core.messaging.scoping import scope_books
+
+    visible_books = scope_books(Book.objects.all(), request.user)
+    book   = visible_books.filter(pk=book_id).first()     if book_id   else None
     entity = Entity.objects.filter(pk=entity_id).first() if entity_id else None
 
     # Template overrides subject+body if given
@@ -103,11 +107,9 @@ def api_compose(request):
     if not subject or not body:
         return JsonResponse({'success': False, 'message': 'الموضوع والنص مطلوبان'}, status=400)
 
-    # Fall back to any book if none specified
-    if not book:
-        book = Book.objects.order_by('id').first()
-        if not book:
-            return JsonResponse({'success': False, 'message': 'لا يوجد كتاب في النظام بعد'}, status=400)
+    # لا سقوطَ إلى «أوّل كتابٍ في القاعدة»: ``BookEmailLog.book`` صار اختياريّاً
+    # (هجرة 0061)، فالرسالة بلا كتابٍ تُسجَّل بلا كتاب بدل أن تُعلَّق على كتابٍ
+    # لا صلة له بها.
 
     cc_list = [x.strip() for x in cc_raw.split(',') if x.strip()] if cc_raw else []
 
@@ -178,7 +180,10 @@ def api_inbox_sync(request):
 @require_http_methods(['POST'])
 def api_mark_read(request, pk):
     from core.models import IncomingEmail, EmailSettings
-    msg = IncomingEmail.objects.filter(pk=pk).first()
+    from core.messaging.scoping import scope_incoming
+
+    # كانت تؤشّر **أيّ** رسالةٍ برقمها مقروءةً — كتابةٌ على بريد غيرك.
+    msg = scope_incoming(IncomingEmail.objects.all(), request.user).filter(pk=pk).first()
     if not msg:
         return JsonResponse({'success': False, 'message': 'الرسالة غير موجودة'}, status=404)
 
@@ -205,8 +210,10 @@ def api_mark_read(request, pk):
 @login_required
 def api_thread_detail(request, pk):
     from core.models import EmailThread
+    from core.messaging.scoping import scope_threads
 
-    thread = EmailThread.objects.filter(pk=pk) \
+    # كانت تُعيد مواضيع الخيط وعناوين مراسليه لأيّ مستخدمٍ برقم الخيط.
+    thread = scope_threads(EmailThread.objects.all(), request.user).filter(pk=pk) \
         .select_related('book', 'entity', 'created_by').first()
     if not thread:
         return JsonResponse({'success': False, 'message': 'الخيط غير موجود'}, status=404)
@@ -249,7 +256,11 @@ def api_thread_status(request, pk):
     if status not in valid:
         return JsonResponse({'success': False, 'message': f'حالة غير صالحة. الخيارات: {valid}'}, status=400)
 
-    updated = EmailThread.objects.filter(pk=pk).update(status=status)
+    from core.messaging.scoping import scope_threads
+
+    # كانت تغيّر حالة **أيّ** خيطٍ برقمه — كتابةٌ على مراسلات غيرك.
+    updated = scope_threads(EmailThread.objects.all(), request.user) \
+        .filter(pk=pk).update(status=status)
     if not updated:
         return JsonResponse({'success': False, 'message': 'الخيط غير موجود'}, status=404)
 
@@ -287,11 +298,11 @@ def api_bulk_send(request):
     if not entity_ids:
         return JsonResponse({'success': False, 'message': 'entity_ids مطلوب'}, status=400)
 
-    book = Book.objects.filter(pk=book_id).first() if book_id else None
-    if not book:
-        book = Book.objects.order_by('id').first()
-    if not book:
-        return JsonResponse({'success': False, 'message': 'لا يوجد كتاب'}, status=400)
+    from core.messaging.scoping import scope_books
+
+    visible_books = scope_books(Book.objects.all(), request.user)
+    # اختياريّ: إرسالٌ جماعيّ لجهاتٍ قد لا يخصّ كتاباً بعينه (انظر هجرة 0061).
+    book = visible_books.filter(pk=book_id).first() if book_id else None
 
     entities = Entity.objects.filter(pk__in=entity_ids, email__gt='')
     results  = {'sent': 0, 'skipped': 0, 'errors': []}
@@ -332,9 +343,12 @@ def api_template_preview(request, pk):
     if not tpl:
         return JsonResponse({'success': False, 'message': 'القالب غير موجود'}, status=404)
 
+    from core.messaging.scoping import scope_books
+
     book_id   = request.GET.get('book_id')
     entity_id = request.GET.get('entity_id')
-    book   = Book.objects.filter(pk=book_id).first()   if book_id   else None
+    # القالب يُصيَّر برقم الكتاب وعنوانه — فمعاينةٌ بكتابِ غيرك تُسرّبهما.
+    book   = scope_books(Book.objects.all(), request.user).filter(pk=book_id).first() if book_id else None
     entity = Entity.objects.filter(pk=entity_id).first() if entity_id else None
 
     ctx = {'book': book, 'entity': entity, 'user': request.user}
@@ -351,9 +365,12 @@ def api_template_preview(request, pk):
 
 @login_required
 @require_http_methods(['POST'])
-@rate_limit('test_smtp', max_attempts=5, window_seconds=300, by='user')
 def api_test_smtp(request):
-    """Delegates to canonical email_endpoints.test_smtp to avoid duplication."""
+    """Delegates to canonical email_endpoints.test_smtp to avoid duplication.
+
+    لا محدِّد معدّل هنا عمداً: النقطة الأصلية تحمله بنفس المفتاح، فكان وجوده في
+    الطرفين يستهلك محاولتين لكل نقرة واحدة ويُنفِد الحصّة قبل أوانها.
+    """
     if not request.user.is_staff:
         return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
     from core.messaging.api.email_endpoints import test_smtp
@@ -366,7 +383,7 @@ def api_test_smtp(request):
 
 @login_required
 @require_http_methods(['POST'])
-@rate_limit('test_imap', max_attempts=5, window_seconds=300, by='user')
+@rate_limit('test_imap', max_attempts=20, window_seconds=300, by='user')
 def api_test_imap(request):
     if not request.user.is_staff:
         return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
@@ -386,18 +403,22 @@ def api_mail_stats(request):
     from django.db.models import Count, Q
     from core.models import BookEmailLog, IncomingEmail, EmailThread
 
-    # استعلام واحد لكل نموذج بدلاً من استعلامات منفصلة لكل حالة
-    email_stats = BookEmailLog.objects.aggregate(
+    from core.messaging.scoping import scope_incoming, scope_sent_logs, scope_threads
+
+    # استعلام واحد لكل نموذج بدلاً من استعلامات منفصلة لكل حالة.
+    # كلّها على المجموعة المرئيّة للمستخدم: عدّادٌ عامٌّ يكشف حجم مراسلات
+    # الأقسام الأخرى ولو أُخفيت قوائمها.
+    email_stats = scope_sent_logs(BookEmailLog.objects.all(), request.user).aggregate(
         sent_total=Count('id'),
         sent_ok=Count('id', filter=Q(status='sent')),
         sent_failed=Count('id', filter=Q(status='failed')),
         sent_pending=Count('id', filter=Q(status='pending')),
     )
-    inbox_stats = IncomingEmail.objects.aggregate(
+    inbox_stats = scope_incoming(IncomingEmail.objects.all(), request.user).aggregate(
         inbox_total=Count('id'),
         inbox_unread=Count('id', filter=Q(is_read=False)),
     )
-    thread_stats = EmailThread.objects.aggregate(
+    thread_stats = scope_threads(EmailThread.objects.all(), request.user).aggregate(
         threads_open=Count('id', filter=Q(status='open')),
         threads_wait=Count('id', filter=Q(status='waiting')),
     )

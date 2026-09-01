@@ -1,0 +1,139 @@
+/* ============================================================
+   doc_canvas.css — عارض المستند الممسوح (DocCanvas) — سطح المكتب RTL
+   «ورقة على مكتب»: سريع (WebP + هيكل عظمي + تلاشٍ)، جميل، يلائم تلقائياً.
+   يستبدل أنماط المعاينة القديمة المضمّنة (نفس أسماء الأصناف — بديل مباشر).
+   ============================================================ */
+:root{
+  --dc-desk:#eef1f5; --dc-paper:#ffffff; --dc-line:#e5e7eb; --dc-ink:#1f2933;
+  --dc-brand:#0f766e; --dc-brand-soft:#e6f4f2;
+  --dc-paper-shadow:0 1px 3px rgba(16,24,40,.10), 0 8px 22px rgba(16,24,40,.08);
+}
+
+/* الحاوية + المسرح
+   المسرح ثابت لا يتمرّر (يُثبّت أشرطة الأدوات فوقه)، وطبقة تمرير داخلية تحمل الصفحة
+   وتُمرّرها في كل الاتجاهات — فلا يُقصّ أعلى/جانب الورقة عند التكبير. */
+#modalBody.has-image{overflow:hidden;padding:6px}
+.preview-stage{
+  position:relative;flex:1 1 auto;min-height:0;width:100%;
+  border-radius:12px;overflow:hidden;
+}
+
+/* طبقة التمرير: تملأ المسرح وتُمرَّر بحرّية. margin:auto على الصفحة يتكفّل بالتوسيط. */
+.preview-scroll{
+  position:absolute;inset:0;overflow:auto;display:flex;
+  background:
+    radial-gradient(120% 120% at 50% 0%, #f3f6fa 0%, var(--dc-desk) 60%, #e7ebf1 100%);
+  scrollbar-width:thin;overscroll-behavior:contain;
+}
+.preview-scroll::-webkit-scrollbar{width:10px;height:10px}
+.preview-scroll::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+.preview-scroll::-webkit-scrollbar-thumb:hover{background:#94a3b8;background-clip:content-box}
+
+/* الصفحة: أبعادها تُضبَط بالبكسل من JS (ملاءمة × تكبير).
+   margin:auto ⇒ تتوسّط حين تلائم، وتلتصق بالبداية وتُمرَّر كاملةً حين تفيض
+   (يُصلح اختفاء أعلى الورقة) — مع تلاشٍ ناعم عند التحميل. */
+.preview-img{
+  margin:auto;flex:0 0 auto;display:block;object-fit:contain;
+  background:var(--dc-paper);border:1px solid var(--dc-line);border-radius:4px;
+  box-shadow:var(--dc-paper-shadow);
+  opacity:0;transition:opacity .18s ease;-webkit-user-drag:none;user-select:none;
+}
+.preview-img.dc-loaded{opacity:1}
+
+/* الهيكل العظمي — بأبعاد المانيفست (صفر قفزة تخطيط) + وميض يمين→يسار (RTL) */
+.dc-skeleton{
+  position:absolute;inset:0;margin:auto;
+  width:min(86%, calc((100% - 16px))); aspect-ratio:var(--dc-ar, 0.707);
+  max-height:calc(100% - 8px);
+  background:var(--dc-paper);border:1px solid var(--dc-line);border-radius:4px;
+  box-shadow:var(--dc-paper-shadow);overflow:hidden;
+}
+.dc-skeleton::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(270deg, transparent, rgba(15,118,110,.07) 45%, rgba(15,118,110,.12) 50%, rgba(15,118,110,.07) 55%, transparent);
+  background-size:220% 100%;animation:dcShimmer 1.15s ease-in-out infinite;
+}
+@keyframes dcShimmer{0%{background-position:200% 0}100%{background-position:-60% 0}}
+
+/* مؤشّر تحميل بطيء (يظهر فقط إن تأخّر) */
+.preview-spinner{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(244,247,250,.55);backdrop-filter:blur(1px);
+}
+
+/* أشرطة الأدوات والتكبير — مصنفرة، أنيقة */
+.preview-tools,.preview-zoom{
+  position:absolute;display:inline-flex;align-items:center;gap:3px;z-index:4;
+  background:rgba(255,255,255,.92);border:1px solid #e2e8f0;border-radius:10px;padding:4px;
+  box-shadow:0 4px 14px rgba(16,24,40,.12);backdrop-filter:blur(6px);
+}
+.preview-tools{inset-block-start:12px;inset-inline-end:12px}
+.preview-zoom{inset-block-end:12px;inset-inline-start:12px}
+.preview-tools .pt-btn,.preview-zoom .pz-btn{
+  border:none;background:transparent;width:32px;height:32px;border-radius:8px;cursor:pointer;
+  color:#334155;display:inline-flex;align-items:center;justify-content:center;font-size:1rem;
+  transition:background .14s, color .14s, transform .12s;
+}
+.preview-tools .pt-btn:hover,.preview-zoom .pz-btn:hover{background:var(--dc-brand-soft);color:var(--dc-brand);transform:translateY(-1px)}
+.preview-tools .pt-btn.pt-danger:hover{background:#fee2e2;color:#dc2626}
+.preview-tools .pt-sep{width:1px;height:20px;background:#e2e8f0;margin:0 2px}
+.preview-zoom .pz-label{font-size:.72rem;font-weight:800;color:#475569;min-width:42px;text-align:center}
+
+/* خطأ */
+.preview-error{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;color:#b91c1c;background:#fff;text-align:center;padding:16px;
+}
+.preview-error>i{font-size:2rem}
+.preview-error .pe-download{font-size:.82rem;color:#2563eb;text-decoration:none;font-weight:700}
+
+/* المُرقّم (في رأس المعاينة) */
+.preview-pager{display:inline-flex;align-items:center;gap:6px;margin-inline-start:auto}
+.preview-pager .pager-btn{
+  border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.18);color:#fff;
+  width:28px;height:28px;border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  transition:background .14s;
+}
+.preview-pager .pager-btn:hover:not(:disabled){background:rgba(255,255,255,.34)}
+.preview-pager .pager-btn:disabled{opacity:.4;cursor:default}
+.preview-pager .pager-label{font-size:.78rem;font-weight:700;color:#fff;white-space:nowrap}
+
+/* شريط المصغّرات (قابل لإعادة الترتيب بالسحب) — أكبر، أنظف */
+.preview-thumbs{
+  display:flex;align-items:center;gap:8px;overflow-x:auto;height:78px;padding:8px 10px;
+  background:#f8fafc;border-block-start:1px solid var(--dc-line);scrollbar-width:thin;
+}
+.thumb-cell{
+  position:relative;flex:0 0 auto;border:2px solid transparent;border-radius:8px;cursor:grab;
+  background:var(--dc-paper);line-height:0;transition:border-color .15s, transform .14s, box-shadow .15s;
+  box-shadow:0 1px 2px rgba(16,24,40,.06);
+}
+.thumb-cell:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(16,24,40,.16)}
+.thumb-cell.active{border-color:var(--dc-brand)}
+.thumb-cell.active::before{
+  content:"";position:absolute;inset-block:6px;inset-inline-start:-1px;width:3px;border-radius:3px;background:var(--dc-brand);
+}
+.thumb-cell.dragging{opacity:.45;cursor:grabbing}
+.thumb-cell .preview-thumb{height:58px;width:auto;display:block;border-radius:6px;object-fit:contain;pointer-events:none}
+.thumb-cell .thumb-num{
+  position:absolute;inset-block-end:3px;inset-inline-start:3px;background:rgba(15,23,42,.80);color:#fff;
+  font-size:.62rem;font-weight:800;line-height:1;padding:2px 5px;border-radius:6px;pointer-events:none;
+}
+/* صفحة مُلحقة حديثاً (قبل الحفظ) — تمييز أخضر يميّزها عن حالة «نشِطة» التركوازية، فيعي المستخدم ما أضافه */
+.thumb-cell--new{border-color:#10b981; box-shadow:0 0 0 1px #10b981, 0 4px 12px rgba(16,185,129,.22)}
+.thumb-cell--new .thumb-new-badge{
+  position:absolute;inset-block-start:3px;inset-inline-end:3px;background:#10b981;color:#fff;
+  font-size:.56rem;font-weight:800;line-height:1;padding:2px 5px;border-radius:6px;pointer-events:none;
+  box-shadow:0 1px 2px rgba(0,0,0,.20);
+}
+
+/* بديل PDF النادر (بلا token) */
+.preview-pdf-fallback{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;color:#475569;text-align:center}
+.preview-pdf-fallback>i{font-size:3.5rem;color:#dc2626}
+.preview-pdf-fallback .pf-name{font-weight:700;word-break:break-word}
+.preview-pdf-fallback .pf-actions{display:flex;gap:8px}
+
+@media (prefers-reduced-motion: reduce){
+  .preview-img{transition:none}
+  .dc-skeleton::after{animation:none}
+}

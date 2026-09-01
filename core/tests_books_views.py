@@ -9,14 +9,16 @@ Covers:
 """
 
 import json
+import tempfile
 from datetime import date, timedelta
 
 from django.contrib.auth.models import User
-from django.test import TestCase, Client
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Book, BookHistory, Attachment, Entity
+from .models import Book, BookHistory, BookComment, Attachment, Entity, OCRResult
 
 
 # ---------------------------------------------------------------------------
@@ -416,6 +418,65 @@ class BookDetailJSONTests(BookViewsBase):
         self.assertEqual(data['id'], self.book.pk)
         self.assertEqual(data['our_number'], '2024-001')
 
+    def test_inline_status_url_present(self):
+        self._login()
+        data = self.client.get(self._url(self.book.pk)).json()
+        self.assertIn('inline_status_url', data)
+        self.assertEqual(
+            data['inline_status_url'],
+            reverse('api_book_inline_status', args=[self.book.pk]),
+        )
+
+
+# ===========================================================================
+# books_api.py — api_book_detail_json attachment hints (Phase 1 inline preview)
+# ===========================================================================
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class BookDetailJSONAttachmentTests(BookViewsBase):
+    """تلميحات المرفقات (is_pdf/is_image/content_type/is_primary) للعرض المضمّن."""
+
+    def _url(self, pk):
+        return reverse('api_book_detail_json', args=[pk])
+
+    def _attach(self, name, content=b'data'):
+        return Attachment.objects.create(
+            book=self.book,
+            file=SimpleUploadedFile(name, content),
+        )
+
+    def test_no_attachment_is_safe(self):
+        self._login()
+        resp = self.client.get(self._url(self.book.pk))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['attachments'], [])
+
+    def test_pdf_attachment_hints(self):
+        self._attach('letter.pdf', b'%PDF-1.4 test')
+        self._login()
+        att = self.client.get(self._url(self.book.pk)).json()['attachments'][0]
+        self.assertTrue(att['is_pdf'])
+        self.assertFalse(att['is_image'])
+        self.assertTrue(att['is_primary'])
+        self.assertEqual(att['content_type'], 'application/pdf')
+
+    def test_image_attachment_hints(self):
+        self._attach('scan.png', b'\x89PNG test')
+        self._login()
+        att = self.client.get(self._url(self.book.pk)).json()['attachments'][0]
+        self.assertTrue(att['is_image'])
+        self.assertFalse(att['is_pdf'])
+        self.assertTrue(att['is_primary'])
+
+    def test_pdf_preferred_as_primary_over_image(self):
+        self._attach('scan.png', b'img')
+        self._attach('letter.pdf', b'%PDF')
+        self._login()
+        atts = self.client.get(self._url(self.book.pk)).json()['attachments']
+        primary = [a for a in atts if a['is_primary']]
+        self.assertEqual(len(primary), 1)
+        self.assertTrue(primary[0]['is_pdf'])
+
 
 # ===========================================================================
 # books_api.py — api_book_inline_status
@@ -473,6 +534,131 @@ class InlineStatusTests(BookViewsBase):
 # books_list.py — book_unified
 # ===========================================================================
 
+class AttachmentOcrTextTests(BookViewsBase):
+    """عقد نقطة نصّ OCR للمرفق (يعتمد عليها العارض المضمّن في صفحة التفاصيل)."""
+
+    def _att(self):
+        return Attachment.objects.create(book=self.book)
+
+    def _url(self, att_id):
+        return reverse('attachment_ocr_text', args=[att_id])
+
+    def test_login_required(self):
+        att = self._att()
+        resp = self.client.get(self._url(att.id))
+        self.assertIn(resp.status_code, [302, 403])
+
+    def test_returns_ocr_text_and_confidence(self):
+        att = self._att()
+        OCRResult.objects.create(attachment=att, cleaned_text='النص المنظّف', confidence_score=88.0)
+        self._login()
+        data = self.client.get(self._url(att.id)).json()
+        self.assertEqual(data['status'], 'ok')
+        self.assertTrue(data['has_text'])
+        self.assertEqual(data['text'], 'النص المنظّف')
+        self.assertEqual(data['confidence'], 88.0)
+
+    def test_prefers_cleaned_over_raw(self):
+        att = self._att()
+        OCRResult.objects.create(attachment=att, raw_text='خام', cleaned_text='منظّف')
+        self._login()
+        self.assertEqual(self.client.get(self._url(att.id)).json()['text'], 'منظّف')
+
+    def test_no_ocr_returns_has_text_false(self):
+        att = self._att()
+        self._login()
+        data = self.client.get(self._url(att.id)).json()
+        self.assertEqual(data['status'], 'ok')
+        self.assertFalse(data['has_text'])
+        self.assertEqual(data['text'], '')
+
+    def test_unauthorized_403(self):
+        att = self._att()
+        self._login(self.other)
+        resp = self.client.get(self._url(att.id))
+        self.assertEqual(resp.status_code, 403)
+
+
+class CommentNotesAPITests(BookViewsBase):
+    """عقود نقاط التعليقات/الملاحظات التي يعتمد عليها static/book_detail.js."""
+
+    # ── notes ──
+    def test_update_notes_saves_and_logs(self):
+        self._login()
+        url = reverse('update_book_notes', args=[self.book.pk])
+        resp = self.client.post(url, data=json.dumps({'margin': 'هامش جديد'}),
+                                content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['status'], 'ok')
+        self.assertEqual(data['margin'], 'هامش جديد')
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.margin, 'هامش جديد')
+        self.assertTrue(BookHistory.objects.filter(book=self.book, action='update_notes').exists())
+
+    def test_update_notes_unauthorized_403(self):
+        self._login(self.other)
+        url = reverse('update_book_notes', args=[self.book.pk])
+        resp = self.client.post(url, data=json.dumps({'margin': 'x'}),
+                                content_type='application/json')
+        self.assertEqual(resp.status_code, 403)
+
+    # ── comments ──
+    def test_add_comment_returns_comment_shape(self):
+        self._login()
+        url = reverse('add_book_comment', args=[self.book.pk])
+        resp = self.client.post(url, data=json.dumps({'content': 'تعليق'}),
+                                content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['status'], 'ok')
+        for field in ['id', 'content', 'created_by', 'created_at', 'is_edited']:
+            self.assertIn(field, data['comment'], f"Missing comment field: {field}")
+        self.assertEqual(data['comment']['content'], 'تعليق')
+
+    def test_add_empty_comment_400(self):
+        self._login()
+        url = reverse('add_book_comment', args=[self.book.pk])
+        resp = self.client.post(url, data=json.dumps({'content': '   '}),
+                                content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_add_comment_unauthorized_403(self):
+        self._login(self.other)
+        url = reverse('add_book_comment', args=[self.book.pk])
+        resp = self.client.post(url, data=json.dumps({'content': 'x'}),
+                                content_type='application/json')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_edit_own_comment_sets_is_edited(self):
+        c = BookComment.objects.create(book=self.book, created_by=self.user, content='قديم')
+        self._login()
+        url = reverse('edit_book_comment', args=[c.pk])
+        resp = self.client.post(url, data=json.dumps({'content': 'محدّث'}),
+                                content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['comment']['is_edited'])
+        c.refresh_from_db()
+        self.assertEqual(c.content, 'محدّث')
+
+    def test_edit_others_comment_403(self):
+        c = BookComment.objects.create(book=self.book, created_by=self.user, content='قديم')
+        self._login(self.other)
+        url = reverse('edit_book_comment', args=[c.pk])
+        resp = self.client.post(url, data=json.dumps({'content': 'x'}),
+                                content_type='application/json')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_delete_own_comment(self):
+        c = BookComment.objects.create(book=self.book, created_by=self.user, content='احذفني')
+        self._login()
+        url = reverse('delete_book_comment', args=[c.pk])
+        resp = self.client.post(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(BookComment.objects.filter(pk=c.pk).exists())
+
+
 class BookUnifiedTests(BookViewsBase):
 
     URL = 'book_unified'
@@ -522,6 +708,63 @@ class BookUnifiedTests(BookViewsBase):
         resp = self.client.get(reverse(self.URL))
         ids = [b.id for b in resp.context['books']]
         self.assertNotIn(self.book.pk, ids)
+
+
+class DeskAndAuditPagesTests(BookViewsBase):
+    """هياكلُ واجهةٍ — تُختبَر أنّها تُعرض **وأنّها تُعلن أنّها هياكل**.
+
+    الحرزُ الثاني هو المقصود: بياناتُ هذه الصفحات ثابتةٌ في `dashboard.py` ولا
+    تمسّ القاعدة. فلو أزال أحدٌ البطاقةَ يوماً بلا أن يصل الصفحةَ ببياناتٍ
+    حقيقيّة، صارت أرقامٌ مفبركةٌ تبدو تقريراً — وهذا ما يفشل هنا صاخباً.
+    """
+
+    PAGES = (('desk_ledger', 'core/desk_ledger.html'),
+             ('desk_handover', 'core/desk_handover.html'),
+             ('book_audit', 'core/book_audit.html'))
+
+    def test_pages_render(self):
+        self._login()
+        for name, template in self.PAGES:
+            with self.subTest(page=name):
+                resp = self.client.get(reverse(name))
+                self.assertEqual(resp.status_code, 200)
+                self.assertTemplateUsed(resp, template)
+
+    def test_each_page_declares_itself_a_skeleton(self):
+        self._login()
+        for name, _t in self.PAGES:
+            with self.subTest(page=name):
+                body = self.client.get(reverse(name)).content.decode('utf-8')
+                self.assertIn('هيكلُ واجهةٍ لا ميزة', body)
+                self.assertIn('ثابتٌ في الكود', body)
+
+    def test_pages_are_not_linked_from_navigation(self):
+        """بيانٌ مفبركٌ خلف عنوانٍ مباشرٍ شيء، وفي قائمة التنقّل شيءٌ آخر."""
+        self._login()
+        nav = self.client.get(reverse('dashboard')).content.decode('utf-8')
+        for name, _t in self.PAGES:
+            self.assertNotIn(reverse(name), nav, name)
+
+
+class DevLoginGuardTests(BookViewsBase):
+    """أداةُ الدخول التطويريّة: حارسُها DEBUG، وإعادةُ توجيهها محروسة."""
+
+    @override_settings(DEBUG=False)
+    def test_disabled_outside_debug(self):
+        self.assertEqual(self.client.get('/dev-login/').status_code, 404)
+        self.assertEqual(self.client.post('/dev-login/', {}).status_code, 404)
+
+    @override_settings(DEBUG=True)
+    def test_external_next_is_refused(self):
+        """`?next=https://evil.example` كانت تُتبَع حرفيّاً — إعادةُ توجيهٍ مفتوحة."""
+        resp = self.client.post('/dev-login/', {'next': 'https://evil.example/x'})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp['Location'], '/')
+
+    @override_settings(DEBUG=True)
+    def test_internal_next_is_honoured(self):
+        resp = self.client.post('/dev-login/', {'next': reverse('dashboard')})
+        self.assertEqual(resp['Location'], reverse('dashboard'))
 
 
 # ===========================================================================
@@ -768,6 +1011,35 @@ class BookEditTests(BookViewsBase):
             'edit_pk': self.book.pk, 'title': 'محاولة اختراق', 'date': '2024-01-15', 'secret_level': 'normal',
         })
         self.assertEqual(resp.status_code, 403)
+
+    def test_update_api_file_replaces_only_targeted_attachment(self):
+        """رفع ملف في التعديل يستبدل المرفق المستهدَف (attachment_id) فقط
+        ولا يؤرشف بقية مرفقات الكتاب (إصلاح استبدال-الكل)."""
+        from core.models import Attachment
+        pdf = b'%PDF-1.4\n%%EOF'
+        att1 = Attachment.objects.create(
+            book=self.book, file=SimpleUploadedFile('a1.pdf', pdf, content_type='application/pdf'))
+        att2 = Attachment.objects.create(
+            book=self.book, file=SimpleUploadedFile('a2.pdf', pdf, content_type='application/pdf'))
+
+        self._login()
+        payload = {
+            'edit_pk': self.book.pk, 'title': 'تعديل مع ملف', 'date': '2024-01-15',
+            'secret_level': 'normal', 'attachment_id': att1.pk,
+            'file': SimpleUploadedFile('new.pdf', pdf, content_type='application/pdf'),
+        }
+        payload.update(self._entity_payload())
+        resp = self.client.post(self._update_url(), payload)
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+        att1.refresh_from_db()
+        att2.refresh_from_db()
+        self.assertTrue(att1.is_deleted, 'المرفق المستهدَف يجب أن يُؤرشف')
+        self.assertFalse(att2.is_deleted, 'المرفق غير المستهدَف يجب أن يبقى نشطاً (لا استبدال-كل)')
+        active = self.book.attachments.filter(is_deleted=False)
+        # المتبقّي: att2 + المرفق الجديد
+        self.assertEqual(active.count(), 2)
+        self.assertTrue(active.exclude(pk=att2.pk).exists(), 'يجب إنشاء مرفق جديد للملف المرفوع')
 
 
 # ===========================================================================

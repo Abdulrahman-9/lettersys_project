@@ -353,20 +353,24 @@ class OCRService:
 
     def clean_text(self, text: str) -> str:
         """
-        تنظيف وتصحيح النص المستخرج
-        """
-        # إزالة المسافات الزائدة
-        text = ' '.join(text.split())
+        تنظيف وتصحيح النص المستخرج.
 
-        # إزالة الأحرف الغريبة
-        allowed_chars = set('0123456789 ')
+        يحفظ فواصل الأسطر «\\n» (تعتمد عليها مستخرِجات العنوان ومطابقة الجهة من
+        الترويسة لتمييز السطور)، ويطوي المسافات الأفقية داخل كلّ سطر فقط.
+        """
+        # اطوِ المسافات الأفقية داخل كلّ سطر مع الإبقاء على فواصل الأسطر
+        text = '\n'.join(' '.join(ln.split()) for ln in (text or '').split('\n'))
+
+        # إزالة الأحرف الغريبة (مع السماح بفاصل السطر)
+        allowed_chars = set('0123456789 \n')
         allowed_chars.update(chr(i) for i in range(0x0600, 0x06FF))
         allowed_chars.update('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
         allowed_chars.update('.,;:!?-/()[]{}')
 
         text = ''.join(c for c in text if c in allowed_chars)
 
-        return text.strip()
+        # أسقِط الأسطر التي صارت فارغة بعد إزالة الأحرف
+        return '\n'.join(ln.strip() for ln in text.split('\n') if ln.strip()).strip()
 
 
 class ArabicOCROptimizer:

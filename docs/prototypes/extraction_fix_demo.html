@@ -1,0 +1,532 @@
+<!doctype html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>نموذج تجريبي — طاولة التصديق (إصلاح صفحة الاستخراج)</title>
+<link rel="stylesheet" href="../../static/vendor/cairo/cairo.css">
+<style>
+  :root{
+    --high:#16a34a; --medium:#d97706; --low:#dc2626; --human:#0f766e;
+    --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#eef2f6; --paper:#fff;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; font-family:'Cairo',Tahoma,system-ui,sans-serif; background:var(--bg);
+    color:var(--ink); min-height:100vh;
+  }
+
+  /* ── شريط النموذج التجريبي ─────────────────────────────── */
+  .demo-bar{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:10px 20px; background:#0f2e2b; color:#e6fffb;
+  }
+  .demo-bar h1{ font-size:1rem; margin:0; font-weight:700; }
+  .demo-tag{
+    font-size:.72rem; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.25);
+    border-radius:999px; padding:2px 10px;
+  }
+  .legend{ display:flex; gap:12px; font-size:.72rem; margin-inline-start:auto; flex-wrap:wrap; }
+  .legend i{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-inline-end:4px; vertical-align:-1px; }
+  .growth-chip{
+    font-size:.72rem; background:rgba(20,184,166,.18); border:1px solid rgba(20,184,166,.5);
+    border-radius:999px; padding:2px 10px; color:#99f6e4;
+  }
+
+  /* ── المسرح ─────────────────────────────────────────────── */
+  .stage{
+    display:grid; grid-template-columns:minmax(380px,460px) 1fr; gap:18px;
+    padding:18px 20px; max-width:1250px; margin-inline:auto; align-items:start;
+  }
+  @media (max-width:900px){ .stage{ grid-template-columns:1fr; } }
+  .panel{
+    background:var(--paper); border:1px solid var(--line); border-radius:14px;
+    box-shadow:0 1px 2px rgba(15,23,42,.05), 0 8px 24px -18px rgba(15,23,42,.25);
+  }
+
+  /* ── لوحة النموذج ───────────────────────────────────────── */
+  .form-panel{ padding:16px 18px 14px; }
+  .panel-head{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .panel-head h2{ font-size:.95rem; margin:0; font-weight:700; }
+  .review-count{
+    font-size:.72rem; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca;
+    border-radius:999px; padding:1px 10px; display:none;
+  }
+  .review-count.done{ color:var(--human); background:#f0fdfa; border-color:#99f6e4; }
+  .maturity{ display:flex; gap:3px; margin-inline-start:auto; }
+  .maturity i{ width:14px; height:8px; border-radius:2px; background:var(--line); transition:background .4s; }
+  .maturity i.on{ background:var(--human); }
+
+  .fields-wrap{ display:flex; gap:10px; }
+  .review-rail{
+    display:flex; flex-direction:column; gap:5px; padding-top:34px;
+    position:sticky; top:14px; height:min-content; min-width:8px;
+  }
+  .rail-tooth{
+    width:7px; height:15px; border-radius:4px; cursor:pointer; background:#cbd5e1;
+    border:0; padding:0; transition:background .3s, transform .2s, height .3s, opacity .3s;
+  }
+  .rail-tooth[data-c="low"]{ background:var(--low); height:22px; }
+  .rail-tooth[data-c="medium"]{ background:var(--medium); }
+  .rail-tooth[data-c="high"]{ background:var(--high); }
+  .rail-tooth[data-c="human"]{ background:var(--human); opacity:.55; }
+  .rail-tooth:hover{ transform:scaleX(2); }
+  .fields{ flex:1; min-width:0; }
+
+  /* حافّة الثقة — الفكرة ١ */
+  .form-group-smart{ position:relative; padding:6px 10px 10px; border-radius:10px; }
+  .form-group-smart::before{
+    content:""; position:absolute; inset-block:32px 12px; inset-inline-start:0;
+    inline-size:4px; border-radius:4px; background:var(--edge,transparent);
+    transition:background .4s cubic-bezier(.4,0,.2,1);
+  }
+  .form-group-smart[data-conf="high"]  { --edge:var(--high); }
+  .form-group-smart[data-conf="medium"]{ --edge:var(--medium); }
+  .form-group-smart[data-conf="low"]   { --edge:var(--low); }
+  .form-group-smart[data-conf="low"] .form-control-smart{ background:rgba(220,38,38,.03); }
+  .form-group-smart[data-conf="human"] { --edge:var(--human); }
+  .form-group-smart[data-conf="human"] .conf-check{ opacity:1; transform:scale(1); }
+
+  .form-group-smart label{
+    display:flex; align-items:center; gap:6px; font-size:.78rem; font-weight:600;
+    color:#334155; margin-bottom:4px;
+  }
+  .conf-check{
+    color:var(--human); font-size:.8rem; opacity:0; transform:scale(.6);
+    transition:opacity .3s, transform .3s;
+  }
+  .form-control-smart{
+    width:100%; padding:8px 12px; font:inherit; font-size:.88rem;
+    border:1px solid var(--line); border-radius:9px; background:#fff;
+    transition:border-color .2s, box-shadow .2s, background .3s;
+  }
+  .form-control-smart:focus{
+    outline:none; border-color:var(--human); box-shadow:0 0 0 3px rgba(15,118,110,.14);
+  }
+  .field-halo{ animation:halo .6s ease-out; }
+  @keyframes halo{ from{ box-shadow:0 0 0 0 rgba(15,118,110,.5);} to{ box-shadow:0 0 0 12px rgba(15,118,110,0);} }
+
+  /* بطاقة الترشيح — الفكرة ٣ */
+  .entity-whisper{ display:none; flex-direction:column; gap:6px; margin-top:8px; }
+  .entity-whisper.on{ display:flex; }
+  .whisper-note{ font-size:.7rem; color:#b45309; }
+  .whisper-item{
+    display:flex; align-items:center; gap:10px; padding:7px 11px; text-align:start;
+    border:1px solid var(--line); border-radius:10px; cursor:pointer; background:#fafbfc;
+    font:inherit; font-size:.82rem; transition:border-color .18s, background .18s, box-shadow .18s;
+  }
+  .whisper-item:hover, .whisper-item.is-top{ border-color:var(--human); background:#f0fdfa; }
+  .whisper-item.is-top{ box-shadow:0 0 0 3px rgba(15,118,110,.08); }
+  .sim-arc{
+    width:26px; height:26px; border-radius:50%; flex:none;
+    background:conic-gradient(var(--human) calc(var(--p)*1%), var(--line) 0);
+    -webkit-mask:radial-gradient(circle 8px, transparent 97%, #000 100%);
+            mask:radial-gradient(circle 8px, transparent 97%, #000 100%);
+  }
+  .w-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .w-score{ font-size:.7rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .whisper-key{
+    font-size:.68rem; color:var(--muted); border:1px solid #cbd5e1; border-radius:5px; padding:1px 7px;
+  }
+
+  /* شريط الإجراءات + أثر المُصحِّح — الفكرة ٤ */
+  .action-bar{
+    display:flex; align-items:center; gap:10px; margin-top:14px; padding-top:12px;
+    border-top:1px solid var(--line); flex-wrap:wrap;
+  }
+  .btn{
+    font:inherit; font-size:.82rem; font-weight:600; border-radius:9px; cursor:pointer;
+    padding:8px 18px; border:1px solid transparent; transition:filter .15s;
+  }
+  .btn:hover{ filter:brightness(1.07); }
+  .btn-primary{ background:var(--human); color:#fff; }
+  .btn-ghost{ background:#fff; color:#334155; border-color:var(--line); }
+  .learn-pill{
+    display:none; align-items:center; gap:6px; font-size:.72rem; color:var(--human);
+    background:#f0fdfa; border:1px solid #99f6e4; border-radius:999px; padding:3px 12px;
+  }
+  .learn-pill.on{ display:inline-flex; }
+  .learn-pill b{ font-variant-numeric:tabular-nums; }
+
+  /* ── لوحة المستند (محاكاة) ──────────────────────────────── */
+  .doc-panel{ padding:18px; display:flex; justify-content:center; background:#e8edf3; }
+  .doc-paper{
+    background:#fff; width:min(560px,100%); aspect-ratio:210/280; border-radius:6px;
+    box-shadow:0 10px 30px -12px rgba(15,23,42,.35); padding:26px 30px; position:relative;
+    display:flex; flex-direction:column; gap:14px; font-size:.8rem;
+  }
+  .doc-region{ position:relative; border-radius:4px; transition:box-shadow .16s, background .16s; }
+  .doc-region.lit{
+    background:color-mix(in srgb, var(--src-c,#0f766e) 12%, transparent);
+    box-shadow:0 0 0 1px var(--src-c), 0 0 14px -2px var(--src-c);
+  }
+  .doc-head{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .doc-brand{ font-weight:700; font-size:.85rem; padding:2px 6px; }
+  .doc-brand small{ display:block; font-weight:400; color:var(--muted); font-size:.68rem; }
+  .doc-meta{ text-align:left; font-size:.75rem; color:#334155; display:flex; flex-direction:column; gap:2px; }
+  .doc-meta span{ padding:1px 5px; }
+  .doc-subject{ text-align:center; font-weight:700; margin-top:6px; padding:3px 8px; align-self:center; }
+  .doc-line{ height:9px; border-radius:5px; background:#e5eaf0; }
+  .doc-line.w80{ width:80%; } .doc-line.w95{ width:95%; } .doc-line.w60{ width:60%; }
+  .doc-sign{ margin-top:auto; align-self:flex-start; text-align:center; font-size:.72rem; color:#334155; }
+  .doc-sign .doc-line{ width:90px; margin:6px auto 0; }
+
+  /* الخيط — عرض توضيحي للفكرة ٦ */
+  #provenanceLayer{ position:fixed; inset:0; pointer-events:none; z-index:60; opacity:0; transition:opacity .16s; }
+  #provenanceLayer.on{ opacity:1; }
+  #provenanceLayer path{
+    fill:none; stroke-width:1.5; stroke-linecap:round;
+    animation:thread .22s cubic-bezier(.4,0,.2,1) forwards;
+  }
+  @keyframes thread{ to{ stroke-dashoffset:0; } }
+
+  /* ── تذييل الشرح ────────────────────────────────────────── */
+  .demo-notes{
+    max-width:1250px; margin:0 auto 26px; padding:0 20px; font-size:.76rem; color:#475569;
+  }
+  .demo-notes ul{ margin:6px 0 0; padding-inline-start:18px; line-height:1.9; }
+  .demo-notes b{ color:var(--ink); }
+
+  @media (prefers-reduced-motion:reduce){
+    *{ transition:none !important; animation:none !important; }
+    #provenanceLayer path{ stroke-dashoffset:0 !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="demo-bar">
+  <h1>طاولة التصديق — نموذج تجريبي</h1>
+  <span class="demo-tag">محاكاة بلا خادم · بيانات وهمية</span>
+  <span class="growth-chip" id="growthChip" hidden></span>
+  <div class="legend">
+    <span><i style="background:var(--high)"></i>واثق آلياً</span>
+    <span><i style="background:var(--medium)"></i>تحقّق</span>
+    <span><i style="background:var(--low)"></i>راجِع</span>
+    <span><i style="background:var(--human)"></i>يقين بشري</span>
+  </div>
+</header>
+
+<main class="stage">
+
+  <!-- لوحة النموذج -->
+  <section class="panel form-panel" aria-label="بيانات الكتاب">
+    <div class="panel-head">
+      <h2>بيانات الكتاب</h2>
+      <span class="review-count" id="reviewCount"></span>
+      <div class="maturity" id="maturity" title="حقول صُودق عليها بشرياً"></div>
+    </div>
+
+    <div class="fields-wrap">
+      <nav class="review-rail" id="reviewRail" aria-label="مسار المراجعة (Alt+↑/↓)"></nav>
+      <div class="fields">
+
+        <div class="form-group-smart" data-field="book_number" data-region="r-num">
+          <label for="book_number">رقم الكتاب <span class="conf-check">✓</span></label>
+          <input class="form-control-smart" id="book_number" autocomplete="off">
+        </div>
+
+        <div class="form-group-smart" data-field="book_date" data-region="r-date">
+          <label for="book_date">تاريخ الكتاب <span class="conf-check">✓</span></label>
+          <input class="form-control-smart" id="book_date" autocomplete="off">
+        </div>
+
+        <div class="form-group-smart" data-field="issuing_entity" data-region="r-entity">
+          <label for="issuing_entity">الجهة المُصدِرة <span class="conf-check">✓</span></label>
+          <input class="form-control-smart" id="issuing_entity" autocomplete="off"
+                 placeholder="اختر من الترشيحات أو اكتب…">
+          <div class="entity-whisper" id="entityWhisper" role="listbox" aria-label="ترشيحات الجهة"></div>
+        </div>
+
+        <div class="form-group-smart" data-field="subject" data-region="r-subject">
+          <label for="subject">الموضوع <span class="conf-check">✓</span></label>
+          <input class="form-control-smart" id="subject" autocomplete="off">
+        </div>
+
+      </div>
+    </div>
+
+    <footer class="action-bar">
+      <button class="btn btn-primary" id="btnExtract">محاكاة الاستخراج</button>
+      <button class="btn btn-ghost" id="btnReset">إعادة تعيين</button>
+      <span class="learn-pill" id="learnPill">✎ ستُعلّم النظام <b id="learnCount">0</b> أمثلة</span>
+    </footer>
+  </section>
+
+  <!-- لوحة المستند (محاكاة ورقة ممسوحة) -->
+  <section class="panel doc-panel" aria-label="معاينة المستند">
+    <div class="doc-paper">
+      <div class="doc-head">
+        <div class="doc-region doc-brand" id="r-entity">شركة المثال العامة<small>قسم الرقابة والتدقيق الداخلي</small></div>
+        <div class="doc-meta">
+          <span class="doc-region" id="r-num">العدد: ش13/5/0847</span>
+          <span class="doc-region" id="r-date">التاريخ: 12/7/2026</span>
+        </div>
+      </div>
+      <div class="doc-region doc-subject" id="r-subject">م/ تدقيق مستندات الصرف للفصل الثاني</div>
+      <div class="doc-line w95"></div>
+      <div class="doc-line w80"></div>
+      <div class="doc-line w95"></div>
+      <div class="doc-line w60"></div>
+      <div class="doc-line w80"></div>
+      <div class="doc-sign">مدير القسم<div class="doc-line"></div></div>
+    </div>
+  </section>
+</main>
+
+<svg id="provenanceLayer" aria-hidden="true"></svg>
+
+<footer class="demo-notes">
+  <b>ما يعرضه هذا النموذج</b> (من رؤية <span dir="ltr">UI_DESIGN_VISION_2026-06-30</span>):
+  <ul>
+    <li><b>حافّة الثقة + التلاشي بالّمس (م١):</b> حافّة ملوّنة على كل حقل بثقة الآلة؛ أي تعديل بشري يحوّلها تركوازياً «يقين بشري». صفر تعديل خادمي.</li>
+    <li><b>مسار المراجعة (م٢):</b> المشط الجانبي مرتّب من الأضعف؛ انقر سنّاً أو استخدم <span dir="ltr">Alt+↑/↓</span> للقفز بين ما يحتاج مراجعة فقط.</li>
+    <li><b>بطاقة الترشيح (م٣):</b> top-3 جهات بأقواس تشابه + <span dir="ltr">Enter/1/2</span> — لا ملء صامت. <b>تتطلب فعلياً تصدير سطرَي entity_matches في result_to_scan_data.</b></li>
+    <li><b>أثر المُصحِّح + صدى الجلسة (م٤/م٥):</b> عدّاد «ستُعلّم النظام» + شريحة الجلسة أعلى الصفحة (sessionStorage).</li>
+    <li><b>الخيط (م٥ — عرض مبسّط):</b> التركيز على حقل يرسم خيطاً لمصدره في الورقة. <b>يتطلب فعلياً استعادة details من Tesseract.</b></li>
+  </ul>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+
+  /* بيانات المحاكاة — ما كان سيعيده result_to_scan_data */
+  var MOCK = {
+    book_number: { value:'ش13/5/0847', conf:0.92 },
+    book_date:   { value:'2026-07-12', conf:0.71 },
+    issuing_entity: { value:'', conf:0.55, matches:[
+      { name:'قسم الرقابة والتدقيق الداخلي', code:'ش13/5', score:0.84 },
+      { name:'قسم الرقابة الداخلية',          code:'ش13/7', score:0.79 },
+      { name:'هيئة التدقيق المركزية',          code:'خ2',    score:0.41 }
+    ]},
+    subject: { value:'تدقيق مستندات الصرف للفصل الثاني', conf:0.62 }
+  };
+
+  var groups   = Array.prototype.slice.call(document.querySelectorAll('.form-group-smart'));
+  var rail     = document.getElementById('reviewRail');
+  var counter  = document.getElementById('reviewCount');
+  var maturity = document.getElementById('maturity');
+  var whisper  = document.getElementById('entityWhisper');
+  var learnPill  = document.getElementById('learnPill');
+  var learnCountEl = document.getElementById('learnCount');
+  var growthChip = document.getElementById('growthChip');
+  var layer    = document.getElementById('provenanceLayer');
+  var origValues = {};   // القيمة كما استخرجتها الآلة — مرجع أثر المُصحِّح
+  var learned  = {};     // الحقول التي احتُسبت تعليماً (مرة واحدة لكل حقل)
+  var learnCount = 0;
+
+  groups.forEach(function(g){
+    maturity.appendChild(document.createElement('i'));
+  });
+
+  /* ── الفكرة ١: نقطة الربط الواحدة ── */
+  function setFieldConfidence(g, score){
+    g.dataset.conf = score >= 0.85 ? 'high' : score >= 0.65 ? 'medium' : 'low';
+    g.dataset.machineConf = score;
+  }
+  function markHumanConfirmed(g){
+    if (g.dataset.conf === 'human' || !g.dataset.conf) return;
+    g.dataset.conf = 'human';
+    syncRail(); updateCounter(); updateMaturity();
+  }
+
+  /* ── الفكرة ٢: مسار المراجعة ── */
+  function buildRail(){
+    rail.innerHTML = '';
+    groups.slice()
+      .filter(function(g){ return g.dataset.machineConf !== undefined; })
+      .sort(function(a,b){ return a.dataset.machineConf - b.dataset.machineConf; })
+      .forEach(function(g){
+        var t = document.createElement('button');
+        t.type = 'button'; t.className = 'rail-tooth'; t.dataset.c = g.dataset.conf;
+        t.dataset.target = g.dataset.field;
+        t.title = g.querySelector('label').textContent.trim();
+        t.addEventListener('click', function(){ jumpTo(g); });
+        rail.appendChild(t);
+      });
+  }
+  function syncRail(){
+    Array.prototype.forEach.call(rail.children, function(t){
+      var g = byField(t.dataset.target);
+      if (g) t.dataset.c = g.dataset.conf;
+    });
+  }
+  function jumpTo(g){
+    g.scrollIntoView({ behavior:'smooth', block:'center' });
+    g.classList.remove('field-halo'); void g.offsetWidth; g.classList.add('field-halo');
+    var inp = g.querySelector('.form-control-smart'); if (inp) inp.focus();
+  }
+  function jumpReview(dir){
+    var pending = groups
+      .filter(function(g){ return g.dataset.conf && g.dataset.conf !== 'human' && g.dataset.conf !== 'high'; })
+      .sort(function(a,b){ return a.dataset.machineConf - b.dataset.machineConf; });
+    if (!pending.length) return;
+    var cur = pending.indexOf(document.activeElement && document.activeElement.closest('.form-group-smart'));
+    var next = pending[(cur + (dir > 0 ? 1 : pending.length - 1)) % pending.length] || pending[0];
+    jumpTo(next);
+  }
+  function updateCounter(){
+    var n = groups.filter(function(g){
+      return g.dataset.conf === 'low' || g.dataset.conf === 'medium';
+    }).length;
+    counter.style.display = 'inline-block';
+    if (n === 0){ counter.textContent = 'اكتملت المراجعة ✓'; counter.classList.add('done'); }
+    else { counter.textContent = n + ' يحتاج مراجعة'; counter.classList.remove('done'); }
+  }
+  function updateMaturity(){
+    var done = groups.filter(function(g){ return g.dataset.conf === 'human'; }).length;
+    Array.prototype.forEach.call(maturity.children, function(seg, i){
+      seg.classList.toggle('on', i < done);
+    });
+  }
+
+  /* ── الفكرة ٣: بطاقة الترشيح ── */
+  function showWhisper(matches){
+    whisper.innerHTML = '';
+    if (matches[0].score - matches[1].score < 0.08){
+      var note = document.createElement('div');
+      note.className = 'whisper-note';
+      note.textContent = '⚠ المرشّحان الأوّلان متقاربان — راجِع قبل الحسم';
+      whisper.appendChild(note);
+    }
+    matches.forEach(function(m, i){
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'whisper-item' + (i === 0 ? ' is-top' : '');
+      el.setAttribute('role','option');
+      el.innerHTML =
+        '<span class="sim-arc" style="--p:' + Math.round(m.score*100) + '"></span>' +
+        '<span class="w-name">' + m.name + '</span>' +
+        '<span class="w-score">' + Math.round(m.score*100) + '٪</span>' +
+        '<span class="whisper-key">' + (i === 0 ? 'Enter' : i) + '</span>';
+      el.addEventListener('click', function(){ commitEntity(m); });
+      whisper.appendChild(el);
+    });
+    whisper.classList.add('on');
+  }
+  function commitEntity(m){
+    var g = byField('issuing_entity');
+    var inp = document.getElementById('issuing_entity');
+    inp.value = m.name;
+    whisper.classList.remove('on');
+    markHumanConfirmed(g);
+    countLearning('issuing_entity');   /* ربط جهة = مثال تعلّم للذاكرة */
+    inp.focus();
+    drawThread(g);                     /* الحقل مركَّز أصلاً — أعد الرسم بلون اليقين البشري */
+  }
+
+  /* ── الفكرتان ٤/٥: أثر المُصحِّح + صدى الجلسة ── */
+  function countLearning(field){
+    if (learned[field]) return;
+    learned[field] = true;
+    learnCount++;
+    learnCountEl.textContent = learnCount;
+    learnPill.classList.add('on');
+    var s = (parseInt(sessionStorage.getItem('demoTaught') || '0', 10) + 1);
+    sessionStorage.setItem('demoTaught', s);
+    renderGrowth();
+  }
+  function renderGrowth(){
+    var s = parseInt(sessionStorage.getItem('demoTaught') || '0', 10);
+    growthChip.hidden = s === 0;
+    growthChip.textContent = 'علّمت النظام ' + s + (s === 1 ? ' مثالاً' : ' أمثلة') + ' هذه الجلسة';
+  }
+
+  /* ── الفكرة ٦ (عرض مبسّط): الخيط + توهّج المصدر ── */
+  var litRegion = null;
+  function drawThread(g){
+    var region = document.getElementById(g.dataset.region);
+    var inp = g.querySelector('.form-control-smart');
+    if (!region || !inp || !g.dataset.conf) return;
+    var colors = { high:'#16a34a', medium:'#d97706', low:'#dc2626', human:'#0f766e' };
+    var c = colors[g.dataset.conf] || '#0f766e';
+    clearThread();
+    litRegion = region;
+    region.style.setProperty('--src-c', c);
+    region.classList.add('lit');
+    var f = inp.getBoundingClientRect(), r = region.getBoundingClientRect();
+    var sx = f.left, sy = f.top + f.height/2;             /* حافة الحقل تجاه المعاينة (RTL) */
+    var tx = r.right, ty = r.top + r.height/2;
+    var cx = (sx + tx) / 2;
+    var total = Math.hypot(tx - sx, ty - sy);
+    layer.setAttribute('viewBox', '0 0 ' + innerWidth + ' ' + innerHeight);
+    layer.innerHTML = '<path d="M' + sx + ',' + sy + ' C' + cx + ',' + sy + ' ' + cx + ',' + ty +
+                      ' ' + tx + ',' + ty + '" stroke="' + c + '"' +
+                      ' stroke-dasharray="' + total + '" stroke-dashoffset="' + total + '"/>';
+    layer.classList.add('on');
+  }
+  function clearThread(){
+    layer.classList.remove('on');
+    if (litRegion){ litRegion.classList.remove('lit'); litRegion = null; }
+  }
+
+  /* ── محاكاة الاستخراج ── */
+  function runExtraction(){
+    reset(false);
+    var order = ['book_number','book_date','issuing_entity','subject'];
+    order.forEach(function(field, i){
+      setTimeout(function(){
+        var g = byField(field), d = MOCK[field];
+        var inp = document.getElementById(field);
+        if (d.value) inp.value = d.value;
+        origValues[field] = d.value;
+        setFieldConfidence(g, d.conf);
+        if (d.matches) showWhisper(d.matches);
+        if (i === order.length - 1){ buildRail(); updateCounter(); updateMaturity(); }
+      }, i * 180);
+    });
+  }
+  function reset(clearSession){
+    groups.forEach(function(g){
+      delete g.dataset.conf; delete g.dataset.machineConf;
+      g.querySelector('.form-control-smart').value = '';
+    });
+    whisper.classList.remove('on'); whisper.innerHTML = '';
+    rail.innerHTML = ''; counter.style.display = 'none';
+    origValues = {}; learned = {}; learnCount = 0;
+    learnCountEl.textContent = '0'; learnPill.classList.remove('on');
+    updateMaturity(); clearThread();
+    if (clearSession){ sessionStorage.removeItem('demoTaught'); renderGrowth(); }
+  }
+  function byField(f){
+    return document.querySelector('.form-group-smart[data-field="' + f + '"]');
+  }
+
+  /* ── الربط ── */
+  document.getElementById('btnExtract').addEventListener('click', runExtraction);
+  document.getElementById('btnReset').addEventListener('click', function(){ reset(true); });
+
+  groups.forEach(function(g){
+    var inp = g.querySelector('.form-control-smart');
+    inp.addEventListener('input', function(){
+      markHumanConfirmed(g);
+      var f = g.dataset.field;
+      if (origValues[f] !== undefined && inp.value.trim() !== origValues[f]) countLearning(f);
+      if (g.dataset.conf) drawThread(g);   /* حدّث لون الخيط بعد التصديق */
+    });
+    inp.addEventListener('focus', function(){ drawThread(g); });
+    inp.addEventListener('blur',  function(){ clearThread(); });
+  });
+
+  addEventListener('keydown', function(e){
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')){
+      e.preventDefault(); jumpReview(e.key === 'ArrowDown' ? 1 : -1);
+    }
+  });
+  /* مفاتيح بطاقة الترشيح: Enter = الأول، 1/2 = البقية */
+  document.getElementById('issuing_entity').addEventListener('keydown', function(e){
+    if (!whisper.classList.contains('on')) return;
+    var d = MOCK.issuing_entity.matches;
+    if (e.key === 'Enter'){ e.preventDefault(); commitEntity(d[0]); }
+    else if (e.key === '1'){ e.preventDefault(); commitEntity(d[1]); }
+    else if (e.key === '2'){ e.preventDefault(); commitEntity(d[2]); }
+  });
+
+  addEventListener('scroll', clearThread, { passive:true });
+  addEventListener('resize', clearThread);
+  renderGrowth();
+})();
+</script>
+</body>
+</html>

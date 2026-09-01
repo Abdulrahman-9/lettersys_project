@@ -63,7 +63,6 @@ def role_capabilities(role):
     caps = {
         'can_manage_users': False,
         'can_view_reports': False,
-        'can_use_quick_access': False,
         'can_manage_books': False,
         'can_manage_entities': False,
         'can_view_notifications': False,

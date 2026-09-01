@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{# صفحة دمج الجهات المكرّرة — كشف آلي + عنقود يدوي اختياري + دمج مؤكَّد #}
+{% block title %}دمج الجهات المكرّرة{% endblock %}
+
+{% block content %}
+<style>
+  .merge-cluster { border: 1px solid rgba(111,70,40,.15); border-radius: .9rem; background: #fff; }
+  .merge-cluster.is-manual { border-color: rgba(249,168,38,.55); box-shadow: 0 .25rem .9rem rgba(249,168,38,.12); }
+  .merge-cluster .table { font-size: .9rem; }
+  .merge-key { font-family: 'JetBrains Mono', monospace; font-size: .78rem; }
+  .merge-cluster tr.table-warning td { background: rgba(249,168,38,.14); }
+  .canon-star { color: #b8860b; }
+  .merge-section-title { font-weight: 800; color: var(--soft-brown, #6f4631); margin: 1rem 0 .6rem; }
+</style>
+
+<div class="container-fluid animate-fade-in">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h4 class="fw-bold mb-1">دمج الجهات المكرّرة</h4>
+      <p class="text-muted mb-0 small">راجِع كل عنقود، اختر الجهة الأمّ، ثم ادمج. تنتقل روابط الكتب وبيانات الاتصال الناقصة إلى الأمّ وتُعطَّل البقية.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'entity_list' %}">
+      <i class="bi bi-arrow-bar-right"></i> الجهات
+    </a>
+  </div>
+
+  {# ── عنقود التحديد اليدوي (من زر "دمج المحدد" في قائمة الجهات) ── #}
+  {% if manual_cluster %}
+    <div class="merge-section-title"><i class="bi bi-hand-index-thumb me-1"></i>تحديدك اليدوي</div>
+    <div class="alert alert-info py-2 small mb-2">
+      هذه الجهات اخترتَها بنفسك من القائمة — تجاوزٌ للكشف الآلي (لتكراراتٍ لا يلتقطها التطبيع).
+      الجهة المقترَحة كأمّ مميَّزة بـ<span class="canon-star">★</span>.
+    </div>
+    <div class="is-manual-wrap">
+      {% include 'core/partials/_merge_cluster.html' with c=manual_cluster %}
+    </div>
+  {% endif %}
+
+  {# ── العناقيد المكتشفة آلياً ── #}
+  {% if clusters %}
+    <div class="merge-section-title"><i class="bi bi-magic me-1"></i>مكرّرات مكتشفة آلياً</div>
+    <div class="alert alert-info py-2">
+      عُثر على <strong>{{ clusters|length }}</strong> عنقوداً مكرّراً (تطبيع إملائي: ة/ه، أ/ا، همزات، مسافات).
+      الأولوية لاختيار الأمّ: رمز ← أصحّ إملاءً ← أكثر استخداماً.
+    </div>
+    {% for c in clusters %}
+      {% include 'core/partials/_merge_cluster.html' with c=c %}
+    {% endfor %}
+  {% elif not manual_cluster %}
+    <div class="alert alert-success">
+      <i class="bi bi-check-circle-fill me-1"></i>
+      لا تكرارات إملائية — كل الجهات النشطة فريدة.
+    </div>
+  {% endif %}
+
+  {# ── الكشف الذكي (الدلالي): تصحيف/التصاق/تشريف — يفوت التطبيع الإملائي ── #}
+  <div class="merge-section-title mt-4">
+    <i class="bi bi-stars me-1"></i>الكشف الذكي (تصحيف وتشريفات)
+  </div>
+  {% if not smart_on %}
+    <div class="alert alert-secondary d-flex justify-content-between align-items-center py-2">
+      <span class="small mb-0">
+        يكشف ما يفوت التطبيع: خطأً مطبعياً بحرف («المدبر العام»)، التصاق كلمتين
+        («المديرالعام»)، وبادئةً تشريفية («السيد رئيس…» ≡ «رئيس…»). مسحٌ أثقل — يعمل بطلبك.
+      </span>
+      <a class="btn btn-sm btn-warning fw-semibold" href="?smart=1">
+        <i class="bi bi-search"></i> ابحث عن مرشّحات ذكية
+      </a>
+    </div>
+  {% elif smart_clusters %}
+    <div class="alert alert-warning py-2">
+      <strong>{{ smart_clusters|length }}</strong> مرشّحاً — <strong>اقتراحاتٌ للمراجعة لا دمجٌ آلي</strong>.
+      لا تُدمَج الفروق الدلالية («الفنية» ≠ «الادارية») ولا التبعيات («شعبة X» ≠ «قسم X»)،
+      لكن راجِع كل عنقود بعينك قبل الدمج.
+    </div>
+    {% for c in smart_clusters %}
+      {% include 'core/partials/_merge_cluster.html' with c=c %}
+    {% endfor %}
+  {% else %}
+    <div class="alert alert-success py-2">
+      <i class="bi bi-check-circle-fill me-1"></i>
+      لا مرشّحات ذكية — لا تصحيفات ولا تشريفات مكرّرة.
+    </div>
+  {% endif %}
+
+</div>
+
+<script>
+(function () {
+  // عند اختيار جهة أمّاً: تُلغى من قائمة "تُدمَج" ويُبرَز صفّها.
+  document.querySelectorAll('form.merge-cluster').forEach(function (form) {
+    function sync() {
+      var chosen = form.querySelector('input[name="canonical"]:checked');
+      form.querySelectorAll('tr[data-mid]').forEach(function (tr) {
+        var isCanon = chosen && tr.dataset.mid === chosen.value;
+        var cb = tr.querySelector('input[name="victim"]');
+        tr.classList.toggle('table-warning', !!isCanon);
+        if (cb) { cb.disabled = !!isCanon; cb.checked = !isCanon; }
+      });
+    }
+    form.querySelectorAll('input[name="canonical"]').forEach(function (r) {
+      r.addEventListener('change', sync);
+    });
+    sync();
+  });
+  // إبراز بطاقة التحديد اليدوي
+  document.querySelectorAll('.is-manual-wrap form.merge-cluster')
+          .forEach(function (f) { f.classList.add('is-manual'); });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}الأضابير{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20260628">{% endblock %}
+
+{% block content %}
+<div class="dossiers-page">
+
+  <div class="dossiers-head">
+    <div>
+      <h4><i class="bi bi-folder2-open"></i> الأضابير</h4>
+      <p class="dossiers-sub">مجلّدات المراسلات لكل قسم/وحدة — الأقسام التي لها كتب صادرة أو واردة فقط.</p>
+    </div>
+    <div class="dossiers-summary">
+      <span class="summary-chip"><b>{{ totals.departments }}</b> قسم</span>
+      <span class="summary-chip" style="color:#b45309"><i class="bi bi-arrow-up-right"></i> <b>{{ totals.issued }}</b> صادر</span>
+      <span class="summary-chip" style="color:#1e5a9e"><i class="bi bi-arrow-down-left"></i> <b>{{ totals.received }}</b> وارد</span>
+    </div>
+  </div>
+
+  <form class="dossier-search" method="get">
+    <input type="text" name="q" value="{{ search_q }}" placeholder="ابحث باسم القسم أو رمزه...">
+    <button type="submit"><i class="bi bi-search"></i> بحث</button>
+  </form>
+
+  {% if page_obj.object_list %}
+  <div class="dossier-grid">
+    {% for e in page_obj.object_list %}
+    <a class="dossier-card" href="{% url 'dossier_detail' e.pk %}">
+      <div class="dc-top">
+        <div class="dc-icon"><i class="bi bi-folder-fill"></i></div>
+        <div>
+          <div class="dc-name">{{ e.name }}</div>
+          {% if e.code %}<div class="dc-code">{{ e.code }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="dc-counts">
+        <div class="dc-badge out"><span class="n">{{ e.issued_count }}</span><span>صادر</span></div>
+        <div class="dc-badge in"><span class="n">{{ e.received_count }}</span><span>وارد</span></div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <div class="dossier-pager">
+    {% if page_obj.has_previous %}<a href="?q={{ search_q|urlencode }}&page={{ page_obj.previous_page_number }}">السابق</a>{% endif %}
+    <span class="cur">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a href="?q={{ search_q|urlencode }}&page={{ page_obj.next_page_number }}">التالي</a>{% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="dossier-empty">
+    <i class="bi bi-folder-x"></i>
+    {% if search_q %}لا قسم يطابق بحثك «{{ search_q }}».{% else %}لا توجد أضابير بعد — ستظهر الأقسام هنا فور ربط كتب بجهاتها.{% endif %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

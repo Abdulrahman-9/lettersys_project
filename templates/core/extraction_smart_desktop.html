@@ -4,21 +4,71 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260702h">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260901a">
 <style>
-.scan-agent-status{font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap}
-.scan-agent-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+.scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
+.scan-agent-status:hover{filter:brightness(.97)}
+.scan-agent-status:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(20,184,166,.35)}
+.scan-agent-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block;flex:none}
 .scan-agent-status[data-state=checking]{color:#475569;background:#f1f5f9}
+.scan-agent-status[data-state=checking]::before{animation:sasPulse 1s ease-in-out infinite}
+@keyframes sasPulse{0%,100%{opacity:.35}50%{opacity:1}}
 .scan-agent-status[data-state=ready]{color:#166534;background:#dcfce7}
 .scan-agent-status[data-state=scanning]{color:#92400e;background:#fef3c7}
 .scan-agent-status[data-state=unavailable],.scan-agent-status[data-state=no_naps2],.scan-agent-status[data-state=no_device]{color:#991b1b;background:#fee2e2}
+/* ── لوحة حالة/تعليمات وكيل المسح (popover لكل حالة) ── */
+.scan-agent-wrap{position:relative;display:inline-flex}
+/* موضع fixed يُحسب بالـJS (_positionAgentHelp) ويُقصَر داخل الشاشة — لا يخرج عن الحوّاف مهما كان مكان الزرّ */
+.scan-agent-help{position:fixed;top:0;left:0;z-index:1200;width:320px;max-width:calc(100vw - 16px);background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 32px -8px rgba(15,23,42,.28);padding:14px 15px;text-align:start;direction:rtl}
+.scan-agent-help[hidden]{display:none}
+.sah-head{display:flex;align-items:center;gap:8px;font-weight:800;font-size:.9rem;margin-bottom:4px}
+.sah-head .sah-dot{width:10px;height:10px;border-radius:50%;flex:none}
+.sah-head.ok{color:#166534}.sah-head.ok .sah-dot{background:#16a34a}
+.sah-head.busy{color:#92400e}.sah-head.busy .sah-dot{background:#d97706}
+.sah-head.err{color:#991b1b}.sah-head.err .sah-dot{background:#dc2626}
+.sah-head.info{color:#475569}.sah-head.info .sah-dot{background:#64748b}
+.sah-desc{font-size:.8rem;color:#475569;line-height:1.7;margin:0 0 8px}
+.sah-steps{margin:0 0 10px;padding-inline-start:18px;font-size:.8rem;color:#334155;line-height:1.9}
+.sah-steps code{background:#f1f5f9;border-radius:5px;padding:1px 5px;font-size:.9em;direction:ltr;display:inline-block}
+.sah-actions{display:flex;gap:8px;flex-wrap:wrap}
+.sah-btn{font:inherit;font-size:.8rem;font-weight:700;border-radius:9px;padding:7px 14px;cursor:pointer;border:1px solid transparent;display:inline-flex;align-items:center;gap:6px;transition:filter .15s,background .15s,box-shadow .15s}
+.sah-btn:hover{filter:brightness(1.04)}.sah-btn:active{filter:brightness(.96)}
+.sah-btn:disabled{opacity:.6;cursor:default}
+.sah-btn-primary{background:linear-gradient(135deg,#0f766e,#0d9488 60%,#14b8a6);color:#fff}
+.sah-btn-ghost{background:#fff;border-color:#cbd5e1;color:#334155}
+.sah-btn-ghost:hover{border-color:#94a3b8}
+.sah-close{margin-inline-start:auto;border:0;background:none;color:#94a3b8;cursor:pointer;font-size:1rem;line-height:1;padding:0}
+.sah-close:hover{color:#475569}
+.sah-note{font-size:.72rem;color:#94a3b8;margin-top:8px;line-height:1.6}
 /* أنماط معاينة المستند (DocCanvas) نُقلت إلى static/css/doc_canvas.css — نظافة + بديل مُحسَّن */
 
 /* ── شارة المسح التلقائي الذكي ── */
 .scan-auto-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.76rem;font-weight:700;color:#3730a3;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:999px;padding:.22rem .6rem;white-space:nowrap}
 .scan-auto-badge .bi{font-size:.85rem}
+/* ── مفتاح الاستخراج التلقائي (تفعيل/إطفاء) ── */
+.auto-extract-toggle{font:inherit;font-size:.74rem;font-weight:700;display:inline-flex;align-items:center;gap:5px;padding:.26rem .7rem;border-radius:999px;cursor:pointer;border:1px solid transparent;white-space:nowrap;transition:color .15s,background .15s,border-color .15s}
+.auto-extract-toggle .bi{font-size:.85rem}
+.auto-extract-toggle.is-on{color:#0f766e;background:#f0fdfa;border-color:#99f6e4}
+.auto-extract-toggle.is-on:hover{background:#ccfbf1}
+.auto-extract-toggle.is-off{color:#94a3b8;background:#f8fafc;border-color:#e2e8f0}
+.auto-extract-toggle.is-off .bi{opacity:.5}
+.auto-extract-toggle.is-off:hover{color:#64748b;border-color:#cbd5e1}
+.auto-extract-toggle:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(20,184,166,.35)}
+
+/* ── عنقود الحالة في رأس المعاينة الداكن: تكييف لونيّ فوق التدرّج التركوازي ──
+   الحالة نقطةٌ فقط (اللون يكفي، والنصّ في التلميح)، والوضع التلقائي أيقونةٌ فقط. */
+.preview-scan-status{display:inline-flex;align-items:center;gap:6px;margin-inline-start:auto;flex:none}
+.preview-scan-status .scan-agent-status{font-size:0;gap:0;padding:.34rem;background:rgba(255,255,255,.15);color:#f0fdfa}
+.preview-scan-status .scan-agent-status::before{width:10px;height:10px;background:#e2e8f0}
+.preview-scan-status .scan-agent-status[data-state=ready]::before{background:#6ee7b7}
+.preview-scan-status .scan-agent-status[data-state=scanning]::before{background:#fcd34d}
+.preview-scan-status .scan-agent-status[data-state=unavailable]::before,
+.preview-scan-status .scan-agent-status[data-state=no_naps2]::before,
+.preview-scan-status .scan-agent-status[data-state=no_device]::before{background:#fca5a5}
+.preview-scan-status .scan-auto-badge{font-size:0;gap:0;color:#f0fdfa;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);padding:.28rem .5rem}
+.preview-scan-status .scan-auto-badge .bi{font-size:.85rem}
 </style>
-<link rel="stylesheet" href="{% static 'css/doc_canvas.css' %}?v=20260702a">
+<link rel="stylesheet" href="{% static 'css/doc_canvas.css' %}?v=20260705a">
 <link rel="stylesheet" href="{% static 'css/document_manager.css' %}?v=20260702b">
 {% endblock %}
 {% block content %}
@@ -51,8 +101,9 @@
 
 <div
     class="extraction-container"
+    data-ws-presence="1"
     data-initial-kind="{{ initial_kind }}"
-    data-smart-extract-endpoint="{% url 'ai_smart_extract' %}"
+    data-smart-extract-stream-endpoint="{% url 'ai_smart_extract_stream' %}"
     data-entity-list-endpoint="{% url 'entity-list-api' %}"
     data-suggestions-endpoint="{% url 'ai_suggestions' %}"
     data-save-book-endpoint="{% url 'save-book-api' %}"
@@ -141,22 +192,39 @@
                                 <label class="field-label" id="bookNumberLabel">
                                     رقمنا
                                     <span class="field-required">*</span>
+                                    <i class="bi bi-info-circle ms-1" style="opacity:.6; font-size:.85em;"
+                                       title="رقم قيدنا يولّده النظام: الخانة الأولى = السجل (1 وارد داخلي، 2 وارد خارجي، 3 صادر داخلي، 4 صادر خارجي) ثم تسلسل فريد. كتب السنوات السابقة تحمل سنتها في المقدّمة. هذا ليس العدد المطبوع على المستند — ذاك حقل «العدد»."></i>
                                 </label>
+                                <span class="register-type-chip" id="bookRegisterChip" style="display: none;"></span>
                                 <span class="confidence-badge high" id="bookNumberConfidence" style="display: none;">
                                     <span class="confidence-indicator" style="background: #16a34a;"></span>
                                     <span id="bookNumberConfidenceValue">95%</span>
                                 </span>
                             </div>
-                            <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
-                            <label class="numberless-toggle" id="numberlessToggle" style="display:none; align-items:center; gap:0.4rem; margin-top:0.3rem; font-size:0.82rem; cursor:pointer; color:#7b5942;">
-                                <input type="checkbox" id="numberlessCheckbox" style="margin:0;">
-                                <span>بلا رقم — كتاب داخلي بلا رقم رسمي (استثناء)</span>
-                            </label>
-                            <div class="input-hint" id="bookNumberHint">
-                                رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.
-                                <span class="network-lock-chip" title="الحجز الشبكي للأرقام الفريدة مفعل">
-                                    <i class="bi bi-shield-lock"></i>حجز شبكي مفعل
-                                </span>
+                            <div class="book-number-cell{% if edit_book_json == 'null' %} has-ring{% endif %}">
+                                <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
+                                {% if edit_book_json == 'null' %}
+                                {% comment %}خاتم الحجز: رمادي=لا حجز، أخضر=محجوز — يقوده _updateReservationRing من مصدر الحجز نفسه.{% endcomment %}
+                                <span class="res-ring" id="reservationRing" title="لم يُحجز رقم بعد" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+                                {% comment %}استثناء «بلا رقم»: أيقونة تُبدّل #numberlessCheckbox المخفي (حالة يقرؤها saveBook) — popover لا يُزيح التخطيط.{% endcomment %}
+                                <button type="button" class="nl-btn" id="numberlessToggle" style="display:none;" title="استثناء: كتاب داخلي بلا رقم رسمي" aria-pressed="false"><i class="bi bi-slash-circle"></i></button>
+                                <input type="checkbox" id="numberlessCheckbox" class="visually-hidden-cb" tabindex="-1" aria-hidden="true">
+                                <div class="nl-pop" id="numberlessPop" role="status" aria-live="polite"></div>
+                                {% endif %}
+                            </div>
+                            <div class="reservation-status" id="reservationStatus" style="display:none;">
+                                <i class="bi bi-lock-fill"></i>
+                                <span class="rs-label">محجوز لك — اكتبه على المستند</span>
+                                <span class="rs-timer" id="reservationTimer"></span>
+                                <button type="button" id="releaseReservationBtn" class="release-res-link" style="display:none;"
+                                        title="تحرير الرقم — يُعاد تدويره لزميلك إن لم تكتبه ورقياً" aria-label="تحرير الرقم">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            </div>
+                            <div class="input-hint" id="bookNumberHint">رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.</div>
+                            <div id="recycledBanner" class="recycled-banner" style="display:none;" role="alert">
+                                <i class="bi bi-recycle"></i>
+                                <span>رقم مُدوّر: سُحب تلقائياً لعدم اكتمال إدخالٍ سابق. تأكّد أن الورقة بين يديك لا تحمل رقماً متضارباً واكتب هذا الرقم عليها.</span>
                             </div>
                         </div>
 
@@ -185,15 +253,45 @@
                     <!-- الصف 2: رقم الجهة المرسلة + تاريخ الجهة المرسلة -->
                     <div class="field-grid-two">
                         <div class="form-group-smart" id="senderNumberGroup">
-                            <label class="field-label" id="senderNumberLabel">رقم الجهة المرسلة</label>
-                            <input type="text" class="form-control-smart" id="senderNumber" placeholder="مثال: 241/و">
-                            <div class="input-hint" id="senderNumberHint">يظهر هذا الحقل في الوارد لتوثيق رقم الجهة الخارجية أو الداخلية.</div>
+                            <label class="field-label" id="senderNumberLabel">
+                                العدد
+                                <i class="bi bi-info-circle ms-1" style="opacity:.6; font-size:.85em;"
+                                   title="العدد الحقيقي المطبوع على المستند، كما أصدرته الجهة المرسِلة. انقله كما هو ولا تُصححه. هذا ليس رقم قيدنا — رقمنا يولّده النظام تلقائياً."></i>
+                            </label>
+                            <input type="text" class="form-control-smart" id="senderNumber" placeholder="مثال: 512 أو 241/و"
+                                   aria-describedby="senderNumberHint">
+                            <div class="input-hint" id="senderNumberHint">
+                                <strong>العدد المطبوع على الورقة</strong> — كما يظهر على كتاب الجهة بعد «العدد /». يُنقَل كما هو، ولا علاقة له برقم قيدنا.
+                            </div>
                         </div>
 
                         <div class="form-group-smart" id="senderDateGroup">
                             <label class="field-label" id="senderDateLabel">تاريخ الجهة المرسلة</label>
                             <input type="date" class="form-control-smart" id="senderDate">
                             <div class="input-hint" id="senderDateHint">لتوثيق تاريخ الكتاب لدى الجهة التي أرسلته.</div>
+                            <!-- قصاصة «التأريخ» اليدويّ من المستند (خيار F): شاهدُ المطابقة.
+                                 القراءةُ الخضراء (≥0.98 · تحليلٌ سليم · حارسُ الفارق سالم)
+                                 تملأ الحقل تلقائيّاً موسومةً `autofilled`، وما دونها يبقى
+                                 اقتراحاً بانتظار نقرة (قرار المالك 2026-09-01). -->
+                            <figure class="sender-date-crop" id="senderDateCrop" hidden>
+                                <img id="senderDateCropImg" alt="قصاصة تاريخ الجهة كما ورد في المستند" loading="lazy">
+                                <figcaption><i class="bi bi-eye"></i> تاريخ الجهة كما ورد في المستند — تحقّق منه بنظرة</figcaption>
+                                <!-- اقتراحُ القارئ: **لا يملأ الحقل من تلقائه أبداً** — الكاتب يؤكّد.
+                                     دقّةُ الأخضر مقيسة 93.5% بتغطية 68% (حجزٌ لم يُرَ، n=360). -->
+                                <div class="date-suggest" id="senderDateSuggest" hidden>
+                                    <div class="date-suggest__head">
+                                        <span class="date-suggest__label">قراءةُ النظام</span>
+                                        <bdi class="date-suggest__raw" id="senderDateRaw"></bdi>
+                                        <span class="confidence-badge" id="senderDateSuggestConf"></span>
+                                    </div>
+                                    <div class="date-suggest__warn" id="senderDateSuggestWarn" hidden></div>
+                                    <button type="button" class="date-suggest__btn" id="senderDateApply">
+                                        <i class="bi bi-check2"></i>
+                                        <span id="senderDateApplyText">تأكيد</span>
+                                        <kbd id="senderDateKbd">Enter</kbd>
+                                    </button>
+                                </div>
+                            </figure>
                         </div>
                     </div>
 
@@ -209,7 +307,28 @@
                                 <span id="titleConfidenceValue">92%</span>
                             </span>
                         </div>
-                        <input type="text" class="form-control-smart" id="title" placeholder="موضوع الكتاب أو خلاصة المراسلة" dir="rtl">
+                        <textarea class="form-control-smart title-autogrow" id="title" rows="1" placeholder="موضوع الكتاب أو خلاصة المراسلة" dir="rtl"></textarea>
+                        <!-- اقتراحُ الموضوع ضعيفِ المسار: يُعرَض ولا يُملأ. مسارُ العلامة
+                             («م/») وحده يملأ الحقل — صالحٌ 72.9% على مجموعةٍ مختومة —
+                             أمّا الاحتياطيّ والقوس (27% من المستندات) فصالحٌ 6.5% فقط،
+                             فيصير بطاقةً يؤكّدها الكاتب بنقرة. -->
+                        <div class="title-suggest" id="titleSuggest" role="group"
+                             aria-label="اقتراحُ موضوعٍ ضعيفُ الثقة" hidden>
+                            <div class="title-suggest__head">
+                                <span class="title-suggest__label">قراءةٌ ضعيفة</span>
+                                <span class="confidence-badge low" id="titleSuggestConf"></span>
+                            </div>
+                            <bdi class="title-suggest__value" id="titleSuggestValue"></bdi>
+                            <div class="title-suggest__warn" id="titleSuggestWarn"></div>
+                            <div class="title-suggest__actions">
+                                <button type="button" class="title-suggest__btn" id="titleSuggestApply">
+                                    <i class="bi bi-check2" aria-hidden="true"></i> استعمِله
+                                </button>
+                                <button type="button" class="title-suggest__btn title-suggest__btn--ghost" id="titleSuggestDismiss">
+                                    <i class="bi bi-x" aria-hidden="true"></i> تجاهُل
+                                </button>
+                            </div>
+                        </div>
                         <div class="input-hint">اكتب عنواناً واضحاً يسهل البحث عنه لاحقاً في الأرشيف.</div>
                     </div>
 
@@ -248,12 +367,14 @@
                                    href="{% url 'book_unified' %}?tab=all&q={{ rb.our_number|urlencode }}&focus={{ rb.id }}"
                                    title="{{ rb.title }}">
                                     <span class="recent-book-kind recent-book-kind--{{ rb.kind }}">{{ rb.kind_label }}</span>
-                                    <span class="recent-book-number">{{ rb.our_number|default:'—' }}</span>
+                                    <span class="recent-book-time">منذ {{ rb.created_at|timesince }}</span>
+                                    <span class="recent-book-number">{{ rb.our_number_display|default:'—' }}</span>
                                     <span class="recent-book-title">{{ rb.title|default:'(بلا عنوان)' }}</span>
                                 </a>
                             </li>
                             {% endfor %}
                         </ul>
+                        <a class="recent-books-all" href="{% url 'book_unified' %}?tab=all">كل الكتب <i class="bi bi-arrow-left-short"></i></a>
                     </div>
                     {% endif %}
                 </div>
@@ -376,16 +497,43 @@
             </button>
             {% if edit_book_json == 'null' %}
             <button type="button" class="btn-action-warn" id="clearFormButton" title="تفريغ كل الحقول المُدخَلة أو المستخرَجة (لا يحذف الصورة الممسوحة)">
-                🧹 تفريغ الحقول
+                <i class="bi bi-eraser" aria-hidden="true"></i> تفريغ الحقول
             </button>
             <button type="button" class="btn-action-secondary" id="extractButton" title="إعادة استخراج البيانات من الملف يدوياً">
-                🔍 استخراج
+                <i class="bi bi-search" aria-hidden="true"></i> استخراج
             </button>
             {% endif %}
+            <button type="button" class="btn-action-secondary" id="saveAndSendButton"
+                    title="حفظ الكتاب ثم إرساله بالبريد إلى الجهة المعنيّة مع مرفقاته">
+                <i class="bi bi-envelope" aria-hidden="true"></i> {% if edit_book_json == 'null' %}حفظ وإرسال للجهة{% else %}حفظ وإرسال{% endif %}
+            </button>
             <button type="button" class="btn-action-primary" id="saveButton" title="حفظ الكتاب في النظام">
-                ✓ حفظ الكتاب
+                <i class="bi bi-check-lg" aria-hidden="true"></i> حفظ الكتاب
             </button>
         </div>
+    </div>
+
+    {# ── حوار الإرسال للجهة: يعرض الجهة والبريد وما سيُرفَق فعلاً قبل أي إرسال ── #}
+    <div class="modal fade" id="sendToEntityModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:16px;border:0;">
+          <div class="modal-header" style="border-bottom:1px solid #eef2f2;">
+            <h5 class="modal-title fw-bold"><i class="bi bi-envelope-paper ms-1"></i> إرسال الكتاب إلى الجهة</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+          </div>
+          <div class="modal-body" id="sendToEntityBody">
+            <div class="text-center text-muted py-4">
+              <div class="spinner-border spinner-border-sm ms-2"></div> جارٍ تحضير المعاينة…
+            </div>
+          </div>
+          <div class="modal-footer" style="border-top:1px solid #eef2f2;">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
+            <button type="button" class="btn btn-primary" id="sendToEntityConfirm" disabled>
+              <i class="bi bi-send ms-1"></i> أرسل الآن
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- الجانب الأيمن: المودال الدائم -->
@@ -404,6 +552,20 @@
                 <span class="pager-label" id="pagerLabel">صفحة 1 / 1</span>
                 <button type="button" class="pager-btn" id="pagerNext" title="الصفحة التالية" aria-label="الصفحة التالية"><i class="bi bi-chevron-left"></i></button>
             </div>
+            {% comment %}حالة الوكيل + التلقائي في رأس المعاينة (الإدخال فقط) — أيقونات تُقرأ بلمحة والنصّ في التلميح؛ scanProgress والأزرار تبقى أسفل.{% endcomment %}
+            {% if edit_book_json == 'null' %}
+            <div class="preview-scan-status">
+                <div class="scan-agent-wrap">
+                <button type="button" id="scanAgentStatus" class="scan-agent-status" data-state="checking"
+                        title="حالة وكيل المسح — انقر للفحص والتعليمات"
+                        aria-haspopup="dialog" aria-expanded="false">جارٍ فحص وكيل المسح…</button>
+                <div id="scanAgentHelp" class="scan-agent-help" role="dialog" aria-label="حالة وكيل المسح والتعليمات" hidden></div>
+            </div>
+                <span class="scan-auto-badge" title="مسح تلقائي بالكامل: يكتشف الوجه/الوجهين، يقوّم الميل، ويزيل الصفحات الفارغة — بلا أي ضبط يدوي">
+                    <i class="bi bi-magic"></i> تلقائي ذكي
+                </span>
+            </div>
+            {% endif %}
         </div>
         <div class="modal-body" id="modalBody">
             <div class="empty-state" id="dropZone" title="اضغط أو اسحب الملف هنا">
@@ -421,24 +583,26 @@
 
         <!-- شريط أزرار المسح الضوئي (محاذٍ لشريط الإجراءات في اللوحة اليسرى) -->
         <div class="scan-action-bar"{% if edit_book_json != 'null' %} style="display:none"{% endif %}>
-            <span id="scanAgentStatus" class="scan-agent-status" data-state="checking" title="حالة وكيل المسح المحلي">جارٍ فحص وكيل المسح…</span>
             <select id="scanDeviceSelect" class="form-select form-select-sm" style="display:none;max-width:220px" title="اختر الماسح الضوئي"></select>
-            <span class="scan-auto-badge" title="مسح تلقائي بالكامل: يكتشف الوجه/الوجهين، يقوّم الميل، ويزيل الصفحات الفارغة — بلا أي ضبط يدوي">
-                <i class="bi bi-magic"></i> تلقائي ذكي
-            </span>
+            {# مفتاح الاستخراج التلقائي: مفعّلاً يُستخرَج فور رفع الملف؛ مطفأً تُدخِل يدوياً بلا انتظار (يُخزَّن) #}
+            <button type="button" id="autoExtractToggle" class="auto-extract-toggle is-on" role="switch" aria-checked="true"
+                    title="الاستخراج التلقائي بعد رفع الملف — أطفئه لتُدخِل الحقول يدوياً بلا انتظار، ويبقى زرّ «استخراج» متاحاً وقتما تشاء">
+                <i class="bi bi-lightning-charge-fill"></i><span class="aet-label">استخراج تلقائي</span>
+            </button>
             <div class="scan-progress-inline" id="scanProgress" style="display: none;">
                 <div class="spinner-border spinner-border-sm" role="status"></div>
                 <span class="progress-message">جاري المسح...</span>
             </div>
+            {# الترتيب (RTL: الأول = أقصى اليمين): مسح من السكانر ← رفع ملف ← حذف الصورة #}
             <div class="scan-action-bar-buttons">
-                <button type="button" class="btn-scan-action btn-scan-action-danger" id="clearScannedButton" style="display: none;" title="حذف الصورة/الملف الممسوح فقط — لا يمسّ الحقول (لتفريغها استخدم «تفريغ الحقول»)">
-                    <i class="bi bi-trash3 me-1"></i>حذف الصورة
+                <button type="button" class="btn-scan-action btn-scan-action-primary {% if initial_kind_direction == 'incoming' %}is-incoming{% else %}is-outgoing{% endif %}" id="startScanButton" title="بدء المسح من السكانر">
+                    <i class="bi bi-upc-scan me-1"></i>مسح من السكانر
                 </button>
                 <button type="button" class="btn-scan-action btn-scan-action-upload" id="uploadFileButton" title="رفع ملف من جهازك (PDF أو صورة)">
                     <i class="bi bi-cloud-arrow-up me-1"></i>رفع ملف
                 </button>
-                <button type="button" class="btn-scan-action btn-scan-action-primary {% if initial_kind_direction == 'incoming' %}is-incoming{% else %}is-outgoing{% endif %}" id="startScanButton" title="بدء المسح من السكانر">
-                    <i class="bi bi-upc-scan me-1"></i>مسح من السكانر
+                <button type="button" class="btn-scan-action btn-scan-action-danger" id="clearScannedButton" style="display: none;" title="حذف الصورة/الملف الممسوح فقط — لا يمسّ الحقول (لتفريغها استخدم «تفريغ الحقول»)">
+                    <i class="bi bi-trash3 me-1"></i>حذف الصورة
                 </button>
             </div>
         </div>
@@ -450,7 +614,7 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260702h"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260901a"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
@@ -461,8 +625,27 @@
   'use strict';
   function initTitleAC() {
     const ta = document.getElementById('title');
-    if (!ta || !window.TitleAutocomplete) return;
-    if (ta.dataset.taBound) return;
+    if (!ta) return;
+
+    // ── توسّع تلقائي لحقل الموضوع (مستقلّ عن الإكمال) — يبقى النصّ مرئياً كاملاً بلا كتابة عمياء ──
+    if (!ta.dataset.growBound) {
+      ta.dataset.growBound = '1';
+      const AUTO_MAX = 160;
+      const growTitle = () => {
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, AUTO_MAX) + 'px';
+        ta.style.overflowY = ta.scrollHeight > AUTO_MAX ? 'auto' : 'hidden';
+      };
+      window.__autoGrowTitle = growTitle;
+      ta.addEventListener('input', growTitle);
+      // الموضوع سطرٌ منطقيّ واحد — امنع Enter من إدراج سطر جديد (الإكمال يعالج Enter لقبول الاقتراح قبله)
+      ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) e.preventDefault(); });
+      growTitle();
+      setTimeout(growTitle, 0);   // بعد أي ملء برمجي متزامن (حقن EDIT/الاستخراج)
+    }
+
+    // ── الإكمال التلقائي (إن توفّر) ──
+    if (!window.TitleAutocomplete || ta.dataset.taBound) return;
     ta.dataset.taBound = '1';
     try {
       new TitleAutocomplete(ta, {
@@ -682,7 +865,13 @@
       if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
     }
 
-    clear() { this.tags = []; this._render(); }
+    // تصفير كامل: الوسوم + مربّع الكتابة + مؤشّر التحقّق (كي يعمل «تفريغ الحقول» على الجهات).
+    clear() {
+      this.tags = [];
+      if (this.input) this.input.value = '';
+      this._render();
+      if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+    }
 
     loadTags(arr) {
       this.tags = (arr || []).map(t => ({ id: t.id, name: t.name, code: t.code || '', isNew: false }));
@@ -781,6 +970,22 @@
       return _origValidateField ? _origValidateField.call(this, fieldId) : true;
     };
 
+    // قصاصة تاريخ الجهة (خيار F): تُظهِر شريط «التأريخ» اليدويّ من المستند بجوار الحقل
+    // ليطابقه الكاتب بنظرة (الأخضرُ وحده يملأ الحقل — انظر extraction_smart.js). غيابُ القصاصة =
+    // إخفاءٌ صامت (صفر تراجع). حارسٌ ضدّ data URL فقط (لا مصادر خارجية).
+    function _updateSenderDateCrop(dataUrl) {
+      const fig = document.getElementById('senderDateCrop');
+      const img = document.getElementById('senderDateCropImg');
+      if (!fig || !img) return;
+      if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+        img.src = dataUrl;
+        fig.hidden = false;
+      } else {
+        img.removeAttribute('src');
+        fig.hidden = true;
+      }
+    }
+
     // 3) تعديل applyExtractionResult: عند ملء الـ AI لقيمة جهة → حوّلها لوسم
     const _origApplyExtraction = ExtractionSmartSystem.prototype.applyExtractionResult;
     ExtractionSmartSystem.prototype.applyExtractionResult = function(data) {
@@ -789,6 +994,11 @@
       const aiReceiving = data.receiving_entity;
       // ندع الأصل يملأ الحقل النصي ثم نحوّله لوسم بعد ذلك
       if (_origApplyExtraction) _origApplyExtraction.call(this, data);
+      // قصاصة تاريخ الجهة (خيار F): أظهِرها إن وردت — مساعدةٌ بصريّة، لا تملأ الحقل
+      // نقطةُ دخولٍ واحدة للقصاصة والاقتراح معاً (extraction_smart.js) — بديلاً
+      // عن `_updateSenderDateCrop` المحلّيّ كي لا يتشعّب العرض في موضعين.
+      if (window.applySenderDateSuggestion) window.applySenderDateSuggestion(data);
+      else _updateSenderDateCrop(data && data.sender_date_crop);
       setTimeout(() => {
         const mgrI = window.entityTagManagers?.issuing;
         const mgrR = window.entityTagManagers?.receiving;
@@ -813,12 +1023,13 @@
     // (أُزيل تجاوز saveBook هنا: تفريغ الجهات وإلحاق معرّفاتها صار داخل الصنف
     //  عبر _flushPendingEntities/_appendEntityIds — مسار حفظ موحّد بلا ترقيع.)
 
-    // 4) عند المسح الذكي للنموذج بعد الحفظ — امسح الوسوم أيضاً
+    // 4) عند المسح الذكي للنموذج بعد الحفظ — امسح الوسوم والقصاصة أيضاً
     const _origSmartClear = ExtractionSmartSystem.prototype.smartClearAndStay;
     if (_origSmartClear) {
       ExtractionSmartSystem.prototype.smartClearAndStay = function(kind) {
         window.entityTagManagers?.issuing?.clear();
         window.entityTagManagers?.receiving?.clear();
+        _updateSenderDateCrop(null);
         return _origSmartClear.call(this, kind);
       };
     }
@@ -960,12 +1171,18 @@
     const senderDateField = document.getElementById('senderDate');
     const todayISO = new Date().toISOString().split('T')[0];
 
-    // Set both dates to today on load
+    // تاريخُ **قيدنا** وحده يفترض اليوم — وهو صحيحٌ بالتعريف (لحظةُ القيد الآن).
     if (dateField && !dateField.value) {
       dateField.value = todayISO;
     }
-    if (senderDateField && !senderDateField.value) {
-      senderDateField.value = todayISO;
+    // ⛔ **تاريخُ الجهة لا يُملأ تلقائيّاً أبداً** — هذا هو جذرُ تسميم التواريخ
+    // (آلافُ الصفوف حملت تاريخ الإدخال بدل حبر الجهة، مقيسٌ 336/344 مخالفاً
+    // للمطبوع بفارقٍ موجبٍ دائماً). أُزيل من `resetDateFields` في 978ccdf
+    // (2026-08-19) لكنّ **هذا الموضع الثاني بقي حيّاً** وكشفه تشغيلُ الصفحة
+    // في متصفّحٍ حقيقيّ 2026-08-26: الحقل يُعرض ممتلئاً بتاريخ اليوم قبل أيّ
+    // استخراج. لا تُعِده: القيمةُ تأتي من الكاتب أو من تأكيد بطاقة الاقتراح.
+    if (senderDateField) {
+      senderDateField.dataset.noAutofill = '1';
     }
 
     // Toggle: enable/disable date editing
@@ -1073,6 +1290,7 @@
     set('title', EDIT_DATA.title);
     set('senderNumber', EDIT_DATA.sender_number);
     set('margin', EDIT_DATA.margin);
+    if (window.__autoGrowTitle) window.__autoGrowTitle();   // وسّع حقل الموضوع لطول العنوان المُحمَّل
 
     // التواريخ — نُفعّل حقل التاريخ مؤقتاً ثم نعيد إغلاقه
     const dateEl = document.getElementById('date');
@@ -1205,22 +1423,52 @@
     const k = currentKind();
     const isInternal = (k === 'incoming_internal' || k === 'outgoing_internal');
     toggle.style.display = isInternal ? 'inline-flex' : 'none';
-    if (!isInternal && cb.checked) { cb.checked = false; applyNumberless(false); }
+    // أيُّ تبديل نوعٍ يفكّ «بلا رقم»: مدير الحجز يعيد رسم رقم النوع الجديد فوق
+    // الحقل أصلاً، وإبقاء الصندوق مؤشَّراً حينها = حالة هجينة تُوهم خلط
+    // الوارد بالصادر (بلاغ المالك 2026-07-07).
+    if (cb.checked) { cb.checked = false; applyNumberless(false); }
+  }
+
+  const pop = document.getElementById('numberlessPop');
+  let popTimer = null;
+  function showPop(html) {
+    if (!pop) return;
+    pop.innerHTML = html;
+    pop.classList.add('on');
+    clearTimeout(popTimer);
+    popTimer = setTimeout(() => pop.classList.remove('on'), 4500);
   }
 
   function applyNumberless(on) {
+    const sys = window.extractionSystem;
+    toggle.classList.toggle('on', on);
+    toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
     if (on) {
-      bookNumField.dataset.prevValue = bookNumField.value || '';
       bookNumField.value = 'بلا رقم';
       bookNumField.classList.add('is-numberless');
       if (hint) hint.textContent = 'سيُحفظ الكتاب بلا رقم رسمي (يأخذ معرّفاً تقنياً داخلياً).';
+      showPop('<b>وضع الاستثناء:</b> كتاب داخلي بلا رقم رسمي — لن يُحجز رقم لهذا الكتاب.');
     } else {
-      bookNumField.value = bookNumField.dataset.prevValue || bookNumField.value;
       bookNumField.classList.remove('is-numberless');
       if (hint) hint.textContent = 'رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.';
+      if (pop) pop.classList.remove('on');
+      // التراجع يستمدّ الرقم من مصدر الحقيقة (مدير الحجز) لا من قيمة محفوظة:
+      // الحقل قد يكون فارغاً لحظة التأشير (الحجز لم يصل) فتعلق «بلا رقم» بلا رجعة.
+      const k = currentKind();
+      bookNumField.value = '';
+      if (sys && typeof sys.ensureReservation === 'function') {
+        sys.ensureReservation(k);
+      }
     }
+    // حدّث الخاتم + مؤشّر الحجز من مصدرهما الواحد (يقرأ حالة #numberlessCheckbox).
+    if (sys && typeof sys._updateReservationPill === 'function') sys._updateReservationPill();
   }
 
+  // الأيقونة تُبدّل حالة الـcheckbox المخفي (بديل نقر الـlabel السابق) ثم تُطلق change.
+  toggle.addEventListener('click', function() {
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+  });
   cb.addEventListener('change', function() { applyNumberless(this.checked); });
 
   // راقب تغيّر التبويب

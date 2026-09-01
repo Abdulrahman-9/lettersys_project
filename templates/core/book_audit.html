@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}مراجعة التدقيق{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
+    <i class="bi bi-cone-striped fs-5" aria-hidden="true"></i>
+    <div>
+      <strong>هيكلُ واجهةٍ لا ميزة.</strong>
+      كلُّ رقمٍ واسمٍ في هذه الصفحة <strong>ثابتٌ في الكود</strong> ولا يأتي من قاعدة
+      البيانات — تخطيطٌ للتصميم لا للعمل. لا تبنِ عليه قراراً ولا تقسه بشيء.
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="mb-1">مراجعة التدقيق</h2>
+      <p class="text-muted mb-0">قائمة مراجعات الكتب والحالات المفتوحة</p>
+    </div>
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">العودة</a>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-white"><strong>سجل التدقيق</strong></div>
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead>
+          <tr>
+            <th>المعرف</th>
+            <th>الكتاب</th>
+            <th>المشكلة</th>
+            <th>الحالة</th>
+            <th>المراجع</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in audit_rows %}
+          <tr>
+            <td>{{ row.id }}</td>
+            <td>{{ row.book }}</td>
+            <td>{{ row.issue }}</td>
+            <td>
+              {% if row.status == 'تمت المراجعة' %}
+                <span class="badge bg-success">{{ row.status }}</span>
+              {% else %}
+                <span class="badge bg-warning text-dark">{{ row.status }}</span>
+              {% endif %}
+            </td>
+            <td>{{ row.user }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center text-muted py-4">لا توجد مراجعات</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

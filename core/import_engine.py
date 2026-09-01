@@ -93,7 +93,7 @@ class LegacyImportEngine:
     }
 
     def __init__(self, field_map: dict, import_user: User,
-                 dry_run: bool = True, number_prefix: str = 'قديم-'):
+                 dry_run: bool = True, number_prefix: str = ''):
         """
         field_map: تعيين أسماء حقول النظام القديم → حقول LetterSys
                    مثال: {'LetterNo': 'our_number', 'Subject': 'title', ...}
@@ -164,16 +164,20 @@ class LegacyImportEngine:
             return ImportResult(success=False, error="العنوان فارغ")
 
         # 3. تحويل أرقام الكتب
+        # صفٌّ بلا رقم يبقى **بلا رقم** — استثناءٌ معتمَد في النظام. كان يُسَكّ له
+        # `auto-3` وهو رقمٌ مخترع لا يوجد على أي ورقة، وخارج نحو الترقيم
+        # (`core/numbering.py`) فلا يُعرض صحيحاً ولا يُوجَد بالبحث ولا يُفرَز.
         original_number = our_number
         if not our_number:
-            our_number = f"{self.number_prefix}auto-{self.summary.total}"
+            our_number = ''
         elif Book.objects.filter(our_number=our_number).exists():
+            # تعارض: مع بادئة نميّز الرقم، وبلا بادئة (الافتراضي الآن) نتخطّى الموجود
+            # (سلوك الاستعادة الآمن — لا نُنشئ نسخة مكرّرة بعلامة).
             our_number = f"{self.number_prefix}{our_number}"
-            # في حالة التكرار مجدداً
-            if Book.objects.filter(our_number=our_number).exists():
+            if not self.number_prefix or Book.objects.filter(our_number=our_number).exists():
                 return ImportResult(
                     success=True, skipped=True,
-                    message=f"تخطي: الرقم {our_number} موجود مسبقاً"
+                    message=f"تخطي: الرقم {original_number} موجود مسبقاً"
                 )
 
         # 4. تحويل القيم
@@ -288,7 +292,12 @@ class LegacyImportEngine:
         ]
         for fmt in formats:
             try:
-                return datetime.strptime(value[:len(fmt)], fmt).date()
+                return datetime.strptime(value, fmt).date()
             except ValueError:
                 continue
-        return None
+        # احتياط: التقط بادئة التاريخ ISO من سلاسل datetime غير المتوقّعة
+        # (microseconds/منطقة زمنية لا تطابق أي صيغة أعلاه)
+        try:
+            return datetime.strptime(value[:10], '%Y-%m-%d').date()
+        except ValueError:
+            return None

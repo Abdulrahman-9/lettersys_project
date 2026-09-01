@@ -4,10 +4,10 @@ core.extraction.ocr.providers
 ===============================
 OCR provider factory — EasyOCR (offline) and Azure Vision (online).
 """
-import base64
 import io
 import ipaddress
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -173,6 +173,134 @@ class AzureOCRProvider(BaseOCRProvider):
 
         logger.warning('[AzureOCR] Exhausted polling budget (%ds)', max_wait)
         return {'raw_text': '', 'avg_confidence': 0.0, 'details': None, 'num_lines': 0, 'processing_time': time.time() - start}
+
+
+class TesseractOCRProvider(BaseOCRProvider):
+    """
+    محرّك OCR محلّي خفيف عبر Tesseract (pytesseract) — أسرع وأخفّ من EasyOCR (بلا PyTorch).
+
+    يقرأ إعداده من Django settings (كلّها اختيارية بقيم افتراضية معقولة):
+      TESSERACT_CMD          مسار tesseract.exe — إن فارغ يُكتشف تلقائياً.
+      TESSERACT_TESSDATA_DIR مجلّد ملفّات اللغة (*.traineddata) — يُمرَّر عبر TESSDATA_PREFIX.
+      TESSERACT_LANG         اللغات (افتراضي 'ara+eng' — العربي وحده يُفسد الأرقام/الإنجليزي).
+      TESSERACT_PSM          وضع تقسيم الصفحة (افتراضي '3' = تلقائي).
+
+    `extract()` يستخدم تمريرة واحدة `image_to_data` فيستخرج النص (مُعاد البناء سطراً سطراً
+    بترتيب RTL صحيح) ومتوسّط الثقة معاً — موفّراً للزمن على الأجهزة المحدودة.
+    """
+    name = 'tesseract'
+
+    # مسارات شائعة على ويندوز عند غياب TESSERACT_CMD (NAPS2 يضمّ Tesseract أصلاً).
+    _CMD_CANDIDATES = (
+        r"C:\Program Files\NAPS2\lib\_win64\tesseract.exe",
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+    )
+
+    def __init__(self):
+        from django.conf import settings as dj
+        import pytesseract
+
+        self._pytesseract = pytesseract
+        self.cmd = getattr(dj, 'TESSERACT_CMD', '') or self._autodetect_cmd()
+        self.tessdata_dir = getattr(dj, 'TESSERACT_TESSDATA_DIR', '') or ''
+        self.lang = getattr(dj, 'TESSERACT_LANG', 'ara+eng') or 'ara+eng'
+        self.psm = str(getattr(dj, 'TESSERACT_PSM', '3') or '3')
+        # تصعيد تكيّفي: عند ثقة < العتبة يُجرَّب تحويل ثنائي (adaptive) ويُحتفَظ بالأعلى.
+        # 0 = تعطيل. مُثبَت على عيّنة قاعدة البيانات (وسيط +6 عند ضعف الثقة).
+        self.adaptive_threshold = float(getattr(dj, 'TESSERACT_ADAPTIVE_THRESHOLD', 0.75) or 0.0)
+
+        if self.cmd:
+            pytesseract.pytesseract.tesseract_cmd = self.cmd
+        if self.tessdata_dir:
+            # متغيّر بيئة أرصن من --tessdata-dir (يتعامل مع المسافات بلا مشاكل اقتباس).
+            os.environ['TESSDATA_PREFIX'] = self.tessdata_dir
+
+    @classmethod
+    def _autodetect_cmd(cls) -> str:
+        for candidate in cls._CMD_CANDIDATES:
+            if os.path.exists(candidate):
+                return candidate
+        return 'tesseract'  # افتراض وجوده في PATH
+
+    def _to_pil(self, image_path_or_bytes: Any):
+        from PIL import Image
+        if isinstance(image_path_or_bytes, (str, Path)):
+            return Image.open(str(image_path_or_bytes))
+        if hasattr(image_path_or_bytes, 'read'):
+            return Image.open(io.BytesIO(image_path_or_bytes.read()))
+        if isinstance(image_path_or_bytes, (bytes, bytearray)):
+            return Image.open(io.BytesIO(bytes(image_path_or_bytes)))
+        if isinstance(image_path_or_bytes, np.ndarray):
+            arr = image_path_or_bytes
+            if arr.ndim == 3 and arr.shape[2] == 3:  # cv2 BGR → RGB
+                arr = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
+            return Image.fromarray(arr)
+        raise ValueError('Unsupported image input for Tesseract OCR')
+
+    def _run_tesseract(self, pil_img) -> tuple:
+        """تمريرة OCR واحدة → (raw_text, avg_conf 0-1, num_lines)."""
+        data = self._pytesseract.image_to_data(
+            pil_img, lang=self.lang, config=f'--psm {self.psm}',
+            output_type=self._pytesseract.Output.DICT,
+        )
+        # إعادة بناء النص: تجميع الكلمات حسب (block, par, line) ثم سطر لكل مجموعة.
+        lines: Dict[tuple, list] = {}
+        confidences = []
+        for i in range(len(data['text'])):
+            word = (data['text'][i] or '').strip()
+            if not word:
+                continue
+            key = (data['block_num'][i], data['par_num'][i], data['line_num'][i])
+            lines.setdefault(key, []).append(word)
+            conf = float(data['conf'][i])
+            if conf >= 0:  # ‑1 يعني «لا نص» — يُستثنى من المتوسّط
+                confidences.append(conf)
+        raw_text = '\n'.join(' '.join(words) for _, words in sorted(lines.items()))
+        avg_conf = (sum(confidences) / len(confidences) / 100.0) if confidences else 0.0
+        return raw_text, avg_conf, len(lines)
+
+    def extract(self, image_path_or_bytes: Any) -> Dict[str, Any]:
+        start = time.time()
+        img = self._to_pil(image_path_or_bytes)
+        raw_text, avg_conf, num_lines = self._run_tesseract(img)
+
+        # تصعيد تكيّفي: عند ثقة منخفضة جرّب نسخة ثنائية (adaptive) واحتفظ بالأعلى ثقةً.
+        # adaptive يرفع المستند النموذجي لكنه قد يدمّر شواذّ — «احتفظ بالأعلى» يلتقط
+        # المكسب ويحتمي من الذيل الكارثي (مُثبَت على عيّنة قاعدة البيانات).
+        if avg_conf < self.adaptive_threshold:
+            try:
+                from PIL import Image
+                gray = np.array(img.convert('L'))
+                binary = cv2.adaptiveThreshold(
+                    gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+                b_text, b_conf, b_lines = self._run_tesseract(Image.fromarray(binary))
+                if b_conf > avg_conf:
+                    raw_text, avg_conf, num_lines = b_text, b_conf, b_lines
+                    logger.info('[tesseract] adaptive escalation improved conf → %.2f', b_conf)
+            except Exception as exc:  # noqa: BLE001 — التصعيد تحسين اختياري لا يُفشل OCR
+                logger.warning('[tesseract] adaptive escalation failed: %s', exc)
+
+        return {
+            'raw_text': raw_text,
+            'avg_confidence': avg_conf,
+            'details': None,
+            'num_lines': num_lines,
+            'processing_time': time.time() - start,
+        }
+
+
+def build_offline_provider_from_settings(settings: Optional[Dict[str, str]] = None) -> BaseOCRProvider:
+    """
+    يختار محرّك OCR المحلّي حسب Django setting `AI_OFFLINE_ENGINE`:
+      'tesseract' (افتراضي) → TesseractOCRProvider (خفيف/سريع)
+      'easyocr'             → EasyOCROfflineProvider (PyTorch، احتياطي)
+    """
+    from django.conf import settings as dj
+    engine = str(getattr(dj, 'AI_OFFLINE_ENGINE', 'tesseract') or 'tesseract').lower()
+    if engine == 'easyocr':
+        return EasyOCROfflineProvider()
+    return TesseractOCRProvider()
 
 
 def build_online_provider_from_settings(settings: Dict[str, str]) -> Optional[BaseOCRProvider]:

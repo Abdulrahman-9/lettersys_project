@@ -17,6 +17,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from ..models import Attachment, Book, Entity
+from core.scoping import can_view_book, is_privileged
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,7 @@ def _serialize_book(book):
     return {
         'id': book.id,
         'our_number': book.our_number or '',
+        'our_number_display': book.our_number_display,
         'our_number_year': book.our_number_year,
         'our_number_sequence': book.our_number_sequence,
         'our_number_is_compound': book.our_number_is_compound,
@@ -116,6 +118,7 @@ def _serialize_book(book):
         'urls': {
             'detail': reverse('book_detail', args=[book.id]),
             'edit':   reverse('book_edit',   args=[book.id]),
+            'delete': reverse('api_delete_book', args=[book.id]),
         },
     }
 
@@ -130,7 +133,7 @@ def book_unified(request):
 
     base_qs = (
         Book.objects.filter(is_deleted=False)
-        if request.user.is_superuser or request.user.is_staff
+        if is_privileged(request.user)
         else Book.objects.filter(created_by=request.user, is_deleted=False)
     ).select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
 
@@ -140,7 +143,9 @@ def book_unified(request):
     date_to_str = (request.GET.get("date_to") or "").strip()
     entity_id = (request.GET.get("entity_id") or "").strip()
     followup = _resolve_followup_param(request)
-    sort = (request.GET.get("sort") or "-date").strip()
+    # عند وجود بحث ولم يختر المستخدم عموداً: افتراضٌ «relevance» يحفظ أولوية الصلة
+    # (قيدنا قبل رقم الجهة). الواجهة لا تُرسل sort إلا عند اختيار عمود صراحةً.
+    sort = (request.GET.get("sort") or ("relevance" if search_text else "-date")).strip()
 
     date_from = None
     date_to = None
@@ -258,7 +263,7 @@ def api_unified_data(request):
 
     base_qs = (
         Book.objects.filter(is_deleted=False)
-        if request.user.is_superuser or request.user.is_staff
+        if is_privileged(request.user)
         else Book.objects.filter(created_by=request.user, is_deleted=False)
     ).select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
 
@@ -268,7 +273,8 @@ def api_unified_data(request):
     date_to_s = (request.GET.get('date_to') or '').strip()
     entity_id = (request.GET.get('entity_id') or '').strip()
     followup = _resolve_followup_param(request)
-    sort = (request.GET.get('sort') or '-date').strip()
+    # عند وجود بحث ولم يختر المستخدم عموداً: «relevance» يحفظ أولوية الصلة (قيدنا قبل رقم الجهة)
+    sort = (request.GET.get('sort') or ('relevance' if search_text else '-date')).strip()
     per_page = 12
 
     date_from = date_to = None
@@ -298,6 +304,14 @@ def api_unified_data(request):
     books_qs = list(page_obj.object_list)
     books_data = [_serialize_book(b) for b in books_qs]
 
+    # رسم صفوف الجدول من القالب نفسه المستخدَم في الرسم الأولي (book_unified_row.html) —
+    # مصدر حقيقة واحد للصف بدل إعادة بنائه في JS (buildRow)، فلا يتباعد المساران. #13
+    from django.template.loader import render_to_string
+    rows_html = ''.join(
+        render_to_string('core/partials/book_unified_row.html', {'book': b}, request=request)
+        for b in books_qs
+    )
+
     active_filters = BookFilterEngine.active_filters_summary(
         tab=tab, search_text=search_text,
         date_from=date_from_s, date_to=date_to_s,
@@ -308,6 +322,7 @@ def api_unified_data(request):
 
     return JsonResponse({
         'books': books_data,
+        'rows_html': rows_html,
         'pagination': {
             'current':  page_obj.number,
             'total':    paginator.num_pages,
@@ -324,10 +339,11 @@ def api_unified_data(request):
 @login_required
 def trash_list(request):
     """عرض سلة المهملات - الكتب والمرفقات المحذوفة."""
-    books_qs = Book.objects.filter(is_deleted=True)
-    attachments_qs = Attachment.objects.filter(is_deleted=True).select_related("book")
+    # ‏all_objects: المدير الافتراضي لا يرى المحذوف — والسلّة كلّها محذوف.
+    books_qs = Book.all_objects.filter(is_deleted=True)
+    attachments_qs = Attachment.all_objects.filter(is_deleted=True).select_related("book")
 
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not is_privileged(request.user):
         books_qs = books_qs.filter(created_by=request.user)
         attachments_qs = attachments_qs.filter(book__created_by=request.user)
 
@@ -346,7 +362,7 @@ def api_export_csv(request):
 
     base_qs = (
         Book.objects.filter(is_deleted=False)
-        if request.user.is_superuser or request.user.is_staff
+        if is_privileged(request.user)
         else Book.objects.filter(created_by=request.user, is_deleted=False)
     ).prefetch_related("issuing_entities", "receiving_entities")
 
@@ -355,7 +371,9 @@ def api_export_csv(request):
     search_text = (request.GET.get("q") or "").strip()
     entity_id = (request.GET.get("entity_id") or "").strip()
     followup = _resolve_followup_param(request)
-    sort = (request.GET.get("sort") or "-date").strip()
+    # عند وجود بحث ولم يختر المستخدم عموداً: افتراضٌ «relevance» يحفظ أولوية الصلة
+    # (قيدنا قبل رقم الجهة). الواجهة لا تُرسل sort إلا عند اختيار عمود صراحةً.
+    sort = (request.GET.get("sort") or ("relevance" if search_text else "-date")).strip()
     date_from = date_to = None
     try:
         if request.GET.get("date_from"):

@@ -1,0 +1,62 @@
+{% comment %}
+تنبيه مؤقّت يشرح تركيبة رقم القيد ويميّزه عن العدد المطبوع على المستند.
+
+مؤقّت بمعنيين: يُغلَق بضغطة ولا يعود (يُحفَظ الإغلاق في localStorage)، ومربوط
+بمفتاح نسخة — فإن تغيّرت قواعد الترقيم مستقبلاً عاد التنبيه للظهور لمن أغلقه.
+ضَعه بتضمينه في أي صفحة تعرض أرقام قيد، مع ربط number_hint.css و number_hint.js.
+
+ملاحظة: التعليق هنا {% templatetag openblock %} comment {% templatetag closeblock %}
+وليس {% templatetag openbrace %}# … #{% templatetag closebrace %} — فصيغة الأخيرة
+لا تصلح لأكثر من سطر في Django، وأي وسم داخلها يُنفَّذ فعلاً.
+{% endcomment %}
+<div class="num-hint alert alert-info d-none" id="numHintNotice" role="note"
+     data-hint-key="number-format-2026-08">
+  <button type="button" class="btn-close num-hint__close" aria-label="إغلاق التنبيه"></button>
+
+  <div class="num-hint__title">
+    <i class="bi bi-info-circle-fill me-1"></i>كيف تقرأ الأرقام في هذا الجدول؟
+  </div>
+
+  <div class="num-hint__grid">
+    <div class="num-hint__card">
+      <div class="num-hint__label">رقم قيدنا — كتب السنوات السابقة</div>
+      <div class="num-hint__sample" dir="ltr" aria-hidden="true">
+        <span class="nh-year">2025</span><span class="nh-reg">1</span><span class="nh-seq">0234</span>
+      </div>
+      <div class="num-hint__legend">
+        <span><b class="nh-dot nh-dot--year"></b>السنة</span>
+        <span><b class="nh-dot nh-dot--reg"></b>السجل</span>
+        <span><b class="nh-dot nh-dot--seq"></b>التسلسل</span>
+      </div>
+    </div>
+
+    <div class="num-hint__card">
+      <div class="num-hint__label">رقم قيدنا — كتب السنة الحالية</div>
+      <div class="num-hint__sample" dir="ltr" aria-hidden="true">
+        <span class="nh-reg">1</span><span class="nh-seq">0234</span>
+      </div>
+      <div class="num-hint__legend">
+        <span><b class="nh-dot nh-dot--reg"></b>السجل</span>
+        <span><b class="nh-dot nh-dot--seq"></b>تسلسل دائم لا يُصفَّر سنوياً</span>
+      </div>
+    </div>
+
+    <div class="num-hint__card num-hint__card--alt">
+      <div class="num-hint__label">عمود «رقم الجهة» شيء آخر تماماً</div>
+      <div class="num-hint__body">
+        هو <strong>العدد الحقيقي المطبوع على المستند</strong> كما أصدرته الجهة المرسِلة —
+        نقرأه من الورقة ولا نولّده. قد يتكرّر بين جهتين، وقد يخلو منه المستند.
+        <strong>لا تبحث به عن كتابك عندنا</strong>؛ ابحث برقم القيد.
+      </div>
+    </div>
+  </div>
+
+  <div class="num-hint__foot">
+    الخانة الأولى تحدّد السجل:
+    <span class="nh-chip">1 وارد داخلي</span>
+    <span class="nh-chip">2 وارد خارجي</span>
+    <span class="nh-chip">3 صادر داخلي</span>
+    <span class="nh-chip">4 صادر خارجي</span>
+    <span class="nh-chip nh-chip--alt" title="استثناء معتمَد: كتاب داخلي لا يحمل رقماً رسمياً">0 بلا رقم رسمي</span>
+  </div>
+</div>

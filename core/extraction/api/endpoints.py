@@ -24,12 +24,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
+from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from core.tasks import process_attachment_extraction
-from core.extraction.pipeline import AIExtractionService
+from core.extraction.pipeline import AIExtractionService, slim_entity_matches
 from core.decorators import rate_limit_scan, rate_limit
 from core.models import (
     Attachment,
@@ -259,6 +262,39 @@ def extraction_statistics(request):
     }, status=status.HTTP_200_OK)
 
 
+def _mint_scan_token(result) -> str:
+    """يسكّ رمز مسحٍ لأيّ استخراج (رفعٌ يدويّ أو بثّ) ويخزّن اقتراحه في الكاش.
+
+    **إصلاح حلقة التعلّم (2026-08-16، تشخيصٌ على الكتاب 11298):** كانت الحلقة تُنشئ
+    الرمز في مسار **وكيل المسح وحده** (`scan_settings`)، فكلُّ مستندٍ يُرفع يدوياً لا
+    يُنتج رمزاً ⟵ `books_api` يتخطّى `persist_extraction_capture` ⟵ **تصحيحُ الكاتب
+    يضيع**. الدليل: 6 سجلّات التقاطٍ في القاعدة كلّها (و0 لهذا الكتاب) مقابل آلاف
+    الحفظات. المخزَّن هو `result_to_scan_data` نفسه لأن الالتقاط يقرأ منه raw_text
+    والحقول والثقات وصندوق العدد. يُعاد الرمز في الاستجابة لترسله الواجهة عند الحفظ."""
+    try:
+        import uuid
+
+        from django.core.cache import cache as _cache
+
+        from core.extraction.pipeline import result_to_scan_data
+        token = uuid.uuid4().hex
+        payload = result_to_scan_data(result)
+        _cache.set(f'scan_token:{token}', payload, timeout=86400)
+        # **ونسخةٌ دائمة**: الكاش مسارُ السرعة وهذا مسارُ الحقيقة. بلا REDIS_CACHE_URL
+        # يكون الكاش LocMemCache — نسخةٌ لكلّ عمليّة — فرمزٌ يُسكّ في عاملٍ لا يراه
+        # عاملٌ آخر يستقبل الحفظ، وكلّ إعادة تشغيلٍ تمحو المعلّق. وضياعُ زوج (قصاصة،
+        # حقيقة) لا يُعوَّض: النصّ الخاطئ يُعاد حسابه غداً، وما كتبه الكاتب يضيع أبداً.
+        try:
+            from core.models import ScanPayload
+            ScanPayload.objects.update_or_create(token=token, defaults={'data': payload})
+        except Exception as exc:                  # الدوام تحسينٌ لا شرط
+            logger.warning('[capture] تعذّر حفظ حمولة المسح دائماً: %s', type(exc).__name__)
+        return token
+    except Exception as exc:                      # الحلقة تحسينٌ لا شرط — لا تُفشل الاستخراج
+        logger.warning('[capture] تعذّر سكّ رمز المسح: %s', type(exc).__name__)
+        return ''
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @rate_limit_scan(max_attempts=20, window_seconds=300)
@@ -314,12 +350,25 @@ def smart_extract_direct(request):
                 'book_number_confidence': result.book_number_confidence,
                 'book_date': result.book_date,
                 'book_date_confidence': result.book_date_confidence,
+                'sender_date': result.sender_date,
+                'sender_date_confidence': result.sender_date_confidence,
+                # القصاصةُ والاقتراح كانا يصلان في مسار البثّ ورمز المسح ويغيبان
+                # عن الرفع المباشر — ثلاثةُ مسارات لحمولةٍ واحدة يجب أن تتساوى،
+                # وإلّا اختلف سلوكُ الحقل باختلاف طريق المستخدم إليه.
+                'sender_date_crop': getattr(result, 'sender_date_crop', None),
+                'sender_date_suggestion': getattr(result, 'sender_date_suggestion', None),
+                'sender_number': result.sender_number,
+                'sender_number_confidence': result.sender_number_confidence,
                 'title': result.title,
                 'title_confidence': result.title_confidence,
+                # اقتراحُ الموضوع الضعيف — المسارات الثلاثة تتساوى حمولةً
+                'title_suggestion': getattr(result, 'title_suggestion', None),
                 'issuing_entity': result.issuing_entity_name,
                 'issuing_entity_confidence': result.issuing_entity_confidence,
+                'issuing_entity_matches': slim_entity_matches(result.issuing_entity_matches),
                 'receiving_entity': result.receiving_entity_name,
                 'receiving_entity_confidence': result.receiving_entity_confidence,
+                'receiving_entity_matches': slim_entity_matches(result.receiving_entity_matches),
                 'secret_level': result.secret_level,
                 'secret_level_confidence': result.secret_level_confidence,
                 'book_kind': result.book_kind,
@@ -327,6 +376,8 @@ def smart_extract_direct(request):
                 'overall_confidence': result.overall_confidence,
                 'cached': result.cached,
                 'needs_review': getattr(result, 'status', '') == 'manual_review',
+                # حلقة التعلّم: ترسله الواجهة عند الحفظ فيُلتقَط (اقتراح → تصحيح الكاتب)
+                'scan_token': _mint_scan_token(result),
             }
         except Exception as exc:
             logger.exception("Smart extract processing failed")
@@ -381,6 +432,106 @@ def smart_extract_direct(request):
                 pass
 
 
+# تسميات المراحل كما يراها المستخدم (مصدر واحد لرسائل التقدّم الحيّة)
+_STAGE_LABELS = {
+    'cache_check': 'تجهيز المستند',
+    'image_enhancement': 'تحسين الصورة',
+    'ocr': 'قراءة النص',
+    'ocr_azure_fallback': 'تحسين القراءة (سحابة)',
+    'pattern_matching': 'استخراج الحقول',
+    'entity_matching': 'مطابقة الجهات',
+    'handwritten_number': 'قراءة الرقم بخط اليد',
+    'confidence': 'حساب الثقة',
+}
+
+
+@login_required
+@require_http_methods(['POST'])
+def smart_extract_stream(request):
+    """بثّ الاستخراج تدريجياً (NDJSON): سطرٌ لكل مرحلة بحقولها المكتملة ثم سطر نهائي.
+
+    يتيح للواجهة ملء الحقول لحظياً برسائل صادقة من الأنبوب نفسه، وإيقافاً يُبقي ما
+    وصل — بدل انتظار الحصيلة كاملةً في نداء متزامن واحد.
+
+    البنية: خيطٌ منتِج يشغّل process_image ويدفع أحداث on_progress إلى طابور،
+    والمولّد يستنزف الطابور ويبثّ. قطع العميل للاتصال يُنهي البثّ، والخيط يُكمل
+    ويُنظّف ملفه المؤقّت (لا يُقتَل — قتل خيط OCR غير آمن).
+    """
+    upload = request.FILES.get('file')
+    if not upload:
+        return JsonResponse({'ok': False, 'error': 'file مطلوب'}, status=400)
+    if upload.content_type not in {'image/jpeg', 'image/png', 'application/pdf'}:
+        return JsonResponse({'ok': False, 'error': 'نوع الملف غير مدعوم'}, status=400)
+    if upload.size > 10 * 1024 * 1024:
+        return JsonResponse({'ok': False, 'error': 'حجم الملف يتجاوز 10MB'}, status=400)
+
+    suffix = Path(upload.name).suffix or '.tmp'
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        for chunk in upload.chunks():
+            tmp.write(chunk)
+        temp_path = tmp.name
+
+    def _events():
+        import json as _json
+        import queue as _queue
+        import threading as _threading
+        from core.extraction.pipeline import result_to_scan_data
+
+        events = _queue.Queue()
+        box = {}
+
+        def _on_progress(stage, fields):
+            events.put({'type': 'stage', 'stage': stage,
+                        'label': _STAGE_LABELS.get(stage, stage), 'fields': fields})
+
+        def _work():
+            try:
+                box['result'] = AIExtractionService().process_image(
+                    temp_path, on_progress=_on_progress)
+            except Exception as exc:              # noqa: BLE001 — يُبلَّغ للعميل كسطر خطأ
+                logger.exception('[extract-stream] فشل الاستخراج')
+                box['error'] = str(exc)
+            finally:
+                # التنظيف في الخيط لا المولّد: العميل قد ينقطع مبكراً بينما OCR ما زال
+                # يقرأ الملف (حذفه حينها يفشل على ويندوز فيتسرّب).
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+                events.put(None)
+
+        _threading.Thread(target=_work, daemon=True).start()
+
+        while True:
+            item = events.get()
+            if item is None:
+                break
+            yield _json.dumps(item, ensure_ascii=False) + '\n'
+
+        result = box.get('result')
+        if result is None:
+            yield _json.dumps({'type': 'error',
+                               'message': box.get('error') or 'تعذّر استخراج البيانات'},
+                              ensure_ascii=False) + '\n'
+        else:
+            payload = result_to_scan_data(result)
+            payload.update({
+                'type': 'done',
+                'success': True,
+                'request_id': _request_id(),
+                'overall_confidence': result.overall_confidence,
+                'cached': result.cached,
+                # حلقة التعلّم: ترسله الواجهة عند الحفظ فيُلتقَط (اقتراح → تصحيح الكاتب)
+                'scan_token': _mint_scan_token(result),
+            })
+            yield _json.dumps(payload, ensure_ascii=False) + '\n'
+
+    resp = StreamingHttpResponse(_events(), content_type='application/x-ndjson; charset=utf-8')
+    resp['Cache-Control'] = 'no-cache'
+    resp['X-Accel-Buffering'] = 'no'      # امنع التخزين الوسيط (nginx) كي يصل التقدّم فوراً
+    return resp
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def scan_token_retrieve(request, token: str):
@@ -397,7 +548,17 @@ def scan_token_retrieve(request, token: str):
             status_code=status.HTTP_404_NOT_FOUND,
             error_code='TOKEN_NOT_FOUND',
         )
-    return Response({'success': True, 'data': data}, status=status.HTTP_200_OK)
+    # ربط الرمز بصاحبه (يسدّ IDOR على رمز مُسرَّب)
+    uid = data.get('user_id')
+    if uid is not None and uid != request.user.id and not request.user.is_superuser:
+        return _api_response(
+            False, 'رمز المسح غير متاح',
+            status_code=status.HTTP_404_NOT_FOUND, error_code='TOKEN_NOT_FOUND',
+        )
+    # لا نُسرّب مسار الخادم المطلق ولا user_id للواجهة — نكشف has_file فقط
+    safe = {k: v for k, v in data.items() if k not in ('processed_path', 'user_id')}
+    safe['has_file'] = bool(data.get('processed_path'))
+    return Response({'success': True, 'data': safe}, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])

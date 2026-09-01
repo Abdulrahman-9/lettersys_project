@@ -21,12 +21,14 @@ class ImageProcessor:
     معالج الصور لتحسين جودتها قبل الاستخراج الضوئي
     """
 
-    def __init__(self, image_path_or_bytes):
+    def __init__(self, image_path_or_bytes, *, preprocess_pdf=True, max_ocr_dim=2000):
         """
         تهيئة معالج الصور
 
         Args:
             image_path_or_bytes: مسار الملف أو bytes من الصورة
+            preprocess_pdf: تطبيق المعالجة الثقيلة عند تحويل PDF (يُعطَّل لـ Tesseract).
+            max_ocr_dim: الحد الأقصى للجانب الأطول قبل التصغير (أعلى لـ Tesseract السريع).
         """
         self.image_path = None
         self.image = None
@@ -38,7 +40,7 @@ class ImageProcessor:
             # تحقق إذا كان الملف PDF
             if self.image_path.lower().endswith('.pdf'):
                 logger.info(f"[ImageProcessor] Detected PDF file: {self.image_path}")
-                self.image = self._convert_pdf_to_image(self.image_path)
+                self.image = self._convert_pdf_to_image(self.image_path, preprocess=preprocess_pdf, max_dim=max_ocr_dim)
             else:
                 self.image = cv2.imread(self.image_path)
         else:
@@ -53,9 +55,8 @@ class ImageProcessor:
         # الحد 2000px على الجانب الأطول كافٍ لـ OCR الطباعي العربي/الإنجليزي.
         h, w = self.image.shape[:2]
         max_dim = max(h, w)
-        MAX_OCR_DIM = 2000
-        if max_dim > MAX_OCR_DIM:
-            scale = MAX_OCR_DIM / max_dim
+        if max_dim > max_ocr_dim:
+            scale = max_ocr_dim / max_dim
             new_w, new_h = int(w * scale), int(h * scale)
             logger.info('[ImageProcessor] downscale %dx%d → %dx%d (OCR speed)',
                         w, h, new_w, new_h)
@@ -64,12 +65,15 @@ class ImageProcessor:
 
         self.original_image = None  # لا نحتفظ بنسخة لتوفير الذاكرة
 
-    def _convert_pdf_to_image(self, pdf_path: str) -> np.ndarray:
+    def _convert_pdf_to_image(self, pdf_path: str, preprocess: bool = True, max_dim: int = 2600) -> np.ndarray:
         """
-        تحويل أول صفحة من PDF إلى صورة بدقة عالية
+        تحويل الصفحة الأولى (الوجه المعتمَد) من PDF إلى صورة بدقة عالية.
+        قرار النطاق: الصفحات التالية مرفقاتٌ للكتاب الأول ولا تدخل في الاستخراج
+        (قد يحوي المستند كتباً أخرى، لكن المعتمَد هو الوجه الأول حصراً).
 
         Args:
             pdf_path: مسار ملف PDF
+            preprocess: تطبيق المعالجة المسبقة بعد التحويل
 
         Returns:
             numpy array للصورة المحسّنة
@@ -81,13 +85,34 @@ class ImageProcessor:
             if doc.page_count == 0:
                 raise ValueError("PDF file is empty")
 
-            # Get first page
+            # الصفحة الأولى فقط — الوجه المعتمَد (الباقي مرفقات لا تُستخرَج)
             page = doc[0]
 
-            # تحويل لصورة بدقة عالية (300 DPI للنص العربي)
-            zoom = 300 / 72  # 72 DPI is default, نستخدم 300 لوضوح أفضل مع توفير الذاكرة
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat, alpha=False)  # بدون alpha channel
+            # دقّة مستهدفة 300 DPI للنص العربي، لكن نحدّ البُعد الأطول بـ max_dim كي لا يُخصَّص
+            # pixmap ضخم يفشل (صفحة كبيرة/ماسح عالي الدقّة تطلب مئات الميغابايت → OOM على
+            # الأجهزة محدودة الذاكرة). التحديد عند العرض لا بعده = لا تخصيص كبير أصلاً.
+            zoom = 300 / 72  # 72 DPI هي الافتراضية
+            longer_px = max(page.rect.width, page.rect.height) * zoom
+            if max_dim and longer_px > max_dim:
+                zoom *= max_dim / longer_px
+
+            # رسم مع سقوط تلقائي عند نفاد الذاكرة: نبدأ بالدقّة المستهدفة ونتراجع
+            # تدريجياً إن فشل تخصيص الـpixmap على جهاز ضيّق الذاكرة (mupdf يرمي
+            # «malloc failed») — أفضل من فشل الاستخراج كليّاً. الأرضية ≈130 DPI
+            # تبقى مقروءةً للعربية المطبوعة. لا خسارة جودة متى توفّرت الذاكرة.
+            min_zoom = 130 / 72
+            while True:
+                try:
+                    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+                    break
+                except Exception as render_exc:
+                    msg = str(render_exc).lower()
+                    out_of_mem = isinstance(render_exc, MemoryError) or 'alloc' in msg or 'memory' in msg
+                    if not out_of_mem or zoom <= min_zoom:
+                        raise
+                    zoom *= 0.66
+                    logger.warning("[ImageProcessor] نقص ذاكرة عند الرسم — إعادة المحاولة بدقّة أدنى (~%d DPI)",
+                                   round(zoom * 72))
 
             # تحويل لـ numpy array
             img_data = pix.tobytes("png")
@@ -95,11 +120,13 @@ class ImageProcessor:
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
             doc.close()
-            logger.info(f"[ImageProcessor] PDF converted at 300 DPI, size: {img.shape}")
+            logger.info(f"[ImageProcessor] PDF converted (~{round(zoom * 72)} DPI), size: {img.shape}")
 
-            # تحسين الصورة فوراً بعد التحويل
-            img = self._preprocess_for_ocr(img)
-            logger.info(f"[ImageProcessor] Image preprocessed for OCR")
+            # تحسين الصورة فوراً بعد التحويل — يُتخطّى لمحرّكات تطبّق تحسينها
+            # داخلياً (Tesseract): المعالجة الثقيلة هنا تؤذي دقّته.
+            if preprocess:
+                img = self._preprocess_for_ocr(img)
+                logger.info(f"[ImageProcessor] Image preprocessed for OCR")
 
             return img
 
@@ -341,6 +368,15 @@ class ImageProcessor:
         self.increase_brightness(1.1)
         self.deskew()
         self.apply_threshold('adaptive')
+        return self
+
+    def light_pipeline(self):
+        """
+        معالجة خفيفة لمحرّكات تطبّق تحسينها الداخلي (Tesseract): تحويل رمادي فقط.
+        التصفية الثنائية العدوانية وdeskew وmorphology تؤذي دقّة Tesseract، فنتجنّبها.
+        """
+        if self.image is not None and len(self.image.shape) == 3:
+            self.convert_to_grayscale()
         return self
 
     def get_image(self):

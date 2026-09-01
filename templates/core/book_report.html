@@ -1,0 +1,306 @@
+{% load static %}<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>تقرير دورة حياة الكتاب — {{ book.our_number_display }}</title>
+  <style>
+    /* ===== تقرير دورة حياة الكتاب — طباعة A4 (سطح المكتب) ===== */
+    :root{
+      --ink:#1f2933; --ink-soft:#52606d; --muted:#9aa5b1; --line:#d9dee5;
+      --paper:#ffffff; --band:#f4f6f8; --accent:#0f6e6e; --accent-soft:#e6f1f1;
+      --ok:#0a7d4d; --warn:#b06a00; --danger:#b42318; --info:#1d4ed8; --gray:#5b6470;
+    }
+    *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    html,body{margin:0;padding:0;background:#e7eaee;color:var(--ink);
+      font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic",Arial,sans-serif;font-size:13px;line-height:1.7;}
+
+    /* شريط الأدوات (لا يُطبع) */
+    .toolbar{position:sticky;top:0;z-index:10;display:flex;gap:.5rem;justify-content:center;
+      padding:.6rem;background:#0f1720;box-shadow:0 2px 8px rgba(0,0,0,.25);}
+    .toolbar button,.toolbar a{font:inherit;font-weight:700;border:0;border-radius:8px;
+      padding:.5rem 1.1rem;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;}
+    .tb-print{background:var(--accent);color:#fff;}
+    .tb-back{background:#33414f;color:#fff;}
+
+    /* الورقة */
+    .sheet{background:var(--paper);width:210mm;min-height:297mm;margin:14px auto;padding:16mm 15mm;
+      box-shadow:0 6px 24px rgba(0,0,0,.18);}
+
+    /* الترويسة */
+    .rpt-head{display:flex;justify-content:space-between;align-items:flex-start;
+      border-bottom:3px solid var(--accent);padding-bottom:12px;margin-bottom:18px;}
+    .rpt-head .org{font-size:12px;color:var(--ink-soft);font-weight:700;letter-spacing:.3px;}
+    .rpt-head h1{font-size:20px;margin:.15rem 0 0;font-weight:800;}
+    .rpt-head .sub{font-size:12px;color:var(--muted);margin-top:.15rem;}
+    .rpt-head .num-chip{text-align:center;border:1.5px solid var(--accent);border-radius:10px;
+      padding:.5rem .9rem;min-width:120px;}
+    .rpt-head .num-chip .lbl{font-size:10px;color:var(--accent);font-weight:700;}
+    .rpt-head .num-chip .val{font-size:18px;font-weight:800;letter-spacing:.5px;}
+
+    /* شارات */
+    .badge{display:inline-block;border-radius:6px;padding:.12rem .55rem;font-size:11px;font-weight:700;border:1px solid transparent;}
+    .b-incoming{background:#eef4ff;color:var(--info);border-color:#c7d7fe;}
+    .b-outgoing{background:#fff3e6;color:var(--warn);border-color:#ffd9a8;}
+    .b-pending{background:#eef4ff;color:var(--info);border-color:#c7d7fe;}
+    .b-due_today{background:#fff7e6;color:var(--warn);border-color:#ffe2ad;}
+    .b-overdue{background:#fdecea;color:var(--danger);border-color:#f6c6c0;}
+    .b-archived{background:#eef1f4;color:var(--gray);border-color:#d3d9e0;}
+    .b-secret{background:#fdecea;color:var(--danger);border-color:#f6c6c0;}
+    .b-confidential{background:#fff7e6;color:var(--warn);border-color:#ffe2ad;}
+    .b-normal{background:#e9f7ef;color:var(--ok);border-color:#bfe6cf;}
+
+    /* أقسام */
+    .section{margin-top:18px;page-break-inside:avoid;}
+    .section > h2{font-size:13px;font-weight:800;color:#fff;background:var(--accent);
+      padding:.35rem .7rem;border-radius:6px 6px 0 0;margin:0;display:flex;align-items:center;gap:.4rem;}
+    .section > .body{border:1px solid var(--line);border-top:0;border-radius:0 0 6px 6px;padding:12px;}
+
+    /* شبكة الحقول */
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 18px;}
+    .grid.two{grid-template-columns:repeat(2,1fr);}
+    .field .k{font-size:10.5px;color:var(--muted);font-weight:700;margin-bottom:1px;}
+    .field .v{font-size:13px;font-weight:600;color:var(--ink);}
+
+    /* بطاقات المُدد */
+    .durations{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+    .dur{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--band);}
+    .dur .n{font-size:22px;font-weight:800;line-height:1.1;}
+    .dur .t{font-size:11px;color:var(--ink-soft);margin-top:2px;}
+    .dur.is-overdue{background:#fdecea;border-color:#f6c6c0;} .dur.is-overdue .n{color:var(--danger);}
+    .dur.is-due{background:#fff7e6;border-color:#ffe2ad;} .dur.is-due .n{color:var(--warn);}
+    .dur.is-ok{background:#e9f7ef;border-color:#bfe6cf;} .dur.is-ok .n{color:var(--ok);}
+
+    /* جداول */
+    table{width:100%;border-collapse:collapse;font-size:12px;}
+    th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;}
+    thead th{background:var(--band);font-size:11px;color:var(--ink-soft);font-weight:800;border-bottom:1.5px solid var(--line);}
+    tbody tr{page-break-inside:avoid;}
+
+    /* الملاحظات/التعليقات */
+    .note-box{background:var(--band);border-right:3px solid var(--accent);border-radius:4px;padding:10px 12px;white-space:pre-wrap;}
+    .comment{padding:8px 0;border-bottom:1px dashed var(--line);page-break-inside:avoid;}
+    .comment:last-child{border-bottom:0;}
+    .comment .meta{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:2px;}
+    .comment .meta .who{color:var(--ink);}
+    .comment .txt{white-space:pre-wrap;}
+
+    /* الجدول الزمني للسجل */
+    .tl{position:relative;padding-right:14px;}
+    .tl-item{position:relative;padding:0 14px 12px 0;border-right:2px solid var(--line);}
+    .tl-item:last-child{border-right-color:transparent;}
+    .tl-item::before{content:"";position:absolute;right:-6px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--accent);}
+    .tl-item .when{font-size:11px;color:var(--muted);font-weight:700;}
+    .tl-item .what{font-weight:700;} .tl-item .by{font-size:11px;color:var(--ink-soft);}
+    .tl-item .extra{font-size:12px;color:var(--ink-soft);}
+
+    .empty{color:var(--muted);font-size:12px;padding:4px 2px;}
+
+    /* التذييل */
+    .rpt-foot{margin-top:20px;border-top:1px solid var(--line);padding-top:8px;
+      display:flex;justify-content:space-between;font-size:11px;color:var(--muted);}
+
+    @media print{
+      html,body{background:#fff;}
+      .no-print{display:none !important;}
+      .sheet{box-shadow:none;margin:0;width:auto;min-height:auto;padding:0;}
+      @page{size:A4;margin:14mm;}
+      .section{break-inside:avoid;}
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <button class="tb-print" onclick="window.print()">🖨 طباعة التقرير</button>
+    <a class="tb-back" href="{% url 'book_detail' book.pk %}">← العودة للكتاب</a>
+  </div>
+
+  <div class="sheet">
+    <!-- الترويسة -->
+    <div class="rpt-head">
+      <div>
+        <div class="org">نظام إدارة المراسلات — LetterSys</div>
+        <h1>تقرير دورة حياة كتاب</h1>
+        <div class="sub">وثيقة تتبّع رسمية لكامل مسار المستند</div>
+      </div>
+      <div class="num-chip">
+        <div class="lbl">رقم القيد</div>
+        <div class="val">{{ book.our_number_display|default:"—" }}</div>
+      </div>
+    </div>
+
+    <!-- هوية الكتاب -->
+    <div class="section">
+      <h2>① هوية الكتاب</h2>
+      <div class="body">
+        <div style="margin-bottom:10px">
+          <span class="badge {% if book.is_incoming %}b-incoming{% else %}b-outgoing{% endif %}">{{ book.kind_label }}</span>
+          <span class="badge b-{{ book.followup_state }}">{{ book.followup_label }}</span>
+          {% if book.get_secret_level_display == 'سري' %}<span class="badge b-secret">{{ book.get_secret_level_display }}</span>
+          {% elif book.get_secret_level_display == 'موثق' %}<span class="badge b-confidential">{{ book.get_secret_level_display }}</span>
+          {% else %}<span class="badge b-normal">{{ book.get_secret_level_display }}</span>{% endif %}
+        </div>
+        <div class="field" style="margin-bottom:8px"><div class="k">العنوان</div><div class="v" style="font-size:15px">{{ book.title|default:"—" }}</div></div>
+        <div class="grid">
+          <div class="field"><div class="k">رقم الجهة المقابل</div><div class="v">{{ book.sender_number|default:"—" }}</div></div>
+          <div class="field"><div class="k">نوع المستند</div><div class="v">{{ book.document_type|default:"—" }}</div></div>
+          <div class="field"><div class="k">المعرّف الداخلي</div><div class="v">#{{ book.id }}</div></div>
+          <div class="field" style="grid-column:span 3">
+            <div class="k">الجهة المصدِرة</div>
+            <div class="v">
+              {% for e in book.issuing_entities.all %}{{ e.name }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}
+              {% for n in book.archived_issuing_names %} · <span style="color:var(--muted)">{{ n }} (أرشيف)</span>{% endfor %}
+            </div>
+          </div>
+          <div class="field" style="grid-column:span 3">
+            <div class="k">الجهة المستلِمة</div>
+            <div class="v">
+              {% for e in book.receiving_entities.all %}{{ e.name }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}
+              {% for n in book.archived_receiving_names %} · <span style="color:var(--muted)">{{ n }} (أرشيف)</span>{% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- المُدد الزمنية -->
+    <div class="section">
+      <h2>② المؤشّرات الزمنية لدورة الحياة</h2>
+      <div class="body">
+        <div class="durations">
+          <div class="dur"><div class="n">{{ age_in_system|default:"0" }}</div><div class="t">يوم في النظام (منذ الإنشاء)</div></div>
+          <div class="dur"><div class="n">{% if since_book_date is not None %}{{ since_book_date }}{% else %}—{% endif %}</div><div class="t">يوم منذ تاريخ الكتاب</div></div>
+          {% if due_delta is None %}
+            <div class="dur"><div class="n">—</div><div class="t">لا يوجد تاريخ متابعة</div></div>
+          {% elif due_delta < 0 %}
+            <div class="dur is-overdue"><div class="n">{{ due_delta|stringformat:"d"|cut:"-" }}</div><div class="t">يوم تأخّر عن الاستحقاق</div></div>
+          {% elif due_delta == 0 %}
+            <div class="dur is-due"><div class="n">0</div><div class="t">مستحق اليوم</div></div>
+          {% else %}
+            <div class="dur is-ok"><div class="n">{{ due_delta }}</div><div class="t">يوم متبقٍّ للاستحقاق</div></div>
+          {% endif %}
+        </div>
+
+        <!-- تحليلات دورة المتابعة (إعادة الفتح / التأخّر / التحديث / المدة) -->
+        <div class="durations" style="margin-top:10px">
+          <div class="dur"><div class="n">{{ followup.cycles }}</div><div class="t">دورة متابعة (إنشاء + إعادات الفتح)</div></div>
+          <div class="dur"><div class="n">{{ followup.reopens }}</div><div class="t">مرّة أُعيد فتح المتابعة</div></div>
+          {% if followup.currently_overdue %}
+            <div class="dur is-overdue"><div class="n">{{ followup.current_overdue_days }}</div><div class="t">يوم تأخّر حالياً</div></div>
+          {% else %}
+            <div class="dur"><div class="n">{{ followup.overdue_episodes }}</div><div class="t">مرّة دخل حالة التأخّر</div></div>
+          {% endif %}
+        </div>
+        <div class="durations" style="margin-top:10px">
+          <div class="dur"><div class="n">{{ followup.active_days }}</div><div class="t">إجمالي أيام المتابعة النشطة (تقديري)</div></div>
+          <div class="dur"><div class="n">{{ followup.updates }}</div><div class="t">مرّة حُدِّث/أُرفق المستند</div></div>
+          <div class="dur"><div class="n">{{ followup.archives }}</div><div class="t">مرّة أُنهيت المتابعة (أرشفة)</div></div>
+        </div>
+
+        <div class="grid" style="margin-top:12px">
+          <div class="field"><div class="k">تاريخ الكتاب</div><div class="v">{{ book.date|date:"d/m/Y"|default:"—" }}</div></div>
+          <div class="field"><div class="k">تاريخ الاستحقاق</div><div class="v">{{ book.due_date|date:"d/m/Y"|default:"—" }}</div></div>
+          <div class="field"><div class="k">الحالة الحالية</div><div class="v">{{ book.followup_label }}</div></div>
+          <div class="field"><div class="k">أُنشئ في النظام</div><div class="v">{{ book.created_at|date:"d/m/Y H:i" }}</div></div>
+          <div class="field"><div class="k">آخر تحديث</div><div class="v">{{ book.updated_at|date:"d/m/Y H:i" }}</div></div>
+          <div class="field"><div class="k">أنشأه</div><div class="v">{{ book.created_by|default:"—" }}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الملاحظات -->
+    <div class="section">
+      <h2>③ الملاحظات والهوامش</h2>
+      <div class="body">
+        {% if book.margin %}<div class="note-box">{{ book.margin }}</div>{% else %}<div class="empty">لا توجد ملاحظات.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- التعليقات -->
+    <div class="section">
+      <h2>④ التعليقات الداخلية ({{ comments|length }})</h2>
+      <div class="body">
+        {% for c in comments %}
+          <div class="comment">
+            <div class="meta"><span class="who">{{ c.created_by.username }}</span> · {{ c.created_at|date:"d/m/Y H:i" }}{% if c.is_edited %} · (معدّل){% endif %}</div>
+            <div class="txt">{{ c.content }}</div>
+          </div>
+        {% empty %}<div class="empty">لا توجد تعليقات.</div>{% endfor %}
+      </div>
+    </div>
+
+    <!-- المراسلات والأجوبة -->
+    <div class="section">
+      <h2>⑤ المراسلات والأجوبة الملحقة ({{ email_logs|length }})</h2>
+      <div class="body">
+        {% if email_logs %}
+        <table>
+          <thead><tr><th>التاريخ</th><th>الموضوع</th><th>المرسَل إليه</th><th>الحالة</th></tr></thead>
+          <tbody>
+            {% for m in email_logs %}
+            <tr>
+              <td style="white-space:nowrap">{{ m.sent_at|date:"d/m/Y H:i" }}</td>
+              <td>{{ m.subject|default:"—" }}</td>
+              <td style="direction:ltr;text-align:right">{{ m.to_address }}</td>
+              <td>{% if m.status == 'sent' %}<span class="badge b-normal">{{ m.get_status_display }}</span>{% elif m.status == 'failed' %}<span class="badge b-overdue">{{ m.get_status_display }}</span>{% else %}<span class="badge b-due_today">{{ m.get_status_display }}</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<div class="empty">لا توجد مراسلات مرتبطة بهذا الكتاب.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- المرفقات -->
+    <div class="section">
+      <h2>⑥ المرفقات ({{ attachments|length }})</h2>
+      <div class="body">
+        {% if attachments %}
+        <table>
+          <thead><tr><th>الملف</th><th>تاريخ الإضافة</th><th>نُسخ سابقة</th></tr></thead>
+          <tbody>
+            {% for a in attachments %}
+            <tr>
+              <td>{{ a.filename|default:"(بدون ملف)" }}</td>
+              <td style="white-space:nowrap">{{ a.uploaded_at|date:"d/m/Y H:i" }}</td>
+              <td>{{ a.versions.all|length }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<div class="empty">لا توجد مرفقات.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- سجل دورة الحياة -->
+    <div class="section">
+      <h2>⑦ سجلّ دورة الحياة الكامل ({{ history|length }})</h2>
+      <div class="body">
+        {% if history %}
+        <div class="tl">
+          {% for h in history %}
+          <div class="tl-item">
+            <div class="when">{{ h.created_at|date:"d/m/Y H:i" }}</div>
+            <div class="what">{{ h.action }} <span class="by">— {{ h.by.username|default:"النظام" }}</span></div>
+            {% if h.notes %}<div class="extra">{{ h.notes }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}<div class="empty">لا يوجد سجل.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- التذييل -->
+    <div class="rpt-foot">
+      <span>أصدر التقرير: {{ generated_by }} · {{ generated_at|date:"d/m/Y H:i" }}</span>
+      <span>LetterSys — تقرير دورة حياة الكتاب {{ book.our_number_display }}</span>
+    </div>
+  </div>
+
+  <script>
+    // طباعة تلقائية عند ?print=1 (يُستدعى من زر «طباعة المستند/التقرير» في صفحة الكتاب)
+    if (new URLSearchParams(location.search).get('print') === '1') {
+      window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 350); });
+    }
+  </script>
+</body>
+</html>

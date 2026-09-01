@@ -6,14 +6,14 @@ Celery Tasks للمعالجة غير المتزامنة
 مهام معالجة البيانات في الخلفية
 """
 
-from celery import shared_task, group, chain, chord
+from celery import shared_task, group
 from celery.utils.log import get_task_logger
 import logging
 from datetime import datetime, timedelta
 
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.utils.html import strip_tags
+from django.utils import timezone
 
 from .models import Attachment, DataExtractionResult, Book, ExtractionFeedback
 from .extraction.pipeline import AIExtractionService, process_extraction_task
@@ -115,11 +115,14 @@ def process_image_path(self, image_path: str, attachment_id: int | None = None):
 @shared_task
 def cleanup_expired_reservations():
     """
-    تُشغَّل كل 15 دقيقة.
-    تُحوّل الحجوزات التي انتهت مهلتها إلى حالة 'expired'.
+    شبكة أمان دورية (تُشغَّل كل دقيقة عبر Celery Beat — احتياطيّ لـWebSocket):
+      • الحجوزات التي تجاوزت مهلتها → expired (تصبح قابلة لإعادة التدوير).
+      • الحجوزات النشطة بنبضة حضور ميتة (انقطاع مفاجئ فات حدث WS) → cooldown
+        (فترة سماح لصاحبها ثم تُدوَّر). الصحّة مضمونة حتى لو لم يعمل WS.
     """
     from django.utils import timezone
     from .models import BookNumberReservation
+    from .reservation_service import sweep_stale
 
     now = timezone.now()
     expired = BookNumberReservation.objects.filter(
@@ -134,7 +137,11 @@ def cleanup_expired_reservations():
             voided_at=now
         )
         logger.info(f'[Reservation] Expired {count} reservations')
-    return {'expired': count}
+
+    cooled = sweep_stale(now=now)   # نبضة ميتة → cooldown
+    if cooled:
+        logger.info(f'[Reservation] Cooled down {cooled} stale (dead-heartbeat) reservations')
+    return {'expired': count, 'cooled': cooled}
 
 
 @shared_task
@@ -165,8 +172,8 @@ def notify_year_end():
     summary = '\n'.join(summary_lines)
 
     msg = (
-        f"⚠️ تنبيه نهاية السنة — متبقي {days_left} يوم/أيام على انتهاء {now.year}\n\n"
-        f"سيبدأ النظام تلقائياً تسلسل {now.year + 1} في 1 يناير.\n\n"
+        f"ℹ️ ملخص نهاية السنة {now.year} — متبقي {days_left} يوم/أيام\n\n"
+        f"الترقيم دائم: التسلسلات تستمر كما هي في السنة الجديدة ولا تتصفّر.\n\n"
         f"ملخص التسلسلات الحالية:\n{summary}"
     )
 
@@ -191,30 +198,20 @@ def notify_year_end():
 @shared_task
 def reset_sequences_new_year():
     """
-    تُشغَّل في 1 يناير الساعة 00:05.
-    تُؤرشف تسلسلات السنة المنتهية وتبدأ سلاسل السنة الجديدة.
+    الترقيم دائم: العدّادات لا تتصفّر عند رأس السنة (تستمر للأبد).
+    أُبقيت المهمة للتوافق (كانت تُصفّر سنوياً) لكنها لم تعد تلمس next_number؛
+    تكتفي بتنظيف الحجوزات النشطة القديمة كنظافة روتينية (وهي تنتهي بالوقت أصلاً).
     """
     from django.utils import timezone
-    from .models import BookSequence, BookNumberReservation
+    from .models import BookNumberReservation
 
     now  = timezone.now()
     year = now.year
 
-    # لا تُنفَّذ إلا في يناير
     if now.month != 1:
         return {'skipped': True}
 
-    sequences = BookSequence.objects.all()
-    reset_count = 0
-    for seq in sequences:
-        old_val = seq.next_number
-        if old_val > 1:  # لا تُعيد تعيين ما لم يبدأ
-            seq.next_number = 1
-            seq.save(update_fields=['next_number', 'updated_at'])
-            reset_count += 1
-            logger.info(f'[YearReset] {seq.kind}: reset from {old_val} to 1 for year {year}')
-
-    # إلغاء أي حجوزات نشطة من السنة الماضية
+    # لا نُصفّر أي تسلسل — الترقيم دائم.
     old_reservations = BookNumberReservation.objects.filter(
         status__in=[BookNumberReservation.STATUS_ACTIVE, BookNumberReservation.STATUS_REACTIVATED],
         year__lt=year
@@ -226,8 +223,8 @@ def reset_sequences_new_year():
         voided_at=now
     )
 
-    logger.info(f'[YearReset] Reset {reset_count} sequences. Voided {old_count} old reservations.')
-    return {'reset_sequences': reset_count, 'voided_reservations': old_count}
+    logger.info(f'[YearReset] Perpetual numbering — no sequence reset. Voided {old_count} old reservations.')
+    return {'reset_sequences': 0, 'voided_reservations': old_count}
 
 
 # ===================================================
@@ -314,6 +311,64 @@ def network_heartbeat():
         logger.warning('[NetworkHeartbeat] error: %s', exc)
 
 
+
+
+# ===================================================
+# النسخ الاحتياطي المجدول
+# ===================================================
+
+def _backup_is_due(cfg, now):
+    """
+    يقرّر إن كان النسخ المجدول مستحقّاً الآن — دالة نقية قابلة للاختبار.
+    ``cfg``: BackupSettings، ``now``: datetime محلي.
+    """
+    if not cfg.enabled:
+        return False
+    if now.hour != cfg.hour:
+        return False
+
+    today = now.date()
+    last = cfg.last_run_at
+    if last is None:
+        return True
+    last_date = timezone.localtime(last).date() if timezone.is_aware(last) else last.date()
+    if last_date >= today:
+        return False  # نُفِّذ اليوم بالفعل
+
+    if cfg.frequency == cfg.FREQ_DAILY:
+        return True
+    if cfg.frequency == cfg.FREQ_WEEKLY:
+        return (today - last_date).days >= 7
+    if cfg.frequency == cfg.FREQ_MONTHLY:
+        return (last_date.year, last_date.month) != (today.year, today.month)
+    return False
+
+
+@shared_task(name='core.tasks.scheduled_backup', ignore_result=True)
+def scheduled_backup():
+    """
+    نسخ احتياطي مجدول — يُشغَّل ساعياً عبر Celery beat، ويقرّر التنفيذ من BackupSettings.
+    ينشئ نسخة مشفّرة، يحذف النسخ الأقدم من مدة الاحتفاظ، ويحدّث آخر تشغيل.
+    """
+    from .models import BackupSettings
+    from .backup_service import create_encrypted_pg_backup, default_backup_dir, prune_old_backups
+
+    cfg = BackupSettings.get()
+    now = timezone.localtime()
+    if not _backup_is_due(cfg, now):
+        return {'skipped': True}
+
+    try:
+        path = create_encrypted_pg_backup()
+    except Exception as exc:
+        logger.exception('[scheduled_backup] فشل إنشاء النسخة: %s', exc)
+        return {'error': str(exc)}
+
+    removed = prune_old_backups(default_backup_dir(), cfg.retention_days)
+    cfg.last_run_at = timezone.now()
+    cfg.save(update_fields=['last_run_at', 'updated_at'])
+    logger.info('[scheduled_backup] أُنشئت %s؛ حُذفت %s نسخة قديمة', path, removed)
+    return {'backup': str(path), 'pruned': removed}
 
 
 def get_task_status(task_id: str) -> dict:

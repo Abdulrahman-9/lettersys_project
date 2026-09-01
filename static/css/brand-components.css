@@ -1,0 +1,134 @@
+/* ============================================================
+   brand-components.css — مكوّنات واجهة محايدة اللون
+   مستوحاة من صفحة تسجيل الدخول: هوفر يرتفع + موجة دائرية + حلقة تركيز ناعمة
+   + حواف متدرّجة + ظلال متراكبة.
+
+   • محايدة اللون: كل شيء مدفوع بمتغيّر --brand واحد. الهالات/الظلال تشتقّ لونها
+     تلقائياً عبر color-mix — فلا قيم لونية مكرّرة، وتتلوّن حسب المنطقة.
+   • اختيارية بالكامل: لا أثر على أي عنصر حتى تُستخدم الأصناف (.btn-brand ...).
+   • الافتراضي = اللون البرتقالي الحيّ (--accent). أي منطقة تُعيد تعريف --brand محلياً
+     (مثلاً الورشة التركوازية) تُلوّن هذه المكوّنات تلقائياً.
+   ============================================================ */
+:root{
+  /* اللون الحيّ — للحواف وحلقات التركيز والزخرفة على خلفية فاتحة (لا يحمل نصّاً أبيض) */
+  --brand:   var(--accent,   #ff9233);
+  --brand-2: var(--accent-2, #ff7b18);
+  /* درجات داكنة آمنة للتباين — لتعبئة الأزرار ونصّ العلامة على الفاتح (نصّ أبيض ≥ 5:1، WCAG AA) */
+  --brand-strong:   #b45309;   /* كهرماني داكن — بداية تدرّج الزرّ + نصّ الأزرار الشبحية */
+  --brand-strong-2: #8a3f08;   /* أعمق — نهاية تدرّج الزرّ (عمق + تباين ~7:1) */
+  --brand-ease: cubic-bezier(.4, 0, .2, 1);
+}
+
+/* ── الزرّ الأساسي: تدرّج + ارتفاع + موجة من المركز + حلقة تركيز ── */
+.btn-brand{
+  position:relative; overflow:hidden; isolation:isolate;
+  display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+  border:none; cursor:pointer; text-decoration:none; white-space:nowrap;
+  border-radius:14px; padding:.75rem 1.5rem;
+  font-weight:700; font-size:1rem; line-height:1.2;
+  color:#fff;
+  background:linear-gradient(135deg, var(--brand-strong) 0%, var(--brand-strong-2) 100%);
+  box-shadow:0 8px 24px rgba(15,23,42,.18);                                          /* fallback */
+  box-shadow:0 8px 24px color-mix(in srgb, var(--brand-strong) 34%, transparent);
+  transition:transform .25s var(--brand-ease), box-shadow .25s var(--brand-ease);
+}
+.btn-brand::before{                     /* الموجة */
+  content:""; position:absolute; z-index:-1; inset-block-start:50%; inset-inline-start:50%;
+  width:0; height:0; border-radius:50%; background:rgba(255,255,255,.25);
+  transform:translate(-50%,-50%); transition:width .55s ease, height .55s ease;
+}
+.btn-brand:hover{
+  transform:translateY(-2px);
+  box-shadow:0 12px 30px color-mix(in srgb, var(--brand-strong) 46%, transparent);
+}
+.btn-brand:hover::before{ width:340px; height:340px; }
+.btn-brand:active{ transform:translateY(0); }
+.btn-brand:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--brand) 30%, transparent),
+             0 8px 24px color-mix(in srgb, var(--brand-strong) 32%, transparent);
+}
+
+/* ── نسخة شبحية (إجراء ثانوي) ── */
+.btn-brand-ghost{
+  display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+  border-radius:14px; padding:calc(.75rem - 2px) calc(1.5rem - 2px);
+  font-weight:700; font-size:1rem; line-height:1.2; cursor:pointer; text-decoration:none; white-space:nowrap;
+  color:var(--brand-strong); background:#fff;          /* نصّ داكن آمن التباين على أبيض */
+  border:2px solid #e5e7eb;
+  border-color:color-mix(in srgb, var(--brand) 38%, #e5e7eb);
+  transition:transform .25s var(--brand-ease), border-color .2s, background .2s, box-shadow .25s;
+}
+.btn-brand-ghost:hover{
+  transform:translateY(-2px);
+  border-color:var(--brand);
+  background:color-mix(in srgb, var(--brand) 8%, #fff);
+  box-shadow:0 10px 24px color-mix(in srgb, var(--brand) 18%, transparent);
+}
+.btn-brand-ghost:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--brand) 18%, transparent);
+}
+
+/* ── حلقة تركيز موحّدة لكل حقول التطبيق ──
+   تُطبَّق تلقائياً على حقول Bootstrap (.form-control/.form-select) بلا إضافة أصناف.
+   تفوز على قاعدة Bootstrap لأنّ هذا الملف يُحمَّل بعده (تخصيص متساوٍ ⇒ الأخير يفوز).
+   الحقول الخاصّة الأعلى تخصيصاً (مثل .login-form .form-control:focus) لا تتأثّر. */
+.form-control:focus,
+.form-select:focus{
+  border-color:var(--brand);
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--brand) 16%, transparent);
+}
+
+/* ── حقل بحلقة تركيز ناعمة (نفس إحساس حقول الدخول) ── */
+.field-brand{
+  border-radius:14px; padding:.8rem 1rem; font-size:1rem; width:100%;
+  border:2px solid var(--color-border-light, #e5e7eb); background:#fff; color:#1f2933;
+  transition:border-color .25s, box-shadow .25s;
+}
+.field-brand::placeholder{ color:#9ca3af; }
+.field-brand:focus{
+  outline:none;
+  border-color:var(--brand);
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--brand) 16%, transparent);
+}
+
+/* ── بطاقة بحواف ناعمة + ارتفاع لطيف عند الهوفر ── */
+.card-brand{
+  background:#fff; border-radius:20px;
+  border:1px solid var(--color-border-light, #e8ebf0);
+  box-shadow:0 10px 30px rgba(15,23,42,.07), 0 2px 8px rgba(15,23,42,.04);
+  transition:transform .28s var(--brand-ease), box-shadow .28s var(--brand-ease), border-color .28s;
+}
+.card-brand:hover{
+  transform:translateY(-3px);
+  border-color:color-mix(in srgb, var(--brand) 40%, var(--color-border-light, #e8ebf0));
+  box-shadow:0 18px 44px rgba(15,23,42,.12);
+}
+/* شريط علوي بلون العلامة (اختياري) — أضِف card-brand--bar */
+.card-brand--bar{ position:relative; overflow:hidden; }
+.card-brand--bar::before{
+  content:""; position:absolute; inset:0 0 auto 0; height:4px;
+  background:linear-gradient(90deg, var(--brand-2, var(--brand)), var(--brand));
+}
+
+/* ── دخول ناعم ──
+   ملاحظة: نستخدم fill-mode: backwards (لا both) عمداً — كي لا يُثبّت الإطار الأخير
+   transform:translateY(0) على العنصر فيتغلّب على تحويل :hover (مثل card-brand:hover).
+   بما أنّ الإطار الأخير = الحالة الطبيعية، لا يحدث أي وميض عند الانتهاء. */
+@keyframes brandSlideUp{ from{opacity:0; transform:translateY(24px)} to{opacity:1; transform:translateY(0)} }
+.anim-slide-up{ animation:brandSlideUp .5s var(--brand-ease) backwards; }
+
+@media (prefers-reduced-motion: reduce){
+  .btn-brand, .btn-brand-ghost, .card-brand{ transition:none }
+  .btn-brand::before{ transition:none }
+  .anim-slide-up{ animation:none }
+}
+
+/* ============================================================
+   نطاقات لونية محلّية — تُعيد توجيه --brand حسب هوية كل منطقة.
+   (مكان واحد يوثّق أين يتغيّر لون العلامة — بدل تشتيته في ملفات كثيرة.)
+   ============================================================ */
+/* ورشة المسح/الاستخراج — تركوازي (يطابق --dc-brand). التركوازي داكن أصلاً فيصلح للتعبئة والنصّ. */
+.extraction-container{ --brand:#0f766e; --brand-2:#0d9488; --brand-strong:#0f766e; --brand-strong-2:#115e59; }
+

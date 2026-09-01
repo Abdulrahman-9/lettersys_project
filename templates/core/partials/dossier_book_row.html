@@ -1,0 +1,13 @@
+{% load static %}{# صفّ كتاب في جدول الإضبارة. متغيّرات: b (الكتاب)، side ('out'|'in')، entity #}
+<tr>
+  <td><a class="num" href="{% url 'book_detail' b.pk %}">{{ b.our_number_display }}</a></td>
+  <td>{{ b.title|truncatechars:55 }}</td>
+  <td>{{ b.date|date:"Y/m/d" }}</td>
+  <td>{% if side == 'out' %}{{ b.first_receiving_entity|default:"—" }}{% else %}{{ b.first_issuing_entity|default:"—" }}{% endif %}</td>
+  <td><span class="fs fs-{{ b.followup_state }}">{{ b.followup_label }}</span></td>
+  <td><div class="row-actions">
+    <a class="view" href="{% url 'book_detail' b.pk %}" title="معاينة"><i class="bi bi-eye"></i></a>
+    <a class="edit" href="{% url 'book_edit' b.pk %}" title="تعديل"><i class="bi bi-pencil"></i></a>
+    <a class="print" href="{% url 'dossier_report' entity.pk %}?book_id={{ b.pk }}" target="_blank" rel="noopener" title="طباعة"><i class="bi bi-printer"></i></a>
+  </div></td>
+</tr>

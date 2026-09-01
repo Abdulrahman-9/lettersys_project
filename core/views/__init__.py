@@ -33,6 +33,7 @@ from .books import (
     book_detail,
     book_edit,
     book_change_status,
+    book_report,
     api_book_inline_status,
 )
 
@@ -58,12 +59,26 @@ from .entities import (
     entity_edit,
     entity_delete,
     entity_bulk_delete,
+    entity_restore,
+    entity_bulk_restore,
+    entity_merge,
+)
+
+# الأضابير (مجلّدات مراسلات الأقسام)
+from .dossiers import (
+    dossier_list,
+    dossier_detail,
+    dossier_report,
 )
 
 # استيراد معالجات لوحة التحكم والتقارير
 from .dashboard import (
     dashboard,
+    desk_ledger,
+    desk_handover,
+    book_audit,
     reports,
+    reports_export,
     followup_activity_report,
     restore_book,
     purge_book,
@@ -72,6 +87,12 @@ from .dashboard import (
     backup_database,
     data_restore,
     bak_browse,
+    restore_probe,
+    restore_reconcile,
+    restore_delta,
+    restore_start,
+    restore_job_status,
+    restore_job_cancel,
     legacy_import_page,
     legacy_import_run,
     legacy_import_status,
@@ -83,6 +104,7 @@ from .attachments import (
     attachment_replace,
     attachment_merge_pages,
     attachment_remove_pages,
+    serve_shared_attachment,
 )
 
 
@@ -97,21 +119,27 @@ from .users import (
 from .api import (
     serve_service_worker,
     update_book_notes,
-    record_ocr_feedback,
-    ocr_training_statistics,
-    trigger_ocr_training,
+    attachment_ocr_text,
 )
 
-# إعدادات الماسح الضوئي
+# مركز الإعدادات الموحّد
+from .settings_hub import (
+    settings_hub,
+    settings_general_save,
+    settings_notifications_save,
+    settings_security_save,
+    settings_backup_save,
+)
+
+# إعدادات الماسح الضوئي (وكيل NAPS2 المحلي)
 from .scan_settings import (
     scan_settings_page,
-    scan_watcher_status_api,
-    scan_watcher_diagnostics,
-    scan_test_capture,
-    scan_launch_api,
-    scan_check_protocol,
-    scan_download_installer,
-    scan_install_protocol,
     scan_file_serve,
-    scan_process_local_file,
+    scan_preview_page,
+    scan_manifest,
+    scan_edit_page,
+    scan_stage_attachment,
+    scan_process_upload,
+    scan_agent_token,
+    scan_agent_start,
 )

@@ -6,6 +6,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 
 from .models import Attachment, AttachmentVersion, MergeLog
@@ -27,8 +28,12 @@ class AttachmentMergeViewSet(viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_attachment(self, attachment_id):
-        """الحصول على الملف المرفق"""
-        return get_object_or_404(Attachment, id=attachment_id)
+        """الحصول على الملف المرفق مع فرض ملكية الكتاب على كل الإجراءات (يسدّ IDOR في history/versions)."""
+        attachment = get_object_or_404(Attachment, id=attachment_id)
+        user = self.request.user
+        if attachment.book.created_by != user and not user.is_staff:
+            raise PermissionDenied('ليس لديك صلاحية للوصول إلى هذا الملف')
+        return attachment
     
     @action(detail=True, methods=['post'])
     def merge(self, request, pk=None):

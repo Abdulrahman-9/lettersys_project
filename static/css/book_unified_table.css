@@ -5,8 +5,15 @@
    - بصمة theme على الـ header والـ hover
 ═════════════════════════════════════════════════════════════ */
 
+/* الحاوية تسمح بالتمرير الأفقي بدل قصّ عمود الإجراءات عند ضيق الشاشة */
+.desktop-table-container {
+  overflow-x: auto;
+}
+
 .book-unified-table {
   width: 100%;
+  min-width: 1080px;        /* أقل عرض يحفظ الأعمدة من الانسحاق */
+  table-layout: fixed;      /* عرض ثابت — عمود العنوان يمتصّ الفائض، بلا فراغات */
   margin: 0;
   border-collapse: separate;
   border-spacing: 0;
@@ -58,21 +65,16 @@
   accent-color: var(--theme-primary);
 }
 
-/* ── العمود: رقم القيد ── */
-.col-our-number { width: 130px; }
+/* ── العمود: رقم القيد (قيدنا) ── */
+.col-our-number { width: 98px; }
 
-.our-number-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 0.18rem;
-  align-items: flex-start;
-  line-height: 1.2;
-}
-
-.our-number-line {
+.num-cell {
   display: inline-flex;
   align-items: center;
   gap: 0.32rem;
+  line-height: 1.2;
+  white-space: nowrap;   /* الرقم لا يلتفّ خارج العمود */
+  max-width: 100%;
 }
 
 .kind-icon {
@@ -95,6 +97,7 @@
   font-size: 0.96rem;
   color: #111827;
 }
+
 
 .num-year {
   font-size: 0.7rem;
@@ -122,30 +125,18 @@
   padding: 0 0.4rem;
 }
 
-/* وسم "قيدنا" / "الجهة" / "نسخة" */
-.num-tag {
-  display: inline-block;
-  font-size: 0.6rem;
-  font-weight: 800;
-  border-radius: 0.25rem;
-  padding: 0.05rem 0.32rem;
-  letter-spacing: 0.01em;
-  line-height: 1.4;
-}
-.num-tag-ours    { background: rgba(34, 102, 50, 0.11); color: #166534; border: 1px solid rgba(34, 102, 50, 0.18); }
-.num-tag-sender  { background: rgba(14, 165, 233, 0.11); color: #075985; border: 1px solid rgba(14, 165, 233, 0.18); }
-.num-tag-version { background: rgba(124, 58, 237, 0.11); color: #5b21b6; border: 1px solid rgba(124, 58, 237, 0.20); margin-inline-start: 0.2rem; }
+/* ── العمود: رقم الجهة (رقمهم) — للوارد فقط ── */
+.col-sender-number { width: 124px; }
 
-.sender-number-line {
-  display: flex;
-  align-items: center;
-  gap: 0.28rem;
-}
 .sender-number-value {
   font-variant-numeric: tabular-nums;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 800;
   color: #075985;
+  /* الأرقام أولوية الظهور: لا اقتصاص أبداً — يلتفّ عند الطول ويبقى كاملاً */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 .sender-number-empty {
   font-size: 0.68rem;
@@ -158,8 +149,8 @@
   padding: 0 0.3rem;
 }
 
-/* ── العمود: التاريخ (مزدوج للوارد، مفرد للصادر) ── */
-.col-date { width: 118px; white-space: nowrap; }
+/* ── العمود: التاريخ (استلام للوارد / إصدار للصادر) ── */
+.col-date { width: 96px; white-space: nowrap; }
 
 .date-val {
   font-variant-numeric: tabular-nums;
@@ -168,28 +159,23 @@
   color: #475569;
 }
 
-.date-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.18rem;
-  align-items: flex-start;
-}
-
-.date-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
+/* ── العمود: تاريخ الإرسال — للوارد فقط ── */
+.col-sender-date { width: 92px; white-space: nowrap; }
 
 .date-val-sm {
   font-variant-numeric: tabular-nums;
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: #64748b;
+}
+.date-empty {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #cbd5e1;
 }
 
-/* ── العمود: العنوان ── */
-.col-title { min-width: 220px; }
+/* ── العمود: العنوان ── (مُقلَّص لصالح الجهات — الأرقام والجهات أولى بالظهور) */
+.col-title { min-width: 172px; width: 22%; }
 
 .book-title-cell {
   display: flex;
@@ -206,6 +192,24 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /* المحتوى المختلط: يُحدَّد الاتجاه بأول حرف قويّ (عربي=RTL، إنجليزي=LTR)
+     فتبقى بداية النصّ ظاهرة دائماً و«...» في نهايته المنطقية لا في بدايته. */
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* النقر على الصفّ (خارج الأزرار) يوسّعه لإظهار العنوان والجهات كاملةً */
+.col-title, .col-entity { cursor: pointer; }
+tr.book-row.row-expanded .book-title-text {
+  -webkit-line-clamp: unset;
+  overflow: visible;
+  white-space: normal;
+}
+tr.book-row.row-expanded .entity-name,
+tr.book-row.row-expanded .entity-name-secondary {
+  white-space: normal;
+  overflow: visible;
+  max-width: none;
 }
 
 .title-meta-row {
@@ -229,8 +233,8 @@
   font-size: 0.78rem;
 }
 
-/* ── العمود: الجهات ── */
-.col-entity { width: 165px; }
+/* ── العمود: الجهات ── (مُعرِّف رئيسيّ خاصةً حين يغيب العنوان — عرض متوازن قابل للسحب) */
+.col-entity { width: 196px; }
 
 .book-entity-cell {
   display: flex;
@@ -263,11 +267,13 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 130px;
+  max-width: 200px;
+  unicode-bidi: plaintext;   /* بداية اسم الجهة (عربي/إنجليزي) تبقى ظاهرة */
+  text-align: start;
 }
 
 /* ── العمود: الحالة ── */
-.col-status { width: 130px; }
+.col-status { width: 138px; }
 
 .status-cell {
   display: flex;
@@ -319,8 +325,8 @@
 .due-pending  { color: var(--followup-pending-text); }
 .due-followup { color: var(--followup-pending-text); }
 
-/* ── العمود: الإجراءات (صف واحد) ── */
-.col-actions { width: 130px; }
+/* ── العمود: الإجراءات (صف واحد، 4 أزرار) ── */
+.col-actions { width: 152px; }
 
 .action-row {
   display: inline-flex;
@@ -363,12 +369,6 @@
 
 .act-btn.act-delete { color: #b91c1c; }
 .act-btn.act-delete:hover { background: #fef2f2; color: #dc2626; }
-
-.act-btn.act-disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  pointer-events: none;
-}
 
 /* ── popover تغيير الحالة ── */
 .status-popover {
@@ -472,9 +472,100 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ═══ خطوط فاصلة عمودية خفيفة بين الخلايا ═══
+   تفصل المعلومات المتراكمة سابقاً (الرقم/التاريخ) إلى خلايا واضحة. */
+.book-unified-table thead th:not(:last-child),
+.book-unified-table tbody td:not(:last-child) {
+  border-inline-end: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+/* ═══ إخفاء عمودَي الجهة في تبويب الصادر ═══
+   الصادر لا يملك رقم جهة ولا تاريخ إرسال — يُطوى العمودان فيتمدّد الجدول بلا فراغ. */
+#bookUnifiedPage[data-theme="outgoing"] .col-sender-number,
+#bookUnifiedPage[data-theme="outgoing"] .col-sender-date {
+  display: none;
+}
+
+/* ═══ تظليل مطابقات البحث ═══ */
+mark.search-hl,
+mark.search-hl-num,
+mark.search-hl-text {
+  padding: 0 0.14rem;
+  border-radius: 0.22rem;
+  font-weight: 800;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+/* الأرقام (قيدنا/رقمهم): أزرق */
+mark.search-hl,
+mark.search-hl-num {
+  background: #bfdbfe;
+  color: #1e3a8a;
+}
+/* كلمات العنوان/الجهة: كهرماني — لون مختلف يميّز التطابق النصّي عن الرقمي */
+mark.search-hl-text {
+  background: #fde68a;
+  color: #7c2d12;
+}
+
+/* إبراز الصف الذي يحتوي مطابقة بلون الثيم */
+.book-unified-table tbody tr.book-row--match {
+  background: var(--theme-tint);
+}
+.book-unified-table tbody tr.book-row--match:hover {
+  background: var(--theme-glow);
+}
+
+/* إبراز مؤقّت للصف القادم من ودجة «آخر الكتب» (?focus=<id>) — يتلاشى تلقائياً */
+.book-unified-table tbody tr.book-row--focused {
+  animation: bookRowFocusPulse 2.6s ease-out 1;
+}
+@keyframes bookRowFocusPulse {
+  0%   { background: var(--theme-glow); box-shadow: inset 0 0 0 2px var(--theme-strong, #0f766e); }
+  70%  { background: var(--theme-tint);  box-shadow: inset 0 0 0 2px transparent; }
+  100% { background: transparent;        box-shadow: none; }
+}
+
+/* ═══ تحجيم الأعمدة يدوياً (سحب حدّ الترويسة) ═══ */
+.book-unified-table thead th { position: relative; }
+.col-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-end: -3px;   /* يستقرّ على الحدّ المشترك (RTL: يسار، LTR: يمين) */
+  width: 8px;
+  cursor: col-resize;
+  z-index: 3;
+  user-select: none;
+  touch-action: none;
+}
+.col-resizer::before {
+  content: "";
+  position: absolute;
+  top: 22%;
+  bottom: 22%;
+  inset-inline-end: 3px;
+  width: 2px;
+  background: transparent;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.col-resizer:hover::before,
+body.col-resizing .col-resizer::before {
+  background: var(--theme-primary, #0f766e);
+}
+body.col-resizing {
+  cursor: col-resize !important;
+  user-select: none;
+}
+body.col-resizing * { user-select: none !important; }
+
 @media (max-width: 1100px) {
-  .col-entity { width: 130px; }
-  .col-our-number { width: 110px; }
+  .col-entity { width: 180px; }
+  .col-our-number { width: 92px; }
+  .col-sender-number { width: 108px; }   /* يبقى كافياً للرقم كاملاً */
+  .col-sender-date { width: 80px; }
+  .entity-name, .entity-name-secondary { max-width: 150px; }
 }
 
 @media (max-width: 900px) {

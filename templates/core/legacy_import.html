@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static dict_utils %}
 {% block title %}استيراد البيانات القديمة{% endblock %}
 
 {% block page_sidebar %}
@@ -213,8 +213,8 @@
           </select>
         </div>
         <div class="col-md-4">
-          <label class="form-label fw-semibold">بادئة الأرقام المتعارضة</label>
-          <input type="text" class="form-control" id="import-prefix" value="قديم-">
+          <label class="form-label fw-semibold">بادئة الأرقام المتعارضة (اختياري)</label>
+          <input type="text" class="form-control" id="import-prefix" value="" placeholder="فارغة — التعارض يُتخطّى">
         </div>
         <div class="col-md-4 d-flex align-items-end gap-2">
           <button class="btn btn-outline-secondary" id="btn-dryrun">
@@ -306,7 +306,7 @@ function collectFieldMap() {
 function runImport(dryRun) {
   const fieldMap  = collectFieldMap();
   const tableName = document.getElementById('import-table')?.value || '';
-  const prefix    = document.getElementById('import-prefix')?.value || 'قديم-';
+  const prefix    = document.getElementById('import-prefix')?.value || '';
 
   const btn = dryRun ? document.getElementById('btn-dryrun') : document.getElementById('btn-import');
   const orig = btn.innerHTML;

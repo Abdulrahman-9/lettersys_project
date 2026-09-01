@@ -7,47 +7,33 @@ Dashboard & Reports Views - لوحة التحكم والتقارير
 import json
 import logging
 import os
-import shutil
-import subprocess
 from datetime import timedelta
 from pathlib import Path
+from subprocess import CalledProcessError
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from ..backup_service import create_encrypted_pg_backup, default_backup_dir
 from ..extraction.kinds import get_kind_label
-from ..models import Attachment, AttachmentVersion, Book, BookHistory, Entity
+from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
+                      RestoreJob)
 from .helpers import staff_required
+from core.scoping import can_view_book, is_privileged
 
 logger = logging.getLogger(__name__)
 
 
-def _build_pg_dump_command(db_config, output_path):
-    pg_dump_bin = os.environ.get("PG_DUMP_BIN") or shutil.which("pg_dump")
-    if not pg_dump_bin:
-        raise FileNotFoundError("pg_dump was not found. Install PostgreSQL client tools or set PG_DUMP_BIN.")
-
-    command = [
-        pg_dump_bin,
-        "--format=custom",
-        "--no-owner",
-        "--no-privileges",
-        f"--file={output_path}",
-    ]
-    if db_config.get("HOST"):
-        command.append(f"--host={db_config['HOST']}")
-    if db_config.get("PORT"):
-        command.append(f"--port={db_config['PORT']}")
-    if db_config.get("USER"):
-        command.append(f"--username={db_config['USER']}")
-    command.append(f"--dbname={db_config['NAME']}")
-    return command
+class _NoJob:
+    """بديل فارغ كي يبقى القالب بسيطاً (id = None ⇒ لا مهمّة حيّة)."""
+    id = None
 
 
 @login_required
@@ -124,7 +110,7 @@ def followup_activity_report(request):
     cutoff = timezone.now() - timedelta(days=days)
     base_history = BookHistory.objects.filter(created_at__gte=cutoff).select_related('book', 'by')
 
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not is_privileged(request.user):
         base_history = base_history.filter(book__created_by=request.user)
 
     became_overdue = list(
@@ -154,23 +140,9 @@ def followup_activity_report(request):
     })
 
 
-@login_required
-def reports(request):
-    """
-    تقارير الكتب المستحقة مع فلاتر وتصدير/طباعة
-    
-    الفلاتر المتاحة:
-    - النوع (وارد/صادر)
-    - الجهة
-    - نطاق تاريخ الاستحقاق
-    - التصنيف الزمني (اليوم، متأخر، قادم، مكتمل)
-    
-    Args:
-        request: HTTP request with filter parameters
-    
-    Returns:
-        Rendered reports template with filtered books and statistics
-    """
+def _reports_qs(request):
+    """يبني queryset التقارير المفلتر والمرتّب حسب فلاتر الصفحة (kind/entity/date/bucket).
+    مصدر تصفية واحد مشترك بين عرض التقارير والتصدير (DRY). يُعيد (qs, meta)."""
     qs = Book.objects.filter(is_deleted=False) if request.user.is_superuser else Book.objects.filter(created_by=request.user, is_deleted=False)
     qs = qs.select_related("created_by").prefetch_related("issuing_entities", "receiving_entities")
     kind = request.GET.get("kind", "all")
@@ -182,13 +154,13 @@ def reports(request):
         qs = qs.filter(kind=kind)
 
     if kind == "all":
-        selected_kind_label = "كل الأنواع"
+        kind_label = "كل الأنواع"
     elif kind == "incoming":
-        selected_kind_label = "كل الوارد"
+        kind_label = "كل الوارد"
     elif kind == "outgoing":
-        selected_kind_label = "كل الصادر"
+        kind_label = "كل الصادر"
     else:
-        selected_kind_label = get_kind_label(kind)
+        kind_label = get_kind_label(kind)
 
     entity_id = request.GET.get("entity")
     if entity_id and entity_id.isdigit():
@@ -217,11 +189,8 @@ def reports(request):
         qs = qs.filter(due_date__lte=end_date)
 
     bucket = request.GET.get("bucket", "") or "today_overdue"
-
-    # حالة المتابعة الموحَّدة: نشط = is_archived=False AND due_date IS NOT NULL
     active_qs = qs.filter(is_archived=False, due_date__isnull=False)
     archived_qs = qs.filter(Q(is_archived=True) | Q(due_date__isnull=True))
-
     if bucket == "today":
         qs = active_qs.filter(due_date=today)
     elif bucket == "overdue":
@@ -234,52 +203,207 @@ def reports(request):
         qs = active_qs.filter(due_date__lte=today)
     # else: bucket == "all" — لا فلتر إضافي
 
-    filtered = list(qs.order_by("due_date", "-date", "-id"))
-    time_stats = {"overdue": 0, "due_today": 0, "pending": 0, "archived": 0}
-    stats = {"total": 0, "incoming": 0, "outgoing": 0, "pending": 0, "due_today": 0, "overdue": 0, "archived": 0}
-    incoming = []
-    outgoing = []
-    for b in filtered:
-        state = b.followup_state
+    qs = qs.order_by("due_date", "-date", "-id")
+    return qs, {
+        "kind": kind, "kind_label": kind_label,
+        "entity_id": entity_id or "", "bucket": bucket,
+        "due_start": due_start or "", "due_end": due_end or "", "today": today,
+    }
+
+
+# ── هياكلُ واجهةٍ (2026-09-01، بقرار المالك: تُودَع موسومةً) ─────────────────
+# الثلاثُ أدناه **تخطيطاتٌ ببياناتٍ ثابتةٍ في الكود**، لا استعلامَ ولا نموذج.
+# أُودعت لأنّها عملُ تصميمٍ قائم، بشرطِ أن تُعلن عن نفسها: كلُّ قالبٍ يبدأ
+# ببطاقة «هيكلُ واجهةٍ لا ميزة» ويحرسها اختبارٌ — فلا تُقرأ أرقامُها يوماً
+# على أنّها حقيقة. ولا رابطَ لها في التنقّل: تُفتح بعنوانها مباشرةً وحدَه.
+# متى تصير ميزةً حقيقيّة: `Book` + `BookHistory` + `UserActivityLog` تحمل
+# فعلاً ما تدّعيه هذه الصفحات (القيدُ اليوميّ · التسليم · أثرُ التدقيق).
+@login_required
+def desk_ledger(request):
+    """هيكلُ واجهةٍ لدفتر المكتب — **بياناتٌ ثابتةٌ لا من القاعدة**."""
+    return render(request, 'core/desk_ledger.html', {
+        'page_title': 'دفتر المكتب',
+        'stats': {
+            'incoming': 18,
+            'outgoing': 12,
+            'pending': 7,
+            'today': 5,
+        },
+        'rows': [
+            {'number': '2433', 'title': 'كتاب وارد جديد', 'kind': 'وارد', 'due': 'اليوم', 'owner': 'المديرية'},
+            {'number': '2434', 'title': 'طلب متابعة', 'kind': 'صادر', 'due': 'غداً', 'owner': 'الإدارة'},
+        ],
+    })
+
+
+@login_required
+def desk_handover(request):
+    """هيكلُ واجهة — **بياناتٌ ثابتةٌ لا من القاعدة**. لوحة التسليم والاستلام بين الأقسام."""
+    return render(request, 'core/desk_handover.html', {
+        'page_title': 'استلام وتسليم',
+        'handover_list': [
+            {'code': 'HD-101', 'from': 'مكتب المستندات', 'to': 'الدوّار', 'status': 'مؤكد', 'time': '09:30'},
+            {'code': 'HD-102', 'from': 'الدوّار', 'to': 'مكتب متابعة', 'status': 'قيد التنفيذ', 'time': '11:00'},
+        ],
+    })
+
+
+@login_required
+def book_audit(request):
+    """هيكلُ واجهة — **بياناتٌ ثابتةٌ لا من القاعدة**. صفحة تدقيق ومراجعة الحالات."""
+    return render(request, 'core/book_audit.html', {
+        'page_title': 'مراجعة التدقيق',
+        'audit_rows': [
+            {'id': 'AUD-01', 'book': '2433', 'issue': 'تأخر في التسليم', 'status': 'مفتوح', 'user': 'سارة'},
+            {'id': 'AUD-02', 'book': '2434', 'issue': 'ملاحظات غير مكتملة', 'status': 'تمت المراجعة', 'user': 'حسن'},
+        ],
+    })
+
+
+@login_required
+def reports(request):
+    """
+    تقارير الكتب المستحقة مع فلاتر وتصدير/طباعة
+    
+    الفلاتر المتاحة:
+    - النوع (وارد/صادر)
+    - الجهة
+    - نطاق تاريخ الاستحقاق
+    - التصنيف الزمني (اليوم، متأخر، قادم، مكتمل)
+    
+    Args:
+        request: HTTP request with filter parameters
+    
+    Returns:
+        Rendered reports template with filtered books and statistics
+    """
+    qs, _m = _reports_qs(request)
+    kind = _m["kind"]
+    selected_kind_label = _m["kind_label"]
+    entity_id = _m["entity_id"]
+    bucket = _m["bucket"]
+    due_start = _m["due_start"]
+    due_end = _m["due_end"]
+    today = _m["today"]
+
+    # ── إحصاءات عبر تجميع DB (بلا تحميل كل الصفوف في الذاكرة) ──
+    active = Q(is_archived=False, due_date__isnull=False)
+    agg = qs.aggregate(
+        total=Count("id"),
+        incoming=Count("id", filter=Q(kind__startswith="incoming")),
+        outgoing=Count("id", filter=Q(kind__startswith="outgoing")),
+        overdue=Count("id", filter=active & Q(due_date__lt=today)),
+        due_today=Count("id", filter=active & Q(due_date=today)),
+        pending=Count("id", filter=active & Q(due_date__gt=today)),
+        archived=Count("id", filter=Q(is_archived=True) | Q(due_date__isnull=True)),
+    )
+    stats = {k: (v or 0) for k, v in agg.items()}
+    time_stats = {key: stats.get(key, 0) for key in ("overdue", "due_today", "pending", "archived")}
+
+    # ── ترقيم العرض: يمنع تحميل آلاف الكتب دفعةً (مهمّ على ذاكرة محدودة) ──
+    page_obj = Paginator(qs, 200).get_page(request.GET.get("page"))
+    books = list(page_obj.object_list)
+    for b in books:
         if b.due_date:
             diff = (b.due_date - today).days
             b.due_phrase = "مستحق اليوم" if diff == 0 else (f"مستحق بعد {diff} يوم" if diff > 0 else f"متأخر منذ {abs(diff)} يوم")
         else:
             b.due_phrase = "-"
-        b.followup_state_value = state
-        time_stats[state] = time_stats.get(state, 0) + 1
-        stats["total"] += 1
-        stats[state] = stats.get(state, 0) + 1
-        if b.is_incoming:
-            stats["incoming"] += 1
-            incoming.append(b)
-        elif b.is_outgoing:
-            stats["outgoing"] += 1
-            outgoing.append(b)
+
+    # الحفاظ على فلاتر الاستعلام عند تنقّل الصفحات
+    page_params = request.GET.copy()
+    page_params.pop("page", None)
+
+    # هوية المؤسسة + ملخّص الفلاتر لترويسة الطباعة الاحترافية
+    from ..models import EmailSettings
+    org = EmailSettings.get()
+    selected_entity_name = ""
+    if entity_id and entity_id.isdigit():
+        _e = Entity.objects.filter(pk=entity_id).only("name").first()
+        selected_entity_name = _e.name if _e else ""
+    bucket_labels = {
+        "all": "كل الحالات", "today_overdue": "المتأخرة والمستحقة اليوم",
+        "overdue": "المتأخرة فقط", "today": "مستحقة اليوم",
+        "upcoming": "مستحقة للفترة القادمة", "completed": "المؤرشفة (انتهت المتابعة)",
+    }
+
     return render(
         request,
         "core/reports.html",
         {
             "stats": stats,
             "time_stats": time_stats,
-            "books": filtered,
-            "incoming": incoming,
-            "outgoing": outgoing,
+            "books": books,
+            "page_obj": page_obj,
+            "total": stats["total"],
+            "querystring": page_params.urlencode(),
             "entities": Entity.objects.filter(is_active=True).order_by("name"),
             "selected_kind": kind,
             "selected_kind_label": selected_kind_label,
             "selected_entity": entity_id or "",
+            "selected_entity_name": selected_entity_name,
             "bucket": bucket,
+            "bucket_label": bucket_labels.get(bucket, bucket),
             "due_start": due_start or "",
             "due_end": due_end or "",
+            "org": org,
         },
     )
 
 
 @login_required
+def reports_export(request):
+    """تصدير نتائج التقرير المفلترة كملف CSV (يفتح مباشرة في Excel) — نفس فلاتر صفحة التقارير.
+    يبثّ الصفوف تدريجياً فيبقى خفيفاً على الذاكرة مهما كبر العدد."""
+    import csv
+    import io
+    from django.http import StreamingHttpResponse
+
+    qs, meta = _reports_qs(request)
+    status_labels = {"pending": "قيد المتابعة", "due_today": "مستحق اليوم",
+                     "overdue": "متأخر", "archived": "مؤرشف"}
+    # أعمدة تطابق جدول الصفحة الرسمي: تاريخا الكتاب (قيدنا + كتاب الجهة رقماً
+    # وتاريخاً) حاضران، ولا معرّفات قاعدة بيانات داخلية في مخرجات رسمية.
+    HEADERS = ["رقم القيد", "تاريخ القيد", "العنوان", "النوع",
+               "الجهة المُصدِرة", "الجهة المستقبِلة",
+               "رقم كتاب الجهة", "تاريخ كتاب الجهة", "تاريخ الإدخال",
+               "تاريخ الاستحقاق", "الحالة", "الملاحظات"]
+
+    def _rows():
+        buf = io.StringIO()
+        buf.write("﻿")  # BOM (يُكتب صراحةً) كي يعرض Excel العربية بلا تشويش
+        csv.writer(buf).writerow(HEADERS)
+        yield buf.getvalue()
+        for b in qs.iterator(chunk_size=500):
+            buf = io.StringIO()
+            issuing = "، ".join(e.name for e in b.issuing_entities.all())
+            receiving = "، ".join(e.name for e in b.receiving_entities.all())
+            csv.writer(buf).writerow([
+                b.our_number or "",
+                b.date.isoformat() if b.date else "",
+                b.title or "",
+                b.kind_label,
+                issuing,
+                receiving,
+                b.sender_number or "",
+                b.sender_date.isoformat() if b.sender_date else "",
+                b.created_at.date().isoformat() if b.created_at else "",
+                b.due_date.isoformat() if b.due_date else "",
+                status_labels.get(b.followup_state, b.followup_state or ""),
+                b.margin or "",
+            ])
+            yield buf.getvalue()
+
+    resp = StreamingHttpResponse(_rows(), content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="report_%s.csv"' % meta["today"].isoformat()
+    return resp
+
+
+@login_required
+@require_POST
 def restore_book(request, pk):
     """
-    استعادة كتاب محذوف من سلة المهملات
+    استعادة كتاب محذوف من سلة المهملات (POST فقط — يُعدّل الحالة فلا يُسمح بـ GET)
     
     Args:
         request: HTTP request
@@ -288,15 +412,15 @@ def restore_book(request, pk):
     Returns:
         Redirect to trash list with success message
     """
-    book = get_object_or_404(Book, pk=pk, is_deleted=True)
-    if not (request.user.is_superuser or request.user.is_staff or book.created_by == request.user):
+    book = get_object_or_404(Book.all_objects, pk=pk, is_deleted=True)
+    if not can_view_book(book, request.user):
         messages.error(request, "غير مصرح بالاستعادة.")
         return redirect("trash_list")
     book.is_deleted = False
     book.deleted_at = None
     book.deleted_by = None
     book.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
-    Attachment.objects.filter(book=book, is_deleted=True).update(is_deleted=False, deleted_at=None, deleted_by=None)
+    Attachment.all_objects.filter(book=book, is_deleted=True).update(is_deleted=False, deleted_at=None, deleted_by=None)
     BookHistory.objects.create(book=book, action="restore", by=request.user)
     messages.success(request, "تمت استعادة الكتاب من سلة المهملات.")
     return redirect("trash_list")
@@ -315,7 +439,7 @@ def purge_book(request, pk):
         Redirect to trash list with success message
     """
     book = get_object_or_404(Book, pk=pk)
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not is_privileged(request.user):
         messages.error(request, "غير مصرح بالحذف النهائي.")
         return redirect("trash_list")
     if request.method != "POST":
@@ -338,9 +462,10 @@ def purge_book(request, pk):
 
 
 @login_required
+@require_POST
 def restore_attachment(request, attachment_id):
     """
-    استعادة مرفق محذوف
+    استعادة مرفق محذوف (POST فقط — يُعدّل الحالة فلا يُسمح بـ GET)
     
     Args:
         request: HTTP request
@@ -349,11 +474,11 @@ def restore_attachment(request, attachment_id):
     Returns:
         Redirect to trash list with success message
     """
-    att = get_object_or_404(Attachment, id=attachment_id, is_deleted=True)
+    att = get_object_or_404(Attachment.all_objects, id=attachment_id, is_deleted=True)
     if att.book.is_deleted:
         messages.error(request, "لا يمكن استعادة مرفق لكتاب محذوف.")
         return redirect("trash_list")
-    if not (request.user.is_superuser or request.user.is_staff or att.book.created_by == request.user):
+    if not can_view_book(att.book, request.user):
         messages.error(request, "غير مصرح بالاستعادة.")
         return redirect("trash_list")
     att.is_deleted = False
@@ -378,7 +503,7 @@ def purge_attachment(request, attachment_id):
         Redirect to trash list with success message
     """
     att = get_object_or_404(Attachment, id=attachment_id)
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not is_privileged(request.user):
         messages.error(request, "غير مصرح بالحذف النهائي.")
         return redirect("trash_list")
     if request.method != "POST":
@@ -414,39 +539,20 @@ def backup_database(request):
     Returns:
         Rendered backup template or redirect after backup creation
     """
-    from ..encryption import encrypt_file
-    
     db_config = settings.DATABASES["default"]
-    default_dir = Path("D:/trackbackup")
-    if not default_dir.exists():
-        default_dir = settings.BASE_DIR / "backups"
-    default_dir.mkdir(parents=True, exist_ok=True)
+    default_dir = default_backup_dir()
     suggested_name = f"pg_backup_{timezone.now().strftime('%Y%m%d_%H%M')}.dump"
 
     if request.method == "POST":
-        target_directory = Path(request.POST.get("target_directory") or default_dir)
-        file_name = Path(request.POST.get("file_name") or suggested_name).name
-        if not file_name.endswith(".dump"):
-            file_name += ".dump"
-        target_directory.mkdir(parents=True, exist_ok=True)
-        target_path = target_directory / file_name
+        target_directory = request.POST.get("target_directory") or default_dir
+        file_name = request.POST.get("file_name") or suggested_name
         try:
-            env = os.environ.copy()
-            if db_config.get("PASSWORD"):
-                env["PGPASSWORD"] = str(db_config["PASSWORD"])
-            subprocess.run(
-                _build_pg_dump_command(db_config, target_path),
-                check=True,
-                capture_output=True,
-                text=True,
-                env=env,
-            )
-            encrypted_path = encrypt_file(target_path)
+            encrypted_path = create_encrypted_pg_backup(target_directory, file_name)
             messages.success(request, f"تم إنشاء نسخة PostgreSQL احتياطية مشفرة: {encrypted_path}")
         except FileNotFoundError as exc:
             logger.error("pg_dump executable is unavailable: %s", exc, exc_info=True)
             messages.error(request, "تعذر العثور على pg_dump. ثبّت أدوات PostgreSQL أو عيّن PG_DUMP_BIN.")
-        except subprocess.CalledProcessError as exc:
+        except CalledProcessError as exc:
             logger.error("pg_dump failed: %s", exc.stderr, exc_info=True)
             messages.error(request, "فشل pg_dump أثناء إنشاء النسخة الاحتياطية. راجع إعدادات اتصال PostgreSQL.")
         except OSError as exc:
@@ -488,13 +594,21 @@ def data_restore(request):
     """
     from ..legacy_restore import LegacyRestoreEngine
 
+    # الاعتماد لا يُكتب في القالب ولا يُعاد للمتصفّح. يُقرأ من البيئة، وحقل النموذج
+    # يبقى متاحاً لمن يفضّل إدخاله يدوياً.
+    saved_password = os.environ.get('LEGACY_SQL_PASSWORD', '')
+
     ctx = {
         'form': {
             'server': request.POST.get('server', 'localhost'),
             'database': request.POST.get('database', ''),
             'username': request.POST.get('username', 'sa'),
         },
-        'book_count': Book.objects.count(),
+        'has_saved_password': bool(saved_password),
+        'state': _restore_state(),
+        # مهمّة دمج حيّة (إن وُجدت) — تُلتقط عند فتح الصفحة فيرى المستخدم تقدّمها
+        # حتى لو بدأها قبل ساعة ثم أغلق المتصفّح.
+        'live_job_id': (RestoreJob.running() or _NoJob).id,
     }
 
     if request.method == 'POST':
@@ -505,7 +619,8 @@ def data_restore(request):
             bak_path = (request.POST.get('bak_path') or '').strip()
             bak_server = (request.POST.get('bak_server') or 'localhost').strip()
             bak_user = (request.POST.get('bak_user') or 'sa').strip()
-            bak_pass = request.POST.get('bak_password') or ''
+            bak_pass = request.POST.get('bak_password') or saved_password
+            bak_work_dir = (request.POST.get('bak_work_dir') or '').strip()
             restore_files = request.POST.get('restore_files') == 'on'
             mode = request.POST.get('merge_mode') or 'skip_existing'
             if mode not in ('fresh', 'skip_existing', 'update_existing'):
@@ -513,6 +628,7 @@ def data_restore(request):
             ctx['form']['bak_path'] = bak_path
             ctx['form']['bak_server'] = bak_server
             ctx['form']['bak_user'] = bak_user
+            ctx['form']['bak_work_dir'] = bak_work_dir
             if not bak_path:
                 messages.error(request, 'مسار ملف الباكاب مطلوب.')
                 return render(request, 'core/data_restore.html', ctx)
@@ -520,6 +636,7 @@ def data_restore(request):
                 summary = LegacyRestoreEngine.restore_from_bak(
                     bak_path, sql_server=bak_server, admin_user=bak_user, admin_password=bak_pass,
                     created_by=request.user, restore_files=restore_files, mode=mode,
+                    work_dir=bak_work_dir or None,
                 )
                 if summary.get('aborted'):
                     messages.warning(request, summary.get('reason', 'تم الإيقاف.'))
@@ -536,14 +653,14 @@ def data_restore(request):
             except Exception as e:
                 logger.exception('restore_from_bak failed')
                 messages.error(request, f'فشل أثناء الاستعادة من الملف: {e}')
-            ctx['book_count'] = Book.objects.count()
+            ctx['state'] = _restore_state()
             return render(request, 'core/data_restore.html', ctx)
 
         # ── طريقة 1: اتصال مباشر بقاعدة حية ──
         server = (request.POST.get('server') or 'localhost').strip()
         database = (request.POST.get('database') or '').strip()
         username = (request.POST.get('username') or 'sa').strip()
-        password = request.POST.get('password') or ''
+        password = request.POST.get('password') or saved_password
 
         if not database:
             messages.error(request, 'اسم قاعدة البيانات مطلوب.')
@@ -566,35 +683,183 @@ def data_restore(request):
             return render(request, 'core/data_restore.html', ctx)
 
         if action == 'import':
-            restore_files = request.POST.get('restore_files') == 'on'
-            mode = request.POST.get('merge_mode') or 'skip_existing'
-            if mode not in ('fresh', 'skip_existing', 'update_existing'):
-                mode = 'skip_existing'
-            try:
-                summary = engine.run(
-                    created_by=request.user,
-                    restore_files=restore_files,
-                    mode=mode,
-                )
-                if summary.get('aborted'):
-                    messages.warning(request, summary.get('reason', 'تم الإيقاف.'))
-                else:
-                    ctx['summary'] = summary
-                    parts = []
-                    if summary.get('books'):   parts.append(f"{summary['books']:,} كتاب جديد")
-                    if summary.get('updated'): parts.append(f"{summary['updated']:,} مُحدَّث")
-                    if summary.get('skipped'): parts.append(f"{summary['skipped']:,} متخطّى")
-                    if restore_files and summary.get('files'): parts.append(f"{summary['files']:,} مرفق")
-                    if summary.get('dedup_fixed'): parts.append(f"فُكّ {summary['dedup_fixed']} تكرار")
-                    messages.success(request, "تمت الاستعادة: " + ("، ".join(parts) if parts else "لا تغييرات"))
-                    _reseed_book_sequences()
-            except Exception as e:
-                logger.exception('data_restore import failed')
-                messages.error(request, f'فشل أثناء الاستعادة: {e}')
-            ctx['book_count'] = Book.objects.count()
+            # المسار المتزامن أُلغي: الدمج قد يستغرق ساعات، وتشغيلُه داخل الطلب
+            # كان ينهي مهلة المتصفّح فيظنّ المستخدم أنه فشل بينما هو ماضٍ.
+            # البديل: restore_start ينشئ RestoreJob ويشغّله كعمليةٍ مستقلّة.
+            messages.info(request, 'استعمل زرّ «ابدأ الدمج الآن» في الخطوة ٤ — يعمل بالخلفية بمؤشّر تقدّم.')
+            ctx['state'] = _restore_state()
             return render(request, 'core/data_restore.html', ctx)
 
     return render(request, 'core/data_restore.html', ctx)
+
+
+# ── واجهات JSON لصفحة الاستعادة (كلها قراءة رخيصة عدا reconcile بـ apply) ──
+
+def _restore_engine(request):
+    """يبني المحرّك من حقول النموذج، والاعتماد من البيئة إن تُرك الحقل فارغاً."""
+    from ..legacy_restore import LegacyRestoreEngine
+    return LegacyRestoreEngine(
+        (request.POST.get('server') or 'localhost').strip(),
+        (request.POST.get('database') or 'ARCHMDOC').strip(),
+        (request.POST.get('username') or 'sa').strip(),
+        request.POST.get('password') or os.environ.get('LEGACY_SQL_PASSWORD', ''),
+    )
+
+
+def _restore_state():
+    """حالة النظام التي تحكم أي خطوة متاحة الآن."""
+    total = Book.objects.count()
+    stamped = Book.objects.exclude(source_ref='').count()
+    return {
+        'books': total,
+        'stamped': stamped,
+        'unstamped': total - stamped,
+        'attachments': Attachment.objects.filter(is_deleted=False).count(),
+        'entities': Entity.objects.count(),
+    }
+
+
+@staff_required
+@require_POST
+def restore_probe(request):
+    """يتحقّق من الاتصال ويعرض جداول المصدر وأعدادها — قراءة فقط."""
+    try:
+        info = _restore_engine(request).discover()
+    except Exception as exc:
+        logger.warning('restore_probe failed: %s', exc)
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=200)
+    total = sum(t['rows'] for t in info['tables'])
+    return JsonResponse({
+        'ok': True, 'years': info['years'], 'tables': info['tables'],
+        'total_rows': total, 'state': _restore_state(),
+    })
+
+
+@staff_required
+@require_POST
+def restore_reconcile(request):
+    """
+    يربط الكتب الحالية بصفوفها في المصدر ويختم source_ref.
+    apply=0 (الافتراضي) معاينة لا تكتب شيئاً.
+    """
+    apply_it = request.POST.get('apply') == '1'
+    try:
+        verify = int(request.POST.get('verify_bytes') or 40)
+    except ValueError:
+        verify = 40
+    try:
+        report = _restore_engine(request).reconcile(
+            apply=apply_it, verify_bytes=max(0, min(verify, 300)))
+    except Exception as exc:
+        logger.warning('restore_reconcile failed: %s', exc)
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=200)
+    report['ok'] = True
+    report['state'] = _restore_state()
+    report['verify_mismatches'] = [list(m) for m in report.get('verify_mismatches', [])]
+    return JsonResponse(report)
+
+
+@staff_required
+@require_POST
+def restore_start(request):
+    """
+    يبدأ الدمج كعمليةٍ مستقلّة ويعود فوراً.
+
+    الطلب لا ينفّذ شيئاً: يتحقّق، يُنشئ صفّ مهمّة، يُشغّل الأمر، ويردّ بمعرّفها.
+    قبل هذا كان الدمج يعمل داخل الطلب نفسه — فتنتهي مهلة المتصفّح ويظنّ المستخدم
+    أنه فشل بينما هو ماضٍ، ولا يبقى منه أثر إن أُغلقت الصفحة.
+    """
+    import subprocess
+    import sys
+
+    from ..models import RestoreJob
+
+    live = RestoreJob.running()
+    if live:
+        return JsonResponse({'ok': False, 'job_id': live.id,
+                             'error': f'توجد مهمّة دمج قيد التنفيذ (#{live.id}). '
+                                      'انتظر انتهاءها أو ألغِها قبل بدء أخرى.'})
+
+    mode = request.POST.get('merge_mode') or 'skip_existing'
+    if mode not in ('fresh', 'skip_existing', 'update_existing'):
+        mode = 'skip_existing'
+
+    password = request.POST.get('password') or os.environ.get('LEGACY_SQL_PASSWORD', '')
+    if not password:
+        return JsonResponse({'ok': False, 'error': 'كلمة سرّ المصدر مطلوبة.'})
+
+    job = RestoreJob.objects.create(
+        created_by=request.user,
+        params={
+            'server': (request.POST.get('server') or 'localhost').strip(),
+            'database': (request.POST.get('database') or 'ARCHMDOC').strip(),
+            'username': (request.POST.get('username') or 'sa').strip(),
+            'mode': mode,
+            'restore_files': request.POST.get('restore_files') == 'on',
+            'include_held': request.POST.get('include_held') == 'on',
+        },
+    )
+
+    # الاعتماد يُمرَّر في بيئة العملية الابنة فقط — لا في صفّ المهمّة ولا في سطر الأوامر.
+    env = dict(os.environ, LEGACY_SQL_PASSWORD=password, PYTHONIOENCODING='utf-8')
+    creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+    try:
+        subprocess.Popen(
+            [sys.executable, 'manage.py', 'run_restore_job', '--job', str(job.id)],
+            cwd=str(settings.BASE_DIR), env=env, creationflags=creationflags,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        job.status = RestoreJob.STATUS_FAILED
+        job.error_message = f'تعذّر تشغيل العملية: {exc}'
+        job.finished_at = timezone.now()
+        job.save(update_fields=['status', 'error_message', 'finished_at'])
+        return JsonResponse({'ok': False, 'error': job.error_message})
+
+    return JsonResponse({'ok': True, 'job_id': job.id})
+
+
+@staff_required
+def restore_job_status(request, job_id):
+    """حالة مهمّة الدمج — تُستطلَع من الصفحة كل ثانيتين."""
+    from ..models import RestoreJob
+
+    job = RestoreJob.objects.filter(pk=job_id).first()
+    if not job:
+        return JsonResponse({'ok': False, 'error': 'المهمّة غير موجودة.'}, status=404)
+    return JsonResponse({
+        'ok': True, 'id': job.id, 'status': job.status, 'phase': job.phase,
+        'done': job.done_count, 'total': job.total_count, 'percent': job.percent,
+        'is_live': job.is_live, 'summary': job.summary, 'error': job.error_message,
+        'cancel_requested': job.cancel_requested,
+        'state': _restore_state(),
+    })
+
+
+@staff_required
+@require_POST
+def restore_job_cancel(request, job_id):
+    """يطلب الإلغاء — يُفحَص بين الدفعات فلا يُترك مرفقٌ نصفه."""
+    from ..models import RestoreJob
+
+    updated = RestoreJob.objects.filter(pk=job_id, status__in=RestoreJob.LIVE_STATUSES) \
+                                .update(cancel_requested=True)
+    return JsonResponse({'ok': bool(updated),
+                         'error': '' if updated else 'المهمّة غير حيّة.'})
+
+
+@staff_required
+@require_POST
+def restore_delta(request):
+    """يعرض ما الجديد في المصدر مقارنةً بما عندنا — بلا نقل مرفقات."""
+    try:
+        info = _restore_engine(request).delta()
+    except Exception as exc:
+        logger.warning('restore_delta failed: %s', exc)
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=200)
+    info['ok'] = True
+    info['state'] = _restore_state()
+    return JsonResponse(info)
 
 
 @staff_required
@@ -656,23 +921,49 @@ def bak_browse(request):
 
 
 def _reseed_book_sequences():
-    """يضبط BookSequence.next_number لكل سجل على (أكبر تسلسل مُستورَد للسنة الحالية + 1)."""
-    import re as _re
-    from ..models import BookSequence
-    cur_year = timezone.now().year
-    for kind, reg in BookSequence.REGISTER_CODES.items():
-        prefix = f"{cur_year}{reg}"
-        max_seq = 0
-        for onum in Book.objects.filter(kind=kind, our_number__startswith=prefix).values_list('our_number', flat=True):
-            rest = onum[len(prefix):]
-            m = _re.match(r'^(\d+)', rest)
-            if m:
-                base = int(rest[:4]) if len(rest) >= 5 and rest[:4].isdigit() else int(m.group(1))
-                max_seq = max(max_seq, base)
-        obj, _c = BookSequence.objects.get_or_create(kind=kind, defaults={'next_number': 1, 'year': cur_year})
-        obj.year = cur_year
-        obj.next_number = max_seq + 1 if max_seq else 1
-        obj.save(update_fields=['year', 'next_number', 'updated_at'])
+    """
+    يرفع BookSequence.next_number لكل سجلّ إلى ما يضمن ألّا يتكرّر رقم — **ولا يُنزله أبداً**.
+
+    السلسلة لا نهائية بلا تصفير سنوي، فيُحتسب أساسها من أرقام **السلسلة الجارية**
+    وحدها (المجرّدة). الموسوم بسنته وكتب التدريب خارج فضائها: لو حُسب '20255782'
+    تسلسلاً لقفز العدّاد إلى عشرين مليوناً. والصادر الخارجي لا عدّاد له أصلاً —
+    رقمه من مكتب السيد المدير العام.
+
+    العدّاد لا ينزل لأن الرقم قد يكون **محجوزاً الآن** لمستخدم يكتب كتاباً لم يُحفظ بعد
+    (BookNumberReservation نشط)، أو قد يكون في حجزٍ ينتظر. إنزال العدّاد كان يمنح
+    ذلك الرقم لشخصٍ آخر فيتصادمان. لذا: الجديد = أكبر (العدّاد الحالي، أكبر رقم كتاب،
+    أكبر رقم محجوز) + ١. الفجوات مقبولة؛ تكرار الأرقام ليس كذلك.
+    """
+    from django.db.models import Max
+
+    from .. import numbering
+    from ..models import BookNumberReservation, BookSequence
+
+    live = (BookNumberReservation.STATUS_ACTIVE,
+            BookNumberReservation.STATUS_REACTIVATED,
+            BookNumberReservation.STATUS_COOLDOWN,
+            BookNumberReservation.STATUS_USED)
+
+    # مسحة واحدة على الأرقام كلها بدل مسحةٍ لكل سجلّ تُحمّلها في الذاكرة مراراً.
+    max_seq = {kind: 0 for kind in numbering.SERIES_KINDS}
+    for kind, onum in (Book.objects.exclude(our_number='')
+                       .filter(kind__in=numbering.SERIES_KINDS)
+                       .values_list('kind', 'our_number').iterator(chunk_size=2000)):
+        p = numbering.parse(onum)
+        if p.kind_of == 'series' and p.seq:
+            max_seq[kind] = max(max_seq[kind], p.seq)
+
+    reserved = dict(BookNumberReservation.objects.filter(status__in=live)
+                    .values_list('kind').annotate(m=Max('number')))
+
+    for kind in numbering.SERIES_KINDS:
+        obj, _c = BookSequence.objects.get_or_create(
+            kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
+        )
+        target = max(obj.next_number, max_seq[kind] + 1, (reserved.get(kind) or 0) + 1, 1)
+        if target != obj.next_number:
+            obj.next_number = target
+            obj.save(update_fields=['next_number', 'updated_at'])
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -739,7 +1030,7 @@ def legacy_import_run(request):
         field_map  = json.loads(request.POST.get("field_map", "{}"))
         dry_run    = request.POST.get("dry_run", "1") == "1"
         table_name = request.POST.get("table_name", "")
-        prefix     = request.POST.get("prefix", "قديم-")
+        prefix     = request.POST.get("prefix", "")
 
         all_data = json.loads(sample_file.read_text(encoding="utf-8"))
         records  = all_data.get(table_name, []) if table_name else []

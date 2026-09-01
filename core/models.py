@@ -5,6 +5,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db import models
 from django.utils import timezone
 
+from . import numbering
 from .extraction.kinds import BOOK_KIND_CHOICES, EXTRACTION_KIND_CHOICES
 
 
@@ -25,6 +26,13 @@ class Entity(models.Model):
     code     = models.CharField(max_length=50, unique=True, blank=True, null=True)
     etype    = models.CharField(max_length=10, choices=TYPE_CHOICES, default="both")
     is_active = models.BooleanField(default=True)
+
+    # عند دمج جهة مكرّرة ضمن جهة أمّ: تشير إلى الأمّ وتُضبط is_active=False.
+    merged_into = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='merged_from', verbose_name='مدموجة في',
+        help_text='الجهة الأمّ التي استوعبت هذه الجهة عند إزالة التكرار',
+    )
 
     # ── بيانات الاتصال ──
     email          = models.EmailField("البريد الإلكتروني", blank=True, default="",
@@ -67,8 +75,13 @@ class Entity(models.Model):
 
 
 def book_attachment_path(instance, filename):
-    y = instance.book.date.year if instance.book and instance.book.date else timezone.localdate().year
-    return f"books/{y}/{instance.book.our_number or 'no-num'}_{filename}"
+    # يدعم Attachment (instance.book) وAttachmentVersion (instance.attachment.book)
+    book = getattr(instance, 'book', None)
+    if book is None:
+        book = getattr(getattr(instance, 'attachment', None), 'book', None)
+    y = book.date.year if book and book.date else timezone.localdate().year
+    our_number = (book.our_number if book else '') or 'no-num'
+    return f"books/{y}/{our_number}_{filename}"
 
 
 class Tag(models.Model):
@@ -108,6 +121,31 @@ class Tag(models.Model):
         return self.name
 
 
+# حدود سنة الوسم في `core/numbering.py` وحده (MIN_YEAR/MAX_YEAR). أُزيلت إعادة
+# التصدير من هنا بعد أن استغنى عنها آخر متّصل: وجودُ اسمين لحدٍّ واحد هو تحديداً
+# ما جعله 2020 في موضع و2000 في آخر، فتُقرأ كتب 2000/2007/2014 قراءتين متناقضتين.
+
+
+class SoftDeleteManager(models.Manager):
+    """المدير الافتراضي للنماذج ذات الحذف الناعم — لا يرى المحذوف.
+
+    كان الحذف الناعم قاعدةً منسوخة يدويّاً: ``is_deleted=False`` مكتوبة **73
+    مرّة** في كود الإنتاج وصفر managers مخصّصة. قاعدةٌ بهذا الانتشار تفشل
+    بالصمت: استعلامٌ واحد ينسى الشرط يُظهر ما حُذف، ولا اختبارَ يلتقطه لأنّ
+    النسيان لا يُخطئ — يُظهر فقط.
+
+    الافتراض الآن آمن، و``all_objects`` هو المخرج **الصريح** لسلّة المحذوفات
+    والاستعادة والتفريغ. وسمُ الصراحة مقصود: من يريد المحذوف يقوله.
+
+    ملاحظة: ``_base_manager`` يبقى مديراً عادياً غير مُرشَّح (جانغو يُنشئه
+    تلقائيّاً ما لم يُضبط ``Meta.base_manager_name``) — فاجتياز المفتاح الأجنبي
+    إلى صفٍّ محذوف (``attachment.book``) يظلّ يعمل ولا ينكسر.
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+
+
 class Book(models.Model):
     """
     نموذج الكتاب - تخزين معلومات الكتب الواردة والصادرة
@@ -144,7 +182,7 @@ class Book(models.Model):
     # ── أرقام الكتاب ──
     # الصادر: our_number = رقم الصادر الخاص بنا
     # الوارد: our_number = رقم الوارد الخاص بنا، sender_number = رقم صادر الجهة المرسلة
-    # بعد التطبيع: our_number بصيغة YYYYNNNN (مثل 20251304)
+    # صيغة `our_number` وتحليلها وعرضها كلّها في `core/numbering.py` — المصدر الوحيد.
     our_number = models.CharField("رقمنا (صادر/وارد)", max_length=50, default="", db_index=True)
     sender_number = models.CharField("رقم صادر الجهة", max_length=50, blank=True, default="")
     # ── حقول التطبيع ──
@@ -159,6 +197,14 @@ class Book(models.Model):
         "هوية المصدر",
         max_length=40, blank=True, default="", db_index=True,
         help_text='"{TABLE}#{ID}" في قاعدة المصدر — يربط الكتاب بصفّه الأصلي للدمج المستقبلي',
+    )
+    is_training = models.BooleanField(
+        "كتاب تدريب",
+        default=False, db_index=True,
+        help_text=(
+            "أُدخل أثناء فترة التدريب. رقمه من فضاء منفصل (T…) فلا يستهلك السلسلة "
+            "الرسمية، ويُحذف كلّه عند التدشين لأن أصله موجود في النظام القديم."
+        ),
     )
     # للأرقام المركّبة قديم-X-Y: series_no = X (السلسلة)، version = Y (الرقم الفرعي)
     series_no = models.PositiveIntegerField(
@@ -216,10 +262,15 @@ class Book(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
+
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="deleted_books")
 
     def save(self, *args, **kwargs):
+        # تطبيع نوع المستند بمصدر واحد (يغلق legacy_restore/Admin وأي مسار يتجاوز BookForm.clean_document_type)
+        if self.document_type:
+            from core.document_types import normalize_document_type_value
+            self.document_type = normalize_document_type_value(self.document_type)
         # القاعدة الذهبية: لا due_date ⇒ مؤرشف تلقائياً
         if not self.due_date:
             self.is_archived = True
@@ -305,60 +356,87 @@ class Book(models.Model):
         return entities[0] if entities else None
 
 
-    # خريطة بادئة السجل → تسمية
-    _REGISTER_LABELS = {'0': 'بلا رقم', '1': 'وارد داخلي', '2': 'وارد خارجي', '3': 'صادر داخلي', '4': 'صادر خارجي'}
-
-    def _parse_year_prefix(self):
-        """يُعيد (year_str, register_char_or_None, rest_string) أو (None, None, our_number)."""
-        s = self.our_number or ''
-        if len(s) >= 4 and s[:4].isdigit() and 2020 <= int(s[:4]) <= 2099:
-            year = s[:4]
-            rest = s[4:]
-            # الصيغة الجديدة: الخانة الخامسة بادئة سجل (1-4) والطول ≥ 9
-            if len(s) >= 9 and rest and rest[0] in '1234':
-                return (year, rest[0], rest[1:])
-            return (year, None, rest)
-        return (None, None, s)
+    # ── رقم القيد: كل التحليل والعرض من `core/numbering.py` وحده ──
+    #
+    # القاعدة (قرار المالك): سلسلةٌ واحدة لا نهائية أساسها أرقام 2026 بلا تصفير
+    # سنوي، وبيانات 2025 وما قبلها موسومةٌ بسنة إضافتها، ولا بادئة سجلّ في الرقم
+    # إطلاقاً — النوع يحمله عمود `kind`. الخصائص أدناه واجهةُ عرضٍ رفيعة فوق
+    # الوحدة؛ لا تُعِد كتابة قاعدةٍ هنا.
 
     @property
     def our_number_year(self):
-        """السنة (أول 4 خانات إن كانت 2020-2099)، وإلا ''."""
-        return self._parse_year_prefix()[0] or ''
-
-    @property
-    def our_number_register_label(self):
-        """تسمية السجل (وارد داخلي / صادر خارجي ...) من بادئة الرقم، أو ''."""
-        reg = self._parse_year_prefix()[1]
-        return self._REGISTER_LABELS.get(reg, '') if reg else ''
+        """وسم السنة للكتب المنقولة من سجلّات ما قبل 2026، وإلا '' للسلسلة الجارية."""
+        return numbering.year_tag(self.our_number)
 
     @property
     def our_number_sequence(self):
+        """الرقم المجرّد كما هو مكتوب على الورق — بلا سنة وبلا بادئة."""
+        return numbering.display(self.our_number)
+
+    @property
+    def our_number_display(self):
         """
-        العرض المختصر بدون السنة وبادئة السجل:
-        - مركّب (series_no + version) → 'X-Y'  (للأرقام المكررة في السجل نفسه)
-        - عادي → 'NNNN'
-        - خام → النص كما هو
+        الرقم كسطرٍ واحد للعرض في أي مكان: «2433» أو «825/2025» أو «T131» أو ''.
+
+        القائمة الموحّدة تفصل الجزأين في عنصرَين لتُصغّر الوسم بصرياً؛ وكل موضعٍ
+        آخر (التفاصيل، التقارير، الأضابير، البريد، المهملات) يستعمل هذا. بدونه
+        كانت تلك الصفحات تعرض المخزَّن الخام «20250825» فيخالف ما تعرضه القائمة
+        وما هو مطبوع على الورقة.
         """
-        if self.series_no is not None and self.version is not None:
-            return f"{self.series_no}-{self.version}"
-        year, reg, rest = self._parse_year_prefix()
-        if year is None:
-            return rest  # خام
-        if not rest:
-            return '0'
-        return (rest.lstrip('0') or '0') if rest.isdigit() else rest
+        seq = numbering.display(self.our_number)
+        if not seq:
+            return ''
+        tag = numbering.year_tag(self.our_number)
+        return f'{seq}/{tag}' if tag else seq
+
+    @property
+    def our_number_register_label(self):
+        """تسمية السجلّ — من نوع الكتاب لا من الرقم (البادئة أُلغيت)."""
+        return dict(BOOK_KIND_CHOICES).get(self.kind, '')
 
     @property
     def our_number_is_compound(self):
+        """الصيغة المركّبة (X-Y) انتهت بإعادة البناء؛ تبقى للبيانات غير المُرحَّلة."""
         return self.series_no is not None and self.version is not None
 
     @property
     def our_number_is_numberless(self):
-        """كتاب داخلي بلا رقم رسمي (بادئة السجل = 0)."""
-        return self._parse_year_prefix()[1] == '0'
+        """كتاب بلا رقم رسمي — استثناءٌ معتمَد في النظام (الحقل فارغ)."""
+        return numbering.parse(self.our_number).kind_of == 'blank'
+
+    @property
+    def our_number_is_training(self):
+        """كتاب أُدخل في فترة التدريب (فضاء T) — يُحذف عند التدشين."""
+        return numbering.parse(self.our_number).kind_of == 'training'
+
+    @property
+    def our_number_explained(self):
+        """شرحٌ نصّيّ لرقم القيد، لتلميح الواجهة — يميّز **رقمنا** عن رقم الجهة."""
+        p = numbering.parse(self.our_number)
+        label = self.our_number_register_label
+
+        if p.kind_of == 'blank':
+            return 'كتاب بلا رقم قيد — استثناء معتمَد في النظام.'
+        if p.kind_of == 'training':
+            return (f'كتاب تدريب رقم {p.seq} — خارج السلسلة الرسمية، '
+                    f'ويُحذف عند تدشين النظام.')
+        if p.kind_of == 'tagged':
+            return (f'رقم قيدنا: {p.seq} من سجلّ سنة {p.year} · {label} — '
+                    f'الوسم السنوي يفصله عن رقم السلسلة الجارية. '
+                    f'هذا رقمنا نحن، وليس العدد المطبوع على المستند.')
+        if self.kind in numbering.MANUAL_KINDS:
+            return (f'رقم الصادر: {p.raw} — يصدر من مكتب السيد المدير العام، '
+                    f'ولا يخضع لسلسلة النظام.')
+        return (f'رقم قيدنا: {p.raw} · {label} — من السلسلة الجارية المستمرّة '
+                f'بلا تصفير سنوي. هذا رقمنا نحن، وليس العدد المطبوع على المستند.')
 
     def __str__(self):
         return f"{self.our_number} - {self.title}"
+
+
+    #: الافتراضيّ لا يرى المحذوف؛ ``all_objects`` مخرجٌ صريح للسلّة والاستعادة.
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
 
     class Meta:
         verbose_name = "كتاب"
@@ -380,6 +458,29 @@ class Book(models.Model):
             models.Index(fields=['is_deleted'], name='book_is_deleted_idx'),
             models.Index(fields=['kind'], name='book_kind_idx'),
             models.Index(fields=['is_deleted', 'created_by', 'is_archived'], name='book_user_status_idx'),
+            # فهرس التاريخ — يسرّع الفرز الافتراضي order_by('-date') في كل قوائم الكتب والأضابير
+            models.Index(fields=['-date', '-id'], name='book_date_idx'),
+        ]
+        constraints = [
+            # التفرّد ضمانةٌ على ما **يُصدره النظام**، لا على ما يُسجّله من الورق.
+            #
+            # ثلاثة استثناءات، كلٌّ منها مفروضٌ بدليل مقيس:
+            #  • `source_ref` غير فارغ = صفٌّ منقولٌ من سجلّ ورقيّ. وذلك السجلّ فيه
+            #    تكرارٌ حقيقي: الكاتب كتب «٨٢٥» على مستندين مختلفين في اليوم نفسه
+            #    (مُتحقَّق بالعين على المستندين). فرضُ التفرّد عليه يُجبرنا على
+            #    تزوير أحدهما.
+            #  • الصادر الخارجي رقمه من مكتب المدير العام لا من سلسلتنا، وتكراره
+            #    مشروع (بياناته: 0، 109، 1555، 27189 — بلا تسلسل).
+            #  • المحذوف لا يحجز رقمه: كتابٌ حُذف كان يمنع إعادة إدخال رقمه
+            #    الشرعي، فيعجز الموظّف عن تصحيح خطئه.
+            models.UniqueConstraint(
+                fields=['our_number', 'kind'],
+                condition=(~models.Q(our_number='')
+                           & models.Q(source_ref='')
+                           & ~models.Q(kind='outgoing_external')
+                           & models.Q(is_deleted=False)),
+                name='uniq_book_our_number_kind',
+            ),
         ]
 
 
@@ -392,8 +493,14 @@ class Attachment(models.Model):
     file = models.FileField(upload_to=book_attachment_path)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
+
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="deleted_attachments")
+
+
+    #: الافتراضيّ لا يرى المحذوف؛ ``all_objects`` مخرجٌ صريح للسلّة والاستعادة.
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
 
     class Meta:
         indexes = [
@@ -403,6 +510,12 @@ class Attachment(models.Model):
 
     def __str__(self):
         return self.file.name
+
+    @property
+    def filename(self):
+        """اسم الملف المجرّد (دون مسار التخزين) للعرض."""
+        import os
+        return os.path.basename(self.file.name) if self.file else ""
 
 
 class AttachmentVersion(models.Model):
@@ -660,6 +773,82 @@ class ScanJob(models.Model):
         return f"ScanJob({self.id}) {self.status} - {self.file_name}"
 
 
+class RestoreJob(models.Model):
+    """
+    مهمّة دمج بيانات من المصدر القديم — تعمل خارج دورة الطلب.
+
+    لماذا صفّ في قاعدة البيانات لا متغيّر في الذاكرة: الدمج يستغرق دقائق إلى
+    ساعات، فلا يجوز أن يحمله طلب HTTP (ينتهي المهلة والمتصفّح يظنّ أنه فشل بينما
+    هو يعمل). وبجعل الحالة صفّاً مشتركاً: يستطيع المستخدم إغلاق الصفحة والعودة،
+    ويراها زميله، وتبقى الخلاصة بعد الانتهاء.
+
+    الاعتماد **لا يُحفظ هنا أبداً** — يُمرَّر إلى العملية الابنة عبر بيئتها.
+    """
+    STATUS_QUEUED = 'queued'
+    STATUS_RUNNING = 'running'
+    STATUS_DONE = 'done'
+    STATUS_FAILED = 'failed'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = (
+        (STATUS_QUEUED, 'في الانتظار'),
+        (STATUS_RUNNING, 'قيد التنفيذ'),
+        (STATUS_DONE, 'انتهت'),
+        (STATUS_FAILED, 'فشلت'),
+        (STATUS_CANCELLED, 'أُلغيت'),
+    )
+    LIVE_STATUSES = (STATUS_QUEUED, STATUS_RUNNING)
+
+    status = models.CharField('الحالة', max_length=12, choices=STATUS_CHOICES,
+                              default=STATUS_QUEUED, db_index=True)
+    phase = models.CharField('المرحلة', max_length=200, blank=True, default='')
+    done_count = models.PositiveIntegerField('المُنجَز', default=0)
+    total_count = models.PositiveIntegerField('الإجمالي', default=0)
+    params = models.JSONField('المعاملات (بلا اعتماد)', default=dict, blank=True)
+    summary = models.JSONField('الخلاصة', default=dict, blank=True)
+    error_message = models.TextField('الخطأ', blank=True, default='')
+    cancel_requested = models.BooleanField('طُلب الإلغاء', default=False)
+    pid = models.PositiveIntegerField('معرّف العملية', null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='restore_jobs')
+    created_at = models.DateTimeField('أُنشئت', auto_now_add=True)
+    updated_at = models.DateTimeField('آخر تحديث', auto_now=True)
+    finished_at = models.DateTimeField('انتهت في', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'مهمّة دمج'
+        verbose_name_plural = 'مهامّ الدمج'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"RestoreJob({self.id}) {self.status} — {self.phase or '—'}"
+
+    @property
+    def is_live(self):
+        return self.status in self.LIVE_STATUSES
+
+    @property
+    def percent(self):
+        if not self.total_count:
+            return 0
+        return min(100, round(100 * self.done_count / self.total_count))
+
+    @classmethod
+    def running(cls):
+        """المهمّة الحيّة إن وُجدت — تمنع تشغيل دمجَين على المصدر نفسه."""
+        return cls.objects.filter(status__in=cls.LIVE_STATUSES).order_by('-created_at').first()
+
+    def touch(self, *, phase=None, done=None, total=None):
+        """تحديث تقدّم خفيف — يُكتب بـUPDATE مباشر ولا يقرأ الصفّ."""
+        fields = {'updated_at': timezone.now()}
+        if phase is not None:
+            fields['phase'] = phase[:200]
+        if done is not None:
+            fields['done_count'] = done
+        if total is not None:
+            fields['total_count'] = total
+        type(self).objects.filter(pk=self.pk).update(**fields)
+
+
 # ===================================================
 # AI Data Extraction Models
 # ===================================================
@@ -786,6 +975,33 @@ class DataExtractionResult(models.Model):
         return f"Extraction - {self.book_number or 'N/A'} ({self.status})"
 
 
+class LetterheadMemory(models.Model):
+    """ذاكرة (ترويسة مستند → جهة مؤكَّدة) — تتعلّم من كلّ كتاب ممسوح يُحفَظ.
+
+    تكسر سقف «الوحدات الداخلية غير المطبوعة»: حتى لو لم يُطبع اسمُ القسم على الورقة،
+    فمستندات نفس المُرسِل تُسنَد دوماً لنفس الجهة؛ ومطابقة ترويسة مستندٍ جديد بترويسات
+    سابقة تكشف جهته المؤكَّدة. مقيسٌ بترك-واحد على بيانات حقيقية: hit@3 ≈ 85% مقابل
+    ≈16% لمطابقة اسم الجهة وحدها. تُملأ من حلقة الالتقاط عند الحفظ + أمر backfill.
+    """
+    letterhead = models.TextField(help_text='نصّ أعلى المستند (الترويسة) — مصدر التشابه')
+    issuing_entity = models.ForeignKey(
+        Entity, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='letterhead_as_issuer', verbose_name='الجهة المُصدِرة المؤكَّدة')
+    receiving_entity = models.ForeignKey(
+        Entity, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='letterhead_as_receiver', verbose_name='الجهة المستقبِلة المؤكَّدة')
+    book = models.ForeignKey(Book, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'ذاكرة ترويسة'
+        verbose_name_plural = 'ذاكرة الترويسات'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"LetterheadMemory#{self.pk} → issuer={self.issuing_entity_id}"
+
+
 class ExtractionFeedback(models.Model):
     """
     ملاحظات المستخدم لتحسين النموذج
@@ -836,6 +1052,35 @@ class ExtractionStatistics(models.Model):
     
     def __str__(self):
         return f"Statistics - {self.date}"
+
+
+class ScanPayload(models.Model):
+    """حمولةُ اقتراحات المسح **دائمةً** — لأن ذهب التدريب لا يجوز أن يعبر كاشاً متطايراً.
+
+    الجذر المقيس (2026-08-18): `_mint_scan_token` كان يضع الحمولة في الكاش وحده، وبلا
+    `REDIS_CACHE_URL` يكون الكاش `LocMemCache` — **نسخةٌ لكلّ عمليّة**. فرمزٌ يُسكّ في
+    عاملٍ لا يراه عاملٌ آخر يستقبل الحفظ، وكلّ إعادة تشغيلٍ تمحو المعلّق. والنتيجة
+    ضياعُ زوج (قصاصة، حقيقة) **بلا رجعة** — وهو الحقل الوحيد الذي خسارتُه لا تُعوَّض:
+    نصٌّ خاطئ يُعاد حسابه غداً، وقيمةٌ كتبها الكاتب بيده تضيع إلى الأبد.
+
+    وقيمتها ارتفعت اليوم تحديداً: بإسكات اقتراح العدد صارت القيمة النهائيّة **ذهباً
+    نظيفاً** — كتبها الكاتب وهو ينظر إلى الورقة، بلا انحياز قبولٍ لاقتراحٍ معروض.
+    (قاعدةٌ عامّة: نهائيّاتُ حقلٍ تصلح تدريباً **ما دام ملؤه التلقائيّ مُطفأً**.)
+
+    الكاش يبقى مسارَ السرعة، وهذا الجدول مسارُ الحقيقة: يُقرأ حين يخيب.
+    """
+
+    token = models.CharField(max_length=64, unique=True, db_index=True)
+    data = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'حمولة مسح'
+        verbose_name_plural = 'حمولات المسح'
+        indexes = [models.Index(fields=['-created_at'])]
+
+    def __str__(self):
+        return f'ScanPayload({self.token[:12]}…)'
 
 
 class ExtractionCache(models.Model):
@@ -897,10 +1142,66 @@ class SuggestionItem(models.Model):
 # =============================
 # AI Integration Settings
 # =============================
-class AIIntegrationSettings(models.Model):
+class EncryptedFieldsMixin(models.Model):
+    """تشفيرٌ شفّاف لحقولٍ نصّيّة حسّاسة — مصدرٌ واحد للقاعدة.
+
+    كان النمط مكتوباً داخل ``EmailSettings`` وحدها، بينما ``azure_key`` نصٌّ صريح
+    في القاعدة — ازدواجُ معيارٍ في الملف نفسه. نسخُ النمط مرّةً ثانية كان
+    سيُثبّت الازدواج بدل أن يرفعه، فوُحِّد هنا.
+
+    العقد: القيمة في الذاكرة **دائماً** نصّ صريح، وفي القاعدة **دائماً** مشفّرة
+    ببادئة ``enc::``؛ والمشفَّر مسبقاً لا يُشفَّر مرّتين.
+
+    حدٌّ مقيس (``encrypt_text``): مدخلُ 32 محرفاً ⟵ 145، و84 ⟵ 209، و120 ⟵ 253.
+    فـ``max_length=255`` يسع كلّ مفاتيح Azure الواقعيّة (32 أو 84) بهامش، ويضيق
+    عند ~121 محرفاً فأكثر — عندها يلزم توسيع العمود بهجرة.
+    """
+
+    #: أسماء الحقول التي تُشفَّر — يعرّفها كل نموذج.
+    ENCRYPTED_FIELDS: tuple = ()
+
+    class Meta:
+        abstract = True
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        from .encryption import decrypt_text, is_encrypted
+
+        instance = super().from_db(db, field_names, values)
+        for name in cls.ENCRYPTED_FIELDS:
+            value = getattr(instance, name, '')
+            if is_encrypted(value):
+                try:
+                    setattr(instance, name, decrypt_text(value))
+                except Exception:
+                    # مفتاحٌ مفقود أو مُبدَّل: نترك القيمة مشفّرة كما هي ليظهر
+                    # العطل عند الاستعمال، لا أن يُبتلع صامتاً هنا.
+                    pass
+        return instance
+
+    def save(self, *args, **kwargs):
+        from .encryption import encrypt_text, is_encrypted
+
+        plaintexts = {}
+        for name in self.ENCRYPTED_FIELDS:
+            value = getattr(self, name, '') or ''
+            if value and not is_encrypted(value):
+                plaintexts[name] = value
+                setattr(self, name, encrypt_text(value))
+
+        super().save(*args, **kwargs)
+
+        # نُعيد النصّ الصريح إلى الكائن كي يبقى صالحاً للاستعمال بعد الحفظ.
+        for name, plaintext in plaintexts.items():
+            setattr(self, name, plaintext)
+
+
+class AIIntegrationSettings(EncryptedFieldsMixin):
     """إعدادات ربط مزودات الذكاء الاصطناعي عبر الإنترنت.
     نخزّن اختيار المزود والمفاتيح ونمط العمل (تعطيل/تمكين/بديل عند ثقة منخفضة).
     """
+
+    ENCRYPTED_FIELDS = ('azure_key',)
 
     PROVIDER_CHOICES = (
         ('offline', 'Offline (EasyOCR)'),
@@ -1128,18 +1429,18 @@ class OCRModelVersion(models.Model):
 # =============================
 class BookSequence(models.Model):
     """
-    عدّاد تسلسلي لكل نوع كتاب — يتصفّر سنوياً.
-    الصيغة الموحّدة: YYYY{R}{NNNN} حيث R = بادئة السجل (1 وارد داخلي، 2 وارد خارجي،
-    3 صادر داخلي، 4 صادر خارجي، 0 = بلا رقم).
+    عدّاد تسلسلي **لا نهائي** لكل سجلّ — لا يتصفّر عند رأس السنة أبداً.
+
+    أساسه أرقام سنة 2026 كما هي مثبَّتة في ختم الوارد: بعد 2432 يأتي 2433، في
+    2027 و2028 وما بعدها. الرقم يُخزَّن مجرّداً بلا بادئة سجلّ وبلا سنة — النوع
+    يحمله عمود `kind`، والتفرّد على (kind, our_number).
+
+    الصادر الخارجي لا عدّاد له: رقمه يصدر من مكتب السيد المدير العام.
+    وكتب السنوات السابقة موسومةٌ بسنتها ({السنة}{الرقم}) فهي خارج فضاء العدّاد.
+    كل تحليلٍ أو تنسيق يمرّ عبر `core/numbering.py`.
     """
-    # بادئة السجل لكل نوع كتاب
-    REGISTER_CODES = {
-        'incoming_internal': '1',
-        'incoming_external': '2',
-        'outgoing_internal': '3',
-        'outgoing_external': '4',
-    }
-    NUMBERLESS_CODE = '0'   # كتاب داخلي بلا رقم رسمي (استثناء يدعمه النظام)
+    #: السجلّات التي يمنحها النظام أرقاماً من سلسلته
+    SERIES_KINDS = numbering.SERIES_KINDS
 
     kind = models.CharField(
         max_length=20, choices=BOOK_KIND_CHOICES, unique=True, verbose_name='نوع الكتاب'
@@ -1149,8 +1450,8 @@ class BookSequence(models.Model):
         help_text='غير مستخدمة بعد التطبيع — يُحتفظ بها للتوافق'
     )
     year = models.PositiveSmallIntegerField(
-        default=2026, verbose_name='سنة العدّاد',
-        help_text='السنة التي يعدّ لها next_number — يتصفّر تلقائياً عند تغيّر السنة'
+        default=2026, verbose_name='سنة بدء العدّاد',
+        help_text='سنة إنشاء/بذر العدّاد — للسجل فقط؛ لم يعد يُستخدم للتصفير (الترقيم دائم)'
     )
     next_number = models.PositiveIntegerField(
         default=1, verbose_name='الرقم التالي'
@@ -1163,60 +1464,51 @@ class BookSequence(models.Model):
 
     def __str__(self):
         label = dict(BOOK_KIND_CHOICES).get(self.kind, self.kind)
-        return f"{label}: {self.format_number(self.kind, self.next_number, self.year)}"
-
-    @classmethod
-    def register_code(cls, kind):
-        return cls.REGISTER_CODES.get(kind, '9')
+        return f"{label}: {self.format_number(self.kind, self.next_number)}"
 
     @classmethod
     def format_number(cls, kind, number, year=None, numberless=False):
-        """صيغة موحّدة: YYYY{R}{NNNN}."""
-        if year is None:
-            year = timezone.now().year
-        reg = cls.NUMBERLESS_CODE if numberless else cls.register_code(kind)
-        return f"{year}{reg}{number:04d}"
-
-    def _maybe_roll_year(self):
-        """إن تغيّرت السنة، صفّر العدّاد (لا يحفظ — المتصل مسؤول عن الحفظ)."""
-        cur_year = timezone.now().year
-        if self.year != cur_year:
-            self.year = cur_year
-            self.next_number = 1
-            return True
-        return False
+        """الرقم كما يُكتب على الورق: مجرّد بلا بادئة ولا سنة.
+        `numberless=True` ⇒ نصّ فارغ، فـ«بلا رقم» تعني لا رقم فعلاً.
+        المعاملان `year`/`kind` يُقبلان للتوافق الرجعي ولا أثر لهما."""
+        if numberless:
+            return ''
+        return numbering.format_series(number)
 
     @classmethod
     def get_next(cls, kind):
-        """إرجاع الرقم التالي دون استهلاكه."""
+        """إرجاع الرقم التالي دون استهلاكه (لا نهائي — لا تصفير سنوي)."""
         obj, _ = cls.objects.get_or_create(
             kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
         )
-        year = timezone.now().year
-        n = 1 if obj.year != year else obj.next_number
+        n = obj.next_number
         return {
-            'kind': kind, 'number': n, 'year': year,
-            'register': cls.register_code(kind),
-            'formatted': cls.format_number(kind, n, year),
+            'kind': kind, 'number': n, 'year': obj.year,
+            'formatted': cls.format_number(kind, n),
         }
 
     @classmethod
     def consume_next(cls, kind, numberless=False):
-        """استهلاك الرقم الحالي — آمن من race conditions (SELECT FOR UPDATE)."""
+        """
+        استهلاك الرقم الحالي — آمن من التسابق (SELECT FOR UPDATE)، بلا تصفير سنوي.
+
+        `numberless=True` **لا يستهلك العدّاد**: الكتاب بلا رقم رسمي، فمنحه رقماً
+        من السلسلة كان يبتلع رقماً لا يظهر على أي ورقة ويفتح فجوة في الدفتر.
+        """
+        if numberless:
+            return {'kind': kind, 'number': None, 'year': None, 'formatted': ''}
+
         from django.db import transaction
         with transaction.atomic():
             obj = cls.objects.select_for_update().get_or_create(
                 kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
             )[0]
-            obj._maybe_roll_year()
             current = obj.next_number
-            year = obj.year
             obj.next_number += 1
-            obj.save(update_fields=['next_number', 'year', 'updated_at'])
+            obj.save(update_fields=['next_number', 'updated_at'])
         return {
-            'kind': kind, 'number': current, 'year': year,
-            'register': cls.NUMBERLESS_CODE if numberless else cls.register_code(kind),
-            'formatted': cls.format_number(kind, current, year, numberless=numberless),
+            'kind': kind, 'number': current, 'year': obj.year,
+            'formatted': cls.format_number(kind, current),
         }
 
 
@@ -1239,6 +1531,7 @@ class BookNumberReservation(models.Model):
     STATUS_VOIDED      = 'voided'
     STATUS_EXPIRED     = 'expired'
     STATUS_REACTIVATED = 'reactivated'
+    STATUS_COOLDOWN    = 'cooldown'   # انقطاع قسريّ — محجوز لصاحبه أولوية 15د قبل التدوير
 
     STATUS_CHOICES = [
         (STATUS_ACTIVE,      'نشط'),
@@ -1246,18 +1539,23 @@ class BookNumberReservation(models.Model):
         (STATUS_VOIDED,      'ملغي'),
         (STATUS_EXPIRED,     'منتهي الصلاحية'),
         (STATUS_REACTIVATED, 'مُعاد تفعيله'),
+        (STATUS_COOLDOWN,    'فترة سماح'),
     ]
 
     VOID_REASON_CANCELLED   = 'user_cancelled'
     VOID_REASON_TIMEOUT     = 'timeout'
     VOID_REASON_YEAR_RESET  = 'year_reset'
     VOID_REASON_REACTIVATED = 'reactivated'
+    VOID_REASON_FORCED      = 'forced_disconnect'   # انقطاع قسريّ (WS/heartbeat)
+    VOID_REASON_RECYCLED    = 'recycled'            # سُحب وأُعيد تدويره لمستخدم آخر
 
     VOID_REASON_CHOICES = [
         (VOID_REASON_CANCELLED,   'ألغاه المستخدم'),
         (VOID_REASON_TIMEOUT,     'انتهت المهلة'),
         (VOID_REASON_YEAR_RESET,  'إعادة تعيين سنوية'),
         (VOID_REASON_REACTIVATED, 'أُعيد تفعيله'),
+        (VOID_REASON_FORCED,      'انقطاع قسريّ'),
+        (VOID_REASON_RECYCLED,    'أُعيد تدويره'),
     ]
 
     user         = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='المستخدم')
@@ -1283,6 +1581,11 @@ class BookNumberReservation(models.Model):
     expires_at   = models.DateTimeField(verbose_name='ينتهي في')
     used_at      = models.DateTimeField(null=True, blank=True, verbose_name='وقت الاستخدام')
     voided_at    = models.DateTimeField(null=True, blank=True, verbose_name='وقت الإلغاء')
+
+    # ── الحضور اللحظيّ + إعادة التدوير بلا فجوات ──
+    last_heartbeat = models.DateTimeField(null=True, blank=True, verbose_name='آخر نبضة حضور')
+    cooldown_until = models.DateTimeField(null=True, blank=True, verbose_name='نهاية فترة السماح')
+    is_recycled    = models.BooleanField(default=False, verbose_name='رقم مُدوّر')
 
     class Meta:
         verbose_name = 'حجز رقم قيد'
@@ -1337,6 +1640,20 @@ class BookNumberReservation(models.Model):
         self.void_reason = ''
         self.save(update_fields=['status', 'expires_at', 'void_reason'])
 
+    def touch_heartbeat(self):
+        """تحديث نبضة الحضور (WS/ping) — لا تُغيّر الحالة."""
+        self.last_heartbeat = timezone.now()
+        self.save(update_fields=['last_heartbeat'])
+
+    def enter_cooldown(self, minutes):
+        """انقطاع قسريّ: يبقى الرقم محجوزاً لصاحبه فترة سماح قبل التدوير لغيره."""
+        now = timezone.now()
+        self.status         = self.STATUS_COOLDOWN
+        self.void_reason    = self.VOID_REASON_FORCED
+        self.cooldown_until = now + timedelta(minutes=minutes)
+        self.voided_at      = now
+        self.save(update_fields=['status', 'void_reason', 'cooldown_until', 'voided_at'])
+
     @classmethod
     def get_active_for_user(cls, user, kind):
         """إرجاع الحجز النشط للمستخدم لنوع معين، أو None."""
@@ -1347,33 +1664,10 @@ class BookNumberReservation(models.Model):
 
     @classmethod
     def reserve(cls, user, kind, expire_minutes=45):
-        """
-        حجز ذري: يأخذ الرقم التالي من BookSequence بـ select_for_update
-        ويُنشئ سجل حجز. آمن تماماً من race conditions.
-        """
-        from django.db import transaction
-        with transaction.atomic():
-            seq = BookSequence.objects.select_for_update().get_or_create(
-                kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
-            )[0]
-            seq._maybe_roll_year()
-            number  = seq.next_number
-            prefix  = seq.prefix
-            year    = seq.year
-            seq.next_number += 1
-            seq.save(update_fields=['next_number', 'year', 'updated_at'])
-
-            formatted = BookSequence.format_number(kind, number, year)
-            reservation = cls.objects.create(
-                user=user,
-                kind=kind,
-                number=number,
-                prefix=prefix,
-                year=year,
-                formatted=formatted,
-                status=cls.STATUS_ACTIVE,
-                expires_at=timezone.now() + timedelta(minutes=expire_minutes),
-            )
+        """حجز رقم آمن من التضارب وبلا فجوات — يفوّض لخدمة الحجز الموحّدة
+        (أولوية عودة cooldown → إعادة تدوير أصغر رقم متروك → رقم جديد)."""
+        from .reservation_service import reserve_number
+        reservation, _outcome = reserve_number(user, kind, expire_minutes)
         return reservation
 
 
@@ -1404,7 +1698,10 @@ class BookEmailLog(models.Model):
         (STATUS_PENDING, 'في الانتظار'),
     ]
 
-    book       = models.ForeignKey('Book', on_delete=models.CASCADE,
+    # اختياريّ عمداً: رسالةٌ إداريّةٌ قد لا تخصّ كتاباً بعينه. كان الحقل إلزاميّاً
+    # فسقط مسار الإنشاء إلى **أوّل كتابٍ في القاعدة** (``Book.objects.order_by('id')
+    # .first()``) لمجرّد إرضاء القيد — فيُسجَّل بريدٌ على كتابٍ لا صلة له به.
+    book       = models.ForeignKey('Book', null=True, blank=True, on_delete=models.CASCADE,
                                    related_name='email_logs', verbose_name='الكتاب')
     sent_by    = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,
                                    verbose_name='أرسله')
@@ -1426,6 +1723,7 @@ class BookEmailLog(models.Model):
         related_name='sent_emails', verbose_name='الخيط'
     )
     smtp_message_id = models.CharField("SMTP Message-ID", max_length=500, blank=True, default="",
+                                        db_index=True,
                                         help_text="يُستخدم لربط الردود الواردة بهذا الإيميل")
 
     sent_at     = models.DateTimeField("أُرسِل في", auto_now_add=True)
@@ -1445,16 +1743,170 @@ class BookEmailLog(models.Model):
 
 
 # ══════════════════════════════════════════════════════════════════
+#  إعدادات النظام العامة — هوية التطبيق المعروضة (Singleton)
+# ══════════════════════════════════════════════════════════════════
+class SystemSettings(models.Model):
+    """
+    هوية التطبيق المعروضة (اسم النظام وسطر الوصف) — سجل وحيد (Singleton).
+    مستقلّة عن هوية المؤسسة في ``EmailSettings`` (تلك خاصّة بترويسة التقارير
+    والبريد). تُعرَض في كل الصفحات عبر context processor ``system_settings``.
+    """
+
+    singleton      = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    app_name       = models.CharField("اسم النظام", max_length=100, default="نظام الكتب")
+    brand_subtitle = models.CharField(
+        "سطر الوصف في الترويسة", max_length=200, blank=True,
+        default="أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة",
+    )
+    updated_at     = models.DateTimeField(auto_now=True)
+
+    # مفتاح كاش موحّد يستخدمه context processor أيضاً (مصدر واحد لتفادي التضارب).
+    CACHE_KEY = "system_settings_singleton"
+
+    class Meta:
+        verbose_name = "إعدادات النظام"
+        verbose_name_plural = "إعدادات النظام"
+
+    def __str__(self):
+        return self.app_name
+
+    @classmethod
+    def get(cls):
+        """يعيد السجل الوحيد (ينشئه بالقيَم الافتراضية عند أول استدعاء)."""
+        obj, _ = cls.objects.get_or_create(singleton=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.singleton = 1
+        super().save(*args, **kwargs)
+        from django.core.cache import cache
+        cache.delete(self.CACHE_KEY)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  سياسة إشعارات تأخّر الكتب (Singleton)
+# ══════════════════════════════════════════════════════════════════
+class NotificationSettings(models.Model):
+    """
+    سياسة إشعارات التأخّر — سجل وحيد (Singleton).
+    يقرؤها أمر ``notify_overdue_books`` عند كل تشغيل؛ كل حقل يغيّر سلوكه فعلاً.
+    """
+
+    singleton       = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    overdue_enabled = models.BooleanField("تفعيل إشعارات التأخّر", default=True)
+    notify_admins   = models.BooleanField("إشعار المدراء داخل النظام", default=True)
+    notify_creator  = models.BooleanField("إشعار مُنشئ الكتاب", default=True)
+    email_admins    = models.BooleanField("إرسال بريد ملخّص للمدراء", default=False,
+                                          help_text="يتطلّب تفعيل إعدادات البريد")
+    updated_at      = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "إعدادات الإشعارات"
+        verbose_name_plural = "إعدادات الإشعارات"
+
+    def __str__(self):
+        return "إعدادات الإشعارات"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(singleton=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.singleton = 1
+        super().save(*args, **kwargs)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  إعدادات الأمان (Singleton)
+# ══════════════════════════════════════════════════════════════════
+class SecuritySettings(models.Model):
+    """
+    إعدادات الأمان — سجل وحيد (Singleton).
+    ``password_min_length`` يُطبَّق فعلياً عند إنشاء المستخدمين في شاشة الأدوار.
+    """
+
+    singleton           = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    password_min_length = models.PositiveSmallIntegerField("الحد الأدنى لطول كلمة المرور", default=8)
+    updated_at          = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "إعدادات الأمان"
+        verbose_name_plural = "إعدادات الأمان"
+
+    def __str__(self):
+        return "إعدادات الأمان"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(singleton=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.singleton = 1
+        super().save(*args, **kwargs)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  إعدادات النسخ الاحتياطي المجدول (Singleton)
+# ══════════════════════════════════════════════════════════════════
+class BackupSettings(models.Model):
+    """
+    إعدادات النسخ الاحتياطي المجدول — سجل وحيد (Singleton).
+    تقرؤها مهمة Celery ``scheduled_backup`` عند كل تشغيل ساعي.
+    """
+
+    FREQ_DAILY = 'daily'
+    FREQ_WEEKLY = 'weekly'
+    FREQ_MONTHLY = 'monthly'
+    FREQUENCY_CHOICES = [
+        (FREQ_DAILY, 'يومي'),
+        (FREQ_WEEKLY, 'أسبوعي'),
+        (FREQ_MONTHLY, 'شهري'),
+    ]
+
+    singleton      = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    enabled        = models.BooleanField("تفعيل النسخ التلقائي", default=False)
+    frequency      = models.CharField("التكرار", max_length=10, choices=FREQUENCY_CHOICES, default=FREQ_DAILY)
+    hour           = models.PositiveSmallIntegerField("ساعة التشغيل (0-23)", default=2)
+    retention_days = models.PositiveSmallIntegerField("مدة الاحتفاظ (يوم)", default=30)
+    last_run_at    = models.DateTimeField("آخر تشغيل ناجح", null=True, blank=True)
+    updated_at     = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "إعدادات النسخ الاحتياطي"
+        verbose_name_plural = "إعدادات النسخ الاحتياطي"
+
+    def __str__(self):
+        return "إعدادات النسخ الاحتياطي"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(singleton=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.singleton = 1
+        super().save(*args, **kwargs)
+
+
+# ══════════════════════════════════════════════════════════════════
 #  إعدادات البريد الإلكتروني للمؤسسة (Singleton)
 # ══════════════════════════════════════════════════════════════════
-class EmailSettings(models.Model):
+class EmailSettings(EncryptedFieldsMixin):
     """
     إعدادات SMTP الخاصة بالمؤسسة — سجل وحيد (Singleton).
     يُفعَّل/يُعطَّل الإرسال من هنا دون تعديل settings.py.
     """
 
-    # ── هوية المؤسسة ──
-    org_name        = models.CharField("اسم المؤسسة", max_length=200, default="")
+    ENCRYPTED_FIELDS = ('smtp_password', 'imap_password')
+
+    # ── هوية المؤسسة (تُستخدم في ترويسة التقارير المطبوعة + البريد) ──
+    org_name        = models.CharField("اسم الشركة/المؤسسة", max_length=200, default="")
+    org_section     = models.CharField("اسم القسم", max_length=200, blank=True, default="",
+                                       help_text="يظهر في ترويسة التقارير المطبوعة")
+    org_unit        = models.CharField("اسم الوحدة", max_length=200, blank=True, default="",
+                                       help_text="يظهر في ترويسة التقارير المطبوعة")
     org_email       = models.EmailField("بريد المؤسسة الرسمي", blank=True, default="",
                                         help_text="يُستخدم كـ From address في جميع الإيميلات")
     reply_to        = models.EmailField("الرد على", blank=True, default="",
@@ -1500,113 +1952,10 @@ class EmailSettings(models.Model):
         return f"إعدادات البريد ({status})"
 
     @classmethod
-    def from_db(cls, db, field_names, values):
-        """
-        Auto-decrypt sensitive fields when loading from DB.
-        Transparent decryption: if value starts with enc::, decrypt it into memory.
-        """
-        from .encryption import decrypt_text, is_encrypted
-        
-        instance = super().from_db(db, field_names, values)
-        for field_name in ('smtp_password', 'imap_password'):
-            if hasattr(instance, field_name):
-                encrypted_val = getattr(instance, field_name, '')
-                if is_encrypted(encrypted_val):
-                    try:
-                        decrypted = decrypt_text(encrypted_val)
-                        setattr(instance, field_name, decrypted)
-                    except Exception:
-                        # If decryption fails, leave as-is (will likely error on use).
-                        pass
-        return instance
-
-    def save(self, *args, **kwargs):
-        """
-        Auto-encrypt sensitive fields before saving to DB.
-        Plaintext values are encrypted; already-encrypted values are left as-is.
-        After save, plaintext is restored in the instance for in-memory use.
-        """
-        from .encryption import encrypt_text, is_encrypted
-        
-        plaintexts = {}
-        for field_name in ('smtp_password', 'imap_password'):
-            if hasattr(self, field_name):
-                val = getattr(self, field_name, '') or ''
-                if val and not is_encrypted(val):
-                    plaintexts[field_name] = val
-                    setattr(self, field_name, encrypt_text(val))
-        
-        super().save(*args, **kwargs)
-        
-        # Restore plaintext in instance for in-memory use after save.
-        for field_name, plaintext in plaintexts.items():
-            setattr(self, field_name, plaintext)
-
-    @classmethod
     def get(cls):
         """أحضر السجل الوحيد أو أنشئه بالقيم الافتراضية."""
         obj, _ = cls.objects.get_or_create(singleton=1)
         return obj
-
-
-# ══════════════════════════════════════════════════════════════════
-#  إعدادات الماسح الضوئي (Singleton)
-# ══════════════════════════════════════════════════════════════════
-class ScanSettings(models.Model):
-    """
-    إعدادات الماسح الضوئي — سجل وحيد (Singleton).
-    يُستخدَم بواسطة Hot Folder Watcher وزر "ابدأ المسح" وسكريبت scan_manager.
-    """
-
-    # ─── CaptureOnTouch ────────────────────────────────────────────
-    capture_exe_path = models.CharField(
-        "مسار CaptureOnTouch.exe", max_length=500, blank=True, default="",
-        help_text=r"مثال: C:\Program Files\Canon\CaptureOnTouch\CaptureOnTouch.exe",
-    )
-    watch_folder = models.CharField(
-        "مجلد المسح الضوئي", max_length=500, blank=True, default="",
-        help_text="المجلد الذي يحفظ فيه CaptureOnTouch الملفات الممسوحة",
-    )
-
-    # ─── سلوك التطبيق ──────────────────────────────────────────────
-    auto_open_browser = models.BooleanField(
-        "فتح المتصفح تلقائياً بعد كل مسح", default=True,
-    )
-    server_url = models.CharField(
-        "عنوان الخادم المحلي", max_length=200, default="http://localhost:8000",
-        help_text="يُستخدم لفتح صفحة الاستخراج بعد انتهاء المسح",
-    )
-    window_topmost = models.BooleanField(
-        "نافذة CaptureOnTouch فوق التطبيق", default=True,
-        help_text="تُبقي نافذة المسح عائمة فوق المتصفح أثناء المسح",
-    )
-
-    # ─── Singleton guard ────────────────────────────────────────────
-    singleton  = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name        = 'إعدادات الماسح الضوئي'
-        verbose_name_plural = 'إعدادات الماسح الضوئي'
-
-    def __str__(self):
-        return f"إعدادات الماسح ({self.watch_folder or 'غير مكوّن'})"
-
-    @classmethod
-    def get(cls) -> 'ScanSettings':
-        """أحضر السجل الوحيد أو أنشئه بالقيم الافتراضية."""
-        obj, _ = cls.objects.get_or_create(singleton=1)
-        return obj
-
-    @property
-    def is_configured(self) -> bool:
-        return bool(self.watch_folder and self.capture_exe_path)
-
-    @property
-    def watcher_status(self) -> str:
-        """الحالة الحالية للـ watcher (تُحدَّث بواسطة الخيط الخلفي)."""
-        from django.core.cache import cache
-        return cache.get('scan_watcher_status', 'stopped')
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1769,6 +2118,7 @@ class EmailTemplate(models.Model):
         except Exception as exc:
             import logging
             logging.getLogger('lettersys').error('[EmailTemplate] render_body error: %s', exc)
+            return self.body_html or ''   # fallback للنص الخام بدل None (يمنع إرسال "None")
 
 
 # ══════════════════════════════════════════════════════════════════

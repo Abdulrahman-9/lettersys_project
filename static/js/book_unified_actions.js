@@ -117,12 +117,12 @@
       });
 
       const deletedCount = bookIds.length;
-      setCount("statTotal", parseCount("statTotal") - deletedCount);
+      // المعرّفات الحيّة: إجمالي الترقيم + شارات الحالة (pill-count-*)
       setCount("paginationTotal", parseCount("paginationTotal") - deletedCount);
-      setCount("statPending",  parseCount("statPending")  - statDelta.pending);
-      setCount("statDueToday", parseCount("statDueToday") - statDelta.due_today);
-      setCount("statOverdue",  parseCount("statOverdue")  - statDelta.overdue);
-      setCount("statArchived", parseCount("statArchived") - statDelta.archived);
+      setCount("pill-count-pending",   parseCount("pill-count-pending")   - statDelta.pending);
+      setCount("pill-count-due-today", parseCount("pill-count-due-today") - statDelta.due_today);
+      setCount("pill-count-overdue",   parseCount("pill-count-overdue")   - statDelta.overdue);
+      setCount("pill-count-archived",  parseCount("pill-count-archived")  - statDelta.archived);
 
       const newTo = Math.max(0, parseCount("paginationTo") - deletedCount);
       setCount("paginationTo", newTo);
@@ -150,7 +150,7 @@
           el.classList.add(prefix + newState);
           // عدّادات: −previous, +archived
           if (prevState && prevState !== newState && FOLLOWUP_STATES.includes(prevState)) {
-            const map = { pending: "statPending", due_today: "statDueToday", overdue: "statOverdue", archived: "statArchived" };
+            const map = { pending: "pill-count-pending", due_today: "pill-count-due-today", overdue: "pill-count-overdue", archived: "pill-count-archived" };
             setCount(map[prevState], parseCount(map[prevState]) - 1);
             setCount(map[newState],  parseCount(map[newState])  + 1);
           }

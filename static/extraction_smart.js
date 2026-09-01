@@ -15,6 +15,310 @@
  */
 const CONFIDENCE_THRESHOLDS = { high: 0.85, medium: 0.65 };
 
+/* ===== اقتراحُ تاريخ الجهة (قارئ D2) — ملءٌ للأخضر وحدَه، والقصاصةُ شاهدة =====
+ *
+ * **القانون بعد قرار المالك (2026-09-01):** الحقلُ يُملأ تلقائيّاً **من قراءةٍ
+ * خضراء وحدَها** (ثقة ≥ 0.98 · تحليلٌ `ok` · حارسُ الفارق سالم)، والقصاصةُ تبقى
+ * معروضةً للمطابقة بنظرة. وما دون ذلك يبقى كما كان: اقتراحٌ لا يمسّ الحقل.
+ *
+ * **وهذا ليس عودةَ جذر التسميم**: ذاك كان ملءَ **تاريخِ اليوم** بلا قراءةٍ أصلاً
+ * (`resetDateFields`)، أمّا هنا فالقيمةُ قراءةُ حبرِ الجهة نفسِه من قصاصةٍ
+ * معروضة، فوق عتبةٍ مقيسةٍ دقّتُها 91.7% على مسار الإنتاج (n=150). وثلاثةُ
+ * حرّاسٍ تبقى قائمة: (١) الخادمُ لا يكتب `sender_date` أبداً — الاقتراحُ في
+ * مفتاحٍ منفصل؛ (٢) القيمةُ المملوءةُ تُوسَم `autofilled` فتُستبعَد من ذهب
+ * التدريب ما لم يلمسها الكاتب؛ (٣) ما لم يُملأ لا يُلمَس: الأصفرُ والغامضُ
+ * وفارقُ اليوم الصفر تبقى بانتظار نقرةٍ صريحة.
+ *
+ * **العتبة 0.98 وليست 0.65:** مقيسةٌ على حجز القارئ (n=360): فوقها دقّةُ 93.5%
+ * بتغطية 68%، وما دونها ~24% — فلا شريحة «صفراء» صادقة. و0.65 معايرةُ نموذج
+ * العدد، ونقلُها إلى نموذجٍ آخر خطأٌ بالبناء.
+ *
+ * **حارسُ الفارق** إشارةٌ متعامدة: لا يمنع العرض ولا يمسّ الثقة (تلك معايَرة)،
+ * بل يحكم **طريقة التأكيد**. يُحسب مقابل قيمة حقل تاريخ القيد الحيّة لا مقابل
+ * «اليوم» — فالكاتبُ المُدخِل أرشيفاً قديماً يحرّر تاريخ القيد فتنزاح النافذة معه.
+ *   0 < الفارق <= 45  ⟵ تأكيدٌ بـEnter
+ *   الفارق = 0        ⟵ تحذيرٌ ونقرةٌ إلزاميّة: قد يكون **ختمَنا** لا حبر الجهة
+ *                        (13% من القصاصات يدخلها ختمُ الوارد — مقيسٌ ببوّابة العين)
+ *   سالبٌ أو > 45     ⟵ محجوبُ التأكيد السريع، كتابةٌ يدويّة
+ */
+const SENDER_DATE_GAP_MAX = 45;
+
+/* ===== عقدُ الالتقاط في الواجهة: مصدرُ القيمة + رايةُ العرض ==================
+ *
+ * **مصدرُ القيمة (provenance)** — الواجهةُ وحدها تعرفه، ولا يُستنتَج خادميّاً.
+ * العدد هو الحقل الوحيد الذي يُملأ تلقائيّاً، فقيمةٌ حُفظت بلا لمسٍ تحمل خطأ
+ * النموذج نفسَه؛ تدريبٌ عليها تسميمٌ ذاتيّ (ضجيجٌ في اتّجاهٍ واحد لا تذيبه
+ * أرضيّةُ الدقّة). فتُوسَم `autofilled` وتُستبعَد لاحقاً، والتقييم لا يثق إلّا
+ * بـ`typed`. والعلمُ الداخليّ لازم: مسارات الملء تُطلق input/change بنفسها،
+ * فبدونه يُحسب ملءُ الكود لمسةً بشريّة فينقلب الوسم كذباً.
+ *
+ * **رايةُ العرض (displayed)** — «وُجد اقتراح» ليس «عُرض اقتراح». بلا الراية
+ * تختلط دلالةُ «لم يُصحَّح» بين «صحيحٌ» و«لم يره أحد» عبر تبدّلات سياسة العرض.
+ */
+const PROV_TYPED = 'typed';
+const PROV_CONFIRMED = 'confirmed';
+const PROV_AUTOFILLED = 'autofilled';
+// الموضوعُ منها لأنّ حقيقةَ تدريبه هي `Book.title` نفسُه: عنوانٌ مُلئ آليّاً
+// وحُفظ بلا لمسٍ يعود وسماً يدرّب المُنتقي على مخرجه هو.
+const PROVENANCE_FIELD_IDS = ['senderNumber', 'senderDate', 'title'];
+// معرّف الحقل في الواجهة ⟵ اسمه في عقد الالتقاط الخادميّ
+const CAPTURE_FIELD_BY_ID = {
+    senderNumber: 'sender_number', senderDate: 'sender_date',
+    title: 'title', secretLevel: 'secret_level',
+};
+
+let _codeFillDepth = 0;
+const _displayedSuggestions = new Set();
+
+/** يُغلّف كلَّ كتابةٍ من الكود كي لا تُحسب أحداثُها لمسةً بشريّة. */
+function codeFill(fn) {
+    _codeFillDepth++;
+    try { return fn(); } finally { _codeFillDepth--; }
+}
+
+function markSuggestionDisplayed(field) { if (field) _displayedSuggestions.add(field); }
+function unmarkSuggestionDisplayed(field) { _displayedSuggestions.delete(field); }
+function displayedFieldsList() { return Array.from(_displayedSuggestions); }
+function resetCaptureProvenance(el) { if (el && el.dataset) delete el.dataset.provenance; }
+
+/** يُستدعى من مسارات الملء الثلاثة بعد كتابة قيمةٍ مُقترَحة في حقل. */
+function noteSuggestionFilled(id, value) {
+    if (value === undefined || value === null || String(value).trim() === '') return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    const group = el.closest ? el.closest('.form-group-smart') : null;
+    if (group && group.classList.contains('is-hidden')) return;   // مخفيٌّ = لم يُعرَض
+    markSuggestionDisplayed(CAPTURE_FIELD_BY_ID[id]);
+    if (PROVENANCE_FIELD_IDS.indexOf(id) >= 0) el.dataset.provenance = PROV_AUTOFILLED;
+}
+
+/** مصدرُ القيمة عند الحفظ — الافتراضُ `typed` لأنّ ما لم يملأه الكود كتبه الكاتب. */
+function fieldProvenance(id) {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    return el.dataset.provenance || (String(el.value || '').trim() ? PROV_TYPED : '');
+}
+
+function _onHumanTouch(ev) {
+    if (_codeFillDepth) return;
+    const el = ev.target;
+    if (!el || !el.id || PROVENANCE_FIELD_IDS.indexOf(el.id) < 0) return;
+    // لمسُ قيمةٍ مُلئت تلقائيّاً يرفعها إلى `confirmed` (شاهدُ تدريبٍ لا تقييم)،
+    // وحقلٌ لم يملأه الكود قطّ يعني كتابةً بيد الكاتب.
+    const prev = el.dataset.provenance;
+    el.dataset.provenance =
+        (prev === PROV_AUTOFILLED || prev === PROV_CONFIRMED) ? PROV_CONFIRMED : PROV_TYPED;
+}
+document.addEventListener('input', _onHumanTouch, true);
+document.addEventListener('change', _onHumanTouch, true);
+
+function _sdEl(id) { return document.getElementById(id); }
+
+function _senderDateGap(iso) {
+    const entry = _sdEl('date') && _sdEl('date').value;
+    if (!entry || !iso) return null;
+    const ms = Date.parse(entry) - Date.parse(iso);
+    return Number.isNaN(ms) ? null : Math.round(ms / 86400000);
+}
+
+function _senderDateGuard(iso) {
+    const gap = _senderDateGap(iso);
+    if (gap === null) return { state: 'ok', gap: null };
+    if (gap === 0) return { state: 'same_day', gap };
+    if (gap < 0 || gap > SENDER_DATE_GAP_MAX) return { state: 'out_of_range', gap };
+    return { state: 'ok', gap };
+}
+
+/** شرطُ الملء التلقائيّ — الموضعُ الوحيد الذي يقرّره (يحرسه اختبارُ مصدر). */
+function _sdAutofillEligible(sug, conf, green, guard) {
+    return !!(sug && sug.iso && sug.parse === 'ok'
+              && conf >= green && guard && guard.state === 'ok');
+}
+
+/** يكتب القراءةَ الخضراء في الحقل — ولا يدهس قيمةً موجودة أبداً. */
+function _autofillSenderDate(iso) {
+    const el = _sdEl('senderDate');
+    if (!el || !iso) return false;
+    if (String(el.value || '').trim()) return false;   // قيمةُ الكاتب أعلى من كلّ قراءة
+    codeFill(() => {
+        el.value = iso;
+        try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+        try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+    });
+    // مُلئ آليّاً وحُفظ بلا لمس ⟵ يُستبعَد من ذهب التدريب. لمسةُ الكاتب ترفعه
+    // إلى `confirmed` تلقائيّاً عبر `_onHumanTouch`.
+    el.dataset.provenance = PROV_AUTOFILLED;
+    markSuggestionDisplayed('sender_date');
+    return true;
+}
+
+/** يعرض القصاصة والاقتراح معاً — نقطةُ الدخول الوحيدة لمسارات الملء الثلاثة. */
+function applySenderDateSuggestion(data) {
+    const fig = _sdEl('senderDateCrop');
+    const img = _sdEl('senderDateCropImg');
+    const card = _sdEl('senderDateSuggest');
+    if (!fig || !img || !card) return;
+    const crop = data && data.sender_date_crop;
+    const sug = data && data.sender_date_suggestion;
+
+    if (typeof crop === 'string' && crop.startsWith('data:image/')) {
+        img.src = crop;
+        fig.hidden = false;
+    } else {
+        img.removeAttribute('src');
+        fig.hidden = !sug;                 // اقتراحٌ بلا قصاصة يبقى مرئيّاً
+    }
+    if (!sug || !sug.raw) { card.hidden = true; return; }
+
+    card.hidden = false;
+    // هنا — وهنا فقط — رأى الكاتبُ اقتراحَ التاريخ فعلاً.
+    markSuggestionDisplayed('sender_date');
+    _sdEl('senderDateRaw').textContent = sug.raw;
+    const conf = Number(sug.confidence || 0);
+    const green = Number(sug.green_threshold || 0.98);
+    const badge = _sdEl('senderDateSuggestConf');
+    badge.textContent = Math.round(conf * 100) + '%';
+    badge.className = 'confidence-badge ' + (conf >= green ? 'high' : 'low');
+
+    const warn = _sdEl('senderDateSuggestWarn');
+    const btn = _sdEl('senderDateApply');
+    const btnText = _sdEl('senderDateApplyText');
+    const kbd = _sdEl('senderDateKbd');
+    const guard = _senderDateGuard(sug.iso);
+    // الملءُ هنا — بعد الحارس وقبل الرسالة: الرسالةُ تصف ما حدث فعلاً.
+    let autofilled = false;
+    if (_sdAutofillEligible(sug, conf, green, guard)) {
+        const el = _sdEl('senderDate');
+        autofilled = _autofillSenderDate(sug.iso) || (el && el.value === sug.iso);
+    }
+    let msg = '', blocked = false, enterOk = true;
+
+    if (!sug.iso) {
+        msg = sug.parse === 'ambiguous'
+            ? 'سنةٌ غامضة — الطرفان محتملان. اكتب التاريخ بنفسك من القصاصة.'
+            : 'تعذّرت قراءةُ تاريخٍ صالح — اكتبه بنفسك من القصاصة.';
+        blocked = true; enterOk = false;
+    } else if (conf < green) {
+        msg = 'قراءةٌ ضعيفة — طابِقها بالقصاصة قبل التأكيد.';
+        enterOk = false;
+    } else if (guard.state === 'same_day') {
+        msg = 'يساوي تاريخ القيد — تأكّد أنّه حبرُ الجهة لا ختمُنا.';
+        enterOk = false;
+    } else if (guard.state === 'out_of_range') {
+        msg = guard.gap < 0
+            ? 'التاريخ بعد تاريخ القيد — راجعه.'
+            : 'أقدمُ من ' + SENDER_DATE_GAP_MAX + ' يوماً من تاريخ القيد — راجعه.';
+        enterOk = false;
+    } else if (autofilled) {
+        msg = 'مُلئ تلقائيّاً من القصاصة — طابِقه بنظرة ثمّ أكّد.';
+    }
+    warn.textContent = msg;
+    warn.hidden = !msg;
+    warn.classList.toggle('is-blocked', blocked);
+    btn.disabled = blocked;
+    btnText.textContent = blocked ? 'تعذّر الاقتراح' : (autofilled ? 'مطابِق' : 'تأكيد');
+    kbd.hidden = !enterOk;
+    card.dataset.iso = sug.iso || '';
+    card.dataset.enter = enterOk ? '1' : '';
+}
+
+function _confirmSenderDateSuggestion() {
+    const card = _sdEl('senderDateSuggest');
+    const el = _sdEl('senderDate');
+    if (!card || card.hidden || !el || !card.dataset.iso) return false;
+    el.value = card.dataset.iso;
+    codeFill(() => el.dispatchEvent(new Event('change', { bubbles: true })));
+    el.dataset.provenance = PROV_CONFIRMED;    // مصدرُ القيمة — للالتقاط لاحقاً
+    card.hidden = true;
+    return true;
+}
+
+document.addEventListener('click', (e) => {
+    if (e.target && e.target.closest && e.target.closest('#senderDateApply')) {
+        e.preventDefault();
+        _confirmSenderDateSuggestion();
+    }
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const card = _sdEl('senderDateSuggest');
+    if (!card || card.hidden || !card.dataset.enter) return;
+    const active = document.activeElement;
+    if (active && active.id !== 'senderDate' && active.id !== 'senderDateApply') return;
+    if (_confirmSenderDateSuggestion()) e.preventDefault();
+});
+window.applySenderDateSuggestion = applySenderDateSuggestion;
+
+/* ===== اقتراحُ الموضوع ضعيفِ المسار — يُعرَض ولا يُملأ =======================
+ *
+ * **لماذا بطاقةٌ لا ملء** (قرار المالك 2026-09-01، على قياس المجموعة المختومة
+ * subject-200، n=190): مُنتقي الموضوع مساران لا مسارٌ واحد —
+ *   مسارُ العلامة («م/» · «الموضوع») 62% من المستندات · صالحٌ **72.9%** ⟵ يملأ
+ *   المسارُ الاحتياطيّ والقوس        27% منها        · صالحٌ **6.5%**  ⟵ بطاقة
+ * فالقيمةُ الضعيفة كانت تُكتب في نصّ الكاتب كالقويّة تماماً (الثقةُ تلوّن
+ * الشارة ولا تحجب القيمة)، أي ربعُ المستندات بموضوعٍ خاطئٍ يجب أن يُمحى يدويّاً.
+ * وهي **لا تُكتَم** لأنّ ثلاثاً من كلّ 46 صحيحة، والبطاقةُ تُبقي مكسبَها
+ * بنقرةٍ وتُلغي كلفتَها.
+ *
+ * والقيمةُ المؤكَّدةُ تُوسَم `confirmed` لا `typed`: نقرةٌ ليست شهادةَ تقييمٍ
+ * مستقلّة — وحقيقةُ تدريب الموضوع هي `Book.title` عينُه، فبلا الوسم يتعلّم
+ * المُنتقي من مخرجه هو.
+ */
+function _tsEl(id) { return document.getElementById(id); }
+
+function applyTitleSuggestion(data) {
+    const card = _tsEl('titleSuggest');
+    if (!card) return;
+    const sug = data && data.title_suggestion;
+    if (!sug || !sug.value) { card.hidden = true; card.dataset.value = ''; return; }
+    card.hidden = false;
+    // هنا — وهنا فقط — رأى الكاتبُ اقتراحَ الموضوع فعلاً.
+    markSuggestionDisplayed('title');
+    const val = _tsEl('titleSuggestValue');
+    const badge = _tsEl('titleSuggestConf');
+    const warn = _tsEl('titleSuggestWarn');
+    if (val) val.textContent = sug.value;
+    if (badge) {
+        badge.textContent = Math.round(Number(sug.confidence || 0) * 100) + '%';
+        badge.className = 'confidence-badge low';
+    }
+    if (warn) {
+        warn.textContent = (sug.source === 'fallback')
+            ? 'أوّلُ سطرٍ فوق التحيّة — أصاب 7 مرّاتٍ من 100 على مجموعةٍ مختومة.'
+            : 'سطرٌ بين المُرسَل إليه والتحيّة — لم يصب مرّةً على المجموعة المختومة.';
+    }
+    card.dataset.value = sug.value;
+}
+
+/** الموضعُ **الوحيد** الذي يكتب اقتراحَ الموضوع في الحقل (يحرسه اختبارُ مصدر). */
+function _confirmTitleSuggestion() {
+    const card = _tsEl('titleSuggest');
+    const el = _tsEl('title');
+    if (!card || card.hidden || !el || !card.dataset.value) return false;
+    el.value = card.dataset.value;
+    codeFill(() => {
+        try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+        try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+    });
+    el.dataset.provenance = PROV_CONFIRMED;
+    card.hidden = true;
+    return true;
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target || !e.target.closest) return;
+    if (e.target.closest('#titleSuggestApply')) {
+        e.preventDefault();
+        _confirmTitleSuggestion();
+    } else if (e.target.closest('#titleSuggestDismiss')) {
+        e.preventDefault();
+        const card = _tsEl('titleSuggest');
+        if (card) card.hidden = true;
+    }
+});
+window.applyTitleSuggestion = applyTitleSuggestion;
+
+
 class ExtractionSmartSystem {
     constructor() {
         this.currentFile = null;
@@ -24,6 +328,7 @@ class ExtractionSmartSystem {
         this.pageCount = 1;
         this.currentPage = 1;
         this.zoom = 1;
+        this.fitMode = 'width';   // 'width' = ملء عرض اللوحة (أكبر/أوضح، بلا هوامش جانبية) | 'page' = احتواء كامل
         this.previewDpi = 130;
         this.extractedData = {};
         this.confidenceScores = {};
@@ -79,7 +384,7 @@ class ExtractionSmartSystem {
         const dataset = container ? container.dataset : {};
 
         return {
-            smartExtract: dataset.smartExtractEndpoint || '/books/api/extract/smart/',
+            smartExtractStream: dataset.smartExtractStreamEndpoint || '/books/api/extract/smart/stream/',
             entityList: dataset.entityListEndpoint || '/books/api/entity-list/',
             suggestions: dataset.suggestionsEndpoint || '/books/api/suggestions/',
             saveBook: dataset.saveBookEndpoint || '/books/api/book/save/',
@@ -87,7 +392,8 @@ class ExtractionSmartSystem {
             nextNumber: dataset.nextNumberEndpoint || '/books/api/next-number/',
             reservationReserve: dataset.reservationReserveEndpoint || '/books/api/reservation/reserve/',
             reservationVoid: dataset.reservationVoidEndpoint || '/books/api/reservation/void/',
-            reservationStatus: dataset.reservationStatusEndpoint || '/books/api/reservation/status/'
+            reservationStatus: dataset.reservationStatusEndpoint || '/books/api/reservation/status/',
+            reservationHeartbeat: dataset.reservationHeartbeatEndpoint || '/books/api/reservation/heartbeat/'
         };
     }
 
@@ -400,12 +706,44 @@ class ExtractionSmartSystem {
         this.enhanceUIFeedback();
         this.checkScanToken();
         this._initScanAgent();
+        this._setupAgentButton();
+        this._setupAutoExtractToggle();
     }
 
-    /** يحدّث مؤشّر حالة الوكيل (الحبّة الملوّنة) في شريط المسح. */
+    // ═══════ مفتاح الاستخراج التلقائي (تفعيل/إطفاء، مُخزَّن) ═══════
+    /** هل يُشغَّل الاستخراج تلقائياً بعد رفع الملف؟ (افتراضياً نعم؛ يُخزَّن في localStorage). */
+    _autoExtractEnabled() {
+        return localStorage.getItem('lettersys_auto_extract') !== 'off';
+    }
+
+    _setupAutoExtractToggle() {
+        const btn = document.getElementById('autoExtractToggle');
+        if (!btn) return;
+        const render = () => {
+            const on = this._autoExtractEnabled();
+            btn.classList.toggle('is-on', on);
+            btn.classList.toggle('is-off', !on);
+            btn.setAttribute('aria-checked', on ? 'true' : 'false');
+            const lbl = btn.querySelector('.aet-label');
+            if (lbl) lbl.textContent = on ? 'استخراج تلقائي' : 'استخراج يدوي';
+        };
+        render();
+        btn.addEventListener('click', () => {
+            const next = this._autoExtractEnabled() ? 'off' : 'on';
+            localStorage.setItem('lettersys_auto_extract', next);
+            render();
+            this.showToast(
+                next === 'on' ? 'الاستخراج التلقائي مفعّل — يُستخرَج فور رفع الملف.'
+                              : 'الاستخراج التلقائي مُطفأ — أدخِل يدوياً أو اضغط «استخراج» وقتما تشاء.',
+                'info', 4000);
+        });
+    }
+
+    /** يحدّث مؤشّر حالة الوكيل (الحبّة الملوّنة) في رأس المعاينة.
+     *  النصّ يُخفى بصرياً (نقطة فقط) فنمرّره أيضاً إلى title ليبقى مقروءاً بالتحويم. */
     setScanStatus(state, text) {
         const pill = document.getElementById('scanAgentStatus');
-        if (pill) { pill.dataset.state = state; if (text) pill.textContent = text; }
+        if (pill) { pill.dataset.state = state; if (text) { pill.textContent = text; pill.title = text; } }
     }
 
     /** يعيد المؤشّر لحالة «جاهز: اسم الجهاز» إن كان هناك ماسح معروف. */
@@ -439,9 +777,8 @@ class ExtractionSmartSystem {
     // فحص جاهزية وكيل المسح المحلي وملء قائمة الأجهزة + المؤشّر (بلا مستمع نقر منافس).
     async _initScanAgent() {
         this._startAgentHealthMonitor();
-        const pill   = document.getElementById('scanAgentStatus');
         const select = document.getElementById('scanDeviceSelect');
-        const setPill = (state, text) => { if (pill) { pill.dataset.state = state; pill.textContent = text; } };
+        const setPill = (state, text) => this.setScanStatus(state, text);   // موحّد (يضبط النصّ + التلميح)
         const hideSelect = () => { if (select) select.style.display = 'none'; };
         this._scanDevices = [];
         try {
@@ -522,6 +859,162 @@ class ExtractionSmartSystem {
         }
     }
 
+    // ═══════ زرّ حالة الوكيل + لوحة التعليمات لكل حالة ═══════
+    /** يربط زرّ مؤشّر الحالة: نقرة تفتح/تغلق لوحة التعليمات، وأزرارها تُشغّل/تُعيد الفحص. */
+    _setupAgentButton() {
+        const btn = document.getElementById('scanAgentStatus');
+        const help = document.getElementById('scanAgentHelp');
+        if (!btn || !help) return;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (help.hidden) this._openAgentHelp(); else this._closeAgentHelp();
+        });
+        document.addEventListener('click', (e) => {
+            if (!help.hidden && !help.contains(e.target) && e.target !== btn) this._closeAgentHelp();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !help.hidden) this._closeAgentHelp();
+        });
+        help.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-action]');
+            if (!b) return;
+            const act = b.dataset.action;
+            if (act === 'recheck') this._recheckAgent();
+            else if (act === 'start') this._startAgentAndVerify();
+            else if (act === 'close') this._closeAgentHelp();
+        });
+    }
+
+    _openAgentHelp() {
+        const btn = document.getElementById('scanAgentStatus');
+        const help = document.getElementById('scanAgentHelp');
+        if (!help) return;
+        this._renderAgentHelp(btn?.dataset.state || 'checking');
+        help.hidden = false;
+        btn?.setAttribute('aria-expanded', 'true');
+        this._positionAgentHelp();
+    }
+
+    /** يضع اللوحة (fixed) قرب الزرّ ويقصُرها داخل الشاشة: فوقه إن اتّسع وإلا تحته، وأفقياً بلا خروج. */
+    _positionAgentHelp() {
+        const btn = document.getElementById('scanAgentStatus');
+        const help = document.getElementById('scanAgentHelp');
+        if (!btn || !help || help.hidden) return;
+        const b = btn.getBoundingClientRect();
+        const pw = help.offsetWidth, ph = help.offsetHeight, m = 8;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        let top = b.top - ph - m;                                  // الأصل: فوق الزرّ
+        if (top < m) top = Math.min(b.bottom + m, vh - ph - m);    // لا يتّسع فوق → تحته
+        top = Math.max(m, top);
+        let left = b.right - pw;                                   // RTL: حاذِ يمين اللوحة بيمين الزرّ
+        left = Math.max(m, Math.min(left, vw - pw - m));           // اقصُر أفقياً داخل الشاشة
+        help.style.top = top + 'px';
+        help.style.left = left + 'px';
+    }
+
+    _closeAgentHelp() {
+        const help = document.getElementById('scanAgentHelp');
+        const btn = document.getElementById('scanAgentStatus');
+        if (help) help.hidden = true;
+        btn?.setAttribute('aria-expanded', 'false');
+    }
+
+    /** يبني محتوى اللوحة حسب الحالة: عنوان + شرح + خطوات مرقّمة + أزرار (تشغيل/إعادة فحص). */
+    _renderAgentHelp(state) {
+        const help = document.getElementById('scanAgentHelp');
+        if (!help) return;
+        const devs = this._scanDevices || [];
+        let dev = '';
+        if (devs.length) {
+            const sel = document.getElementById('scanDeviceSelect');
+            const chosen = (sel && sel.value) || devs[0].id;
+            dev = (devs.find(d => d.id === chosen) || devs[0]).name;
+        }
+        const C = {
+            checking:   { tone: 'info', title: 'جارٍ فحص وكيل المسح…',
+                desc: 'نتحقّق من اتصال وكيل المسح والماسح الضوئي على هذا الجهاز.', steps: [], actions: [] },
+            ready:      { tone: 'ok', title: 'الماسح جاهز',
+                desc: dev ? `وكيل المسح متصل، والماسح «${dev}» جاهز. اضغط «مسح من السكانر» لبدء المسح.`
+                          : 'وكيل المسح متصل وجاهز للمسح.', steps: [], actions: ['recheck'] },
+            scanning:   { tone: 'busy', title: 'جارٍ المسح…',
+                desc: 'يجري مسح المستند الآن — لا تُغلق النافذة حتى ينتهي.', steps: [], actions: [] },
+            unavailable:{ tone: 'err', title: 'وكيل المسح غير مشغّل',
+                desc: 'برنامج وكيل المسح المحلي متوقّف — وهو الوسيط الذي يشغّل الماسح الضوئي.', steps: [
+                    'اضغط «شغّل الوكيل الآن» أدناه ليبدأ تلقائياً.',
+                    'أو يدوياً: نفّذ <code>scan_agent\\run_agent.bat</code> من مجلد المشروع.',
+                    'لتشغيله تلقائياً مع ويندوز: ضع اختصاره في <code>shell:startup</code> (Win+R).',
+                ], actions: ['start', 'recheck'] },
+            no_naps2:   { tone: 'err', title: 'برنامج NAPS2 غير مثبّت',
+                desc: 'الوكيل يعمل، لكنه لا يجد NAPS2 — وهو محرّك المسح الفعلي.', steps: [
+                    'نزّل NAPS2 من <code>naps2.com</code> وثبّته (الإعداد الافتراضي كافٍ).',
+                    'بعد التثبيت أعد تشغيل وكيل المسح.',
+                    'اضغط «إعادة الفحص».',
+                ], actions: ['recheck'] },
+            no_device:  { tone: 'err', title: 'لا يوجد ماسح متصل',
+                desc: 'الوكيل وNAPS2 جاهزان، لكن لا يوجد ماسح ضوئي متّصل ومُكتشَف.', steps: [
+                    'وصّل الماسح بمنفذ USB وشغّله (تأكّد أنه ليس نائماً).',
+                    'تحقّق أن ويندوز يتعرّف عليه (لوحة التحكم ← الأجهزة والطابعات).',
+                    'اضغط «إعادة الفحص».',
+                ], actions: ['recheck'] },
+        };
+        const c = C[state] || C.checking;
+        const label = { recheck: '<i class="bi bi-arrow-clockwise"></i> إعادة الفحص',
+                        start: '<i class="bi bi-play-circle"></i> شغّل الوكيل الآن' };
+        const cls = { recheck: 'sah-btn-ghost', start: 'sah-btn-primary' };
+        const stepsHtml = c.steps.length
+            ? `<ol class="sah-steps">${c.steps.map(s => `<li>${s}</li>`).join('')}</ol>` : '';
+        const actionsHtml = c.actions.length
+            ? `<div class="sah-actions">${c.actions.map(a =>
+                `<button type="button" class="sah-btn ${cls[a]}" data-action="${a}">${label[a]}</button>`).join('')}</div>` : '';
+        help.innerHTML =
+            `<div class="sah-head ${c.tone}"><span class="sah-dot"></span>${c.title}` +
+            `<button type="button" class="sah-close" data-action="close" aria-label="إغلاق">✕</button></div>` +
+            `<p class="sah-desc">${c.desc}</p>${stepsHtml}${actionsHtml}`;
+        if (!help.hidden) this._positionAgentHelp();   // الارتفاع تغيّر → أعِد القصّ داخل الشاشة
+    }
+
+    /** يعيد فحص الوكيل من الصفر (يمسح الكاش) ويحدّث المؤشّر واللوحة. */
+    async _recheckAgent() {
+        this.setScanStatus('checking', 'جارٍ فحص وكيل المسح…');
+        this._renderAgentHelp('checking');
+        this._agentBase = null; this._agentHealth = null;   // أعِد حلّ العنوان من الصفر
+        await this._initScanAgent();
+        const btn = document.getElementById('scanAgentStatus');
+        this._renderAgentHelp(btn?.dataset.state || 'unavailable');
+    }
+
+    /** يطلب من الخادم تشغيل الوكيل المحلي، ثم ينتظر حياة المنفذ (حتى ~8ث) ويعيد الفحص. */
+    async _startAgentAndVerify() {
+        const help = document.getElementById('scanAgentHelp');
+        const startBtn = help?.querySelector('[data-action="start"]');
+        if (startBtn) { startBtn.disabled = true; startBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> يجري التشغيل…'; }
+        this.setScanStatus('checking', 'جارٍ تشغيل الوكيل…');
+        try {
+            const r = await fetch('/books/api/scan/agent-start/', {
+                method: 'POST', headers: { 'X-CSRFToken': this.getCookie('csrftoken') }, credentials: 'same-origin',
+            });
+            const d = await r.json();
+            if (!d.ok) {
+                this.showToast(d.message || 'تعذّر تشغيل الوكيل', 'error', 6000, 'وكيل المسح');
+                await this._recheckAgent(); return;
+            }
+        } catch (_) {
+            this.showToast('تعذّر الاتصال بالخادم لتشغيل الوكيل.', 'error', 6000, 'وكيل المسح');
+            await this._recheckAgent(); return;
+        }
+        // انتظر حتى يصير المنفذ حيّاً (الوكيل يستغرق لحظات للإقلاع)
+        for (let i = 0; i < 8; i++) {
+            await new Promise(res => setTimeout(res, 1000));
+            try {
+                const td = await (await this._fetchWithTimeout('/books/api/scan/agent-token/', { credentials: 'same-origin' }, 3000)).json();
+                if (td.available) break;
+            } catch (_) { /* استمر بالانتظار */ }
+        }
+        await this._recheckAgent();
+        const st = document.getElementById('scanAgentStatus')?.dataset.state;
+        if (st === 'ready' || st === 'no_device') this.showToast('تم تشغيل وكيل المسح.', 'success', 4000, 'وكيل المسح');
+    }
+
     /**
      * إذا وُجد scan_token في URL (يُضاف بواسطة Hot Folder Watcher)،
      * يجلب البيانات المستخرجة مسبقاً ويملأ الحقول تلقائياً.
@@ -564,6 +1057,11 @@ class ExtractionSmartSystem {
                 // تنبيه (تأجيل الاستخراج/فشل OCR) له الأولوية على رسالة الثقة
                 if (notice) {
                     this._showProgressBanner(notice, 'warning');
+                } else if (data.extract_skipped) {
+                    // المستخدم أطفأ الاستخراج التلقائي — رسالة صادقة بدل «ثقة 0%»
+                    this._showProgressBanner(
+                        'تم التقاط المستند — الاستخراج التلقائي مُطفأ. أدخِل الحقول يدوياً أو اضغط «استخراج».',
+                        'info');
                 } else {
                     this._showProgressBanner(
                         `تم تحميل بيانات المسح تلقائياً — ثقة ${Math.round((data.overall_confidence || 0) * 100)}%`,
@@ -619,7 +1117,10 @@ class ExtractionSmartSystem {
         this.beginTextUndoBatch?.();   // لقطة قبل التعبئة → يصير الاستخراج خطوة تراجع واحدة
         const setVal = (id, val) => {
             const el = document.getElementById(id);
-            if (el && val != null && val !== '') el.value = val;
+            if (el && val != null && val !== '') {
+                el.value = val;
+                noteSuggestionFilled(id, val);   // مُلئ تلقائيّاً وعُرض — عقدُ الالتقاط
+            }
         };
         // ملاحظة DRY: هذا التعيين يوازي applyExtractionResult (مسار الرفع المباشر).
         // المعرّفات الصحيحة في القالب هي #date و #title (لا #bookDate/#bookTitle) —
@@ -627,11 +1128,19 @@ class ExtractionSmartSystem {
         // لم يُدمج المساران بعد لأن مُنتِج كاش scan_token قيد إعادة الكتابة في نافذة
         // أخرى (عقد القيمة المُخزَّنة غير مُجمَّد) — يُوحَّدان حين يستقرّ العقد.
         const dateOnly = (v) => (v ? String(v).slice(0, 10) : v);   // ISO بوقت → YYYY-MM-DD
-        setVal('bookNumber', data.book_number);
+        // رقم السجلّ اليدويّ يمرّ عبر مصالحة صريحة؛ وسلسلة النظام لا تُمسّ إطلاقاً.
+        if (data.book_number != null && data.book_number !== '') {
+            const numEl = document.getElementById('bookNumber');
+            if (numEl && this._reconcileManualNumber(numEl, data.book_number, data.book_number_confidence)) {
+                numEl.value = data.book_number;
+            }
+        }
         setVal('date', dateOnly(data.book_date));
         setVal('senderDate', dateOnly(data.sender_date));
+        applySenderDateSuggestion(data);
         setVal('senderNumber', data.sender_number);
         setVal('title', data.title);
+        applyTitleSuggestion(data);
         setVal('secretLevel', data.secret_level);
         if (data.book_kind) {
             setVal('bookKind', data.book_kind);
@@ -659,7 +1168,9 @@ class ExtractionSmartSystem {
             const c = data[confMap[fid]];
             if (typeof c === 'number') this.setFieldConfidence(fid, c);
         });
+        if (window.__autoGrowTitle) window.__autoGrowTitle();   // وسّع الموضوع لطول النصّ المملوء
         this.updateQualitySummary(data);
+        this.renderEntityCandidates(data);
         this.endTextUndoBatch?.();
 
         if (data.needs_review) {
@@ -682,8 +1193,8 @@ class ExtractionSmartSystem {
                 bookNumberLabel: 'رقم القيد الوارد',
                 bookNumberHint: 'الرقم الداخلي الذي نعتمد عليه عند تسجيل الوارد.',
                 bookNumberPlaceholder: 'مثال: و/144',
-                senderNumberLabel: 'رقم الجهة المرسلة',
-                senderNumberHint: 'رقم المرجع لدى القسم أو الوحدة التي أصدرت الكتاب.',
+                senderNumberLabel: 'العدد',
+                senderNumberHint: 'رقم الجهة المرسلة — كما يظهر على كتابهم بعد «العدد /».',
                 dateLabel: 'تاريخ القيد لدينا',
                 dateHint: 'تاريخ إدخال الكتاب في سجل الوارد الداخلي.',
                 senderDateLabel: 'تاريخ الجهة المرسلة',
@@ -704,8 +1215,8 @@ class ExtractionSmartSystem {
                 bookNumberLabel: 'رقم القيد الوارد',
                 bookNumberHint: 'رقمنا الداخلي المعتمد عند تسجيل الوارد الخارجي.',
                 bookNumberPlaceholder: 'مثال: خ/203',
-                senderNumberLabel: 'رقم الكتاب لدى الجهة الخارجية',
-                senderNumberHint: 'انسخ رقم الجهة كما يظهر في المستند أو الختم.',
+                senderNumberLabel: 'العدد',
+                senderNumberHint: 'رقم الجهة الخارجية — كما يظهر في المستند/الختم بعد «العدد /».',
                 dateLabel: 'تاريخ القيد لدينا',
                 dateHint: 'تاريخ استلام الكتاب وتسجيله في المؤسسة.',
                 senderDateLabel: 'تاريخ الجهة الخارجية',
@@ -745,9 +1256,9 @@ class ExtractionSmartSystem {
                 numberPlanCopy: 'في الصادر الخارجي نستخدم رقمنا الرسمي فقط لأنه المرجع الذي يُرسل إلى الخارج.',
                 datePlanTitle: 'تاريخ الإرسال + المتابعة',
                 datePlanCopy: 'تاريخنا هو تاريخ الإرسال الرسمي، ويمكن إدخال تاريخ متابعة للرد أو الإنجاز.',
-                bookNumberLabel: 'رقم الصادر الخارجي',
-                bookNumberHint: 'رقم الخطاب أو الصادر الرسمي المعتمد عند الإرسال للخارج.',
-                bookNumberPlaceholder: 'مثال: ص/خ/57',
+                bookNumberLabel: 'رقم صادر مكتب السيد المدير العام',
+                bookNumberHint: 'اكتبه كما هو على الكتاب، أو امسح المستند ليُقرأ تلقائياً. لا يولّده النظام.',
+                bookNumberPlaceholder: 'مثال: 7436',
                 senderNumberLabel: 'رقم الجهة المرسلة',
                 senderNumberHint: '',
                 dateLabel: 'تاريخ الإرسال',
@@ -756,6 +1267,10 @@ class ExtractionSmartSystem {
                 senderDateHint: '',
                 propertiesCopy: 'الصادر الخارجي لا يحتاج رقم جهة مرسلة، لكنه يحتاج صياغة متابعة واضحة إذا كان هناك رد منتظر.',
                 showSenderFields: false,
+                // هذا السجلّ **لا سلسلة له**: الرقم يصدر من مكتب المدير العام لا من النظام.
+                // قياساً على البيانات الفعلية أرقامه (0, 109, 1555, 27189…) بلا تسلسل ولا
+                // ترتيب، وتتكرّر — فحجز رقمٍ له من عدّادنا يخترع رقماً لا وجود له على الورق.
+                manualNumber: true,
             },
         };
 
@@ -817,6 +1332,7 @@ class ExtractionSmartSystem {
         const bookNumber = document.getElementById('bookNumber');
         if (bookNumber) {
             bookNumber.placeholder = config.bookNumberPlaceholder;
+            this.applyNumberMode(kind, config, bookNumber);
         }
 
         if (senderNumberGroup) {
@@ -831,6 +1347,10 @@ class ExtractionSmartSystem {
             const senderDate = document.getElementById('senderDate');
             if (senderNumber) senderNumber.value = '';
             if (senderDate) senderDate.value = '';
+            // الحقلان أُخفيا وفُرِّغا: مصدرُ قيمةٍ لم تعد موجودة، وعرضٌ لم يعد
+            // قائماً — إبقاؤهما يكذب على الالتقاط عند تبديل النوع بعد الاستخراج.
+            [senderNumber, senderDate].forEach(resetCaptureProvenance);
+            ['sender_number', 'sender_date'].forEach(unmarkSuggestionDisplayed);
         }
 
         if (startScanButton) {
@@ -859,9 +1379,46 @@ class ExtractionSmartSystem {
      *  - On page open → loadAllReservationStatuses() restores any active holds
      */
 
+    /**
+     * يضبط سلوك حقل الرقم حسب السجلّ.
+     *
+     * السجلّات الثلاثة الأولى: الرقم يولّده النظام ويُحجز ذرّياً — الحقل للقراءة فقط
+     * كي لا يكتب موظّفان الرقم نفسه.
+     * الصادر الخارجي: لا سلسلة له أصلاً — الرقم يصدر من مكتب المدير العام. فالحقل
+     * قابل للكتابة، ويُملأ تلقائياً من استخلاص المستند الممسوح، وإن كُتب قبل المسح
+     * يُطلَب تأكيد المطابقة بدل الكتابة فوقه بصمت.
+     */
+    applyNumberMode(kind, config, field) {
+        const manual = !!config.manualNumber;
+        field.readOnly = !manual;
+        field.tabIndex = manual ? 0 : -1;
+        field.classList.toggle('book-number-readonly', !manual);
+        field.classList.toggle('book-number-manual', manual);
+        field.setAttribute('inputmode', manual ? 'numeric' : 'none');
+
+        // عناصر الحجز لا معنى لها بلا سلسلة
+        ['reservationStatus', 'reservationRing', 'numberlessToggle', 'recycledBanner']
+            .forEach((id) => {
+                const el = document.getElementById(id);
+                if (el && manual) el.style.display = 'none';
+            });
+
+        if (manual) {
+            // نظّف أي رقم محجوز بقي من تبويب آخر — رقم هذا السجلّ يأتي من الورق
+            if (field.dataset.reservationId) {
+                delete field.dataset.reservationId;
+                delete field.dataset.formatted;
+                field.value = '';
+            }
+            field.classList.remove('is-valid', 'is-pending', 'has-error');
+        }
+    }
+
     ensureReservation(kind) {
         // وضع التعديل: الرقم ثابت فلا حجز (كان override في القالب — نُقل للصنف لتوحيد كشف الوضع)
         if (this._editData) return Promise.resolve(null);
+        // سجلّ بلا سلسلة (الصادر الخارجي): لا نحجز رقماً لا وجود له على الورق.
+        if (this.getKindConfig(kind).manualNumber) return Promise.resolve(null);
         // Already have an active reservation cached for this kind → just paint
         if (this.reservations[kind] && this.reservations[kind].id) {
             this.applyReservationToUI(kind, this.reservations[kind]);
@@ -896,23 +1453,90 @@ class ExtractionSmartSystem {
 
     applyReservationToUI(kind, reservation) {
         if (!reservation) return;
-        // Update the tab badge for this kind
+        // نوع السجل: تسمية + لون. رمز السجل (1-4) مُعرِّف داخلي يبقى في formatted،
+        // لكن المستخدم يرى التسلسل النظيف فقط + شارة النوع (النوع معروف من التبويب أصلاً).
+        // لون + تسمية النوع من مصدر واحد (يطابق التبويبات ومودال التكرار)
+        const meta = this._kindMeta(kind);
+        const seq = (reservation.number !== null && reservation.number !== undefined && reservation.number !== '')
+            ? String(reservation.number) : (reservation.formatted || '');
+
+        // شارة التبويب: التسلسل النظيف
         const badge = document.getElementById(`tabNum_${kind}`);
-        if (badge) badge.textContent = reservation.number || reservation.formatted || '—';
-        // If this is the currently active kind, fill the bookNumber field
+        if (badge) badge.textContent = seq || '—';
+
+        // الحقل + الشارة: للنوع الفعّال فقط
         const kindSelect = document.getElementById('bookKind');
         if (kindSelect && kindSelect.value === kind) {
-            const bookNumberField = document.getElementById('bookNumber');
-            if (bookNumberField) {
-                bookNumberField.value = reservation.formatted || '';
-                bookNumberField.dataset.reservationId = reservation.id;
-                bookNumberField.classList.remove('has-error', 'is-pending');
-                bookNumberField.classList.add('is-valid');
+            const f = document.getElementById('bookNumber');
+            if (f) {
+                f.value = seq;                                  // التسلسل النظيف (89) لا الرمز الخام (10089)
+                f.dataset.reservationId = reservation.id;       // الحفظ يعتمد على الحجز (يُخزَّن formatted الكامل)
+                f.dataset.formatted = reservation.formatted || '';
+                f.classList.remove('has-error', 'is-pending');
+                f.classList.add('is-valid');
+                f.title = `${meta.label} — رقمك ${seq} (المعرّف الداخلي الفريد: ${reservation.formatted || ''})`;
                 if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
             }
+            const chip = document.getElementById('bookRegisterChip');
+            if (chip) {
+                chip.textContent = meta.label;
+                chip.style.display = 'inline-flex';
+                chip.style.background = meta.bg;
+                chip.style.color = meta.fg;
+            }
+            // بانر «رقم مُدوّر» — تحذير صارخ عند استلام رقم أُعيد تدويره
+            const banner = document.getElementById('recycledBanner');
+            if (banner) banner.style.display = reservation.is_recycled ? 'flex' : 'none';
+            // زرّ التحرير الاختياريّ (يُظهره فقط عند وجود حجز فعّال)
+            const relBtn = document.getElementById('releaseReservationBtn');
+            if (relBtn) relBtn.style.display = 'inline';
+            // وميض خاطف يجذب العين لكتابة الرقم على الورق
+            if (f) { f.classList.remove('just-reserved'); void f.offsetWidth; f.classList.add('just-reserved'); }
+            // مؤشّر «محجوز لك» البارز + العدّاد الحيّ
+            this._updateReservationPill();
         }
-        // 🕓 ابدأ/جدّد العدّاد التنازلي لانتهاء الصلاحية
+        // 🕓 ابدأ/جدّد العدّاد التنازلي + الحضور اللحظيّ (heartbeat + خمول)
         this._ensureReservationCountdown();
+        this._ensurePresence();
+    }
+
+    /** خاتم الحجز (أيقونة صح أقصى يسار الحقل): أخضر=محجوز، رمادي=لا حجز/بلا رقم/تعديل.
+     *  يُقاد من مصدر الحجز نفسه (_activeReservation + حالة «بلا رقم»)، ويُستدعى في مطلع
+     *  _updateReservationPill فيتحدّث مع كل نبضة عدّاد وكل تغيّر حجز أو «بلا رقم». */
+    _updateReservationRing() {
+        const ring = document.getElementById('reservationRing');
+        if (!ring) return;
+        const numberless = document.getElementById('numberlessCheckbox')?.checked;
+        const reserved = !this._editData && !numberless && !!this._activeReservation();
+        ring.classList.toggle('is-reserved', reserved);
+        ring.title = reserved ? 'الرقم محجوز لك — اكتبه على المستند' : 'لم يُحجز رقم بعد';
+    }
+
+    /** مؤشّر «محجوز لك» البارز: يُظهر الحالة + الوقت المتبقّي بلون يتدرّج مع الاقتراب من الانتهاء.
+     *  حين يظهر المؤشّر يُخفى #bookNumberHint المكرّر فيبقى سطر تنبيه واحد نظيف أسفل الحقل. */
+    _updateReservationPill() {
+        this._updateReservationRing();   // الخاتم يتحدّث دائماً، مستقلّاً عن وجود المؤشّر أو مساراته المبكّرة
+        const pill = document.getElementById('reservationStatus');
+        const hint = document.getElementById('bookNumberHint');
+        if (!pill) return;
+        const timerEl = document.getElementById('reservationTimer');
+        const cur = this._activeReservation();
+        const numberless = document.getElementById('numberlessCheckbox')?.checked;
+        if (this._editData || numberless || !cur) {
+            pill.style.display = 'none';
+            if (hint) hint.style.display = '';        // لا مؤشّر → أظهِر التلميح (قيد الطلب / بلا رقم)
+            return;
+        }
+        pill.style.display = 'flex';
+        if (hint) hint.style.display = 'none';        // المؤشّر يكفي — أخفِ التلميح المكرّر
+        let secs = 0;
+        if (cur.r.expires_at) {
+            secs = Math.max(0, Math.floor((new Date(cur.r.expires_at).getTime() - Date.now()) / 1000));
+        }
+        pill.classList.remove('rs-warn', 'rs-critical');
+        if (secs > 0 && secs < 5 * 60) pill.classList.add('rs-critical');
+        else if (secs < 10 * 60) pill.classList.add('rs-warn');
+        if (timerEl) timerEl.textContent = secs > 0 ? `صالح ${Math.ceil(secs / 60)} د` : 'انتهى — سيُجدَّد';
     }
 
     /** عدّاد تنازلي مركزي يحدّث ألوان وشارات تبويبات الأنواع كل 20 ثانية. */
@@ -959,6 +1583,7 @@ class ExtractionSmartSystem {
                     tab.title = `الحجز صالح حتى ${new Date(expMs).toLocaleTimeString('ar-EG')}`;
                 }
             });
+            this._updateReservationPill();   // حدّث مؤشّر «محجوز لك» + العدّاد الحيّ
             if (!anyActive) {
                 clearInterval(this._reservationTimerId);
                 this._reservationTimerId = null;
@@ -966,6 +1591,131 @@ class ExtractionSmartSystem {
         };
         tick();
         this._reservationTimerId = setInterval(tick, 20000);
+    }
+
+    // ═══ الحضور اللحظيّ: نبضة heartbeat + كشف الخمول + معالجة فقدان الرقم ═══
+    // (يعمل عبر HTTP؛ WS طبقة تسريع اختيارية لا شرطٌ للصحّة)
+    _ensurePresence() {
+        if (this._editData) return;   // التعديل: لا حجز
+        if (!this._presenceBound) {
+            this._presenceBound = true;
+            this._lastActivity = Date.now();
+            const bump = () => {
+                this._lastActivity = Date.now();
+                if (this._idleWarned) { this._idleWarned = false; }
+            };
+            ['mousemove', 'keydown', 'pointerdown', 'input', 'wheel'].forEach(ev =>
+                document.addEventListener(ev, bump, { passive: true }));
+            const relBtn = document.getElementById('releaseReservationBtn');
+            if (relBtn) relBtn.addEventListener('click', () => this._releaseCurrentReservation());
+        }
+        if (!this._presenceTimer) {
+            this._presenceTimer = setInterval(() => this._presenceTick(), 25000);
+        }
+        // WS اختياريّ (كشف لحظيّ) — مُطفأ حتى يُفعَّل عبر data-ws-presence="1" + channels
+        if (!this._wsTried &&
+            document.querySelector('.extraction-container')?.dataset.wsPresence === '1') {
+            this._wsTried = true;
+            this._connectPresenceWS();
+        }
+    }
+
+    _connectPresenceWS() {
+        if (this._ws || !window.WebSocket) return;
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        try {
+            const ws = new WebSocket(`${proto}://${location.host}/ws/reservation/presence/`);
+            this._ws = ws;
+            ws.onopen = () => this._wsPing();
+            ws.onclose = () => { this._ws = null; };   // الخادم يتكفّل بالـcooldown عند الإغلاق
+            ws.onerror = () => { try { ws.close(); } catch (e) {} };
+            this._wsTimer = setInterval(() => this._wsPing(), 25000);
+        } catch (e) { this._ws = null; }
+    }
+
+    _wsPing() {
+        const cur = this._activeReservation();
+        if (this._ws && this._ws.readyState === 1 && cur) {
+            try { this._ws.send(JSON.stringify({ t: 'hb', id: cur.r.id })); } catch (e) {}
+        }
+    }
+
+    _activeReservation() {
+        const kind = this.getCurrentKind();
+        const r = this.reservations[kind];
+        return (r && r.id) ? { kind, r } : null;
+    }
+
+    _presenceTick() {
+        const IDLE_WARN_MS = 5 * 60 * 1000;   // خمول 5 دقائق → تنبيه (لا إسقاط)
+        const cur = this._activeReservation();
+        if (!cur) return;
+        // 1) خمول: تنبيه بصريّ+صوتيّ مرّة واحدة (لا يُسقط الحجز — سياسة المالك)
+        if (Date.now() - (this._lastActivity || Date.now()) > IDLE_WARN_MS && !this._idleWarned) {
+            this._idleWarned = true;
+            this._showIdleWarning(cur.kind, cur.r);
+        }
+        // 2) نبضة حضور: تُبقي الرقم حيّاً؛ إن عاد alive=false فالرقم فُقد/دُوّر
+        fetch(this.apiEndpoints.reservationHeartbeat || '/books/api/reservation/heartbeat/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCookie('csrftoken') },
+            body: JSON.stringify({ reservation_id: cur.r.id }),
+        }).then(r => r.json()).then(d => {
+            if (d && d.alive === false) this._onReservationLost(cur.kind);
+        }).catch(() => {});
+    }
+
+    _beep() {
+        try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = this._audioCtx || (this._audioCtx = new Ctx());
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'sine'; o.frequency.value = 880;
+            g.gain.value = 0.08;
+            o.connect(g); g.connect(ctx.destination);
+            o.start(); o.stop(ctx.currentTime + 0.35);
+        } catch (e) { /* الصوت مكمّل — لا يُفشل شيئاً */ }
+    }
+
+    _showIdleWarning(kind, res) {
+        this._beep();
+        const msg = `أنت تحجز الرقم ${res.formatted} وزملاؤك بانتظاره. إن لم تكتبه على المستند حرّره ليُعاد تدويره؛ وإن كتبته أبقِه وأكمل الحفظ.`;
+        if (window.ToastCenter && typeof window.ToastCenter.action === 'function') {
+            window.ToastCenter.action('warning', msg, [
+                { label: 'أُبقيه (كتبته)', className: 'btn btn-sm btn-warning text-dark fw-semibold',
+                  onClick: () => { this._lastActivity = Date.now(); this._idleWarned = false; } },
+                { label: 'حرّره ليُدوَّر', className: 'btn btn-sm btn-outline-danger fw-semibold',
+                  onClick: () => this._releaseCurrentReservation() },
+            ], { title: '⏳ حجزٌ خامل', delay: 0, autohide: false });
+        } else {
+            this.showToast(msg, 'warning', 9000, 'حجز خامل');
+        }
+    }
+
+    _onReservationLost(kind) {
+        delete this.reservations[kind];
+        const f = document.getElementById('bookNumber');
+        if (f) { f.value = ''; delete f.dataset.reservationId; }
+        this._beep();
+        this.showToast('انتهى حجز رقمك أو أُعيد تدويره — سنطلب رقماً جديداً.', 'warning', 7000, 'تنبيه حجز');
+        this.ensureReservation(kind);
+    }
+
+    _releaseCurrentReservation() {
+        const cur = this._activeReservation();
+        if (!cur) return;
+        fetch(this.apiEndpoints.reservationVoid, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCookie('csrftoken') },
+            body: JSON.stringify({ reservation_id: cur.r.id, note: 'تحرير اختياريّ من المستخدم' }),
+        }).then(r => r.json()).then(() => {
+            delete this.reservations[cur.kind];
+            const f = document.getElementById('bookNumber');
+            if (f) { f.value = ''; delete f.dataset.reservationId; }
+            this.showToast('حُرّر الرقم — يمكن لزميلك استخدامه الآن. سنطلب لك رقماً جديداً عند الحاجة.', 'info', 6000);
+            this.ensureReservation(cur.kind);
+        }).catch(() => this.showToast('تعذّر تحرير الرقم — حاول مجدداً', 'error'));
     }
 
     loadAllReservationStatuses() {
@@ -1126,6 +1876,13 @@ class ExtractionSmartSystem {
             } else if (btnId === 'saveButton') {
                 e.preventDefault();
                 console.log('[ExtractionSmart] Calling saveBook()');
+                this.sendToEntityAfterSave = false;
+                this.saveBook();
+            } else if (btnId === 'saveAndSendButton') {
+                e.preventDefault();
+                // نحفظ أوّلاً ثم نفتح حوار الإرسال: لا يُرسَل مستند رسمي إلا بتأكيد
+                // صريح يرى فيه المستخدم الجهة والبريد وما سيُرفَق فعلياً.
+                this.sendToEntityAfterSave = true;
                 this.saveBook();
             } else if (btnId === 'startScanButton') {
                 e.preventDefault();
@@ -1391,12 +2148,14 @@ class ExtractionSmartSystem {
             'clearScannedButton',
             'clearFormButton',
             'extractButton',
-            'saveButton'
+            'saveButton',
+            'saveAndSendButton'
         ];
     }
 
     isActionButtonField(fieldId) {
-        return ['uploadFileButton', 'startScanButton', 'clearScannedButton', 'clearFormButton', 'extractButton', 'saveButton'].includes(fieldId);
+        return ['uploadFileButton', 'startScanButton', 'clearScannedButton', 'clearFormButton',
+                'extractButton', 'saveButton', 'saveAndSendButton'].includes(fieldId);
     }
 
     isElementNavigable(element) {
@@ -1534,6 +2293,135 @@ class ExtractionSmartSystem {
                 },
                 onHidden: () => finalize(false),
             });
+        });
+    }
+
+    /** لون + تسمية نوع السجل — مصدر واحد (يطابق تبويبات النوع). */
+    _kindMeta(kind) {
+        const M = {
+            incoming_internal: { label: 'وارد داخلي', bg: '#f0fdfa', fg: '#0f766e' },
+            incoming_external: { label: 'وارد خارجي', bg: '#f0f9ff', fg: '#0369a1' },
+            outgoing_internal: { label: 'صادر داخلي', bg: '#fff7ed', fg: '#b45309' },
+            outgoing_external: { label: 'صادر خارجي', bg: '#fff1f2', fg: '#9f1239' },
+        };
+        return M[kind] || { label: 'سجل', bg: '#e5e7eb', fg: '#374151' };
+    }
+
+    /** مودال التكرار: قائمة المطابقات + معاينة سريعة لكل كتاب، ويُعيد Promise<boolean>
+     *  (true = تابِع الحفظ، false = ألغِ الإدخال). DUPLICATE_BOOK لغير المشرف = منع بلا متابعة. */
+    _confirmDuplicate(data) {
+        return new Promise((resolve) => {
+            const dups = data.duplicates || [];
+            const hard = data.error_code === 'DUPLICATE_BOOK';
+            const canProceed = hard ? !!data.can_override : true;
+            const title = hard ? 'كتاب مكرّر (تطابق تامّ)' : 'كتاب مشابه موجود';
+            const esc = (s) => String(s == null ? '' : s)
+                .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+            if (!document.body) { resolve(false); return; }
+
+            let settled = false;
+            const overlay = document.createElement('div');
+            overlay.className = 'dup-modal-overlay';
+            overlay.innerHTML =
+                `<div class="dup-modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+                    <div class="dup-modal-header ${hard ? 'is-hard' : 'is-soft'}">
+                        <span class="dup-modal-title"><i class="bi ${hard ? 'bi-exclamation-octagon-fill' : 'bi-exclamation-triangle-fill'}"></i> ${esc(title)}</span>
+                        <button type="button" class="dup-modal-close" aria-label="إغلاق">&times;</button>
+                    </div>
+                    <div class="dup-modal-body"></div>
+                    <div class="dup-modal-footer"></div>
+                </div>`;
+            document.body.appendChild(overlay);
+            const body = overlay.querySelector('.dup-modal-body');
+            const footer = overlay.querySelector('.dup-modal-footer');
+
+            const finish = (r) => {
+                if (settled) return;
+                settled = true;
+                document.removeEventListener('keydown', onKey);
+                overlay.classList.add('dup-closing');
+                setTimeout(() => overlay.remove(), 160);
+                resolve(r);
+            };
+            const backOrCancel = () => {
+                if (overlay.dataset.view === 'preview') renderList();
+                else finish(false);
+            };
+            const onKey = (e) => { if (e.key === 'Escape') backOrCancel(); };
+            document.addEventListener('keydown', onKey);
+            overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) backOrCancel(); });
+            overlay.querySelector('.dup-modal-close').addEventListener('click', backOrCancel);
+
+            const renderList = () => {
+                overlay.dataset.view = 'list';
+                body.innerHTML =
+                    `<p class="dup-msg">${esc(data.message || '')}</p>` +
+                    `<div class="dup-list">` + dups.map(d => `
+                        <div class="dup-item">
+                            <span class="dup-badge">${esc(d.match_count || 0)}/4</span>
+                            <div class="dup-item-main">
+                                <div class="dup-item-num">${esc(d.our_number_display || d.our_number || '—')}</div>
+                                <div class="dup-item-title">${esc(d.title || 'بدون عنوان')}</div>
+                                <div class="dup-item-date">${esc(d.date || '')}</div>
+                            </div>
+                            <button type="button" class="dup-preview-btn" data-id="${esc(d.id)}"><i class="bi bi-eye"></i> معاينة</button>
+                        </div>`).join('') + `</div>`;
+                footer.innerHTML =
+                    (canProceed ? `<button type="button" class="btn btn-sm ${hard ? 'btn-danger' : 'btn-warning text-dark'} fw-semibold" data-act="proceed">${hard ? 'حفظ رغم التكرار' : 'متابعة الحفظ'}</button>` : '') +
+                    `<button type="button" class="btn btn-sm btn-outline-secondary fw-semibold" data-act="cancel">إلغاء الإدخال</button>`;
+                footer.querySelector('[data-act="cancel"]').onclick = () => finish(false);
+                const pb = footer.querySelector('[data-act="proceed"]'); if (pb) pb.onclick = () => finish(true);
+                body.querySelectorAll('.dup-preview-btn').forEach(b => b.onclick = () => renderPreview(b.dataset.id));
+            };
+
+            const renderPreview = async (id) => {
+                overlay.dataset.view = 'preview';
+                body.innerHTML = `<div class="dup-loading"><span class="spinner"></span> جارٍ تحميل المعاينة...</div>`;
+                footer.innerHTML = `<button type="button" class="btn btn-sm btn-link" data-act="back">رجوع للقائمة</button>`;
+                footer.querySelector('[data-act="back"]').onclick = renderList;
+                let b;
+                try {
+                    const r = await fetch(`/books/api/book/${id}/preview/`, { credentials: 'same-origin' });
+                    b = await r.json();
+                    if (!r.ok) throw new Error(b.error || 'تعذّر التحميل');
+                } catch (e) {
+                    body.innerHTML = `<div class="dup-error">تعذّرت المعاينة. <a href="/books/${esc(id)}/" target="_blank">افتح الكتاب في صفحة مستقلة ↗</a></div>`;
+                    return;
+                }
+                const meta = this._kindMeta(b.kind);
+                const prim = (b.attachments || []).find(a => a.is_primary) || (b.attachments || [])[0];
+                let docHtml = '<div class="dup-doc-empty"><i class="bi bi-file-earmark"></i> لا مرفق</div>';
+                if (prim && prim.is_image) docHtml = `<img class="dup-doc-img" src="${esc(prim.url)}" alt="مستند" loading="lazy">`;
+                else if (prim) docHtml = `<a class="dup-doc-link" href="${esc(prim.url)}" target="_blank"><i class="bi bi-file-earmark-pdf"></i> فتح المستند</a>`;
+                const entities = (b.issuing_entities || []).concat(b.receiving_entities || [])
+                    .map(e => esc(e.name)).join('، ') || '—';
+                body.innerHTML =
+                    `<div class="dup-preview">
+                        <div class="dup-fields">
+                            <span class="dup-chip" style="background:${meta.bg};color:${meta.fg}">${esc(meta.label)}</span>
+                            <div class="dup-f"><label>رقمنا</label><b>${esc(b.our_number_display || b.our_number)}</b></div>
+                            <div class="dup-f"><label>العنوان</label><span>${esc(b.title || 'بدون عنوان')}</span></div>
+                            <div class="dup-f"><label>تاريخنا</label><span>${esc(b.date || '—')}</span></div>
+                            <div class="dup-f"><label>رقم الجهة</label><span>${esc(b.sender_number || '—')}</span></div>
+                            <div class="dup-f"><label>تاريخهم</label><span>${esc(b.sender_date || '—')}</span></div>
+                            <div class="dup-f"><label>الجهات</label><span>${entities}</span></div>
+                            <div class="dup-f"><label>الحالة</label><span>${esc(b.followup_label || '')}</span></div>
+                        </div>
+                        <div class="dup-doc">${docHtml}<a class="dup-open-full" href="/books/${esc(id)}/" target="_blank">فتح الكتاب كاملاً ↗</a></div>
+                    </div>`;
+                footer.innerHTML =
+                    `<button type="button" class="btn btn-sm btn-danger fw-semibold" data-act="cancel"><i class="bi bi-x-circle"></i> هذا مكرّر — ألغِ الإدخال</button>` +
+                    (canProceed ? `<button type="button" class="btn btn-sm btn-outline-secondary fw-semibold" data-act="proceed">ليس مطابقاً — تابِع</button>` : '') +
+                    `<button type="button" class="btn btn-sm btn-link" data-act="back">رجوع</button>`;
+                footer.querySelector('[data-act="cancel"]').onclick = () => finish(false);
+                const pb = footer.querySelector('[data-act="proceed"]'); if (pb) pb.onclick = () => finish(true);
+                footer.querySelector('[data-act="back"]').onclick = renderList;
+            };
+
+            renderList();
+            requestAnimationFrame(() => overlay.classList.add('dup-open'));
+            setTimeout(() => overlay.querySelector('.dup-modal-close')?.focus(), 30);
         });
     }
 
@@ -1720,6 +2608,8 @@ class ExtractionSmartSystem {
             const fd = new FormData();
             fd.append('file', blob, 'scan.pdf');
             fd.append('trim_blanks', '1');           // إزالة ظهور الصفحات الفارغة (مسح مزدوج)
+            // مفتاح الاستخراج التلقائي يحكم مسار المسح أيضاً: مطفأً يُلتقط المستند فوراً بلا OCR
+            fd.append('auto_ocr', this._autoExtractEnabled() ? '1' : '0');
             const ud = await (await fetch('/books/api/scan/process-upload/', {
                 method: 'POST',
                 credentials: 'same-origin',
@@ -1829,9 +2719,14 @@ class ExtractionSmartSystem {
                 this.displayFileName(fileName);
                 this._updateScanState();
                 if (!noAutoExtract) {
-                    this.showToast('✓ تم المسح — جاري الاستخراج...', 'info');
-                    // استخراج تلقائي بعد المسح الضوئي
-                    setTimeout(() => this.extractData(), 400);
+                    if (this._autoExtractEnabled()) {
+                        this.showToast('✓ تم المسح — جاري الاستخراج...', 'info');
+                        // استخراج تلقائي بعد المسح الضوئي
+                        setTimeout(() => this.extractData(), 400);
+                    } else {
+                        // الاستخراج التلقائي مُطفأ — المستند جاهز للإدخال اليدوي، وزرّ «استخراج» متاح
+                        this.showToast('✓ المستند جاهز — أدخِل الحقول يدوياً أو اضغط «استخراج» متى شئت.', 'info', 6000);
+                    }
                 }
             })
             .catch(error => {
@@ -1878,7 +2773,8 @@ class ExtractionSmartSystem {
         if (!modalBody) return;
 
         let stage = modalBody.querySelector('.preview-stage');
-        if (!stage) {
+        const firstBuild = !stage;
+        if (firstBuild) {
             modalBody.innerHTML = '';
             modalBody.classList.add('has-image');
             stage = this._buildPreviewStage();
@@ -1887,6 +2783,10 @@ class ExtractionSmartSystem {
             this._bindPager();
             this._bindKeyboard();
         }
+        // إعادة ضبط الملاءمة/التمرير عند الانتقال لصفحة أخرى فقط — لا عند إعادة رسم نفس الصفحة
+        // (تحديث الدقّة أو التدوير/الحذف) كي لا يقفز التكبير الحالي فجأة.
+        const pageChanged = firstBuild || n !== this.currentPage;
+        const scroll  = stage.querySelector('.preview-scroll');
         const img     = stage.querySelector('.preview-img');
         const spinner = stage.querySelector('.preview-spinner');
         const errBox  = stage.querySelector('.preview-error');
@@ -1894,7 +2794,7 @@ class ExtractionSmartSystem {
         if (!skel) {
             skel = document.createElement('div');
             skel.className = 'dc-skeleton';
-            stage.insertBefore(skel, img);
+            (scroll || stage).insertBefore(skel, img);
         }
 
         errBox.style.display = 'none';
@@ -1902,8 +2802,10 @@ class ExtractionSmartSystem {
         skel.style.setProperty('--dc-ar', this._pageAspect(n));
         skel.style.display = 'block';
         img.classList.remove('dc-loaded');     // أخفِ الصورة القديمة أثناء التحميل (تلاشٍ)
-        this.zoom = 1;
+        if (pageChanged) this.zoom = 1;
+        this.currentPage = n;                  // اضبط الصفحة قبل القياس كي تُستخدم نسبة أبعادها الصحيحة
         this._applyZoom();
+        if (pageChanged && scroll) { scroll.scrollTop = 0; scroll.scrollLeft = 0; }
 
         // مؤشّر بطيء: لا يظهر إلا إن تأخّر التحميل (تفادي وميض للصفحات المُخبّأة مسبقاً)
         spinner.style.display = 'none';
@@ -1919,6 +2821,8 @@ class ExtractionSmartSystem {
             skel.style.display = 'none';
             img.classList.add('dc-loaded');
             this.currentPage = n;
+            this._applyZoom();                     // إعادة القياس بأبعاد الصفحة المؤكَّدة
+            if (pageChanged && scroll) scroll.scrollTop = 0;
             this._updatePager();
             this._updateThumbsActive();
             this._prefetchNeighbors(n);
@@ -1992,7 +2896,7 @@ class ExtractionSmartSystem {
                 case 'End':  e.preventDefault(); this.renderPreviewPage(total); break;
                 case '+': case '=': e.preventDefault(); this._stepZoom(1); break;
                 case '-': e.preventDefault(); this._stepZoom(-1); break;
-                case '0': e.preventDefault(); this.zoom = 1; this._applyZoom(); break;
+                case '0': e.preventDefault(); this._zoomTo(1, null, null); break;
             }
         });
     }
@@ -2169,21 +3073,28 @@ class ExtractionSmartSystem {
         const stage = document.createElement('div');
         stage.className = 'preview-stage';
 
+        // طبقة التمرير الداخلية: تحمل الصفحة وتُمرّرها في كل الاتجاهات، بينما تبقى الأدوات
+        // (أشرطة التكبير/التحرير) ثابتة على المسرح فلا تجرفها عملية التمرير.
+        const scroll = document.createElement('div');
+        scroll.className = 'preview-scroll';
+        stage.appendChild(scroll);
+
         const img = document.createElement('img');
         img.className = 'preview-img';
         img.alt = 'معاينة المستند';
-        stage.appendChild(img);
+        img.draggable = false;
+        scroll.appendChild(img);
 
         const zoom = document.createElement('div');
         zoom.className = 'preview-zoom';
         zoom.innerHTML =
-            '<button type="button" class="pz-btn" data-z="out" title="تصغير"><i class="bi bi-zoom-out"></i></button>' +
+            '<button type="button" class="pz-btn" data-z="out" title="تصغير (‪-‬)"><i class="bi bi-zoom-out"></i></button>' +
             '<span class="pz-label">100%</span>' +
-            '<button type="button" class="pz-btn" data-z="in" title="تكبير"><i class="bi bi-zoom-in"></i></button>' +
-            '<button type="button" class="pz-btn" data-z="fit" title="ملاءمة الصفحة"><i class="bi bi-arrows-fullscreen"></i></button>';
+            '<button type="button" class="pz-btn" data-z="in" title="تكبير (‪+‬)"><i class="bi bi-zoom-in"></i></button>' +
+            '<button type="button" class="pz-btn" data-z="fit" title="ملاءمة"><i class="bi bi-arrows-angle-expand"></i></button>';
         zoom.querySelector('[data-z=out]').onclick = () => this._stepZoom(-1);
         zoom.querySelector('[data-z=in]').onclick  = () => this._stepZoom(1);
-        zoom.querySelector('[data-z=fit]').onclick = () => { this.zoom = 1; this._applyZoom(); };
+        zoom.querySelector('[data-z=fit]').onclick = () => this._toggleFit();
         stage.appendChild(zoom);
 
         // أدوات تحرير الصفحة الحالية (تدوير/حذف) — تعمل على PDF المؤقّت عبر token
@@ -2222,50 +3133,134 @@ class ExtractionSmartSystem {
         errBox.appendChild(retry); errBox.appendChild(dl);
         stage.appendChild(errBox);
 
-        this._enablePan(stage, img);
+        // تنقّل مرن: Ctrl + عجلة الفأرة = تكبير حول المؤشّر (العجلة وحدها تُمرّر عادياً)،
+        // ونقر مزدوج يبدّل بين ملاءمة/تكبير 2× عند نقطة النقر.
+        scroll.addEventListener('wheel', (e) => {
+            if (!e.ctrlKey) return;
+            e.preventDefault();
+            this._zoomAt(e.deltaY < 0 ? 1 : -1, e.clientX, e.clientY, 1.18);
+        }, { passive: false });
+        scroll.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            if (this.zoom > 1.01) { this._zoomTo(1, e.clientX, e.clientY); }
+            else { this._zoomAt(1, e.clientX, e.clientY, 2); }
+        });
+
+        // إعادة القياس عند تغيّر حجم النافذة/اللوحة (يُربط مرّة واحدة)
+        if (!this._resizeBound) {
+            this._resizeBound = true;
+            window.addEventListener('resize', () => {
+                clearTimeout(this._resizeTimer);
+                this._resizeTimer = setTimeout(() => {
+                    if (document.querySelector('#modalBody .preview-scroll')) this._applyZoom();
+                }, 120);
+            });
+        }
+
+        this._enablePan(scroll, img);
         return stage;
     }
 
-    _stepZoom(dir) {
-        const steps = [1, 1.25, 1.5, 2, 3];
-        let i = steps.indexOf(this.zoom);
-        if (i === -1) i = 0;
-        i = Math.max(0, Math.min(steps.length - 1, i + dir));
-        this.zoom = steps[i];
-        const wantDpi = this.zoom > 1.5 ? 220 : 130;   // رفع كسول للدقّة عند التكبير
-        if (wantDpi !== this.previewDpi) { this.previewDpi = wantDpi; this.renderPreviewPage(this.currentPage); }
+    /** يبدّل نمط الملاءمة: عرض اللوحة ⇄ الصفحة كاملة (يُعيد ضبط التكبير والتمرير). */
+    _toggleFit() {
+        this.fitMode = (this.fitMode === 'width') ? 'page' : 'width';
+        this.zoom = 1;
         this._applyZoom();
+        const scroll = document.querySelector('#modalBody .preview-scroll');
+        if (scroll) { scroll.scrollTop = 0; scroll.scrollLeft = 0; }
+    }
+
+    _stepZoom(dir) {
+        const steps = [1, 1.25, 1.5, 2, 3, 4];
+        let i = steps.findIndex(s => Math.abs(s - this.zoom) < 0.02);
+        if (i === -1) {   // تكبير حرّ (من العجلة) ⇒ اقفز لأقرب خطوة في الاتجاه المطلوب
+            i = 0; for (let k = 0; k < steps.length; k++) { if (steps[k] <= this.zoom + 0.02) i = k; }
+        }
+        i = Math.max(0, Math.min(steps.length - 1, i + dir));
+        this._zoomTo(steps[i], null, null);
+    }
+
+    /** يحسب مقاس «الملاءمة» بالبكسل من نسبة أبعاد الصفحة وحجم طبقة التمرير. */
+    _computeFitSize(scroll) {
+        const pad = 14;   // هامش تنفّس بسيط داخل الطبقة
+        const availW = Math.max(40, scroll.clientWidth  - pad);
+        const availH = Math.max(40, scroll.clientHeight - pad);
+        const ar = parseFloat(this._pageAspect(this.currentPage || 1)) || 0.707;   // عرض/ارتفاع
+        let w, h;
+        if (this.fitMode === 'width') {
+            w = availW; h = w / ar;                       // يملأ العرض (أكبر/أوضح، بلا هوامش جانبية)
+        } else {                                          // 'page' — احتواء كامل الصفحة
+            if (availW / availH > ar) { h = availH; w = h * ar; }
+            else { w = availW; h = w / ar; }
+        }
+        return { w, h };
     }
 
     _applyZoom() {
         const modalBody = document.getElementById('modalBody');
         const stage = modalBody && modalBody.querySelector('.preview-stage');
         if (!stage) return;
+        const scroll = stage.querySelector('.preview-scroll');
         const img = stage.querySelector('.preview-img');
         const label = stage.querySelector('.pz-label');
-        if (img) {
-            img.style.transform = `scale(${this.zoom})`;
-            img.style.cursor = this.zoom > 1 ? 'grab' : 'default';
+        if (scroll && img) {
+            const fit = this._computeFitSize(scroll);
+            img.style.width  = Math.round(fit.w * this.zoom) + 'px';
+            img.style.height = Math.round(fit.h * this.zoom) + 'px';
+            const pannable = (scroll.scrollHeight > scroll.clientHeight + 1) ||
+                             (scroll.scrollWidth  > scroll.clientWidth  + 1);
+            img.style.cursor = pannable ? 'grab' : 'default';
         }
         if (label) label.textContent = Math.round(this.zoom * 100) + '%';
-        stage.style.overflow = this.zoom > 1 ? 'auto' : 'hidden';
+        const fitBtn = stage.querySelector('[data-z=fit]');
+        if (fitBtn) fitBtn.title = (this.fitMode === 'width') ? 'ملاءمة كامل الصفحة' : 'ملاءمة عرض الصفحة';
     }
 
-    _enablePan(stage, img) {
+    /** يضبط التكبير مع تثبيت نقطة (clientX/Y) بصرياً في مكانها — لتنقّل مريح. */
+    _zoomTo(newZoom, cx, cy) {
+        newZoom = Math.max(1, Math.min(5, newZoom));
+        const stage = document.querySelector('#modalBody .preview-stage');
+        const scroll = stage && stage.querySelector('.preview-scroll');
+        if (!scroll) { this.zoom = newZoom; this._applyZoom(); return; }
+        const rect = scroll.getBoundingClientRect();
+        const ax = (cx == null) ? rect.width  / 2 : (cx - rect.left);
+        const ay = (cy == null) ? rect.height / 2 : (cy - rect.top);
+        const prev = this.zoom || 1;
+        const beforeX = scroll.scrollLeft + ax;
+        const beforeY = scroll.scrollTop  + ay;
+        this.zoom = newZoom;
+        this._applyZoom();
+        const ratio = newZoom / prev;
+        scroll.scrollLeft = beforeX * ratio - ax;   // يُقصّ تلقائياً إلى [0, max]
+        scroll.scrollTop  = beforeY * ratio - ay;
+    }
+
+    /** خطوة تكبير نسبية حول نقطة (للعجلة/النقر المزدوج) مع مواءمة الدقّة عند التكبير القوي. */
+    _zoomAt(dir, cx, cy, factor) {
+        const f = factor || 1.18;
+        const nz = Math.max(1, Math.min(5, dir > 0 ? this.zoom * f : this.zoom / f));
+        const wantDpi = nz > 1.5 ? 220 : 130;
+        if (wantDpi !== this.previewDpi) { this.previewDpi = wantDpi; this.renderPreviewPage(this.currentPage); }
+        this._zoomTo(nz, cx, cy);
+    }
+
+    _enablePan(scroll, img) {
         let down = false, sx = 0, sy = 0, sl = 0, st = 0;
-        stage.addEventListener('mousedown', (e) => {
-            if (this.zoom <= 1) return;
-            down = true; sx = e.clientX; sy = e.clientY; sl = stage.scrollLeft; st = stage.scrollTop;
+        const canPan = () => (scroll.scrollHeight > scroll.clientHeight + 1) ||
+                             (scroll.scrollWidth  > scroll.clientWidth  + 1);
+        scroll.addEventListener('mousedown', (e) => {
+            if (e.button !== 0 || !canPan()) return;
+            down = true; sx = e.clientX; sy = e.clientY; sl = scroll.scrollLeft; st = scroll.scrollTop;
             if (img) img.style.cursor = 'grabbing'; e.preventDefault();
         });
         window.addEventListener('mousemove', (e) => {
             if (!down) return;
-            stage.scrollLeft = sl - (e.clientX - sx);
-            stage.scrollTop  = st - (e.clientY - sy);
+            scroll.scrollLeft = sl - (e.clientX - sx);
+            scroll.scrollTop  = st - (e.clientY - sy);
         });
         window.addEventListener('mouseup', () => {
             if (!down) return; down = false;
-            if (img) img.style.cursor = this.zoom > 1 ? 'grab' : 'default';
+            if (img) img.style.cursor = canPan() ? 'grab' : 'default';
         });
     }
 
@@ -2396,6 +3391,7 @@ class ExtractionSmartSystem {
         this.pageCount = 1;
         this.currentPage = 1;
         this.zoom = 1;
+        this.fitMode = 'width';
         this.previewDpi = 130;
         const pager = document.getElementById('previewPager');
         const thumbs = document.getElementById('previewThumbs');
@@ -2538,7 +3534,9 @@ class ExtractionSmartSystem {
             this._hideExtractionOverlay();   // لا تترك مؤشّر الرفع عالقاً عند فشل التجهيز
             this.currentFile = file;
             this.displayFilePreview(file);
-            this.showToast('تم تحميل الملف — جاري الاستخراج...', 'info');
+            // صراحةً: نُبلّغ سبب فشل التجهيز على الخادم بدل رسالة نجاح مضلِّلة، ثم نحاول محلياً
+            const why = (err && err.message) ? ` (${err.message})` : '';
+            this.showToast(`تعذّرت معالجة الملف على الخادم${why} — جارٍ محاولة محلية…`, 'warning', 6000);
             setTimeout(() => this.extractData(), 350);
         });
     }
@@ -2551,6 +3549,10 @@ class ExtractionSmartSystem {
         const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
         const fd = new FormData();
         fd.append('file', file, file.name);
+        // تجهيز فقط بلا OCR: الاستخراج يجري بعد المعاينة عبر extractData (المحكوم بمفتاح
+        // «استخراج تلقائي»). بدون هذا كان OCR يعمل مرّتين — في process-upload (وتُهمَل
+        // نتيجتها) ثم في smart_extract_direct — فيتضاعف أبطأ جزء في المسار.
+        fd.append('auto_ocr', '0');
         // مؤشّر تحميل احترافي داخل لوحة المعاينة (بدل التجمّد الصامت أثناء رفع/معالجة المستند).
         // يبقى ظاهراً حتى تُرسَم المعاينة، ثم يعود أثناء الاستخراج — فلا يشعر المستخدم بجمود.
         this._showExtractionOverlay('جارٍ رفع المستند…', 'يتم رفع المستند ومعالجته على الخادم');
@@ -2566,6 +3568,9 @@ class ExtractionSmartSystem {
         this.currentPage = 1;
         this.previewDpi = 130;
         this._previewVersion = (this._previewVersion || 0) + 1;
+        // إن أعاد الخادم تنبيهاً (مثلاً: تعذّر الاستخراج التلقائي — أدخِل يدوياً) نُظهره
+        // في مسار الرفع أيضاً، لا مسار السكانر وحده (كان يُهمَل هنا سابقاً).
+        if (ud.warning) this._showProgressBanner(ud.warning, 'warning');
         const serveUrl = `/books/api/scan/serve/${encodeURIComponent(ud.token)}/`;
         this.loadScannedFile(serveUrl, ud.source_file || file.name, { noAutoExtract: false });
     }
@@ -2771,6 +3776,9 @@ class ExtractionSmartSystem {
         }
     }
 
+    // (أُزيلت مراحل الأوفرلاي المؤقّتة الوهمية: البثّ التدريجي صار يعطي مرحلةً حقيقية
+    //  من الأنبوب مع كل حدث — انظر _onExtractStage.)
+
     _focusFirstReviewField(data) {
         // بعد الاستخراج، ضع التركيز على أول حقل مهم يحتاج مراجعة (ثقة منخفضة أو فارغ)
         const priority = ['title', 'senderNumber', 'issuingEntity', 'receivingEntity', 'secretLevel'];
@@ -2799,10 +3807,18 @@ class ExtractionSmartSystem {
             extractBtn.innerHTML = '<span class="spinner"></span> جاري...';
             extractBtn.disabled = true;
         }
-        this._showExtractionOverlay();
+        // تقدّم حقيقي من الأنبوب (بدل مؤقّتات وهمية) + إيقاف يُبقي ما استُخرج
+        this._streamFilled = new Set();
+        this._extractStopped = false;
+        this._extractAbort = new AbortController();
+        this._showExtractionOverlay(
+            'جارٍ تجهيز المستند…',
+            'ستُملأ الحقول تِباعاً فور استخراج كلٍّ منها',
+            () => this._stopExtraction());
 
-        this.callExtractApi()
+        this._streamExtract()
             .then((data) => {
+                if (this._extractStopped) return;
                 const fallbackFlag = (data.details && data.details.fallback) || (data.message && data.message.toLowerCase().includes('mock'));
                 if (fallbackFlag) {
                     const reason = data.details && data.details.reason ? ` (سبب: ${data.details.reason})` : '';
@@ -2814,12 +3830,22 @@ class ExtractionSmartSystem {
                 if (data.request_id) {
                     console.info('extract request_id:', data.request_id);
                 }
-                this.showToast(this.t('extractSuccess'), 'success');
-                // بعد النجاح: حدّث نص الزر ليدل على "إعادة الاستخراج" وركّز على أول حقل يحتاج مراجعة
-                if (extractBtn) extractBtn.innerHTML = '↺ إعادة الاستخراج';
+                // رسالة صادقة بحسب النتيجة الفعلية: صفر حقول ⇒ لا نُبلّغ «نجاحاً» بل نُرشد
+                // للإدخال اليدوي (المستند محفوظ ومعروض)؛ وإلا نؤكّد عدد الحقول المُستخرَجة.
+                const extractedCount = this._countExtractedFields(data);
+                if (extractedCount === 0) {
+                    this.showToast('تعذّرت قراءة بيانات المستند تلقائياً — أدخِل الحقول يدوياً. المستند محفوظ ومعروض للمراجعة.', 'warning', 8000);
+                    if (extractBtn) extractBtn.innerHTML = '↺ إعادة المحاولة';
+                } else {
+                    this.showToast(`${this.t('extractSuccess')} (${extractedCount} حقل)`, 'success');
+                    if (extractBtn) extractBtn.innerHTML = '↺ إعادة الاستخراج';
+                }
+                // ركّز على أول حقل يحتاج مراجعة/إدخال — إرشادٌ بصريّ لما يفعله المستخدم تالياً
                 setTimeout(() => this._focusFirstReviewField(data), 200);
             })
             .catch((err) => {
+                // الإيقاف المقصود ليس خطأً — _stopExtraction تولّى الرسالة والحالة
+                if (this._extractStopped || err.name === 'AbortError') return;
                 this.showToast(err.message || this.t('extractFail'), 'error', 6000);
                 console.error(err);
             })
@@ -2833,63 +3859,198 @@ class ExtractionSmartSystem {
             });
     }
 
-    async callExtractApi() {
+    // ═══════ الاستخراج التدريجي الحيّ (بثّ NDJSON) ═══════
+    /** يبثّ الاستخراج ويملأ الحقول تِباعاً، ويُعيد الحصيلة النهائية.
+     *  مسارٌ واحد يحلّ محلّ النداء المتزامن القديم: تقدّم حقيقي من الأنبوب + إيقاف
+     *  يُبقي ما وصل (بدل انتظار كلّ شيء ثم لا شيء عند القطع). */
+    async _streamExtract() {
         const form = new FormData();
         form.append('file', this.currentFile);
 
-        // إضافة timeout (5 دقائق للتحميل الأول للنموذج)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 300000);
-
         let response;
         try {
-            response = await fetch(this.apiEndpoints.smartExtract, {
+            response = await fetch(this.apiEndpoints.smartExtractStream, {
                 method: 'POST',
-                headers: {
-                    'X-CSRFToken': this.getCookie('csrftoken'),
-                    'Accept': 'application/json'
-                },
+                headers: { 'X-CSRFToken': this.getCookie('csrftoken') },
                 body: form,
-                signal: controller.signal
+                credentials: 'same-origin',
+                signal: this._extractAbort.signal,
             });
-            clearTimeout(timeoutId);
         } catch (err) {
-            clearTimeout(timeoutId);
-            if (err.name === 'AbortError') {
-                console.error('[ExtractionSmart] ✗ Request timeout (5 min)');
-                throw new Error('انتهت مهلة الاستخراج (5 دقائق). قد يكون السيرفر يحمّل النماذج للمرة الأولى. يرجى المحاولة مرة أخرى.');
-            }
-            console.error('[ExtractionSmart] ✗ Fetch failed:', err);
+            if (err.name === 'AbortError') throw err;      // إيقاف المستخدم — يعالجه _stopExtraction
             throw new Error(`خطأ في الاتصال: ${err.message}`);
         }
 
-        let data;
-        try {
-            data = await response.json();
-        } catch (err) {
-            // غالباً رد HTML (login أو خطأ خادم). نقرأ النص لعرضه.
-            const text = await response.text();
-            const hint = text && text.slice(0, 180);
-            console.error('[ExtractionSmart] ✗ Non-JSON response from extract API:', hint);
-            throw new Error(`فشل الاستخراج (HTTP ${response.status}). يرجى التحقق من تسجيل الدخول أو سجلات الخادم.`);
-        }
-
-        if (!response.ok || data.success === false) {
-            const msg = data.message || this.t('extractFail');
-            if (data.error_code === 'FILE_TYPE') {
-                throw new Error(this.t('fileType'));
-            }
-            if (data.error_code === 'FILE_SIZE') {
-                throw new Error(this.t('fileSize'));
+        if (!response.ok) {
+            let msg = `فشل الاستخراج (HTTP ${response.status}).`;
+            try {
+                const body = await response.json();
+                if (body && body.error) msg = body.error;
+            } catch (_) {
+                if (response.status === 403 || response.redirected) {
+                    msg = 'انتهت الجلسة — سجّل الدخول ثم أعد المحاولة.';
+                }
             }
             throw new Error(msg);
         }
+        if (!response.body) throw new Error('المتصفّح لا يدعم القراءة التدريجية للاستجابة.');
 
-        this.applyExtractionResult(data);
-        return data;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '', final = null;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let nl;
+            while ((nl = buffer.indexOf('\n')) >= 0) {
+                const line = buffer.slice(0, nl).trim();
+                buffer = buffer.slice(nl + 1);
+                if (!line) continue;
+                let ev;
+                try { ev = JSON.parse(line); } catch (_) { continue; }   // سطر تالف يُتخطّى
+                if (ev.type === 'stage') this._onExtractStage(ev);
+                else if (ev.type === 'error') throw new Error(ev.message || this.t('extractFail'));
+                else if (ev.type === 'done') final = ev;
+            }
+        }
+        if (!final) throw new Error('انقطع البثّ قبل اكتمال الاستخراج — أعد المحاولة.');
+        this.applyExtractionResult(final);   // الحصيلة الكاملة (جهات + مرشّحات + ملخّص الثقة)
+        return final;
+    }
+
+    /** حدث مرحلة: رسالة تقدّم صادقة من الأنبوب + ملء ما اكتمل من حقول فوراً. */
+    _onExtractStage(ev) {
+        this._applyPartialFields(ev.fields);
+        const overlay = document.querySelector('#modalBody .extraction-loading-overlay');
+        if (!overlay) return;
+        const text = overlay.querySelector('.overlay-text');
+        const sub = overlay.querySelector('.overlay-sub');
+        if (text) text.textContent = `يجري ${ev.label}…`;
+        if (sub) {
+            const names = [...(this._streamFilled || [])].map(id => this._fieldLabelAr(id)).filter(Boolean);
+            sub.textContent = names.length
+                ? `تم استخراج: ${names.join('، ')}`
+                : 'ستُملأ الحقول تِباعاً فور استخراج كلٍّ منها';
+        }
+    }
+
+    /** يملأ حقول اللقطة الجزئية — مرّة واحدة لكل حقل (لا يدهس ما ملأه المستخدم بعدها). */
+    _applyPartialFields(fields) {
+        if (!fields) return;
+        applySenderDateSuggestion(fields);
+        applyTitleSuggestion(fields);
+        const filled = this._streamFilled || (this._streamFilled = new Set());
+        [
+            ['bookNumber', 'book_number', 'book_number_confidence'],
+            ['title', 'title', 'title_confidence'],
+            ['date', 'book_date', 'book_date_confidence'],
+            ['senderDate', 'sender_date', 'sender_date_confidence'],
+            ['senderNumber', 'sender_number', 'sender_number_confidence'],
+            ['secretLevel', 'secret_level', 'secret_level_confidence'],
+        ].forEach(([id, key, confKey]) => {
+            const value = fields[key];
+            if (value === undefined || value === null || value === '' || filled.has(id)) return;
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (id === 'bookNumber' && !this._reconcileManualNumber(el, value, fields[confKey])) {
+                filled.add(id);          // حُسم أمره — لا نُعيد سؤاله في اللقطة التالية
+                return;
+            }
+            el.value = (id === 'date' || id === 'senderDate') ? String(value).slice(0, 10) : value;
+            // نفس ترتيب applyExtractionResult: حدث input أولاً ثم الثقة، وإلا وُسِم «يقين بشري»
+            codeFill(() => {
+                try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+            });
+            noteSuggestionFilled(id, value);
+            const conf = fields[confKey] || 0;
+            this.updateConfidenceBadge(id, conf);
+            this.setFieldConfidence(id, conf);
+            this.validateField(id);
+            filled.add(id);
+        });
+        if (window.__autoGrowTitle) window.__autoGrowTitle();
+    }
+
+    _fieldLabelAr(id) {
+        return ({
+            bookNumber: 'رقمنا', title: 'الموضوع', date: 'تاريخنا',
+            senderDate: 'تاريخ الجهة', senderNumber: 'العدد', secretLevel: 'السرية',
+        })[id] || '';
+    }
+
+    /** إيقاف الاستخراج الجاري: يقطع البثّ ويُبقي كلّ ما مُلئ حتى اللحظة للإكمال يدوياً. */
+    _stopExtraction() {
+        if (this._extractStopped) return;
+        this._extractStopped = true;
+        try { this._extractAbort?.abort(); } catch (_) {}
+        this._hideExtractionOverlay();
+        const kept = (this._streamFilled || new Set()).size;
+        this.showToast(
+            kept ? `أُوقف الاستخراج — بقي ما استُخرج (${kept} حقل)، أكمل الباقي يدوياً.`
+                 : 'أُوقف الاستخراج — أدخِل الحقول يدوياً.',
+            'info', 6000, 'إيقاف الاستخراج');
+        const btn = document.getElementById('extractButton');
+        if (btn) { btn.disabled = false; btn.innerHTML = '↺ إعادة الاستخراج'; }
+    }
+
+    // يَعُدّ الحقول التي استُخرجت فعلاً (قيمة غير فارغة) — لرسالة صادقة بعد الاستخراج:
+    // صفر ⇒ فشل قراءة ⇒ إرشاد للإدخال اليدوي بدل ادّعاء النجاح.
+    _countExtractedFields(data) {
+        const keys = ['book_number', 'title', 'book_date', 'sender_date', 'sender_number',
+                      'issuing_entity', 'receiving_entity', 'secret_level', 'book_kind'];
+        return keys.reduce((n, k) => {
+            const v = data[k];
+            return n + ((typeof v !== 'undefined' && v !== null && String(v).trim() !== '') ? 1 : 0);
+        }, 0);
+    }
+
+    /**
+     * يوفّق بين ما كتبه الموظّف في حقل الرقم وما قرأه الاستخلاص من المستند.
+     *
+     * يُعيد true إن جاز للاستخلاص الكتابة في الحقل، وfalse إن وجب تركه.
+     * ثلاث حالات:
+     *   • سجلّ له سلسلة  → الرقم محجوز من النظام؛ الاستخلاص لا يمسّه إطلاقاً.
+     *   • الحقل فارغ     → يُملأ من المستند (وهو المقصود من المسح).
+     *   • فيه رقم مكتوب  → يتطابقان: تأكيد صامت بعلامة. يختلفان: نسأله أيّهما الصحيح.
+     */
+    _reconcileManualNumber(input, extracted, confidence) {
+        const kind = document.getElementById('bookKind')?.value;
+        if (!this.getKindConfig(kind).manualNumber) return false;   // سلسلة النظام لا تُمسّ
+
+        const norm = (v) => String(v ?? '').replace(/[^\d]/g, '');
+        const typed = norm(input.value);
+        const read = norm(extracted);
+        if (!read) return false;
+
+        if (!typed) {
+            input.classList.add('number-from-scan');
+            this.showToast(`قُرئ رقم الصادر من المستند: ${read}`, 'info', 4000);
+            return true;
+        }
+        if (typed === read) {
+            input.classList.add('number-confirmed');
+            this.showToast(`تطابق: الرقم الذي كتبته «${typed}» هو نفسه المقروء من المستند.`, 'success', 4000);
+            return false;                       // القيمة نفسها — لا داعي للكتابة
+        }
+
+        const takeScan = window.confirm(
+            'اختلاف في رقم الصادر:\n\n' +
+            `  ما كتبتَه      : ${input.value}\n` +
+            `  المقروء من المستند: ${extracted}` +
+            (confidence ? `  (ثقة ${Math.round(confidence * 100)}%)` : '') +
+            '\n\nموافق = اعتمد المقروء من المستند\nإلغاء = أبقِ ما كتبتَه'
+        );
+        input.classList.add(takeScan ? 'number-from-scan' : 'number-kept-manual');
+        if (!takeScan) this.showToast('أُبقي رقمك كما كتبتَه.', 'warning', 4000);
+        return takeScan;
     }
 
     applyExtractionResult(data) {
+        // حلقة التعلّم (إصلاح 2026-08-16): الخادم يسكّ رمز مسحٍ لكلّ استخراج — بما فيه
+        // **الرفع اليدويّ** الذي كان بلا رمز فيضيع تصحيح الكاتب (6 سجلّات التقاطٍ فقط
+        // في القاعدة كلّها). نحفظه هنا ليُرسَل مع الحفظ فيُلتقَط الزوج (اقتراح → تصحيح).
+        if (data && data.scan_token) this.scanToken = data.scan_token;
         const mapping = [
             { field: 'bookNumber', key: 'book_number', conf: 'book_number_confidence' },
             { field: 'title', key: 'title', conf: 'title_confidence' },
@@ -2907,6 +4068,11 @@ class ExtractionSmartSystem {
             if (typeof value !== 'undefined' && value !== null) {
                 const input = document.getElementById(field);
                 if (input) {
+                    // رقم السجلّ اليدويّ (الصادر الخارجي): لا يُكتب فوق ما كتبه الموظّف
+                    // بصمت. إن تطابقا فتأكيدٌ صامت، وإن اختلفا فقرارٌ صريح منه.
+                    if (field === 'bookNumber' && !this._reconcileManualNumber(input, value, data[conf])) {
+                        return;
+                    }
                     if (field === 'bookKind') {
                         let resolvedKind = value;
                         if (resolvedKind === 'incoming') {
@@ -2924,14 +4090,20 @@ class ExtractionSmartSystem {
                         input.value = value;
                     }
                     // إطلاق حدث input لتفعيل مؤشر التحقق وتفعيل زر الحفظ
-                    try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
-                    try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+                    codeFill(() => {
+                        try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+                        try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+                    });
+                    noteSuggestionFilled(field, value);
                     this.updateConfidenceBadge(field, data[conf] || 0);
                     this.setFieldConfidence(field, data[conf] || 0);   // حافّة الثقة
                     this.validateField(field);
                 }
             }
         });
+
+        // بطاقةُ الموضوع الضعيف — نفسُ نقطة الدخول للمسارات الثلاثة.
+        applyTitleSuggestion(data);
 
         const extractedDocumentType = (data.document_type || data.book_type_name || '').trim();
         if (extractedDocumentType) {
@@ -2940,11 +4112,70 @@ class ExtractionSmartSystem {
 
         // ملخّص الثقة الكلي + تنبيه المراجعة (بطاقتا P1)
         this.updateQualitySummary(data);
+        this.renderEntityCandidates(data);
 
         // ضمان تحديث عام بعد الانتهاء من كل الحقول
         if (typeof updateValidationIndicator === 'function') {
             try { updateValidationIndicator(); } catch (e) {}
         }
+    }
+
+    // مرشّحو الجهة top-3 بنسب التشابه — يُزرعون تحت حقلَي الجهة داخل التخطيط
+    // القائم بلا أي تغيير في ترتيب الصفحة (قرار المالك 2026-07-19).
+    renderEntityCandidates(data) {
+        // تأجيل دورة: بعد تحويل قيمة الـAI إلى وسم (patch القالب يعمل بعد 50ms)
+        setTimeout(() => {
+            this._renderCandidateList('issuing', data.issuing_entity_matches);
+            this._renderCandidateList('receiving', data.receiving_entity_matches);
+        }, 120);
+    }
+
+    _renderCandidateList(side, matches) {
+        const wrap = document.getElementById(side === 'issuing' ? 'issuingTagWrapper' : 'receivingTagWrapper');
+        const container = wrap && wrap.closest('.entity-input-container');
+        if (!container) return;
+        let box = container.querySelector('.entity-candidates');
+        const list = (Array.isArray(matches) ? matches : []).filter(m => (m.entity_name || '').trim());
+        if (!list.length) { if (box) box.remove(); return; }
+        if (!box) {
+            box = document.createElement('div');
+            box.className = 'entity-candidates';
+            container.appendChild(box);
+        }
+        const sourceLabels = { memory: 'من الذاكرة', letterhead: 'من الترويسة', register: 'رمز السجلّ', pattern: 'نمط صريح' };
+        const mgr = window.entityTagManagers?.[side];
+        box.replaceChildren();
+        list.slice(0, 3).forEach((m) => {
+            const name = m.entity_name.trim();
+            const pct = Math.round((m.score || 0) * 100);
+            const chosen = !!(mgr && mgr.tags.some(t => (t.name || '').trim().toLowerCase() === name.toLowerCase()));
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'entity-candidate' + (chosen ? ' is-chosen' : '');
+            btn.title = chosen ? 'مُضافة كوسم' : 'إضافة كوسم';
+            const nameEl = document.createElement('span');
+            nameEl.className = 'candidate-name';
+            nameEl.textContent = name;
+            const bar = document.createElement('span');
+            bar.className = 'candidate-bar';
+            const fill = document.createElement('i');
+            fill.style.width = pct + '%';
+            bar.appendChild(fill);
+            const pctEl = document.createElement('span');
+            pctEl.className = 'candidate-pct';
+            pctEl.textContent = pct + '%';
+            const srcEl = document.createElement('small');
+            srcEl.className = 'candidate-src';
+            srcEl.textContent = chosen ? '✓' : (sourceLabels[m.match_type] || '');
+            btn.append(nameEl, bar, pctEl, srcEl);
+            btn.addEventListener('click', () => {
+                if (!mgr || btn.classList.contains('is-chosen')) return;
+                if (m.entity_id) mgr.addEntity({ id: m.entity_id, name, code: '' });
+                else mgr._resolveOrCreate(name, true);
+                box.remove();   // أدّت القائمة غرضها — تختفي بعد التضمين (قرار المالك)
+            });
+            box.appendChild(btn);
+        });
     }
 
     // ملخّص الثقة الكلي (quality-hero) + تنبيه المراجعة (needs_review) — بطاقتا P1
@@ -3405,7 +4636,16 @@ class ExtractionSmartSystem {
             dateField.tabIndex = -1;
         }
         if (senderDateField) {
-            senderDateField.value = todayISO;
+            // **جذر تسميم التواريخ (وُجد 2026-08-19):** كان يُملأ بتاريخ اليوم تلقائيّاً،
+            // والكاتب يتركه فيُحفَظ تاريخُ الإدخال باسم «تاريخ الجهة المرسلة» — وهو
+            // بالضبط نمطُ القاعدة المقيس (336 من 344 تاريخاً يخالف حبر المستند والفارق
+            // دائماً موجب = زمن الوصول). يبقى فارغاً: القصاصة أمام الكاتب ينسخ منها،
+            // وفارغٌ يُصحَّح بنقرة، وافتراضيٌّ خاطئ يُسمّم ذهب التدريب صامتاً.
+            senderDateField.value = '';
+            // المصدرُ يموت مع القيمة: حقلٌ فُرِّغ ثمّ حُفظ لا يجوز أن يحمل وسم
+            // قيمةٍ سابقة (هذه نقطةُ التفريغ الوحيدة لتاريخ الجهة).
+            resetCaptureProvenance(senderDateField);
+            unmarkSuggestionDisplayed('sender_date');
         }
         if (dateToggle) {
             dateToggle.checked = false;
@@ -3517,11 +4757,21 @@ class ExtractionSmartSystem {
                 field.value = '';
             }
             field.classList.remove('has-error', 'is-valid');
+            resetCaptureProvenance(field);      // نموذجٌ فارغ = لا مصدرَ قيمةٍ بعد
             if (field.id === 'bookNumber') {
                 delete field.dataset.reservationId;
             }
         });
+        _displayedSuggestions.clear();          // ولا اقتراحَ معروضاً بعد
         this.endTextUndoBatch?.();
+
+        // امسح وسوم الجهات: مكوّن EntityTagInput مخصّص (ليست .form-control-smart) فلا تطالها الحلقة أعلاه.
+        window.entityTagManagers?.issuing?.clear();
+        window.entityTagManagers?.receiving?.clear();
+
+        // صفّر «بلا رقم» كي لا يعلق مؤشَّراً بعد التفريغ (عبر معالج القالب الواحد).
+        const _nlCbClear = document.getElementById('numberlessCheckbox');
+        if (_nlCbClear && _nlCbClear.checked) { _nlCbClear.checked = false; _nlCbClear.dispatchEvent(new Event('change', { bubbles: true })); }
 
         const badges = document.querySelectorAll('.confidence-badge');
         console.log('[ExtractionSmart] Found', badges.length, 'confidence badges');
@@ -3555,10 +4805,23 @@ class ExtractionSmartSystem {
             // Clear bookNumber too — ensureReservation() will paint the next reserved value.
             field.value = '';
             field.classList.remove('has-error', 'is-valid');
+            resetCaptureProvenance(field);
             if (field.id === 'bookNumber') {
                 delete field.dataset.reservationId;
             }
         });
+        // الكتابُ التالي يبدأ بصفحةٍ بيضاء: لا اقتراحَ معروضاً موروثاً عن سابقه
+        // (تسريبُ حالةٍ يُفسد رايةَ الالتقاط صامتاً). ووسمُ تاريخ الجهة يسقط في
+        // `resetDateFields` مع قيمته أدناه.
+        _displayedSuggestions.clear();
+
+        // امسح وسوم الجهات (مكوّن مخصّص خارج .form-control-smart) — «تفريغ» يشمل الجهات.
+        window.entityTagManagers?.issuing?.clear();
+        window.entityTagManagers?.receiving?.clear();
+
+        // صفّر «بلا رقم» كي لا يعلق مؤشَّراً للكتاب التالي (عبر معالج القالب الواحد → يُعيد الحجز).
+        const _nlCb = document.getElementById('numberlessCheckbox');
+        if (_nlCb && _nlCb.checked) { _nlCb.checked = false; _nlCb.dispatchEvent(new Event('change', { bubbles: true })); }
 
         const badges = document.querySelectorAll('.confidence-badge');
         badges.forEach(badge => { badge.style.display = 'none'; });
@@ -3656,6 +4919,21 @@ class ExtractionSmartSystem {
         formData.append('date', document.getElementById('date').value);
         formData.append('sender_number', senderNumber);
         formData.append('sender_date', senderDate);
+        // مصدرُ قيمة التاريخ والعدد: مكتوبةٌ بيد الكاتب أم مؤكَّدةٌ بلمسة أم
+        // مملوءةٌ تلقائيّاً وحُفظت بلا لمس. المؤكَّدةُ ليست شاهدَ تقييمٍ مستقلّاً
+        // (قد تُختم بلا تدقيق)، والمملوءةُ تلقائيّاً ليست شهادةً أصلاً.
+        {
+            const _sdProv = fieldProvenance('senderDate');
+            if (_sdProv) formData.append('sender_date_provenance', _sdProv);
+            const _snProv = fieldProvenance('senderNumber');
+            if (_snProv) formData.append('sender_number_provenance', _snProv);
+            // الموضوع: مسارُ العلامة يملؤه آليّاً وحقيقةُ تدريبه هي القيمةُ
+            // المحفوظة نفسُها — فبلا الوسم يصير الحصادُ تعزيزاً ذاتيّاً.
+            const _tProv = fieldProvenance('title');
+            if (_tProv) formData.append('title_provenance', _tProv);
+            // ما عُرض على الكاتب فعلاً — لا يُخمَّن خادميّاً من وجود الاقتراح.
+            formData.append('displayed_fields', displayedFieldsList().join(','));
+        }
         formData.append('secret_level', document.getElementById('secretLevel')?.value || 'normal');
         formData.append('document_type', documentTypeValue || '');
         formData.append('margin', document.getElementById('margin')?.value || '');
@@ -3681,6 +4959,15 @@ class ExtractionSmartSystem {
 
         // ── 6) وضع الإدخال: حقول الترقيم/الحجز + إرسال إلى save-book-api ──
         const bookNumber = document.getElementById('bookNumber').value;
+
+        // سجلّ بلا سلسلة: النظام لا يملك رقماً يمنحه، فالرقم إلزاميّ من الموظّف.
+        if (!numberlessChecked && this.getKindConfig(kindValue).manualNumber && !bookNumber.trim()) {
+            this.showToast('أدخل رقم صادر مكتب السيد المدير العام — هذا السجلّ لا يولّد رقماً تلقائياً.',
+                           'error', 6000);
+            const el = document.getElementById('bookNumber');
+            if (el) { el.focus(); el.classList.add('has-error'); }
+            return;
+        }
         const dueDate = document.getElementById('dueDate').value;
         const needsFollowup = document.getElementById('needsFollowup')?.checked;
         // Keep both keys during the extraction transition layer.
@@ -3701,6 +4988,11 @@ class ExtractionSmartSystem {
             formData.delete('auto_number');
             formData.set('our_number', '');
             formData.set('book_number', '');
+        } else if (this.getKindConfig(kindValue).manualNumber) {
+            // سجلّ بلا سلسلة: الرقم من الورق حرفياً — لا حجز ولا توليد تلقائي.
+            // بدون هذا كان الخادم يخترع رقماً من عدّادٍ لا يخصّ هذا السجلّ.
+            formData.delete('reservation_id');
+            formData.append('auto_number', 'false');
         } else {
             // Prefer the active reservation; fall back to auto_number generation server-side.
             const activeReservation = this.reservations[kindValue];
@@ -3738,7 +5030,148 @@ class ExtractionSmartSystem {
         (mgrR?.getNames() || []).forEach(n  => formData.append('receiving_entity_new[]', n));
     }
 
-    /** إرسال تعديل كتاب قائم إلى update-book-api ثم العودة لوجهة البدء. */
+    // ════════════════════════════════════════════════════════════════
+    //  إرسال الكتاب إلى الجهة المعنيّة (مع مرفقاته)
+    //  لا يخرج مستند رسمي دون أن يرى المستخدم الجهة والبريد وما سيُرفَق.
+    // ════════════════════════════════════════════════════════════════
+
+    _escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = String(s ?? '');
+        return d.innerHTML;
+    }
+
+    async openSendToEntity(bookId) {
+        const modalEl = document.getElementById('sendToEntityModal');
+        const body    = document.getElementById('sendToEntityBody');
+        const confirm = document.getElementById('sendToEntityConfirm');
+        if (!modalEl || !body || !confirm) return;
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        body.innerHTML = '<div class="text-center text-muted py-4">'
+                       + '<div class="spinner-border spinner-border-sm ms-2"></div> جارٍ تحضير المعاينة…</div>';
+        confirm.disabled = true;
+        modal.show();
+
+        let preview;
+        try {
+            const resp = await fetch(`/books/api/email/book/${bookId}/preview/`, {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            preview = await resp.json();
+            if (!resp.ok || !preview.success) throw new Error(preview.message || 'تعذّرت المعاينة');
+        } catch (e) {
+            body.innerHTML = `<div class="alert alert-danger mb-0">تعذّر تحضير المعاينة: ${this._escapeHtml(e.message)}</div>`;
+            return;
+        }
+
+        body.innerHTML = this._renderSendPreview(preview);
+
+        // لا نُفعّل الإرسال إلا إذا كان ممكناً فعلاً — لا زرّ يَعِد بما لا يقدر عليه.
+        const blocked = !preview.email_enabled || !preview.entity;
+        confirm.disabled = blocked;
+        confirm.onclick = blocked ? null : () => this._doSendToEntity(bookId, modal, confirm);
+    }
+
+    _renderSendPreview(p) {
+        if (!p.email_enabled) {
+            return '<div class="alert alert-warning mb-0">'
+                 + '<strong>إرسال البريد معطّل.</strong> فعّله من: الإعدادات ← البريد الإلكتروني ← «تفعيل إرسال البريد».'
+                 + '</div>';
+        }
+        if (!p.entity) {
+            return `<div class="alert alert-warning mb-0"><strong>لا يمكن الإرسال.</strong> ${this._escapeHtml(p.entity_error || 'لا توجد جهة معنيّة.')}</div>`;
+        }
+
+        const cc = (p.entity.cc || []).length
+            ? `<div class="text-muted small">نسخة إلى: ${this._escapeHtml(p.entity.cc.join('، '))}</div>` : '';
+
+        const attach = p.files.filter(f => f.mode === 'attach');
+        const linked = p.files.filter(f => f.mode === 'link');
+        const failed = p.files.filter(f => f.mode === 'failed');
+
+        const row = (f, icon, note) => `
+            <li class="d-flex align-items-center gap-2 py-1">
+              <i class="bi ${icon}"></i>
+              <span class="flex-grow-1 text-truncate">${this._escapeHtml(f.name)}</span>
+              <span class="text-muted small">${this._escapeHtml(f.size_label)}</span>
+              ${note ? `<span class="badge bg-light text-dark">${note}</span>` : ''}
+            </li>`;
+
+        let files = '';
+        if (!p.files.length) {
+            files = '<div class="text-muted small">لا مرفقات على هذا الكتاب — ستُرسل الرسالة نصّاً فقط.</div>';
+        } else {
+            files = '<ul class="list-unstyled mb-0" style="max-height:190px;overflow:auto">'
+                  + attach.map(f => row(f, 'bi-paperclip', '')).join('')
+                  + linked.map(f => row(f, 'bi-link-45deg', 'رابط')).join('')
+                  + failed.map(f => row(f, 'bi-exclamation-triangle text-danger', 'تعذّر')).join('')
+                  + '</ul>';
+        }
+
+        const linkNote = linked.length
+            ? `<div class="alert alert-info py-2 px-3 mt-2 mb-0" style="font-size:.82rem">
+                 ${linked.length} ملف يتجاوز حدّ البريد (${this._escapeHtml(p.limit_label)}) — سيُرسَل
+                 <strong>رابط تحميل موقّع</strong> بدل إرفاقه. الرابط ينتهي بعد 7 أيام.
+               </div>` : '';
+
+        return `
+          <div class="mb-3">
+            <div class="text-muted small">إلى</div>
+            <div class="fw-bold">${this._escapeHtml(p.entity.name)}</div>
+            <div dir="ltr" class="text-muted" style="font-size:.85rem">${this._escapeHtml(p.entity.email)}</div>
+            ${cc}
+          </div>
+          <div class="mb-3">
+            <div class="text-muted small">الموضوع</div>
+            <div>${this._escapeHtml(p.subject)}</div>
+          </div>
+          <div>
+            <div class="text-muted small mb-1">المرفقات (${p.files.length}) — سيُرفَق ${this._escapeHtml(p.attach_label)}</div>
+            ${files}
+            ${linkNote}
+          </div>`;
+    }
+
+    async _doSendToEntity(bookId, modal, confirmBtn) {
+        const original = confirmBtn.innerHTML;
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm ms-1"></span> جارٍ الإرسال…';
+        try {
+            const resp = await fetch(`/books/api/email/book/${bookId}/send/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                body: '{}',
+            });
+            const data = await resp.json();
+            if (data.success) {
+                // تقرير صادق: ما أُرفِق فعلاً وما أُحيل إلى رابط
+                const bits = [data.message];
+                if (data.attached?.length) bits.push(`أُرفِق ${data.attached.length} ملف (${data.attached_label})`);
+                if (data.linked?.length)   bits.push(`${data.linked.length} ملف أُرسل كرابط`);
+                if (data.failed?.length)   bits.push(`${data.failed.length} ملف تعذّر`);
+                this.showToast(bits.join(' — '), 'success', 7000);
+                modal.hide();
+            } else {
+                this.showToast(data.message || 'فشل الإرسال', 'error', 8000);
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = original;
+            }
+        } catch (e) {
+            this.showToast('خطأ في الاتصال — لم تُرسَل الرسالة', 'error', 6000);
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = original;
+        }
+    }
+
+    /** إرسال تعديل كتاب قائم إلى update-book-api ثم العودة لوجهة البدء.
+     *  لا كشف تكرار هنا: الكتاب محفوظ مسبقاً — التنبيه للإدخال الأوّل فقط. */
     async _submitEdit(formData) {
         const saveBtn = document.getElementById('saveButton');
         const originalText = saveBtn.innerHTML;
@@ -3756,17 +5189,24 @@ class ExtractionSmartSystem {
                 this._pagesEditedInPreview = false;   // استُهلكت تعديلات الصفحات بالحفظ
                 if (window.__setExtractionBaseline) window.__setExtractionBaseline();  // لا يعترض beforeunload التوجيه
                 this.showToast('تم حفظ التعديلات بنجاح ✓', 'success', 3000);
+                // «حفظ وإرسال» في وضع التعديل: نفتح الحوار ولا نغادر الصفحة —
+                // المغادرة أثناء الإرسال تقطع العملية على المستخدم.
+                if (this.sendToEntityAfterSave && result.book_id) {
+                    this.sendToEntityAfterSave = false;
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.disabled = false;
+                    this.openSendToEntity(result.book_id);
+                    return;
+                }
                 setTimeout(() => { window.location.href = this.backUrl || result.redirect_url || '/'; }, 1200);
-            } else {
-                this.showToast(result.message || 'فشل الحفظ', 'error', 6000);
-                saveBtn.innerHTML = originalText;
-                saveBtn.disabled = false;
+                return;
             }
+            this.showToast(result.message || 'فشل الحفظ', 'error', 6000);
         } catch (e) {
             this.showToast('خطأ في الاتصال — حاول مجدداً', 'error', 5000);
-            saveBtn.innerHTML = originalText;
-            saveBtn.disabled = false;
         }
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
     }
 
     async submitBookData(formData) {
@@ -3777,6 +5217,7 @@ class ExtractionSmartSystem {
         saveBtn.disabled = true;
 
         let retriedAfterReservationRefresh = false;
+        let confirmedDuplicate = false;
 
         try {
             while (true) {
@@ -3808,6 +5249,12 @@ class ExtractionSmartSystem {
                     this.smartClearAndStay(savedKind);
                     this.clearFile();
                     this.ensureReservation(savedKind);
+                    // «حفظ وإرسال»: النموذج يُمسح بعد الحفظ، لذا نلتقط معرّف الكتاب
+                    // من الاستجابة ونفتح حوار الإرسال عليه.
+                    if (this.sendToEntityAfterSave && data.book_id) {
+                        this.sendToEntityAfterSave = false;
+                        this.openSendToEntity(data.book_id);
+                    }
                     break;
                 }
 
@@ -3818,6 +5265,18 @@ class ExtractionSmartSystem {
                         this.updateFormDataReservation(formData, replacementReservation);
                         continue;
                     }
+                }
+
+                // كشف التكرار: 3/4 (SIMILAR) أو 4/4 (DUPLICATE) — نستأذن مرّة ثم نُعيد بعلَم التأكيد
+                if (!confirmedDuplicate &&
+                    (data.error_code === 'SIMILAR_BOOK' || data.error_code === 'DUPLICATE_BOOK')) {
+                    const proceed = await this._confirmDuplicate(data);
+                    if (proceed) {
+                        confirmedDuplicate = true;
+                        formData.set('confirm_duplicate', 'true');
+                        continue;
+                    }
+                    break;   // ألغى المستخدم
                 }
 
                 const msg = data.message || this.t('saveFail');

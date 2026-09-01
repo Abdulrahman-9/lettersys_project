@@ -351,8 +351,13 @@
 
 {% block content %}
 <div>
+  {% comment %}
+  داخل مركز الإعدادات (?embed=1) تُخفى ترويسة البريد وشريط تبويباته: الشريط
+  العلوي للمركز هو المُنقِّل، ولا معنى لـ«إنشاء رسالة» أو «الوارد» داخل لوحة
+  إعدادات — وإلا صار تنقّلاً مزدوجاً يفتح تطبيق البريد داخل تبويب الإعدادات.
+  {% endcomment %}
   <!-- ── Header ── -->
-  <div class="mail-page-header">
+  <div class="mail-page-header settings-embed-hide">
     <div class="d-flex align-items-center gap-2 flex-grow-1">
       <i class="bi bi-envelope-fill" style="font-size:1.4rem;color:var(--warm-clay)"></i>
       <div>
@@ -367,7 +372,7 @@
   </div>
 
   <!-- ── شريط التبويبات ── -->
-  <div class="mail-tabs-bar">
+  <div class="mail-tabs-bar settings-embed-hide">
     <a href="{% url 'mail_sent' %}" class="mail-tab {% if active_tab == 'sent' %}active{% endif %}">
       <i class="bi bi-send-fill"></i>
       <span>الصادر</span>
@@ -491,7 +496,7 @@
             <td>
               {% if log.book %}
               <a href="{% url 'book_detail' log.book.pk %}" style="color:var(--warm-clay);font-weight:600;font-size:.82rem">
-                {{ log.book.our_number|default:log.book.pk }}
+                {{ log.book.our_number_display|default:log.book.pk }}
               </a>
               {% else %}—{% endif %}
             </td>
@@ -596,7 +601,7 @@
               </a>
               {% if inc.thread.book %}
               <div style="font-size:.73rem;color:var(--muted-brown)">
-                كتاب: <a href="{% url 'book_detail' inc.thread.book.pk %}" style="color:var(--warm-clay)">{{ inc.thread.book.our_number }}</a>
+                كتاب: <a href="{% url 'book_detail' inc.thread.book.pk %}" style="color:var(--warm-clay)">{{ inc.thread.book.our_number_display }}</a>
               </div>
               {% endif %}
               {% else %}—{% endif %}
@@ -645,7 +650,7 @@
     <div class="compose-card">
       <h6 style="font-weight:800;color:var(--deep-brown);margin-bottom:1.25rem">
         <i class="bi bi-pencil-square me-2" style="color:var(--warm-clay)"></i>
-        {% if book %}رسالة جديدة — بشأن كتاب رقم {{ book.our_number }}{% else %}رسالة جديدة{% endif %}
+        {% if book %}رسالة جديدة — بشأن كتاب رقم {{ book.our_number_display }}{% else %}رسالة جديدة{% endif %}
       </h6>
 
       <!-- اختيار قالب -->
@@ -722,7 +727,7 @@
         </h6>
         <div style="font-size:.78rem;color:var(--muted-brown)">
           {% if thread.entity %}<i class="bi bi-buildings me-1"></i>{{ thread.entity.name }} &nbsp;|&nbsp; {% endif %}
-          {% if thread.book %}<i class="bi bi-journal-text me-1"></i>كتاب: <a href="{% url 'book_detail' thread.book.pk %}" style="color:var(--warm-clay)">{{ thread.book.our_number }}</a> &nbsp;|&nbsp; {% endif %}
+          {% if thread.book %}<i class="bi bi-journal-text me-1"></i>كتاب: <a href="{% url 'book_detail' thread.book.pk %}" style="color:var(--warm-clay)">{{ thread.book.our_number_display }}</a> &nbsp;|&nbsp; {% endif %}
           <i class="bi bi-clock me-1"></i>{{ thread.last_activity|date:"Y/m/d H:i" }}
         </div>
       </div>
@@ -773,6 +778,49 @@
     <!-- ════ إعدادات البريد ════ -->
     {% elif active_tab == 'settings' %}
 
+    <style>
+      .mail-hint { display:block; margin-top:.3rem; font-size:.76rem; line-height:1.55; color:#6b7280; }
+      .mail-hint code { background:#f1f5f9; padding:.05rem .3rem; border-radius:4px; font-size:.92em; direction:ltr; display:inline-block; }
+      .mail-guide { border:1px solid #e6ecec; border-radius:14px; padding:16px 18px; margin-bottom:20px; background:#fbfcfc; }
+      .mail-guide h6 { font-weight:800; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+      .mail-guide dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:7px 12px; font-size:.83rem; }
+      .mail-guide dt { font-weight:800; color:#0f766e; white-space:nowrap; direction:ltr; text-align:start; }
+      .mail-guide dd { margin:0; color:#4b5563; }
+      .mail-warn { margin-top:12px; padding:11px 13px; border-radius:10px; background:#fff7ed;
+                   border:1px solid #fed7aa; color:#9a3412; font-size:.82rem; line-height:1.6; }
+      .mail-warn b { color:#7c2d12; }
+    </style>
+
+    <div class="mail-guide">
+      <h6><i class="bi bi-info-circle-fill" style="color:#0f766e"></i> ماذا تعني هذه المختصرات؟</h6>
+      <dl>
+        <dt>SMTP</dt>
+        <dd><b>بروتوكول الإرسال</b> — القناة التي يُخرج بها النظام بريدك إلى العالم. بدونه لا تستطيع الإرسال.</dd>
+
+        <dt>IMAP</dt>
+        <dd><b>بروتوكول الاستقبال</b> — القناة التي يقرأ بها النظام صندوق الوارد ليجلب <b>الردود</b> ويربطها بالكتب. بدونه تُرسل ولا ترى ردّاً.</dd>
+
+        <dt>TLS</dt>
+        <dd><b>تشفير الاتصال</b> — يبدأ الاتصال عادياً ثم يُرقّى إلى مشفّر. يُستخدم مع المنفذ <code>587</code>. هذا الموصى به لـGmail.</dd>
+
+        <dt>SSL</dt>
+        <dd><b>تشفير من أول لحظة</b> — يُستخدم مع المنفذ <code>465</code> (إرسال) و<code>993</code> (استقبال). <b>لا تفعّل TLS وSSL معاً للإرسال.</b></dd>
+
+        <dt>Reply-To</dt>
+        <dd>العنوان الذي تذهب إليه ردود المستقبِلين إن اختلف عن عنوان المُرسِل. اتركه فارغاً ليُستخدم بريد المؤسسة.</dd>
+
+        <dt>المنفذ</dt>
+        <dd>«باب» الاتصال على الخادم. Gmail: إرسال <code>587</code> (TLS) أو <code>465</code> (SSL) — استقبال <code>993</code> (SSL).</dd>
+      </dl>
+
+      <div class="mail-warn">
+        <b>مهم لحسابات Gmail:</b> «كلمة المرور» هنا <b>ليست كلمة مرور حسابك</b> — Google لا تقبلها.
+        تحتاج <b>App Password</b> (كلمة مرور تطبيق، 16 حرفاً): فعّل <b>التحقّق بخطوتين</b> على حسابك، ثم أنشئها من
+        <code>myaccount.google.com/apppasswords</code> والصقها في حقلَي كلمة المرور (الإرسال والاستقبال).
+        وأخيراً فعّل <b>«تفعيل إرسال البريد»</b> — بدونه لا يُرسِل النظام شيئاً فعلياً.
+      </div>
+    </div>
+
     <form method="post" id="settingsForm">
       {% csrf_token %}
 
@@ -781,12 +829,20 @@
         <div class="settings-section-title"><i class="bi bi-building" style="color:var(--warm-clay)"></i> هوية المؤسسة</div>
         <div class="row g-3">
           <div class="col-md-6">
-            <label class="compose-label">اسم المؤسسة</label>
+            <label class="compose-label">اسم الشركة/المؤسسة</label>
             <input name="org_name" class="compose-input" value="{{ cfg.org_name }}">
           </div>
           <div class="col-md-6">
             <label class="compose-label">بريد المؤسسة الرسمي (From)</label>
             <input name="org_email" type="email" class="compose-input" value="{{ cfg.org_email }}" dir="ltr">
+          </div>
+          <div class="col-md-6">
+            <label class="compose-label">اسم القسم <span class="text-muted small">(ترويسة التقارير)</span></label>
+            <input name="org_section" class="compose-input" value="{{ cfg.org_section }}">
+          </div>
+          <div class="col-md-6">
+            <label class="compose-label">اسم الوحدة <span class="text-muted small">(ترويسة التقارير)</span></label>
+            <input name="org_unit" class="compose-input" value="{{ cfg.org_unit }}">
           </div>
           <div class="col-md-6">
             <label class="compose-label">الرد على (Reply-To) — اختياري</label>
@@ -806,28 +862,35 @@
           <div class="col-md-6">
             <label class="compose-label">خادم SMTP</label>
             <input name="smtp_host" class="compose-input" value="{{ cfg.smtp_host }}" dir="ltr" placeholder="smtp.gmail.com">
+            <span class="mail-hint">عنوان خادم الإرسال. لحسابات Gmail: <code>smtp.gmail.com</code></span>
           </div>
           <div class="col-md-2">
             <label class="compose-label">المنفذ</label>
             <input name="smtp_port" type="number" class="compose-input" value="{{ cfg.smtp_port }}" dir="ltr">
+            <span class="mail-hint"><code>587</code> مع TLS<br><code>465</code> مع SSL</span>
           </div>
-          <div class="col-md-4 d-flex align-items-end gap-3">
-            <div class="form-check">
-              <input name="smtp_use_tls" type="checkbox" class="form-check-input" id="ckTLS" {% if cfg.smtp_use_tls %}checked{% endif %}>
-              <label class="form-check-label" for="ckTLS">TLS</label>
+          <div class="col-md-4 d-flex flex-column justify-content-end">
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input name="smtp_use_tls" type="checkbox" class="form-check-input" id="ckTLS" {% if cfg.smtp_use_tls %}checked{% endif %}>
+                <label class="form-check-label" for="ckTLS">TLS</label>
+              </div>
+              <div class="form-check">
+                <input name="smtp_use_ssl" type="checkbox" class="form-check-input" id="ckSSL" {% if cfg.smtp_use_ssl %}checked{% endif %}>
+                <label class="form-check-label" for="ckSSL">SSL</label>
+              </div>
             </div>
-            <div class="form-check">
-              <input name="smtp_use_ssl" type="checkbox" class="form-check-input" id="ckSSL" {% if cfg.smtp_use_ssl %}checked{% endif %}>
-              <label class="form-check-label" for="ckSSL">SSL</label>
-            </div>
+            <span class="mail-hint">نوع التشفير — فعّل <b>واحداً فقط</b>. الموصى به لـGmail: TLS مع المنفذ 587.</span>
           </div>
           <div class="col-md-6">
             <label class="compose-label">المستخدم</label>
             <input name="smtp_user" class="compose-input" value="{{ cfg.smtp_user }}" dir="ltr" autocomplete="off">
+            <span class="mail-hint">بريدك الإلكتروني الكامل (وليس الاسم فقط).</span>
           </div>
           <div class="col-md-6">
             <label class="compose-label">كلمة المرور</label>
             <input name="smtp_password" type="password" class="compose-input" placeholder="اتركه فارغاً للإبقاء على القيمة الحالية" dir="ltr" autocomplete="new-password">
+            <span class="mail-hint">لـGmail: <b>App Password</b> من 16 حرفاً — لا كلمة مرور حسابك. تُخزَّن مشفّرة.</span>
           </div>
           <div class="col-12">
             <button type="button" class="settings-test-btn" onclick="testSMTP()">
@@ -845,32 +908,40 @@
           <div class="col-md-6">
             <label class="compose-label">خادم IMAP</label>
             <input name="imap_host" class="compose-input" value="{{ cfg.imap_host }}" dir="ltr" placeholder="imap.gmail.com">
+            <span class="mail-hint">عنوان خادم الاستقبال. لحسابات Gmail: <code>imap.gmail.com</code></span>
           </div>
           <div class="col-md-2">
             <label class="compose-label">المنفذ</label>
             <input name="imap_port" type="number" class="compose-input" value="{{ cfg.imap_port }}" dir="ltr">
+            <span class="mail-hint"><code>993</code> مع SSL</span>
           </div>
-          <div class="col-md-4 d-flex align-items-end gap-3">
-            <div class="form-check">
-              <input name="imap_use_ssl" type="checkbox" class="form-check-input" id="ckImapSSL" {% if cfg.imap_use_ssl %}checked{% endif %}>
-              <label class="form-check-label" for="ckImapSSL">SSL</label>
+          <div class="col-md-4 d-flex flex-column justify-content-end">
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input name="imap_use_ssl" type="checkbox" class="form-check-input" id="ckImapSSL" {% if cfg.imap_use_ssl %}checked{% endif %}>
+                <label class="form-check-label" for="ckImapSSL">SSL</label>
+              </div>
+              <div class="form-check">
+                <input name="imap_sync_enabled" type="checkbox" class="form-check-input" id="ckImapSync" {% if cfg.imap_sync_enabled %}checked{% endif %}>
+                <label class="form-check-label" for="ckImapSync">مزامنة تلقائية</label>
+              </div>
             </div>
-            <div class="form-check">
-              <input name="imap_sync_enabled" type="checkbox" class="form-check-input" id="ckImapSync" {% if cfg.imap_sync_enabled %}checked{% endif %}>
-              <label class="form-check-label" for="ckImapSync">مزامنة تلقائية</label>
-            </div>
+            <span class="mail-hint"><b>مزامنة تلقائية:</b> يفحص صندوق الوارد دورياً ويجلب الردود ويربطها بالكتب. <b>بدونها لن تصلك أي ردود.</b></span>
           </div>
           <div class="col-md-6">
             <label class="compose-label">المستخدم</label>
             <input name="imap_user" class="compose-input" value="{{ cfg.imap_user }}" dir="ltr" autocomplete="off">
+            <span class="mail-hint">نفس بريدك الكامل المستخدَم في الإرسال.</span>
           </div>
           <div class="col-md-4">
             <label class="compose-label">كلمة المرور</label>
             <input name="imap_password" type="password" class="compose-input" placeholder="اتركه فارغاً للإبقاء" dir="ltr" autocomplete="new-password">
+            <span class="mail-hint">نفس الـ<b>App Password</b> المستخدَم في الإرسال — حقل منفصل، يجب ملؤه أيضاً.</span>
           </div>
           <div class="col-md-2">
             <label class="compose-label">المجلد</label>
             <input name="imap_folder" class="compose-input" value="{{ cfg.imap_folder }}" dir="ltr">
+            <span class="mail-hint">عادةً <code>INBOX</code></span>
           </div>
           <div class="col-12">
             <button type="button" class="settings-test-btn" onclick="testIMAP()">
@@ -890,13 +961,15 @@
       <div class="settings-section">
         <div class="settings-section-title"><i class="bi bi-toggle-on" style="color:var(--warm-clay)"></i> التفعيل</div>
         <div class="d-flex gap-4 flex-wrap">
-          <div class="form-check form-switch">
+          <div class="form-check form-switch" style="min-width:280px">
             <input name="is_active" type="checkbox" class="form-check-input" id="ckActive" {% if cfg.is_active %}checked{% endif %}>
             <label class="form-check-label" for="ckActive">تفعيل إرسال البريد</label>
+            <span class="mail-hint"><b>المفتاح الرئيسي.</b> وهو مُطفأ، لا يخرج أي بريد فعلياً من النظام مهما كانت بقيّة الإعدادات صحيحة.</span>
           </div>
-          <div class="form-check form-switch">
+          <div class="form-check form-switch" style="min-width:280px">
             <input name="send_on_save" type="checkbox" class="form-check-input" id="ckAutoSend" {% if cfg.send_on_save %}checked{% endif %}>
             <label class="form-check-label" for="ckAutoSend">إرسال تلقائي عند حفظ كتاب</label>
+            <span class="mail-hint">يُرسل إشعاراً للجهة المعنيّة تلقائياً بمجرّد حفظ كتاب جديد.</span>
           </div>
         </div>
       </div>
@@ -1116,15 +1189,26 @@ function onEntityChange(sel) {
   if (email && document.getElementById('f_to')) document.getElementById('f_to').value = email;
 }
 
+// ── أدوات أمان العرض ──
+// تهريب النص للسياق النصي (يكفي &<> لأن الإدراج بين الوسوم لا داخل سمة)
+function escHtml(s) { const d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+// عرض HTML غير موثوق داخل iframe معزول: لا سكربتات ولا وصول للأصل (يُحيّد XSS في body_html)
+function makeSandboxedHtml(html) {
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', '');
+  f.style.cssText = 'width:100%;min-height:50vh;border:0;';
+  f.srcdoc = (html == null ? '' : String(html));
+  return f;
+}
+
 // ── معاينة compose ──
 function previewCompose() {
   const body = document.getElementById('f_body')?.value || '';
   const subj = document.getElementById('f_subject')?.value || '';
   const modal = new bootstrap.Modal(document.getElementById('emailPreviewModal'));
-  document.getElementById('emailPreviewBody').innerHTML = `
-    <div class="mb-2"><strong>الموضوع:</strong> ${subj}</div>
-    <hr>
-    <div>${body}</div>`;
+  const el = document.getElementById('emailPreviewBody');
+  el.innerHTML = `<div class="mb-2"><strong>الموضوع:</strong> ${escHtml(subj)}</div><hr>`;
+  el.appendChild(makeSandboxedHtml(body));
   modal.show();
 }
 
@@ -1139,10 +1223,10 @@ async function previewEmail(logId) {
     const data = await res.json();
     if (data.logs && data.logs.length) {
       const l = data.logs.find(x => x.id == logId) || data.logs[0];
-      document.getElementById('emailPreviewBody').innerHTML = `
-        <div class="mb-1"><strong>إلى:</strong> ${l.to_address}</div>
-        <div class="mb-2"><strong>الموضوع:</strong> ${l.subject}</div>
-        <hr>${l.body_html || '<em>لا يوجد محتوى HTML</em>'}`;
+      const el = document.getElementById('emailPreviewBody');
+      el.innerHTML = `<div class="mb-1"><strong>إلى:</strong> ${escHtml(l.to_address)}</div>` +
+        `<div class="mb-2"><strong>الموضوع:</strong> ${escHtml(l.subject)}</div><hr>`;
+      el.appendChild(makeSandboxedHtml(l.body_html || '<em>لا يوجد محتوى HTML</em>'));
     } else {
       document.getElementById('emailPreviewBody').innerHTML = '<p class="text-muted">لا يمكن تحميل المحتوى</p>';
     }
