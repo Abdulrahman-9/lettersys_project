@@ -1,0 +1,110 @@
+{% load static %}<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>التحقّق من التوقيع — {{ token }}</title>
+{% comment %}
+  صفحةٌ قائمةٌ بذاتها لا تمتدّ من `base.html`: تُفتح من ورقةٍ خرجت من الشركة،
+  فقد يقرؤها مَن ليس مستخدماً — ولا شريطَ تنقّلٍ ولا قائمةَ جانبيّةٍ تعنيه.
+  ونمطٌ مضمَّن لأنّها بلا `base.html` فلا تدخل فخَّ رفعِ نسختَي الكاش.
+
+  **ولا مضمونَ للكتاب هنا**: الاسمُ والصفةُ والوقتُ وحكمُ البصمة. مَن يريد
+  المضمونَ يدخل النظام.
+{% endcomment %}
+<style>
+  :root { --ink:#362014; --soft:#6f4631; --faint:#9c7a63; --amber:#b45309;
+          --rule:rgba(111,70,40,.18); --ok:#15803d; --bad:#b91c1c; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Cairo","Segoe UI",Tahoma,sans-serif; color:var(--ink);
+         background:linear-gradient(180deg,#fff8ee,#fde5cc); min-height:100vh;
+         display:flex; align-items:center; justify-content:center; padding:1.5rem; }
+  .card { background:#fff; border:1px solid var(--rule); border-radius:1.1rem;
+          box-shadow:0 18px 44px rgba(77,44,25,.14); max-width:34rem; width:100%;
+          overflow:hidden; }
+  .hd { padding:1.4rem 1.4rem 1.1rem; text-align:center; border-bottom:1px solid var(--rule); }
+  .mark { width:3.4rem; height:3.4rem; border-radius:1rem; margin:0 auto .7rem;
+          display:flex; align-items:center; justify-content:center;
+          font-size:1.7rem; color:#fff; font-weight:800; }
+  .ok  { background:linear-gradient(135deg,#16a34a,#15803d); }
+  .bad { background:linear-gradient(135deg,#dc2626,#991b1b); }
+  .unk { background:linear-gradient(135deg,#9c7a63,#6f4631); }
+  h1 { font-size:1.15rem; font-weight:800; margin:0 0 .3rem; }
+  .lead { font-size:.88rem; color:var(--soft); margin:0; line-height:1.8; }
+  .bd { padding:1.2rem 1.4rem 1.4rem; }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:.5rem 1rem; margin:0; font-size:.88rem; }
+  dt { color:var(--faint); font-weight:600; }
+  dd { margin:0; font-weight:700; }
+  .digest { font-family:ui-monospace,Consolas,monospace; font-size:.72rem;
+            word-break:break-all; color:var(--soft); font-weight:400; }
+  .foot { margin-top:1.1rem; padding-top:.9rem; border-top:1px dashed var(--rule);
+          font-size:.76rem; color:var(--faint); line-height:1.8; }
+</style>
+</head>
+<body>
+<div class="card">
+
+  {% if not signature %}
+    <div class="hd">
+      <div class="mark unk">؟</div>
+      <h1>هذا الرمزُ لا يقابل توقيعاً</h1>
+      <p class="lead">
+        تأكّد من نسخ الرمز كاملاً كما هو مطبوعٌ على الختم.
+      </p>
+    </div>
+    <div class="bd">
+      <dl><dt>الرمز المُدخَل</dt><dd class="digest">{{ token }}</dd></dl>
+    </div>
+
+  {% else %}
+    <div class="hd">
+      {% if not state.valid %}
+        <div class="mark bad">✕</div>
+        <h1>توقيعٌ مُبطَل</h1>
+        <p class="lead">
+          هذا التوقيعُ أُبطل في {{ signature.revoked_at|date:"Y/m/d H:i" }}.
+          {% if signature.revoke_reason %}السبب: {{ signature.revoke_reason }}.{% endif %}
+          والختمُ المطبوعُ لا يزال على الورقة — فالعبرةُ بهذه الصفحة.
+        </p>
+      {% elif state.matches %}
+        <div class="mark ok">✓</div>
+        <h1>توقيعٌ صحيحٌ والمستندُ لم يتغيّر</h1>
+        <p class="lead">
+          بصمةُ الملفّ الآن تطابق البصمةَ المحفوظة لحظةَ التوقيع.
+        </p>
+      {% else %}
+        <div class="mark bad">✕</div>
+        <h1>{% if state.matches is None %}تعذّر التحقّق{% else %}المستندُ تغيّر بعد التوقيع{% endif %}</h1>
+        <p class="lead">{{ state.reason }}</p>
+      {% endif %}
+    </div>
+
+    <div class="bd">
+      <dl>
+        <dt>الموقِّع</dt>
+        <dd>{{ signature.signer.get_full_name|default:signature.signer.username }}</dd>
+
+        <dt>الصفة</dt>
+        <dd>{{ signature.get_capacity_display }}</dd>
+
+        <dt>وقت التوقيع</dt>
+        <dd>{{ signature.signed_at|date:"Y/m/d — H:i" }}</dd>
+
+        <dt>رمز التحقّق</dt>
+        <dd class="digest">{{ signature.verify_token }}</dd>
+
+        <dt>البصمة</dt>
+        <dd class="digest">{{ signature.digest }}</dd>
+      </dl>
+
+      <p class="foot">
+        هذا <b>توقيعُ مصادقةٍ داخليّ</b>: يُثبت مَن صادق ومتى، وأنّ الملفَّ لم
+        يتغيّر بعدها. وهو ليس توقيعاً رقميّاً معياريّاً بشهادةٍ معتمدة —
+        ولا يُقدَّم على أنّه كذلك.
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+</body>
+</html>

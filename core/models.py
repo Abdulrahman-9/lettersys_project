@@ -574,6 +574,68 @@ class Book(models.Model):
         ]
 
 
+class BookSignature(models.Model):
+    """توقيعُ مصادقةٍ داخليّ — **مَن صادق على ماذا ومتى، وإثباتُ عدم التغيير**.
+
+    الطورُ الأوّل من المرحلة هـ. والطورُ الثاني (PAdES/X.509) قرارُ شركةٍ لا
+    كود: مرجعُ شهاداتٍ وعتادٌ واعترافٌ قانونيّ — والبنيةُ هنا أساسُه فلا عملَ
+    يُهدر.
+
+    **البصمةُ هي الحجّة**: SHA-256 لبايتات الملفّ الموقَّع لحظةَ التوقيع. أيُّ
+    تعديلٍ لاحقٍ يُنتج بصمةً أخرى، فيُقال «هذا ليس ما وُقّع عليه» بيقينٍ لا
+    بظنّ. ولذلك تُخزَّن البصمةُ لا الملفّ: الملفُّ قد يُنقل أو يُضغط.
+
+    **ولا يُحذف توقيع**: التوقيعُ واقعةٌ حدثت. إبطالُه صفٌّ ثانٍ (`revoked_*`)
+    لا حذفُ الأوّل — القاعدةُ نفسُها التي حكمت الجهاتِ والعناقيد.
+    """
+
+    CAPACITY_HEAD = 'dept_head'
+    CAPACITY_MANAGER = 'manager'
+    CAPACITY_DELEGATE = 'delegate'
+    CAPACITY_CHOICES = (
+        (CAPACITY_HEAD, 'رئيس القسم'),
+        (CAPACITY_MANAGER, 'المدير'),
+        (CAPACITY_DELEGATE, 'مفوَّض'),
+    )
+
+    book = models.ForeignKey('Book', on_delete=models.CASCADE,
+                             related_name='signatures', verbose_name='الكتاب')
+    #: النسخةُ الموقَّعة — قد تُحذف نسخةٌ قديمة، والتوقيعُ يبقى ببصمته.
+    version = models.ForeignKey('AttachmentVersion', on_delete=models.SET_NULL,
+                                null=True, blank=True, related_name='signatures',
+                                verbose_name='النسخة الموقَّعة')
+    signer = models.ForeignKey(User, on_delete=models.PROTECT,
+                               related_name='book_signatures', verbose_name='الموقِّع')
+    capacity = models.CharField('الصفة', max_length=16, choices=CAPACITY_CHOICES)
+    signed_at = models.DateTimeField('وقت التوقيع', auto_now_add=True, db_index=True)
+
+    #: SHA-256 لبايتات الملفّ لحظةَ التوقيع — الحجّةُ على عدم التغيير.
+    digest = models.CharField('بصمة الملفّ', max_length=64, db_index=True)
+    #: رمزُ تحقّقٍ عامّ يُطبع على الختم ويفتح صفحةَ التثبّت.
+    verify_token = models.CharField('رمز التحقّق', max_length=32, unique=True)
+    note = models.CharField('ملاحظة', max_length=255, blank=True, default='')
+
+    revoked_at = models.DateTimeField('أُبطل في', null=True, blank=True)
+    revoked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name='revoked_signatures')
+    revoke_reason = models.CharField('سبب الإبطال', max_length=255, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'توقيع'
+        verbose_name_plural = 'التواقيع'
+        ordering = ['-signed_at']
+        indexes = [models.Index(fields=['book', '-signed_at'],
+                                name='signature_book_time_idx')]
+
+    def __str__(self):
+        return '%s — %s' % (self.book_id, self.signer)
+
+    @property
+    def is_valid(self):
+        """التوقيعُ قائمٌ ما لم يُبطَل — والبصمةُ تُتحقّق عند العرض لا هنا."""
+        return self.revoked_at is None
+
+
 class Attachment(models.Model):
     """
     نموذج المرفق - تخزين الملفات المرفوعة مع الكتب
@@ -827,6 +889,9 @@ class BookHistory(models.Model):
         ('registered',         'قُيّد في دفتر قسم'),
         # ── التعميم (EntityGroup) ──
         ('circular',           'تعميم على عنقود'),
+        # ── التواقيع (BookSignature) ──
+        ('sign',               'توقيع مصادقة'),
+        ('sign-revoked',       'إبطال توقيع'),
     )
 
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="history")
