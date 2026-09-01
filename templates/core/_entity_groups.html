@@ -1,0 +1,185 @@
+{% comment %}
+  ورشةُ العناقيد — إنشاءٌ وتعديلٌ وعرضٌ وحذف، في صفحةٍ واحدة.
+
+  **مسارُ الكتابة لم يُنسخ**: النموذجان يُرسلان إلى `admin_panel` نفسِها التي
+  تحرسها `_guard_admin` وتُسجّلها في سجلّ الحركات. هنا واجهةٌ فقط — ونسخةٌ
+  ثانيةٌ من منطق الحفظ كانت ستعني إصلاحَ كلّ عيبٍ مرّتين.
+
+  والعمودان: القائمةُ أعرض (تُقرأ أكثرَ ممّا تُحرَّر) والنموذجُ إلى جانبها فلا
+  يُغادر المستخدمُ الصفحةَ لينشئ عنقوداً.
+{% endcomment %}
+
+<div class="en-groups en-reveal">
+
+  {# ─────────── العناقيد القائمة ─────────── #}
+  <section class="en-panel" aria-labelledby="en-groups-title">
+    <div class="en-panel-hd">
+      <h6 id="en-groups-title">
+        <i class="bi bi-diagram-2 me-1"></i>العناقيد ({{ groups|length }})
+      </h6>
+      <span class="text-muted" style="font-size:.74rem">
+        العنقودُ يُخاطَب بضغطةٍ واحدة — «حفظ وإرسال»
+      </span>
+    </div>
+    <div class="en-panel-bd">
+      {% for g in groups %}
+        <article class="en-group{% if editing_group and editing_group.pk == g.pk %} is-editing{% endif %}{% if not g.is_active %} is-off{% endif %}">
+          <div class="en-group-top">
+            <span class="en-group-name">{{ g.name }}</span>
+            {% if g.auto_rule %}
+              <span class="en-group-rule" title="تتّسع تلقائيّاً لكلّ قسمٍ جديد">
+                {{ g.get_auto_rule_display }}
+              </span>
+            {% else %}
+              <span class="en-group-rule en-group-fixed">عضويّة ثابتة</span>
+            {% endif %}
+          </div>
+
+          {% with members=g.resolved_members %}
+          {% if members %}
+            <div class="en-members">
+              {% for m in members|slice:":6" %}
+                <span class="en-member" title="{{ m.name }}">{{ m.name }}</span>
+              {% endfor %}
+              {% if members.count > 6 %}
+                <span class="en-member en-member-more">و{{ members.count|add:"-6" }} غيرها</span>
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="en-group-empty">لا أعضاء بعد — التعميمُ عليه لن يصل أحداً.</div>
+          {% endif %}
+          {% endwith %}
+
+          <div class="en-group-acts">
+            <a class="en-act" href="?view=groups&edit={{ g.pk }}">
+              <i class="bi bi-pencil"></i> تعديل
+            </a>
+
+            <form method="post" action="{% url 'admin_panel' %}" class="d-inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="save_group">
+              <input type="hidden" name="tab" value="groups">
+              <input type="hidden" name="return_to" value="groups_workshop">
+              <input type="hidden" name="id" value="{{ g.pk }}">
+              <input type="hidden" name="name" value="{{ g.name }}">
+              <input type="hidden" name="auto_rule" value="{{ g.auto_rule }}">
+              <input type="hidden" name="is_active" value="{% if g.is_active %}0{% else %}1{% endif %}">
+              {% comment %}
+                بلا `members_submitted` عمداً: هذا الزرُّ لا حقلَ أعضاءَ فيه،
+                والعلامةُ الغائبة تقول «لا تمسّ العضويّة». (بدونها كان التعطيلُ
+                يمحو الأعضاءَ صامتاً — عيبٌ أُصلح وحُرِس.)
+              {% endcomment %}
+              <button type="submit" class="en-act">
+                {% if g.is_active %}<i class="bi bi-pause"></i> تعطيل
+                {% else %}<i class="bi bi-play"></i> تفعيل{% endif %}
+              </button>
+            </form>
+
+            {% if g.books.exists %}
+              <span class="en-act en-act-locked"
+                    title="عُمِّم به كتابٌ — التعطيلُ يحفظ أثرَه في سجلّ تلك الكتب">
+                <i class="bi bi-lock"></i> لا يُحذف
+              </span>
+            {% else %}
+              <form method="post" action="{% url 'admin_panel' %}" class="d-inline"
+                    onsubmit="return confirm('حذف العنقود «{{ g.name|escapejs }}» نهائياً؟');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete_group">
+                <input type="hidden" name="tab" value="groups">
+              <input type="hidden" name="return_to" value="groups_workshop">
+                <input type="hidden" name="id" value="{{ g.pk }}">
+                <button type="submit" class="en-act en-act-danger">
+                  <i class="bi bi-trash"></i> حذف
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </article>
+      {% empty %}
+        <p class="text-muted mb-0" style="font-size:.86rem">
+          لا عناقيد بعد. أنشئ واحداً من اللوحة المجاورة — «جميع الهيئات والأقسام»
+          مثالٌ يبدأ به الكاتب.
+        </p>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ─────────── إنشاءٌ وتعديل ─────────── #}
+  <section class="en-panel" aria-labelledby="en-form-title">
+    <div class="en-panel-hd">
+      <h6 id="en-form-title">
+        {% if editing_group %}
+          <i class="bi bi-pencil-square me-1"></i>تعديل «{{ editing_group.name }}»
+        {% else %}
+          <i class="bi bi-plus-circle me-1"></i>عنقود جديد
+        {% endif %}
+      </h6>
+      {% if editing_group %}
+        <a href="?view=groups" class="en-act">إلغاء</a>
+      {% endif %}
+    </div>
+
+    <form method="post" action="{% url 'admin_panel' %}" class="en-panel-bd">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save_group">
+      <input type="hidden" name="tab" value="groups">
+      <input type="hidden" name="return_to" value="groups_workshop">
+      {% if editing_group %}<input type="hidden" name="id" value="{{ editing_group.pk }}">{% endif %}
+      {# العلامةُ الصريحة: «الأعضاءُ في هذا الطلب» — تفصلها عن «لا حقلَ أصلاً» #}
+      <input type="hidden" name="members_submitted" value="1">
+
+      <div class="mb-3">
+        <label for="grpName" class="form-label" style="font-size:.82rem;font-weight:700">
+          اسم العنقود
+        </label>
+        <input type="text" class="form-control form-control-sm" id="grpName" name="name"
+               required maxlength="200" placeholder="جميع الهيئات والأقسام"
+               value="{% if editing_group %}{{ editing_group.name }}{% endif %}">
+      </div>
+
+      <div class="mb-3">
+        <label for="grpRule" class="form-label" style="font-size:.82rem;font-weight:700">
+          قاعدة ديناميكيّة
+        </label>
+        <select class="form-select form-select-sm" id="grpRule" name="auto_rule">
+          <option value="">— عضويّة ثابتة أختارها —</option>
+          {% for value, label in auto_rules %}
+            <option value="{{ value }}"{% if editing_group and editing_group.auto_rule == value %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text" style="font-size:.74rem">
+          العضويّةُ الثابتةُ باسم «جميع الأقسام» <b>تتيبّس</b> عند دخول قسمٍ جديد —
+          والقاعدةُ الديناميكيّة تتّسع له وحدها.
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" style="font-size:.82rem;font-weight:700">الأعضاء</label>
+        <div class="en-picker" data-member-picker>
+          <input type="search" class="en-picker-search" data-picker-search
+                 placeholder="ابحث بالاسم أو الرمز…" aria-label="تصفية الأعضاء">
+          <div class="en-picker-list" data-picker-list>
+            {% for e in group_entities %}
+              <label class="en-opt" data-picker-option
+                     data-text="{{ e.name|lower }} {{ e.code|default:''|lower }}">
+                <input type="checkbox" name="members" value="{{ e.pk }}"
+                       {% if e.pk in editing_member_ids %}checked{% endif %}>
+                <span>{{ e.name }}</span>
+                {% if e.code %}<span class="en-opt-code">{{ e.code }}</span>{% endif %}
+              </label>
+            {% endfor %}
+          </div>
+          <div class="en-picker-count" data-picker-count></div>
+        </div>
+        <div class="form-text" style="font-size:.74rem">
+          تُهمَل إن اخترتَ قاعدةً ديناميكيّة.
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-sm {% if editing_group %}btn-primary{% else %}btn-orange{% endif %} w-100">
+        <i class="bi bi-check2 me-1"></i>
+        {% if editing_group %}احفظ التعديل{% else %}أنشئ العنقود{% endif %}
+      </button>
+    </form>
+  </section>
+</div>

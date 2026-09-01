@@ -17,7 +17,7 @@ from django.views.decorators.http import require_http_methods
 
 from ..forms import EntityForm
 from core.entity_kinds import KIND_HINTS, KIND_LABELS, KINDS
-from ..models import Book, Entity
+from ..models import Book, Entity, EntityGroup
 from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,17 @@ def entity_list_api(request):
             'success': False,
             'message': 'فشل تحميل قائمة الجهات'
         }, status=500)
+
+
+def _editing_group(request):
+    """العنقودُ المطلوب تعديلُه عبر `?edit=<id>` — أو لا شيء.
+
+    التعديلُ برابطٍ لا بـJS: يُنسخ ويُشارَك ويعمل بلا سكربت.
+    """
+    raw = (request.GET.get('edit') or '').strip()
+    if not raw.isdigit():
+        return None
+    return EntityGroup.objects.filter(pk=int(raw)).first()
 
 
 @staff_required
@@ -172,10 +183,27 @@ def entity_list(request):
     active_count = agg['active_count']
     inactive_count = agg['inactive_count']
 
+    # ── العناقيد ────────────────────────────────────────────────────
+    # موضعُها الطبيعيّ هنا لا في لوحة الإدارة: العنقودُ **مجموعةُ جهات**، ومَن
+    # يُنقّي الدليلَ هو مَن يشكّل المجموعات، وأداةُ اختيار الأعضاء تحتاج بحثَ
+    # هذه الصفحة أصلاً. و**مسارُ الكتابة لم يُنسخ**: النموذجُ يُرسل إلى
+    # `admin_panel` نفسِها التي تحرسها `_guard_admin` وتُسجّلها في سجلّ الحركات.
+    view_mode = 'groups' if request.GET.get('view') == 'groups' else 'entities'
+    editing_group = _editing_group(request)
+
     return render(
         request,
         "core/entity_list.html",
         {
+            "view_mode": view_mode,
+            "groups": (EntityGroup.objects.prefetch_related('members').order_by('name')
+                       if view_mode == 'groups' else []),
+            "group_entities": (Entity.objects.filter(is_active=True).order_by('name')
+                               if view_mode == 'groups' else []),
+            "auto_rules": EntityGroup.AUTO_RULE_CHOICES,
+            "editing_group": editing_group,
+            "editing_member_ids": (set(editing_group.members.values_list('pk', flat=True))
+                                   if editing_group else set()),
             "entities": entities,
             "paginator": paginator,
             "totals": totals,

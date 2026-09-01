@@ -4,7 +4,9 @@
 {% block title %}جهات المراسلات{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20260831">
 <link rel="stylesheet" href="{% static 'css/entity_list.css' %}">
+<link rel="stylesheet" href="{% static 'css/entities_design.css' %}?v=20260831">
 {% endblock %}
 
 {% block page_sidebar %}
@@ -44,89 +46,53 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid animate-fade-in">
-  <!-- Header -->
-  <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid en-page">
+  <div class="px-1 px-lg-2">
+
+  <div class="en-head en-reveal">
     <div>
-      <h4 class="fw-bold mb-1 gradient-text">إدارة الجهات</h4>
-      <p class="text-muted mb-0">إدارة جميع جهات المراسلات الواردة والصادرة</p>
+      <h4>الجهات والعناقيد</h4>
+      <p>دليلُ المراسلات — ومجموعاتُ التعميم التي تُبنى منه.</p>
     </div>
-    <div class="d-flex gap-2">
-      <a class="btn btn-outline-primary hover-lift" href="{% url 'entity_merge' %}">
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-primary" href="{% url 'entity_merge' %}">
         <i class="bi bi-union me-1"></i>دمج المكرّرات
       </a>
-      <a class="btn btn-orange hover-lift" href="{% url 'entity_create' %}">
-        <i class="bi bi-plus-circle me-1"></i>إضافة جهة جديدة
+      <a class="btn btn-orange" href="{% url 'entity_create' %}">
+        <i class="bi bi-plus-circle me-1"></i>جهة جديدة
       </a>
     </div>
   </div>
 
-  <!-- مبدّل الحالة: النشطة / المعطّلة -->
-  <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
-    <span class="text-muted small">العرض:</span>
-    <a href="{% url 'entity_list' %}" class="filter-chip {% if not showing_inactive %}active{% endif %}">
-      <i class="bi bi-check-circle me-1"></i>النشطة ({{ active_count }})
+  {% comment %}
+    تبويبان رئيسيّان بترميز قائمة الكتب نفسِه (`tabs-split`/`tab-main`):
+    الدليلُ ومجموعاتُه وجهان لعملٍ واحد، ومكانُ العناقيد هنا لا في لوحة
+    الإدارة — العنقودُ **مجموعةُ جهات**، ومنتقي أعضائه يحتاج بحثَ هذه الصفحة.
+  {% endcomment %}
+  <nav class="tabs-split tabs-split-2 en-reveal" role="tablist" aria-label="الجهات أو العناقيد">
+    <a class="tab-main tab-en-entities{% if view_mode == 'entities' %} active{% endif %}"
+       role="tab" aria-selected="{% if view_mode == 'entities' %}true{% else %}false{% endif %}"
+       href="{% url 'entity_list' %}">
+      <i class="bi bi-building tab-icon"></i>
+      <div class="tab-text">
+        <span class="tab-label">الجهات</span>
+        <span class="tab-count">دليلُ المراسلات · {{ active_count }}</span>
+      </div>
     </a>
-    <a href="{% url 'entity_list' %}?status=inactive" class="filter-chip {% if showing_inactive %}active{% endif %}">
-      <i class="bi bi-archive me-1"></i>المعطّلة ({{ inactive_count }})
+    <a class="tab-main tab-en-groups{% if view_mode == 'groups' %} active{% endif %}"
+       role="tab" aria-selected="{% if view_mode == 'groups' %}true{% else %}false{% endif %}"
+       href="?view=groups">
+      <i class="bi bi-diagram-2 tab-icon"></i>
+      <div class="tab-text">
+        <span class="tab-label">العناقيد</span>
+        <span class="tab-count">مجموعاتُ التعميم</span>
+      </div>
     </a>
-  </div>
+  </nav>
 
-  <!-- Quick Stats -->
-  <div class="row g-3 mb-4">
-    <div class="col-md-3 col-sm-6">
-      <div class="stats-mini-card">
-        <div class="d-flex align-items-center">
-          <div class="entity-icon me-3">
-            <i class="bi bi-building text-primary"></i>
-          </div>
-          <div>
-            <div class="text-muted small">إجمالي الجهات</div>
-            <div class="fs-4 fw-bold text-primary" id="totalEntities">{{ totals.all }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3 col-sm-6">
-      <div class="stats-mini-card">
-        <div class="d-flex align-items-center">
-          <div class="entity-icon me-3">
-            <i class="bi bi-tag text-success"></i>
-          </div>
-          <div>
-            <div class="text-muted small">لها رمز</div>
-            <div class="fs-4 fw-bold text-success">{{ totals.with_code }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3 col-sm-6">
-      <div class="stats-mini-card">
-        <div class="d-flex align-items-center">
-          <div class="entity-icon me-3">
-            <i class="bi bi-tag text-warning"></i>
-          </div>
-          <div>
-            <div class="text-muted small">بلا رمز</div>
-            <div class="fs-4 fw-bold text-warning">{{ totals.no_code }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3 col-sm-6">
-      <div class="stats-mini-card">
-        <div class="d-flex align-items-center">
-          <div class="entity-icon me-3">
-            <i class="bi bi-archive text-secondary"></i>
-          </div>
-          <div>
-            <div class="text-muted small">جهات معطّلة</div>
-            <div class="fs-4 fw-bold text-secondary">{{ inactive_count }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+{% if view_mode == 'groups' %}
+  {% include "core/_entity_groups.html" %}
+{% else %}
 
   <!-- Search & Filters + View Toggle -->
   <div class="card border-0 shadow-sm mb-4 animate-scale-in">
@@ -457,9 +423,14 @@
     </ul>
   </nav>
   {% endif %}
+
+{% endif %}{# view_mode #}
+
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{% static 'js/entity_list.js' %}?v=20260831"></script>
+<script src="{% static 'js/member_picker.js' %}?v=20260831"></script>
 {% endblock %}

@@ -68,7 +68,26 @@ def _handle(request):
         messages.error(request, exc.messages[0])
     except PermissionDenied as exc:
         messages.error(request, str(exc))
-    return redirect('/books/admin/?tab=%s' % (tab if tab in TABS else 'departments'))
+    return redirect(_back_to(request, tab))
+
+
+#: الوجهاتُ المسموحة بعد الكتابة — قائمةٌ بيضاء لا عنوانٌ حرّ.
+_RETURN_TO = {
+    'groups_workshop': '/books/entities/?view=groups',
+}
+
+
+def _back_to(request, tab):
+    """أين يعود المستخدمُ بعد الحفظ.
+
+    ورشةُ العناقيد تعيش في صفحة الجهات وتُرسل إلى هنا، فإعادتُها إلى اللوحة
+    تقذف المستخدمَ خارج عمله. و**الوجهةُ من قائمةٍ بيضاء لا من الطلب**: عنوانٌ
+    حرٌّ في `next` يفتح تحويلاً مفتوحاً.
+    """
+    wanted = (request.POST.get('return_to') or '').strip()
+    if wanted in _RETURN_TO:
+        return _RETURN_TO[wanted]
+    return '/books/admin/?tab=%s' % (tab if tab in TABS else 'departments')
 
 
 def _create_department(request):
