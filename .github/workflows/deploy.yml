@@ -32,6 +32,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: التحقّقُ من الأسرار الأربعة
+        # بدون هذا يسقط `ssh` برسالةِ استعمالٍ عمياء (exit 255) فيبدو العطبُ
+        # في السكربت لا في إعدادٍ ناقص — قِيس على أوّل تشغيلٍ فعليّ.
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.DEPLOY_USER }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          missing=""
+          [ -n "$HOST" ]      || missing="$missing DEPLOY_HOST"
+          [ -n "$USER_NAME" ] || missing="$missing DEPLOY_USER"
+          [ -n "$KEY" ]       || missing="$missing DEPLOY_SSH_KEY"
+          [ -n "$KNOWN" ]     || missing="$missing DEPLOY_KNOWN_HOSTS"
+          if [ -n "$missing" ]; then
+            echo "::error::أسرارٌ ناقصةٌ في إعدادات المستودع:$missing"
+            echo "اضبطها: gh secret set <الاسم> --repo <المستودع>"
+            exit 1
+          fi
+
       - name: تهيئةُ مفتاح النشر وبصمة الخادم
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
