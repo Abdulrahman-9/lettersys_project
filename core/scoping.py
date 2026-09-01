@@ -150,10 +150,16 @@ def can_view_book(book, user) -> bool:
         return is_owner
     if is_owner or book.department_id in subtree_ids(dept_id):
         return True
-    # **توأمُ الشقّ الثالث في `scope_books_for`** — وانفراجُهما هو صنفُ العيب
-    # الذي كلّفنا مرّتين: مسندٌ يتّسع وقرينُه لا، فيظهر الكتابُ في القائمة
-    # ويُرفض عند فتحه (أو العكس، وهو أسوأ).
-    return _referred_to(dept_id).filter(book_id=book.pk).exists()
+    # **توأمُ الشقّين الثالث والرابع في `scope_books_for`** — وانفراجُهما هو
+    # صنفُ العيب الذي كلّفنا مرّتين: مسندٌ يتّسع وقرينُه لا، فيظهر الكتابُ في
+    # القائمة ويُرفض عند فتحه (أو العكس، وهو أسوأ).
+    #
+    # **ووقع ثالثةً**: أُضيف شقُّ الذكر (الأضبارة) إلى الاستعلام ونُسي هنا،
+    # فكانت الوحدةُ ترى كتابَ أضبارتها في القائمة ولا تفتحه. الحارسُ الآن
+    # بنيويّ: `tests_scope_parity` يقارن الدالّتين على مصفوفة حالات.
+    mine = subtree_ids(dept_id)
+    return (_referred_to(dept_id).filter(book_id=book.pk).exists()
+            or _mentioned_in(mine).filter(pk=book.pk).exists())
 
 
 def can_open_content(book, user) -> bool:

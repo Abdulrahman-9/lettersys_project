@@ -124,7 +124,7 @@ def send_reminder(referral, *, by):
 
     if not referral.is_open:
         raise ValidationError('الالتزامُ مُغلقٌ — لا تنبيهَ عليه.')
-    _guard(referral, by)
+    _guard_chaser(referral, by)
 
     with transaction.atomic():
         referral.last_reminder_at = timezone.now()
@@ -308,7 +308,7 @@ def _project_onto_m2m(book, referrals):
 
 def _advance(referral, status, action, by, detail):
     """نقلةُ حالةٍ واحدة — وهي المكانُ الوحيد الذي يُكتب فيه ``status``."""
-    _guard(referral, by)
+    _guard_target(referral, by)
     if referral.status == status:
         return referral
 
@@ -319,13 +319,97 @@ def _advance(referral, status, action, by, detail):
     return referral
 
 
-def _guard(referral, by):
-    """الصفُّ يرث بوّابتَي الكتاب — ويُضاف إليهما طرفا الإحالة نفسُها."""
-    from core.scoping import can_open_content, user_department_id
+def _open_gate(referral, by):
+    """بوّابةُ الكتاب — شرطٌ لازمٌ لكلّ فعلٍ على الصفّ، لا كافٍ لأيٍّ منها."""
+    from core.scoping import can_open_content
 
-    if can_open_content(referral.book, by):
+    if not can_open_content(referral.book, by):
+        raise PermissionDenied('لا تملك صلاحيةً على هذه الإحالة.')
+
+
+def _desk_of(referral, by):
+    """أهو مختصُّ بريد قسمِ الكتاب أو رئيسُه؟
+
+    هو مَن يمسك الورقَ فعلاً — يُسلّمه ويستلمه ويطارد المتأخّر. منعُه من
+    تحريك الصفوف يدفع العملَ خارج النظام إلى دفترٍ ورقيٍّ موازٍ.
+    """
+    from core.scoping import (is_department_head, is_mail_officer,
+                              user_department_id)
+
+    department_id = user_department_id(by)
+    return (department_id is not None
+            and referral.book.department_id == department_id
+            and (is_department_head(by) or is_mail_officer(by)))
+
+
+def _guard_target(referral, by):
+    """حارسُ **تحريك الحالة** — للطرف المُلتزِم وحده.
+
+    بوّابةُ الكتاب لا تكفي: كتابٌ فُرِّق إلى وحدتين أختين يراه موظّفو
+    الاثنتين، فيستطيع أحدُهما **إقفالَ التزام الأخرى**. والحالةُ صارت حيّةً
+    منذ بناء الشجرة (أربعُ وحداتٍ أخواتٍ تحت شعبةٍ واحدة).
+
+    ومَن يجوز له:
+
+    - **مديرُ النظام** — بوّابةٌ عامّة.
+    - **المكلَّفُ باسمه** — الالتزامُ عليه شخصيّاً.
+    - **الوحدةُ المُحال إليها ومَن فوقها** في الشجرة: الشجرةُ تسيل نزولاً،
+      فرئيسُ الشعبة يُقفل صفَّ وحدته، والأختُ لا تجد أختَها في شجرتها.
+    - **طاولةُ قسم الكتاب** (مختصُّ بريده أو رئيسُه).
+
+    والقسمُ المُرسِل **ليس** منهم: إقفالُ عملٍ لم يُنجَز بعدُ ليس حقّاً للمُرسِل
+    — وله بابُه في ``_guard_chaser``.
+    """
+    from core.scoping import is_privileged, subtree_ids, user_department_id
+
+    _open_gate(referral, by)
+
+    if is_privileged(by) or referral.assignee_id == getattr(by, 'id', None):
         return
-    raise PermissionDenied('لا تملك صلاحيةً على هذه الإحالة.')
+
+    department_id = user_department_id(by)
+    if (department_id is not None
+            and referral.to_department_id in subtree_ids(department_id)):
+        return
+
+    if _desk_of(referral, by):
+        return
+
+    raise PermissionDenied('هذه الإحالةُ ليست لك — الالتزامُ على وحدةٍ أخرى.')
+
+
+def _guard_chaser(referral, by):
+    """حارسُ **المطاردة** (التنبيه) — للطرف المُرسِل وطاولةِ القسم.
+
+    التنبيهُ فعلٌ معاكسٌ لتحريك الحالة: يُصدره مَن ينتظر الجواب لا مَن عليه
+    الجواب. توحيدُ الحارسين منع موظّفَ البريد من التنبيه على وحدةٍ تأخّرت —
+    وهو الاستعمالُ الذي بُنيت الدالّةُ لأجله (كشفه اختبارٌ قائم).
+    """
+    from core.scoping import is_privileged, subtree_ids, user_department_id
+
+    _open_gate(referral, by)
+
+    if is_privileged(by):
+        return
+
+    department_id = user_department_id(by)
+    if (department_id is not None
+            and referral.from_department_id in subtree_ids(department_id)):
+        return
+
+    if _desk_of(referral, by):
+        return
+
+    raise PermissionDenied('التنبيهُ لمن ينتظر الجواب — لا لمن عليه.')
+
+    if referral.to_department_id in subtree_ids(department_id):
+        return
+
+    owning = referral.book.department_id
+    if owning == department_id and (is_department_head(by) or is_mail_officer(by)):
+        return
+
+    raise PermissionDenied('هذه الإحالةُ ليست لك — الالتزامُ على وحدةٍ أخرى.')
 
 
 def _notify(referrals, book, by, *, urgent=False, lead='كتابٌ فُرِّق إليكم'):
