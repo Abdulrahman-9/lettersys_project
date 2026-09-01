@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 {% load static %}
 
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/book_detail_design.css' %}?v=20260831b">{% endblock %}
+
 {% block title %}{{ book.title }} - كتاب {{ book.our_number_display }}{% endblock %}
 
 {% block page_sidebar %}
@@ -57,39 +59,122 @@
 {% endblock %}
 
 {% block content %}
-<div class="py-4 page-shell" data-book-id="{{ book.pk }}">
-  <div class="card card-hero mb-3 shadow-sm border-0">
-    <div class="card-body p-3">
-      <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start gap-3">
-        <div>
-          <div class="d-flex align-items-center gap-3 mb-2">
-            <span class="badge bg-light text-dark fs-6">{{ book.our_number_display }}</span>
-            {% if book.is_incoming %}
-              <span class="kind-badge kind-incoming" role="status" aria-label="نوع المراسلة: {{ book.kind_label }}"><i class="bi bi-arrow-down-left me-1" aria-hidden="true"></i>{{ book.kind_label }}</span>
-            {% else %}
-              <span class="kind-badge kind-outgoing" role="status" aria-label="نوع المراسلة: {{ book.kind_label }}"><i class="bi bi-arrow-up-right me-1" aria-hidden="true"></i>{{ book.kind_label }}</span>
-            {% endif %}
-            {% if book.followup_state == 'overdue' %}
-              <span class="due-badge due-danger" role="alert" aria-label="تحذير: متأخر {{ book.delay_days }} يوم"><i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>متأخر {{ book.delay_days }} يوم</span>
-            {% elif book.followup_state == 'due_today' %}
-              <span class="due-badge due-today" role="status" aria-label="مستحق اليوم"><i class="bi bi-clock me-1" aria-hidden="true"></i>مستحق اليوم</span>
-            {% elif book.followup_state == 'pending' %}
-              <span class="due-badge due-future" role="status" aria-label="مستحق بعد {{ book.delay_days }} يوم"><i class="bi bi-calendar-check me-1" aria-hidden="true"></i>مستحق بعد {{ book.delay_days }} يوم</span>
-            {% else %}
-              <span class="due-badge due-normal" role="status" aria-label="مؤرشف"><i class="bi bi-archive-fill me-1" aria-hidden="true"></i>مؤرشف</span>
-            {% endif %}
-          </div>
-          <h4 class="fw-bold mb-1">{{ book.title }}</h4>
-          <div class="text-muted">{{ book.first_issuing_entity|default:"—" }}</div>
-        </div>
-        <div class="d-flex gap-2 flex-wrap">
-          <a id="backBtn" data-back-nav class="btn btn-sm btn-light" href="{{ back_url|default:'#' }}"><i class="bi bi-arrow-right me-1"></i>{{ back_label|default:'عودة' }}</a>
-          {% if book.attachments.all %}
-          <button type="button" id="printDocBtn" class="btn btn-sm btn-outline-secondary" title="طباعة المستند المرفق عبر عارض PDF"><i class="bi bi-printer me-1"></i>طباعة المستند</button>
+{% comment %}
+  ترويسةُ الكتاب على لوح التصميم (design/Main.dc.html): الرقمُ أوّلاً لأنّه
+  هويّةُ الكتاب، ثمّ الشارات، ثمّ العنوان، ثمّ شريطُ القيود — و**بطاقةُ العهدة
+  إلى جانبها** لأنّها الميزةُ الحاكمة بشهادة الكاتب: «لا يضيع مستندٌ أبداً».
+
+  العهدةُ والقيودُ **نُقلتا** من لوحة دورة الحياة ولم تُنسخا: نسختان لحقيقةٍ
+  واحدةٍ على شاشةٍ واحدة أسوأُ من غيابها.
+{% endcomment %}
+<div class="py-0 page-shell bd-page" data-book-id="{{ book.pk }}">
+ <div class="container-fluid px-3 px-lg-4">
+
+  <div class="bd-card bd-reveal mb-3">
+    <div class="bd-bd d-flex flex-column flex-lg-row justify-content-between align-items-start gap-3">
+
+      <div class="d-flex flex-column gap-2 flex-grow-1" style="min-width:0">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="bd-num">{{ book.our_number_display }}</span>
+          <span class="bd-pill bd-pill-kind" role="status"
+                aria-label="نوع المراسلة: {{ book.kind_label }}">
+            <i class="bi {% if book.is_incoming %}bi-arrow-down-left{% else %}bi-arrow-up-right{% endif %}"
+               aria-hidden="true"></i>{{ book.kind_label }}
+          </span>
+          {% if book.secret_level and book.secret_level != 'normal' %}
+            <span class="bd-pill bd-pill-secret">
+              <i class="bi bi-shield-lock-fill" aria-hidden="true"></i>{{ book.get_secret_level_display }}
+            </span>
           {% endif %}
-          <a class="btn btn-sm btn-outline-secondary" href="{% url 'book_report' book.id %}?print=1" target="_blank" rel="noopener" title="تقرير دورة حياة الكتاب (حالة + مُدد + تعليقات + مراسلات + سجل)"><i class="bi bi-file-earmark-text me-1"></i>طباعة التقرير</a>
-          <a class="btn btn-sm btn-dark" href="{% url 'book_edit' book.id %}?next={% url 'book_detail' book.id %}"><i class="bi bi-pencil-square me-1"></i>تعديل</a>
+          {% if book.followup_state == 'overdue' %}
+            <span class="bd-pill bd-pill-late" role="alert">
+              <i class="bi bi-exclamation-circle" aria-hidden="true"></i>متأخر {{ book.delay_days }} يوم
+            </span>
+          {% elif book.followup_state == 'due_today' %}
+            <span class="bd-pill bd-pill-due" role="status">
+              <i class="bi bi-clock" aria-hidden="true"></i>مستحق اليوم
+            </span>
+          {% elif book.followup_state == 'pending' %}
+            <span class="bd-pill bd-pill-calm" role="status">
+              <i class="bi bi-calendar-check" aria-hidden="true"></i>مستحق بعد {{ book.delay_days }} يوم
+            </span>
+          {% else %}
+            <span class="bd-pill bd-pill-calm" role="status">
+              <i class="bi bi-archive-fill" aria-hidden="true"></i>مؤرشف
+            </span>
+          {% endif %}
         </div>
+
+        <h1 class="bd-title">{{ book.title|default:"بلا عنوان" }}</h1>
+
+        <div class="bd-meta">
+          <span>من: {{ book.first_issuing_entity|default:"—" }}</span>
+          {% if book.date %}<span>التاريخ: <span class="num">{{ book.date|date:"Y/m/d" }}</span></span>{% endif %}
+          {% if book.sender_number %}<span>رقم الجهة: <span class="num">{{ book.sender_number }}</span></span>{% endif %}
+          {% if book.department %}<span>القسم: {{ book.department.code }} — {{ book.department.name }}</span>{% endif %}
+        </div>
+
+        {% comment %}شريطُ القيود — «المستندُ واحدٌ والقيدُ متعدّد»{% endcomment %}
+        {% if registrations %}
+        <div class="bd-regs">
+          <span class="bd-regs-lbl">قُيِّد في</span>
+          {% for reg in registrations %}
+            <span class="bd-reg{% if reg.is_ours %} bd-reg-mine{% endif %}">
+              <span class="bd-reg-num">{{ reg.number|default:"بلا رقم" }}</span>
+              <span class="bd-reg-dept">{{ reg.department.name }}</span>
+              {% if reg.is_ours %}<span class="bd-reg-ours">دفترُنا</span>{% endif %}
+            </span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      {% comment %}بطاقةُ العهدة — أوّلُ ما تسأل عنه الشعبةُ حين يُطلب كتاب{% endcomment %}
+      <div class="bd-custody">
+        <div class="bd-custody-lbl">العهدة الآن</div>
+        {% if book.current_custody %}
+          <div class="bd-custody-who">
+            <span class="bd-custody-badge" aria-hidden="true"><i class="bi bi-person-fill"></i></span>
+            <div style="min-width:0">
+              <div class="bd-custody-name">{{ book.current_custody.holder_name }}</div>
+              <div class="bd-custody-sub">{{ book.current_custody.get_event_display }}</div>
+            </div>
+          </div>
+          <div class="bd-custody-sig">
+            <span>{{ book.current_custody.note|default:"سُجّلت" }}</span>
+            <span class="num">{{ book.current_custody.signed_at|date:"Y/m/d — H:i" }}</span>
+          </div>
+        {% else %}
+          <div class="bd-custody-who">
+            <span class="bd-custody-badge" style="background:rgba(111,70,40,.18);box-shadow:none"
+                  aria-hidden="true"><i class="bi bi-dash-lg"></i></span>
+            <div class="bd-custody-empty">لم تُسجَّل عهدة</div>
+          </div>
+          <div class="bd-custody-sig">
+            <span>الكتبُ المنقولة من الورق لا عهدةَ لها — ولا تُختلق لها واحدة.</span>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="bd-hd bd-actions" style="border-top:1px solid var(--rule);border-bottom:0">
+      <a id="backBtn" data-back-nav class="bd-btn bd-btn-ghost" href="{{ back_url|default:'#' }}">
+        <i class="bi bi-arrow-right"></i>{{ back_label|default:'عودة' }}
+      </a>
+      <div class="d-flex gap-2 flex-wrap">
+        {% if book.attachments.all %}
+        <button type="button" id="printDocBtn" class="bd-btn bd-btn-ghost"
+                title="طباعة المستند المرفق عبر عارض PDF">
+          <i class="bi bi-printer"></i>طباعة المستند
+        </button>
+        {% endif %}
+        <a class="bd-btn bd-btn-ghost" href="{% url 'book_report' book.id %}?print=1"
+           target="_blank" rel="noopener" title="تقرير دورة حياة الكتاب">
+          <i class="bi bi-file-earmark-text"></i>طباعة التقرير
+        </a>
+        <a class="bd-btn bd-btn-ink" href="{% url 'book_edit' book.id %}?next={% url 'book_detail' book.id %}">
+          <i class="bi bi-pencil-square"></i>تعديل
+        </a>
       </div>
     </div>
   </div>
@@ -559,7 +644,11 @@
     </div>
   </div>
 </div>
+
+ </div>{# container-fluid #}
+</div>{# bd-page #}
 {% endblock %}
+
 
 {% block extra_js %}
 <script src="{% static 'book_detail.js' %}?v=20260629-r2"></script>

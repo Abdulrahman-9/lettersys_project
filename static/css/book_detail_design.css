@@ -1,0 +1,230 @@
+/* ═══════════════════════════════════════════════════════════════════
+   صفحةُ تفاصيل الكتاب — «مكتبُ الأرشيف الدافئ»
+
+   الهويّةُ من لوح التصميم (design/Main.dc.html): ورقٌ دافئ، حبرٌ بنّيّ،
+   لمساتٌ كهرمانيّة. وهي ليست اختياراً اعتباطيّاً: النظامُ سجلُّ مراسلاتٍ
+   ورقيٍّ في أصله، فالورقُ والحبرُ هما لغتُه الطبيعيّة.
+
+   **مقصورةٌ على `.bd-page`** — لا تُسرّب لوناً إلى بقيّة التطبيق (هويّاتُ
+   الصفحات الأخرى قرارُ مالكٍ قائم). وكلُّ لونٍ متغيّرٌ واحدٌ يُبدَّل من مكان.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.bd-page {
+  --ink:        #362014;   /* الحبر — أقوى تباينٍ في الصفحة */
+  --ink-soft:   #6f4631;
+  --ink-faint:  #9c7a63;
+  --amber:      #b45309;
+  --amber-deep: #8a3f08;
+  --amber-lite: #d87b44;
+  --gold:       #f9a826;
+  --paper:      #fff;
+  --paper-warm: #fffaf3;
+  --paper-tint: #fdf6ec;
+  --rule:       rgba(111, 70, 40, .16);
+  --rule-hard:  rgba(180, 83, 9, .30);
+
+  color: var(--ink);
+  padding: 1.25rem 0 2.25rem;
+  /* أرضيّةُ الورق: تدرّجٌ هادئٌ ينتهي دافئاً — عمقٌ بلا ضجيج. */
+  background:
+    radial-gradient(1200px 420px at 85% -80px, rgba(249, 168, 38, .18), transparent 70%),
+    linear-gradient(180deg, #fff8ee 0%, #ffeeda 46%, #fde5cc 100%);
+}
+
+/* ── البطاقة: الوحدةُ البنائيّة الوحيدة ───────────────────────────── */
+.bd-page .bd-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 1.1rem;
+  box-shadow: 0 12px 28px rgba(77, 44, 25, .10);
+  overflow: hidden;
+}
+.bd-page .bd-card > .bd-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; padding: .85rem 1.1rem;
+  border-bottom: 1px solid var(--rule);
+  background: linear-gradient(180deg, #fffdfa, var(--paper));
+}
+.bd-page .bd-hd h6 {
+  margin: 0; font-size: .95rem; font-weight: 800; color: var(--ink);
+  display: flex; align-items: center; gap: .5rem;
+}
+.bd-page .bd-hd h6 .bi { color: var(--amber); }
+.bd-page .bd-card > .bd-bd { padding: 1.1rem; }
+
+/* ── الرقم: هويّةُ الكتاب، فأقوى عنصرٍ بصريٍّ في الصفحة ──────────── */
+.bd-page .bd-num {
+  font-variant-numeric: tabular-nums; letter-spacing: .01em;
+  background: var(--ink); color: #fff;
+  font-size: 1.05rem; font-weight: 800;
+  padding: .35rem 1rem; border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(54, 32, 20, .28);
+}
+
+/* ── الشارات ───────────────────────────────────────────────────── */
+.bd-page .bd-pill {
+  display: inline-flex; align-items: center; gap: .35rem;
+  border-radius: 999px; padding: .25rem .75rem;
+  font-size: .76rem; font-weight: 700; white-space: nowrap;
+}
+.bd-page .bd-pill-kind   { background: rgba(37, 99, 235, .12);  color: #1e40af; }
+.bd-page .bd-pill-secret { background: rgba(124, 58, 237, .14); color: #5b21b6; }
+.bd-page .bd-pill-due    { background: rgba(217, 119, 6, .18);  color: var(--amber); }
+.bd-page .bd-pill-late   { background: rgba(220, 38, 38, .12);  color: #b91c1c; }
+.bd-page .bd-pill-calm   { background: rgba(111, 70, 40, .10);  color: var(--ink-soft); }
+
+/* ── ترويسةُ الكتاب ────────────────────────────────────────────── */
+.bd-page .bd-title {
+  margin: .1rem 0 0; font-size: 1.35rem; font-weight: 800; line-height: 1.55;
+  color: var(--ink); text-wrap: balance;
+}
+.bd-page .bd-meta {
+  display: flex; gap: 1.1rem; flex-wrap: wrap;
+  font-size: .82rem; color: var(--ink-soft); font-weight: 600;
+}
+.bd-page .bd-meta .num { font-variant-numeric: tabular-nums; }
+
+/* شريطُ القيود: «المستندُ واحدٌ والقيدُ متعدّد» — إطارٌ متقطّعٌ كدفترٍ مفتوح */
+.bd-page .bd-regs {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  background: var(--paper-tint);
+  border: 1px dashed var(--rule-hard); border-radius: .75rem;
+  padding: .55rem .8rem;
+}
+.bd-page .bd-regs-lbl {
+  font-size: .68rem; font-weight: 800; color: var(--ink-faint);
+  letter-spacing: .04em;
+}
+.bd-page .bd-reg {
+  display: inline-flex; align-items: center; gap: .45rem;
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 999px; padding: .2rem .7rem;
+}
+.bd-page .bd-reg-mine { border-color: var(--rule-hard); }
+.bd-page .bd-reg-num {
+  font-variant-numeric: tabular-nums; font-size: .82rem;
+  font-weight: 800; color: var(--ink);
+}
+.bd-page .bd-reg-dept { font-size: .72rem; color: var(--ink-soft); font-weight: 700; }
+.bd-page .bd-reg-ours { font-size: .64rem; font-weight: 800; color: var(--amber); }
+
+/* ── بطاقةُ العهدة: الميزةُ الحاكمة، فلها وزنٌ بصريٌّ خاصّ ─────────── */
+.bd-page .bd-custody {
+  min-width: 17rem; flex: 0 1 20rem;
+  background: var(--paper-warm);
+  border: 1px solid var(--rule-hard); border-radius: .9rem; padding: .9rem;
+}
+.bd-page .bd-custody-lbl {
+  font-size: .68rem; font-weight: 800; color: var(--ink-faint);
+  letter-spacing: .05em; margin-bottom: .5rem;
+}
+.bd-page .bd-custody-who { display: flex; align-items: center; gap: .65rem; }
+.bd-page .bd-custody-badge {
+  width: 2.4rem; height: 2.4rem; border-radius: .7rem; flex: none;
+  background: linear-gradient(135deg, var(--gold), var(--amber-lite));
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 1.15rem;
+  box-shadow: 0 4px 12px rgba(216, 123, 68, .35);
+}
+.bd-page .bd-custody-name { font-size: .9rem; font-weight: 800; line-height: 1.35; }
+.bd-page .bd-custody-sub  { font-size: .76rem; color: var(--ink-soft); font-weight: 600; }
+/* سطرُ التوقيع — قصٌّ متقطّعٌ كأسفل إيصال */
+.bd-page .bd-custody-sig {
+  margin-top: .65rem; padding-top: .6rem;
+  border-top: 1px dashed rgba(111, 70, 40, .28);
+  font-size: .74rem; color: var(--ink-soft); font-weight: 600;
+  display: flex; justify-content: space-between; gap: .5rem;
+}
+.bd-page .bd-custody-empty { color: var(--ink-faint); font-weight: 700; font-size: .84rem; }
+
+/* ── الأزرار ──────────────────────────────────────────────────── */
+.bd-page .bd-btn {
+  display: inline-flex; align-items: center; gap: .4rem;
+  border-radius: .65rem; padding: .45rem .9rem; min-height: 2.4rem;
+  font-size: .82rem; font-weight: 700; border: 1px solid transparent;
+  cursor: pointer; text-decoration: none;
+  transition: filter .18s ease, transform .18s ease;
+}
+.bd-page .bd-btn-primary { background: linear-gradient(180deg, var(--amber), var(--amber-deep)); color: #fff; }
+.bd-page .bd-btn-ghost   { background: var(--paper); color: var(--amber); border-color: var(--rule-hard); }
+.bd-page .bd-btn-ink     { background: var(--ink); color: #fff; }
+.bd-page .bd-btn:hover   { filter: brightness(1.06); transform: translateY(-1px); }
+.bd-page .bd-btn:active  { transform: translateY(0); }
+.bd-page .bd-btn:focus-visible,
+.bd-page a:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* ── قائمةُ مفتاح/قيمة ─────────────────────────────────────────── */
+.bd-page .bd-kv { display: grid; grid-template-columns: 8rem 1fr; gap: .4rem .8rem; font-size: .86rem; margin: 0; }
+.bd-page .bd-kv dt { color: var(--ink-faint); font-weight: 600; }
+.bd-page .bd-kv dd { margin: 0; color: var(--ink); font-weight: 600; }
+
+/* ── الشبكة ───────────────────────────────────────────────────── */
+.bd-page .bd-grid { display: grid; grid-template-columns: minmax(0, 1.62fr) minmax(0, 1fr); gap: 1.1rem; }
+.bd-page .bd-col  { display: flex; flex-direction: column; gap: 1.1rem; min-width: 0; }
+@media (max-width: 991.98px) { .bd-page .bd-grid { grid-template-columns: 1fr; } }
+
+/* ── لحظةُ الفتح: كشفٌ متدرّجٌ واحدٌ منظَّم، لا حركاتٌ مبعثرة ───────── */
+@media (prefers-reduced-motion: no-preference) {
+  .bd-page .bd-reveal { animation: bd-rise .5s cubic-bezier(.22, .8, .3, 1) backwards; }
+  .bd-page .bd-reveal-2 { animation-delay: .07s; }
+  .bd-page .bd-reveal-3 { animation-delay: .14s; }
+}
+@keyframes bd-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* `backwards` لا `both`: الأخيرةُ تُجمّد الحالةَ النهائيّة فتكسر `:hover` بعدها. */
+
+/* ── المرساةُ لا تختفي خلف الشريط اللاصق (75px مقيسة) ──────────── */
+.bd-page [id] { scroll-margin-top: 5.5rem; }
+
+/* ── الطباعة: الصفحةُ تُطبع فعلاً، فلا تُترك للصدفة ───────────────── */
+@media print {
+  .bd-page { background: #fff; padding: 0; }
+  .bd-page .bd-card { box-shadow: none; border-color: #ccc; break-inside: avoid; }
+  .bd-page .bd-btn, .bd-page .bd-actions { display: none !important; }
+  .bd-page .bd-grid { grid-template-columns: 1fr; }
+}
+
+/* ═══ توحيدُ بطاقات الصفحة القائمة على الهويّة نفسِها ═══════════════
+   الصفحةُ 600 سطرٍ من الترميز القائم، وإعادةُ كتابتها كلِّها مجازفةٌ بلا
+   مكسب: البنيةُ سليمةٌ والـJS يستهدفها. فتُرفع الهويّةُ إلى ما هو موجود —
+   `.card` داخل `.bd-page` تصير ورقاً دافئاً، وتبقى أصنافُ بوتستراب عاملة. */
+
+.bd-page .card {
+  background: var(--paper);
+  border: 1px solid var(--rule) !important;
+  border-radius: 1.1rem;
+  box-shadow: 0 12px 28px rgba(77, 44, 25, .10) !important;
+}
+.bd-page .card-header {
+  background: linear-gradient(180deg, #fffdfa, var(--paper)) !important;
+  border-bottom: 1px solid var(--rule) !important;
+}
+.bd-page .card-header h6 { color: var(--ink); font-weight: 800; }
+
+/* الأيقوناتُ الملوّنةُ بأزرق بوتستراب تُعاد إلى الكهرمان — بلا لمس القوالب. */
+.bd-page .card-header .bi.text-primary,
+.bd-page .card-header .bi.text-info,
+.bd-page .card-header .bi.text-secondary { color: var(--amber) !important; }
+.bd-page .card-header .bi.text-success { color: #15803d !important; }
+
+.bd-page .text-muted { color: var(--ink-faint) !important; }
+.bd-page a { color: var(--amber); }
+.bd-page a:hover { color: var(--amber-deep); }
+
+/* أزرارُ بوتستراب داخل الصفحة تأخذ لهجةَ الورق. */
+.bd-page .btn-outline-primary {
+  color: var(--amber); border-color: var(--rule-hard);
+}
+.bd-page .btn-outline-primary:hover,
+.bd-page .btn-outline-primary:focus {
+  background: var(--amber); border-color: var(--amber); color: #fff;
+}
+.bd-page .btn-primary {
+  background: linear-gradient(180deg, var(--amber), var(--amber-deep));
+  border-color: var(--amber-deep);
+}
+.bd-page .btn-dark { background: var(--ink); border-color: var(--ink); }
+
+/* الشارةُ الفاتحة في المتن تُصبح ورقيّة. */
+.bd-page .badge.text-bg-light { background: var(--paper-tint) !important; color: var(--ink-soft) !important; }
+
+/* الشريطُ الجانبيّ للسياق يبقى كما هو — خارج `.bd-page`. */
