@@ -612,7 +612,8 @@ class AIExtractionService:
         تموضعٌ بمرساة «العدد» وبصمة تخطيط الجهة ← قصّ الشريط ← قراءة CRNN (v5:
         94.5% على شرائط محجوزة) ← بوابة الثقة المُعايَرة.
 
-        يعيد `(number_result, date_crop)`: `number_result` = (نص، ثقة، bbox) أو None؛
+        يعيد `(number_result, date_crop, date_suggestion, (det_box, W, H))`:
+        `number_result` = (نص، ثقة، bbox) أو None؛
         و`date_crop` = data URL لشريط «التأريخ» اليدويّ (خيار F) أو None. القصاصةُ تركب
         نفس الرسم+TSV (بلا مسحٍ ثانٍ — فيبل16) وتُحسَب **باستقلالٍ عن ارتدادات العدد**.
         أيّ فشلٍ داخليّ يتدهور بصمت — القارئ لا يُسقط الأنبوب أبداً."""
@@ -628,7 +629,14 @@ class AIExtractionService:
                 # فمرساةُ التسمية المطبوعة وحدها تقود — ونقبل source='label' فقط.
                 self._hw_date_locator = NumberStripLocator(None, field='date')
             if not self._hw_reader.available:
-                return None, None
+                # **رباعيّةٌ لا ثنائيّة**: النداءُ يفكّ أربعةً، وثنائيّةٌ هنا ترفع
+                # ValueError يبتلعها except العام فيعود المستندُ كلُّه `failed` —
+                # لا «تدهوراً رشيقاً». عاشت منذ توصيل قارئ التاريخ (c961ed3)
+                # لأنّها لا تُطلَق إلّا حين تغيب الأوزان: على جهاز التطوير هي
+                # حاضرةٌ دائماً، والمسارُ **نسبيٌّ لمجلّد العمل** — فتكفي خدمةٌ
+                # تُقلَع من مجلّدٍ آخر ليسقط الاستخراجُ كلُّه. يحرسها اختبارٌ في
+                # `core/tests_weights_preflight.py`.
+                return None, None, None, (None, 0, 0)
 
             from PIL import Image as PILImage
             if image_path.lower().endswith('.pdf'):
