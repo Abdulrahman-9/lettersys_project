@@ -126,3 +126,7 @@ var/models/*
 !var/entity_extraction_profiles.json
 !var/entity_doc_profiles.json
 !var/handwriting_layout_priors.json
+
+# نسخُ قاعدة البيانات (pg_dump) — بياناتُ الشركة لا تدخل المستودع أبداً
+*.dump
+*.backup

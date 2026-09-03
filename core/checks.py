@@ -18,22 +18,34 @@ import os
 
 from django.core.checks import Tags, Warning as CheckWarning, register
 
-from core.extraction.artifacts import ARTIFACTS
+from core.extraction.artifacts import ARTIFACTS, is_lfs_pointer
 
 MISSING_ARTIFACTS_ID = 'core.W001'
 
 
 @register(Tags.compatibility)
 def check_runtime_artifacts(app_configs, **kwargs):
-    missing = [a for a in ARTIFACTS
-               if a.level in ('required', 'degrades') and not os.path.exists(a.path_fn())]
-    if not missing:
+    # الحالةُ الأرجحُ على نسخةٍ جديدة منذ LFS (2026-09-01) ليست الغيابَ بل **مؤشّرٌ
+    # غيرُ مسحوب** باسم الملفّ نفسِه — `os.path.exists` وحدَه أعمى عنه.
+    missing, pointers = [], []
+    for a in ARTIFACTS:
+        if a.level not in ('required', 'degrades'):
+            continue
+        p = a.path_fn()
+        if not os.path.exists(p):
+            missing.append(a)
+        elif is_lfs_pointer(p):
+            pointers.append(a)
+    if not missing and not pointers:
         return []
-    lines = '\n'.join('  · %s — %s' % (a.label, a.breaks) for a in missing)
+    lines = '\n'.join(
+        ['  · %s — مفقود: %s' % (a.label, a.breaks) for a in missing]
+        + ['  · %s — مؤشّرُ Git LFS لا الملفّ' % a.label for a in pointers])
     return [CheckWarning(
-        'عتادُ النماذج ناقص: %d ملفّاً مفقوداً مِن %d.\n%s'
-        % (len(missing), len(ARTIFACTS), lines),
-        hint='`var/` خارج git فلا يصل مع النسخة. انسخ الأوزان ثمّ تحقّق بـ'
-             '`python manage.py models_healthcheck --strict --load`.',
+        ('عتادُ النماذج ناقص: %d مفقوداً و%d مؤشّرَ LFS مِن %d.'
+         % (len(missing), len(pointers), len(ARTIFACTS))) + '\n' + lines,
+        hint='الأوزانُ في Git LFS: `git lfs install && git lfs pull`، والمفتاحُ '
+             '`.encryption_key` يُنسَخ يدويّاً. ثمّ `python manage.py '
+             'models_healthcheck --strict --load`.',
         id=MISSING_ARTIFACTS_ID,
     )]

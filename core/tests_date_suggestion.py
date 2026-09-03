@@ -215,3 +215,37 @@ class StructuralVetoTests(TestCase):
         r.sender_number = '7099'
         r.issuing_entity_id = 1
         self.assertFalse(_printed_number_vetoed(r))
+
+
+class FailClosedGuardTests(SimpleTestCase):
+    """حارسُ الفارق يُغلَق عند الفراغ، والوسمُ `autofilled` صار يُقرأ لا يُكتب فقط.
+
+    مراجعة 2026-09-01: `_senderDateGuard` كان يعود `ok` حين يخلو تاريخُ القيد
+    فيُملأ الأخضرُ بلا فحصِ التباس الختم — فشلٌ مفتوحٌ في مشروعٍ سمّمه افتراضٌ
+    مفتوح. و`harvest_dates.py` لم يكن يستشير الوسمَ إطلاقاً، فالضمانُ المكتوبُ في
+    السجلّ («المملوءُ آليّاً يخرج من ذهب التدريب») كان حبراً.
+    """
+
+    def _read(self, rel):
+        import os
+        from django.conf import settings
+        with open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def test_empty_registration_date_is_unknown_not_ok(self):
+        src = self._read('static/extraction_smart.js')
+        body = src[src.index('function _senderDateGuard'):]
+        body = body[:body.index('\n}')]
+        self.assertIn("if (gap === null) return { state: 'unknown', gap: null };", body)
+        self.assertNotIn("if (gap === null) return { state: 'ok'", body)
+
+    def test_autofill_requires_a_known_ok_gap(self):
+        src = self._read('static/extraction_smart.js')
+        body = src[src.index('function _sdAutofillEligible'):]
+        body = body[:body.index('\n}')]
+        self.assertIn("guard.state === 'ok'", body)
+
+    def test_date_harvest_excludes_autofilled_rows(self):
+        src = self._read('scripts/eval/harvest_dates.py')
+        self.assertIn("additional_data__sender_date_provenance='autofilled'", src)
+        self.assertIn('if bid in _autofilled_dates:', src)

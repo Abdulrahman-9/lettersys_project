@@ -123,7 +123,10 @@ function _senderDateGap(iso) {
 
 function _senderDateGuard(iso) {
     const gap = _senderDateGap(iso);
-    if (gap === null) return { state: 'ok', gap: null };
+    // فراغُ تاريخ القيد = لا يُعرَف الفارق ⟵ **لا ملءَ تلقائيّاً** (كان يعود ok
+    // فيُملأ بلا فحصِ التباس الختم — فشلٌ مفتوحٌ في مشروعٍ سمّمه افتراضٌ مفتوح).
+    // التأكيدُ اليدويُّ يبقى متاحاً: الكاتبُ يرى القصاصة ويحكم.
+    if (gap === null) return { state: 'unknown', gap: null };
     if (gap === 0) return { state: 'same_day', gap };
     if (gap < 0 || gap > SENDER_DATE_GAP_MAX) return { state: 'out_of_range', gap };
     return { state: 'ok', gap };
@@ -209,6 +212,8 @@ function applySenderDateSuggestion(data) {
             ? 'التاريخ بعد تاريخ القيد — راجعه.'
             : 'أقدمُ من ' + SENDER_DATE_GAP_MAX + ' يوماً من تاريخ القيد — راجعه.';
         enterOk = false;
+    } else if (guard.state === 'unknown') {
+        msg = 'تاريخُ القيد فارغ — لم يُملأ تلقائيّاً؛ طابِق القصاصة ثمّ أكّد.';
     } else if (autofilled) {
         msg = 'مُلئ تلقائيّاً من القصاصة — طابِقه بنظرة ثمّ أكّد.';
     }
@@ -4065,7 +4070,10 @@ class ExtractionSmartSystem {
 
         mapping.forEach(({ field, key, conf }) => {
             const value = data[key];
-            if (typeof value !== 'undefined' && value !== null) {
+            // '' ليست قيمةً (مراجعة 2026-09-01): حمولةُ done تحمل title='' للمسار
+            // الضعيف والصامت (~38% من المستندات) فكانت تمسح ما كتبه الكاتبُ أثناء
+            // البثّ. المساران الآخران يتخطّيان الفارغ أصلاً — يُوحَّد هنا.
+            if (typeof value !== 'undefined' && value !== null && value !== '') {
                 const input = document.getElementById(field);
                 if (input) {
                     // رقم السجلّ اليدويّ (الصادر الخارجي): لا يُكتب فوق ما كتبه الموظّف
