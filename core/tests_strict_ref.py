@@ -8,6 +8,8 @@
 ينجح في الاختبار ويسقط في الإنتاج (وهذا ما حدث في النسخة الأولى: اشترطت
 «Ref. No.» فأخطأت كلَّ كتب NK التي تكتب «Ref:» وحدَها).
 """
+import os
+
 from django.test import SimpleTestCase
 
 from core.extraction.matchers.strict_ref import (
@@ -185,3 +187,53 @@ class PipelineWiringTests(SimpleTestCase):
                     sender_number_source='ref_num')
         _suppress_sender_number_emission(r)
         self.assertFalse(r.sender_number)
+
+
+class ProductionTextShapeTests(SimpleTestCase):
+    """الصارمُ يُغذّى بالشكل الذي قِيس عليه — لا بالنصّ المفروز.
+
+    **العطبُ المقيس** (مراجعة 2026-09-01، 34 مستنداً محكَّماً): على نصّ الصفحة
+    الأولى بلا فرزٍ أطلق 32 وأصاب 32؛ على نصّ الإنتاج المفروز (`sort=True`) أطلق
+    8 فقط. الفرزُ يضغط التسميةَ والقيمةَ وخربشةَ الهامش في سطرٍ واحد فتنكسر حدودُ
+    «الحكم على السطر». هذا الاختبارُ يبني الشكلَ نفسَه في PDF ويثبت الاتّجاهين.
+    """
+
+    def _pdf(self, spans):
+        import tempfile
+
+        import fitz
+        doc = fitz.open()
+        page = doc.new_page(width=595, height=842)
+        for x, y, text in spans:
+            page.insert_text((x, y), text, fontsize=11)
+        path = tempfile.mktemp(suffix='.pdf')
+        doc.save(path)
+        doc.close()
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+        return path
+
+    def test_sorted_text_kills_the_anchor_but_unsorted_fires(self):
+        import fitz
+
+        from core.extraction.pipeline import pdf_first_page_text
+        # تسميةٌ · قيمةٌ · خربشةُ هامشٍ — على ارتفاعٍ واحد (نموذجُ ADO كما تراه الماسحة)
+        p = self._pdf([(50, 100, 'No.:'), (200, 100, 'ADO-361'),
+                       (330, 100, 'lrl cl! ali.r! xxxxxxxxxxxx')])
+        unsorted = pdf_first_page_text(p)
+        d = fitz.open(p)
+        sorted_text = d[0].get_text('text', sort=True)
+        d.close()
+        self.assertEqual(strict_ref_match(unsorted), 'ADO-361')
+        self.assertIsNone(strict_ref_match(sorted_text),
+                          'الفرزُ ضغط الهامشَ خلف القيمة فتجاوز الذيلُ حدَّه — وهذا ما كان يُطلَق عليه')
+
+    def test_pipeline_feeds_strict_from_the_unsorted_page_independent_of_cache(self):
+        """حرزُ مصدر: الكاتبُ يقرأ `strict_text` لا `pdf_text` (المُصفَّر على الكاش)."""
+        import os as _os
+
+        from django.conf import settings
+        src = open(_os.path.join(settings.BASE_DIR, 'core', 'extraction', 'pipeline.py'),
+                   encoding='utf-8').read()
+        self.assertIn('strict_text = pdf_first_page_text(image_path)', src)
+        self.assertIn('_strict_raw = strict_ref_match(strict_text)', src)
+        self.assertNotIn('strict_ref_match(pdf_text)', src)

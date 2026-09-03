@@ -165,8 +165,17 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
     displayed = {str(f) for f in (final.get('displayed_fields') or ())}
     # book_kind يُختم دائماً كي يُميّز المستهلك «صادر: الحقل غير منطبق» عن
     # «وارد: القارئ أخفق فعلاً» — وإلا صارا سواءً في البيانات.
+    # **الاقتراحُ الضعيف يُحفَظ وإن لم يُملأ** (مراجعة 2026-09-01): توجيهُ الانبعاث
+    # يُفرغ `title` للمسارَين الضعيفين ويضع القيمةَ في `title_suggestion` — فكان
+    # الالتقاطُ يخزّن اقتراحاً فارغاً وتصمت حلقةُ التغذية الراجعة لربع المستندات،
+    # وهي بالضبط الشريحةُ التي نحتاج قياسَها من الإنتاج. الزوجُ (ما عُرض ⟵ ما
+    # كتب الكاتب) يُحفَظ هنا أيّاً كان المسار، والمنشأُ يميّز البطاقةَ من الملء.
+    _t_sug = suggested.get('title_suggestion') or {}
+    _title_seen = (suggested.get('title') or _t_sug.get('value') or '')
     add_data = {
         'book_kind': book.kind or '',
+        'title_suggestion_source': str(_t_sug.get('source') or
+                                       ('marker' if suggested.get('title') else ''))[:32],
         # الحجرُ يُحسم لحظةَ الالتقاط لا عند بناء الدفعة: قرارٌ لاحق يعني ترحيلاً
         # ممكناً من الحجز إلى التدريب بعد رؤية النتيجة.
         EVAL_HOLD_KEY: eval_hold_for(book.id),
@@ -243,8 +252,9 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
         book_number_confidence=_to_float(suggested.get('book_number_confidence')),
         book_date=_parse_iso_date(suggested.get('book_date')),
         book_date_confidence=_to_float(suggested.get('book_date_confidence')),
-        title=(suggested.get('title') or '')[:500],
-        title_confidence=_to_float(suggested.get('title_confidence')),
+        title=_title_seen[:500],
+        title_confidence=_to_float(suggested.get('title_confidence')
+                                   or _t_sug.get('confidence')),
         secret_level=_norm_secret(suggested.get('secret_level')),
         secret_level_confidence=_to_float(suggested.get('secret_level_confidence')),
         book_kind=suggested.get('book_kind') or None,
@@ -264,7 +274,7 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
     for sug_key, final_key in _FIELD_MAP:
         if final_key == 'sender_number' and not is_incoming:
             continue   # الصادر: لا عدد جهةٍ يُستخرَج — لا إشارة تصحيح
-        original = str(suggested.get(sug_key) or '').strip()
+        original = str((_title_seen if sug_key == 'title' else suggested.get(sug_key)) or '').strip()
         corrected = str(final.get(final_key) or '').strip()
         differs = (not _same_number(original, corrected)
                    if final_key == 'sender_number' else original != corrected)

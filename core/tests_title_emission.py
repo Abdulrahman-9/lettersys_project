@@ -148,9 +148,9 @@ class HarvestExcludesAutofilledTests(SimpleTestCase):
         with open(os.path.join(settings.BASE_DIR, self.SCRIPT), encoding='utf-8') as f:
             return f.read()
 
-    def test_query_excludes_autofilled_books(self):
+    def test_query_excludes_untrusted_books(self):
         src = self._src()
-        self.assertIn('poisoned = _autofilled_titles()', src)
+        self.assertIn('poisoned = _untrusted_titles()', src)
         self.assertIn('.exclude(id__in=poisoned)', src)
 
     def test_the_filter_keys_off_the_capture_contract(self):
@@ -158,10 +158,13 @@ class HarvestExcludesAutofilledTests(SimpleTestCase):
         import ast
         tree = ast.parse(self._src())
         fn = next(n for n in ast.walk(tree)
-                  if isinstance(n, ast.FunctionDef) and n.name == '_autofilled_titles')
+                  if isinstance(n, ast.FunctionDef) and n.name == '_untrusted_titles')
         body = ast.dump(fn)
+        # فاشلٌ‑مغلقاً: كتبُ التطبيق تُستبعَد إلّا بشهادة `typed` — لا «إلّا إن قال autofilled»
         self.assertIn('additional_data__title_provenance', body)
-        self.assertIn('autofilled', body)
+        self.assertIn("'typed'", body)
+        self.assertIn('source_ref', body)
+        self.assertNotIn("'autofilled'", body)
 
     def test_capture_writes_that_exact_key(self):
         import os
@@ -197,3 +200,61 @@ class AutofilledLookupTests(TestCase):
                     .filter(additional_data__title_provenance='autofilled')
                     .values_list('book_id', flat=True))
         self.assertEqual(found, {poisoned.id})
+
+
+class CaptureKeepsWeakSuggestionTests(TestCase):
+    """الاقتراحُ الضعيفُ يُلتقَط وإن لم يُملأ — حلقةُ التغذية الراجعة لا تنطفئ.
+
+    مراجعة 2026-09-01: توجيهُ الانبعاث كان يُفرغ `title` فيُخزَّن اقتراحٌ فارغ ولا
+    يُنشأ صفُّ تصحيحٍ لربع المستندات — الشريحةُ التي نحتاج قياسَها من الإنتاج.
+    """
+
+    def test_weak_suggestion_is_stored_and_correction_is_recorded(self):
+        from django.contrib.auth.models import User
+
+        from core.extraction.capture import persist_extraction_capture
+        from core.models import Attachment, Book, ExtractionFeedback
+        u = User.objects.create_user('kaatib2', password='x')
+        book = Book.objects.create(title='كتبه الكاتب', kind='incoming_internal', created_by=u)
+        att = Attachment.objects.create(book=book, file='attachments/a.pdf')
+        res = persist_extraction_capture(
+            book=book, attachment=att,
+            suggested={'raw_text': 'نصّ', 'title': '', 'title_confidence': 0.0,
+                       'title_suggestion': {'value': 'اقتراحٌ ضعيف', 'confidence': 0.35,
+                                            'source': 'fallback'}},
+            final={'title': 'كتبه الكاتب', 'title_provenance': 'typed'}, user=u)
+        self.assertEqual(res.title, 'اقتراحٌ ضعيف')
+        self.assertAlmostEqual(res.title_confidence, 0.35)
+        self.assertEqual(res.additional_data['title_suggestion_source'], 'fallback')
+        fb = ExtractionFeedback.objects.filter(extraction=res, field_name='title').first()
+        self.assertIsNotNone(fb, 'لا صفَّ تصحيحٍ ⟵ الحلقةُ مطفأةٌ للمسار الضعيف')
+        self.assertEqual(fb.original_value, 'اقتراحٌ ضعيف')
+        self.assertEqual(fb.corrected_value, 'كتبه الكاتب')
+
+    def test_marker_fill_records_its_source_too(self):
+        from django.contrib.auth.models import User
+
+        from core.extraction.capture import persist_extraction_capture
+        from core.models import Attachment, Book
+        u = User.objects.create_user('kaatib3', password='x')
+        book = Book.objects.create(title='م', kind='incoming_internal', created_by=u)
+        att = Attachment.objects.create(book=book, file='attachments/b.pdf')
+        res = persist_extraction_capture(
+            book=book, attachment=att,
+            suggested={'raw_text': 'نصّ', 'title': 'م', 'title_confidence': 0.75},
+            final={'title': 'م', 'title_provenance': 'autofilled'}, user=u)
+        self.assertEqual(res.additional_data['title_suggestion_source'], 'marker')
+
+
+class DoneEventDoesNotWipeTypedTitleTests(SimpleTestCase):
+    """حمولةُ `done` تحمل `title=''` للضعيف والصامت (~38%) — كانت تمسح كتابةَ الكاتب."""
+
+    def test_final_fill_path_skips_empty_strings(self):
+        import os
+        from django.conf import settings
+        with open(os.path.join(settings.BASE_DIR, 'static', 'extraction_smart.js'),
+                  encoding='utf-8') as f:
+            src = f.read()
+        body = src[src.index('applyExtractionResult(data) {'):]
+        body = body[:body.index('mapping.forEach')+1200]
+        self.assertIn("value !== null && value !== ''", body)

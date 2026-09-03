@@ -75,26 +75,29 @@ def _sealed_books():
     return ids
 
 
-def _autofilled_titles():
-    """كتبٌ عنوانُها **مملوءٌ آليّاً ولم يلمسه كاتب** — تُستبعَد من الحصاد.
+def _untrusted_titles():
+    """كتبٌ عنوانُها **ليس شهادةَ كاتبٍ مستقلّة** — تُستبعَد من الحصاد.
 
-    **حلقةُ التسميم الذاتيّ**: حقيقةُ تدريب الموضوع هي `Book.title` عينُه. فلمّا
-    صار مسارُ العلامة يملأ الحقل تلقائيّاً، صار العنوانُ المحفوظُ بلا لمسٍ **مخرَجَ
-    المُنتقي نفسِه** — وحصادُه وسماً يُدرِّب النموذجَ على ما قاله هو، فيرسّخ خطأه
-    بدل أن يصحّحه (ضجيجٌ في اتّجاهٍ واحد لا تذيبه أرضيّةُ الدقّة).
+    **حلقةُ التسميم الذاتيّ**: حقيقةُ تدريب الموضوع هي `Book.title` عينُه، والواجهةُ
+    تملأ العنوانَ من مسار العلامة تلقائيّاً **منذ أيّار 2026** (لا منذ اليوم —
+    ادّعاءُ «الحصادُ القديمُ نظيفٌ بالبناء» نُقض بالقياس: 48 من 6,462 صندوقاً من
+    كتبٍ أنشأها التطبيق). فعنوانٌ مملوءٌ وحُفظ بلا لمس، أو أُكّد بنقرةٍ على اقتراحٍ
+    صالحٍ 6.5%، يعود وسماً يدرّب المُنتقي على مخرجه هو.
 
-    الوسمُ يُكتب لحظةَ الحفظ في `additional_data.title_provenance`
-    (`core/extraction/capture.py:178`): `typed` كتابةُ الكاتب · `confirmed` لمسٌ
-    بعد ملء · `autofilled` ملءٌ بلا لمس. والاستبعادُ هنا **متحفّظ**: يكفي التقاطٌ
-    واحدٌ يقول `autofilled` كي يسقط الكتاب، لأنّ نقاءَ الوسم أغلى من حجم الدفعة.
-
-    الحصادُ السابقُ (6,462 صندوقاً) نظيفٌ بالبناء: سبقَ الملءَ التلقائيّ كلَّه.
+    **القاعدةُ فاشلةٌ‑مغلقاً**: كلُّ كتابٍ أنشأه التطبيق (`source_ref` فارغ) يُستبعَد
+    **إلّا** إن التقطت له شهادةُ `typed` (كتبه الكاتبُ بيده). لا التقاطَ = يُستبعَد،
+    و`autofilled`/`confirmed` = يُستبعَد. الكتبُ المستوردةُ من الورق تبقى: عناوينُها
+    كتبها موظّفون في النظام القديم بلا مُنتقٍ آليّ.
     """
-    from core.models import DataExtractionResult
-    return set(
+    from core.models import Book, DataExtractionResult
+    typed = set(
         DataExtractionResult.objects
-        .filter(additional_data__title_provenance='autofilled')
+        .filter(additional_data__title_provenance='typed')
         .values_list('book_id', flat=True))
+    app_made = set(
+        Book.objects.filter(is_deleted=False, source_ref='')
+        .values_list('id', flat=True))
+    return app_made - typed
 
 
 def render(p, dpi=175, cap=3500):
@@ -122,13 +125,13 @@ if os.path.exists(MANIFEST):
         except Exception:
             pass
 
-poisoned = _autofilled_titles()
+poisoned = _untrusted_titles()
 qs = (Book.objects.filter(is_deleted=False, attachments__isnull=False)
       .exclude(title='').exclude(title=None)
       .exclude(id__in=sealed).exclude(id__in=poisoned)
       .order_by('id').distinct())
 todo = [b for b in qs.values_list('id', 'title') if b[0] not in attempted][:CHUNK]
-print('مؤهَّلون %d · حوولوا %d · مستبعَدٌ مملوءاً آليّاً %d · هذه الدفعة %d'
+print('مؤهَّلون %d · حوولوا %d · مستبعَدٌ بلا شهادةِ كاتب %d · هذه الدفعة %d'
       % (qs.count(), len(attempted), len(poisoned), len(todo)), flush=True)
 
 from core.extraction.ocr.providers import TesseractOCRProvider  # noqa: E402

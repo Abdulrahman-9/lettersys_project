@@ -377,8 +377,9 @@ def _strict_ref_skips_visual(result) -> bool:
     """هل يُغني المرجعُ المطبوعُ الصارم عن استدعاء المسار البصريّ كلِّه؟
 
     **شرطان معاً، وكلاهما لازم:**
-      ١. منشأُ القيمة `strict_ref` — المقيسُ 32 إصابةً وصفرَ خطأٍ على صفّه مقابل
-         11 إصابةً وخطأين للبصريّ على نفس المستندات.
+      ١. منشأُ القيمة `strict_ref` — على مجموعة **تطويرٍ** (e2e-E بعد الضبط) 32
+         إصابةً وصفرَ خطأ مقابل 11 وخطأين للبصريّ؛ ولا دليلَ مختوماً موجباً بعد
+         (المختومُ الوحيد e2e-D: 0–1 إطلاق). يُعاد النظرُ في الشرط عند e2e-F.
       ٢. `sender_date` مملوء — فـ`want_date_crop` يصير `False`، وعندها **كلُّ جسم
          `_read_handwritten_sender_number` عملٌ ضائع** إلّا صندوقَ التدريب. أمّا
          حين يصمت التاريخُ فالنداءُ يبقى: تخطّيه يقتل قصاصةَ التاريخ واقتراحَه
@@ -444,6 +445,33 @@ def _route_title_emission(result, source: str) -> None:
     }
     result.title = ''
     result.title_confidence = 0.0
+
+
+def pdf_first_page_text(path: str) -> str:
+    """نصُّ الصفحة الأولى **بلا فرز** — الشكلُ الوحيدُ الذي قِيس عليه الصارم.
+
+    **العطبُ الذي يقفله** (مراجعة 2026-09-01): القياسُ (`e2e_number_e.py`) غذّى
+    `strict_ref_match` بـ`doc[0].get_text()`، بينما الإنتاجُ غذّاه بـ
+    `_extract_pdf_text_layer` (كلُّ الصفحات، `sort=True`) وبعد بوّابة المسبار.
+    الفرزُ يضغط عمودَ التسميات وعمودَ القيم وخربشاتِ الهامش في سطرٍ واحد فتنكسر
+    حدودُ «الحكم على السطر». **مقيسٌ على 34 مستنداً محكَّماً**: بلا فرز أطلق 32
+    وأصاب 32؛ مفروزاً أطلق 8 وأصاب 8. الدقّةُ واحدة، والتغطيةُ رُبع.
+
+    مستقلٌّ عن الكاش عمداً: `pdf_text` يُصفَّر على إصابة الكاش فكان الصارمُ لا
+    يعمل إلّا في أوّل معالجةٍ للملفّ. الكلفةُ ~30 مللي ثانية.
+    """
+    if not str(path).lower().endswith('.pdf'):
+        return ''
+    try:
+        import fitz
+        doc = fitz.open(path)
+        try:
+            return doc[0].get_text() if doc.page_count else ''
+        finally:
+            doc.close()
+    except Exception as exc:          # noqa: BLE001 — الصارمُ يصمت، لا يُسقط الأنبوب
+        logger.warning('[strict_ref] تعذّر نصُّ الصفحة الأولى: %s', type(exc).__name__)
+        return ''
 
 
 _WARNED_ARTIFACTS = set()
@@ -647,9 +675,14 @@ class AIExtractionService:
                 # مُموضِع «التأريخ» بلا priors: لا بصمةَ تاريخٍ لكل جهةٍ بعد (فيبل16)،
                 # فمرساةُ التسمية المطبوعة وحدها تقود — ونقبل source='label' فقط.
                 self._hw_date_locator = NumberStripLocator(None, field='date')
-            if not self._hw_reader.available:
+            reader_ok = self._hw_reader.available
+            if not reader_ok:
                 _warn_missing_artifact('number_model', self._hw_reader.model_path,
                                        'لا قراءةَ عددٍ يدويّ — الحقلُ يبقى فارغاً')
+                # **لا عودةَ مبكرة** (مراجعة 2026-09-01): الكاشفُ وقصاصةُ التاريخ
+                # واقتراحُه وصندوقُ التدريب لا تعتمد على قارئ العدد — العودةُ هنا
+                # كانت تُسقطها كلَّها بغياب وزنٍ واحد. تُتخطّى القراءتان وحدهما.
+            if False:
                 # **رباعيّةٌ لا ثنائيّة**: النداءُ يفكّ أربعةً، وثنائيّةٌ هنا ترفع
                 # ValueError يبتلعها except العام فيعود المستندُ كلُّه `failed` —
                 # لا «تدهوراً رشيقاً». عاشت منذ توصيل قارئ التاريخ (c961ed3)
@@ -705,7 +738,8 @@ class AIExtractionService:
                     # النقض يصيب اقتباسات المتن «رقم في تاريخ» بحقّ، لكنّ تلك دون البوّابة أصلاً —
                     # فالمكسب صفر والكلفة 10 صحيحة. الإصلاح الصحيح واعٍ بالسياق (نمط «في+تاريخ»)
                     # لا رقمين مجرّدين. `guards.printed_region_veto` يبقى مكتوباً غير موصول.
-                    text, conf = self._hw_reader.read_best(strip)
+                    text, conf = (self._hw_reader.read_best(strip) if reader_ok
+                                  else (None, 0.0))
                     # موضع القصّ مُطبَّعاً [x0,y0,x1,y1] — يُعاد حسابه من التسمية (حتميّ، لا
                     # يمسّ الاستخراج). ميتاداتا تدريب التوضيع: أين قصّ المُموضِع حين انبعث العدد.
                     loc = self._hw_locator
@@ -753,7 +787,8 @@ class AIExtractionService:
                 pw, ph = img.width, img.height
                 crop2 = img.crop((max(0, int(bx0 * pw)), max(0, int(by0 * ph)),
                                   min(pw, int(bx1 * pw)), min(ph, int(by1 * ph))))
-                text2, conf2 = self._hw_reader.read_best(crop2)
+                text2, conf2 = (self._hw_reader.read_best(crop2) if reader_ok
+                                else (None, 0.0))
                 del crop2
                 if text2 and text2.isdigit() and 1 <= len(text2) <= 6:
                     number_result = (text2, conf2, [round(v, 4) for v in det_box])
@@ -789,12 +824,13 @@ class AIExtractionService:
             return None, None, None, (None, 0, 0)
 
     def _suggest_date(self, crop, det_box, geometry_tag):
-        """اقتراحُ تاريخٍ من قصاصة `x` — **لا يُكتب في الحقل أبداً**.
+        """اقتراحُ تاريخٍ من قصاصة `x` — **الخادمُ لا يكتبه في الحقل أبداً**.
 
         يُعاد قاموسٌ بمفتاحٍ منفصل (`sender_date_suggestion`) لا في `sender_date`:
-        مسارات ملء الواجهة تكتب `sender_date` في الحقل صامتاً
-        (`extraction_smart.js:832`)، فوضعُ قراءةٍ بدقّة 71% هناك = إعادةُ بناء
-        جذر تسميم التواريخ الذي اجتُثّ. والفصلُ يعزل أيضاً سُلَّمَي ثقةٍ غير
+        مسارات ملء الواجهة تكتب `data.sender_date` في الحقل بلا شرط، فوضعُ
+        قراءةٍ بدقّة 71% هناك = إعادةُ بناء جذر تسميم التواريخ. والواجهةُ وحدها
+        (منذ 2026-09-01) تملأ الأخضرَ ≥0.98 موسوماً `autofilled` بعد حارس الفارق
+        (`_sdAutofillEligible` في `extraction_smart.js`). والفصلُ يعزل أيضاً سُلَّمَي ثقةٍ غير
         متقارنين: ثقةُ المطبوع مجدولةٌ يدويّاً، وهذه معايَرةٌ بـH6.
 
         `iso` قد يكون None مع `parse` = invalid/ambiguous — وذاك امتناعٌ مقصود:
@@ -1198,6 +1234,9 @@ class AIExtractionService:
             # الرسم + Tesseract، ويعالج كل الصفحات تلقائياً. نسقط إلى تحسين الصورة + OCR
             # فقط للصور الممسوحة بلا طبقة نصّ غنيّة.
             pdf_text = None if (skip_ocr or result.cached) else self._extract_pdf_text_layer(image_path)
+            # نصُّ الصارم منفصلٌ عن `pdf_text`: بلا فرزٍ (الشكلُ المقيس) وبلا كاشٍ
+            # وقبل بوّابة المسبار — انظر `pdf_first_page_text`.
+            strict_text = pdf_first_page_text(image_path)
             if pdf_text:
                 # «الطبقة تكسب مكانها»: بعض الطبقات متنُها إنكليزية سليمة (تعبر
                 # بوّابة الكثافة) لكن ترويستها خردة — فيضيع الرأس كله. نقبل الطبقة
@@ -1337,13 +1376,15 @@ class AIExtractionService:
                 # ── «النصُّ يسبق البصريّ» (أمر المالك 2026-08-30) ───────────────
                 # مطابقةٌ صارمةٌ على **طبقة النصّ الخامّة** لا على `probe`: بنيةُ
                 # السطور هي الدليل (`clean_text` تطوي `\n` فتُلغي كلَّ الطبقات).
-                # المقاس على e2e-E (34 حقيقةً محكَّمةً بالعين): الصارمُ 32 إصابةً
-                # وصفرَ خطأٍ بـ0.094 ث، مقابل البصريّ 11 إصابةً وخطأين بـ3.92 ث.
-                # وعلى e2e-D المختومة يُطلق **مرّةً واحدةً صحيحة** — حارسُ التعميم.
-                # الثقةُ 0.85: عاليةٌ لأنّها مقيسة، ودون عتبة «الواثق» (0.90)
-                # بنائيّاً لأنّ الأدلّة كلَّها من مجموعةِ تطويرٍ حتّى تُبنى e2e-F.
-                if pdf_text:
-                    _strict_raw = strict_ref_match(pdf_text)
+                # **الدليلُ تطويريٌّ لا مختوم** (تصحيح 2026-09-01): النظرةُ المختومة
+                # على e2e-E أُنفقت على نسخةٍ سابقة (25/34)، ثمّ ضُبطت القاعدةُ على
+                # المجموعة نفسِها (32/34، صفر خطأ) — فصارت تطويراً. والدليلُ المختومُ
+                # الوحيد e2e-D: إطلاقةٌ 0–1 صحيحة (حارسُ لا-تراجع). ويُغذّى بنصّ الصفحة
+                # الأولى بلا فرز — الشكلُ المقيس (كان يُغذّى بالمفروز فيُطلق رُبعاً).
+                # الثقةُ 0.85: دون عتبة «الواثق» (0.90) بنائيّاً حتّى تُبنى e2e-F
+                # بمسار `process_image` نفسِه.
+                if strict_text:
+                    _strict_raw = strict_ref_match(strict_text)
                     _strict_val = canonical_sender_number(_strict_raw) if _strict_raw else ''
                     if _strict_val:
                         if result.sender_number and result.sender_number != _strict_val:
