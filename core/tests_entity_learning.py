@@ -91,3 +91,25 @@ class ResolveEntityCandidatesContractTests(TestCase):
         src = open(os.path.join(settings.BASE_DIR, 'core', 'extraction', 'pipeline.py'),
                    encoding='utf-8').read()
         self.assertIn('return self.resolve_entity_candidates(', src)
+
+
+class DominantDestinationFallbackTests(TestCase):
+    """صمتُ المستلمة يُسدّ بالوجهة السائدة لنوع الكتاب بثقةٍ منخفضة — لا للمُصدِرة."""
+
+    def test_silent_receiver_gets_the_dominant_destination(self):
+        from core.extraction import pipeline as P
+        from core.extraction.pipeline import AIExtractionService
+        P._DOMINANT_CACHE.clear()
+        r = Entity.objects.create(name='هيئة العمليات', code='OPS', etype='receiver', is_active=True)
+        u = User.objects.create_user('kaatib_dom', password='x')
+        for _ in range(2):
+            b = Book.objects.create(title='ت', kind='incoming_internal', created_by=u)
+            b.receiving_entities.add(r)
+        svc = AIExtractionService()
+        got = svc.resolve_entity_candidates('receiver', 'نصٌّ بلا أيّ إشارة', 'incoming_internal', '', '', [])
+        self.assertTrue(got and got[-1]['match_type'] == 'kind_prior' and got[-1]['entity_id'] == r.id)
+        self.assertLessEqual(got[-1]['score'], 30.0)
+        self.assertFalse(any(x.get('match_type') == 'kind_prior'
+                             for x in svc.resolve_entity_candidates('issuer', 'نصٌّ', 'incoming_internal', '', '', [])))
+        P._DOMINANT_CACHE.clear()
+
