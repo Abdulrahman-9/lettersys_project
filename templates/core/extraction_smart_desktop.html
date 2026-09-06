@@ -923,7 +923,10 @@
       this.input.value = '';
       this._hideDropdown();
       this.input.focus();
-      try { this.input.dispatchEvent(new Event('input', { bubbles: true })); } catch(e) {}
+      // حدثٌ برمجيّ لا لمسةٌ بشريّة: بدون codeFill يقلب وسمَ المنشأ إلى «مؤكَّد» عند
+      // تحويل قيمة الـAI إلى وسم — فتضيع شهادةُ «مُلئ آليّاً» التي تحمي الذاكرة.
+      const _fire = () => { try { this.input.dispatchEvent(new Event('input', { bubbles: true })); } catch(e) {} };
+      (typeof codeFill === 'function') ? codeFill(_fire) : _fire();
       if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
     }
   }

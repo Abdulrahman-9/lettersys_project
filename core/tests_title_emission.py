@@ -8,6 +8,8 @@
 إلى مفتاحٍ منفصل، وبلا اختبارٍ هنا يعود الملءُ صامتاً بأيّ إعادةِ ترتيبٍ للأسطر
 (نفسُ فخّ المرآة في جبهة العدد).
 """
+import re
+
 from django.test import SimpleTestCase, TestCase
 
 from core.extraction.pipeline import (AIExtractionResult, TITLE_DIRECT_FILL_SOURCES,
@@ -124,7 +126,10 @@ class TitleZeroAutofillSourceGuardTests(SimpleTestCase):
     def test_title_is_in_the_provenance_contract(self):
         """بلا الوسم يعود الحصادُ يدرّب المُنتقي على مخرجه هو."""
         src = self._src()
-        self.assertIn("const PROVENANCE_FIELD_IDS = ['senderNumber', 'senderDate', 'title'];", src)
+        m = re.search(r"const PROVENANCE_FIELD_IDS = \[(.*?)\];", src)
+        self.assertIsNotNone(m)
+        for fid in ('senderNumber', 'senderDate', 'title', 'issuingEntity', 'receivingEntity'):
+            self.assertIn("'%s'" % fid, m.group(1), fid)
         self.assertIn("formData.append('title_provenance', _tProv)", src)
 
     def test_renderer_is_called_from_all_three_fill_paths(self):
