@@ -2,6 +2,7 @@ from django.contrib.auth.models import Group, Permission
 
 ENTRY_GROUP_NAME = 'مدخل الكتب'
 CONTROLLER_GROUP_NAME = 'مشرف المتابعة'
+ARCHIVIST_GROUP_NAME = 'مسؤول الأرشفة'
 
 ROLE_DEFINITIONS = {
     'entry': {
@@ -11,6 +12,10 @@ ROLE_DEFINITIONS = {
     'controller': {
         'label': CONTROLLER_GROUP_NAME,
         'description': 'الوصول السريع للكتب وتحديث الحالات دون صلاحيات إدارية كاملة.'
+    },
+    'archivist': {
+        'label': ARCHIVIST_GROUP_NAME,
+        'description': 'إدخالُ الكتب وحفظُها: تمامُ الأرشفة والاستعلامُ وفتحُ الأضابير.'
     },
     'viewer': {
         'label': 'قارئ فقط',
@@ -43,7 +48,15 @@ def ensure_role_groups():
             'view_entity',
         ])
         controller_group.permissions.add(*controller_perms)
-    return entry_group, controller_group
+
+    archivist_group, _ = Group.objects.get_or_create(name=ARCHIVIST_GROUP_NAME)
+    if archivist_group.permissions.count() == 0:
+        archivist_perms = Permission.objects.filter(codename__in=[
+            'view_book', 'add_book', 'change_book',
+            'view_entity', 'add_entity',
+        ])
+        archivist_group.permissions.add(*archivist_perms)
+    return entry_group, controller_group, archivist_group
 
 
 def get_user_role(user):
@@ -58,6 +71,12 @@ def get_user_role(user):
         return 'dept_head'
     if user.groups.filter(name=CONTROLLER_GROUP_NAME).exists():
         return 'controller'
+    # **بعد** مختصّ البريد وقبل المُدخِل: الرجلُ قد يجمع البريدَ والأرشفة
+    # (الشهادةُ الميدانيّة تقول «مسؤول إدارة البريد والأرشفة» بصيغةٍ واحدة)،
+    # وهذه تسميةُ عرضٍ واحدة لا تحتمل الجمع. فبوّابةُ الأرشفة عضويّةُ مجموعةٍ
+    # في `scoping.is_archivist` لا تسميةٌ هنا — وإلّا فقَد الجامعُ طاولةَ بريده.
+    if user.groups.filter(name=ARCHIVIST_GROUP_NAME).exists():
+        return 'archivist'
     if user.groups.filter(name=ENTRY_GROUP_NAME).exists():
         return 'entry'
     return 'viewer'
@@ -91,6 +110,11 @@ def role_capabilities(role):
             'can_manage_books': True,
             'can_manage_entities': True,
             'can_view_notifications': True,
+        })
+    elif role == 'archivist':
+        caps.update({
+            'can_manage_books': True,
+            'can_manage_entities': True,
         })
     elif role == 'entry':
         caps.update({

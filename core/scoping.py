@@ -57,6 +57,31 @@ def is_mail_officer(user) -> bool:
     return get_user_role(user) == 'controller'
 
 
+def is_archivist(user) -> bool:
+    """أهو مسؤولُ الأرشفة؟ — **عضويّةُ مجموعةٍ لا تسميةُ دور**.
+
+    التسميةُ في `roles.get_user_role` واحدةٌ بسلسلةِ أولويّة، والشهادةُ الميدانيّة
+    تقول «مسؤول إدارة البريد والأرشفة» بصيغةٍ واحدة — أي أنّ الرجلَ الواحد قد
+    يحمل الدورين. فلو سُئلت التسميةُ هنا لفقَد الجامعُ أحدَ بابيه: إمّا طاولةُ
+    البريد وإمّا الأرشفة. والعضويّةُ تحتمل الجمعَ فتُسأل هي.
+    """
+    from core.roles import ARCHIVIST_GROUP_NAME
+
+    if not getattr(user, 'pk', None):
+        return False
+    return user.groups.filter(name=ARCHIVIST_GROUP_NAME).exists()
+
+
+def can_archive(user) -> bool:
+    """مَن يقيّد «تمامَ الأرشفة»؟ — الأرشيفيُّ ومديرُ النظام وحدَهما.
+
+    الأرشفةُ خاتمةُ الدورة وتوقيعُها الثاني (استلامُ الوحدة · تمامُ الأرشفة ·
+    تسليمُ المتعهّد). فلو ملَكها المُدخِلُ أو مختصُّ البريد لأُغلقت كتبٌ لم
+    تُحفظ — وصار الطابورُ الذي يعيش عليه هذا الدورُ كاذباً.
+    """
+    return is_privileged(user) or is_archivist(user)
+
+
 def can_view_audit(user) -> bool:
     """أيحقّ له فتحُ **سجلّ الحركات**؟ رئيسُ القسم والسوبر أدمن حصراً.
 
@@ -97,6 +122,17 @@ def can_use_desk(user) -> bool:
     return is_privileged(user) or is_department_head(user) or is_mail_officer(user)
 
 
+def _department_custodian(user) -> bool:
+    """أهو أمينُ ورقِ قسمه؟ — رئيسُه أو مختصُّ بريده أو أرشيفيُّه.
+
+    **مسندٌ واحدٌ يُستهلك في موضعين**: `secret_access` (فتحُ المحتوى) و
+    `_unauthorized_secret_q` (حارسُ البحث النصّيّ). وكانا نسختين متطابقتين
+    بالصدفة؛ ولو أُضيف دورٌ إلى إحداهما دون الأخرى لصار البحثُ إمّا أداةَ
+    استنطاقٍ وإمّا حاجباً لِما يملكه صاحبُه. والحارسُ البنيويُّ يقارنهما.
+    """
+    return is_department_head(user) or is_mail_officer(user) or is_archivist(user)
+
+
 def secret_access(user, book) -> str:
     """مستوى وصول المستخدم إلى كتابٍ سرّيّ: ``full`` أو ``stub``.
 
@@ -114,7 +150,7 @@ def secret_access(user, book) -> str:
         return ACCESS_FULL
 
     same_department = book.department_id and book.department_id == user_department_id(user)
-    if same_department and (is_department_head(user) or is_mail_officer(user)):
+    if same_department and _department_custodian(user):
         return ACCESS_FULL
 
     if _has_live_grant(user, book):
@@ -329,7 +365,7 @@ def _unauthorized_secret_q(user):
     """الكتبُ السرّيّة التي لا يملك هذا المستخدم محتواها."""
     q = Q(secret_level__in=RESTRICTED_SECRET_LEVELS) & ~Q(created_by=user)
     dept_id = user_department_id(user)
-    if dept_id and (is_department_head(user) or is_mail_officer(user)):
+    if dept_id and _department_custodian(user):
         # مخوَّلٌ بالدور داخل قسمه — فلا يُستثنى منه إلّا سرّيُّ غيره.
         q &= ~Q(department_id=dept_id)
     return q

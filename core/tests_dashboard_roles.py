@@ -140,5 +140,5 @@ class DashboardViewTests(TestCase):
         with io.open('templates/core/_dashboard_sections.html', encoding='utf-8') as fh:
             markup = fh.read()
 
-        for forbidden in ('is_superuser', 'dept_head', 'controller', 'role_key'):
+        for forbidden in ('is_superuser', 'dept_head', 'controller', 'archivist', 'role_key'):
             self.assertNotIn(forbidden, markup)

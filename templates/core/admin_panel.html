@@ -159,6 +159,7 @@
                 <th scope="col" style="width:16rem">القسم</th>
                 <th scope="col" style="width:10rem">رئيس القسم</th>
                 <th scope="col" style="width:10rem">مختصّ البريد</th>
+                <th scope="col" style="width:10rem">مسؤول الأرشفة</th>
                 <th scope="col" style="width:7rem"></th>
               </tr>
             </thead>
@@ -207,6 +208,15 @@
                       </div>
                     </td>
                     <td>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="1"
+                               name="is_archivist" id="arch-{{ row.user.pk }}"
+                               {% if row.is_archivist %}checked{% endif %}>
+                        <label class="form-check-label" for="arch-{{ row.user.pk }}"
+                               style="font-size:.78rem">طاولة الأرشفة</label>
+                      </div>
+                    </td>
+                    <td>
                       <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem">حفظ</button>
                     </td>
                   </form>
@@ -219,7 +229,9 @@
       <div class="card-footer bg-white text-muted py-2" style="font-size:.78rem">
         <i class="bi bi-info-circle me-1"></i>
         <b>رئيس القسم</b> يرى سجلّ مَن قرأ ماذا وكتبَ قسمه السرّية ودفاتر شُعبه ·
-        <b>مختصّ البريد</b> يفتح طاولة البريد والكتب السرّية ولا يرى سجلّ القراءة.
+        <b>مختصّ البريد</b> يفتح طاولة البريد والكتب السرّية ولا يرى سجلّ القراءة ·
+        <b>مسؤول الأرشفة</b> يُدخل الكتب ويقيّد تمامَ الأرشفة ويستعلم — ولا يُفرّق ولا يوقّع.
+        والدوران يُجمعان في شخصٍ واحد بتأشير الخانتين.
       </div>
     </div>
 

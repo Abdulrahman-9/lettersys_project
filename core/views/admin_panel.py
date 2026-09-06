@@ -20,7 +20,7 @@ from core.admin_service import (assign_user, create_department, delete_group,
                                 save_group,
                                 update_department)
 from core.models import Department, Entity, EntityGroup
-from core.roles import CONTROLLER_GROUP_NAME
+from core.roles import ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME
 from core.scoping import is_privileged
 
 TABS = ('departments', 'users', 'groups')
@@ -131,6 +131,7 @@ def _assign_user(request):
         department=_department(request.POST.get('department')),
         is_department_head=_flag(request.POST.get('is_department_head')) or False,
         is_controller=_flag(request.POST.get('is_controller')) or False,
+        is_archivist=_flag(request.POST.get('is_archivist')) or False,
     )
     return 'حُدِّث حساب «%s».' % user.get_username()
 
@@ -222,6 +223,7 @@ def _user_rows():
         'department': getattr(getattr(u, 'profile', None), 'department', None),
         'is_head': bool(getattr(getattr(u, 'profile', None), 'is_department_head', False)),
         'is_controller': any(g.name == CONTROLLER_GROUP_NAME for g in u.groups.all()),
+        'is_archivist': any(g.name == ARCHIVIST_GROUP_NAME for g in u.groups.all()),
     } for u in people]
 
 

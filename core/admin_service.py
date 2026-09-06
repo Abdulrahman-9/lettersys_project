@@ -93,14 +93,14 @@ def update_department(department, *, by, name=None, code=None, parent=UNSET,
 
 
 def assign_user(user, *, by, department=UNSET, is_department_head=None,
-                is_controller=None):
+                is_controller=None, is_archivist=None):
     """يُسند موظّفاً إلى قسمٍ ويمنحه أدوارَه — **وكلُّ منحٍ واقعةٌ مسجَّلة**.
 
     الدورُ يفتح سجلَّ القراءة والكتبَ السرّيّة، فمنحُه بلا أثرٍ يُبطل السجلّ.
     """
     from django.contrib.auth.models import Group
 
-    from core.roles import CONTROLLER_GROUP_NAME
+    from core.roles import ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME
     from core.scoping import ensure_profile
 
     _guard_admin(by)
@@ -116,12 +116,16 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
         if changes:
             profile.save()
 
-        if is_controller is not None:
-            group, _ = Group.objects.get_or_create(name=CONTROLLER_GROUP_NAME)
+        # الدوران مستقلّان ويُجمعان في شخصٍ واحد: كتلتان لا سلسلةٌ واحدة.
+        for flag, name, key in ((is_controller, CONTROLLER_GROUP_NAME, 'is_controller'),
+                                (is_archivist, ARCHIVIST_GROUP_NAME, 'is_archivist')):
+            if flag is None:
+                continue
+            group, _ = Group.objects.get_or_create(name=name)
             had = user.groups.filter(pk=group.pk).exists()
-            if is_controller != had:
-                (user.groups.add if is_controller else user.groups.remove)(group)
-                changes['is_controller'] = is_controller
+            if flag != had:
+                (user.groups.add if flag else user.groups.remove)(group)
+                changes[key] = flag
 
         if changes:
             _log(by, 'ASSIGN_USER', {'user': user.get_username(), **changes})
