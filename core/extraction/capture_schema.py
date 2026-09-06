@@ -70,6 +70,8 @@ BASE_KEYS = frozenset({
     # تسميمٍ ذاتيّ لا تُكشَف لاحقاً بلا هذا الوسم — الحصادُ يقرأ العمود مجرّداً).
     'title_provenance',
     'title_suggestion_source',   # marker | fallback | bracket_* | '' — أيُّ مسارٍ أنتج ما عُرض
+    'issuing_entity_provenance',    # typed | confirmed | autofilled | '' — حارسُ ذاكرة الترويسة
+    'receiving_entity_provenance',
 })
 
 # كتلةُ العدد + رايةُ عرض التاريخ — تُكتب لكلّ واردٍ بلا شرط.

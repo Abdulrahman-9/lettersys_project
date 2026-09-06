@@ -653,6 +653,66 @@ class AIExtractionService:
                            type(exc).__name__)
             return []
 
+    def resolve_entity_candidates(self, etype, cleaned, kind, recipient_text, register_code,
+                                  entity_candidates, exclude_book_id=None):
+        """ترتيب مصادر الجهة **بحسب اتّجاه الكتاب** — أفضلُ ثلاثةٍ مرشَّحين.
+
+        كانت مُغلَقةً داخل `_process_image_internal` فلا تُقاس إلّا بتشغيل الأنبوب
+        كلِّه (OCR ورسمٍ وكاشف) — فقِيست الجهاتُ بمُطابِقٍ واحدٍ (`match_from_memory`)
+        لا بالمسار الذي يبلغ الكاتب. الآن تُقاس كما تعمل (`entity_eval.py`).
+
+        ترتيبُ المصادر (الأوّلُ يحتلّ الصدارة — **ترتيبٌ بالمصدر لا بالدرجة**):
+          1) رمزُ السجلّ («العدد: ش13/…») للمُصدِرة — معرِّفٌ مسجَّل، لا تخمين.
+          2) سطرُ «الى/» أوّلاً في الصادر (المُخاطَبُ الحقيقيّ).
+          3) ذاكرةُ الترويسة (تعلّمٌ من كتبٍ محفوظة) — top‑1 60% على 30، 49.0% على 1000.
+          4) سطرُ «الى/» بعد الذاكرة في الوارد الداخليّ.
+          5) البروفايل (كلماتٌ مميّزة + رمزُ السجلّ) — 23% وحده، يملأ فجوةَ الذاكرة.
+          6) الترويسةُ بأسماء الجهات — حين المرشَّحون أقلُّ من ثلاثة.
+          7) أنماطُ «من/الجهة X» — الأضعف.
+          ثمّ إعادةُ ترتيب اللجان المشتركة للمُصدِرة.
+        فشلُ أيّ مصدرٍ (MemoryError تحت ضغط 8GB) يُسقطه وحده لا الخطوةَ كلَّها.
+
+        `exclude_book_id`: **للقياس فقط** — يُقصي صفَّ الكتاب نفسِه من تصويت
+        الذاكرة (وإلّا تعرّف المستندُ على ترويسة نفسِه بتشابه 1.0 — تسريبُ «77%»).
+        """
+        ranked, seen = [], set()
+
+        def _extend(fetch, label):
+            try:
+                for m in fetch():
+                    if m['entity_id'] not in seen:
+                        ranked.append(m); seen.add(m['entity_id'])
+            except Exception as exc:
+                logger.warning('[pipeline] مصدر الجهات %s فشل (%s) — تدهور رشيق',
+                               label, type(exc).__name__)
+
+        if etype == 'issuer' and register_code:
+            _extend(lambda: self.entity_matcher.match_by_register_code(
+                register_code, entity_type='issuer'), 'register_code')
+        _plan = entity_source_plan(etype, str(kind or ''), bool(recipient_text))
+        if 'recipient_line_first' in _plan:
+            _extend(lambda: self.entity_matcher.match_entity(
+                recipient_text, entity_type='receiver')[:3], 'recipient_line')
+        _extend(lambda: self.entity_matcher.match_from_memory(
+            cleaned, entity_type=etype, top_k=3, exclude_book_id=exclude_book_id), 'memory')
+        if 'recipient_line_after_memory' in _plan:
+            _extend(lambda: self.entity_matcher.match_entity(
+                recipient_text, entity_type='receiver')[:3], 'recipient_line')
+        _extend(lambda: self._profile_entity_matches(
+            recipient_text if etype == 'receiver' else cleaned, etype), 'profile')
+        if len(ranked) < 3 and 'letterhead' in _plan:
+            _extend(lambda: self.entity_matcher.match_from_letterhead(
+                cleaned, entity_type=etype, top_k=3), 'letterhead')
+        pattern_match = (self.entity_matcher.match_issuing_entity if etype == 'issuer'
+                         else self.entity_matcher.match_receiving_entity)
+        for entity_text in entity_candidates or ():
+            _extend(lambda: pattern_match(entity_text), 'patterns')
+            if len(ranked) > 3:
+                break
+        if etype == 'issuer':
+            ranked = prefer_jmc_committee(ranked, cleaned)
+        return ranked[:3]
+
     def _read_handwritten_sender_number(self, image_path, entity_id, want_date_crop=False):
         """مرحلة 3 — رقم الجهة المخربش بخط اليد حيث تعجز كل الطبقات المطبوعة:
         تموضعٌ بمرساة «العدد» وبصمة تخطيط الجهة ← قصّ الشريط ← قراءة CRNN (v5:
@@ -1419,65 +1479,14 @@ class AIExtractionService:
             ]
 
             def _resolve_entity(etype: str):
-                """ترتيب المصادر بحسب دقّتها المقيسة على بيانات حقيقية:
-                  1) ذاكرة الترويسة (تعلّمٌ من مستندات سابقة مؤكَّدة) — **الأقوى**،
-                  2) مطابقة اسم الجهة في الترويسة،
-                  3) أنماط «من/إلى X» — الأضعف.
-                الأرقام القديمة هنا (85%/18-27%/0-3%) كانت **مُسرَّبة**: قِيست بترك-واحد
-                على كتبٍ لها صفٌّ في LetterheadMemory، فتعرّف المستند على ترويسة نفسه
-                بتشابه 1.0. الصادق (2026-08-17، `exclude_book_id`): **top-1 60% ·
-                top-3 73%** على 30 نصّاً، و**49.0%** على 1000 استعلامٍ مُجمَّد.
-                كلٌّ يملأ ما نقص عن أفضل-3 دون إزاحة الأعلى أو تكرار، وفشلُ أي
-                مصدرٍ (MemoryError تحت ضغط 8GB مثلاً) يُسقطه وحده لا الخطوة كلها."""
-                cleaned = result.cleaned_text or ''
-                ranked, seen = [], set()
-
-                def _extend(fetch, label):
-                    try:
-                        for m in fetch():
-                            if m['entity_id'] not in seen:
-                                ranked.append(m); seen.add(m['entity_id'])
-                    except Exception as exc:
-                        logger.warning('[pipeline] مصدر الجهات %s فشل (%s) — تدهور رشيق',
-                                       label, type(exc).__name__)
-
-                # رمز السجلّ («العدد: ش13/…») معرِّفٌ قاطعٌ للجهة المُصدِرة — يتصدّر
-                # كل شيء (قانون المجال: لكل قسم رمزٌ مسجَّل عندنا)، ويسدّ ثغرة
-                # الأقسام الجديدة التي لا ذاكرةَ ترويسةٍ لها بعد.
-                if etype == 'issuer' and getattr(result, 'register_code', ''):
-                    _extend(lambda: self.entity_matcher.match_by_register_code(
-                        result.register_code, entity_type='issuer'), 'register_code')
-                _plan = entity_source_plan(etype, str(getattr(result, 'book_kind', '') or ''),
-                                           bool(getattr(result, 'recipient_text', '')))
-                if 'recipient_line_first' in _plan:
-                    _extend(lambda: self.entity_matcher.match_entity(
-                        result.recipient_text, entity_type='receiver')[:3], 'recipient_line')
-                _extend(lambda: self.entity_matcher.match_from_memory(cleaned, entity_type=etype, top_k=3),
-                        'memory')
-                if 'recipient_line_after_memory' in _plan:
-                    _extend(lambda: self.entity_matcher.match_entity(
-                        result.recipient_text, entity_type='receiver')[:3], 'recipient_line')
-                # مُعرّف البروفايل: كلماتٌ مميّزة من اسم الجهة + ترجيحُ رمز السجلّ، على
-                # **المنطقة الصحيحة بحسب الاتجاه** (المُصدِرة من الترويسة، المُخاطَب من
-                # سطر «الى/») — قانون المالك: «الوارد ليس كالصادر». يأتي **بعد** الذاكرة
-                # فلا يزاحم ترشيحها الواثق، ويملأ ما تعجز عنه: جهةٌ جديدة أو أوّل كتابٍ
-                # منها لا ذاكرةَ لها. مقيس على 80 (نصّ مخزَّن): دمجُه مع الذاكرة أنقذ 2
-                # وأفسد 0 (top-1 55→57، top-3 63→66)؛ وحده 23%.
-                _extend(lambda: self._profile_entity_matches(
-                    (getattr(result, 'recipient_text', '') if etype == 'receiver' else cleaned), etype),
-                    'profile')
-                if len(ranked) < 3 and 'letterhead' in _plan:
-                    _extend(lambda: self.entity_matcher.match_from_letterhead(cleaned, entity_type=etype, top_k=3),
-                            'letterhead')
-                pattern_match = (self.entity_matcher.match_issuing_entity if etype == 'issuer'
-                                 else self.entity_matcher.match_receiving_entity)
-                for entity_text in entity_candidates:
-                    _extend(lambda: pattern_match(entity_text), 'patterns')
-                    if len(ranked) > 3:
-                        break
-                if etype == 'issuer':
-                    ranked = prefer_jmc_committee(ranked, cleaned)
-                return ranked[:3]
+                """يفوّض إلى `resolve_entity_candidates` — الدالّةُ نفسُها التي يقيسها
+                `scripts/eval/entity_eval.py` بمسار الإنتاج لا بمُطابِقٍ واحد."""
+                return self.resolve_entity_candidates(
+                    etype, result.cleaned_text or '',
+                    str(getattr(result, 'book_kind', '') or ''),
+                    getattr(result, 'recipient_text', '') or '',
+                    getattr(result, 'register_code', '') or '',
+                    entity_candidates)
 
             def _assign_entity(matches, id_attr, name_attr, conf_attr, matches_attr):
                 if not matches:

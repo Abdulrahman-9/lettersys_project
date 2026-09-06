@@ -398,6 +398,12 @@ def save_book_api(request):
                                # الحصادُ تعزيزاً ذاتيّاً لخطأ المُنتقي.
                                'title_provenance': (
                                    request.POST.get('title_provenance') or ''),
+                               # الجهتان — الواجهةُ تحوّل top‑1 إلى وسمٍ تلقائيّاً؛ بلا
+                               # الوسم تتعلّم ذاكرةُ الترويسة من مخرجها هي.
+                               'issuing_entity_provenance': (
+                                   request.POST.get('issuing_entity_provenance') or ''),
+                               'receiving_entity_provenance': (
+                                   request.POST.get('receiving_entity_provenance') or ''),
                                # ما عُرض على الكاتب فعلاً — الواجهةُ وحدها تعرفه
                                # (اقتراحٌ موجود ≠ اقتراحٌ معروض).
                                'displayed_fields': [
@@ -844,6 +850,16 @@ def update_book_api(request):
             book.save()
             book.issuing_entities.set(issuing_entities_list)
             book.receiving_entities.set(receiving_entities_list)
+            # تصحيحُ الجهة في التعديل يبلغ ذاكرةَ الترويسة (كان يضيع: لا التقاطَ هنا).
+            # الوسمُ من الواجهة يمنع تعليمَ جانبٍ مُلئ آليّاً ولم يُلمَس.
+            try:
+                from core.extraction.capture import refresh_letterhead_memory
+                refresh_letterhead_memory(
+                    book,
+                    issuing_prov=request.POST.get('issuing_entity_provenance') or '',
+                    receiving_prov=request.POST.get('receiving_entity_provenance') or '')
+            except Exception:      # noqa: BLE001 — التعلّمُ تحسينٌ لا شرطُ حفظ
+                logger.warning('[capture] تعذّر تحديث ذاكرة الترويسة عند التعديل', exc_info=True)
             _had_new_file = 'file' in request.FILES
             if _had_new_file:
                 file_obj = request.FILES['file']

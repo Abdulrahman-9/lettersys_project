@@ -60,7 +60,9 @@ const PROV_CONFIRMED = 'confirmed';
 const PROV_AUTOFILLED = 'autofilled';
 // الموضوعُ منها لأنّ حقيقةَ تدريبه هي `Book.title` نفسُه: عنوانٌ مُلئ آليّاً
 // وحُفظ بلا لمسٍ يعود وسماً يدرّب المُنتقي على مخرجه هو.
-const PROVENANCE_FIELD_IDS = ['senderNumber', 'senderDate', 'title'];
+// الجهتان: الواجهةُ تحوّل top‑1 إلى وسمٍ تلقائيّاً — بلا الوسم تتعلّم ذاكرةُ
+// الترويسة من مخرجها هي (تصوّت لنفسها). typed/confirmed = يدُ الكاتب أو نقرتُه.
+const PROVENANCE_FIELD_IDS = ['senderNumber', 'senderDate', 'title', 'issuingEntity', 'receivingEntity'];
 // معرّف الحقل في الواجهة ⟵ اسمه في عقد الالتقاط الخادميّ
 const CAPTURE_FIELD_BY_ID = {
     senderNumber: 'sender_number', senderDate: 'sender_date',
@@ -1152,11 +1154,11 @@ class ExtractionSmartSystem {
         }
         if (data.issuing_entity) {
             const issuingInput = document.querySelector('[data-field="issuingEntity"] input, #issuingEntity');
-            if (issuingInput) issuingInput.value = data.issuing_entity;
+            if (issuingInput) { issuingInput.value = data.issuing_entity; noteSuggestionFilled('issuingEntity', data.issuing_entity); }
         }
         if (data.receiving_entity) {
             const receivingInput = document.querySelector('[data-field="receivingEntity"] input, #receivingEntity');
-            if (receivingInput) receivingInput.value = data.receiving_entity;
+            if (receivingInput) { receivingInput.value = data.receiving_entity; noteSuggestionFilled('receivingEntity', data.receiving_entity); }
         }
         // حافّة الثقة + بطاقتا P1 في مسار المسح أيضاً — البيانات مُصدَّرة في result_to_scan_data
         const confMap = {
@@ -4178,6 +4180,9 @@ class ExtractionSmartSystem {
             btn.append(nameEl, bar, pctEl, srcEl);
             btn.addEventListener('click', () => {
                 if (!mgr || btn.classList.contains('is-chosen')) return;
+                // نقرةُ الكاتب على مرشَّحٍ = تأكيدٌ (شاهدُ تدريبٍ) لا ملءٌ آليّ
+                const _pin = document.getElementById(side === 'issuing' ? 'issuingEntity' : 'receivingEntity');
+                if (_pin) _pin.dataset.provenance = PROV_CONFIRMED;
                 if (m.entity_id) mgr.addEntity({ id: m.entity_id, name, code: '' });
                 else mgr._resolveOrCreate(name, true);
                 box.remove();   // أدّت القائمة غرضها — تختفي بعد التضمين (قرار المالك)
@@ -4939,6 +4944,10 @@ class ExtractionSmartSystem {
             // المحفوظة نفسُها — فبلا الوسم يصير الحصادُ تعزيزاً ذاتيّاً.
             const _tProv = fieldProvenance('title');
             if (_tProv) formData.append('title_provenance', _tProv);
+            const _ieProv = fieldProvenance('issuingEntity');
+            if (_ieProv) formData.append('issuing_entity_provenance', _ieProv);
+            const _reProv = fieldProvenance('receivingEntity');
+            if (_reProv) formData.append('receiving_entity_provenance', _reProv);
             // ما عُرض على الكاتب فعلاً — لا يُخمَّن خادميّاً من وجود الاقتراح.
             formData.append('displayed_fields', displayedFieldsList().join(','));
         }
