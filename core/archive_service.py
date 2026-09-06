@@ -30,8 +30,8 @@ from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
-#: أقصى ما يُكتب في موضع الحفظ — ``CustodyEvent.note`` سعتُها 255 وتحمل الاثنين.
-PLACE_MAX = 120
+#: سعةُ ``CustodyEvent.note`` — وتحمل موضعَ الحفظ والملاحظةَ معاً.
+NOTE_MAX = 255
 
 
 def archive_book(book, *, by, place='', note=''):
@@ -43,35 +43,29 @@ def archive_book(book, *, by, place='', note=''):
     يرفع ``PermissionDenied`` لمن ليس أرشيفيّاً، و``ValidationError`` على
     كتابٍ عليه التزامٌ مفتوح أو مؤرشَفٍ سلفاً.
     """
-    from core.custody_service import record_custody
+    from core.custody_service import record_archive_event
     from core.models import BookReferral, CustodyEvent
-    from core.scoping import can_archive
 
-    if not can_archive(by):
-        raise PermissionDenied('تمامُ الأرشفة لمسؤول الأرشفة ومدير النظام.')
-    if book.department_id is None:
-        raise ValidationError('لا قسمَ لهذا الكتاب — ولا أرشيفَ بلا قسم.')
+    department = _gate(book, by, 'تمامُ الأرشفة لمسؤول الأرشفة ومدير النظام.')
+    summary = _compose(place, note)
 
     # **الأرشفةُ خاتمةٌ لا إخفاء**: التزامٌ مفتوحٌ يعني أنّ الورقةَ ما زالت
     # عند وحدةٍ تعمل عليها، وإغلاقُ الملفّ عليها يجعل الطابورَ يكذب ويُسقط
     # الكتابَ من عين مَن يطارده.
-    pending = BookReferral.objects.filter(
-        book=book, status__in=BookReferral.OPEN_STATUSES).count()
+    pending = list(BookReferral.objects
+                   .filter(book=book, status__in=BookReferral.OPEN_STATUSES)
+                   .select_related('to_department', 'to_entity')[:5])
     if pending:
-        raise ValidationError(
-            'لا تُؤرشَف: %d التزامٌ مفتوحٌ لم تُنجزه الوحدة.' % pending)
+        raise ValidationError('الكتابُ مُفرَّقٌ والتزامُه ما زال مفتوحاً عند: %s '
+                              '— يُؤرشَف بعد الإنجاز.' % ' · '.join(_target(r)
+                                                                    for r in pending))
     if is_archived(book):
-        raise ValidationError('هذا الكتابُ مؤرشَفٌ سلفاً.')
-
-    place = (place or '').strip()[:PLACE_MAX]
-    body = (note or '').strip()
-    summary = ' — '.join(part for part in ('الحفظ: ' + place if place else '', body)
-                         if part)
+        raise ValidationError('هذا الكتابُ مؤرشَفٌ سلفاً — يُفتح بسببٍ قبل أن يُؤرشَف ثانيةً.')
 
     with transaction.atomic():
-        moment = record_custody(
+        moment = record_archive_event(
             book, CustodyEvent.ARCHIVE_DONE,
-            to_department=book.department, by=by, note=summary)
+            to_department=department, by=by, note=summary)
         _record(book, 'archived', by, summary or 'بلا موضعِ حفظ')
 
     logger.info('archive: book=%s by=%s place=%r', book.pk, by.pk, place)
@@ -87,26 +81,86 @@ def reopen_archive(book, *, by, reason):
     خروجٍ لألغى رجوعُ متعهّدِ بريدٍ حفظَ الورقة بلا أن يقصد أحدٌ ذلك.
     والسببُ **إلزاميّ**: فتحُ ملفٍّ مقفولٍ بلا سببٍ هو ما يجعل الأرشيفَ بلا معنى.
     """
-    from core.custody_service import record_custody
+    from core.custody_service import record_archive_event
     from core.models import CustodyEvent
-    from core.scoping import can_archive
 
-    if not can_archive(by):
-        raise PermissionDenied('فتحُ المؤرشَف لمسؤول الأرشفة ومدير النظام.')
+    _gate(book, by, 'فتحُ المؤرشَف لمسؤول الأرشفة ومدير النظام.')
     reason = (reason or '').strip()
     if not reason:
         raise ValidationError('لا يُفتح مؤرشَفٌ بلا سببٍ مسجَّل.')
+    if len(reason) > NOTE_MAX:
+        raise ValidationError('السببُ يتجاوز %d حرفاً.' % NOTE_MAX)
     if not is_archived(book):
         raise ValidationError('هذا الكتابُ ليس مؤرشَفاً.')
 
     with transaction.atomic():
-        moment = record_custody(
-            book, CustodyEvent.ARCHIVE_REOPEN, to_user=by, by=by,
-            note=('أُخرج من الأرشيف: ' + reason)[:255])
+        moment = record_archive_event(
+            book, CustodyEvent.ARCHIVE_REOPEN, to_user=by, by=by, note=reason)
         _record(book, 'archive-reopened', by, reason[:255])
 
     logger.info('archive-reopen: book=%s by=%s', book.pk, by.pk)
     return moment
+
+
+# ───────────────────────────── البوّابة ─────────────────────────────
+
+def _gate(book, by, denial):
+    """يتحقّق من الحقّ **قبل** أيّ كشفٍ عن حال الكتاب — ويُعيد قسمَ الحفظ.
+
+    الترتيبُ مقصود: لو سبق فحصُ «أعليه التزامٌ مفتوح؟» فحصَ الحقّ، لتعلّم
+    الغريبُ من رسالة الرفض أنّ الكتابَ مُفرَّقٌ وإلى أين — وهو تسريبٌ برسالة.
+
+    **وثلاثةُ شروطٍ لا شرطان**: يفتح المحتوى · أرشيفيٌّ · و**الكتابُ من أرشيف
+    شجرته**. الثالثُ هو الذي كان ناقصاً: الكتابُ المُفرَّق إلى وحدةٍ مرئيٌّ
+    لأرشيفيّها، وليس له أن يُغلق ملفَّ القسم المالك. والشجرةُ لا المساواة —
+    أرشيفُ الشعبة تحت أرشيفيّ قسمها كما يسيل النطاق.
+    """
+    from core.models import Department
+    from core.scoping import (can_archive, can_open_content, is_privileged,
+                              subtree_ids, user_department_id)
+
+    if not can_open_content(book, by):
+        raise PermissionDenied('لا تملك صلاحيةَ أرشفة هذا الكتاب.')
+    if not can_archive(by):
+        raise PermissionDenied(denial)
+
+    department = book.department
+    if department is None:
+        # كتابٌ بلا قسم: المخطّطُ يسمح والواقعُ فيه صفوف. يُحفظ في أرشيف
+        # مَن يحفظه — وهو أصدقُ من رفضٍ يترك الورقةَ بلا رفّ.
+        mine = user_department_id(by)
+        if mine is None:
+            raise ValidationError(
+                'لا قسمَ للكتاب ولا للأرشيفيّ — لا يُعرف أيُّ أرشيفٍ يحفظه.')
+        department = Department.objects.get(pk=mine)
+
+    if not (is_privileged(by)
+            or department.pk in subtree_ids(user_department_id(by))):
+        raise PermissionDenied('هذا الكتابُ من أرشيف قسمٍ آخر — يُؤرشفه أرشيفيُّه.')
+    return department
+
+
+def _compose(place, note):
+    """موضعُ الحفظ ثمّ الملاحظة — **ويُرفض الطويلُ ولا يُبتَر**.
+
+    البترُ الصامت يأكل آخرَ ما كُتب، وموضعُ الرفّ هو الشيءُ الوحيد الذي يُسأل
+    عنه بعد سنة. فأن يُقال «طويل» خيرٌ من أن يُحفظ نصفُ عنوانِ الرفّ.
+    """
+    text = ' — '.join(part for part in ((place or '').strip(), (note or '').strip())
+                      if part)
+    if len(text) > NOTE_MAX:
+        raise ValidationError(
+            'موضعُ الحفظ والملاحظةُ معاً يتجاوزان %d حرفاً.' % NOTE_MAX)
+    return text
+
+
+def _target(referral):
+    """اسمُ مَن عنده الالتزامُ المفتوح — ليقول الرفضُ **أين** الورقة."""
+    if referral.to_department_id:
+        return referral.to_department.name
+    if referral.to_entity_id:
+        return referral.to_entity.name
+    return 'جهةٍ غير مسمّاة'
 
 
 # ───────────────────────── الاشتقاقُ من الحدث ─────────────────────────

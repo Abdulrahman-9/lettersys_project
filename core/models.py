@@ -2092,6 +2092,12 @@ class CustodyEvent(models.Model):
         (ARCHIVE_REOPEN, 'فتحُ مؤرشَف'),
     )
 
+    #: حدثا الأرشفة **بروتوكولٌ فرعيٌّ له قواعدُه** — يُكتبان من
+    #: ``core/archive_service.py`` وحدَه، ويُردّان من كشف العهدة العامّ.
+    #: ولولا ذلك لاختار مختصُّ البريد «تمامَ أرشفة» من الحواريّة
+    #: فتصير قواعدُ الأرشفة كلُّها زينةً تُلتَفُّ من الباب المجاور.
+    ARCHIVE_EVENTS = (ARCHIVE_DONE, ARCHIVE_REOPEN)
+
     PAPER = 'paper'
     DIGITAL = 'digital'
     SIGNATURE_MODES = (

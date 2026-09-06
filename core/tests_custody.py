@@ -16,7 +16,8 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from core.custody_service import custody_chain, held_by, record_custody, undelivered
+from core.custody_service import (custody_chain, held_by, record_archive_event,
+                                  record_custody, undelivered)
 from core.models import (Book, BookHistory, BookReferral, CustodyEvent, Department,
                          Entity, UserProfile)
 from core.referral_service import distribute
@@ -59,8 +60,8 @@ class RecordCustodyTests(CustodyTestCase):
         self.assertEqual(self.book.current_custody.holder_name, self.dept.name)
 
     def test_leaves_a_trace_in_the_book_history(self):
-        record_custody(self.book, CustodyEvent.ARCHIVE_DONE, to_department=self.dept,
-                       note='الرفّ ب/12', by=self.clerk)
+        record_archive_event(self.book, CustodyEvent.ARCHIVE_DONE,
+                             to_department=self.dept, note='الرفّ ب/12', by=self.clerk)
         event = BookHistory.objects.get(book=self.book, action='custody')
         self.assertIn('الرفّ ب/12', event.notes)
 
@@ -132,8 +133,8 @@ class ReceiptClosesTheLoopTests(CustodyTestCase):
         self.assertIn('referral-received', actions)
 
     def test_another_event_does_not_touch_the_referral(self):
-        record_custody(self.book, CustodyEvent.ARCHIVE_DONE, referral=self.referral,
-                       to_department=self.unit, by=self.clerk)
+        record_archive_event(self.book, CustodyEvent.ARCHIVE_DONE,
+                             to_department=self.unit, by=self.clerk)
         self.referral.refresh_from_db()
         self.assertEqual(self.referral.status, BookReferral.SENT)
 
@@ -207,8 +208,19 @@ class DeskQueryTests(CustodyTestCase):
                        by=self.staff)
         self.assertEqual(list(undelivered(self.unit)), [])
 
+    def test_the_general_custody_path_refuses_archive_events(self):
+        """**البابُ المجاور مُغلَق**: حواريّةُ العهدة تعرض الأحداثَ كلَّها.
+
+        لو قُبل «تمامُ أرشفة» منها لاستطاع مختصُّ البريد أن يُغلق ملفَّ كتابٍ
+        عليه التزامٌ مفتوح، وصارت قواعدُ `archive_service` زينةً تُلتَفُّ من
+        الباب المجاور. الرفضُ في الخدمة لا في الغلاف.
+        """
+        for event in CustodyEvent.ARCHIVE_EVENTS:
+            with self.assertRaises(ValidationError):
+                record_custody(self.book, event, to_department=self.unit, by=self.clerk)
+
     def test_an_archive_signature_does_not_count_as_unit_receipt(self):
         """توقيعُ الأرشفة ليس توقيعَ استلام — والخلطُ يُفرغ الطابور كذباً."""
-        record_custody(self.book, CustodyEvent.ARCHIVE_DONE, to_department=self.unit,
-                       by=self.clerk)
+        record_archive_event(self.book, CustodyEvent.ARCHIVE_DONE,
+                             to_department=self.unit, by=self.clerk)
         self.assertEqual(len(list(undelivered(self.unit))), 1)

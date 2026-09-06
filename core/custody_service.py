@@ -29,8 +29,42 @@ def record_custody(book, event, *, referral=None, to_department=None, to_user=No
     لا يصحّ أن تنقطع عند أوّل حاملٍ من خارج الحسابات.
 
     يرفع ``ValidationError`` على حدثٍ مجهول أو صفٍّ بلا حامل أو إحالةٍ لكتابٍ
-    آخر، و``PermissionDenied`` إن لم يملك ``by`` محتوى الكتاب.
+    آخر أو **حدثِ أرشفة**، و``PermissionDenied`` إن لم يملك ``by`` محتوى الكتاب.
     """
+    from core.models import CustodyEvent
+
+    if event in CustodyEvent.ARCHIVE_EVENTS:
+        # **البابُ المجاور يُغلق هنا لا في الغلاف**: حواريّةُ العهدة تعرض
+        # `EVENT_CHOICES` كلَّها، فلو قُبل «تمامُ أرشفة» منها لاستطاع مختصُّ
+        # البريد أن يُغلق ملفَّ كتابٍ عليه التزامٌ مفتوح — وصارت قواعدُ
+        # `archive_service` كلُّها زينة.
+        raise ValidationError(
+            'تمامُ الأرشفة وفتحُها يُسجَّلان من مسار الأرشفة لا من كشف العهدة.')
+    return _write_event(book, event, referral=referral, to_department=to_department,
+                        to_user=to_user, to_name=to_name, signed_at=signed_at,
+                        mode=mode, note=note, by=by)
+
+
+def record_archive_event(book, event, *, to_department=None, to_user=None,
+                         note='', by):
+    """ميكانيكا حدثِ الأرشفة — **ولا قاعدةَ عملٍ هنا**.
+
+    القواعدُ (مَن يُؤرشف · متى يُرفض · ماذا يُكتب في السجلّ) في
+    ``core/archive_service.py`` وحدَه؛ وهذه تكتب الصفَّ وتُحرّك المؤشّر كأختها.
+    وفصلُهما هو ما يجعل الرفضَ في ``record_custody`` ممكناً بلا أن يُغلق البابَ
+    على صاحب الحقّ.
+    """
+    from core.models import CustodyEvent
+
+    if event not in CustodyEvent.ARCHIVE_EVENTS:
+        raise ValidationError('ليس حدثَ أرشفة.')
+    return _write_event(book, event, to_department=to_department,
+                        to_user=to_user, note=note, by=by)
+
+
+def _write_event(book, event, *, referral=None, to_department=None, to_user=None,
+                 to_name='', signed_at=None, mode=None, note='', by):
+    """كتابةُ صفّ العهدة وتحريكُ المؤشّر — الجسدُ المشترك للبابين."""
     from core.models import CustodyEvent
     from core.scoping import can_open_content
 

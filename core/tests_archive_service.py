@@ -61,17 +61,32 @@ class ArchiveWriteTests(TestCase):
         self.assertEqual(moment.holder_name, self.dept.name)
 
     # ── الخاتمةُ ليست إخفاءً ────────────────────────────────────────────
-    def test_an_open_obligation_refuses_the_archive_with_its_count(self):
-        """الورقةُ ما زالت عند وحدةٍ تعمل — وإغلاقُها يُسقطها من عين مطاردها."""
+    def test_an_open_obligation_refuses_the_archive_and_names_the_holder(self):
+        """الورقةُ ما زالت عند وحدةٍ تعمل — والرفضُ يقول **أين** هي."""
+        unit = Department.objects.create(name='وحدة التقارير', code='ح.و',
+                                         parent=self.dept)
         BookReferral.objects.create(
-            book=self.book, from_department=self.dept, to_department=self.dept,
+            book=self.book, from_department=self.dept, to_department=unit,
             status=BookReferral.SENT, created_by=self.archivist)
 
         with self.assertRaises(ValidationError) as caught:
             archive_book(self.book, by=self.archivist)
 
-        self.assertIn('التزامٌ مفتوح', caught.exception.messages[0])
+        self.assertIn('وحدة التقارير', caught.exception.messages[0])
         self.assertFalse(is_archived(self.book))
+
+    def test_a_received_obligation_still_blocks_the_archive(self):
+        """«استلمتُه» ليست «أنجزتُه» — والورقةُ على مكتب الوحدة الآن.
+
+        (اصطاد هذا الحارسَ **غيابُه**: طفرةٌ ضيّقت الشرطَ إلى `SENT` وحدَه
+        فمرّت خضراءَ — أي أنّ نصفَ الحالة المفتوحة كان بلا حارس.)
+        """
+        BookReferral.objects.create(
+            book=self.book, from_department=self.dept, to_department=self.dept,
+            status=BookReferral.RECEIVED, created_by=self.archivist)
+
+        with self.assertRaises(ValidationError):
+            archive_book(self.book, by=self.archivist)
 
     def test_a_finished_obligation_does_not_block_the_archive(self):
         BookReferral.objects.create(
@@ -97,6 +112,67 @@ class ArchiveWriteTests(TestCase):
     def test_a_plain_employee_may_not_archive(self):
         with self.assertRaises(PermissionDenied):
             archive_book(self.book, by=_member('worker', self.dept))
+
+
+class ArchiveScopeTests(TestCase):
+    """**الرؤيةُ ليست الأرشفة** — أخطرُ ما كان ناقصاً في أوّل صياغة."""
+
+    def setUp(self):
+        self.owner = Department.objects.create(name='القسم المالك', code='م.ل')
+        self.other = Department.objects.create(name='قسمٌ غريب', code='غ.ر')
+        self.unit = Department.objects.create(name='وحدةٌ تابعة', code='ت.ب',
+                                              parent=self.owner)
+        self.mine = _member('mine', self.owner, archivist=True)
+        self.stranger = _member('stranger', self.other, archivist=True)
+        self.root = _member('root', self.owner, admin=True)
+        self.book = Book.objects.create(
+            kind='incoming_external', title='ملفُّ القسم', our_number='9820',
+            department=self.owner, created_by=self.mine)
+
+    def test_an_archivist_of_another_department_cannot_close_our_file(self):
+        """يراه لأنّه فُرِّق إليه — ولا يملك إغلاقَ ملفّ القسم المالك."""
+        BookReferral.objects.create(
+            book=self.book, from_department=self.owner, to_department=self.other,
+            status=BookReferral.DONE, created_by=self.mine)
+
+        with self.assertRaises(PermissionDenied):
+            archive_book(self.book, by=self.stranger)
+
+    def test_a_refused_stranger_learns_nothing_about_the_open_obligations(self):
+        """ترتيبُ الفحوص: الحقُّ قبل الحال — وإلّا سرّبت رسالةُ الرفض.
+
+        لو سبق فحصُ الالتزام فحصَ الحقّ لتعلّم الغريبُ من الرسالة أنّ الكتابَ
+        مُفرَّقٌ وإلى أين. فالإذنُ أوّلاً، والخطأُ من نوعه.
+        """
+        BookReferral.objects.create(
+            book=self.book, from_department=self.owner, to_department=self.other,
+            status=BookReferral.SENT, created_by=self.mine)
+
+        with self.assertRaises(PermissionDenied):
+            archive_book(self.book, by=self.stranger)
+
+    def test_the_archivist_of_the_parent_may_file_a_unit_book(self):
+        """الشجرةُ لا المساواة — أرشيفُ الوحدة تحت أرشيفيّ قسمها."""
+        book = Book.objects.create(
+            kind='incoming_external', title='ملفُّ الوحدة', our_number='9821',
+            department=self.unit, created_by=self.mine)
+
+        archive_book(book, by=self.mine)
+
+        self.assertTrue(is_archived(book))
+
+    def test_the_root_may_file_any_department(self):
+        archive_book(self.book, by=self.root)
+
+        self.assertTrue(is_archived(self.book))
+
+    def test_a_place_longer_than_the_column_is_refused_not_truncated(self):
+        """البترُ الصامت يأكل موضعَ الرفّ — وهو الشيءُ الذي يُسأل عنه بعد سنة."""
+        with self.assertRaises(ValidationError):
+            archive_book(self.book, by=self.mine, place='ر' * 300)
+
+        self.assertFalse(is_archived(self.book))
+        self.assertEqual(CustodyEvent.objects.filter(book=self.book).count(), 0)
 
 
 class ArchiveReopenTests(TestCase):
