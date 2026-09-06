@@ -5,9 +5,11 @@ Attachments Views - معالجات المرفقات
 """
 
 import logging
+import mimetypes
 import os
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import quote as urlquote
 
 from django.conf import settings
 from django.contrib import messages
@@ -31,6 +33,41 @@ from core.scoping import can_open_content, is_privileged
 logger = logging.getLogger(__name__)
 
 
+def _content_disposition(download_name):
+    """ترويسة Content-Disposition لتنزيلٍ باسمٍ قد يكون عربيّاً (RFC 5987)."""
+    try:
+        download_name.encode('ascii')
+        return 'attachment; filename="%s"' % download_name.replace('"', '')
+    except UnicodeEncodeError:
+        return "attachment; filename*=UTF-8''%s" % urlquote(download_name)
+
+
+def _serve_media_file(full_path, rel_path, *, as_attachment=False, download_name=None):
+    """يخدم ملفَّ وسائطٍ **بعد أن يكون المتصل قد أذِن** (لا فحصَ صلاحيّةٍ هنا).
+
+    الإنتاج (``USE_X_ACCEL_REDIRECT``): يفوّض البثَّ إلى nginx بترويسة
+    X-Accel-Redirect إلى الموقع الداخليّ — فلا يشغل عاملَ gunicorn بالبثّ.
+    التطوير/الاختبار: FileResponse من Django (لا nginx أمامه).
+    """
+    if getattr(settings, 'USE_X_ACCEL_REDIRECT', False):
+        prefix = settings.X_ACCEL_MEDIA_PREFIX
+        if not prefix.endswith('/'):
+            prefix += '/'
+        resp = HttpResponse()
+        ctype, _enc = mimetypes.guess_type(download_name or rel_path)
+        resp['Content-Type'] = ctype or 'application/octet-stream'
+        # nginx يفكّ ترميزَ الـURI الداخليّ؛ نرمّز المسار (فراغات/أسماء عربيّة).
+        resp['X-Accel-Redirect'] = prefix + urlquote(rel_path.replace('\\', '/'))
+        # nginx يحسب Content-Length من الملفّ الداخليّ — لا نتركه صفراً.
+        if resp.has_header('Content-Length'):
+            del resp['Content-Length']
+        if as_attachment and download_name:
+            resp['Content-Disposition'] = _content_disposition(download_name)
+        return resp
+    return FileResponse(open(full_path, 'rb'), as_attachment=as_attachment,
+                        filename=download_name)
+
+
 def serve_shared_attachment(request, token):
     """يخدم مرفقاً واحداً عبر رابط موقّع محدود المدة — **بلا تسجيل دخول**.
 
@@ -51,8 +88,10 @@ def serve_shared_attachment(request, token):
         raise Http404("الملف لم يعد متاحاً.")
 
     try:
-        handle = attachment.file.open('rb')
-    except (FileNotFoundError, ValueError):
+        full_path = attachment.file.path
+    except (NotImplementedError, ValueError):
+        full_path = None
+    if not full_path or not os.path.isfile(full_path):
         logger.warning("serve_shared_attachment: الملف مفقود على القرص — %s", attachment_id)
         raise Http404("الملف غير موجود.")
 
@@ -62,7 +101,8 @@ def serve_shared_attachment(request, token):
     record_event(request, 'SHARED_LINK_OPEN', book=attachment.book,
                  metadata={'attachment_id': attachment.pk})
 
-    return FileResponse(handle, as_attachment=True, filename=attachment.filename)
+    return _serve_media_file(full_path, attachment.file.name,
+                             as_attachment=True, download_name=attachment.filename)
 
 
 @login_required
@@ -75,7 +115,9 @@ def serve_media(request, path):
     - أي media أخرى (شعارات…) تُخدَم لأي مستخدم مُصادَق فقط.
 
     ملاحظة نشر: في الإنتاج يجب توجيه /media/ عبر هذا العرض (أو تكرار الفحص
-    على مستوى الويب-سيرفر) — لا تَخدمه مباشرةً دون مصادقة.
+    على مستوى الويب-سيرفر) — لا تَخدمه مباشرةً دون مصادقة. مع
+    ``USE_X_ACCEL_REDIRECT`` يبقى الإذنُ هنا ويتولّى nginx البثَّ (انظر
+    docs/DEPLOY_MEDIA.md).
     """
     try:
         full_path = safe_join(settings.MEDIA_ROOT, path)
@@ -110,8 +152,8 @@ def serve_media(request, path):
         else:
             record_view(request, owner_book, action=UserActivityLog.VIEW_ATTACHMENT)
 
-    return FileResponse(open(full_path, "rb"),
-                        as_attachment=bool(request.GET.get('download')))
+    return _serve_media_file(full_path, path,
+                             as_attachment=bool(request.GET.get('download')))
 
 
 def _save_attachment_version(attachment, user, note="", merge_type="none", page_count=None):

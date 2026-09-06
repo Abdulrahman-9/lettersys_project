@@ -206,6 +206,17 @@ MEDIA_URL = '/media/'
 _media_root_env = os.environ.get('MEDIA_ROOT', '')
 MEDIA_ROOT = _media_root_env if _media_root_env else (BASE_DIR / 'media')
 
+# ─── خدمة الوسائط المحميّة عبر X-Accel-Redirect ────────────────────────────
+# المرفقاتُ كتبٌ رسميّة؛ لا يجوز خدمتُها بلا مصادقةٍ وفحصِ ملكيّة. العرضُ
+# serve_media يفعل ذلك، لكنّ بثَّ ملفٍّ قد يبلغ غيغابايتات عبر Django يشغل
+# عاملَ gunicorn طوالَ التنزيل. الحلّ في الإنتاج: يأذنُ Django ثمّ يفوّض البثَّ
+# إلى nginx بترويسة X-Accel-Redirect إلى موقعٍ داخليّ (internal) يخدم MEDIA_ROOT.
+#   nginx:  location /protected_media/ { internal; alias <MEDIA_ROOT>/; }
+#           و /media/ يُمرَّر إلى Django (لا alias مباشر) — انظر docs/DEPLOY_MEDIA.md
+# في التطوير (runserver) والاختبارات يبقى False فيبثّ Django مباشرةً كما كان.
+USE_X_ACCEL_REDIRECT = os.environ.get('USE_X_ACCEL_REDIRECT', 'False').lower() in ('true', '1', 'yes')
+X_ACCEL_MEDIA_PREFIX = os.environ.get('X_ACCEL_MEDIA_PREFIX', '/protected_media/')
+
 # ─── حدود رفع الملفات (منع ابتلاع RAM بملفات PDF كبيرة) ─────────────────────
 # ملفات أكبر من 5 MB تُكتب على القرص مؤقتاً بدل بقائها في الذاكرة
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10 MB (لا يشمل ملفات multipart)
