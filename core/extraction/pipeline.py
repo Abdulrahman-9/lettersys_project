@@ -711,6 +711,17 @@ class AIExtractionService:
                 break
         if etype == 'issuer':
             ranked = prefer_jmc_committee(ranked, cleaned)
+        elif not ranked:
+            # **سدُّ الصمت بوجهة التوجيه السائدة** (مقيسٌ 2026-09-01 على Tier A، n=932):
+            # المستلمةُ في الوارد وجهةُ توجيهٍ عندنا لا اسمٌ على الصفحة، والوجهاتُ قليلة
+            # (45 قيمة، السائدةُ 64.9%) — فحين تصمت المصادرُ كلُّها (9.9%) يُقترح الأكثرُ
+            # تكراراً لنوع الكتاب بثقةٍ منخفضة: top‑1 **65.2 ⟵ 73.6%**. (إعادةُ الترتيب
+            # بالدرجة قِيست في التشغيلة نفسِها **فأذت**: 65 ⟵ 56 — لا تُشحَن.)
+            prior = dominant_receiving_entity(kind)
+            if prior:
+                ranked.append({'entity_id': prior[0], 'entity_name': prior[1],
+                               'entity_code': '', 'entity_type': 'receiver',
+                               'score': 30.0, 'match_type': 'kind_prior'})
         return ranked[:3]
 
     def _read_handwritten_sender_number(self, image_path, entity_id, want_date_crop=False):
@@ -1500,7 +1511,8 @@ class AIExtractionService:
                 #   رمز السجلّ = معرِّف مسجَّل (لا تخمين) → بلا سقف؛
                 #   ذاكرة (hit@1 ≈ 62%) → 0.85، ترويسة (≈ 11%) → 0.5، نمط صريح → كاملة.
                 #   بروفايل (top-1 ≈ 23% وحده) → 0.45 — اقتراحٌ يملأ فجوة الذاكرة لا يحسم.
-                cap = {'memory': 0.85, 'letterhead': 0.5, 'profile': 0.45}.get(best.get('match_type'))
+                cap = {'memory': 0.85, 'letterhead': 0.5, 'profile': 0.45,
+                       'kind_prior': 0.30}.get(best.get('match_type'))
                 setattr(result, conf_attr, min(score, cap) if cap else score)
 
             _assign_entity(_resolve_entity('issuer'), 'issuing_entity_id',
@@ -1860,6 +1872,32 @@ def prefer_jmc_committee(ranked: list, text: str) -> list:
         if _JMC_RE.search((m.get('entity_name') or '') if isinstance(m, dict) else ''):
             return [ranked[i]] + ranked[:i] + ranked[i + 1:]
     return ranked
+
+
+_DOMINANT_CACHE = {}
+
+
+def dominant_receiving_entity(kind: str):
+    """(id, name) للجهة المستلمة الأكثر تكراراً لنوع الكتاب — أو None.
+
+    تُحسب مرّةً لكلّ عمليّةٍ ونوع (مئاتُ الآلاف من الصفوف لا تُعدّ لكلّ مستند). لا
+    تسريبَ في الإنتاج: المستندُ الجديدُ لا صفَّ له بعد."""
+    kind = str(kind or '')
+    if not kind:
+        return None
+    if kind not in _DOMINANT_CACHE:
+        try:
+            from django.db.models import Count
+            from core.models import Book
+            row = (Book.objects.filter(is_deleted=False, kind=kind, receiving_entities__isnull=False)
+                   .values('receiving_entities__id', 'receiving_entities__name')
+                   .annotate(n=Count('id')).order_by('-n').first())
+            _DOMINANT_CACHE[kind] = ((row['receiving_entities__id'], row['receiving_entities__name'])
+                                     if row else None)
+        except Exception as exc:          # noqa: BLE001
+            logger.warning('[pipeline] الوجهةُ السائدة تعذّرت (%s)', type(exc).__name__)
+            return None
+    return _DOMINANT_CACHE[kind]
 
 
 def entity_source_plan(etype: str, kind: str, has_recipient: bool) -> set:
