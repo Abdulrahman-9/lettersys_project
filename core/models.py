@@ -892,6 +892,8 @@ class BookHistory(models.Model):
         # ── التواقيع (BookSignature) ──
         ('sign',               'توقيع مصادقة'),
         ('sign-revoked',       'إبطال توقيع'),
+        ('archived',           'تمام أرشفة'),
+        ('archive-reopened',   'فتح مؤرشف'),
     )
 
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="history")
@@ -2077,12 +2079,17 @@ class CustodyEvent(models.Model):
     ARCHIVE_DONE = 'archive_done'
     COURIER_PICKUP = 'courier_pickup'
     RETURN = 'return'
+    # حدثٌ مخصَّصٌ لا إعادةُ استعمال ``RETURN``: الأرشفةُ تُقرأ بآخر حدثٍ
+    # أرشيفيّ، ولو أُخذ ``RETURN`` علامةَ خروجٍ لألغت **أيُّ** إعادةٍ
+    # لسببٍ آخر (رجوعُ متعهّدٍ مثلاً) حفظَ الورقة صامتةً.
+    ARCHIVE_REOPEN = 'archive_reopen'
     EVENT_CHOICES = (
         (INTAKE,         'قيدٌ في السجلّ'),
         (UNIT_RECEIPT,   'استلامُ وحدة'),
         (ARCHIVE_DONE,   'تمامُ أرشفة'),
         (COURIER_PICKUP, 'تسليمٌ لمتعهّد البريد'),
         (RETURN,         'إعادة'),
+        (ARCHIVE_REOPEN, 'فتحُ مؤرشَف'),
     )
 
     PAPER = 'paper'
