@@ -23,7 +23,7 @@ from django.http import (FileResponse, Http404, HttpResponse,
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.utils._os import safe_join
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.http import content_disposition_header, url_has_allowed_host_and_scheme
 from pypdf import PdfReader, PdfWriter
 
 from ..attachment_service import ensure_pdf, validate_attachment_file
@@ -31,15 +31,6 @@ from ..models import Attachment, AttachmentVersion, BookHistory
 from core.scoping import can_open_content, is_privileged
 
 logger = logging.getLogger(__name__)
-
-
-def _content_disposition(download_name):
-    """ترويسة Content-Disposition لتنزيلٍ باسمٍ قد يكون عربيّاً (RFC 5987)."""
-    try:
-        download_name.encode('ascii')
-        return 'attachment; filename="%s"' % download_name.replace('"', '')
-    except UnicodeEncodeError:
-        return "attachment; filename*=UTF-8''%s" % urlquote(download_name)
 
 
 def _serve_media_file(full_path, rel_path, *, as_attachment=False, download_name=None):
@@ -62,7 +53,9 @@ def _serve_media_file(full_path, rel_path, *, as_attachment=False, download_name
         if resp.has_header('Content-Length'):
             del resp['Content-Length']
         if as_attachment and download_name:
-            resp['Content-Disposition'] = _content_disposition(download_name)
+            cd = content_disposition_header(True, download_name)
+            if cd:
+                resp['Content-Disposition'] = cd
         return resp
     return FileResponse(open(full_path, 'rb'), as_attachment=as_attachment,
                         filename=download_name)
