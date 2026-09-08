@@ -26,6 +26,10 @@ from core.scoping import (
 logger = logging.getLogger(__name__)
 
 
+#: كم قيداً يُعرض في بطاقة السجلّ — والحدُّ يمرّ إلى SQL لا إلى القالب.
+HISTORY_PAGE = 50
+
+
 @login_required
 def book_detail(request, pk):
     """عرض تفاصيل كتاب واحد مع المرفقات والسجل."""
@@ -130,6 +134,14 @@ def book_detail(request, pk):
     attachments = book.attachments.all()
     comments = book.comments.select_related('created_by').all()
 
+    # **الحدُّ في الاستعلام لا في القالب**: كان السجلُّ يُجلب كلُّه ثمّ يُقصّ
+    # بـ`slice:":50"` عند التصيير — فكتابٌ له 800 قيدٍ يدفع ثمنَ 800 صفٍّ
+    # ليُعرض خمسون. و`select_related('by')` تُجنّب استعلاماً لكلّ صفّ.
+    history_rows = BookHistory.objects.filter(book=book)
+    history = list(history_rows.select_related('by')
+                   .order_by('-created_at')[:HISTORY_PAGE])
+    history_total = history_rows.count()
+
     return render(
         request,
         "core/book_detail.html",
@@ -139,6 +151,8 @@ def book_detail(request, pk):
             "comments": comments,
             "back_url": back_url,
             "back_label": back_label,
+            "history": history,
+            "history_total": history_total,
             **_lifecycle_context(book, request.user),
         },
     )
