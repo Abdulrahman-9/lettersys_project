@@ -28,9 +28,22 @@ _MEMORY_HALFLIFE_DAYS = 180  # نصف-عُمر ترجيح الحداثة: الأ
 _AR_TASHKEEL = re.compile(r'[ً-ْٰـ]')
 
 
+_MEMORY_ALLOWED = (set('0123456789 ') | {chr(i) for i in range(0x0600, 0x06FF)}
+                   | set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
+                   | set('.,;:!?-/()[]{}'))
+
+
 def _normalize_ar(s: str) -> str:
-    """تطبيع عربي خفيف يحسّن المطابقة (ألف/ياء/تاء مربوطة + حذف تشكيل/تطويل)."""
-    s = _AR_TASHKEEL.sub('', str(s or ''))
+    """تطبيع عربي خفيف يحسّن المطابقة (ألف/ياء/تاء مربوطة + حذف تشكيل/تطويل).
+
+    **وتوحيدُ شكل الجانبين** (مقيس 2026-09-01): ذاكرةُ الترويسة خُزّنت من Tesseract
+    **الخامّ** (`backfill`) بينما الاستعلامُ الحيُّ يمرّ بـ`clean_text` الذي يحذف كلَّ
+    محرفٍ خارج طقمٍ مسموح — فالفهرسُ والاستعلامُ كانا بشكلين. تطبيقُ الحذف نفسِه هنا
+    (على الفهرس والاستعلام ونوافذ الترويسة معاً) رفع E‑100 بالنوع: المُصدِرة 44.0 ⟵
+    **50.0%** والمستلمة 60.6 ⟵ **64.9%** (top‑3 62 ⟵ 69 · 71 ⟵ 79)، وTier A بلا تراجع.
+    """
+    s = ''.join(c if c in _MEMORY_ALLOWED else ' ' for c in str(s or ''))
+    s = _AR_TASHKEEL.sub('', s)
     s = re.sub(r'[إأآ]', 'ا', s)
     s = s.replace('ى', 'ي').replace('ة', 'ه')
     return ' '.join(s.lower().split()).strip()

@@ -237,3 +237,22 @@ class ProductionTextShapeTests(SimpleTestCase):
         self.assertIn('strict_text = pdf_first_page_text(image_path)', src)
         self.assertIn('_strict_raw = strict_ref_match(strict_text)', src)
         self.assertNotIn('strict_ref_match(pdf_text)', src)
+
+
+class PrintedAnchorSanitizerTests(SimpleTestCase):
+    """e2e‑F بالعين: المطبوعُ كان يبلغ الكاتبَ غيرَ مقنَّنٍ ومبتوراً — 0/10."""
+
+    def test_approved_prefix_is_canonicalised_to_digits(self):
+        from core.extraction.pipeline import sanitize_printed_anchor
+        self.assertEqual(sanitize_printed_anchor('NK-2025092'), '2025092')
+        self.assertEqual(sanitize_printed_anchor('ADO-117'), '117')
+
+    def test_truncations_are_silenced(self):
+        from core.extraction.pipeline import sanitize_printed_anchor
+        for bad in ('NK-20', 'EBS-MdOC-2026004311', 'NK', ''):
+            self.assertIsNone(sanitize_printed_anchor(bad), bad)
+
+    def test_unmeasured_prefixes_pass_through_untouched(self):
+        from core.extraction.pipeline import sanitize_printed_anchor
+        self.assertEqual(sanitize_printed_anchor('KHL/25/32'), 'KHL/25/32')
+
