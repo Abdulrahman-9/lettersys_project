@@ -432,7 +432,10 @@ class BookDetailJSONTests(BookViewsBase):
 # books_api.py — api_book_detail_json attachment hints (Phase 1 inline preview)
 # ===========================================================================
 
-@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+_MEDIA_TMP = tempfile.mkdtemp()
+import atexit, shutil
+atexit.register(shutil.rmtree, _MEDIA_TMP, True)
+@override_settings(MEDIA_ROOT=_MEDIA_TMP)
 class BookDetailJSONAttachmentTests(BookViewsBase):
     """تلميحات المرفقات (is_pdf/is_image/content_type/is_primary) للعرض المضمّن."""
 

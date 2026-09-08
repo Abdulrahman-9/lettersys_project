@@ -51,6 +51,10 @@ EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
 # ─── تجاوز: ملفات الوسائط في مجلد مؤقت ────────────────────────────────────
 import tempfile
 MEDIA_ROOT = Path(tempfile.mkdtemp())
+# مجلّدُ الوسائط المؤقّت لم يكن يُمسح قطّ: 219 مجلّداً (6.2 GB) ملأت C: في أسبوع
+# (2026-09-08). يُمسح عند خروج العمليّة، فاشلاً‑بصمت إن كان مقفولاً.
+import atexit, shutil
+atexit.register(shutil.rmtree, str(MEDIA_ROOT), True)
 
 # ─── تجاوز: كلمة مرور بسيطة مسموح بها للاختبارات ─────────────────────────
 AUTH_PASSWORD_VALIDATORS = []

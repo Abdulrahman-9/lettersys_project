@@ -21,6 +21,8 @@ from django.utils import timezone
 from core.models import Attachment, Book
 
 _MEDIA = tempfile.mkdtemp()
+import atexit, shutil
+atexit.register(shutil.rmtree, _MEDIA, True)
 _PDF = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\nfake-official-document-bytes\n%%EOF\n"
 
 
