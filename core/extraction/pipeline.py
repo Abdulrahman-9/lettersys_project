@@ -1921,19 +1921,24 @@ def dominant_receiving_entity(kind: str):
     kind = str(kind or '')
     if not kind:
         return None
-    if kind not in _DOMINANT_CACHE:
+    # لا يُحفَظ الفراغُ إلى الأبد (قاعدةٌ فارغةٌ ثمّ مُحمَّلة)، ومهلةٌ 10 دقائق للانجراف.
+    _hit = _DOMINANT_CACHE.get(kind)
+    if _hit is not None and (time.time() - _hit[1]) < 600:
+        return _hit[0]
+    if True:
         try:
             from django.db.models import Count
             from core.models import Book
             row = (Book.objects.filter(is_deleted=False, kind=kind, receiving_entities__isnull=False)
                    .values('receiving_entities__id', 'receiving_entities__name')
                    .annotate(n=Count('id')).order_by('-n').first())
-            _DOMINANT_CACHE[kind] = ((row['receiving_entities__id'], row['receiving_entities__name'])
-                                     if row else None)
+            val = (row['receiving_entities__id'], row['receiving_entities__name']) if row else None
+            if val is not None:
+                _DOMINANT_CACHE[kind] = (val, time.time())
+            return val
         except Exception as exc:          # noqa: BLE001
             logger.warning('[pipeline] الوجهةُ السائدة تعذّرت (%s)', type(exc).__name__)
             return None
-    return _DOMINANT_CACHE[kind]
 
 
 def entity_source_plan(etype: str, kind: str, has_recipient: bool) -> set:

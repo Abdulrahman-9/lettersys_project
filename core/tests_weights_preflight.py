@@ -23,7 +23,7 @@ import tempfile
 
 from django.conf import settings
 from django.core.management import CommandError, call_command
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from core.extraction import artifacts as A
 
@@ -227,3 +227,20 @@ class ModelsHealthcheckCommandTests(SimpleTestCase):
         out = self._run_capturing_failure()
         for art in A.ARTIFACTS:
             self.assertIn(art.label, out, art.key)
+
+
+class ModelsHealthcheckDataTests(TestCase):
+    """يحتاج قاعدةً (SimpleTestCase يمنع الاستعلام فيسقط الفحصُ إلى تحذيرٍ عامّ)."""
+
+    def test_empty_database_is_reported(self):
+        """إنتاجٌ بلا بيانات يبدو سليماً ويُخرج جهاتٍ فارغةً — الفحصُ يقولها."""
+        from io import StringIO
+        out = StringIO()
+        try:
+            call_command('models_healthcheck', stdout=out, stderr=out)
+        except CommandError:
+            pass
+        text = out.getvalue()
+        self.assertIn('بياناتُ القاعدة', text)
+        self.assertIn('لا جهاتَ في القاعدة', text)
+
