@@ -340,3 +340,41 @@ class ArchiveButtonTests(TestCase):
 
         self.assertContains(res, 'فتحُ المؤرشَف')
         self.assertNotContains(res, 'archiveModal')
+
+
+class ArchiveToolsTests(TestCase):
+    """أدواتُ الدور: السلّةُ والأضابيرُ والاستعلامُ والإدخال.
+
+    «يُدخل الكتبَ ويؤرشفها ويستعلم عنها ويفتح الأضابير» — أربعةٌ، ولا تكفي
+    البوّابةُ الأولى وحدَها ما لم تُفتح الأبوابُ الأربعة فعلاً.
+    """
+
+    def setUp(self):
+        self.dept = Department.objects.create(name='قسم الأدوات', code='أ.د')
+        self.archivist = _member('arch', self.dept, archivist=True)
+        self.client.force_login(self.archivist)
+
+    def test_he_reaches_the_pages_his_role_needs(self):
+        for path in ('/books/unified/', '/books/dossiers/', '/books/trash/',
+                     '/books/extract/smart-desktop/'):
+            self.assertEqual(self.client.get(path).status_code, 200, path)
+
+    def test_the_trash_link_is_offered_to_him(self):
+        """يستعيد ورقاً حُذف خطأً — وكان الرابطُ محجوباً بـ`is_staff` وحدَها."""
+        self.assertContains(self.client.get('/'), 'سلة المهملات')
+
+    def test_the_trash_link_stays_hidden_from_a_plain_employee(self):
+        self.client.force_login(_member('plain', self.dept))
+
+        self.assertNotContains(self.client.get('/'), 'سلة المهملات')
+
+    def test_his_dashboard_carries_the_archive_section(self):
+        res = self.client.get('/')
+
+        self.assertContains(res, 'الأرشفة')
+        self.assertContains(res, 'أُنجز ولم يُحفَظ')
+
+    def test_a_plain_employee_gets_no_archive_section(self):
+        self.client.force_login(_member('plain2', self.dept))
+
+        self.assertNotContains(self.client.get('/'), 'أُنجز ولم يُحفَظ')

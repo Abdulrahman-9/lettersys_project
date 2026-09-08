@@ -84,4 +84,8 @@ def nav_gates(request):
         'desk': can_use_desk(user),
         'archive': can_archive(user),
         'audit': can_view_audit(user),
+        # السلّةُ مُنطَّقةٌ أصلاً بـ`scope_books_for`، والاستعادةُ بـ
+        # `can_open_content`. فالأرشيفيُّ يستعيد ورقاً حُذف خطأً — وهو
+        # عملُه — وكان الرابطُ محجوباً عنه بـ`is_staff` وحدَها.
+        'trash': user.is_staff or can_archive(user),
     }}
