@@ -378,3 +378,90 @@ class ArchiveToolsTests(TestCase):
         self.client.force_login(_member('plain2', self.dept))
 
         self.assertNotContains(self.client.get('/'), 'أُنجز ولم يُحفَظ')
+
+
+class ArchiveDeskIsAWorkSurfaceTests(TestCase):
+    """الطاولةُ تُري العملَ **وتدع صاحبَها يعمل** — لا لوحةَ قراءةٍ فقط.
+
+    أرشيفيٌّ يمرّ على عشرات الأوراق في الجلسة؛ وطاولةٌ تُلزمه فتحَ كلّ كتابٍ
+    ثمّ العودةَ تُحوّل عملَ دقيقةٍ إلى عملِ ساعة — فتُهجَر ويُهجَر الدورُ معها.
+    """
+
+    def setUp(self):
+        self.dept = Department.objects.create(name='قسم السطح', code='س.ط')
+        self.archivist = _member('arch', self.dept, archivist=True)
+        self.client.force_login(self.archivist)
+        Book.objects.create(kind='incoming_external', title='ورقةٌ تنتظر',
+                            our_number='9990', department=self.dept,
+                            created_by=self.archivist)
+
+    def test_the_queue_row_offers_the_filing_action(self):
+        res = self.client.get(URL)
+
+        self.assertContains(res, 'data-qb-act="archive"')
+        self.assertContains(res, 'احفظه')
+
+    def test_the_action_is_declared_by_the_queue_not_guessed_by_the_template(self):
+        """القالبُ لا يسأل عن الدور — الطابورُ يُصرّح بفعله."""
+        import io
+
+        with io.open('templates/core/_queue_board.html', encoding='utf-8') as fh:
+            markup = fh.read()
+
+        self.assertIn('q.action', markup)
+        for forbidden in ('archivist', 'is_superuser', 'can_archive'):
+            self.assertNotIn(forbidden, markup)
+
+    def test_the_desk_loads_the_hand_that_moves_the_button(self):
+        """«مبنيٌّ ولا أحد يوصله» — زرٌّ بلا سكربتٍ يُنصت له زينة."""
+        res = self.client.get(URL)
+
+        self.assertContains(res, 'js/archive_desk.js')
+
+    def test_a_reading_only_queue_offers_no_action(self):
+        queues = {q['key']: q for q in self.client.get(URL).context['queues']}
+
+        self.assertIsNone(queues['recent'].get('action'))
+        self.assertEqual(queues['idle'].get('action'), 'archive')
+
+    def test_a_reading_only_queue_renders_no_button_either(self):
+        """العقدُ في البانِي **والمُصيَّرُ يطابقه** — لا يكفي أن يصمت السياق.
+
+        (اصطاد هذا الحارسَ **غيابُه**: طفرةٌ حذفت شرطَ `q.action` من القالب
+        فمرّت خضراءَ — أي أنّ صفوفَ «حُفظ حديثاً» كانت تُصيَّر بأزرارِ حفظٍ
+        لكتبٍ محفوظةٍ سلفاً بلا أن يشتكي حارس.)
+        """
+        import re
+
+        archive_book(Book.objects.get(our_number='9990'), by=self.archivist)
+
+        html = self.client.get(URL).content.decode()
+        # مرساةٌ على البطاقة بعينها لا على أوّل `qb-card` — وإلّا ابتلع
+        # التعبيرُ الجشعُ الطوابيرَ التي قبلها وأخفق على مُصيَّرٍ سليم.
+        recent = re.search(r'aria-labelledby="qb-h-recent".*?</section>', html, re.S)
+
+        self.assertIsNotNone(recent, 'لم يُعثر على بطاقة الطابور القرائيّ')
+        self.assertNotIn('data-qb-act', recent.group(0))
+
+
+class AuditLinkTests(TestCase):
+    """بوّابةٌ بُنيت ولم يستعملها أحد — والرابطُ الغائب صفحةٌ لا تُزار."""
+
+    def setUp(self):
+        self.dept = Department.objects.create(name='قسم السجلّ', code='ج.ل')
+
+    def test_the_department_head_finds_the_audit_link(self):
+        self.client.force_login(_member('head', self.dept, head=True))
+
+        self.assertContains(self.client.get('/'), 'سجلّ الحركات')
+
+    def test_a_plain_employee_does_not(self):
+        self.client.force_login(_member('plain', self.dept))
+
+        self.assertNotContains(self.client.get('/'), 'سجلّ الحركات')
+
+    def test_the_archivist_does_not_either(self):
+        """يحفظ الورقَ ولا يراقب مَن قرأه."""
+        self.client.force_login(_member('arch', self.dept, archivist=True))
+
+        self.assertNotContains(self.client.get('/'), 'سجلّ الحركات')

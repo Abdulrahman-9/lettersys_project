@@ -82,3 +82,15 @@
   background: #fafafa; color: #64748b; font-size: .82rem;
 }
 .qb-legacy b { color: #475569; font-variant-numeric: tabular-nums; }
+
+/* زرُّ فعلِ الصفّ — هادئٌ حتى يُقصَد: الطابورُ للقراءة أوّلاً، والفعلُ
+   في متناول اليد لا في وجهها. */
+.qb-act {
+  border: 1px solid #e5e7eb; border-radius: 999px; background: #fff;
+  padding: .1rem .6rem; font-size: .72rem; font-weight: 700;
+  color: #64748b; cursor: pointer; white-space: nowrap;
+  transition: border-color .15s ease, color .15s ease;
+}
+.qb-act:hover:not(:disabled) { border-color: var(--qb-tone, #94a3b8); color: var(--qb-tone, #475569); }
+.qb-act:focus-visible { outline: 2px solid var(--brand, #0f766e); outline-offset: 2px; }
+.qb-act:disabled { opacity: .55; cursor: progress; }

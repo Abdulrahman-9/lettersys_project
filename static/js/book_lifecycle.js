@@ -57,14 +57,42 @@
     });
   }
 
-  function notify(message, ok) {
+  // مفتاحُ الرسالة التي تعبر إعادةَ التحميل — انظر `notify`.
+  var PENDING_TOAST = 'lifecycleToast';
+
+  function toast(message, ok) {
+    // **لهجةٌ واحدةٌ للإشعار**: التطبيقُ له مركزٌ موحّد (`ToastCenter` في
+    // `static/app.js`، مُحمَّلٌ في كلّ صفحة) يستعمله البحثُ الموحّد ومدير
+    // المستندات. وكانت حواريّاتُ دورة الحياة وحدَها تكتب تنبيهاً مضمَّناً —
+    // لهجةً خامسةً لشيءٍ واحد. والمضمَّنُ يبقى **سقوطاً احتياطيّاً** لا بديلاً.
+    if (window.ToastCenter && typeof window.ToastCenter.show === 'function') {
+      window.ToastCenter.show(ok ? 'success' : 'error', message);
+      return true;
+    }
     var box = document.getElementById('lifecycleAlert');
-    if (!box) return;
+    if (!box) return false;
     box.className = 'alert alert-' + (ok ? 'success' : 'danger') + ' py-2 mb-3';
     box.textContent = message;
     box.hidden = false;
-    if (ok) setTimeout(function () { window.location.reload(); }, 700);
+    return true;
   }
+
+  function notify(message, ok) {
+    if (!ok) { toast(message, false); return; }
+    // النجاحُ يُعيد تحميلَ الصفحة ليظهر أثرُه، فتوستٌ يُعرض الآن يموت قبل أن
+    // يُقرأ. تُحفظ الرسالةُ لتُعرض **بعد** التحميل — فيرى الكاتبُ ما جرى.
+    try { window.sessionStorage.setItem(PENDING_TOAST, message); } catch (e) { toast(message, true); }
+    setTimeout(function () { window.location.reload(); }, 250);
+  }
+
+  (function showWhatSurvivedTheReload() {
+    try {
+      var pending = window.sessionStorage.getItem(PENDING_TOAST);
+      if (!pending) return;
+      window.sessionStorage.removeItem(PENDING_TOAST);
+      toast(pending, true);
+    } catch (e) { /* تخزينٌ محجوب — والأثرُ ظاهرٌ في الصفحة على أيّ حال */ }
+  })();
 
   function busy(button, on) {
     if (!button) return;

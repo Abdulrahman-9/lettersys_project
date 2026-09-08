@@ -23,6 +23,17 @@
         <span class="qb-meta">
           {% if r.meta_label %}<span class="qb-to">{{ r.meta_label }}</span>{% endif %}
           {% if r.meta_date %}<time datetime="{{ r.meta_date|date:'Y-m-d' }}">{{ r.meta_date|date:"Y-m-d" }}</time>{% endif %}
+          {% comment %}
+            فعلُ الصفّ — يُعرَض حين يُصرّح الطابورُ به (`q.action`) لا حين
+            يُخمّن القالبُ الدور. طاولةٌ تُري العملَ ولا تدع صاحبَها يعمل
+            تُجبره على فتح كلّ كتابٍ في تبويبٍ ثمّ العودة، فيهجرها.
+          {% endcomment %}
+          {% if q.action %}
+          <button type="button" class="qb-act" data-qb-act="{{ q.action }}"
+                  data-book-id="{{ r.book.pk }}" data-book-label="{{ r.book.our_number_display|default:'—' }}">
+            {{ q.action_label }}
+          </button>
+          {% endif %}
         </span>
       </li>
       {% endfor %}
