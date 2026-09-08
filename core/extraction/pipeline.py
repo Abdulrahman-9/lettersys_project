@@ -47,7 +47,7 @@ from core.models import AIIntegrationSettings
 from core.extraction.matchers.pattern import PatternMatcher, DateParser
 from core.extraction.matchers.entity import EntityMatcher
 from core.extraction.matchers.profile import SenderNumberProfiles
-from core.extraction.matchers.strict_ref import (canonical_sender_number,
+from core.extraction.matchers.strict_ref import (APPROVED_PREFIXES, canonical_sender_number,
                                                  strict_ref_match)
 from core.models import (
     OCRResult, DataExtractionResult, ExtractionFeedback,
@@ -445,6 +445,27 @@ def _route_title_emission(result, source: str) -> None:
     }
     result.title = ''
     result.title_confidence = 0.0
+
+
+def sanitize_printed_anchor(raw):
+    """مخرَجُ كاتب المرساة المطبوعة قبل أن يبلغ الكاتب — تقنينٌ وحارسُ سلامة.
+
+    **مقيسٌ بالعين على e2e‑F** (2026-09-01): حين يصمت الصارمُ يكتب هذا المسار، وعشرتُه
+    كلُّها كانت خاطئة — خمسٌ **صيغةً لا قيمة** (`NK-2025092` والحقيقةُ `2025092`: لم يكن
+    يُقنّن خلافاً للقاعدة المُجمَّدة «الإصدارُ خاناتٌ وحدَها») وخمسٌ **بترٌ** من طبقة
+    النصّ (`NK-20` · `NK-202518` · `EBS-MdOC-2026004311`). فالبادئاتُ المعتمدةُ تُقنَّن
+    خاناتٍ، وأيُّ قيمةٍ خاناتُها خارج 3–8 تُكتَم (مرجعٌ حقيقيٌّ لا يقلّ عن 3 ولا يزيد
+    على سنةٍ + أربع). غيرُ المعتمَد (`KHL/25/32`) يبقى كما هو — لم يُقَس فلا يُمسّ.
+    """
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    digits = canonical_sender_number(raw)
+    if not (3 <= len(digits) <= 8):
+        return None
+    if any(raw.upper().startswith(p) for p in APPROVED_PREFIXES):
+        return digits
+    return raw
 
 
 def pdf_first_page_text(path: str) -> str:
@@ -1428,7 +1449,7 @@ class AIExtractionService:
                 result.sender_date = patterns.get('sender_date')
                 result.sender_date_confidence = (patterns.get('sender_date_confidence') or 0.0) \
                     if result.sender_date else 0.0
-                result.sender_number = patterns.get('sender_number')
+                result.sender_number = sanitize_printed_anchor(patterns.get('sender_number'))
                 result.sender_number_confidence = patterns.get('sender_number_confidence') or 0.0
                 # **منشأُ القيمة** — يفصل كاتبَ مرساة الرأس (المفتوحُ في S4) عن
                 # بقيّة الكُتّاب النصّيّين (احتياطُ ref_num والبصمات) الذين يبقون
