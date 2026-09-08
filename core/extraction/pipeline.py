@@ -1224,9 +1224,15 @@ class AIExtractionService:
         image_path: str,
         skip_ocr: bool = False,
         on_progress: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        book_kind: str = '',
     ) -> AIExtractionResult:
         """
         Process single image through complete extraction pipeline.
+
+        `book_kind`: نوعُ الكتاب كما اختاره الكاتبُ في الواجهة (التبويب) — **يُمرَّر
+        دائماً**. مقيسٌ (E‑100 المختومة، 2026-09-01): بدونه تعمل خطّةُ اتّجاه الجهات
+        على `''` كأنّ كلَّ كتابٍ صادر، فتسقط المستلمةُ من 73.6% (Tier A بالنوع) إلى
+        29.8%، وسدُّ الصمت لا يُطلق مرّةً (0/100).
 
         Args:
             image_path:   Path to image file
@@ -1242,7 +1248,7 @@ class AIExtractionService:
         # تنفيذ المعالجة الداخلية مع حد زمني
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(
-                self._process_image_internal, image_path, skip_ocr, on_progress
+                self._process_image_internal, image_path, skip_ocr, on_progress, book_kind
             )
             try:
                 return future.result(timeout=timeout_sec)
@@ -1261,6 +1267,7 @@ class AIExtractionService:
         image_path: str,
         skip_ocr: bool = False,
         on_progress: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        book_kind: str = '',
     ) -> AIExtractionResult:
         """المعالجة الداخلية — تُستدعى داخل thread منفصل."""
 
@@ -1481,6 +1488,11 @@ class AIExtractionService:
                 result.recipient_text = patterns.get('recipient') or ''
                 logger.info('Pattern matching done: book_number=%s', result.book_number)
 
+            # نوعُ الكتاب من الواجهة يعلو على تخمين النصّ: الكاتبُ اختار التبويبَ قبل
+            # المسح، وخطّةُ الاتّجاه وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه).
+            if book_kind:
+                result.book_kind = book_kind
+                result.book_kind_confidence = 1.0
             # Step 5: Entity Matching
             _progress('entity_matching')
             result.progress_stage = 'مطابقة الجهات'
@@ -1497,7 +1509,10 @@ class AIExtractionService:
                     str(getattr(result, 'book_kind', '') or ''),
                     getattr(result, 'recipient_text', '') or '',
                     getattr(result, 'register_code', '') or '',
-                    entity_candidates)
+                    entity_candidates,
+                    # **للقياس فقط**: يُقصي صفَّ الكتاب نفسِه من تصويت الذاكرة عند
+                    # تشغيل الأنبوب كاملاً على كتابٍ محفوظ. None في الإنتاج دائماً.
+                    exclude_book_id=getattr(self, '_eval_exclude_book_id', None))
 
             def _assign_entity(matches, id_attr, name_attr, conf_attr, matches_attr):
                 if not matches:
@@ -1971,19 +1986,19 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
     }
 
 
-def run_ocr_inprocess(image_path: str) -> Dict[str, Any]:
+def run_ocr_inprocess(image_path: str, book_kind: str = '') -> Dict[str, Any]:
     """يشغّل الاستخراج داخل عملية الخادم مباشرةً — آمن مع Tesseract (برنامج خارجي،
     لا يُسقِط Django بـ segfault مثل EasyOCR/PyTorch) وأسرع من run_ocr_isolated
     (بلا إعادة إقلاع Django ~5-11ث). الأخطاء تُعاد كـ needs_review بلا رفع استثناء."""
     try:
-        result = AIExtractionService().process_image(image_path)
+        result = AIExtractionService().process_image(image_path, book_kind=book_kind)
         return result_to_scan_data(result)
     except Exception as exc:  # noqa: BLE001 — فشل OCR لا يُهدر المسح
         logger.error('[OCR-inprocess] خطأ: %s', exc, exc_info=True)
         return {'needs_review': True, '_error': str(exc)}
 
 
-def run_ocr_isolated(image_path: str, timeout: int = 150) -> Dict[str, Any]:
+def run_ocr_isolated(image_path: str, timeout: int = 150, book_kind: str = '') -> Dict[str, Any]:
     """
     يشغّل الاستخراج في عملية فرعية معزولة عبر `manage.py ocr_process`.
 
@@ -2007,7 +2022,7 @@ def run_ocr_isolated(image_path: str, timeout: int = 150) -> Dict[str, Any]:
 
     try:
         proc = subprocess.run(
-            [sys.executable, manage_py, 'ocr_process', image_path, out_path],
+            [sys.executable, manage_py, 'ocr_process', image_path, out_path, '--book-kind', book_kind or ''],
             capture_output=True, text=True, timeout=timeout, env=env,
         )
         if proc.returncode != 0:
