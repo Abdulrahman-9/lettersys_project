@@ -113,3 +113,34 @@ class DominantDestinationFallbackTests(TestCase):
                              for x in svc.resolve_entity_candidates('issuer', 'نصٌّ', 'incoming_internal', '', '', [])))
         P._DOMINANT_CACHE.clear()
 
+
+class BookKindReachesThePipelineTests(TestCase):
+    """E‑100 (مختومة): بلا نوع الكتاب تعمل خطّةُ الاتّجاه على '' — المستلمة 29.8% لا 73.6%."""
+
+    def _src(self, rel):
+        import os
+        from django.conf import settings
+        return open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8').read()
+
+    def test_pipeline_accepts_and_honours_the_kind(self):
+        import inspect
+        from core.extraction.pipeline import AIExtractionService
+        self.assertIn('book_kind', inspect.signature(AIExtractionService.process_image).parameters)
+        self.assertIn('book_kind', inspect.signature(AIExtractionService._process_image_internal).parameters)
+        src = self._src('core/extraction/pipeline.py')
+        self.assertIn('if book_kind:', src)
+        self.assertIn('result.book_kind = book_kind', src)
+
+    def test_every_extraction_entry_point_forwards_it(self):
+        ep = self._src('core/extraction/api/endpoints.py')
+        self.assertEqual(ep.count("request.POST.get('book_kind')"), 2)
+        self.assertEqual(ep.count('book_kind=_book_kind'), 2)
+        sc = self._src('core/views/scan_settings.py')
+        self.assertIn("run_ocr_inprocess(tmp_path, book_kind=_book_kind)", sc)
+        self.assertIn("run_ocr_isolated(tmp_path, book_kind=_book_kind)", sc)
+        self.assertIn("'--book-kind', book_kind", self._src('core/extraction/pipeline.py'))
+
+    def test_ui_sends_it_with_every_upload(self):
+        js = self._src('static/extraction_smart.js')
+        self.assertGreaterEqual(js.count(".append('book_kind',"), 4)
+

@@ -2614,6 +2614,8 @@ class ExtractionSmartSystem {
             setMsg('جارٍ تجهيز المستند...');
             const fd = new FormData();
             fd.append('file', blob, 'scan.pdf');
+            // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
+            fd.append('book_kind', (typeof this?.getCurrentKind === 'function' ? this.getCurrentKind() : (window.extractionSystem?.getCurrentKind?.() || '')) || '');
             fd.append('trim_blanks', '1');           // إزالة ظهور الصفحات الفارغة (مسح مزدوج)
             // مفتاح الاستخراج التلقائي يحكم مسار المسح أيضاً: مطفأً يُلتقط المستند فوراً بلا OCR
             fd.append('auto_ocr', this._autoExtractEnabled() ? '1' : '0');
@@ -2979,6 +2981,8 @@ class ExtractionSmartSystem {
         const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
         const fd = new FormData();
         fd.append('file', file, name || file.name || 'append.pdf');
+        // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
+        fd.append('book_kind', (typeof this?.getCurrentKind === 'function' ? this.getCurrentKind() : (window.extractionSystem?.getCurrentKind?.() || '')) || '');
         fd.append('trim_blanks', '1');   // قصّ الفراغات كمسار المسح
         try {
             const resp = await fetch('/books/api/scan/process-upload/', {
@@ -3556,6 +3560,8 @@ class ExtractionSmartSystem {
         const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
         const fd = new FormData();
         fd.append('file', file, file.name);
+        // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
+        fd.append('book_kind', (typeof this?.getCurrentKind === 'function' ? this.getCurrentKind() : (window.extractionSystem?.getCurrentKind?.() || '')) || '');
         // تجهيز فقط بلا OCR: الاستخراج يجري بعد المعاينة عبر extractData (المحكوم بمفتاح
         // «استخراج تلقائي»). بدون هذا كان OCR يعمل مرّتين — في process-upload (وتُهمَل
         // نتيجتها) ثم في smart_extract_direct — فيتضاعف أبطأ جزء في المسار.
@@ -3873,6 +3879,8 @@ class ExtractionSmartSystem {
     async _streamExtract() {
         const form = new FormData();
         form.append('file', this.currentFile);
+        // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
+        form.append('book_kind', (typeof this?.getCurrentKind === 'function' ? this.getCurrentKind() : (window.extractionSystem?.getCurrentKind?.() || '')) || '');
 
         let response;
         try {
