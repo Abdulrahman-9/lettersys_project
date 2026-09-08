@@ -179,10 +179,19 @@ class EntityResolver:
             self.index.append({'id': eid, 'name': name, 'key': key or set(toks),
                                'code': code})
 
+    _cache_n = -1
+
     @classmethod
     def get(cls):
-        if cls._cache is None:
-            cls._cache = cls()
+        # **كاشٌ يشفى ذاتيّاً** (إنتاج 2026-09-01): بُني على قاعدةٍ فارغةٍ فحفظ خريطةً
+        # فارغةً إلى الأبد وبقي «لا جهات» بعد تحميل البيانات حتّى إعادة التشغيل.
+        # عدُّ الجهات النشطة استعلامٌ رخيص؛ تغيّرُه يُعيد البناء.
+        try:
+            n = Entity.objects.filter(is_active=True).count()
+        except Exception:      # noqa: BLE001
+            n = cls._cache_n
+        if cls._cache is None or n != cls._cache_n:
+            cls._cache = cls(); cls._cache_n = n
         return cls._cache
 
     def resolve(self, text, top_k=3):
