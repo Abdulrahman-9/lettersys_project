@@ -8,7 +8,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Case, Count, IntegerField, OuterRef, Q, Subquery, Value, When
+from django.db.models import Case, Count, F, IntegerField, OuterRef, Q, Subquery, Value, When
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,7 +16,8 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from ..forms import EntityForm
-from ..models import Book, Entity
+from core.entity_kinds import KIND_HINTS, KIND_LABELS, KINDS
+from ..models import Book, Entity, EntityGroup
 from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,17 @@ def entity_list_api(request):
         }, status=500)
 
 
+def _editing_group(request):
+    """العنقودُ المطلوب تعديلُه عبر `?edit=<id>` — أو لا شيء.
+
+    التعديلُ برابطٍ لا بـJS: يُنسخ ويُشارَك ويعمل بلا سكربت.
+    """
+    raw = (request.GET.get('edit') or '').strip()
+    if not raw.isdigit():
+        return None
+    return EntityGroup.objects.filter(pk=int(raw)).first()
+
+
 @staff_required
 def entity_list(request):
     """
@@ -67,6 +79,7 @@ def entity_list(request):
     search_q = (request.GET.get('q') or '').strip()
     status_filter = (request.GET.get('status') or 'active').strip()
     showing_inactive = status_filter == 'inactive'
+    viewing_active = not showing_inactive
 
     # عدّ كتب كل جهة عبر استعلامين فرعيين مستقلّين بدل ضمّ علاقتَي M2M
     # (issued/received) في استعلام واحد — الضمّ المزدوج يُنتج ضرباً ديكارتياً
@@ -101,6 +114,21 @@ def entity_list(request):
     elif lang_filter == 'en':
         entities_qs = entities_qs.filter(name__regex=r'^[A-Za-z0-9]')
 
+    # تصنيفُ الجهة (داخليّة · خارجيّة · شعبٌ ووحداتٌ وأفراد) — القاعدةُ في
+    # ``core.entity_kinds`` وهي نفسُها التي تُبوّب صفحةَ الأضابير. اللغةُ تبقى
+    # مرشِّحاً مستقلّاً: كانت تُستعمل بديلاً عن التصنيف («الإنجليزيّ خارجيّ»)
+    # وهو تقريبٌ يخطئ — «هيئة العمليات / قسم حقول الانبار» عربيّةٌ وخارجيّةٌ
+    # بالتقريب، وداخليّةٌ بالحقيقة.
+    kind_counts = {
+        k: Entity.objects.filter(is_active=viewing_active, kind=k).count()
+        for k in KINDS
+    }
+    kind_filter = (request.GET.get('kind') or '').strip()
+    if kind_filter in KINDS:
+        entities_qs = entities_qs.filter(kind=kind_filter)
+    else:
+        kind_filter = ''
+
     # ── بحث: name أو code ──
     if search_q:
         entities_qs = entities_qs.filter(
@@ -115,7 +143,17 @@ def entity_list(request):
                        default=Value(0), output_field=IntegerField()),
         _is_arabic=Case(When(name__regex=r'^[؀-ۿ]', then=Value(1)),
                         default=Value(0), output_field=IntegerField()),
-    ).order_by('-_has_code', '-_is_arabic', 'name')
+    )
+
+    # **ترتيبُ المراجعة**: التبويبُ بُذر آليّاً مرّةً واحدة، ومراجعتُه بالأثر لا
+    # بالأبجديّة — جهةٌ عليها 1090 كتاباً تستحقّ النظرَ قبل جهةٍ بلا كتاب.
+    # `?sort=books` يقلب الترتيب إلى الأكثر تداولاً أوّلاً.
+    if (request.GET.get('sort') or '').strip() == 'books':
+        entities_qs = entities_qs.annotate(
+            _total=F('issued_count') + F('received_count')
+        ).order_by('-_total', 'name')
+    else:
+        entities_qs = entities_qs.order_by('-_has_code', '-_is_arabic', 'name')
     # Pagination — 100 لكل صفحة (كان 50 صغيراً وضيّعت العربية بعد الإنجليزية)
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
     paginator = Paginator(entities_qs, 100)
@@ -145,14 +183,36 @@ def entity_list(request):
     active_count = agg['active_count']
     inactive_count = agg['inactive_count']
 
+    # ── العناقيد ────────────────────────────────────────────────────
+    # موضعُها الطبيعيّ هنا لا في لوحة الإدارة: العنقودُ **مجموعةُ جهات**، ومَن
+    # يُنقّي الدليلَ هو مَن يشكّل المجموعات، وأداةُ اختيار الأعضاء تحتاج بحثَ
+    # هذه الصفحة أصلاً. و**مسارُ الكتابة لم يُنسخ**: النموذجُ يُرسل إلى
+    # `admin_panel` نفسِها التي تحرسها `_guard_admin` وتُسجّلها في سجلّ الحركات.
+    view_mode = 'groups' if request.GET.get('view') == 'groups' else 'entities'
+    editing_group = _editing_group(request)
+
     return render(
         request,
         "core/entity_list.html",
         {
+            "view_mode": view_mode,
+            "groups": (EntityGroup.objects.prefetch_related('members').order_by('name')
+                       if view_mode == 'groups' else []),
+            "group_entities": (Entity.objects.filter(is_active=True).order_by('name')
+                               if view_mode == 'groups' else []),
+            "auto_rules": EntityGroup.AUTO_RULE_CHOICES,
+            "editing_group": editing_group,
+            "editing_member_ids": (set(editing_group.members.values_list('pk', flat=True))
+                                   if editing_group else set()),
             "entities": entities,
             "paginator": paginator,
             "totals": totals,
             "lang_filter": lang_filter,
+            "kind_filter": kind_filter,
+            "sort": (request.GET.get('sort') or '').strip(),
+            "kind_tabs": [{"key": k, "label": KIND_LABELS[k],
+                           "hint": KIND_HINTS[k], "count": kind_counts[k]}
+                          for k in KINDS],
             "search_q": search_q,
             "status_filter": status_filter,
             "showing_inactive": showing_inactive,
@@ -312,6 +372,42 @@ def entity_bulk_delete(request):
         request,
         f"تم تعطيل {count} جهة — أُخفيت من القوائم مع الحفاظ على سجلّاتها وروابطها بالكتب.",
     )
+    return redirect("entity_list")
+
+
+@staff_required
+@require_http_methods(["POST"])
+def entity_set_kind(request):
+    """نقلُ الجهات المحدَّدة إلى تبويب — **هذه هي الأداةُ التي يشكّل بها المالك مجموعاته**.
+
+    التبويبُ قرارٌ بشريٌّ لا استنتاج، فيلزمه مسارُ كتابةٍ صريح: تُحدَّد الأسماءُ
+    في الجدول ويُختار التبويب. والعودةُ إلى المرشِّح الذي جاء منه المستخدم كي
+    لا يضيع مكانُه بعد كلّ نقلة.
+    """
+    kind = (request.POST.get("kind") or "").strip()
+    selected = request.POST.getlist("selected")
+
+    if kind not in KINDS:
+        messages.error(request, "تبويب غير معروف.")
+        return redirect("entity_list")
+    if not selected:
+        messages.info(request, "لم يتم تحديد أي جهة.")
+        return redirect("entity_list")
+
+    count = Entity.objects.filter(id__in=selected).exclude(kind=kind).update(kind=kind)
+    logger.info("entity_set_kind: kind=%s ids=%s changed=%s by=%s",
+                kind, selected, count, request.user)
+    if count:
+        messages.success(request, f"نُقلت {count} جهة إلى «{KIND_LABELS[kind]}».")
+    else:
+        messages.info(request, "الجهات المحدَّدة في هذا التبويب أصلاً.")
+
+    # العودةً إلى المرشِّح الذي جاء منه المستخدم — وسلسلةُ استعلامٍ فقط:
+    # قبولُ عنوانٍ كاملاً هنا يفتح تحويلاً مفتوحاً (open redirect)، وسطرٌ
+    # ثانٍ فيه يفتح حقنَ ترويسة.
+    back = (request.POST.get("back") or "").strip()
+    if back.startswith("?") and len(back.splitlines()) == 1:
+        return redirect(reverse("entity_list") + back)
     return redirect("entity_list")
 
 

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}طاولة الوارد{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20260831">{% endblock %}
+
+{% block content %}
+<div class="queues-page">
+  <div class="queues-head">
+    <div>
+      <h4><i class="bi bi-inboxes"></i> طاولة الوارد</h4>
+      <p class="queues-sub">عملُ القسم اليوم في خمسة طوابير — والنقرُ يفتح الكتاب.</p>
+    </div>
+    <div class="queues-actions">
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'desk_ledger' %}">
+        <i class="bi bi-journal-text"></i> دفتر الوارد
+      </a>
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'desk_handover' %}">
+        <i class="bi bi-pen"></i> كشف التسليم
+      </a>
+    </div>
+  </div>
+
+  {% include "core/_queue_board.html" %}
+</div>
+{% endblock %}

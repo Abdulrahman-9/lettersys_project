@@ -62,3 +62,30 @@ def mail_unread(request):
             count = 0
         cache.set(cache_key, count, 60)  # كاش لمدة دقيقة
     return {'mail_inbox_unread': count}
+
+
+def nav_gates(request):
+    """بوّاباتُ الشريط الجانبيّ — **من `core/scoping.py` لا من شرطٍ في القالب**.
+
+    القاعدة: **رابطٌ ظاهرٌ = صفحةٌ تُفتح**. وكان رابطُ «طاولة الوارد» يظهر
+    للجميع ويردّ 403 لأكثرهم — وهو أسوأُ من إخفائه: يَعِد بما لا يفي، ويُعلّم
+    المستخدمَ أن يتجاهل الشريط.
+
+    وتُسأل الدوالُّ نفسُها التي تحرس الصفحات، فلا تنحرف نسخةُ العرض عن نسخة
+    الحراسة — وهو الجذرُ الذي كلّف هذه الدفعةَ ثماني مرّات.
+    """
+    user = getattr(request, 'user', None)
+    if user is None or not user.is_authenticated:
+        return {'nav': {}}
+
+    from core.scoping import can_archive, can_use_desk, can_view_audit
+
+    return {'nav': {
+        'desk': can_use_desk(user),
+        'archive': can_archive(user),
+        'audit': can_view_audit(user),
+        # السلّةُ مُنطَّقةٌ أصلاً بـ`scope_books_for`، والاستعادةُ بـ
+        # `can_open_content`. فالأرشيفيُّ يستعيد ورقاً حُذف خطأً — وهو
+        # عملُه — وكان الرابطُ محجوباً عنه بـ`is_staff` وحدَها.
+        'trash': user.is_staff or can_archive(user),
+    }}

@@ -12,10 +12,12 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
 from django.core.exceptions import SuspiciousOperation, ValidationError
 from django.core.files import File
 from django.core.files.base import ContentFile
-from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
+from django.http import (FileResponse, Http404, HttpResponse,
+                         HttpResponseForbidden, JsonResponse)
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.utils._os import safe_join
@@ -24,7 +26,7 @@ from pypdf import PdfReader, PdfWriter
 
 from ..attachment_service import ensure_pdf, validate_attachment_file
 from ..models import Attachment, AttachmentVersion, BookHistory
-from core.scoping import can_view_book, is_privileged
+from core.scoping import can_open_content, is_privileged
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,11 @@ def serve_shared_attachment(request, token):
         raise Http404("الملف غير موجود.")
 
     logger.info("serve_shared_attachment: served attachment %s", attachment_id)
+    # رابطٌ موقَّعٌ يفتحه مَن لا حسابَ له — يُسجَّل بلا مستخدمٍ وبعنوانه
+    from core.audit_service import record_event
+    record_event(request, 'SHARED_LINK_OPEN', book=attachment.book,
+                 metadata={'attachment_id': attachment.pk})
+
     return FileResponse(handle, as_attachment=True, filename=attachment.filename)
 
 
@@ -88,10 +95,23 @@ def serve_media(request, path):
             owner_book = ver.attachment.book
 
     if owner_book is not None:
-        if not can_view_book(owner_book, request.user):
+        if not can_open_content(owner_book, request.user):
             return HttpResponseForbidden("غير مصرح بالوصول لهذا الملف")
 
-    return FileResponse(open(full_path, "rb"))
+        # **التمييزُ حاسم:** عارضُ المستند يطلب عشرات صور الصفحات لكلّ فتحة،
+        # فتسجيلُها خامّاً يعني ثلاثين صفّاً للفتحة الواحدة. العرضُ يُطوى على
+        # مستوى الكتاب، والتحميلُ الصريح (`?download=1`) واقعةٌ لا تُطوى.
+        from core.audit_service import record_event, record_view
+        from core.logging_models import UserActivityLog
+
+        if request.GET.get('download'):
+            record_event(request, 'DOWNLOAD_ATTACHMENT', book=owner_book,
+                         metadata={'path': path[:200]})
+        else:
+            record_view(request, owner_book, action=UserActivityLog.VIEW_ATTACHMENT)
+
+    return FileResponse(open(full_path, "rb"),
+                        as_attachment=bool(request.GET.get('download')))
 
 
 def _save_attachment_version(attachment, user, note="", merge_type="none", page_count=None):
@@ -174,7 +194,7 @@ def attachment_delete(request, pk):
     book = att.book
     
     # فحص الصلاحيات: صاحب المستند أو الموظف
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         return _mgmt_result(request, book, ok=False, message="غير مصرح بحذف هذا المرفق.", status=403)
 
     if request.method != "POST":
@@ -213,7 +233,7 @@ def attachment_replace(request, pk):
     book = att.book
     
     # فحص الصلاحيات
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         return _mgmt_result(request, book, ok=False, message="غير مصرح باستبدال هذا المرفق.", status=403)
 
     if not (request.method == "POST" and request.FILES.get("file")):
@@ -269,7 +289,7 @@ def attachment_merge_pages(request, pk):
     book = att.book
     
     # فحص الصلاحيات
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         return _mgmt_result(request, book, ok=False, message="غير مصرح بدمج الملفات.", status=403)
 
     # التحقق من أن الملف PDF (الموديل لا يملك حقل file_type — نفحص الامتداد)
@@ -357,7 +377,7 @@ def attachment_remove_pages(request, pk):
     book = att.book
     
     # فحص الصلاحيات
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         return _mgmt_result(request, book, ok=False, message="غير مصرح بحذف الصفحات.", status=403)
 
     # التحقق من أن الملف PDF (الموديل لا يملك حقل file_type — نفحص الامتداد)
@@ -419,3 +439,31 @@ def attachment_remove_pages(request, pk):
             return _mgmt_result(request, book, ok=False, message=f"فشل حذف الصفحات: {e}", status=500)
 
     return _mgmt_result(request, book, ok=False, message="طريقة غير مسموحة.", status=405)
+
+@login_required
+@require_http_methods(["GET"])
+def attachment_page_image(request, pk, page):
+    """صورةُ صفحةٍ من مرفق — لأجل تحديد قصاصة الهامش عليها.
+
+    **بوّابةُ المحتوى هي البوّابة**: الصفحةُ صورةٌ من المستند نفسِه، فمن لا
+    يفتح المستندَ لا يرى صفحتَه. و404 لا 403: وجودُ المرفق لا يُسرَّب.
+    """
+    from core.page_render import render_page
+
+    attachment = get_object_or_404(Attachment, id=pk, is_deleted=False)
+    if not can_open_content(attachment.book, request.user):
+        raise Http404
+
+    try:
+        path = attachment.file.path
+    except (ValueError, AttributeError):
+        raise Http404
+
+    data, mimetype = render_page(path, int(page))
+    if data is None:
+        raise Http404
+
+    response = HttpResponse(data, content_type=mimetype)
+    # الصفحةُ لا تتغيّر بعد رفعها — فالكاشُ الخاصّ طويلٌ بلا خطر.
+    response['Cache-Control'] = 'private, max-age=86400'
+    return response

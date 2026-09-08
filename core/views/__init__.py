@@ -59,6 +59,7 @@ from .entities import (
     entity_edit,
     entity_delete,
     entity_bulk_delete,
+    entity_set_kind,
     entity_restore,
     entity_bulk_restore,
     entity_merge,
@@ -74,9 +75,6 @@ from .dossiers import (
 # استيراد معالجات لوحة التحكم والتقارير
 from .dashboard import (
     dashboard,
-    desk_ledger,
-    desk_handover,
-    book_audit,
     reports,
     reports_export,
     followup_activity_report,
@@ -103,6 +101,7 @@ from .attachments import (
     attachment_delete,
     attachment_replace,
     attachment_merge_pages,
+    attachment_page_image,
     attachment_remove_pages,
     serve_shared_attachment,
 )

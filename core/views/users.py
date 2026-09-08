@@ -155,6 +155,9 @@ def user_roles(request):
             
             # إنشاء المستخدم
             user = User.objects.create(username=username, email=email, is_staff=True)
+            # بلا ملفٍّ يسقط الموظّف الجديد إلى «كتبي أنا» بدل «كتب قسمي».
+            from core.scoping import ensure_profile
+            ensure_profile(user)
             user.set_password(password)
             user.save()
             

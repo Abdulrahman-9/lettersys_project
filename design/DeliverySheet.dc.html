@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: Cairo, "Segoe UI", system-ui, sans-serif; direction: rtl;
+           background: #fff; color: #1a1a1a; }
+    a { color: #333; } a:hover { color: #000; }
+    .num { font-variant-numeric: tabular-nums; }
+    th, td { text-align: right; border: 1px solid #4a4a4a; }
+    th { background: #ededed; font-size: 12px; font-weight: 800; padding: 8px 9px; }
+    td { font-size: 12px; padding: 11px 9px; }
+  </style>
+</helmet>
+
+<div style="padding: 56px 60px; min-height: 1123px; box-sizing: border-box;">
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;
+              border-bottom:2.5px solid #1a1a1a;padding-bottom:14px;">
+    <div>
+      <div style="font-size:15px;font-weight:800;line-height:1.7;">شركة نفط الوسط</div>
+      <div style="font-size:14px;font-weight:700;line-height:1.7;">قسم المتابعة — ش13</div>
+      <div style="font-size:12px;color:#4a4a4a;line-height:1.7;">وحدة البريد والأرشفة</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:19px;font-weight:800;">كشفُ تسليمِ بريد</div>
+      <div style="font-size:12px;margin-top:5px;">التاريخ: <span class="num">2026/08/27</span></div>
+    </div>
+    <div style="text-align:left;font-size:12px;line-height:1.9;">
+      <div>الكشف رقم: <span class="num" style="font-weight:800;">114</span></div>
+      <div>عدد المستندات: <span class="num" style="font-weight:800;">6</span></div>
+    </div>
+  </div>
+
+  <div style="margin:18px 0 12px;font-size:13px;font-weight:700;">
+    تُسلَّم المستنداتُ المدرجةُ أدناه إلى:
+    <span style="border-bottom:1.5px solid #1a1a1a;padding:0 34px 2px;">شعبة متابعة تنفيذ الموازنة</span>
+  </div>
+
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th style="width:34px;">ت</th>
+        <th style="width:74px;">الرقم</th>
+        <th style="width:82px;">التاريخ</th>
+        <th>الموضوع</th>
+        <th style="width:58px;">المرفقات</th>
+        <th style="width:96px;">اسم المستلم</th>
+        <th style="width:112px;">التوقيع</th>
+      </tr>
+    </thead>
+    <tbody>
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+        <tr>
+          <td class="num" style="text-align:center;">{{r.i}}</td>
+          <td class="num" style="font-weight:800;">{{r.number}}</td>
+          <td class="num">{{r.date}}</td>
+          <td style="line-height:1.6;">{{r.title}}</td>
+          <td class="num" style="text-align:center;">{{r.att}}</td>
+          <td></td>
+          <td></td>
+        </tr>
+      </sc-for>
+    </tbody>
+  </table>
+
+  <div style="margin-top:12px;font-size:11.5px;color:#4a4a4a;line-height:1.8;">
+    الكتبُ المصنَّفة سرّيّاً تُدرَج برقمها وتاريخها دون موضوع — والحجبُ يسري على الورق كما يسري على الشاشة.
+  </div>
+
+  <div style="margin-top:44px;display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:34px;">
+    <div style="text-align:center;">
+      <div style="font-size:12.5px;font-weight:700;">سلَّم — موظّف البريد</div>
+      <div style="margin-top:38px;border-top:1.5px solid #1a1a1a;padding-top:6px;font-size:11.5px;color:#4a4a4a;">الاسم والتوقيع</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:12.5px;font-weight:700;">استلم — الوحدة المختصّة</div>
+      <div style="margin-top:38px;border-top:1.5px solid #1a1a1a;padding-top:6px;font-size:11.5px;color:#4a4a4a;">الاسم والتوقيع</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:12.5px;font-weight:700;">تمامُ الأرشفة</div>
+      <div style="margin-top:38px;border-top:1.5px solid #1a1a1a;padding-top:6px;font-size:11.5px;color:#4a4a4a;">موظّف الأرشفة</div>
+    </div>
+  </div>
+
+  <div style="position:relative;margin-top:52px;padding-top:10px;border-top:1px solid #b8b8b8;
+              font-size:10.5px;color:#6a6a6a;display:flex;justify-content:space-between;">
+    <span>يُحفظ أصلُ الكشف في مضبارة كشوف التسليم</span>
+    <span class="num">صفحة 1 من 1</span>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      rows: [
+        { i: '1', number: '2433', date: '2026/08/24', title: 'بشأن تنفيذ الموازنة الاستثمارية للربع الثالث', att: '3' },
+        { i: '2', number: '2434', date: '2026/08/24', title: 'تخصيصات الصيانة الدوريّة لحقل المنصورية', att: '1' },
+        { i: '3', number: '2437', date: '2026/08/25', title: '— سرّي —', att: '2' },
+        { i: '4', number: '2440', date: '2026/08/25', title: 'إحالة عقد الخدمات الفنّية إلى القسم القانوني', att: '4' },
+        { i: '5', number: '2441', date: '2026/08/26', title: 'تأييد استلام المذكّرة المرقّمة 2311', att: '1' },
+        { i: '6', number: '2445', date: '2026/08/26', title: 'كتاب شكر وتقدير لشعبة إدارة الجودة', att: '1' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

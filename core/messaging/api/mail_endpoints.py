@@ -96,6 +96,11 @@ def api_compose(request):
     book   = visible_books.filter(pk=book_id).first()     if book_id   else None
     entity = Entity.objects.filter(pk=entity_id).first() if entity_id else None
 
+    # كتابٌ طُلب ولم يُحلَّ (غير موجود أو خارج نطاقك) = رفضٌ صريح، لا سقوطٌ
+    # صامتٌ إلى إرسالٍ بلا كتاب: المستخدم يظنّ رسالته عُلّقت على كتابه.
+    if book_id and book is None:
+        return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
+
     # Template overrides subject+body if given
     if tpl_id:
         tpl = EmailTemplate.objects.filter(pk=tpl_id, is_active=True).first()

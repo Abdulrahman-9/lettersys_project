@@ -2,6 +2,10 @@
 {% load static %}
 {% block title %}لوحة التحكم{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20260831">
+{% endblock %}
+
 {% block extra_head %}
 <style>
   .stat-card {
@@ -112,7 +116,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="animate-fade-in">
+<div class="animate-fade-in db-page">
   <!-- Header بالوغو — إثبات مفهوم لمكوّنات العلامة (بطاقة + حقل + زر بإحساس صفحة الدخول) -->
   <div class="row mb-4">
     <div class="col-12">
@@ -144,8 +148,27 @@
     </div>
   </div>
 
+  <div class="db-hero">
+    <div>
+      <h4>مرحباً، {{ request.user.get_full_name|default:request.user.username }}</h4>
+      <p>هذه لوحتُك — أقسامُها بحسب صلاحيّاتك.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <span class="db-role"><i class="bi bi-person-badge"></i>{{ role_label }}</span>
+      {% if my_department %}
+        <span class="db-dept"><i class="bi bi-diagram-3"></i>{{ my_department.name }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% comment %}
+    أقسامُ الدور: ما يراه المستخدمُ حاصلُ صلاحيّاته لا قائمةٌ مكتوبةٌ هنا.
+    وتسبق الإحصاءَ العامّ لأنّها **عملُه**، والإحصاءُ سياقٌ حوله.
+  {% endcomment %}
+  {% include "core/_dashboard_sections.html" %}
+
   <!-- إحصائيات سريعة -->
-  <div class="row g-4 mb-4">
+  <div class="row g-4 mb-4 mt-1">
     <!-- إجمالي الكتب -->
     <div class="col-lg-3 col-md-6">
       <div class="card stat-card h-100 shadow-sm animate-scale-in">

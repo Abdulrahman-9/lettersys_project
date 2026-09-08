@@ -96,12 +96,12 @@ class RequestLoggingMiddleware(MiddlewareMixin):
     @staticmethod
     def get_client_ip(request):
         """الحصول على IP الحقيقي للمستخدم"""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
+        # الترويسةُ يرسلها **العميل**: الثقةُ بها بلا بروكسي مضبوط تعني
+        # أنّ أيَّ جهازٍ على الشبكة يلبس عنوانَ غيره في سجلٍّ غرضُه
+        # المساءلة. المصدرُ الواحد في ``core.audit_service.client_ip``.
+        from core.audit_service import client_ip
+
+        return client_ip(request)
 
 
 class PerformanceMonitoringMiddleware(MiddlewareMixin):
@@ -144,44 +144,3 @@ class PerformanceMonitoringMiddleware(MiddlewareMixin):
             )
         
         return response
-
-
-class UserActivityLoggingMiddleware(MiddlewareMixin):
-    """
-    Middleware لتسجيل أنشطة المستخدمين
-    """
-    
-    # الأنشطة المهمة للتسجيل
-    TRACKED_ACTIONS = {
-        '/books/add/': 'CREATE_BOOK',
-        '/books/edit/': 'EDIT_BOOK',
-        '/books/delete/': 'DELETE_BOOK',
-        '/export/': 'EXPORT_DATA',
-        '/backup/': 'BACKUP_DATA',
-    }
-    
-    def process_response(self, request, response):
-        """تسجيل الأنشطة المهمة"""
-        if not request.user.is_authenticated:
-            return response
-        
-        # التحقق من الأنشطة المتتبعة
-        for path_pattern, action_name in self.TRACKED_ACTIONS.items():
-            if path_pattern in request.path:
-                self._log_user_activity(request, action_name, response.status_code)
-                break
-        
-        return response
-    
-    def _log_user_activity(self, request, action, status_code):
-        """تسجيل نشاط المستخدم"""
-        log_data = {
-            'user': str(request.user),
-            'action': action,
-            'path': request.path,
-            'method': request.method,
-            'status_code': status_code,
-            'ip': RequestLoggingMiddleware.get_client_ip(request),
-        }
-        
-        logger.info(f"USER ACTIVITY: {request.user} performed {action}", extra=log_data)

@@ -496,9 +496,12 @@ class IMAPEngine:
             except Exception:
                 pass
 
-        # Update last sync timestamp
-        from core.models import EmailSettings as ES
-        ES.objects.filter(singleton=1).update(imap_last_sync=timezone.now())
+        # ختمُ الانتهاء عبر ``save`` لا ``update``: الأخير يتجاوز منطق النموذج
+        # (تشفير الحقول الحسّاسة في ``EncryptedFieldsMixin.save``) وسيكسر أوّل
+        # منطقٍ يُضاف إليه — وتعدّدُ حسابات البريد في المرحلة ج أوّلُ الطارقين.
+        # ملاحظة: ختمُ **البدء** يكتبه ``_autosync_inbox_if_due`` (سجلّ العيوب م1).
+        effective_cfg.imap_last_sync = timezone.now()
+        effective_cfg.save(update_fields=['imap_last_sync'])
 
         logger.info(f"IMAPEngine: Sync complete: {stats}")
         return stats

@@ -120,6 +120,20 @@ def _legacy_flexible_q(search_text):
     return Q(legacy_number__iregex=pattern)
 
 
+def _ocr_text_q(search_text):
+    """يطابق **نصّ المستند الممسوح** الذي يُخزّنه أنبوبُ الاستخراج.
+
+    النظام يقرأ نصّ كلّ مسحةٍ ويحفظه في ``OCRResult`` منذ سنوات، **والبحثُ لم
+    يكن يمسّه إطلاقاً** — أي أنّ ثمن الـOCR مدفوعٌ وقيمتُه اليوميّة مهدورة.
+    وهي أوّلُ ميزةٍ محبوبةٍ في أنظمة الأرشفة المشابهة: أن تجد كتاباً لا تذكر
+    رقمَه ولا عنوانَه الدقيق، بكلمةٍ وردت في متنه.
+
+    (السرّيّةُ محروسةٌ فوق هذا: ``guard_secret_text_search`` يستثني السرّيَّ من
+    كلّ بحثٍ نصّيّ لغير المخوَّل — وهذا منه.)
+    """
+    return Q(attachments__ocr_result__cleaned_text__icontains=search_text)
+
+
 def _simple_search(queryset, search_text):
     """بحث icontains بسيط — يُستخدم في بيئة SQLite (الاختبارات)."""
     return queryset.filter(
@@ -131,6 +145,7 @@ def _simple_search(queryset, search_text):
         | Q(margin__icontains=search_text)
         | Q(issuing_entities__name__icontains=search_text)
         | Q(receiving_entities__name__icontains=search_text)
+        | _ocr_text_q(search_text)
     ).distinct()
 
 
@@ -166,6 +181,7 @@ def _pg_search(queryset, search_text):
             | _legacy_flexible_q(search_text)
             | Q(issuing_entities__name__icontains=search_text)
             | Q(receiving_entities__name__icontains=search_text)
+            | _ocr_text_q(search_text)
         )
         .distinct()
         .order_by('-fts_rank', '-title_sim')

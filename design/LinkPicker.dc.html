@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: Cairo, "Segoe UI", system-ui, sans-serif; direction: rtl; }
+    a { color: #b45309; } a:hover { color: #8a3f08; }
+    .num { font-variant-numeric: tabular-nums; }
+    .btn { display:inline-flex;align-items:center;gap:6px;border-radius:10px;padding:8px 14px;
+           font-size:13px;font-weight:700;border:1px solid transparent;cursor:pointer;min-height:40px; }
+  </style>
+</helmet>
+
+<div style="background:rgba(54,32,20,.45);padding:36px;min-height:100%;display:flex;align-items:flex-start;justify-content:center;font-family:Cairo,sans-serif;">
+  <div style="width:640px;background:#fff;border-radius:16px;box-shadow:0 26px 60px rgba(54,32,20,.28);overflow:hidden;">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(111,70,40,.14);">
+      <div style="display:flex;align-items:center;gap:9px;">
+        <span style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#f9a826,#d87b44);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;">@</span>
+        <h6 style="margin:0;font-size:16px;font-weight:800;color:#362014;">ربط بكتاب</h6>
+      </div>
+      <span style="font-size:12px;color:#9c7a63;font-weight:700;">إلحاقاً بمذكّرتكم المرقّمة…</span>
+    </div>
+
+    <div style="padding:18px 20px;">
+      <div style="position:relative;">
+        <input value="@1556" style="width:100%;box-sizing:border-box;padding:13px 44px 13px 14px;font-family:Cairo,sans-serif;
+                     font-size:16px;font-weight:800;border:2px solid #d87b44;border-radius:12px;
+                     background:#fffaf3;color:#362014;outline:none;" />
+        <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9c7a63;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </span>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:#6f4631;font-weight:600;">
+        اكتب الرقم — أو اكتب كلمةً من العنوان إن لم تعرفه
+      </div>
+
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:9px;">
+        <sc-for list="{{results}}" as="r" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:12px;
+                      border:1px solid {{r.border}};background:{{r.bg}};cursor:pointer;">
+            <div style="display:flex;flex-direction:column;align-items:center;min-width:74px;">
+              <span class="num" style="font-size:17px;font-weight:800;color:#362014;">{{r.number}}</span>
+              <span style="font-size:11px;font-weight:700;color:#9c7a63;">{{r.year}}</span>
+            </div>
+            <div style="width:1px;align-self:stretch;background:rgba(111,70,40,.16);"></div>
+            <div style="flex-grow:1;">
+              <div style="font-size:13.5px;font-weight:700;color:#362014;line-height:1.5;">{{r.title}}</div>
+              <div style="margin-top:4px;display:flex;gap:12px;font-size:11.5px;color:#6f4631;font-weight:600;">
+                <span>{{r.dept}}</span><span>{{r.entity}}</span><span class="num">{{r.date}}</span>
+              </div>
+            </div>
+            <sc-if value="{{r.mine}}" hint-placeholder-val="{{ true }}">
+              <span style="border-radius:999px;padding:3px 10px;font-size:11px;font-weight:800;
+                           background:rgba(217,119,6,.18);color:#b45309;">قسمي</span>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="margin-top:14px;padding:11px 14px;background:#fdf6ec;border-radius:11px;
+                  font-size:12.5px;color:#6f4631;font-weight:600;line-height:1.7;">
+        الرقمُ ليس فريداً على مستوى الشركة — لكلّ قسمٍ دفترُه. فاختر البطاقة الصحيحة بعينك،
+        وعندها يُثبَّت الربط ويُفتح الكتاب للمعاينة والطباعة.
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 20px;
+                border-top:1px solid rgba(111,70,40,.14);background:#fffdfa;">
+      <select style="font-family:Cairo,sans-serif;font-size:13px;font-weight:700;padding:9px 12px;
+                     border:1px solid rgba(111,70,40,.24);border-radius:10px;background:#fff;color:#362014;">
+        <option>نوع العلاقة: إلحاقاً بـ</option>
+        <option>جواب على</option>
+        <option>إشارة إلى</option>
+        <option>معطوف على</option>
+        <option>تأكيد على</option>
+      </select>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" style="background:#fff;color:#6f4631;border-color:rgba(111,70,40,.24);">إلغاء</button>
+        <button class="btn" style="background:linear-gradient(180deg,#b45309,#8a3f08);color:#fff;">ربط وفتح المعاينة</button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      results: [
+        { number: '1556', year: 'جارٍ', title: 'بشأن تنفيذ الموازنة الاستثمارية للربع الثالث',
+          dept: 'ش13 — المتابعة', entity: 'هيئة التخطيط', date: '2026/08/22',
+          mine: true, bg: '#fffaf3', border: '#d87b44' },
+        { number: '1556', year: '2025', title: 'تخصيصات الموازنة التشغيلية — موسوم بسنته',
+          dept: 'ش5 — العقود', entity: 'الهيئة المالية', date: '2025/03/11',
+          mine: false, bg: '#fff', border: 'rgba(111,70,40,.16)' },
+        { number: '1556', year: 'جارٍ', title: 'إحالة عقد الصيانة الدوريّة',
+          dept: 'ش7 — الفحص الهندسي', entity: 'شركة نفط واسط', date: '2026/07/02',
+          mine: false, bg: '#fff', border: 'rgba(111,70,40,.16)' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

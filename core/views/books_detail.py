@@ -18,7 +18,10 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from ..forms import AttachmentForm
 from ..models import Attachment, Book, BookHistory
-from core.scoping import can_view_book, is_privileged
+from core.scoping import (
+    ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_open_content, can_view_book,
+    is_privileged, secret_access,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,18 +48,29 @@ def book_detail(request, pk):
         is_deleted=False
     )
 
-    has_permission = (
-        request.user.is_superuser or
-        request.user.is_staff or
-        book.created_by == request.user
-    )
-
-    if not has_permission:
+    # كانت هذه نسخةً يدويّةً ثامنةً وعشرين من قاعدة الرؤية، نجت من التوحيد لأنّها
+    # موزَّعةٌ على أربعة أسطر — فبقيت الصفحةُ الرئيسة على القاعدة القديمة
+    # (staff يرى الكلّ، والقسمُ لا أثر له). صارت من المصدر الوحيد.
+    if not can_view_book(book, request.user):
         logger.warning(
             f"Unauthorized book access attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
         )
         raise PermissionDenied("ليس لديك صلاحية الوصول لهذا الكتاب")
+
+    # الصفُّ مرئيٌّ والمحتوى قد لا يكون: قالبٌ مقيَّدٌ مستقلّ بدل رشّ الشروط في
+    # قالبٍ من خمسمئة سطر — قائمةٌ بيضاء لا استثناءاتٌ من سوداء.
+    from core.audit_service import record_event, record_view
+
+    if secret_access(request.user, book) == ACCESS_STUB:
+        record_view(request, book)
+        return render(request, 'core/book_detail_secret.html', {'book': book})
+
+    # فتحٌ متعمَّدٌ يُطوى في صفٍّ لليوم؛ وفتحُ السرّيّ **واقعةٌ لا تُطوى**:
+    # عددُ مرّاته ومواقيتُه هي الدليل.
+    record_view(request, book)
+    if book.secret_level in RESTRICTED_SECRET_LEVELS:
+        record_event(request, 'SECRET_VIEW', book=book)
 
     if request.method == 'POST' and 'file' in request.FILES:
         _ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
@@ -124,9 +138,59 @@ def book_detail(request, pk):
             "attachments": attachments,
             "comments": comments,
             "back_url": back_url,
-            "back_label": back_label
+            "back_label": back_label,
+            **_lifecycle_context(book, request.user),
         },
     )
+
+
+def _lifecycle_context(book, user):
+    """دورةُ حياة الكتاب — أين مشى، وبعهدة مَن، ومَن ردّ، وفي أيّ دفترٍ قُيّد.
+
+    كلُّ قطعةٍ منها مبنيّةٌ على **مسار قراءةٍ واحد** يحمل بوّابتَه معه
+    (`links_of` · `reply_matrix` · `registrations_of`)، فلا تُرشّ الشروطُ
+    في قالبٍ من ستّمئة سطر — وهو الدرسُ الذي كلّفنا نسختين من قاعدة الرؤية.
+    """
+    from core.custody_service import custody_chain
+    from core.linking_service import links_of
+    from core.referral_service import reply_matrix
+    from core.models import BookLink
+    from core.archive_service import is_archived
+    from core.signature_service import can_sign
+    from core.registration_service import registrations_of
+    from core.scoping import can_archive
+
+    matrix = reply_matrix(book, user)
+    return {
+        "links": links_of(book, user),
+        "referrals": matrix,
+        "open_referrals": [row for row in matrix if row["is_open"]],
+        "overdue_referrals": [row for row in matrix if row["is_overdue"]],
+        "custody": list(custody_chain(book)),
+        "registrations": registrations_of(book, user),
+        # مصدرُ قصاصة الهامش: أوّلُ مرفقٍ يُصيَّر. غيابُه يُخفي الأداةَ كلَّها
+        # بدل أن يعرض صندوقاً فارغاً — 11,183 كتاباً منقولاً من الورق بلا مرفق.
+        "crop_source": _crop_source(book),
+        # صفاتُ الربط من النموذج لا من قائمةٍ في القالب — مصدرٌ واحد.
+        "relation_choices": BookLink.RELATION_CHOICES,
+        # التواقيع: القائمةُ للعرض، والصلاحيّةُ من الخدمة لا من قائمةِ أدوارٍ
+        # ثانيةٍ في القالب.
+        "signatures": list(book.signatures.select_related('signer').all()),
+        "can_sign_book": can_sign(user, book),
+        # الأرشفة: الحالُ من الخدمة والحقُّ من البوّابة — والقالبُ يعرض ولا يقرّر.
+        "book_is_archived": is_archived(book),
+        "can_archive_book": can_archive(user),
+    }
+
+
+def _crop_source(book):
+    """أوّلُ مرفقٍ صالحٍ للتصيير — أو ``None``.
+
+    نكتفي بالأوّل: الهامشُ على الصفحة الأولى في الغالب، ومنتقي الصفحة يتيح
+    الانتقال داخل المرفق نفسِه. وقائمةُ مرفقاتٍ للاختيار تعقيدٌ بلا حاجةٍ مقيسة.
+    """
+    return (book.attachments.filter(is_deleted=False)
+            .order_by('uploaded_at').first())
 
 
 @login_required
@@ -134,11 +198,10 @@ def book_edit(request, pk):
     """تعديل كتاب قائم."""
     book = get_object_or_404(Book, pk=pk, is_deleted=False)
 
-    has_permission = (
-        request.user.is_superuser or
-        request.user.is_staff or
-        book.created_by == request.user
-    )
+    # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
+    # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
+    # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
+    has_permission = can_open_content(book, request.user)
 
     if not has_permission:
         logger.warning(
@@ -164,11 +227,10 @@ def book_change_status(request, pk):
     """
     book = get_object_or_404(Book, pk=pk, is_deleted=False)
 
-    has_permission = (
-        request.user.is_superuser or
-        request.user.is_staff or
-        book.created_by == request.user
-    )
+    # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
+    # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
+    # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
+    has_permission = can_open_content(book, request.user)
 
     if not has_permission:
         logger.warning(
@@ -237,12 +299,16 @@ def book_report(request, pk):
         is_deleted=False,
     )
 
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         logger.warning(
             f"Unauthorized book report attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
         )
         raise PermissionDenied("ليس لديك صلاحية عرض تقرير هذا الكتاب")
+
+    # ورقةٌ تُطبع وتخرج من الجهاز — واقعةٌ لا تُطوى
+    from core.audit_service import record_event
+    record_event(request, 'PRINT', book=book)
 
     comments = book.comments.select_related("created_by").order_by("created_at")
     email_logs = BookEmailLog.objects.filter(book=book).order_by("sent_at")

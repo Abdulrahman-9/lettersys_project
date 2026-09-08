@@ -32,7 +32,7 @@ from ..models import (
     BookHistory,
     BookSequence,
 )
-from core.scoping import can_view_book, is_privileged
+from core.scoping import can_open_content, is_privileged
 from .books_helpers import (
     _normalize_secret_level_value,
     _resolve_entities,
@@ -297,6 +297,11 @@ def save_book_api(request):
         # المنطق الموحّد: due_date موجود ⇒ نشط (is_archived=False)، غير ذلك ⇒ مؤرشف
         effective_due_date = due_date if needs_followup else None
         attachment = None  # يُلتقط من create_attachment لربط حلقة التدريب لاحقاً
+        # قسمُ الكتاب = قسمُ مُنشئه، وإلّا القسم الافتراضيّ. وهو ما يحدّد
+        # العدّاد الذي يُستهلَك منه الرقم — لكلّ قسمٍ دفترُه.
+        book_department = (getattr(getattr(request.user, 'profile', None), 'department', None)
+                           or BookSequence.resolve_department())
+
         try:
             with transaction.atomic():
                 # تعيين الرقم التلقائي داخل المعاملة (B2): لا يُستهلك رقم السجل الرسمي
@@ -304,11 +309,14 @@ def save_book_api(request):
                 if numberless_internal:
                     # «بلا رقم»: الحقل يبقى فارغاً ولا يُستهلك رقمٌ من السلسلة —
                     # منحُه رقماً كان يبتلع رقماً لا يظهر على أي ورقة.
-                    our_number = BookSequence.consume_next(kind_value, numberless=True)['formatted']
+                    our_number = BookSequence.consume_next(
+                        kind_value, numberless=True, department=book_department)['formatted']
                 elif auto_number and not reservation_id:
-                    our_number = BookSequence.consume_next(kind_value)['formatted']
+                    our_number = BookSequence.consume_next(
+                        kind_value, department=book_department)['formatted']
 
                 book = Book.objects.create(
+                    department=book_department,
                     our_number=our_number,
                     sender_number=sender_number,
                     title=title,
@@ -444,7 +452,7 @@ def api_delete_book(request, book_id):
 
     book = get_object_or_404(Book, id=book_id)
 
-    if not can_view_book(book, request.user):
+    if not can_open_content(book, request.user):
         return JsonResponse({"error": "Unauthorized"}, status=403)
 
     try:
@@ -594,7 +602,7 @@ def api_undo_delete_book(request, book_id):
     try:
         book = get_object_or_404(Book.all_objects, id=book_id, is_deleted=True)
 
-        if not can_view_book(book, request.user):
+        if not can_open_content(book, request.user):
             return JsonResponse({"error": "Unauthorized"}, status=403)
 
         book.is_deleted = False
@@ -638,10 +646,14 @@ def api_book_detail_json(request, pk):
         return JsonResponse({'error': 'الكتاب غير موجود'}, status=404)
 
     has_permission = (
-        can_view_book(book, request.user)
+        can_open_content(book, request.user)
     )
     if not has_permission:
         return JsonResponse({'error': 'ليس لديك صلاحية'}, status=403)
+
+    # فتحُ المعاينة فتحٌ متعمَّدٌ كفتح الصفحة — يُطوى في صفّ اليوم نفسِه
+    from core.audit_service import record_view
+    record_view(request, book)
 
     image_exts = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff')
 
@@ -777,11 +789,10 @@ def update_book_api(request):
             return JsonResponse({'success': False, 'message': 'edit_pk مطلوب', 'error_code': 'MISSING_EDIT_PK'}, status=400)
 
         book = get_object_or_404(Book, pk=edit_pk, is_deleted=False)
-        has_permission = (
-            request.user.is_superuser or
-            request.user.is_staff or
-            book.created_by == request.user
-        )
+        # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
+        # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
+        # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
+        has_permission = can_open_content(book, request.user)
         if not has_permission:
             return JsonResponse({'success': False, 'message': 'ليس لديك صلاحية تعديل هذا الكتاب', 'error_code': 'PERMISSION_DENIED'}, status=403)
 

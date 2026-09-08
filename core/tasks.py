@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.conf import settings
 from django.utils import timezone
 
 from .models import Attachment, DataExtractionResult, Book, ExtractionFeedback
@@ -241,9 +242,6 @@ def sync_inbox_task():
         from .messaging.engines.imap import sync_inbox
         stats = sync_inbox()
         logger.info(f"IMAP sync task: {stats}")
-        # مسح كاش badge الوارد
-        from django.core.cache import cache
-        cache.delete('mail_inbox_unread')
         return stats
     except Exception as e:
         logger.exception(f"sync_inbox_task error: {e}")
@@ -253,44 +251,87 @@ def sync_inbox_task():
 @shared_task(name='core.tasks.retry_failed_emails_task', ignore_result=True)
 def retry_failed_emails_task():
     """
-    إعادة إرسال الإيميلات الفاشلة أو المعلّقة — تُشغَّل كل 30 دقيقة.
-    تحاول مرة واحدة فقط لكل سجل (تجنب حلقة لانهائية).
+    إعادة إرسال الإيميلات الفاشلة أو المعلّقة — مجدولةٌ كلّ 30 دقيقة.
+
+    كان توثيق هذه المهمّة يدّعي «محاولةً واحدةً فقط لكلّ سجلّ (تجنّب حلقة
+    لانهائية)» **والكود لا ينفّذ ذلك إطلاقاً**: ``send_book_notification``
+    يُنشئ صفّاً جديداً لكلّ محاولة ولا يمسّ حالة الصفّ الأصلي، فيبقى الأصل
+    ``failed`` أبداً ويُعاد إرساله في كلّ تشغيل — وكلّ محاولةٍ فاشلة تُضيف
+    مرشَّحاً جديداً فينمو الحشد. عدمُ جدولتها كان سترًا عرضيّاً لا تصميماً.
+
+    ثلاثة حرّاسٍ يجعلون الوعد صادقاً:
+
+    * ``retry_of__isnull=True`` — صفوف المحاولات نفسها لا تدخل الطابور.
+    * ``retry_count`` على **الأصل** يُزاد بعد كلّ محاولة، وعند بلوغ الحدّ
+      يصير الأصل ``abandoned`` فيخرج نهائيّاً.
+    * قفلٌ ذرّيّ يمنع تراكب تشغيلتين من beat.
     """
     from datetime import timedelta
+
+    from django.core.cache import cache
     from django.utils import timezone
+
     from .models import BookEmailLog, EmailSettings
     from .messaging.engines.smtp import send_book_notification
 
-    cfg = EmailSettings.get()
-    if not cfg.is_active:
-        return {'skipped': 'email not active'}
+    # تشغيلتان متراكبتان تعنيان إرسالاً مزدوجاً لكلّ سجلّ.
+    # ملاحظة: على LocMemCache القفل لكلّ عمليّة لا لكلّ الخادم — الضمان الكامل
+    # يأتي مع Redis (مرحلة ز0).
+    lock = 'lock:retry_failed_emails'
+    if not cache.add(lock, 1, timeout=600):
+        return {'skipped': 'already running'}
 
-    # إيميلات فاشلة أو معلّقة منذ أكثر من 5 دقائق
-    cutoff = timezone.now() - timedelta(minutes=5)
-    qs = BookEmailLog.objects.filter(
-        status__in=['failed', 'pending'],
-        sent_at__lt=cutoff,
-    ).select_related('book', 'entity', 'sent_by')[:20]
+    try:
+        cfg = EmailSettings.get()
+        if not cfg.is_active:
+            return {'skipped': 'email not active'}
 
-    retried = 0
-    for log in qs:
-        try:
-            send_book_notification(
-                book=log.book,
-                recipients=[log.to_address],
-                subject=log.subject,
-                html_body=log.body_html,
-                cc=[x.strip() for x in log.cc_addresses.split(',') if x.strip()],
-                trigger=log.trigger,
-                sent_by=log.sent_by,
-                entity=log.entity,
-            )
-            retried += 1
-        except Exception as e:
-            logger.warning(f"retry_failed_emails: فشل إعادة إرسال log#{log.pk}: {e}")
+        # فاشلة أو معلّقة منذ أكثر من 5 دقائق، وأصولٌ لم تستنفد محاولاتها.
+        cutoff = timezone.now() - timedelta(minutes=5)
+        candidates = list(
+            BookEmailLog.objects.filter(
+                status__in=[BookEmailLog.STATUS_FAILED, BookEmailLog.STATUS_PENDING],
+                sent_at__lt=cutoff,
+                retry_of__isnull=True,
+                retry_count__lt=BookEmailLog.MAX_RETRIES,
+            ).select_related('book', 'entity', 'sent_by')[:20]
+        )
 
-    logger.info(f"retry_failed_emails: أعدت إرسال {retried}/{qs.count()} إيميل")
-    return {'retried': retried}
+        retried = 0
+        for log in candidates:
+            log.retry_count += 1
+            log.last_retry_at = timezone.now()
+            if log.retry_count >= BookEmailLog.MAX_RETRIES:
+                log.status = BookEmailLog.STATUS_ABANDONED
+            log.save(update_fields=['retry_count', 'last_retry_at', 'status'])
+
+            try:
+                attempt = send_book_notification(
+                    book=log.book,
+                    recipients=[log.to_address],
+                    subject=log.subject,
+                    html_body=log.body_html,
+                    cc=[x.strip() for x in log.cc_addresses.split(',') if x.strip()],
+                    trigger=log.trigger,
+                    sent_by=log.sent_by,
+                    entity=log.entity,
+                )
+                # وسمُ الصفّ الجديد محاولةً — هو ما يمنعه من دخول الطابور لاحقاً.
+                if attempt is not None and attempt.pk != log.pk:
+                    attempt.retry_of = log
+                    attempt.save(update_fields=['retry_of'])
+                    if attempt.status == BookEmailLog.STATUS_SENT:
+                        # نجحت: يُغلق الأصل ولو لم يستنفد محاولاته.
+                        log.status = BookEmailLog.STATUS_SENT
+                        log.save(update_fields=['status'])
+                retried += 1
+            except Exception as e:
+                logger.warning(f"retry_failed_emails: فشل إعادة إرسال log#{log.pk}: {e}")
+
+        logger.info(f"retry_failed_emails: أعدت إرسال {retried}/{len(candidates)} إيميل")
+        return {'retried': retried, 'candidates': len(candidates)}
+    finally:
+        cache.delete(lock)
 
 
 @shared_task(name='core.tasks.network_heartbeat', ignore_result=True)
@@ -348,27 +389,65 @@ def _backup_is_due(cfg, now):
 def scheduled_backup():
     """
     نسخ احتياطي مجدول — يُشغَّل ساعياً عبر Celery beat، ويقرّر التنفيذ من BackupSettings.
-    ينشئ نسخة مشفّرة، يحذف النسخ الأقدم من مدة الاحتفاظ، ويحدّث آخر تشغيل.
+
+    كان يغطّي ``pg_dump`` وحده (سجلّ العيوب ح8): استعادةٌ «ناجحة» كانت تُعيد
+    نظاماً بكتبٍ **بلا مستنداتها** — 15.8 غيغا من المرفقات لا يحميها شيء —
+    وبلا ``.env`` فلا تقوم على جهازٍ نظيف أصلاً.
+
+    فصار ثلاثة أجزاء: القاعدة مشفَّرةً، وملفّات الإعداد مشفَّرةً، ومرآةً
+    تدريجيّةً للوسائط وأوزان النماذج. فشلُ جزءٍ لا يُسقط البقيّة — نسخةٌ
+    ناقصةٌ خيرٌ من لا شيء، والتقرير يقول أيّها نقص.
     """
     from .models import BackupSettings
-    from .backup_service import create_encrypted_pg_backup, default_backup_dir, prune_old_backups
+    from .backup_service import (
+        create_encrypted_config_backup,
+        create_encrypted_pg_backup,
+        default_backup_dir,
+        encryption_key_status,
+        mirror_tree,
+        prune_old_backups,
+    )
 
     cfg = BackupSettings.get()
     now = timezone.localtime()
     if not _backup_is_due(cfg, now):
         return {'skipped': True}
 
-    try:
-        path = create_encrypted_pg_backup()
-    except Exception as exc:
-        logger.exception('[scheduled_backup] فشل إنشاء النسخة: %s', exc)
-        return {'error': str(exc)}
+    directory = default_backup_dir()
+    report = {}
 
-    removed = prune_old_backups(default_backup_dir(), cfg.retention_days)
+    try:
+        report['database'] = str(create_encrypted_pg_backup())
+    except Exception as exc:
+        logger.exception('[scheduled_backup] فشل نسخ القاعدة: %s', exc)
+        report['database_error'] = str(exc)
+
+    try:
+        config_path = create_encrypted_config_backup()
+        report['config'] = str(config_path) if config_path else None
+    except Exception as exc:
+        logger.exception('[scheduled_backup] فشل نسخ ملفّات الإعداد: %s', exc)
+        report['config_error'] = str(exc)
+
+    for label, source in (('media', settings.MEDIA_ROOT),
+                          ('models', settings.BASE_DIR / 'var' / 'models')):
+        try:
+            report[label] = mirror_tree(source, directory / f'{label}_mirror')
+        except Exception as exc:
+            logger.exception('[scheduled_backup] فشل مرآة %s: %s', label, exc)
+            report[f'{label}_error'] = str(exc)
+
+    # لا يُنسخ المفتاح تلقائيّاً — لكن يُنبَّه إن كان مفقوداً أو مُلقىً هنا.
+    key = encryption_key_status(directory)
+    report['encryption_key'] = key
+    if not key['exists']:
+        logger.error('[scheduled_backup] .encryption_key مفقود — النسخ المشفّرة لن تُفتح!')
+
+    report['pruned'] = prune_old_backups(directory, cfg.retention_days)
     cfg.last_run_at = timezone.now()
     cfg.save(update_fields=['last_run_at', 'updated_at'])
-    logger.info('[scheduled_backup] أُنشئت %s؛ حُذفت %s نسخة قديمة', path, removed)
-    return {'backup': str(path), 'pruned': removed}
+    logger.info('[scheduled_backup] %s', report)
+    return report
 
 
 def get_task_status(task_id: str) -> dict:

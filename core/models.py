@@ -27,6 +27,22 @@ class Entity(models.Model):
     etype    = models.CharField(max_length=10, choices=TYPE_CHOICES, default="both")
     is_active = models.BooleanField(default=True)
 
+    #: تبويبُ الجهة في الأضابير — **يدويٌّ بقرار المالك لا مستنتَجٌ من الاسم**.
+    #: الاستنتاجُ من صدر الاسم كان تقريباً يخطئ («هيئة العمليات / قسم حقول
+    #: الانبار» داخليّةٌ ويقرؤها التقريبُ خارجيّة)، والمالكُ يشكّل المجموعات
+    #: بالأسماء والأقسام التي يريد. ``suggest_kind`` تبقى **اقتراحاً** للجهة
+    #: الجديدة وللبذر الأوّل فقط — ولا تكتب فوق قرارٍ بشريّ أبداً.
+    KIND_EXTERNAL = 'external'
+    KIND_INTERNAL = 'internal'
+    KIND_UNIT = 'unit'
+    KIND_CHOICES = (
+        (KIND_EXTERNAL, 'جهة خارجية'),
+        (KIND_INTERNAL, 'قسم داخلي'),
+        (KIND_UNIT, 'شعبة/وحدة/فرد'),
+    )
+    kind = models.CharField("التبويب", max_length=10, choices=KIND_CHOICES,
+                            default=KIND_EXTERNAL, db_index=True)
+
     # عند دمج جهة مكرّرة ضمن جهة أمّ: تشير إلى الأمّ وتُضبط is_active=False.
     merged_into = models.ForeignKey(
         'self', null=True, blank=True, on_delete=models.SET_NULL,
@@ -82,6 +98,63 @@ def book_attachment_path(instance, filename):
     y = book.date.year if book and book.date else timezone.localdate().year
     our_number = (book.our_number if book else '') or 'no-num'
     return f"books/{y}/{our_number}_{filename}"
+
+
+class Department(models.Model):
+    """قسمٌ داخليٌّ في الشركة — بُعدُ النطاق الذي يقوم عليه التعميم.
+
+    لم يكن للنظام كيانُ «قسم» إطلاقاً: الأقسام كانت جهاتِ مراسلةٍ (``Entity``)
+    في فضاءٍ واحدٍ مع الوزارات والشركات الأجنبيّة، والرؤية بمُنشئ الكتاب وحده.
+
+    **حدُّ القسم بقرار المالك:** الوحداتُ الداخليّة المرمّزة برموز السجلّ
+    العربيّة (ش13 المتابعة، ش5 العقود، د الموارد البشرية…) — 42 وحدةً مقيسةً
+    في القاعدة الحيّة. أمّا الجهات بلا رمز (364) فتبقى أطرافَ مراسلةٍ لا أقساماً
+    مالكة، والرموز اللاتينيّة شركاتٌ خارجيّة.
+
+    ``entity`` يربط القسم بجهته في الدليل — وهو ما يجعله **طرف مراسلةٍ** أيضاً
+    (الإحالات والبريد الداخليّ في المرحلة ج)، ويحسم سؤال الأضابير المؤجَّل:
+    الجهةُ الداخليّة هي التي لها قسم.
+    """
+
+    name       = models.CharField("اسم القسم", max_length=200, unique=True)
+    code       = models.CharField("رمز السجلّ", max_length=20, unique=True,
+                                  help_text="رمز الوارد المطبوع على الختم — مثل ش13")
+    parent     = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT,
+                                   related_name='children', verbose_name="يتبع")
+    entity     = models.OneToOneField('Entity', null=True, blank=True, on_delete=models.SET_NULL,
+                                      related_name='department', verbose_name="الجهة المقابلة")
+    is_active  = models.BooleanField("نشط", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'قسم'
+        verbose_name_plural = 'الأقسام'
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} — {self.name}"
+
+
+class UserProfile(models.Model):
+    """امتدادُ المستخدم: قسمُه وصفتُه فيه.
+
+    كان ``UserPassword`` الامتدادَ الوحيد لـ``User``، ولا شيء يربط موظّفاً بقسم.
+    """
+
+    user       = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.PROTECT,
+                                   related_name='members', verbose_name="القسم")
+    job_title  = models.CharField("المسمّى الوظيفي", max_length=120, blank=True, default="")
+    # رئيس القسم يرى سرّيّات قسمه — انظر ``core.scoping``.
+    is_department_head = models.BooleanField("رئيس القسم", default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'ملف مستخدم'
+        verbose_name_plural = 'ملفات المستخدمين'
+
+    def __str__(self):
+        return f"{self.user.get_username()} — {self.department or 'بلا قسم'}"
 
 
 class Tag(models.Model):
@@ -168,7 +241,10 @@ class Book(models.Model):
         ("pending",   "قيد المتابعة"),
         ("due_today", "مستحق اليوم"),
         ("overdue",   "متأخر"),
-        ("archived",  "مؤرشف"),
+        # **لا تُسمَّ «مؤرشف»**: الأرشفةُ صارت واقعةً أخرى (حفظُ الورقة على
+        # الرفّ — `CustodyEvent.ARCHIVE_DONE`)، وكلمتان بمعنيين في الصفحة
+        # الواحدة تُنتجان سؤالاً لا جواب. هذه حالُ **المتابعة** لا الورق.
+        ("archived",  "انتهت المتابعة"),
     )
     FOLLOWUP_COLOR = {
         "pending":   "#2563eb",  # أزرق
@@ -261,6 +337,23 @@ class Book(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # بُعدُ النطاق. اختياريّ في المخطّط ومُعبَّأ بالكامل في الواقع (هجرة 0064):
+    # تنصيبٌ جديدٌ قبل بذر الأقسام يجب أن يعمل، وصفٌّ بلا قسمٍ يراه المدير فقط.
+    department = models.ForeignKey('Department', null=True, blank=True, on_delete=models.PROTECT,
+                                   related_name='books', verbose_name='القسم')
+    # «بعهدة مَن» الآن — **مؤشّرٌ إلى آخر صفّ عهدة، لا نسخةٌ ثانيةٌ للحقيقة.**
+    # الاسمُ والقسمُ والوقتُ كلُّها في `CustodyEvent`؛ ولو نُسخت هنا لانفرجت
+    # عنه عند أوّل كتابةٍ على جنب — وهو ما يُضيع المستند. يكتبه
+    # `custody_service.record_custody` وحدَه.
+    current_custody = models.ForeignKey('CustodyEvent', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='+',
+                                        verbose_name='بعهدة')
+    # واقعةُ المخاطبة: «إلى: جميع الهيئات والأقسام» — **بدل رشّ 42 صفَّ M2M**.
+    # التعميمُ يحمل رقمَ صادرٍ واحداً (هذا هو الورقُ نفسه)، ورقمٌ لكلّ عضوٍ
+    # يفجّر الدفتر ويناقض الممارسة.
+    sent_to_group = models.ForeignKey('EntityGroup', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='books',
+                                      verbose_name='عُمِّم على')
     is_deleted = models.BooleanField(default=False)
 
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -474,14 +567,76 @@ class Book(models.Model):
             #  • المحذوف لا يحجز رقمه: كتابٌ حُذف كان يمنع إعادة إدخال رقمه
             #    الشرعي، فيعجز الموظّف عن تصحيح خطئه.
             models.UniqueConstraint(
-                fields=['our_number', 'kind'],
+                fields=['department', 'our_number', 'kind'],
                 condition=(~models.Q(our_number='')
                            & models.Q(source_ref='')
                            & ~models.Q(kind='outgoing_external')
                            & models.Q(is_deleted=False)),
-                name='uniq_book_our_number_kind',
+                name='uniq_book_number_kind_dept',
             ),
         ]
+
+
+class BookSignature(models.Model):
+    """توقيعُ مصادقةٍ داخليّ — **مَن صادق على ماذا ومتى، وإثباتُ عدم التغيير**.
+
+    الطورُ الأوّل من المرحلة هـ. والطورُ الثاني (PAdES/X.509) قرارُ شركةٍ لا
+    كود: مرجعُ شهاداتٍ وعتادٌ واعترافٌ قانونيّ — والبنيةُ هنا أساسُه فلا عملَ
+    يُهدر.
+
+    **البصمةُ هي الحجّة**: SHA-256 لبايتات الملفّ الموقَّع لحظةَ التوقيع. أيُّ
+    تعديلٍ لاحقٍ يُنتج بصمةً أخرى، فيُقال «هذا ليس ما وُقّع عليه» بيقينٍ لا
+    بظنّ. ولذلك تُخزَّن البصمةُ لا الملفّ: الملفُّ قد يُنقل أو يُضغط.
+
+    **ولا يُحذف توقيع**: التوقيعُ واقعةٌ حدثت. إبطالُه صفٌّ ثانٍ (`revoked_*`)
+    لا حذفُ الأوّل — القاعدةُ نفسُها التي حكمت الجهاتِ والعناقيد.
+    """
+
+    CAPACITY_HEAD = 'dept_head'
+    CAPACITY_MANAGER = 'manager'
+    CAPACITY_DELEGATE = 'delegate'
+    CAPACITY_CHOICES = (
+        (CAPACITY_HEAD, 'رئيس القسم'),
+        (CAPACITY_MANAGER, 'المدير'),
+        (CAPACITY_DELEGATE, 'مفوَّض'),
+    )
+
+    book = models.ForeignKey('Book', on_delete=models.CASCADE,
+                             related_name='signatures', verbose_name='الكتاب')
+    #: النسخةُ الموقَّعة — قد تُحذف نسخةٌ قديمة، والتوقيعُ يبقى ببصمته.
+    version = models.ForeignKey('AttachmentVersion', on_delete=models.SET_NULL,
+                                null=True, blank=True, related_name='signatures',
+                                verbose_name='النسخة الموقَّعة')
+    signer = models.ForeignKey(User, on_delete=models.PROTECT,
+                               related_name='book_signatures', verbose_name='الموقِّع')
+    capacity = models.CharField('الصفة', max_length=16, choices=CAPACITY_CHOICES)
+    signed_at = models.DateTimeField('وقت التوقيع', auto_now_add=True, db_index=True)
+
+    #: SHA-256 لبايتات الملفّ لحظةَ التوقيع — الحجّةُ على عدم التغيير.
+    digest = models.CharField('بصمة الملفّ', max_length=64, db_index=True)
+    #: رمزُ تحقّقٍ عامّ يُطبع على الختم ويفتح صفحةَ التثبّت.
+    verify_token = models.CharField('رمز التحقّق', max_length=32, unique=True)
+    note = models.CharField('ملاحظة', max_length=255, blank=True, default='')
+
+    revoked_at = models.DateTimeField('أُبطل في', null=True, blank=True)
+    revoked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name='revoked_signatures')
+    revoke_reason = models.CharField('سبب الإبطال', max_length=255, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'توقيع'
+        verbose_name_plural = 'التواقيع'
+        ordering = ['-signed_at']
+        indexes = [models.Index(fields=['book', '-signed_at'],
+                                name='signature_book_time_idx')]
+
+    def __str__(self):
+        return '%s — %s' % (self.book_id, self.signer)
+
+    @property
+    def is_valid(self):
+        """التوقيعُ قائمٌ ما لم يُبطَل — والبصمةُ تُتحقّق عند العرض لا هنا."""
+        return self.revoked_at is None
 
 
 class Attachment(models.Model):
@@ -722,6 +877,26 @@ class BookHistory(models.Model):
         ('merge',              'دمج ملفات'),
         ('merge-pages',        'دمج صفحات'),
         ('remove-pages',       'إزالة صفحات'),
+        # ── نسيجُ الوثائق (BookLink) ──
+        ('link-added',         'ربط بكتاب'),
+        ('link-removed',       'فكّ ربط'),
+        # ── عمودُ التسيير (BookReferral) ──
+        ('referral',           'تفريق/إحالة'),
+        ('referral-received',  'استلام الإحالة'),
+        ('referral-done',      'إنجاز الإحالة'),
+        ('referral-returned',  'إعادة الإحالة'),
+        ('reminder',           'تنبيه'),
+        # ── العهدة (CustodyEvent) ──
+        ('custody',            'انتقال عهدة'),
+        # ── القيدُ في دفترِ قسم (BookRegistration) ──
+        ('registered',         'قُيّد في دفتر قسم'),
+        # ── التعميم (EntityGroup) ──
+        ('circular',           'تعميم على عنقود'),
+        # ── التواقيع (BookSignature) ──
+        ('sign',               'توقيع مصادقة'),
+        ('sign-revoked',       'إبطال توقيع'),
+        ('archived',           'تمام أرشفة'),
+        ('archive-reopened',   'فتح مؤرشف'),
     )
 
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="history")
@@ -1442,8 +1617,12 @@ class BookSequence(models.Model):
     #: السجلّات التي يمنحها النظام أرقاماً من سلسلته
     SERIES_KINDS = numbering.SERIES_KINDS
 
+    # عدّادٌ لكلّ (قسم، نوع): كلّ قسمٍ يمسك دفتر ختمه الورقيّ الخاصّ به، وعدّادٌ
+    # واحدٌ للشركة كان سيُجبر قسمين على تقاسم سلسلةٍ لا يتقاسمانها على الورق.
+    department = models.ForeignKey('Department', null=True, on_delete=models.PROTECT,
+                                   related_name='sequences', verbose_name='القسم')
     kind = models.CharField(
-        max_length=20, choices=BOOK_KIND_CHOICES, unique=True, verbose_name='نوع الكتاب'
+        max_length=20, choices=BOOK_KIND_CHOICES, verbose_name='نوع الكتاب'
     )
     prefix = models.CharField(
         max_length=20, blank=True, default='', verbose_name='البادئة (مهملة)',
@@ -1459,6 +1638,7 @@ class BookSequence(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        unique_together = ('department', 'kind')
         verbose_name = 'عدّاد تسلسلي'
         verbose_name_plural = 'العدّادات التسلسلية'
 
@@ -1476,10 +1656,25 @@ class BookSequence(models.Model):
         return numbering.format_series(number)
 
     @classmethod
-    def get_next(cls, kind):
+    def resolve_department(cls, department=None):
+        """القسمُ المقصود بالعدّاد — والافتراضيّ حين لا يُمرَّر.
+
+        التوقيعُ متساهلٌ عمداً: مسارات الاستدعاء القديمة (الاستخراج، الحجز،
+        شاشة العدّادات) لا تعرف القسم بعد، وإجبارها عليه اليوم يعني تعديلاً
+        متزامناً في ملفّاتٍ تعمل عليها جلسةٌ أخرى. فتُسقَط إلى القسم الافتراضيّ
+        — وهو الصواب حرفيّاً في وضع «قسم واحد».
+        """
+        if department is not None:
+            return department
+        from core.models import Department
+        return Department.objects.filter(is_active=True).order_by('id').first()
+
+    @classmethod
+    def get_next(cls, kind, department=None):
         """إرجاع الرقم التالي دون استهلاكه (لا نهائي — لا تصفير سنوي)."""
         obj, _ = cls.objects.get_or_create(
-            kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
+            kind=kind, department=cls.resolve_department(department),
+            defaults={'next_number': 1, 'year': timezone.now().year}
         )
         n = obj.next_number
         return {
@@ -1488,7 +1683,7 @@ class BookSequence(models.Model):
         }
 
     @classmethod
-    def consume_next(cls, kind, numberless=False):
+    def consume_next(cls, kind, numberless=False, department=None):
         """
         استهلاك الرقم الحالي — آمن من التسابق (SELECT FOR UPDATE)، بلا تصفير سنوي.
 
@@ -1501,7 +1696,8 @@ class BookSequence(models.Model):
         from django.db import transaction
         with transaction.atomic():
             obj = cls.objects.select_for_update().get_or_create(
-                kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
+                kind=kind, department=cls.resolve_department(department),
+                defaults={'next_number': 1, 'year': timezone.now().year}
             )[0]
             current = obj.next_number
             obj.next_number += 1
@@ -1655,12 +1851,15 @@ class BookNumberReservation(models.Model):
         self.save(update_fields=['status', 'void_reason', 'cooldown_until', 'voided_at'])
 
     @classmethod
-    def get_active_for_user(cls, user, kind):
+    def get_active_for_user(cls, user, kind, department=None):
         """إرجاع الحجز النشط للمستخدم لنوع معين، أو None."""
-        return cls.objects.filter(
+        qs = cls.objects.filter(
             user=user, kind=kind,
             status__in=[cls.STATUS_ACTIVE, cls.STATUS_REACTIVATED]
-        ).order_by('-reserved_at').first()
+        )
+        if department is not None:
+            qs = qs.filter(department=department)
+        return qs.order_by('-reserved_at').first()
 
     @classmethod
     def reserve(cls, user, kind, expire_minutes=45):
@@ -1674,6 +1873,437 @@ class BookNumberReservation(models.Model):
 # ══════════════════════════════════════════════════════════════════
 #  سجل إرسال الإيميل للكتب
 # ══════════════════════════════════════════════════════════════════
+class BookLink(models.Model):
+    """ضلعٌ في نسيج الوثائق: هذا الكتاب **جوابُ** ذاك، أو **إلحاقٌ** به.
+
+    كان النظام **عاجزاً بنيويّاً** عن التعبير عن هذا: مسحُ ``core/models.py``
+    أظهر صفرَ علاقةٍ من كتابٍ إلى كتاب — كلُّ المفاتيح إلى ``Book`` تأتي من
+    نماذجَ أخرى (مرفقات، تعليقات، تاريخ، بريد). فسؤالُ الكاتب «إلحاقاً
+    بمذكّرتكم المرقّمة…» لم يكن له جواب.
+
+    **حقيقةٌ ثابتةٌ لا حالةَ لها** — وهذا ما يفصلها عن الإحالة (سيرِ العمل):
+    الضلعُ يقول «هذان متّصلان» ولا يقول «ما زال معلّقاً». الجدولان لا يُدمجان:
+    خلطُ الدلالتين هو «الجدول الغامض».
+
+    و``PROTECT`` على ``to_book`` مقصود: تفريغُ أصلٍ من السلّة **وهو مرجعُ
+    غيرِه** يُرفض حتى يُفكّ الربط — حمايةُ سلسلة الإحالات من الانقطاع.
+    """
+
+    REPLY        = 'reply'
+    FOLLOWUP     = 'followup'
+    REFERS       = 'refers'
+    CONFIRMATION = 'confirmation'
+    RELATION_CHOICES = (
+        (REPLY,        'جواب على'),
+        (FOLLOWUP,     'إلحاقاً بـ'),
+        (REFERS,       'إشارة إلى'),
+        (CONFIRMATION, 'تأكيد على'),
+    )
+
+    from_book  = models.ForeignKey('Book', on_delete=models.CASCADE,
+                                   related_name='links_out', verbose_name='من كتاب')
+    to_book    = models.ForeignKey('Book', on_delete=models.PROTECT,
+                                   related_name='links_in', verbose_name='إلى كتاب')
+    relation   = models.CharField('العلاقة', max_length=16, choices=RELATION_CHOICES)
+    note       = models.CharField('ملاحظة', max_length=255, blank=True, default='')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   related_name='book_links')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'رابط بين كتابين'
+        verbose_name_plural = 'روابط الكتب'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['from_book', 'to_book', 'relation'],
+                                    name='uniq_book_link'),
+            models.CheckConstraint(check=~models.Q(from_book=models.F('to_book')),
+                                   name='book_link_not_self'),
+        ]
+        indexes = [
+            # «مَن يجيب هذا الكتاب؟» — استعلامُ مصفوفة الردود ولوحة العلاقات
+            models.Index(fields=['to_book', 'relation'], name='booklink_to_idx'),
+            models.Index(fields=['from_book', 'relation'], name='booklink_from_idx'),
+        ]
+
+    #: الوسمُ مكتوبٌ من طرف ``from_book``؛ وعرضُه كما هو على الطرف الآخر
+    #: **يقلب المعنى**: «جواب على 2455» على كتابٍ *أجابه* 2455 تُقرأ عكسَها.
+    INBOUND_LABELS = {
+        REPLY:        'أجابه',
+        FOLLOWUP:     'أُلحق به',
+        REFERS:       'مُشارٌ إليه من',
+        CONFIRMATION: 'أُكِّد بـ',
+    }
+
+    def label_for(self, direction):
+        """وسمُ الضلع من منظور الطرف الذي نعرضه عنده."""
+        if direction == 'in':
+            return self.INBOUND_LABELS.get(self.relation, self.get_relation_display())
+        return self.get_relation_display()
+
+    def __str__(self):
+        return f"{self.from_book_id} {self.get_relation_display()} {self.to_book_id}"
+
+
+class BookReferral(models.Model):
+    """**التفريق** — الكتابُ يمشي إلى وحدةٍ أو قسمٍ أو جهةٍ خارجيّة، ومعه توجيه.
+
+    شهادةُ موظّف البريد قلبت هذا من استثناءٍ إلى قاعدةٍ يوميّة: «نمسك الكتاب
+    نذهب به للمدير ويكتب إمّا هامشَ الاطّلاع والحفظ أو إجابةً مباشرةً بالهامش
+    أو **التوجيهَ للوحدات بأوامر مداولة**». فالكتابُ الواحد يُفرَّق على وحداتٍ
+    عدّة، ولكلّ وحدةٍ توجيهُها ومدّتُها ومَن يتابعها.
+
+    **لماذا صفٌّ لكلّ هدفٍ لا حقلٌ في الكتاب؟** لأنّ ما نطارده هو **حالةُ كلّ
+    قفزةٍ على حدة**: سبعُ قفزاتٍ = سبعةُ هوامشَ مؤرَّخةٍ بأصحابها، وحقلٌ واحدٌ
+    لا يبلغ ذلك إلّا بالكشط والإلحاق النصّيّ — وهو ما يُضيع المستند.
+
+    **والمرساةُ دائماً ``book``:** الكتابُ يبقى لقسمٍ مالكٍ واحد، والصفوفُ
+    نسخُ إحالةٍ لا نقلُ ملكيّة.
+    """
+
+    #: الهدفُ الواحد بالضبط — قسمٌ داخليّ أو جهةٌ خارجيّة، لا كلاهما ولا لا شيء.
+    ACTION = 'action'
+    INFO = 'info'
+    PURPOSE_CHOICES = (
+        (ACTION, 'للتنفيذ'),
+        (INFO,   'للعلم'),
+    )
+
+    SENT = 'sent'
+    RECEIVED = 'received'
+    DONE = 'done'
+    RETURNED = 'returned'
+    STATUS_CHOICES = (
+        (SENT,     'مُرسَل'),
+        (RECEIVED, 'مستلَم'),
+        (DONE,     'منجَز'),
+        (RETURNED, 'مُعاد'),
+    )
+    #: الحالاتُ التي ما زال الصفُّ فيها التزاماً مفتوحاً يُطارَد.
+    OPEN_STATUSES = (SENT, RECEIVED)
+
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='referrals',
+                             verbose_name="الكتاب")
+    from_department = models.ForeignKey(Department, on_delete=models.PROTECT,
+                                        related_name='referrals_out', verbose_name="من قسم")
+    to_department = models.ForeignKey(Department, on_delete=models.PROTECT, null=True, blank=True,
+                                      related_name='referrals_in', verbose_name="إلى قسم/وحدة")
+    to_entity = models.ForeignKey('Entity', on_delete=models.PROTECT, null=True, blank=True,
+                                  related_name='referrals_in', verbose_name="إلى جهة خارجيّة")
+    assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='referrals_assigned', verbose_name="المكلَّف")
+
+    purpose = models.CharField("الغرض", max_length=8, choices=PURPOSE_CHOICES, default=ACTION)
+    margin = models.TextField("التوجيه/الهامش", blank=True)
+    #: قصاصةُ الهامش المكتوب بخطّ اليد: {attachment_id, page, bbox} — التوجيهُ
+    #: يُكتب على وجه المعاملة بخطّ المدير، ونسخُه يدويّاً يُضيع الحجّة.
+    margin_crop = models.JSONField("قصاصة الهامش", null=True, blank=True)
+    via_book = models.ForeignKey(Book, on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='referrals_via', verbose_name="المذكّرة الصادرة")
+
+    status = models.CharField("الحالة", max_length=10, choices=STATUS_CHOICES,
+                              default=SENT, db_index=True)
+    due_date = models.DateField("موعد الإنجاز", null=True, blank=True)
+    last_reminder_at = models.DateTimeField("آخر تنبيه", null=True, blank=True)
+    closed_by_link = models.ForeignKey('BookLink', on_delete=models.SET_NULL, null=True, blank=True,
+                                       related_name='closes_referrals', verbose_name="أُقفل بالجواب")
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='referrals_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'إحالة'
+        verbose_name_plural = 'الإحالات'
+        ordering = ['-created_at']
+        constraints = [
+            # هدفٌ واحدٌ بالضبط: صفٌّ بلا هدفٍ التزامٌ لا يطارده أحد، وصفٌّ
+            # بهدفين يُحتسب مرّتين في مصفوفة الردود.
+            models.CheckConstraint(
+                check=(models.Q(to_department__isnull=False, to_entity__isnull=True)
+                       | models.Q(to_department__isnull=True, to_entity__isnull=False)),
+                name='referral_exactly_one_target',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['to_department', 'status'], name='referral_dept_status_idx'),
+            models.Index(fields=['status', 'purpose', 'due_date'], name='referral_queue_idx'),
+            models.Index(fields=['book'], name='referral_book_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.book_id} ⟵ {self.target_name} ({self.get_status_display()})"
+
+    @property
+    def target(self):
+        """الهدفُ كائناً أيّاً كان نوعُه — القيدُ يضمن أنّ أحدَهما موجودٌ حتماً."""
+        return self.to_department if self.to_department_id else self.to_entity
+
+    @property
+    def target_name(self):
+        """**الاسمُ وحده بلا رمز.** ``Department.__str__`` يُصدّر «ش13 — المتابعة»
+        وهو نافعٌ في قائمةٍ منسدلة، لكنّه ضجيجٌ حين يتكرّر في كلّ خليّةٍ من ورقةٍ
+        يقارنها الكاتبُ بدفتره سطراً بسطر — والرمزُ في ترويسة الورقة أصلاً."""
+        return self.target.name
+
+    @property
+    def is_open(self):
+        return self.status in self.OPEN_STATUSES
+
+    @property
+    def is_overdue(self):
+        """متأخّرٌ **للتنفيذ فقط**: «للعلم» لا يُطارَد ولا يُحتسب تأخيراً."""
+        from django.utils import timezone as _tz
+
+        return bool(
+            self.is_open and self.purpose == self.ACTION
+            and self.due_date and self.due_date < _tz.localdate()
+        )
+
+
+class CustodyEvent(models.Model):
+    """**بعهدة مَن** — سجلُّ انتقال المستند من يدٍ إلى يد.
+
+    سُئل الكاتبُ ما الذي يجعله يترك دفترَ التواقيع الورقيَّ فأجاب: «إذا كانت
+    المهامُّ والمسؤوليّاتُ واضحةً ومقسّمةً على اليوزريّة وظاهرةً لي **كلُّ
+    تفاصيل الاستلام وبعهدة مَن**: مَن استلم، ومَن أكّد، ومَن أعدّ… لاستغنينا
+    عنه. **المهمّ الشفافيّة: لا يضيع مستندٌ أبداً ولا تفاصيله.**»
+
+    فهذا الجدولُ هو **الميزةُ الحاكمة** في المشروع كلّه، ومقياسُ نجاحه بسيطٌ
+    وقاسٍ: مستندٌ واحدٌ يضيع يُبطل الثقةَ كلَّها.
+
+    **صفٌّ لكلّ انتقال — لا حقلٌ يُكشط:** «آخرُ عهدة» تُقرأ من الصفّ الأخير،
+    والخطُّ الزمنيّ كلُّه محفوظ. وحقلُ ``Book.current_custody`` مؤشّرٌ إلى هذا
+    الصفّ لا **نسخةٌ ثانيةٌ للحقيقة**.
+    """
+
+    INTAKE = 'intake'
+    UNIT_RECEIPT = 'unit_receipt'
+    ARCHIVE_DONE = 'archive_done'
+    COURIER_PICKUP = 'courier_pickup'
+    RETURN = 'return'
+    # حدثٌ مخصَّصٌ لا إعادةُ استعمال ``RETURN``: الأرشفةُ تُقرأ بآخر حدثٍ
+    # أرشيفيّ، ولو أُخذ ``RETURN`` علامةَ خروجٍ لألغت **أيُّ** إعادةٍ
+    # لسببٍ آخر (رجوعُ متعهّدٍ مثلاً) حفظَ الورقة صامتةً.
+    ARCHIVE_REOPEN = 'archive_reopen'
+    EVENT_CHOICES = (
+        (INTAKE,         'قيدٌ في السجلّ'),
+        (UNIT_RECEIPT,   'استلامُ وحدة'),
+        (ARCHIVE_DONE,   'تمامُ أرشفة'),
+        (COURIER_PICKUP, 'تسليمٌ لمتعهّد البريد'),
+        (RETURN,         'إعادة'),
+        (ARCHIVE_REOPEN, 'فتحُ مؤرشَف'),
+    )
+
+    #: حدثا الأرشفة **بروتوكولٌ فرعيٌّ له قواعدُه** — يُكتبان من
+    #: ``core/archive_service.py`` وحدَه، ويُردّان من كشف العهدة العامّ.
+    #: ولولا ذلك لاختار مختصُّ البريد «تمامَ أرشفة» من الحواريّة
+    #: فتصير قواعدُ الأرشفة كلُّها زينةً تُلتَفُّ من الباب المجاور.
+    ARCHIVE_EVENTS = (ARCHIVE_DONE, ARCHIVE_REOPEN)
+
+    PAPER = 'paper'
+    DIGITAL = 'digital'
+    SIGNATURE_MODES = (
+        (PAPER,   'توقيعٌ ورقيّ'),
+        (DIGITAL, 'إقرارٌ في النظام'),
+    )
+
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='custody_events',
+                             verbose_name="الكتاب")
+    referral = models.ForeignKey('BookReferral', on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='custody_events', verbose_name="الإحالة")
+    event = models.CharField("الحدث", max_length=20, choices=EVENT_CHOICES, db_index=True)
+
+    to_holder_department = models.ForeignKey(Department, on_delete=models.PROTECT,
+                                             null=True, blank=True,
+                                             related_name='custody_held',
+                                             verbose_name="بعهدة قسم/وحدة")
+    to_holder_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                       related_name='custody_held', verbose_name="بعهدة موظّف")
+    #: نصٌّ حرٌّ لأنّ **متعهّد البريد ليس مستخدماً في النظام** — ولا يصحّ أن
+    #: تنقطع سلسلةُ العهدة عند أوّل حاملٍ من خارج الحسابات.
+    to_holder_name = models.CharField("بعهدة (اسم)", max_length=120, blank=True)
+
+    signed_at = models.DateTimeField("وقت التوقيع", db_index=True)
+    recorded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='custody_recorded', verbose_name="سجّله")
+    signature_mode = models.CharField("نوعُ التوقيع", max_length=10,
+                                      choices=SIGNATURE_MODES, default=PAPER)
+    #: يحمل **مكانَ الحفظ** عند الأرشفة — وهو ما يسأل عنه الكاتبُ بعد سنة.
+    note = models.CharField("ملاحظة", max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'حدث عهدة'
+        verbose_name_plural = 'سجلّ العهدة'
+        ordering = ['-signed_at', '-id']
+        constraints = [
+            # حاملٌ واحدٌ على الأقلّ: صفٌّ بلا حاملٍ يقول «انتقلت العهدة إلى
+            # لا أحد» — وهو تماماً الضياعُ الذي وُجد الجدولُ لمنعه.
+            models.CheckConstraint(
+                check=(models.Q(to_holder_department__isnull=False)
+                       | models.Q(to_holder_user__isnull=False)
+                       | ~models.Q(to_holder_name='')),
+                name='custody_has_a_holder',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['book', '-signed_at'], name='custody_book_idx'),
+            models.Index(fields=['event', 'signed_at'], name='custody_event_idx'),
+        ]
+
+    def __str__(self):
+        return '%s ⟵ %s' % (self.get_event_display(), self.holder_name)
+
+    @property
+    def holder_name(self):
+        """اسمُ الحامل أيّاً كان نوعُه — القيدُ يضمن أنّ أحدَها موجود."""
+        if self.to_holder_user_id:
+            return self.to_holder_user.get_full_name() or self.to_holder_user.get_username()
+        if self.to_holder_department_id:
+            return self.to_holder_department.name
+        return self.to_holder_name
+
+
+class BookRegistration(models.Model):
+    """قيدُ الكتاب الواحد في **دفترِ أكثرَ من قسم** — ولكلٍّ رقمُ واردِه.
+
+    تصحيحُ المالك حرفيّاً: «عندما تأتي من الوزارة جهةٌ أعلى تخاطب الشركة
+    بعنوانها فيوقّع المديرُ العامّ ويهمّش ويوجّه الكتاب… **ويدخل مرّةً بوارد
+    مكتب المدير العامّ ثمّ مرّةً أخرى بوارد الأقسام المختصّة**»، و«ندخله برقم
+    الكتاب الأصليّ… **ورقمِ واردٍ خاصٍّ بنا**».
+
+    فالورقةُ الواحدة لها أرقامُ واردٍ بعددِ الدفاتر التي مرّت بها. وحقلُ
+    ``Book.our_number`` يبقى **رقمَ القسم المالك** — وهذه الصفوفُ هي البقيّة،
+    كلٌّ في دفتره. ولا يُختلق شيءٌ للماضي: القيدُ يُنشأ حين يُقيَّد فعلاً.
+    """
+
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='registrations',
+                             verbose_name="الكتاب")
+    department = models.ForeignKey(Department, on_delete=models.PROTECT,
+                                   related_name='registrations', verbose_name="القسم")
+    #: من منظور **المقيِّد**: الكتابُ صادرٌ عند مُرسِله ووارِدٌ عند مُستلمه.
+    direction = models.CharField("النوع", max_length=20, default='incoming_internal',
+                                 choices=(('incoming_internal', 'وارد داخلي'),
+                                          ('incoming_external', 'وارد خارجي')))
+    number = models.CharField("رقم الوارد", max_length=20, blank=True)
+    registered_at = models.DateTimeField("تاريخ القيد", default=timezone.now)
+    registered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                      related_name='registrations_made')
+    via_referral = models.ForeignKey('BookReferral', on_delete=models.SET_NULL,
+                                     null=True, blank=True, related_name='registrations',
+                                     verbose_name="عن إحالة")
+
+    class Meta:
+        verbose_name = 'قيد في دفتر'
+        verbose_name_plural = 'القيود'
+        ordering = ['-registered_at']
+        constraints = [
+            # رقمٌ واحدٌ لا يتكرّر في دفترِ القسم الواحد — و«بلا رقم» مستثنىً
+            # (استثناءٌ مدعومٌ في `numbering.py` ولا يستهلك عدّاداً).
+            models.UniqueConstraint(
+                fields=['department', 'direction', 'number'],
+                condition=~models.Q(number=''),
+                name='uniq_registration_per_department',
+            ),
+            models.UniqueConstraint(
+                fields=['book', 'department'],
+                name='uniq_registration_book_department',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['department', 'direction'], name='registration_dept_idx'),
+        ]
+
+    def __str__(self):
+        return '%s: %s' % (self.department.code, self.number or '(بلا رقم)')
+
+
+class EntityGroup(models.Model):
+    """عنقودُ جهات — «جميع الهيئات والأقسام» بضغطةٍ واحدة.
+
+    طلبُ المالك: «لو كنتُ أستطيع أن أحدّد عنقوداً من الجهات بمسمّىً واحد… ومباشرةً
+    يذهب إلى كلّ الأقسام بهذا الاسم دفعةً واحدة بعد ضغط حفظ وإرسال».
+
+    **ولماذا ليس `Entity` بنوعٍ خاصّ؟** لأنّ العنقود **ليس طرفَ مراسلة**: لا
+    أضبارةَ له ولا يُرسِل ولا يُحصى في تقارير الجهات. وجعلُه جهةً يعني حراسةَ
+    «إلّا العناقيد» في كلّ مستهلكي الجهات إلى الأبد — **والجهاتُ الوهميّة الأربع
+    في القاعدة الحيّة دليلٌ حيٌّ** على أنّ الناس ستختاره كأنّه جهة.
+    """
+
+    #: القاعدةُ الديناميكيّةُ **الوحيدة**: عضويّةٌ ثابتةٌ باسم «جميع الهيئات
+    #: والأقسام» **ستتيبّس حتماً** عند دخول القسم الثالث والأربعين — فخٌّ
+    #: مضمونُ الوقوع فلا يُترك. وأيُّ لغةِ قواعدَ أوسع: لا.
+    ALL_REGISTRY_DEPARTMENTS = 'all_registry_departments'
+    AUTO_RULE_CHOICES = (
+        (ALL_REGISTRY_DEPARTMENTS, 'كلُّ الأقسام المسجّلة النشطة'),
+    )
+
+    name = models.CharField("اسم العنقود", max_length=200, unique=True)
+    members = models.ManyToManyField('Entity', blank=True, related_name='groups',
+                                     verbose_name="الأعضاء")
+    auto_rule = models.CharField("قاعدة ديناميكيّة", max_length=32, blank=True,
+                                 choices=AUTO_RULE_CHOICES)
+    is_active = models.BooleanField("نشط", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'عنقود جهات'
+        verbose_name_plural = 'عناقيد الجهات'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def resolved_members(self):
+        """أعضاءُ العنقود الآن — محسوبةً إن كانت له قاعدةٌ ديناميكيّة.
+
+        **لقطةُ العضويّة ليست هنا:** صفوفُ الإحالة التي تُنشأ لحظةَ الإرسال هي
+        اللقطة، فتغييرُ الأعضاء لاحقاً لا يمسّ تعميماً مضى — بلا جدولِ لقطاتٍ
+        إضافيّ.
+        """
+        if self.auto_rule == self.ALL_REGISTRY_DEPARTMENTS:
+            return Entity.objects.filter(department__is_active=True).order_by('name')
+        return self.members.all().order_by('name')
+
+
+class SecretAccessGrant(models.Model):
+    """تفويضُ الاطّلاع على كتابٍ سرّيٍّ **بعينه**.
+
+    شهادةُ موظّف البريد: «فقط مسؤول إدارة البريد والأرشفة يحقّ لهم الاطّلاع،
+    **أو تفويضُ موظّفٍ معيّنٍ للاطّلاع**». فالتفويضُ واقعةٌ في العمل لا ترفٌ
+    تقنيّ.
+
+    **لكتابٍ واحدٍ فقط — لا تفويضَ شامل:** أقلُّ امتيازٍ ممكن. ومن احتاج
+    السرّيّ كلَّه فترقيتُه إلى دور مختصّ البريد قرارُ إنسانٍ أثقل، وهو الصواب:
+    صلاحيةٌ دائمةٌ تُمنح بوعيٍ لا بضغطة زرّ في صفحة كتاب.
+    """
+
+    book       = models.ForeignKey('Book', on_delete=models.CASCADE, related_name='secret_grants')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='secret_grants')
+    granted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   related_name='secret_grants_given')
+    granted_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField("ينتهي في", null=True, blank=True)
+    revoked_at = models.DateTimeField("سُحب في", null=True, blank=True)
+    reason     = models.CharField("السبب", max_length=255, blank=True, default="")
+
+    class Meta:
+        verbose_name = 'تفويض اطّلاع'
+        verbose_name_plural = 'تفويضات الاطّلاع'
+        constraints = [
+            # منحةٌ ساريةٌ واحدة لكلّ (كتاب، مستخدم) — والمسحوبةُ تبقى للتاريخ.
+            models.UniqueConstraint(
+                fields=['book', 'user'], condition=models.Q(revoked_at__isnull=True),
+                name='uniq_live_secret_grant',
+            ),
+        ]
+        indexes = [models.Index(fields=['user'], name='secret_grant_user_idx')]
+
+    def __str__(self):
+        return f"{self.user.get_username()} ⟵ {self.book_id}"
+
+
 class BookEmailLog(models.Model):
     """
     يسجّل كل إيميل يُرسَل مرتبطاً بكتاب —
@@ -1689,14 +2319,19 @@ class BookEmailLog(models.Model):
         (TRIGGER_REMINDER, 'تذكير متابعة'),
     ]
 
-    STATUS_SENT    = 'sent'
-    STATUS_FAILED  = 'failed'
-    STATUS_PENDING = 'pending'
+    STATUS_SENT      = 'sent'
+    STATUS_FAILED    = 'failed'
+    STATUS_PENDING   = 'pending'
+    STATUS_ABANDONED = 'abandoned'
     STATUS_CHOICES = [
-        (STATUS_SENT,    'أُرسِل'),
-        (STATUS_FAILED,  'فشل'),
-        (STATUS_PENDING, 'في الانتظار'),
+        (STATUS_SENT,      'أُرسِل'),
+        (STATUS_FAILED,    'فشل'),
+        (STATUS_PENDING,   'في الانتظار'),
+        (STATUS_ABANDONED, 'مُتروك بعد محاولات'),
     ]
+
+    #: أقصى محاولاتٍ لإعادة الإرسال قبل الترك.
+    MAX_RETRIES = 3
 
     # اختياريّ عمداً: رسالةٌ إداريّةٌ قد لا تخصّ كتاباً بعينه. كان الحقل إلزاميّاً
     # فسقط مسار الإنشاء إلى **أوّل كتابٍ في القاعدة** (``Book.objects.order_by('id')
@@ -1729,6 +2364,19 @@ class BookEmailLog(models.Model):
     sent_at     = models.DateTimeField("أُرسِل في", auto_now_add=True)
     delivered_at = models.DateTimeField("تأكيد التسليم", null=True, blank=True)
 
+    # ── إعادة الإرسال ──
+    # كانت مهمّة الإعادة تدّعي في توثيقها «محاولةً واحدةً لكلّ سجلّ» ولا تنفّذه:
+    # المُرسِل يُنشئ **صفّاً جديداً** لكلّ محاولة ولا يمسّ الأصل، فيبقى الأصل
+    # `failed` أبداً ويُعاد إرساله كلّ تشغيل — والصفوف الجديدة تدخل الطابور
+    # بدورها فينمو الحشد. هذه الحقول هي ما يجعل «مرّةً واحدة» صادقةً فعلاً.
+    retry_count   = models.PositiveSmallIntegerField("عدد المحاولات", default=0)
+    last_retry_at = models.DateTimeField("آخر محاولة", null=True, blank=True)
+    retry_of      = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='retries', verbose_name='محاولةٌ لـ',
+        help_text='غير فارغ ⟵ هذا الصفّ محاولةُ إعادةٍ لا أصلاً: لا يدخل الطابور.',
+    )
+
     class Meta:
         verbose_name = 'سجل إيميل'
         verbose_name_plural = 'سجلات الإيميل'
@@ -1754,6 +2402,18 @@ class SystemSettings(models.Model):
 
     singleton      = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
     app_name       = models.CharField("اسم النظام", max_length=100, default="نظام الكتب")
+
+    # وضعا تشغيلٍ من الكود نفسه: تنصيبُ قسمٍ واحد لا يرى تعقيد الأقسام أصلاً،
+    # وتنصيبُ الشركة يُظهرها. القاعدة: كلّ سلوكٍ جديدٍ خلف ``company``.
+    PROFILE_SINGLE  = 'single'
+    PROFILE_COMPANY = 'company'
+    PROFILE_CHOICES = [
+        (PROFILE_SINGLE,  'قسم واحد'),
+        (PROFILE_COMPANY, 'الشركة كاملةً'),
+    ]
+    deployment_profile = models.CharField(
+        "وضع التشغيل", max_length=10, choices=PROFILE_CHOICES, default=PROFILE_SINGLE,
+    )
     brand_subtitle = models.CharField(
         "سطر الوصف في الترويسة", max_length=200, blank=True,
         default="أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة",

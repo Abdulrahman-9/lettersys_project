@@ -1,0 +1,41 @@
+{% comment %}
+  أقسامُ اللوحة — عرضٌ عامٌّ لا يعرف دوراً.
+
+  القالبُ لا يسأل «أهو رئيسُ قسم؟» ولا مرّةً واحدة: القسمةُ حُسمت في
+  `core/dashboard_sections.py` ببوّاباتٍ هي نفسُها بوّاباتُ الصفحات. وشرطٌ في
+  القالب معناه قاعدةُ صلاحيّةٍ ثانيةٌ تنحرف عن الأولى بصمت.
+{% endcomment %}
+
+<div class="db-sections">
+  {% for s in sections %}
+  <section class="db-section db-{{ s.key }}" aria-labelledby="db-h-{{ s.key }}">
+    <header class="db-section-hd">
+      <div>
+        <h5 id="db-h-{{ s.key }}">{{ s.title }}</h5>
+        <p>{{ s.hint }}</p>
+      </div>
+      {% if s.links %}
+      <div class="db-links">
+        {% for l in s.links %}
+          <a class="db-link" href="{{ l.href }}"><i class="bi {{ l.icon }}"></i>{{ l.label }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </header>
+
+    <div class="db-counters">
+      {% for c in s.counters %}
+        <a class="db-counter db-tone-{{ c.tone }}" href="{{ c.href }}">
+          <span class="db-n"{% if c.value %} data-has="1"{% endif %}>{{ c.value }}</span>
+          <span class="db-l">{{ c.label }}</span>
+        </a>
+      {% endfor %}
+    </div>
+
+    {% if s.note %}<p class="db-note">{{ s.note }}</p>{% endif %}
+    {% if s.empty %}
+      <p class="db-note">لا التزامَ مفتوحاً باسمك — وهذا خبرٌ جيّد.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>

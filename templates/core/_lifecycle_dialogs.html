@@ -1,0 +1,233 @@
+{% comment %}
+حواريّتا التفريق والعهدة.
+
+الحقولُ مرتَّبةٌ على تسلسل عمل الكاتب لا على ترتيب النموذج: يختار الوحداتِ
+أوّلاً (أو العنقودَ)، ثمّ يكتب توجيهَ المدير، ثمّ المدّة. و«الغرض» افتراضُه
+«للتنفيذ» لأنّه الغالب، و«للعلم» اختيارٌ صريح — فصفوفُ «للعلم» لا تُطارَد،
+وجعلُها الافتراضَ يُفرغ طابورَ المتابعة صامتاً.
+{% endcomment %}
+
+<div class="modal fade lc-scope" id="distributeModal" tabindex="-1"
+     aria-labelledby="distributeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="distributeModalLabel">
+          <i class="bi bi-arrow-left-right text-primary me-2"></i>تفريق الكتاب
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+      <div class="modal-body">
+
+        <div class="mb-3">
+          <label for="distGroup" class="form-label" style="font-size:.85rem">
+            عنقود <span class="text-muted">(يُغني عن الاختيار اليدويّ)</span>
+          </label>
+          <select class="form-select form-select-sm" id="distGroup">
+            <option value="">— لا عنقود —</option>
+          </select>
+        </div>
+
+        <fieldset class="mb-3">
+          <legend class="form-label" style="font-size:.85rem">الجهات</legend>
+          <div id="distTargets"
+               style="max-height:14rem;overflow-y:auto;border:1px solid var(--bs-border-color);
+                      border-radius:.5rem;padding:.6rem">
+            <span class="text-muted" style="font-size:.85rem">جارٍ التحميل…</span>
+          </div>
+        </fieldset>
+
+        <div class="mb-3">
+          <label for="distMargin" class="form-label" style="font-size:.85rem">
+            التوجيه / الهامش
+          </label>
+          <textarea class="form-control form-control-sm" id="distMargin" rows="2"
+                    placeholder="أعدّوا مذكّرةً بالتخصيصات المطلوبة"></textarea>
+          <div class="form-text" style="font-size:.75rem">
+            هامشُ المدير كما كتبه — يظهر تحت اسم كلّ وحدةٍ في اللوحة.
+          </div>
+        </div>
+
+        {% comment %}
+          قصاصةُ الهامش — الأصلُ بخطّ اليد. النصُّ أعلاه نسخةٌ يقرؤها البحث،
+          والقصاصةُ هي **الأصل**: توقيعُ المدير وخطُّه لا يُنسخان حرفاً.
+          و«الهامشُ يسبق الرقم» في لوح التصميم لأنّ الكاتب يقرأ التوجيه أوّلاً.
+          تظهر فقط حين يكون للكتاب مرفقٌ يُصيَّر.
+        {% endcomment %}
+        {% if crop_source %}
+        <div class="mb-3" data-margin-crop
+             data-attachment="{{ crop_source.pk }}"
+             data-page-url="{% url 'attachment_page_image' crop_source.pk 1 %}">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+            <label class="form-label mb-0" style="font-size:.85rem">
+              قصاصةُ الهامش — من صورة الصفحة
+            </label>
+            <div class="d-flex align-items-center gap-2">
+              <label for="cropPage" class="form-label mb-0" style="font-size:.75rem">صفحة</label>
+              <input type="number" id="cropPage" data-crop-page value="1" min="1" max="50"
+                     class="form-control form-control-sm" style="width:4.5rem">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-crop-clear>
+                مسح
+              </button>
+            </div>
+          </div>
+
+          <div data-crop-stage
+               style="position:relative;overflow:hidden;border:2px solid #d87b44;border-radius:.7rem;
+                      background:#fdfaf5;cursor:crosshair;touch-action:none;max-height:22rem">
+            <img data-crop-image alt="صفحة المستند — اسحب لتحديد الهامش"
+                 src="{% url 'attachment_page_image' crop_source.pk 1 %}"
+                 style="display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none">
+            <div data-crop-rect hidden
+                 style="position:absolute;border:2px dashed #b45309;border-radius:.4rem;
+                        background:rgba(249,168,38,.16);pointer-events:none"></div>
+          </div>
+
+          <input type="hidden" id="distMarginCrop" data-crop-value>
+          <div class="form-text" data-crop-hint style="font-size:.75rem">
+            اسحب لتحديد الهامش على الصفحة.
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="row g-2">
+          <div class="col-sm-4">
+            <label for="distPurpose" class="form-label" style="font-size:.85rem">الغرض</label>
+            <select class="form-select form-select-sm" id="distPurpose">
+              <option value="action" selected>للتنفيذ</option>
+              <option value="info">للعلم</option>
+            </select>
+            <div class="form-text" style="font-size:.75rem">«للعلم» لا يُطارَد.</div>
+          </div>
+          <div class="col-sm-4">
+            <label for="distDue" class="form-label" style="font-size:.85rem">موعد الإنجاز</label>
+            <input type="date" class="form-control form-control-sm" id="distDue">
+          </div>
+          <div class="col-sm-4">
+            <label for="distAssignee" class="form-label" style="font-size:.85rem">المكلَّف</label>
+            <select class="form-select form-select-sm" id="distAssignee">
+              <option value="">— بلا مكلَّف —</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-sm btn-primary" id="distSubmit">
+          <i class="bi bi-send me-1"></i>حفظ وإرسال
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if can_archive_book and not book_is_archived %}
+<div class="modal fade lc-scope" id="archiveModal" tabindex="-1"
+     aria-labelledby="archiveModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="archiveModalLabel">
+          <i class="bi bi-archive text-primary me-2"></i>تمامُ الأرشفة
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="archPlace" class="form-label" style="font-size:.85rem">موضع الحفظ</label>
+          <input type="text" class="form-control form-control-sm" id="archPlace"
+                 maxlength="200" placeholder="الرفّ ب/12 — صندوق 3">
+          <div class="form-text" style="font-size:.75rem">
+            أين وُضعت الورقة فعلاً — وهو أوّلُ ما يُسأل عنه بعد سنة.
+          </div>
+        </div>
+        <div class="mb-1">
+          <label for="archNote" class="form-label" style="font-size:.85rem">ملاحظة</label>
+          <input type="text" class="form-control form-control-sm" id="archNote"
+                 maxlength="200" placeholder="اختياريّة">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-primary btn-sm" id="archSubmit">
+          <i class="bi bi-archive me-1"></i>قيّد الحفظ
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="modal fade lc-scope" id="custodyModal" tabindex="-1"
+     aria-labelledby="custodyModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="custodyModalLabel">
+          <i class="bi bi-person-badge text-primary me-2"></i>تسجيل عهدة
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+      <div class="modal-body">
+
+        <div class="mb-3">
+          <label for="custEvent" class="form-label" style="font-size:.85rem">الحدث</label>
+          <select class="form-select form-select-sm" id="custEvent"></select>
+        </div>
+
+        <div class="mb-2">
+          <label for="custDepartment" class="form-label" style="font-size:.85rem">
+            بعهدة قسم/وحدة
+          </label>
+          <select class="form-select form-select-sm" id="custDepartment">
+            <option value="">— لا قسم —</option>
+          </select>
+        </div>
+
+        <div class="mb-2">
+          <label for="custUser" class="form-label" style="font-size:.85rem">أو بعهدة موظّف</label>
+          <select class="form-select form-select-sm" id="custUser">
+            <option value="">— لا موظّف —</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label for="custName" class="form-label" style="font-size:.85rem">أو باسمٍ حرّ</label>
+          <input type="text" class="form-control form-control-sm" id="custName"
+                 maxlength="120" placeholder="مُتعهّد البريد — أبو أحمد">
+          <div class="form-text" style="font-size:.75rem">
+            لمن ليس له حسابٌ عندنا — فسلسلةُ العهدة لا تنقطع عند أوّل حاملٍ من خارج النظام.
+          </div>
+        </div>
+
+        <div class="row g-2">
+          <div class="col-sm-6">
+            <label for="custSignedAt" class="form-label" style="font-size:.85rem">
+              وقت التوقيع
+            </label>
+            <input type="datetime-local" class="form-control form-control-sm" id="custSignedAt">
+            <div class="form-text" style="font-size:.75rem">اتركه فارغاً = الآن.</div>
+          </div>
+          <div class="col-sm-6">
+            <label for="custNote" class="form-label" style="font-size:.85rem">ملاحظة</label>
+            <input type="text" class="form-control form-control-sm" id="custNote"
+                   maxlength="255" placeholder="بموجب كشف التسليم 14 · الرفّ ب/12">
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-sm btn-primary" id="custSubmit">
+          <i class="bi bi-check2 me-1"></i>سجّل
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% include "core/_link_picker.html" %}

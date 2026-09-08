@@ -98,6 +98,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 # مخصّص — badge الإشعارات والبريد في الشريط الجانبي
                 'core.context_processors.notifications',
+                'core.context_processors.nav_gates',
                 'core.context_processors.mail_unread',
                 # مخصّص — هوية التطبيق المعروضة (اسم النظام + سطر الوصف)
                 'core.context_processors.system_settings',
@@ -276,6 +277,13 @@ CELERY_BEAT_SCHEDULE = {
     'sync-inbox-every-10-minutes': {
         'task': 'core.tasks.sync_inbox_task',
         'schedule': crontab(minute='*/10'),
+    },
+    # لم تُجدوَل قبل اليوم — وكان ذلك سترًا عرضيّاً لا تصميماً: المهمّة كانت
+    # تُعيد إرسال الصفّ الفاشل في **كلّ** تشغيلة بلا نهاية. جُدولت بعد أن صار
+    # لها عدّاد محاولاتٍ وحالةُ ترْكٍ وقفلٌ ذرّيّ (سجلّ العيوب ح2).
+    'retry-failed-emails-every-30-minutes': {
+        'task': 'core.tasks.retry_failed_emails_task',
+        'schedule': crontab(minute='*/30'),
     },
 }
 

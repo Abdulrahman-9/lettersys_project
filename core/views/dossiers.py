@@ -3,7 +3,10 @@
 الأضابير (Dossiers) — مجلّدات مراسلات الأقسام.
 
 طبقة عرض/استعلام فوق النماذج القائمة:
-  - "القسم" = Entity.
+  - "القسم" = Entity — والداخليّةُ منها هي المرتبطة بـ``Department``
+    (سؤالٌ كان مؤجَّلاً في ADABIR_DESIGN حتى وصل بُعد القسم: كانت الشاشة تعرض
+    الشركات الأجنبيّة كأقسام لأنّ ``Entity`` لم يكن يميّز داخليّاً من خارجيّ).
+    المرشّح ``?internal=1`` يقصر العرض على الوحدات الداخليّة.
   - كتب القسم = اتحاد issuing_entities/receiving_entities (M2M).
   - التقسيم = Book.document_type (مع كتالوج document_types.py + سلّة "متفرقة").
 
@@ -31,9 +34,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from ..document_types import get_document_type_options, normalize_document_type_value
+from core.entity_kinds import EXTERNAL, KIND_HINTS, KIND_LABELS, KINDS
 from ..models import Book, Entity
 from .filter_helpers import FOLLOWUP_LABELS, BookFilterEngine, BookSortEngine
-from core.scoping import can_view_book, is_privileged
+from core.scoping import can_view_book, is_privileged, scope_books_for
 
 logger = logging.getLogger(__name__)
 
@@ -52,16 +56,15 @@ _REPORT_FIELDS = _DETAIL_FIELDS + ("margin",)
 
 
 # ════════════ أساس مؤمَّن (هزيل — الـprefetch يُضاف عند العرض فقط) ════════════
-def _book_base_filter(user):
-    """قاعدة الرؤية المؤمَّنة: المشرف/الموظّف = الكل؛ غيرهما = كتبه فقط."""
-    f = Q(is_deleted=False)
-    if not is_privileged(user):
-        f &= Q(created_by=user)
-    return f
-
-
 def _visible_books(request):
-    return Book.objects.filter(_book_base_filter(request.user))
+    """الكتبُ المرئيّة — من **المصدر الوحيد** ``scope_books_for``.
+
+    كانت هنا نسخةٌ خاصّةٌ من القاعدة («المشرف الكلّ، وغيرُه كتبَه فقط») سبقت
+    بُعدَ القسم ولم تلحق به: فكانت أضبارةُ الوحدة تُفتح **فارغةً** لموظّفها
+    لأنّه لم يُنشئ كتبَها بيده. وهي النسخةُ التي تُبطلها هذه الدفعة كلَّما
+    وجدتها — والقاعدةُ الآن واحدةٌ للقائمة والتفاصيل والأضبارة.
+    """
+    return scope_books_for(request.user, Book.objects.filter(is_deleted=False))
 
 
 def _direction_bases(base, pk):
@@ -215,14 +218,14 @@ def _ordered_type_groups(scan_books, meta, row_limit=_GROUP_ROW_LIMIT):
 def dossier_list(request):
     """المستوى 1: الأقسام التي لها كتب (مع أعداد صادر/وارد)، مرتّبة بالأكثر."""
     search_q = (request.GET.get("q") or "").strip()
-    base_filter = _book_base_filter(request.user)
+    visible = _visible_books(request)
 
     issued_sq = (
-        Book.objects.filter(base_filter, issuing_entities=OuterRef("pk"))
+        visible.filter(issuing_entities=OuterRef("pk"))
         .order_by().values("issuing_entities").annotate(c=Count("id")).values("c")
     )
     received_sq = (
-        Book.objects.filter(base_filter, receiving_entities=OuterRef("pk"))
+        visible.filter(receiving_entities=OuterRef("pk"))
         .order_by().values("receiving_entities").annotate(c=Count("id")).values("c")
     )
     qs = (
@@ -233,6 +236,15 @@ def dossier_list(request):
         )
         .filter(Q(issued_count__gt=0) | Q(received_count__gt=0))
     )
+    # التبويباتُ الثلاثة — القاعدةُ في ``core.entity_kinds`` مصدراً وحيداً
+    # تشترك فيه هذه الصفحةُ وصفحةُ الجهات. والتصفيةُ **في الاستعلام**: الصفحة
+    # مُرقَّمة، وتصفيةٌ في بايثون تكسر العدَّ والصفحات معاً.
+    counts = {k: qs.filter(kind=k).count() for k in KINDS}
+    kind = request.GET.get('kind') or EXTERNAL
+    if kind not in KINDS:
+        kind = EXTERNAL
+    qs = qs.filter(kind=kind)
+
     if search_q:
         qs = qs.filter(Q(name__icontains=search_q) | Q(code__icontains=search_q))
 
@@ -249,13 +261,16 @@ def dossier_list(request):
 
     # الإجماليات: تجميع DB واحد (بلا بثّ صفوف الأقسام إلى بايثون ولا حلقة مُفسَّرة)
     agg = qs.aggregate(
-        departments=Count("id"),
+        departments=Count("id", distinct=True),
         issued=Coalesce(Sum("issued_count"), 0),
         received=Coalesce(Sum("received_count"), 0),
     )
 
     return render(request, "core/dossier_list.html", {
         "page_obj": page, "paginator": paginator, "search_q": search_q,
+        "kind": kind,
+        "tabs": [{"key": k, "label": KIND_LABELS[k], "hint": KIND_HINTS[k],
+                  "count": counts[k]} for k in KINDS],
         "totals": {"departments": agg["departments"], "issued": agg["issued"], "received": agg["received"]},
     })
 

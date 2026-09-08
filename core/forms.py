@@ -15,13 +15,14 @@ class EntityForm(forms.ModelForm):
         # etype مُستبعَد عمداً — النوع (مُصدِرة/مستلِمة) يُشتَقّ آلياً من روابط
         # الكتب الفعلية، لا من حقل يدوي لا يُحدَّث.
         fields = [
-            "name", "code", "is_active",
+            "name", "code", "kind", "is_active",
             "email", "email_cc", "phone", "address", "contact_person", "notes",
             "notify_on_receive", "notify_on_send",
         ]
         labels = {
             "name":             "اسم الجهة",
             "code":             "رمز الجهة",
+            "kind":             "التبويب في الأضابير",
             "is_active":        "نشطة",
             "email":            "البريد الإلكتروني",
             "email_cc":         "نسخة إلى (CC)",
@@ -32,9 +33,13 @@ class EntityForm(forms.ModelForm):
             "notify_on_receive": "إشعار عند استلام كتاب منها",
             "notify_on_send":   "إشعار عند إرسال كتاب إليها",
         }
+        help_texts = {
+            "kind": "أنت تختاره — لا يُستنتج من الاسم. يحدّد تبويبَ الجهة في صفحة الأضابير.",
+        }
         widgets = {
             "name":           forms.TextInput(attrs={"class": "form-control"}),
             "code":           forms.TextInput(attrs={"class": "form-control"}),
+            "kind":           forms.Select(attrs={"class": "form-select"}),
             "email":          forms.EmailInput(attrs={"class": "form-control", "dir": "ltr", "placeholder": "example@domain.com"}),
             "email_cc":       forms.TextInput(attrs={"class": "form-control", "dir": "ltr", "placeholder": "addr1@domain.com, addr2@domain.com"}),
             "phone":          forms.TextInput(attrs={"class": "form-control", "dir": "ltr"}),

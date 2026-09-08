@@ -3,7 +3,10 @@
 
 {% block title %}الأضابير{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20260628">{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20260831">
+<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20260831c">
+{% endblock %}
 
 {% block content %}
 <div class="dossiers-page">
@@ -11,17 +14,37 @@
   <div class="dossiers-head">
     <div>
       <h4><i class="bi bi-folder2-open"></i> الأضابير</h4>
-      <p class="dossiers-sub">مجلّدات المراسلات لكل قسم/وحدة — الأقسام التي لها كتب صادرة أو واردة فقط.</p>
+      <p class="dossiers-sub">مجلّدات المراسلات — الجهات التي لها كتب صادرة أو واردة فقط.</p>
     </div>
     <div class="dossiers-summary">
-      <span class="summary-chip"><b>{{ totals.departments }}</b> قسم</span>
+      <span class="summary-chip"><b>{{ totals.departments }}</b> جهة</span>
       <span class="summary-chip" style="color:#b45309"><i class="bi bi-arrow-up-right"></i> <b>{{ totals.issued }}</b> صادر</span>
       <span class="summary-chip" style="color:#1e5a9e"><i class="bi bi-arrow-down-left"></i> <b>{{ totals.received }}</b> وارد</span>
     </div>
   </div>
 
+  {% comment %}
+    التبويباتُ الثلاثة — على غرار تبويبَي «وارد/صادر» في قائمة الكتب:
+    الترميزُ نفسُه (`tabs-split` / `tab-main`) وثلاثةُ أعمدةٍ بدل عمودين.
+    وهي **روابطُ خادمٍ** لا أزرار: تعمل بلا JS، وكلٌّ منها عنوانٌ يُنسخ.
+  {% endcomment %}
+  <nav class="tabs-split tabs-split-3" role="tablist" aria-label="تبويب الجهات">
+    {% for t in tabs %}
+    <a class="tab-main tab-kind-{{ t.key }}{% if t.key == kind %} active{% endif %}"
+       role="tab" aria-selected="{% if t.key == kind %}true{% else %}false{% endif %}"
+       href="?kind={{ t.key }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}">
+      <i class="bi {% if t.key == 'external' %}bi-globe2{% elif t.key == 'internal' %}bi-building{% else %}bi-diagram-3{% endif %} tab-icon"></i>
+      <div class="tab-text">
+        <span class="tab-label">{{ t.label }}</span>
+        <span class="tab-count">{{ t.hint }} · {{ t.count }}</span>
+      </div>
+    </a>
+    {% endfor %}
+  </nav>
+
   <form class="dossier-search" method="get">
-    <input type="text" name="q" value="{{ search_q }}" placeholder="ابحث باسم القسم أو رمزه...">
+    <input type="hidden" name="kind" value="{{ kind }}">
+    <input type="text" name="q" value="{{ search_q }}" placeholder="ابحث باسم الجهة أو رمزها...">
     <button type="submit"><i class="bi bi-search"></i> بحث</button>
   </form>
 

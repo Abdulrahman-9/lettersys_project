@@ -150,7 +150,10 @@ These files remain for backwards compatibility but are not actively maintained:
 Tasks in `core/tasks.py` that use this package:
 
 - **`sync_inbox_task`** — runs every 10 min via Celery Beat; uses `IMAPEngine` via `sync_inbox()`
-- **`retry_failed_emails_task`** — runs every 30 min; uses `SMTPEngine` via `send_book_notification()`
+- **`retry_failed_emails_task`** — runs every 30 min (scheduled in `CELERY_BEAT_SCHEDULE`
+  as `retry-failed-emails-every-30-minutes`); retries each **original** log up to
+  `BookEmailLog.MAX_RETRIES` then marks it `abandoned`. Retry rows carry `retry_of`
+  and never re-enter the queue. Guarded by an atomic cache lock.
 
 ---
 

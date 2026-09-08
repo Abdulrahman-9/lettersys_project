@@ -1,6 +1,9 @@
 from django.urls import path, include
 from django.views.generic import RedirectView
 from . import views
+
+from core.views import (admin_panel, audit, desk, lifecycle_api, linking,
+                        queues, signatures)
 from . import logging_views
 from . import api as api_views
 from . import reservation_api
@@ -32,9 +35,6 @@ urlpatterns = [
     path("reports/", views.reports, name="reports"),
     path("reports/export/", views.reports_export, name="reports_export"),
     path("reports/followup-activity/", views.followup_activity_report, name="followup_activity_report"),
-    path("desk/ledger/", views.desk_ledger, name="desk_ledger"),
-    path("desk/handover/", views.desk_handover, name="desk_handover"),
-    path("audit/", views.book_audit, name="book_audit"),
     path("trash/", views.trash_list, name="trash_list"),
     path("trash/book/<int:pk>/restore/", views.restore_book, name="restore_book"),
     path("trash/book/<int:pk>/purge/", views.purge_book, name="purge_book"),
@@ -42,6 +42,9 @@ urlpatterns = [
     path("trash/attachment/<int:attachment_id>/purge/", views.purge_attachment, name="purge_attachment"),
     path("attachment/<int:pk>/delete/", views.attachment_delete, name="attachment_delete"),
     path("attachment/<int:pk>/replace/", views.attachment_replace, name="attachment_replace"),
+    # صورةُ صفحةٍ من مرفق — لتحديد قصاصة الهامش عليها
+    path("attachment/<int:pk>/page/<int:page>.webp", views.attachment_page_image,
+         name="attachment_page_image"),
     path("attachment/<int:pk>/merge/", views.attachment_merge_pages, name="attachment_merge_pages"),
     path("attachment/<int:pk>/remove-pages/", views.attachment_remove_pages, name="attachment_remove_pages"),
     path("<int:pk>/", views.book_detail, name="book_detail"),
@@ -61,6 +64,40 @@ urlpatterns = [
     path("api/books/bulk-status/", views.api_bulk_update_status_books, name="api_bulk_update_status_books"),
     path("api/book/<int:book_id>/undo-delete/", views.api_undo_delete_book, name="api_undo_delete_book"),
     path("api/book/<int:pk>/preview/", views.api_book_detail_json, name="api_book_detail_json"),
+
+    # -- نسيجُ الوثائق: منتقي الربط والأضلاع --
+    # دورةُ حياة الكتاب — نقاطُ الكتابة (تفريق · عهدة · قيد · تنبيه)
+    path("api/lifecycle/targets/", lifecycle_api.api_targets, name="api_lifecycle_targets"),
+    path("api/book/<int:pk>/distribute/", lifecycle_api.api_distribute, name="api_distribute"),
+    path("api/book/<int:pk>/referral/<int:referral_id>/act/",
+         lifecycle_api.api_referral_action, name="api_referral_action"),
+    path("api/book/<int:pk>/custody/", lifecycle_api.api_record_custody, name="api_record_custody"),
+    path("api/book/<int:pk>/register-here/", lifecycle_api.api_register_here, name="api_register_here"),
+    path("api/book/<int:pk>/archive/", lifecycle_api.api_archive_book,
+         name="api_archive_book"),
+    path("api/book/<int:pk>/archive/reopen/", lifecycle_api.api_reopen_archive,
+         name="api_reopen_archive"),
+    # لوحةُ الإدارة — الأقسام والأدوار والعناقيد (مديرُ النظام)
+    path("admin/", admin_panel.admin_panel, name="admin_panel"),
+    # سجلُّ الحركات — رئيسُ القسم ومديرُ النظام حصراً
+    path("audit/", audit.audit_log, name="audit_log"),
+    # التواقيع — والتحقّقُ **عامٌّ بلا تسجيل دخول**: الورقةُ تخرج من الشركة
+    path("attachment/<int:pk>/sign/", signatures.sign_attachment_view,
+         name="sign_attachment"),
+    path("signature/<int:pk>/revoke/", signatures.revoke_signature_view,
+         name="revoke_signature"),
+    path("verify/<str:token>/", signatures.verify_signature_view,
+         name="verify_signature"),
+    # طاولةُ البريد — اللوحةُ والورقتان اللتان يطلبهما الكاتبُ ليترك دفترَه
+    path("desk/", queues.desk_board, name="desk_board"),
+    path("desk/archive/", queues.archive_desk, name="archive_desk"),
+    path("my/today/", queues.my_today, name="my_today"),
+    path("desk/handover/", desk.desk_handover, name="desk_handover"),
+    path("desk/ledger/", desk.desk_ledger, name="desk_ledger"),
+    path("api/links/picker/", linking.api_link_picker, name="api_link_picker"),
+    path("api/book/<int:pk>/links/add/", linking.api_add_link, name="api_add_link"),
+    path("api/book/<int:pk>/links/<int:link_id>/remove/", linking.api_remove_link,
+         name="api_remove_link"),
     path("backup/", views.backup_database, name="backup_database"),
     path("restore-data/", views.data_restore, name="data_restore"),
     path("restore-data/browse/", views.bak_browse, name="bak_browse"),
@@ -111,6 +148,8 @@ urlpatterns = [
     path("entities/<int:pk>/edit/", views.entity_edit, name="entity_edit"),
     path("entities/<int:pk>/delete/", views.entity_delete, name="entity_delete"),
     path("entities/bulk-delete/", views.entity_bulk_delete, name="entity_bulk_delete"),
+    # نقلُ جهاتٍ محدَّدةٍ إلى تبويب — أداةُ المالك ليشكّل مجموعاته بنفسه
+    path("entities/set-kind/", views.entity_set_kind, name="entity_set_kind"),
     path("entities/<int:pk>/restore/", views.entity_restore, name="entity_restore"),
     path("entities/bulk-restore/", views.entity_bulk_restore, name="entity_bulk_restore"),
     # ── الأضابير (مجلّدات مراسلات الأقسام) ──

@@ -1,0 +1,68 @@
+{% comment %}
+  منتقي الربط — «إلحاقاً بمذكّرتكم المرقّمة…».
+
+  النقطتان (`api_link_picker` · `api_add_link`) كانتا مبنيّتين والروابطُ
+  تُعرَض، **ولا واجهةَ لإضافة رابط**. هذه هي اليد.
+
+  والقاعدةُ التي يجسّدها التصميم: **الربطُ اختيارُ إنسانٍ لا استنتاجُ آلة**.
+  النتائجُ تُعرض برقمها وتاريخها وجهتها، ولا يُثبَّت ضلعٌ حتى يُنقر صفٌّ
+  بعينه — لأنّ ربطاً خاطئاً يُقفل التزاماً لم يُنجَز.
+{% endcomment %}
+
+<div class="modal fade lc-scope" id="linkPickerModal" tabindex="-1"
+     aria-labelledby="linkPickerLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        {% comment %}
+          العنوانُ وشرحُه عمودٌ واحد: وضعُهما جنباً إلى جنبٍ زاحمهما في العرض
+          المتوسّط — كشفته اللقطة البصريّة لا الاختبار.
+        {% endcomment %}
+        <div class="d-flex flex-column" style="min-width:0">
+          <h5 class="modal-title" id="linkPickerLabel">
+            <i class="bi bi-link-45deg me-1"></i>ربطُ الكتاب بكتابٍ آخر
+          </h5>
+          <span class="lc-sub">الربطُ اختيارُ إنسان — لا يُثبَّت ضلعٌ حتى تنقر صفّاً</span>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"
+                aria-label="إغلاق"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="lpQuery" class="form-label">ابحث برقم الكتاب أو موضوعه</label>
+          <input type="search" class="form-control" id="lpQuery"
+                 placeholder="2433 · أو: الموازنة الاستثمارية" autocomplete="off">
+          <div class="form-text">
+            البحثُ داخل نطاقك وحده، وقسمُك أوّلاً — والسرّيُّ يظهر رقماً بلا عنوان.
+          </div>
+        </div>
+
+        <div id="lpResults" class="mb-3" role="listbox" aria-label="نتائج البحث"></div>
+
+        <div id="lpChosen" class="mb-3" hidden>
+          <label for="lpRelation" class="form-label">صفةُ العلاقة</label>
+          <div class="d-flex gap-2 flex-wrap align-items-center">
+            <select class="form-select form-select-sm" id="lpRelation" style="max-width:12rem">
+              {% for value, label in relation_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+            <input type="text" class="form-control form-control-sm" id="lpNote"
+                   maxlength="255" placeholder="ملاحظة (اختياريّة)" style="max-width:18rem">
+          </div>
+          <div class="form-text" id="lpChosenLabel"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-sm btn-primary" id="lpSubmit" disabled>
+          <i class="bi bi-check2 me-1"></i>اربط
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
