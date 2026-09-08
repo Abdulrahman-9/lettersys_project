@@ -3,6 +3,10 @@ from django.contrib.auth.models import Group, Permission
 ENTRY_GROUP_NAME = 'مدخل الكتب'
 CONTROLLER_GROUP_NAME = 'مشرف المتابعة'
 ARCHIVIST_GROUP_NAME = 'مسؤول الأرشفة'
+#: **موسّعُ نطاقٍ لا دورٌ رابع**: حاملُها أرشيفيٌّ يتخطّى شرطَ الشجرة
+#: فيحفظ ورقَ كلّ الأقسام. وهي تمنح الدورَ الأساسَ معها (`is_archivist`)
+#: كي لا توجد حالٌ ميّتة: «أرشيفُ شركةٍ» بلا صلاحيّةِ أرشفة.
+ARCHIVE_ALL_GROUP_NAME = 'أرشيف الشركة'
 
 ROLE_DEFINITIONS = {
     'entry': {
@@ -75,7 +79,8 @@ def get_user_role(user):
     # (الشهادةُ الميدانيّة تقول «مسؤول إدارة البريد والأرشفة» بصيغةٍ واحدة)،
     # وهذه تسميةُ عرضٍ واحدة لا تحتمل الجمع. فبوّابةُ الأرشفة عضويّةُ مجموعةٍ
     # في `scoping.is_archivist` لا تسميةٌ هنا — وإلّا فقَد الجامعُ طاولةَ بريده.
-    if user.groups.filter(name=ARCHIVIST_GROUP_NAME).exists():
+    if user.groups.filter(
+            name__in=(ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME)).exists():
         return 'archivist'
     if user.groups.filter(name=ENTRY_GROUP_NAME).exists():
         return 'entry'

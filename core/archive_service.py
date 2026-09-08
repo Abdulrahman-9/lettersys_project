@@ -59,6 +59,14 @@ def archive_book(book, *, by, place='', note=''):
         raise ValidationError('الكتابُ مُفرَّقٌ والتزامُه ما زال مفتوحاً عند: %s '
                               '— يُؤرشَف بعد الإنجاز.' % ' · '.join(_target(r)
                                                                     for r in pending))
+    # **الحفظُ يستلزم انتهاءَ المتابعة** (قرارُ المالك 2026-09-06): ورقةٌ لها
+    # موعدُ استحقاقٍ قائمٌ ما زالت في طابور المتابعة، وحفظُها على الرفّ يُخرجها
+    # من عين مَن يطاردها. والمفهومان يبقيان منفصلين في التخزين — هذا شرطُ
+    # ترتيبٍ بينهما لا دمجٌ لهما.
+    if book.followup_state != 'archived':
+        raise ValidationError(
+            'المتابعةُ ما زالت قائمة (يستحقّ %s) — تُغلق أوّلاً ثمّ يُحفظ الورق.'
+            % book.due_date)
     if is_archived(book):
         raise ValidationError('هذا الكتابُ مؤرشَفٌ سلفاً — يُفتح بسببٍ قبل أن يُؤرشَف ثانيةً.')
 
@@ -116,7 +124,8 @@ def _gate(book, by, denial):
     أرشيفُ الشعبة تحت أرشيفيّ قسمها كما يسيل النطاق.
     """
     from core.models import Department
-    from core.scoping import (can_archive, can_open_content, is_privileged,
+    from core.scoping import (can_archive, can_open_content,
+                              is_company_archivist, is_privileged,
                               subtree_ids, user_department_id)
 
     if not can_open_content(book, by):
@@ -134,7 +143,7 @@ def _gate(book, by, denial):
                 'لا قسمَ للكتاب ولا للأرشيفيّ — لا يُعرف أيُّ أرشيفٍ يحفظه.')
         department = Department.objects.get(pk=mine)
 
-    if not (is_privileged(by)
+    if not (is_privileged(by) or is_company_archivist(by)
             or department.pk in subtree_ids(user_department_id(by))):
         raise PermissionDenied('هذا الكتابُ من أرشيف قسمٍ آخر — يُؤرشفه أرشيفيُّه.')
     return department

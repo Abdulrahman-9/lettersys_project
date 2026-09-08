@@ -215,6 +215,14 @@
                         <label class="form-check-label" for="arch-{{ row.user.pk }}"
                                style="font-size:.78rem">طاولة الأرشفة</label>
                       </div>
+                      {# موسّعُ نطاقٍ لا دورٌ رابع — ولذلك يسكن الخليّةَ نفسَها #}
+                      <div class="form-check ms-3">
+                        <input class="form-check-input" type="checkbox" value="1"
+                               name="is_company_archivist" id="arall-{{ row.user.pk }}"
+                               {% if row.is_company_archivist %}checked{% endif %}>
+                        <label class="form-check-label text-muted" for="arall-{{ row.user.pk }}"
+                               style="font-size:.72rem">أرشيف الشركة كلّها</label>
+                      </div>
                     </td>
                     <td>
                       <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem">حفظ</button>
@@ -230,8 +238,9 @@
         <i class="bi bi-info-circle me-1"></i>
         <b>رئيس القسم</b> يرى سجلّ مَن قرأ ماذا وكتبَ قسمه السرّية ودفاتر شُعبه ·
         <b>مختصّ البريد</b> يفتح طاولة البريد والكتب السرّية ولا يرى سجلّ القراءة ·
-        <b>مسؤول الأرشفة</b> يُدخل الكتب ويقيّد تمامَ الأرشفة ويستعلم — ولا يُفرّق ولا يوقّع.
-        والدوران يُجمعان في شخصٍ واحد بتأشير الخانتين.
+        <b>مسؤول الأرشفة</b> يُدخل الكتب ويقيّد تمامَ الأرشفة ويستعلم — ولا يُفرّق ولا يوقّع،
+        ويحفظ ورقَ قسمه وشُعبه وحدها. و<b>أرشيف الشركة</b> يرفع عنه حدَّ القسم فيحفظ ورقَ
+        الأقسام كلِّها. والأدوارُ تُجمع في شخصٍ واحد بتأشير خاناتها.
       </div>
     </div>
 

@@ -65,11 +65,27 @@ def is_archivist(user) -> bool:
     يحمل الدورين. فلو سُئلت التسميةُ هنا لفقَد الجامعُ أحدَ بابيه: إمّا طاولةُ
     البريد وإمّا الأرشفة. والعضويّةُ تحتمل الجمعَ فتُسأل هي.
     """
-    from core.roles import ARCHIVIST_GROUP_NAME
+    from core.roles import ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME
 
     if not getattr(user, 'pk', None):
         return False
-    return user.groups.filter(name=ARCHIVIST_GROUP_NAME).exists()
+    return user.groups.filter(
+        name__in=(ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME)).exists()
+
+
+def is_company_archivist(user) -> bool:
+    """أيتخطّى شجرةَ قسمه فيحفظ ورقَ الشركة كلِّها؟
+
+    **موسّعُ نطاقٍ لا دورٌ رابع**: القرارُ الافتراضيُّ أنّ لكلّ قسمٍ أرشيفيَّه
+    (فمَن أغلق الملفَّ يُسأل عنه)، وهذه استثناءٌ يُمنح صراحةً حين يكون
+    الأرشيفُ مركزيّاً. وهي تحمل الدورَ الأساسَ معها — فلا حاملَ لها بلا
+    صلاحيّةِ أرشفة.
+    """
+    from core.roles import ARCHIVE_ALL_GROUP_NAME
+
+    if not getattr(user, 'pk', None):
+        return False
+    return user.groups.filter(name=ARCHIVE_ALL_GROUP_NAME).exists()
 
 
 def can_archive(user) -> bool:

@@ -16,17 +16,20 @@ from core.archive_service import (archive_book, archived_books, is_archived,
                                   reopen_archive, unarchived_books)
 from core.models import (Book, BookHistory, BookReferral, CustodyEvent,
                          Department, UserProfile)
-from core.roles import ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME
+from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
+                        CONTROLLER_GROUP_NAME)
 
 
-def _member(name, department, *, controller=False, archivist=False, admin=False):
+def _member(name, department, *, controller=False, archivist=False,
+            company_archivist=False, admin=False):
     if admin:
         user = User.objects.create_superuser(name, name + '@x.co', 'pw')
     else:
         user = User.objects.create_user(name, name + '@x.co', 'pw')
     UserProfile.objects.update_or_create(user=user, defaults={'department': department})
     for wanted, group_name in ((controller, CONTROLLER_GROUP_NAME),
-                               (archivist, ARCHIVIST_GROUP_NAME)):
+                               (archivist, ARCHIVIST_GROUP_NAME),
+                               (company_archivist, ARCHIVE_ALL_GROUP_NAME)):
         if wanted:
             user.groups.add(Group.objects.get_or_create(name=group_name)[0])
     return user
@@ -263,3 +266,78 @@ class ArchiveQuerySetTests(TestCase):
 
         self.assertTrue(self.never.is_archived)      # العلَمُ المنطقيّ مرفوع
         self.assertFalse(is_archived(self.never))    # والورقةُ لم تُحفظ بعد
+
+
+class ArchiveFollowupOrderTests(TestCase):
+    """**الحفظُ يستلزم انتهاءَ المتابعة** — قرارُ المالك 2026-09-06.
+
+    المفهومان يبقيان منفصلين في التخزين (`is_archived` علَمُ متابعةٍ، والحفظُ
+    حدثُ عهدة)؛ وهذا شرطُ **ترتيبٍ** بينهما لا دمجٌ لهما: ورقةٌ لها موعدُ
+    استحقاقٍ قائمٌ ما زالت في طابور المطارَدة، وحفظُها يُخرجها من عينِ مطاردها.
+    """
+
+    def setUp(self):
+        self.dept = Department.objects.create(name='قسم الترتيب', code='ر.ت')
+        self.archivist = _member('arch', self.dept, archivist=True)
+
+    def _book(self, number, **extra):
+        return Book.objects.create(
+            kind='incoming_external', title='ك %s' % number, our_number=number,
+            department=self.dept, created_by=self.archivist, **extra)
+
+    def test_a_book_still_under_followup_is_refused(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        live = self._book('9970', due_date=timezone.localdate() + timedelta(days=7))
+        live.is_archived = False
+        live.save()
+
+        with self.assertRaises(ValidationError) as caught:
+            archive_book(live, by=self.archivist)
+
+        self.assertIn('المتابعةُ ما زالت قائمة', caught.exception.messages[0])
+        self.assertFalse(is_archived(live))
+
+    def test_a_book_whose_followup_is_closed_may_be_filed(self):
+        closed = self._book('9971')          # بلا موعد ⟵ المتابعةُ منتهية
+
+        archive_book(closed, by=self.archivist)
+
+        self.assertTrue(is_archived(closed))
+
+
+class CompanyArchiveTests(TestCase):
+    """أرشيفُ الشركة — **موسّعُ نطاقٍ لا دورٌ رابع**."""
+
+    def setUp(self):
+        self.owner = Department.objects.create(name='قسمٌ مالك', code='ك.م')
+        self.other = Department.objects.create(name='قسمٌ آخر', code='ك.خ')
+        self.local = _member('local', self.other, archivist=True)
+        self.central = _member('central', self.other, company_archivist=True)
+        self.book = Book.objects.create(
+            kind='incoming_external', title='ملفُّ الغير', our_number='9980',
+            department=self.owner, created_by=_member('owner', self.owner))
+        BookReferral.objects.create(
+            book=self.book, from_department=self.owner, to_department=self.other,
+            status=BookReferral.DONE, created_by=self.local)
+
+    def test_the_company_archivist_files_another_departments_book(self):
+        archive_book(self.book, by=self.central)
+
+        self.assertTrue(is_archived(self.book))
+
+    def test_the_local_archivist_still_cannot(self):
+        """الاستثناءُ يُمنح صراحةً — ولا يتسرّب إلى مَن لم يُمنح."""
+        with self.assertRaises(PermissionDenied):
+            archive_book(self.book, by=self.local)
+
+    def test_the_wider_group_carries_the_base_role_with_it(self):
+        """لا حالَ ميّتة: «أرشيفُ شركةٍ» بلا صلاحيّةِ أرشفة."""
+        from core.scoping import can_archive, is_archivist, is_company_archivist
+
+        self.assertTrue(is_archivist(self.central))
+        self.assertTrue(can_archive(self.central))
+        self.assertTrue(is_company_archivist(self.central))
+        self.assertFalse(is_company_archivist(self.local))

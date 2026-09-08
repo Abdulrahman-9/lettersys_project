@@ -93,14 +93,15 @@ def update_department(department, *, by, name=None, code=None, parent=UNSET,
 
 
 def assign_user(user, *, by, department=UNSET, is_department_head=None,
-                is_controller=None, is_archivist=None):
+                is_controller=None, is_archivist=None, is_company_archivist=None):
     """يُسند موظّفاً إلى قسمٍ ويمنحه أدوارَه — **وكلُّ منحٍ واقعةٌ مسجَّلة**.
 
     الدورُ يفتح سجلَّ القراءة والكتبَ السرّيّة، فمنحُه بلا أثرٍ يُبطل السجلّ.
     """
     from django.contrib.auth.models import Group
 
-    from core.roles import ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME
+    from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
+                            CONTROLLER_GROUP_NAME)
     from core.scoping import ensure_profile
 
     _guard_admin(by)
@@ -117,8 +118,10 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
             profile.save()
 
         # الدوران مستقلّان ويُجمعان في شخصٍ واحد: كتلتان لا سلسلةٌ واحدة.
-        for flag, name, key in ((is_controller, CONTROLLER_GROUP_NAME, 'is_controller'),
-                                (is_archivist, ARCHIVIST_GROUP_NAME, 'is_archivist')):
+        for flag, name, key in (
+                (is_controller, CONTROLLER_GROUP_NAME, 'is_controller'),
+                (is_archivist, ARCHIVIST_GROUP_NAME, 'is_archivist'),
+                (is_company_archivist, ARCHIVE_ALL_GROUP_NAME, 'is_company_archivist')):
             if flag is None:
                 continue
             group, _ = Group.objects.get_or_create(name=name)
