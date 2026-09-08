@@ -143,6 +143,28 @@ class Command(BaseCommand):
             hard.append('حزمة onnxruntime غيرُ مثبَّتة (%s) ⟵ الكاشفُ والقارئان '
                         'خاملون رغم وجود الأوزان' % type(exc).__name__)
 
+    def _check_data(self, opts, hard, soft):
+        """القاعدةُ الفارغة = صفرُ جهاتٍ بنيويّاً (إنتاج 2026-09-01: 0 كتاب · 0 جهة).
+
+        استخراجُ الجهة كلُّه يعتمد `Entity` و`LetterheadMemory`؛ نسخةٌ بأوزانٍ كاملةٍ
+        وقاعدةٍ فارغةٍ تبدو سليمةً وتُخرج حقولَ جهاتٍ فارغةً دائماً.
+        """
+        w = self.stdout.write
+        try:
+            from core.models import Book, Entity, LetterheadMemory
+            n_e = Entity.objects.filter(is_active=True).count()
+            n_m = LetterheadMemory.objects.count()
+            n_b = Book.objects.filter(is_deleted=False).count()
+        except Exception as exc:      # noqa: BLE001
+            soft.append('تعذّر عدُّ بيانات القاعدة (%s) — لم يُتحقَّق من الجهات' % type(exc).__name__)
+            return
+        w(self.style.SUCCESS('سليم: %-22s كتب %d · جهات %d · ذاكرةُ ترويسة %d' % ('بياناتُ القاعدة', n_b, n_e, n_m)))
+        if n_e == 0:
+            msg = 'لا جهاتَ في القاعدة ⟵ حقلا الجهة سيبقيان فارغين دائماً (حمّل البيانات ثمّ أعد تشغيل الخدمة)'
+            (hard if opts.get('strict') else soft).append(msg)
+        elif n_m == 0:
+            soft.append('ذاكرةُ الترويسة فارغة ⟵ لا تعلّمَ من الكتب السابقة (backfill_letterhead_memory)')
+
     def _check_tesseract(self, hard, soft):
         w = self.stdout.write
         # **نفسُ مُحلِّل الإنتاج حرفيّاً** (`TesseractProvider._autodetect_cmd`):
@@ -184,6 +206,7 @@ class Command(BaseCommand):
                 present.add(art.key)
         self._check_runtime_package(hard)
         self._check_tesseract(hard, soft)
+        self._check_data(options, hard, soft)
 
         for issue in soft:
             w(self.style.WARNING('تحذير: %s' % issue))

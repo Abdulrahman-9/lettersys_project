@@ -161,6 +161,11 @@ ssh-keyscan -H <العنوان> | gh secret set DEPLOY_KNOWN_HOSTS --repo Abdulr
 #   echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIACWfXpnaUmwnSTCiwNnHoZXs3QbOwErqotyzPaT2c79 github-actions@lettersys-deploy' >> ~/.ssh/authorized_keys
 ```
 
+**البياناتُ قبل الأوزان** (إنتاج 2026-09-01): قاعدةٌ فارغةٌ = **صفرُ جهاتٍ بنيويّاً** مهما
+كانت الأوزانُ حاضرة — `Entity` و`LetterheadMemory` هما ما يُطابَق عليه. حمّل النسخةَ
+الحقيقيّة (`pg_restore`) ثمّ **أعد تشغيل الخدمة**، و`models_healthcheck` يطبع أعدادَ الكتب
+والجهات والذاكرة ويصرخ عند الصفر.
+
 **ما يجب أن يفعله `lettersys-deploy` بعد كلّ سحب**: `git lfs pull` ثمّ `migrate`
 ثمّ `collectstatic` ثمّ إعادةُ تشغيل الخدمة — و`models_healthcheck --strict`
 بوّابةً قبل الإقلاع. ولا `makemigrations` في الإنتاج أبداً: توليدُ ترحيلٍ على
