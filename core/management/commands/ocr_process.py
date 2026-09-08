@@ -20,6 +20,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('image_path')
         parser.add_argument('output_json')
+        parser.add_argument('--book-kind', default='', help='نوعُ الكتاب من الواجهة')
 
     def handle(self, *args, **options):
         image_path = options['image_path']
@@ -27,7 +28,7 @@ class Command(BaseCommand):
         try:
             from core.extraction.pipeline import AIExtractionService, result_to_scan_data
             service = AIExtractionService()
-            result = service.process_image(image_path)
+            result = service.process_image(image_path, book_kind=options.get('book_kind') or '')
             payload = {'ok': True, 'data': result_to_scan_data(result)}
         except Exception as exc:  # noqa: BLE001 — نُبلّغ كل خطأ كنتيجة
             payload = {'ok': False, 'data': {'needs_review': True, '_error': str(exc)}}

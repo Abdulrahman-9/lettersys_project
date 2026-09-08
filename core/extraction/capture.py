@@ -23,20 +23,53 @@ from core.models import (DataExtractionResult, ExtractionFeedback,
 logger = logging.getLogger('lettersys')
 
 
-def _persist_letterhead_memory(book, text):
+def _persist_letterhead_memory(book, text, issuing_prov='', receiving_prov=''):
     """يخزّن (ترويسة المستند → الجهة المؤكَّدة) لتحسين اقتراح الجهة مستقبلاً.
 
     هذا جوهر التعلّم من الداتا بيس: كلّ كتاب محفوظ يعلّم النظام ربط ترويسة المُرسِل
-    بالجهة التي أسندها المستخدم — فيكسر سقف الوحدات الداخلية غير المطبوعة على الورق."""
+    بالجهة التي أسندها المستخدم — فيكسر سقف الوحدات الداخلية غير المطبوعة على الورق.
+
+    **عطبان أُصلحا (2026-09-01)**:
+    ١. كان يعود مبكراً إن وُجد صفٌّ للكتاب — فتصحيحُ الكاتب بعد أوّل حفظٍ **لا يبلغ
+       الذاكرةَ أبداً** وتبقى تُعلّم الخطأَ الأوّل. الآن يُحدَّث الصفُّ بما تغيّر.
+    ٢. لم يكن يسأل من أين جاءت الجهة: الواجهةُ تحوّل top‑1 الذاكرةِ إلى وسمٍ تلقائيّاً،
+       فحفظٌ بلا لمسٍ يعيد مخرجَ الذاكرة إليها صفّاً جديداً يصوّت لنفسه (تعزيزٌ
+       ذاتيّ). الجانبُ الموسومُ `autofilled` **لا يُكتب**؛ و`typed`/`confirmed`
+       والفارغُ (واجهةٌ قديمة أو تعديلٌ يدويّ) يُكتب كما كان.
+    """
     from core.extraction.matchers.entity import letterhead_region
     head = letterhead_region(text)
-    if not head or LetterheadMemory.objects.filter(book=book).exists():
-        return   # لا نصّ، أو ذاكرة هذا الكتاب موجودة (لا نكرّر عند إعادة الحفظ)
-    issuing = book.issuing_entities.first()
-    receiving = book.receiving_entities.first()
-    if issuing or receiving:
-        LetterheadMemory.objects.create(
-            letterhead=head, issuing_entity=issuing, receiving_entity=receiving, book=book)
+    if not head:
+        return
+    issuing = None if issuing_prov == 'autofilled' else book.issuing_entities.first()
+    receiving = None if receiving_prov == 'autofilled' else book.receiving_entities.first()
+    row = LetterheadMemory.objects.filter(book=book).first()
+    if row is None:
+        if issuing or receiving:
+            LetterheadMemory.objects.create(
+                letterhead=head, issuing_entity=issuing, receiving_entity=receiving, book=book)
+        return
+    changed = []
+    if issuing is not None and row.issuing_entity_id != issuing.id:
+        row.issuing_entity = issuing; changed.append('issuing_entity')
+    if receiving is not None and row.receiving_entity_id != receiving.id:
+        row.receiving_entity = receiving; changed.append('receiving_entity')
+    if changed:
+        row.save(update_fields=changed)
+
+
+def refresh_letterhead_memory(book, issuing_prov='', receiving_prov=''):
+    """مسارُ **التعديل** (لا مسحَ جديد): تصحيحُ الجهة في كتابٍ محفوظٍ يبلغ الذاكرة.
+
+    `update_book_api` لا يستدعي الالتقاطَ (لا حمولةَ مسحٍ عنده)، فكان تصحيحُ الجهة
+    بعد أوّل حفظٍ يضيع على الذاكرة إلى الأبد وتبقى تُعلّم الخطأَ الأوّل. الترويسةُ
+    المخزّنةُ في صفّ الكتاب هي النصّ، فلا حاجةَ إلى OCR جديد.
+    """
+    row = LetterheadMemory.objects.filter(book=book).first()
+    if row is None:
+        return
+    _persist_letterhead_memory(book, row.letterhead, issuing_prov, receiving_prov)
+
 
 # الحقول المتتبَّعة للتصحيح: (مفتاح اقتراح OCR ، مفتاح القيمة النهائية المحفوظة).
 # نقتصر على الحقول **متطابقة التمثيل** فقط لإشارة تصحيح نظيفة:
@@ -165,8 +198,17 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
     displayed = {str(f) for f in (final.get('displayed_fields') or ())}
     # book_kind يُختم دائماً كي يُميّز المستهلك «صادر: الحقل غير منطبق» عن
     # «وارد: القارئ أخفق فعلاً» — وإلا صارا سواءً في البيانات.
+    # **الاقتراحُ الضعيف يُحفَظ وإن لم يُملأ** (مراجعة 2026-09-01): توجيهُ الانبعاث
+    # يُفرغ `title` للمسارَين الضعيفين ويضع القيمةَ في `title_suggestion` — فكان
+    # الالتقاطُ يخزّن اقتراحاً فارغاً وتصمت حلقةُ التغذية الراجعة لربع المستندات،
+    # وهي بالضبط الشريحةُ التي نحتاج قياسَها من الإنتاج. الزوجُ (ما عُرض ⟵ ما
+    # كتب الكاتب) يُحفَظ هنا أيّاً كان المسار، والمنشأُ يميّز البطاقةَ من الملء.
+    _t_sug = suggested.get('title_suggestion') or {}
+    _title_seen = (suggested.get('title') or _t_sug.get('value') or '')
     add_data = {
         'book_kind': book.kind or '',
+        'title_suggestion_source': str(_t_sug.get('source') or
+                                       ('marker' if suggested.get('title') else ''))[:32],
         # الحجرُ يُحسم لحظةَ الالتقاط لا عند بناء الدفعة: قرارٌ لاحق يعني ترحيلاً
         # ممكناً من الحجز إلى التدريب بعد رؤية النتيجة.
         EVAL_HOLD_KEY: eval_hold_for(book.id),
@@ -176,6 +218,10 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
     # مصدرُ قيمة الموضوع: مسارُ العلامة يملأ الحقل تلقائيّاً وحقيقةُ التدريب هي
     # `Book.title` عينُه — فبلا هذا الوسم يتغذّى المُنتقي على مخرجه هو.
     add_data['title_provenance'] = normalize_provenance(final.get('title_provenance'))
+    # الجهتان: الواجهةُ تحوّل top‑1 إلى وسمٍ تلقائيّاً — بلا الوسم تعود ذاكرةُ
+    # الترويسة تتعلّم من مخرجها هي (انظر `_persist_letterhead_memory`).
+    add_data['issuing_entity_provenance'] = normalize_provenance(final.get('issuing_entity_provenance'))
+    add_data['receiving_entity_provenance'] = normalize_provenance(final.get('receiving_entity_provenance'))
     if is_incoming:
         add_data.update({
             'sender_number_suggested': (suggested.get('sender_number') or '')[:50],
@@ -243,8 +289,9 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
         book_number_confidence=_to_float(suggested.get('book_number_confidence')),
         book_date=_parse_iso_date(suggested.get('book_date')),
         book_date_confidence=_to_float(suggested.get('book_date_confidence')),
-        title=(suggested.get('title') or '')[:500],
-        title_confidence=_to_float(suggested.get('title_confidence')),
+        title=_title_seen[:500],
+        title_confidence=_to_float(suggested.get('title_confidence')
+                                   or _t_sug.get('confidence')),
         secret_level=_norm_secret(suggested.get('secret_level')),
         secret_level_confidence=_to_float(suggested.get('secret_level_confidence')),
         book_kind=suggested.get('book_kind') or None,
@@ -264,7 +311,7 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
     for sug_key, final_key in _FIELD_MAP:
         if final_key == 'sender_number' and not is_incoming:
             continue   # الصادر: لا عدد جهةٍ يُستخرَج — لا إشارة تصحيح
-        original = str(suggested.get(sug_key) or '').strip()
+        original = str((_title_seen if sug_key == 'title' else suggested.get(sug_key)) or '').strip()
         corrected = str(final.get(final_key) or '').strip()
         differs = (not _same_number(original, corrected)
                    if final_key == 'sender_number' else original != corrected)
@@ -279,5 +326,8 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
             )
 
     # ذاكرة الترويسة → الجهة المؤكَّدة (تعلّمٌ تراكمي لاقتراح الجهة)
-    _persist_letterhead_memory(book, cleaned_text or raw_text)
+    _persist_letterhead_memory(
+        book, cleaned_text or raw_text,
+        issuing_prov=normalize_provenance(final.get('issuing_entity_provenance')),
+        receiving_prov=normalize_provenance(final.get('receiving_entity_provenance')))
     return extraction

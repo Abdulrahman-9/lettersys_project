@@ -47,7 +47,7 @@ from core.models import AIIntegrationSettings
 from core.extraction.matchers.pattern import PatternMatcher, DateParser
 from core.extraction.matchers.entity import EntityMatcher
 from core.extraction.matchers.profile import SenderNumberProfiles
-from core.extraction.matchers.strict_ref import (canonical_sender_number,
+from core.extraction.matchers.strict_ref import (APPROVED_PREFIXES, canonical_sender_number,
                                                  strict_ref_match)
 from core.models import (
     OCRResult, DataExtractionResult, ExtractionFeedback,
@@ -377,8 +377,9 @@ def _strict_ref_skips_visual(result) -> bool:
     """هل يُغني المرجعُ المطبوعُ الصارم عن استدعاء المسار البصريّ كلِّه؟
 
     **شرطان معاً، وكلاهما لازم:**
-      ١. منشأُ القيمة `strict_ref` — المقيسُ 32 إصابةً وصفرَ خطأٍ على صفّه مقابل
-         11 إصابةً وخطأين للبصريّ على نفس المستندات.
+      ١. منشأُ القيمة `strict_ref` — على مجموعة **تطويرٍ** (e2e-E بعد الضبط) 32
+         إصابةً وصفرَ خطأ مقابل 11 وخطأين للبصريّ؛ ولا دليلَ مختوماً موجباً بعد
+         (المختومُ الوحيد e2e-D: 0–1 إطلاق). يُعاد النظرُ في الشرط عند e2e-F.
       ٢. `sender_date` مملوء — فـ`want_date_crop` يصير `False`، وعندها **كلُّ جسم
          `_read_handwritten_sender_number` عملٌ ضائع** إلّا صندوقَ التدريب. أمّا
          حين يصمت التاريخُ فالنداءُ يبقى: تخطّيه يقتل قصاصةَ التاريخ واقتراحَه
@@ -444,6 +445,54 @@ def _route_title_emission(result, source: str) -> None:
     }
     result.title = ''
     result.title_confidence = 0.0
+
+
+def sanitize_printed_anchor(raw):
+    """مخرَجُ كاتب المرساة المطبوعة قبل أن يبلغ الكاتب — تقنينٌ وحارسُ سلامة.
+
+    **مقيسٌ بالعين على e2e‑F** (2026-09-01): حين يصمت الصارمُ يكتب هذا المسار، وعشرتُه
+    كلُّها كانت خاطئة — خمسٌ **صيغةً لا قيمة** (`NK-2025092` والحقيقةُ `2025092`: لم يكن
+    يُقنّن خلافاً للقاعدة المُجمَّدة «الإصدارُ خاناتٌ وحدَها») وخمسٌ **بترٌ** من طبقة
+    النصّ (`NK-20` · `NK-202518` · `EBS-MdOC-2026004311`). فالبادئاتُ المعتمدةُ تُقنَّن
+    خاناتٍ، وأيُّ قيمةٍ خاناتُها خارج 3–8 تُكتَم (مرجعٌ حقيقيٌّ لا يقلّ عن 3 ولا يزيد
+    على سنةٍ + أربع). غيرُ المعتمَد (`KHL/25/32`) يبقى كما هو — لم يُقَس فلا يُمسّ.
+    """
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    digits = canonical_sender_number(raw)
+    if not (3 <= len(digits) <= 8):
+        return None
+    if any(raw.upper().startswith(p) for p in APPROVED_PREFIXES):
+        return digits
+    return raw
+
+
+def pdf_first_page_text(path: str) -> str:
+    """نصُّ الصفحة الأولى **بلا فرز** — الشكلُ الوحيدُ الذي قِيس عليه الصارم.
+
+    **العطبُ الذي يقفله** (مراجعة 2026-09-01): القياسُ (`e2e_number_e.py`) غذّى
+    `strict_ref_match` بـ`doc[0].get_text()`، بينما الإنتاجُ غذّاه بـ
+    `_extract_pdf_text_layer` (كلُّ الصفحات، `sort=True`) وبعد بوّابة المسبار.
+    الفرزُ يضغط عمودَ التسميات وعمودَ القيم وخربشاتِ الهامش في سطرٍ واحد فتنكسر
+    حدودُ «الحكم على السطر». **مقيسٌ على 34 مستنداً محكَّماً**: بلا فرز أطلق 32
+    وأصاب 32؛ مفروزاً أطلق 8 وأصاب 8. الدقّةُ واحدة، والتغطيةُ رُبع.
+
+    مستقلٌّ عن الكاش عمداً: `pdf_text` يُصفَّر على إصابة الكاش فكان الصارمُ لا
+    يعمل إلّا في أوّل معالجةٍ للملفّ. الكلفةُ ~30 مللي ثانية.
+    """
+    if not str(path).lower().endswith('.pdf'):
+        return ''
+    try:
+        import fitz
+        doc = fitz.open(path)
+        try:
+            return doc[0].get_text() if doc.page_count else ''
+        finally:
+            doc.close()
+    except Exception as exc:          # noqa: BLE001 — الصارمُ يصمت، لا يُسقط الأنبوب
+        logger.warning('[strict_ref] تعذّر نصُّ الصفحة الأولى: %s', type(exc).__name__)
+        return ''
 
 
 _WARNED_ARTIFACTS = set()
@@ -625,6 +674,77 @@ class AIExtractionService:
                            type(exc).__name__)
             return []
 
+    def resolve_entity_candidates(self, etype, cleaned, kind, recipient_text, register_code,
+                                  entity_candidates, exclude_book_id=None):
+        """ترتيب مصادر الجهة **بحسب اتّجاه الكتاب** — أفضلُ ثلاثةٍ مرشَّحين.
+
+        كانت مُغلَقةً داخل `_process_image_internal` فلا تُقاس إلّا بتشغيل الأنبوب
+        كلِّه (OCR ورسمٍ وكاشف) — فقِيست الجهاتُ بمُطابِقٍ واحدٍ (`match_from_memory`)
+        لا بالمسار الذي يبلغ الكاتب. الآن تُقاس كما تعمل (`entity_eval.py`).
+
+        ترتيبُ المصادر (الأوّلُ يحتلّ الصدارة — **ترتيبٌ بالمصدر لا بالدرجة**):
+          1) رمزُ السجلّ («العدد: ش13/…») للمُصدِرة — معرِّفٌ مسجَّل، لا تخمين.
+          2) سطرُ «الى/» أوّلاً في الصادر (المُخاطَبُ الحقيقيّ).
+          3) ذاكرةُ الترويسة (تعلّمٌ من كتبٍ محفوظة) — top‑1 60% على 30، 49.0% على 1000.
+          4) سطرُ «الى/» بعد الذاكرة في الوارد الداخليّ.
+          5) البروفايل (كلماتٌ مميّزة + رمزُ السجلّ) — 23% وحده، يملأ فجوةَ الذاكرة.
+          6) الترويسةُ بأسماء الجهات — حين المرشَّحون أقلُّ من ثلاثة.
+          7) أنماطُ «من/الجهة X» — الأضعف.
+          ثمّ إعادةُ ترتيب اللجان المشتركة للمُصدِرة.
+        فشلُ أيّ مصدرٍ (MemoryError تحت ضغط 8GB) يُسقطه وحده لا الخطوةَ كلَّها.
+
+        `exclude_book_id`: **للقياس فقط** — يُقصي صفَّ الكتاب نفسِه من تصويت
+        الذاكرة (وإلّا تعرّف المستندُ على ترويسة نفسِه بتشابه 1.0 — تسريبُ «77%»).
+        """
+        ranked, seen = [], set()
+
+        def _extend(fetch, label):
+            try:
+                for m in fetch():
+                    if m['entity_id'] not in seen:
+                        ranked.append(m); seen.add(m['entity_id'])
+            except Exception as exc:
+                logger.warning('[pipeline] مصدر الجهات %s فشل (%s) — تدهور رشيق',
+                               label, type(exc).__name__)
+
+        if etype == 'issuer' and register_code:
+            _extend(lambda: self.entity_matcher.match_by_register_code(
+                register_code, entity_type='issuer'), 'register_code')
+        _plan = entity_source_plan(etype, str(kind or ''), bool(recipient_text))
+        if 'recipient_line_first' in _plan:
+            _extend(lambda: self.entity_matcher.match_entity(
+                recipient_text, entity_type='receiver')[:3], 'recipient_line')
+        _extend(lambda: self.entity_matcher.match_from_memory(
+            cleaned, entity_type=etype, top_k=3, exclude_book_id=exclude_book_id), 'memory')
+        if 'recipient_line_after_memory' in _plan:
+            _extend(lambda: self.entity_matcher.match_entity(
+                recipient_text, entity_type='receiver')[:3], 'recipient_line')
+        _extend(lambda: self._profile_entity_matches(
+            recipient_text if etype == 'receiver' else cleaned, etype), 'profile')
+        if len(ranked) < 3 and 'letterhead' in _plan:
+            _extend(lambda: self.entity_matcher.match_from_letterhead(
+                cleaned, entity_type=etype, top_k=3), 'letterhead')
+        pattern_match = (self.entity_matcher.match_issuing_entity if etype == 'issuer'
+                         else self.entity_matcher.match_receiving_entity)
+        for entity_text in entity_candidates or ():
+            _extend(lambda: pattern_match(entity_text), 'patterns')
+            if len(ranked) > 3:
+                break
+        if etype == 'issuer':
+            ranked = prefer_jmc_committee(ranked, cleaned)
+        elif not ranked:
+            # **سدُّ الصمت بوجهة التوجيه السائدة** (مقيسٌ 2026-09-01 على Tier A، n=932):
+            # المستلمةُ في الوارد وجهةُ توجيهٍ عندنا لا اسمٌ على الصفحة، والوجهاتُ قليلة
+            # (45 قيمة، السائدةُ 64.9%) — فحين تصمت المصادرُ كلُّها (9.9%) يُقترح الأكثرُ
+            # تكراراً لنوع الكتاب بثقةٍ منخفضة: top‑1 **65.2 ⟵ 73.6%**. (إعادةُ الترتيب
+            # بالدرجة قِيست في التشغيلة نفسِها **فأذت**: 65 ⟵ 56 — لا تُشحَن.)
+            prior = dominant_receiving_entity(kind)
+            if prior:
+                ranked.append({'entity_id': prior[0], 'entity_name': prior[1],
+                               'entity_code': '', 'entity_type': 'receiver',
+                               'score': 30.0, 'match_type': 'kind_prior'})
+        return ranked[:3]
+
     def _read_handwritten_sender_number(self, image_path, entity_id, want_date_crop=False):
         """مرحلة 3 — رقم الجهة المخربش بخط اليد حيث تعجز كل الطبقات المطبوعة:
         تموضعٌ بمرساة «العدد» وبصمة تخطيط الجهة ← قصّ الشريط ← قراءة CRNN (v5:
@@ -647,9 +767,14 @@ class AIExtractionService:
                 # مُموضِع «التأريخ» بلا priors: لا بصمةَ تاريخٍ لكل جهةٍ بعد (فيبل16)،
                 # فمرساةُ التسمية المطبوعة وحدها تقود — ونقبل source='label' فقط.
                 self._hw_date_locator = NumberStripLocator(None, field='date')
-            if not self._hw_reader.available:
+            reader_ok = self._hw_reader.available
+            if not reader_ok:
                 _warn_missing_artifact('number_model', self._hw_reader.model_path,
                                        'لا قراءةَ عددٍ يدويّ — الحقلُ يبقى فارغاً')
+                # **لا عودةَ مبكرة** (مراجعة 2026-09-01): الكاشفُ وقصاصةُ التاريخ
+                # واقتراحُه وصندوقُ التدريب لا تعتمد على قارئ العدد — العودةُ هنا
+                # كانت تُسقطها كلَّها بغياب وزنٍ واحد. تُتخطّى القراءتان وحدهما.
+            if False:
                 # **رباعيّةٌ لا ثنائيّة**: النداءُ يفكّ أربعةً، وثنائيّةٌ هنا ترفع
                 # ValueError يبتلعها except العام فيعود المستندُ كلُّه `failed` —
                 # لا «تدهوراً رشيقاً». عاشت منذ توصيل قارئ التاريخ (c961ed3)
@@ -705,7 +830,8 @@ class AIExtractionService:
                     # النقض يصيب اقتباسات المتن «رقم في تاريخ» بحقّ، لكنّ تلك دون البوّابة أصلاً —
                     # فالمكسب صفر والكلفة 10 صحيحة. الإصلاح الصحيح واعٍ بالسياق (نمط «في+تاريخ»)
                     # لا رقمين مجرّدين. `guards.printed_region_veto` يبقى مكتوباً غير موصول.
-                    text, conf = self._hw_reader.read_best(strip)
+                    text, conf = (self._hw_reader.read_best(strip) if reader_ok
+                                  else (None, 0.0))
                     # موضع القصّ مُطبَّعاً [x0,y0,x1,y1] — يُعاد حسابه من التسمية (حتميّ، لا
                     # يمسّ الاستخراج). ميتاداتا تدريب التوضيع: أين قصّ المُموضِع حين انبعث العدد.
                     loc = self._hw_locator
@@ -753,7 +879,8 @@ class AIExtractionService:
                 pw, ph = img.width, img.height
                 crop2 = img.crop((max(0, int(bx0 * pw)), max(0, int(by0 * ph)),
                                   min(pw, int(bx1 * pw)), min(ph, int(by1 * ph))))
-                text2, conf2 = self._hw_reader.read_best(crop2)
+                text2, conf2 = (self._hw_reader.read_best(crop2) if reader_ok
+                                else (None, 0.0))
                 del crop2
                 if text2 and text2.isdigit() and 1 <= len(text2) <= 6:
                     number_result = (text2, conf2, [round(v, 4) for v in det_box])
@@ -789,12 +916,13 @@ class AIExtractionService:
             return None, None, None, (None, 0, 0)
 
     def _suggest_date(self, crop, det_box, geometry_tag):
-        """اقتراحُ تاريخٍ من قصاصة `x` — **لا يُكتب في الحقل أبداً**.
+        """اقتراحُ تاريخٍ من قصاصة `x` — **الخادمُ لا يكتبه في الحقل أبداً**.
 
         يُعاد قاموسٌ بمفتاحٍ منفصل (`sender_date_suggestion`) لا في `sender_date`:
-        مسارات ملء الواجهة تكتب `sender_date` في الحقل صامتاً
-        (`extraction_smart.js:832`)، فوضعُ قراءةٍ بدقّة 71% هناك = إعادةُ بناء
-        جذر تسميم التواريخ الذي اجتُثّ. والفصلُ يعزل أيضاً سُلَّمَي ثقةٍ غير
+        مسارات ملء الواجهة تكتب `data.sender_date` في الحقل بلا شرط، فوضعُ
+        قراءةٍ بدقّة 71% هناك = إعادةُ بناء جذر تسميم التواريخ. والواجهةُ وحدها
+        (منذ 2026-09-01) تملأ الأخضرَ ≥0.98 موسوماً `autofilled` بعد حارس الفارق
+        (`_sdAutofillEligible` في `extraction_smart.js`). والفصلُ يعزل أيضاً سُلَّمَي ثقةٍ غير
         متقارنين: ثقةُ المطبوع مجدولةٌ يدويّاً، وهذه معايَرةٌ بـH6.
 
         `iso` قد يكون None مع `parse` = invalid/ambiguous — وذاك امتناعٌ مقصود:
@@ -1117,9 +1245,15 @@ class AIExtractionService:
         image_path: str,
         skip_ocr: bool = False,
         on_progress: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        book_kind: str = '',
     ) -> AIExtractionResult:
         """
         Process single image through complete extraction pipeline.
+
+        `book_kind`: نوعُ الكتاب كما اختاره الكاتبُ في الواجهة (التبويب) — **يُمرَّر
+        دائماً**. مقيسٌ (E‑100 المختومة، 2026-09-01): بدونه تعمل خطّةُ اتّجاه الجهات
+        على `''` كأنّ كلَّ كتابٍ صادر، فتسقط المستلمةُ من 73.6% (Tier A بالنوع) إلى
+        29.8%، وسدُّ الصمت لا يُطلق مرّةً (0/100).
 
         Args:
             image_path:   Path to image file
@@ -1135,7 +1269,7 @@ class AIExtractionService:
         # تنفيذ المعالجة الداخلية مع حد زمني
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(
-                self._process_image_internal, image_path, skip_ocr, on_progress
+                self._process_image_internal, image_path, skip_ocr, on_progress, book_kind
             )
             try:
                 return future.result(timeout=timeout_sec)
@@ -1154,6 +1288,7 @@ class AIExtractionService:
         image_path: str,
         skip_ocr: bool = False,
         on_progress: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        book_kind: str = '',
     ) -> AIExtractionResult:
         """المعالجة الداخلية — تُستدعى داخل thread منفصل."""
 
@@ -1198,6 +1333,9 @@ class AIExtractionService:
             # الرسم + Tesseract، ويعالج كل الصفحات تلقائياً. نسقط إلى تحسين الصورة + OCR
             # فقط للصور الممسوحة بلا طبقة نصّ غنيّة.
             pdf_text = None if (skip_ocr or result.cached) else self._extract_pdf_text_layer(image_path)
+            # نصُّ الصارم منفصلٌ عن `pdf_text`: بلا فرزٍ (الشكلُ المقيس) وبلا كاشٍ
+            # وقبل بوّابة المسبار — انظر `pdf_first_page_text`.
+            strict_text = pdf_first_page_text(image_path)
             if pdf_text:
                 # «الطبقة تكسب مكانها»: بعض الطبقات متنُها إنكليزية سليمة (تعبر
                 # بوّابة الكثافة) لكن ترويستها خردة — فيضيع الرأس كله. نقبل الطبقة
@@ -1311,7 +1449,7 @@ class AIExtractionService:
                 result.sender_date = patterns.get('sender_date')
                 result.sender_date_confidence = (patterns.get('sender_date_confidence') or 0.0) \
                     if result.sender_date else 0.0
-                result.sender_number = patterns.get('sender_number')
+                result.sender_number = sanitize_printed_anchor(patterns.get('sender_number'))
                 result.sender_number_confidence = patterns.get('sender_number_confidence') or 0.0
                 # **منشأُ القيمة** — يفصل كاتبَ مرساة الرأس (المفتوحُ في S4) عن
                 # بقيّة الكُتّاب النصّيّين (احتياطُ ref_num والبصمات) الذين يبقون
@@ -1337,13 +1475,15 @@ class AIExtractionService:
                 # ── «النصُّ يسبق البصريّ» (أمر المالك 2026-08-30) ───────────────
                 # مطابقةٌ صارمةٌ على **طبقة النصّ الخامّة** لا على `probe`: بنيةُ
                 # السطور هي الدليل (`clean_text` تطوي `\n` فتُلغي كلَّ الطبقات).
-                # المقاس على e2e-E (34 حقيقةً محكَّمةً بالعين): الصارمُ 32 إصابةً
-                # وصفرَ خطأٍ بـ0.094 ث، مقابل البصريّ 11 إصابةً وخطأين بـ3.92 ث.
-                # وعلى e2e-D المختومة يُطلق **مرّةً واحدةً صحيحة** — حارسُ التعميم.
-                # الثقةُ 0.85: عاليةٌ لأنّها مقيسة، ودون عتبة «الواثق» (0.90)
-                # بنائيّاً لأنّ الأدلّة كلَّها من مجموعةِ تطويرٍ حتّى تُبنى e2e-F.
-                if pdf_text:
-                    _strict_raw = strict_ref_match(pdf_text)
+                # **الدليلُ تطويريٌّ لا مختوم** (تصحيح 2026-09-01): النظرةُ المختومة
+                # على e2e-E أُنفقت على نسخةٍ سابقة (25/34)، ثمّ ضُبطت القاعدةُ على
+                # المجموعة نفسِها (32/34، صفر خطأ) — فصارت تطويراً. والدليلُ المختومُ
+                # الوحيد e2e-D: إطلاقةٌ 0–1 صحيحة (حارسُ لا-تراجع). ويُغذّى بنصّ الصفحة
+                # الأولى بلا فرز — الشكلُ المقيس (كان يُغذّى بالمفروز فيُطلق رُبعاً).
+                # الثقةُ 0.85: دون عتبة «الواثق» (0.90) بنائيّاً حتّى تُبنى e2e-F
+                # بمسار `process_image` نفسِه.
+                if strict_text:
+                    _strict_raw = strict_ref_match(strict_text)
                     _strict_val = canonical_sender_number(_strict_raw) if _strict_raw else ''
                     if _strict_val:
                         if result.sender_number and result.sender_number != _strict_val:
@@ -1369,6 +1509,11 @@ class AIExtractionService:
                 result.recipient_text = patterns.get('recipient') or ''
                 logger.info('Pattern matching done: book_number=%s', result.book_number)
 
+            # نوعُ الكتاب من الواجهة يعلو على تخمين النصّ: الكاتبُ اختار التبويبَ قبل
+            # المسح، وخطّةُ الاتّجاه وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه).
+            if book_kind:
+                result.book_kind = book_kind
+                result.book_kind_confidence = 1.0
             # Step 5: Entity Matching
             _progress('entity_matching')
             result.progress_stage = 'مطابقة الجهات'
@@ -1378,65 +1523,17 @@ class AIExtractionService:
             ]
 
             def _resolve_entity(etype: str):
-                """ترتيب المصادر بحسب دقّتها المقيسة على بيانات حقيقية:
-                  1) ذاكرة الترويسة (تعلّمٌ من مستندات سابقة مؤكَّدة) — **الأقوى**،
-                  2) مطابقة اسم الجهة في الترويسة،
-                  3) أنماط «من/إلى X» — الأضعف.
-                الأرقام القديمة هنا (85%/18-27%/0-3%) كانت **مُسرَّبة**: قِيست بترك-واحد
-                على كتبٍ لها صفٌّ في LetterheadMemory، فتعرّف المستند على ترويسة نفسه
-                بتشابه 1.0. الصادق (2026-08-17، `exclude_book_id`): **top-1 60% ·
-                top-3 73%** على 30 نصّاً، و**49.0%** على 1000 استعلامٍ مُجمَّد.
-                كلٌّ يملأ ما نقص عن أفضل-3 دون إزاحة الأعلى أو تكرار، وفشلُ أي
-                مصدرٍ (MemoryError تحت ضغط 8GB مثلاً) يُسقطه وحده لا الخطوة كلها."""
-                cleaned = result.cleaned_text or ''
-                ranked, seen = [], set()
-
-                def _extend(fetch, label):
-                    try:
-                        for m in fetch():
-                            if m['entity_id'] not in seen:
-                                ranked.append(m); seen.add(m['entity_id'])
-                    except Exception as exc:
-                        logger.warning('[pipeline] مصدر الجهات %s فشل (%s) — تدهور رشيق',
-                                       label, type(exc).__name__)
-
-                # رمز السجلّ («العدد: ش13/…») معرِّفٌ قاطعٌ للجهة المُصدِرة — يتصدّر
-                # كل شيء (قانون المجال: لكل قسم رمزٌ مسجَّل عندنا)، ويسدّ ثغرة
-                # الأقسام الجديدة التي لا ذاكرةَ ترويسةٍ لها بعد.
-                if etype == 'issuer' and getattr(result, 'register_code', ''):
-                    _extend(lambda: self.entity_matcher.match_by_register_code(
-                        result.register_code, entity_type='issuer'), 'register_code')
-                _plan = entity_source_plan(etype, str(getattr(result, 'book_kind', '') or ''),
-                                           bool(getattr(result, 'recipient_text', '')))
-                if 'recipient_line_first' in _plan:
-                    _extend(lambda: self.entity_matcher.match_entity(
-                        result.recipient_text, entity_type='receiver')[:3], 'recipient_line')
-                _extend(lambda: self.entity_matcher.match_from_memory(cleaned, entity_type=etype, top_k=3),
-                        'memory')
-                if 'recipient_line_after_memory' in _plan:
-                    _extend(lambda: self.entity_matcher.match_entity(
-                        result.recipient_text, entity_type='receiver')[:3], 'recipient_line')
-                # مُعرّف البروفايل: كلماتٌ مميّزة من اسم الجهة + ترجيحُ رمز السجلّ، على
-                # **المنطقة الصحيحة بحسب الاتجاه** (المُصدِرة من الترويسة، المُخاطَب من
-                # سطر «الى/») — قانون المالك: «الوارد ليس كالصادر». يأتي **بعد** الذاكرة
-                # فلا يزاحم ترشيحها الواثق، ويملأ ما تعجز عنه: جهةٌ جديدة أو أوّل كتابٍ
-                # منها لا ذاكرةَ لها. مقيس على 80 (نصّ مخزَّن): دمجُه مع الذاكرة أنقذ 2
-                # وأفسد 0 (top-1 55→57، top-3 63→66)؛ وحده 23%.
-                _extend(lambda: self._profile_entity_matches(
-                    (getattr(result, 'recipient_text', '') if etype == 'receiver' else cleaned), etype),
-                    'profile')
-                if len(ranked) < 3 and 'letterhead' in _plan:
-                    _extend(lambda: self.entity_matcher.match_from_letterhead(cleaned, entity_type=etype, top_k=3),
-                            'letterhead')
-                pattern_match = (self.entity_matcher.match_issuing_entity if etype == 'issuer'
-                                 else self.entity_matcher.match_receiving_entity)
-                for entity_text in entity_candidates:
-                    _extend(lambda: pattern_match(entity_text), 'patterns')
-                    if len(ranked) > 3:
-                        break
-                if etype == 'issuer':
-                    ranked = prefer_jmc_committee(ranked, cleaned)
-                return ranked[:3]
+                """يفوّض إلى `resolve_entity_candidates` — الدالّةُ نفسُها التي يقيسها
+                `scripts/eval/entity_eval.py` بمسار الإنتاج لا بمُطابِقٍ واحد."""
+                return self.resolve_entity_candidates(
+                    etype, result.cleaned_text or '',
+                    str(getattr(result, 'book_kind', '') or ''),
+                    getattr(result, 'recipient_text', '') or '',
+                    getattr(result, 'register_code', '') or '',
+                    entity_candidates,
+                    # **للقياس فقط**: يُقصي صفَّ الكتاب نفسِه من تصويت الذاكرة عند
+                    # تشغيل الأنبوب كاملاً على كتابٍ محفوظ. None في الإنتاج دائماً.
+                    exclude_book_id=getattr(self, '_eval_exclude_book_id', None))
 
             def _assign_entity(matches, id_attr, name_attr, conf_attr, matches_attr):
                 if not matches:
@@ -1450,7 +1547,8 @@ class AIExtractionService:
                 #   رمز السجلّ = معرِّف مسجَّل (لا تخمين) → بلا سقف؛
                 #   ذاكرة (hit@1 ≈ 62%) → 0.85، ترويسة (≈ 11%) → 0.5، نمط صريح → كاملة.
                 #   بروفايل (top-1 ≈ 23% وحده) → 0.45 — اقتراحٌ يملأ فجوة الذاكرة لا يحسم.
-                cap = {'memory': 0.85, 'letterhead': 0.5, 'profile': 0.45}.get(best.get('match_type'))
+                cap = {'memory': 0.85, 'letterhead': 0.5, 'profile': 0.45,
+                       'kind_prior': 0.30}.get(best.get('match_type'))
                 setattr(result, conf_attr, min(score, cap) if cap else score)
 
             _assign_entity(_resolve_entity('issuer'), 'issuing_entity_id',
@@ -1812,6 +1910,32 @@ def prefer_jmc_committee(ranked: list, text: str) -> list:
     return ranked
 
 
+_DOMINANT_CACHE = {}
+
+
+def dominant_receiving_entity(kind: str):
+    """(id, name) للجهة المستلمة الأكثر تكراراً لنوع الكتاب — أو None.
+
+    تُحسب مرّةً لكلّ عمليّةٍ ونوع (مئاتُ الآلاف من الصفوف لا تُعدّ لكلّ مستند). لا
+    تسريبَ في الإنتاج: المستندُ الجديدُ لا صفَّ له بعد."""
+    kind = str(kind or '')
+    if not kind:
+        return None
+    if kind not in _DOMINANT_CACHE:
+        try:
+            from django.db.models import Count
+            from core.models import Book
+            row = (Book.objects.filter(is_deleted=False, kind=kind, receiving_entities__isnull=False)
+                   .values('receiving_entities__id', 'receiving_entities__name')
+                   .annotate(n=Count('id')).order_by('-n').first())
+            _DOMINANT_CACHE[kind] = ((row['receiving_entities__id'], row['receiving_entities__name'])
+                                     if row else None)
+        except Exception as exc:          # noqa: BLE001
+            logger.warning('[pipeline] الوجهةُ السائدة تعذّرت (%s)', type(exc).__name__)
+            return None
+    return _DOMINANT_CACHE[kind]
+
+
 def entity_source_plan(etype: str, kind: str, has_recipient: bool) -> set:
     """أيّ مصادر الجهات تُستعمَل ولأيّ ترتيب — **بحسب اتّجاه الكتاب** (فيبل 2026-08-16).
 
@@ -1883,19 +2007,19 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
     }
 
 
-def run_ocr_inprocess(image_path: str) -> Dict[str, Any]:
+def run_ocr_inprocess(image_path: str, book_kind: str = '') -> Dict[str, Any]:
     """يشغّل الاستخراج داخل عملية الخادم مباشرةً — آمن مع Tesseract (برنامج خارجي،
     لا يُسقِط Django بـ segfault مثل EasyOCR/PyTorch) وأسرع من run_ocr_isolated
     (بلا إعادة إقلاع Django ~5-11ث). الأخطاء تُعاد كـ needs_review بلا رفع استثناء."""
     try:
-        result = AIExtractionService().process_image(image_path)
+        result = AIExtractionService().process_image(image_path, book_kind=book_kind)
         return result_to_scan_data(result)
     except Exception as exc:  # noqa: BLE001 — فشل OCR لا يُهدر المسح
         logger.error('[OCR-inprocess] خطأ: %s', exc, exc_info=True)
         return {'needs_review': True, '_error': str(exc)}
 
 
-def run_ocr_isolated(image_path: str, timeout: int = 150) -> Dict[str, Any]:
+def run_ocr_isolated(image_path: str, timeout: int = 150, book_kind: str = '') -> Dict[str, Any]:
     """
     يشغّل الاستخراج في عملية فرعية معزولة عبر `manage.py ocr_process`.
 
@@ -1919,7 +2043,7 @@ def run_ocr_isolated(image_path: str, timeout: int = 150) -> Dict[str, Any]:
 
     try:
         proc = subprocess.run(
-            [sys.executable, manage_py, 'ocr_process', image_path, out_path],
+            [sys.executable, manage_py, 'ocr_process', image_path, out_path, '--book-kind', book_kind or ''],
             capture_output=True, text=True, timeout=timeout, env=env,
         )
         if proc.returncode != 0:

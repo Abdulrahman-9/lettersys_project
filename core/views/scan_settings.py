@@ -532,6 +532,8 @@ def scan_process_upload(request):
         # مفتاح «الاستخراج التلقائي» في الواجهة يَعلو على الإعداد لكل طلب: يتيح للمستخدم
         # تخطّي OCR البطيء والانتقال للإدخال اليدوي فوراً (يبقى زرّ «استخراج» متاحاً لاحقاً).
         _req_ocr = (request.POST.get('auto_ocr') or '').strip()
+        from core.extraction.kinds import normalize_book_kind
+        _book_kind = normalize_book_kind(request.POST.get('book_kind'), default=None) or ''
         _user_skipped = _req_ocr in ('0', 'false', 'False')
         auto_ocr = (_req_ocr in ('1', 'true', 'True')) if _req_ocr \
             else getattr(dj_settings, 'SCAN_AUTO_OCR', False)
@@ -540,10 +542,10 @@ def scan_process_upload(request):
             # بكثير (بلا إعادة إقلاع Django ~5-11ث). EasyOCR/PyTorch يحتاج عزل عملية فرعية.
             if getattr(dj_settings, 'AI_OFFLINE_ENGINE', 'tesseract') == 'tesseract':
                 from core.extraction.pipeline import run_ocr_inprocess
-                data = run_ocr_inprocess(tmp_path)
+                data = run_ocr_inprocess(tmp_path, book_kind=_book_kind)
             else:
                 from core.extraction.pipeline import run_ocr_isolated
-                data = run_ocr_isolated(tmp_path)  # OCR معزول (segfault لا يُسقط الخادم)
+                data = run_ocr_isolated(tmp_path, book_kind=_book_kind)  # OCR معزول (segfault لا يُسقط الخادم)
             # فشل OCR لا يُهدر المسح: نحتفظ بالـPDF ونتابع لإدخال يدوي.
             if data.get('_error'):
                 logger.warning('[ScanUpload] فشل OCR — نتابع لإدخال يدوي: %s', data['_error'])

@@ -60,7 +60,9 @@ const PROV_CONFIRMED = 'confirmed';
 const PROV_AUTOFILLED = 'autofilled';
 // الموضوعُ منها لأنّ حقيقةَ تدريبه هي `Book.title` نفسُه: عنوانٌ مُلئ آليّاً
 // وحُفظ بلا لمسٍ يعود وسماً يدرّب المُنتقي على مخرجه هو.
-const PROVENANCE_FIELD_IDS = ['senderNumber', 'senderDate', 'title'];
+// الجهتان: الواجهةُ تحوّل top‑1 إلى وسمٍ تلقائيّاً — بلا الوسم تتعلّم ذاكرةُ
+// الترويسة من مخرجها هي (تصوّت لنفسها). typed/confirmed = يدُ الكاتب أو نقرتُه.
+const PROVENANCE_FIELD_IDS = ['senderNumber', 'senderDate', 'title', 'issuingEntity', 'receivingEntity'];
 // معرّف الحقل في الواجهة ⟵ اسمه في عقد الالتقاط الخادميّ
 const CAPTURE_FIELD_BY_ID = {
     senderNumber: 'sender_number', senderDate: 'sender_date',
@@ -123,7 +125,10 @@ function _senderDateGap(iso) {
 
 function _senderDateGuard(iso) {
     const gap = _senderDateGap(iso);
-    if (gap === null) return { state: 'ok', gap: null };
+    // فراغُ تاريخ القيد = لا يُعرَف الفارق ⟵ **لا ملءَ تلقائيّاً** (كان يعود ok
+    // فيُملأ بلا فحصِ التباس الختم — فشلٌ مفتوحٌ في مشروعٍ سمّمه افتراضٌ مفتوح).
+    // التأكيدُ اليدويُّ يبقى متاحاً: الكاتبُ يرى القصاصة ويحكم.
+    if (gap === null) return { state: 'unknown', gap: null };
     if (gap === 0) return { state: 'same_day', gap };
     if (gap < 0 || gap > SENDER_DATE_GAP_MAX) return { state: 'out_of_range', gap };
     return { state: 'ok', gap };
@@ -209,6 +214,8 @@ function applySenderDateSuggestion(data) {
             ? 'التاريخ بعد تاريخ القيد — راجعه.'
             : 'أقدمُ من ' + SENDER_DATE_GAP_MAX + ' يوماً من تاريخ القيد — راجعه.';
         enterOk = false;
+    } else if (guard.state === 'unknown') {
+        msg = 'تاريخُ القيد فارغ — لم يُملأ تلقائيّاً؛ طابِق القصاصة ثمّ أكّد.';
     } else if (autofilled) {
         msg = 'مُلئ تلقائيّاً من القصاصة — طابِقه بنظرة ثمّ أكّد.';
     }
@@ -1147,11 +1154,11 @@ class ExtractionSmartSystem {
         }
         if (data.issuing_entity) {
             const issuingInput = document.querySelector('[data-field="issuingEntity"] input, #issuingEntity');
-            if (issuingInput) issuingInput.value = data.issuing_entity;
+            if (issuingInput) { issuingInput.value = data.issuing_entity; noteSuggestionFilled('issuingEntity', data.issuing_entity); }
         }
         if (data.receiving_entity) {
             const receivingInput = document.querySelector('[data-field="receivingEntity"] input, #receivingEntity');
-            if (receivingInput) receivingInput.value = data.receiving_entity;
+            if (receivingInput) { receivingInput.value = data.receiving_entity; noteSuggestionFilled('receivingEntity', data.receiving_entity); }
         }
         // حافّة الثقة + بطاقتا P1 في مسار المسح أيضاً — البيانات مُصدَّرة في result_to_scan_data
         const confMap = {
@@ -2607,6 +2614,8 @@ class ExtractionSmartSystem {
             setMsg('جارٍ تجهيز المستند...');
             const fd = new FormData();
             fd.append('file', blob, 'scan.pdf');
+            // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
+            fd.append('book_kind', (typeof this?.getCurrentKind === 'function' ? this.getCurrentKind() : (window.extractionSystem?.getCurrentKind?.() || '')) || '');
             fd.append('trim_blanks', '1');           // إزالة ظهور الصفحات الفارغة (مسح مزدوج)
             // مفتاح الاستخراج التلقائي يحكم مسار المسح أيضاً: مطفأً يُلتقط المستند فوراً بلا OCR
             fd.append('auto_ocr', this._autoExtractEnabled() ? '1' : '0');
@@ -2972,6 +2981,8 @@ class ExtractionSmartSystem {
         const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
         const fd = new FormData();
         fd.append('file', file, name || file.name || 'append.pdf');
+        // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
+        fd.append('book_kind', (typeof this?.getCurrentKind === 'function' ? this.getCurrentKind() : (window.extractionSystem?.getCurrentKind?.() || '')) || '');
         fd.append('trim_blanks', '1');   // قصّ الفراغات كمسار المسح
         try {
             const resp = await fetch('/books/api/scan/process-upload/', {
@@ -3549,6 +3560,8 @@ class ExtractionSmartSystem {
         const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
         const fd = new FormData();
         fd.append('file', file, file.name);
+        // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
+        fd.append('book_kind', (typeof this?.getCurrentKind === 'function' ? this.getCurrentKind() : (window.extractionSystem?.getCurrentKind?.() || '')) || '');
         // تجهيز فقط بلا OCR: الاستخراج يجري بعد المعاينة عبر extractData (المحكوم بمفتاح
         // «استخراج تلقائي»). بدون هذا كان OCR يعمل مرّتين — في process-upload (وتُهمَل
         // نتيجتها) ثم في smart_extract_direct — فيتضاعف أبطأ جزء في المسار.
@@ -3866,6 +3879,8 @@ class ExtractionSmartSystem {
     async _streamExtract() {
         const form = new FormData();
         form.append('file', this.currentFile);
+        // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
+        form.append('book_kind', (typeof this?.getCurrentKind === 'function' ? this.getCurrentKind() : (window.extractionSystem?.getCurrentKind?.() || '')) || '');
 
         let response;
         try {
@@ -4065,7 +4080,10 @@ class ExtractionSmartSystem {
 
         mapping.forEach(({ field, key, conf }) => {
             const value = data[key];
-            if (typeof value !== 'undefined' && value !== null) {
+            // '' ليست قيمةً (مراجعة 2026-09-01): حمولةُ done تحمل title='' للمسار
+            // الضعيف والصامت (~38% من المستندات) فكانت تمسح ما كتبه الكاتبُ أثناء
+            // البثّ. المساران الآخران يتخطّيان الفارغ أصلاً — يُوحَّد هنا.
+            if (typeof value !== 'undefined' && value !== null && value !== '') {
                 const input = document.getElementById(field);
                 if (input) {
                     // رقم السجلّ اليدويّ (الصادر الخارجي): لا يُكتب فوق ما كتبه الموظّف
@@ -4170,6 +4188,9 @@ class ExtractionSmartSystem {
             btn.append(nameEl, bar, pctEl, srcEl);
             btn.addEventListener('click', () => {
                 if (!mgr || btn.classList.contains('is-chosen')) return;
+                // نقرةُ الكاتب على مرشَّحٍ = تأكيدٌ (شاهدُ تدريبٍ) لا ملءٌ آليّ
+                const _pin = document.getElementById(side === 'issuing' ? 'issuingEntity' : 'receivingEntity');
+                if (_pin) _pin.dataset.provenance = PROV_CONFIRMED;
                 if (m.entity_id) mgr.addEntity({ id: m.entity_id, name, code: '' });
                 else mgr._resolveOrCreate(name, true);
                 box.remove();   // أدّت القائمة غرضها — تختفي بعد التضمين (قرار المالك)
@@ -4931,6 +4952,10 @@ class ExtractionSmartSystem {
             // المحفوظة نفسُها — فبلا الوسم يصير الحصادُ تعزيزاً ذاتيّاً.
             const _tProv = fieldProvenance('title');
             if (_tProv) formData.append('title_provenance', _tProv);
+            const _ieProv = fieldProvenance('issuingEntity');
+            if (_ieProv) formData.append('issuing_entity_provenance', _ieProv);
+            const _reProv = fieldProvenance('receivingEntity');
+            if (_reProv) formData.append('receiving_entity_provenance', _reProv);
             // ما عُرض على الكاتب فعلاً — لا يُخمَّن خادميّاً من وجود الاقتراح.
             formData.append('displayed_fields', displayedFieldsList().join(','));
         }

@@ -163,6 +163,16 @@ if os.path.exists(MANIFEST):
 # صفّاً هبطت في 17 دقيقة يوم 2026-08-19) فلا يصلح مرجعاً زمنيّاً؛ والكاتبيُّ قبل
 # الإصلاح مسمومٌ بافتراضيّ «اليوم» فلا يدخل أصلاً. حارسُ الفارق يستبعد أيضاً
 # صفوف الفارق صفر (7.2%) والسالب (0.3%) كما سُجّل — لا توسيعَ بعد النظر.
+# **الوسمُ يُكتب ولا يُقرأ — حتّى اليوم** (مراجعة 2026-09-01): `autofilled` يُسجَّل
+# في الالتقاط منذ ملء الواجهة الأخضر، لكنّ الحاصد لم يكن يستشيره فيعود المملوءُ
+# بلا لمسٍ وسماً يدرّب القارئَ على مخرجه هو. الاستبعادُ هنا يجعل الضمانَ المكتوب
+# في السجلّ صادقاً. (`confirmed` يبقى: نقرةُ الكاتب بعد المطابقة شاهدُ تدريب.)
+from core.models import DataExtractionResult  # noqa: E402
+_autofilled_dates = set(
+    DataExtractionResult.objects
+    .filter(additional_data__sender_date_provenance='autofilled')
+    .values_list('book_id', flat=True))
+
 pool_of, delta_of, clerk_of = {}, {}, {}
 rows = (Book.objects.filter(is_deleted=False, sender_date__isnull=False,
                             attachments__isnull=False)
@@ -175,6 +185,8 @@ for bid, bdate, sdate, created, sref in rows:
     if clerk:
         if timezone.localtime(created).date() < FIX_DATE:
             continue                      # كاتبيٌّ قبل الإصلاح = وسمٌ مسموم
+        if bid in _autofilled_dates:
+            continue                      # مُلئ آليّاً وحُفظ بلا لمس = مخرجُ القارئ نفسُه
         pool_of[bid] = 'clean'
         delta_of[bid] = (bdate - sdate).days if bdate else None
     else:

@@ -128,6 +128,25 @@ class SystemCheckTests(SimpleTestCase):
         self.assertEqual(found[0].level, 30)
 
 
+def _machine_complete():
+    """tesseract + onnxruntime + المفتاح — ما يُفشل الفحصَ صلباً بلا `--strict`.
+
+    مراجعة 2026-09-01: كانت الاختباراتُ تتوقّع نجاحاً غيرَ صارمٍ فتسقط على أيّ
+    نسخةٍ بلا tesseract أو مفتاح — «عقوبةُ المطوّر لا حراسةُ الإنتاج». ما يعتمد
+    على اكتمال الجهاز يُتخطّى بصراحةٍ بدل أن يحمرّ زوراً.
+    """
+    import shutil
+    try:
+        import onnxruntime  # noqa: F401
+    except Exception:      # noqa: BLE001
+        return False
+    from core.extraction.ocr.providers import TesseractOCRProvider
+    cmd = getattr(settings, 'TESSERACT_CMD', '') or TesseractOCRProvider._autodetect_cmd()
+    if not (cmd and (os.path.exists(cmd) or shutil.which(cmd))):
+        return False
+    return all(os.path.exists(a.path_fn()) for a in A.ARTIFACTS)
+
+
 class ModelsHealthcheckCommandTests(SimpleTestCase):
 
     def _run(self, **kw):
@@ -137,15 +156,17 @@ class ModelsHealthcheckCommandTests(SimpleTestCase):
         return out.getvalue()
 
     def test_passes_on_a_complete_machine(self):
-        if not all(os.path.exists(a.path_fn()) for a in A.ARTIFACTS):
-            self.skipTest('عتادٌ ناقصٌ على هذا الجهاز')
+        if not _machine_complete():
+            self.skipTest('الجهازُ غيرُ مكتمل (tesseract/onnxruntime/المفتاح)')
         self.assertIn('فحصُ العتاد نجح', self._run())
 
     @override_settings(HANDWRITTEN_DATE_ONNX=r'D:\nope\missing.onnx')
     def test_missing_model_warns_by_default_and_fails_under_strict(self):
-        self.assertIn('تحذير', self._run())          # جهازُ تطويرٍ لا يُعاقَب
         with self.assertRaises(CommandError):
-            self._run(strict=True)                    # بوّابةُ النشر تصرخ
+            self._run(strict=True)                    # بوّابةُ النشر تصرخ — دائماً
+        if not _machine_complete():
+            self.skipTest('النجاحُ غيرُ الصارم يحتاج جهازاً مكتملاً')
+        self.assertIn('تحذير', self._run())          # جهازُ تطويرٍ لا يُعاقَب
 
     def test_date_charset_without_the_separator_is_rejected(self):
         """طقمٌ بلا «/» = طقمُ الأرقام في غير موضعه ⟵ فكُّ الترميز يرفع IndexError."""
@@ -178,8 +199,31 @@ class ModelsHealthcheckCommandTests(SimpleTestCase):
             pass
         return out.getvalue()
 
+    def test_blank_last_charset_is_rejected(self):
+        """فكُّ الترميز يفترض blank أوّلاً (`charset[k-1]`) — اصطلاحُ blank-الأخير كان يمرّ «سليماً»."""
+        with tempfile.TemporaryDirectory() as d:
+            bad = os.path.join(d, 'charset.json')
+            with open(bad, 'w', encoding='utf-8') as f:
+                json.dump({'charset': '0123456789', 'blank': 10}, f)
+            with override_settings(HANDWRITTEN_NUMBER_CHARSET=bad):
+                out = self._run_capturing_failure()
+        self.assertIn('يفترض 0', out)
+
+    def test_system_check_sees_an_unpulled_lfs_pointer(self):
+        """فحصُ النظام كان أعمى عن المؤشّر — `os.path.exists` يقول موجود."""
+        from core.checks import check_runtime_artifacts
+        with tempfile.TemporaryDirectory() as d:
+            ptr = os.path.join(d, 'handwritten_digits_crnn.onnx')
+            with open(ptr, 'wb') as f:
+                f.write(b'version https://git-lfs.github.com/spec/v1\noid sha256:0\nsize 1\n')
+            with override_settings(HANDWRITTEN_NUMBER_ONNX=ptr):
+                found = check_runtime_artifacts(None)
+        self.assertEqual(len(found), 1)
+        self.assertIn('LFS', found[0].msg)
+        self.assertIn('git lfs pull', found[0].hint)
+
     def test_every_artifact_is_reported(self):
         """لا ملفَّ يمرّ بلا سطر — تقريرٌ ناقصٌ يوهم بأنّ المفقود غيرُ مفحوص."""
-        out = self._run()
+        out = self._run_capturing_failure()
         for art in A.ARTIFACTS:
             self.assertIn(art.label, out, art.key)

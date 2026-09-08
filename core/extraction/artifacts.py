@@ -52,6 +52,21 @@ def artifact_path(*parts, setting: str = '') -> str:
     return os.path.join(root, *parts) if root else os.path.join(*parts)
 
 
+_LFS_MAGIC = b'version https://git-lfs.github.com/spec/'
+
+
+def is_lfs_pointer(path: str) -> bool:
+    """مؤشّرُ Git LFS بدل الملفّ: استنساخٌ بلا `git lfs pull` يترك نصّاً من ثلاثة
+    أسطرٍ باسم النموذج نفسِه — الوجودُ وحدَه يكذب، فيُمسَك بالمضمون."""
+    try:
+        if os.path.getsize(path) > 1024:      # المؤشّرُ ~130 بايتاً دائماً
+            return False
+        with open(path, 'rb') as f:
+            return f.read(len(_LFS_MAGIC)) == _LFS_MAGIC
+    except OSError:
+        return False
+
+
 # ── مُحلّلاتُ المسار — يستدعيها الكودُ الحيّ والفحصُ معاً ─────────────────────
 def number_model_path() -> str:
     return artifact_path('var', 'models', 'handwritten_digits_crnn.onnx',

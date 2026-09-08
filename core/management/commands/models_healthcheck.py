@@ -25,7 +25,7 @@ import shutil
 from django.conf import settings
 from django.core.management import BaseCommand, CommandError
 
-from core.extraction.artifacts import ARTIFACTS
+from core.extraction.artifacts import ARTIFACTS, is_lfs_pointer
 
 
 def _sha256(path):
@@ -34,20 +34,6 @@ def _sha256(path):
         for chunk in iter(lambda: f.read(1 << 20), b''):
             h.update(chunk)
     return h.hexdigest()[:16]
-
-
-_LFS_MAGIC = b'version https://git-lfs.github.com/spec/'
-
-
-def _is_lfs_pointer(path):
-    """مؤشّرُ LFS: ملفٌّ نصّيٌّ صغيرٌ يبدأ بسطر النسخة القياسيّ."""
-    try:
-        if os.path.getsize(path) > 1024:      # المؤشّرُ ~130 بايتاً دائماً
-            return False
-        with open(path, 'rb') as f:
-            return f.read(len(_LFS_MAGIC)) == _LFS_MAGIC
-    except OSError:
-        return False
 
 
 def _human(n):
@@ -85,7 +71,7 @@ class Command(BaseCommand):
         if size == 0:
             hard.append('%s — ملفٌّ فارغ (%s)' % (art.label, path))
             return False
-        if _is_lfs_pointer(path):
+        if is_lfs_pointer(path):
             # الأوزانُ تُشحَن عبر Git LFS: استنساخٌ بلا `git lfs pull` يترك
             # **مؤشّراً نصّيّاً من ثلاثة أسطر** باسم الملفّ نفسِه ومقاسٍ ببضعة
             # بايتات. الوجودُ وحدَه يقول «سليم» كذباً — فيُمسَك بالمضمون.
@@ -129,8 +115,12 @@ class Command(BaseCommand):
             return False, 'بلا مفتاح `charset`'
         if not isinstance(meta.get('blank', 0), int):
             return False, '`blank` ليس عدداً صحيحاً'
-        if meta.get('blank', 0) > len(charset):
-            return False, 'فهرسُ `blank` خارجَ الطقم'
+        # فكُّ الترميز يفترض blank **أوّلاً** صراحةً (`charset[k - 1]` في reader.py):
+        # طقمٌ باصطلاح blank-الأخير كان يمرّ «سليماً» ثمّ يُفكّ الصنفُ 0 إلى آخر
+        # محرف — خردةٌ واثقة. الفحصُ يفرض افتراضَ فكّ الترميز لا مدىً عامّاً.
+        if meta.get('blank', 0) != 0:
+            return False, ('`blank` = %s وفكُّ الترميز يفترض 0 (blank أوّلاً) — '
+                           'غيّر القارئَ قبل الطقم' % meta.get('blank'))
         # طقمُ التاريخ يحوي الفاصل «/»؛ وسقوطُه إلى طقم الأرقام يُزيح الخريطةَ
         # كلَّها فتخرج تواريخُ خردةٍ بثقةٍ عالية. الشرطُ يمنع خلطَ الملفّين أيضاً.
         if art.key == 'date_charset' and '/' not in charset:
