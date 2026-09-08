@@ -1,0 +1,164 @@
+# Merge9 — توحيدُ التبويبات وخطّةُ ترحيل البيانات إلى الإنتاج
+
+> **هذه الوثيقةُ مصدرُ الحقيقة الموحّد.** أُنشئت لدمج عمل ثلاثة تبويبات (جلسات Claude)
+> في محادثةٍ واحدة، ولتوجيه العمل القادم. **كلُّ تبويبٍ يقرؤها أوّلاً**، ويُلحِق فيها
+> (لا يكتب فوقها). أُعدّت خطّةُ الترحيل باستشارة نموذج فيبل ومقيسةٌ على الجهاز.
+>
+> **أوّلُ ما تفعله المحادثةُ الجديدة:** اقرأ `MEMORY.md` ثمّ هذه الوثيقة، **أعد التحقّق من
+> رأس الحالة أدناه** (`git rev-parse main origin/main` + `gh workflow list`)، ثمّ
+> **لا تلمس الخادمَ ولا تُفعّل النشرَ** — نفّذ المراحلَ بالترتيب وبوّاباتِ التحقّق.
+
+---
+
+## §0 — القيودُ الصارمة (لا تُخالَف)
+- **لا اتّصالَ بالخادم `217.65.145.47` إطلاقاً** — يديره مشغّلٌ آخر ([م]). كلُّ عمل الخادم يُعطى له أوامرَ جاهزةً ويُعيد المخرَج.
+- **لا رفعَ لبيانات العميل** (تأكّد دوماً: GitHub = كودٌ + 4 أوزان `.onnx` LFS فقط؛ كلُّ dump/`.env`/`.encryption_key`/`media` متجاهَل).
+- **لا طبعَ** لمحتوى `.env` ولا `.encryption_key` ولا أيّ سرّ.
+- **لا نشرَ (deploy)** قبل اكتمال الترحيل والقبول.
+- **لا فروعَ من مجلّد المشروع** — استعمل worktree مؤقّتاً قصير المسار.
+- لا `git add -A` / `commit -a` (بروتوكول ROLLOUT_EXECUTION) · المخرَجُ الطويل إلى ملفّ خارج المستودع.
+
+## §1 — الحالةُ الموحّدة (أعد التحقّق عند البدء)
+- **`main` = `origin/main` = `236ffec`** · آخرُ هجرة **`0077_archive_events_and_history`** · **0 PR مفتوح** · النشرُ التلقائيّ **`disabled_manually`** (وطبقةٌ ثانية: `deploy.yml` نفسُه `workflow_dispatch`-فقط).
+- **قاعدةُ الإنتاج الحيّة فارغة** (0 كتاب) — الموقعُ حيٌّ لكنْ شبح. **الترحيلُ لم يُبدأ** = المُعلَّقُ الأكبر.
+- **الحزمةُ الكاملة:** كانت 1549 اختباراً خضراء على 0076؛ أعِد تشغيلها على `236ffec` قبل أيّ لقطة.
+
+**ما أُنجز ودُمج على main:**
+- الكودُ بلغ **0077** (دمج rollout-b3 → main: أدوار/أقسام/أرشيف/توقيع، هجرات 0062–0077).
+- **حماية الوسائط X-Accel-Redirect** (PR #9) + `docs/DEPLOY_MEDIA.md` (كتلةُ nginx للمشغّل).
+- **تعطيل النشر التلقائيّ** (PR #11 + `gh workflow disable`).
+- **إصلاحُ كاش الجهات** (PR #14): الكاشاتُ تشفى ذاتيّاً بعد تحميل البيانات + فحصُ الإقلاع يصرخ عند قاعدةٍ فارغة.
+- **تنظيفُ كودٍ** (PR #15): استبدالُ `_content_disposition` بدالّة Django الجاهزة.
+
+## §2 — الحقائقُ الحاكمة (مقيسة)
+- **مصدرُ الحقيقة = القاعدةُ المحلّيّة `lettersys` @0077** (عُدَّ بـ`Book.all_objects` — المدير `objects` يُخفي المحذوف): الكلّ **13,239** · محذوفٌ ناعماً **45** · تدريب **131** (منها 32 محذوفة) · نشطٌ غيرُ تدريبيّ **13,095** · جهات **674** (أعلى id 722) · ذاكرةُ ترويسة **5,395** · مرفقاتٌ نشطة **13,173** (0 مفقود على القرص). آخرُ كتابٍ أُنشئ 2026-08-30.
+- **الوسائط:** `D:\lettersys_data\media` = 14,044 ملفّاً؛ **`books/` وحدَه ≈15,939 MiB / 13,932 ملفّاً** (مساراتٌ نسبيّة `books/<سنة>/<رقم>_<اسم>`، 0 مطلقة). لا يُشحَن: `scan_inbox` · `tmp` · `training_datasets` · `MD. O. C.png`.
+- **مفتاحُ التعمية:** `project/.encryption_key` sha **`1e639b05`** (44 بايت) يفكّ `EmailSettings.smtp/imap_password` الحقيقيّين؛ مفتاحُ `../lettersys_rollout/.encryption_key` (`67572ad5`) **يفشل** ولا يُشحَن. كلاهما غائبٌ عن الخادم ⟵ يُشحَن `1e639b05` وحده (chmod 600).
+- **معرّفاتُ الجهات في `var/*.json`:** `entity_doc_profiles.json` 143/143 · `entity_extraction_profiles.json` 136/136 — **0 انحراف**؛ يبقى كذلك ما دامت الاستعادةُ `pg_restore` (تحفظ المفاتيح الأوّليّة) لا إعادةَ استيراد.
+- **البريدُ في القاعدة:** `is_active=True` · **`imap_sync_enabled=True`** (imap.gmail.com) · beat كلَّ 10 دقائق + مزامنةٌ عند فتح الوارد ⟵ **يُطفَأ في نسخة الشحن**. `BookEmailLog`: صفٌّ `sent` واحد (لا إعادةَ إرسال). `BackupSettings.enabled=False`.
+- **SECRET_KEY:** لا شيءَ دائمٌ موقّعٌ به ⟵ **يبقى مفتاحُ الخادم**؛ كلماتُ المرور PBKDF2 مستقلّة؛ الجلساتُ تُقصّ.
+- **البطء 15s على الإنتاج** = Tesseract (الافتراضيّ، لا EasyOCR) حتّى 3 تمريراتٍ على 1 vCPU. تخفيفٌ بلا كود: `TESSERACT_ADAPTIVE_THRESHOLD=0` · `OMP_THREAD_LIMIT=1` · gunicorn `--timeout≥180` · swap. **«لا جهات» = عرَضُ القاعدة الفارغة**، يزول بالاستعادة.
+- **مفتاحُ النشر مكسور:** الخادم فيه pubkey `g4MZOdBd` بينما سرُّ GitHub يتوقّع `F/jfafPX` ⟵ النشرُ التلقائيّ كان يفشل. سكربتُ `lettersys-deploy`: `git reset --hard origin/main` + `lfs pull` + `migrate` + `collectstatic` + restart.
+- **الترميز:** القاعدةُ المحلّيّة UTF8/ويندوز؛ الخادم `C.UTF-8` ⟵ يتغيّر ترتيبُ الفرز العربيّ فقط، لا المحتوى.
+
+---
+
+# خطّةُ الترحيل (cutover)
+
+الرموز: **[م]** مشغّلُ الخادم (طرفٌ آخر) · **[ن]** نحن محلّيّاً · **[مالك]** قرارٌ لا يُتجاوز.
+قاعدة: **كلُّ خطوةٍ تنتهي بمخرَجٍ يُلصق هنا** (لا «تمّ»)، ولا خطوةَ تالية قبل خضرة بوّابة السابقة.
+
+## المرحلة 0 — ما قبل النافذة (T-3 ⟶ T-1)
+
+| # | الخطوة | مَن | بوّابة | الرجوع |
+|---|---|---|---|---|
+| 0.1 | حسمُ قرارات §6 وتثبيتُ موعد النافذة | مالك | جوابٌ مكتوبٌ على كلّ بند | — |
+| 0.2 | توحيدُ التبويبات وتجميدُ git (§«التوحيد») | ن | `git status` نظيف · `main`=`origin/main` · السيرُ disabled | — |
+| 0.3 | **استطلاعُ الخادم بلا تغيير** — يُرسل [م]: `df -h` · `free -m` · `swapon --show` · `psql -c "select version()"` · `\l+ lettersys` · `cd /var/www/lettersys && git rev-parse HEAD && git lfs ls-files` · أسماءُ مفاتيح `.env` فقط (`cut -d= -f1`) · `cat $(which lettersys-deploy)` · وحداتُ systemd · كتلةُ nginx للوسائط · `ls -la .encryption_key` · `which rsync pg_restore` · `models_healthcheck` | م | حرّ ≥ **20 GB** · HEAD=main · LFS أوزانٌ لا مؤشّرات · `DEBUG=False` · `MEDIA_ROOT=/var/www/lettersys/media` · `USE_X_ACCEL_REDIRECT=True` مع كتلة `internal` · `pg_restore` 18 | — |
+| 0.4 | **الأساسُ المحلّيّ**: `showmigrations core\|tail -3` (0077 [X]) · `db_healthcheck --strict` · `models_healthcheck --strict --load --hash` · الحزمةُ الكاملة خضراء · الأعدادُ بـ`all_objects` · فحصُ الوسائط · فحصُ var/*.json · sha المفتاح=1e639b05 | ن | كلُّ الأرقام مطابقةٌ لـ§2 | — |
+| 0.5 | **بيانُ الوسائط** (WSL): `cd /mnt/d/lettersys_data/media/books && find . -type f -print0\|sort -z\|xargs -0 sha256sum > /mnt/d/lettersys_data/manifests/books_<ts>.sha256` | ن | الأسطر = 13,932 | — |
+| 0.6 | **المزامنةُ الكبرى للوسائط** (خارج النافذة، قابلةٌ للاستئناف): `rsync -rlt --partial --partial-dir=.rsync-partial --info=progress2 --chmod=D755,F644 --exclude '.rsync-partial' /mnt/d/lettersys_data/media/books/ <user>@<host>:/var/www/lettersys/media/books/` (لا `-a`؛ `--bwlimit` نهاراً) | ن+م | [م]: `sha256sum -c books_<ts>.sha256\|grep -vc ': OK$'`=**0** · `find\|wc -l`=13,932 · `df -h`≥4GB | `rm -rf` المجلّد المنسوخ |
+| 0.7 | **شحنُ المفتاح** (scp أو لصقٌ في ssh — لا بريد/دردشة/git): `project/.encryption_key` وحده ⟶ `/var/www/lettersys/.encryption_key`؛ أيُّ مفتاحٍ ذاتيّ السكّ يُعاد تسميتُه | ن+م | [م]: sha[:8]=**1e639b05** · `wc -c`=**44** · `stat -c '%U %a'`=مستخدمُ الخدمة/600 | إعادةُ المُعاد تسميتُه |
+| 0.8 | **تحصينُ الخادم** (لا يمسّ القاعدة): swap 2–4GB · `.env`: `TESSERACT_ADAPTIVE_THRESHOLD=0`, `OMP_THREAD_LIMIT=1`, `BACKUP_DIR` خارج `/` · gunicorn `--timeout 180` · celery `--concurrency 1` | م | `swapon --show` · ExecStart فيه timeout | إرجاعُ `.env.bak` |
+
+## المرحلة 1 — التجميد (بدايةُ النافذة T-0)
+
+| # | الخطوة | مَن | بوّابة | الرجوع |
+|---|---|---|---|---|
+| 1.1 | إبلاغُ المُدخِلين (sarah · zainab · abdulrahman) بوقف الإدخال HH:MM + تسجيلُ آخر رقمٍ لكلّ سجلّ | مالك | رسالةٌ مؤرّخة + الأرقام | — |
+| 1.2 | إيقافُ الخادم المحلّيّ: `schtasks /End /TN LetterSysServer; schtasks /Change /TN LetterSysServer /DISABLE` + قتلُ runserver/celery | ن | لا مستمعَ على 8000 | `/Change /ENABLE; /Run` |
+| 1.3 | **قفلُ القاعدة قراءةً فقط**: `ALTER DATABASE lettersys SET default_transaction_read_only=on;` + `pg_terminate_backend` للجلسات | ن | فحصٌ مزدوجٌ بفاصل 5د: `count,max(created_at)` ثابت · `auth_user`=12 | `... RESET default_transaction_read_only;` |
+
+## المرحلة 2 — اللقطةُ النهائيّة ونسخةُ الشحن [ن]
+المبدأ: **القاعدةُ المجمّدة لا تُلمَس** (مصدرُ الرجوع)؛ التنظيفُ على نسخةٍ `lettersys_ship` = بروفةُ استعادةٍ كاملة.
+
+| # | الخطوة | بوّابة | الرجوع |
+|---|---|---|---|
+| 2.1 | لقطةٌ خام (`PGPASSWORD` لا سطرَ الأوامر): `pg_dump(16) -U lettersys_user -d lettersys -Fc --no-owner --no-privileges -f D:\lettersys_data\backups\cutover_raw_<ts>.dump` | `pg_restore -l` يعمل · sha مسجَّل | — |
+| 2.2 | بروفةُ استعادة: `createdb -T template0 -E UTF8 --locale=C lettersys_ship` ثمّ `pg_restore --no-owner --no-privileges --role=lettersys_user --exit-on-error -d lettersys_ship <raw>` | خروجٌ 0 · `DB_NAME=lettersys_ship migrate --check`=0 · 0077 | `dropdb lettersys_ship` |
+| 2.3 | **تنظيفٌ في `lettersys_ship` فقط**: (أ) `purge_dev_seed_books` معاينةً ثمّ `--yes` (131+117 مرفق+إعادةُ بذر العدّادات) · (ب) `UPDATE core_emailsettings SET imap_sync_enabled=false;` · (ج) `UPDATE auth_user SET is_active=false, password='!'||md5(random()::text) WHERE username IN ('ui_probe_tmp','booklet_shot','agent_flow_79f151b1','_pwverify','admin10','testuser'[,'admin12' حسب §6]);` (تعطيلٌ لا حذف — CASCADE يشلّ سجلّات) · (د) `TRUNCATE django_session;` · (هـ) `core_backupsettings.enabled=false` | الأعداد `all_objects`: الكلّ **13,108** · نشط 13,095 · محذوف 13 · تدريب 0 · جهات 674 · ذاكرة 5,395 · `imap_sync_enabled=false` · `bookemaillog` failed/pending=0 · العدّادات 2433/358/455 | `dropdb` وإعادةُ 2.2 |
+| 2.4 | نسخةُ الشحن: `pg_dump(16) -U postgres -d lettersys_ship -Fc --no-owner --no-privileges -f cutover_ship_<ts>.dump` + sha | الملفّان وبصمتاهما هنا | — |
+| 2.5 | دلتا الوسائط: أمرُ 0.6 مع `-n -i` أوّلاً ثمّ فعليّاً | الجافّ 0 نقلٍ (أو ملفّاتٌ معدودةٌ تحت `books/`) ثمّ `sha256sum -c`=0 فشل | — |
+| 2.6 | رفعُ `cutover_ship_<ts>.dump`+`.sha256` إلى `/var/backups/lettersys/incoming/` | [م]: `sha256sum -c` OK | — |
+
+## المرحلة 3 — الاستعادةُ في قاعدةٍ جانبيّة [م] (التطبيقُ يعمل على القديمة بلا انقطاع)
+
+| # | الخطوة | بوّابة | الرجوع |
+|---|---|---|---|
+| 3.1 | نسخةٌ ممّا هو قائم: `pg_dump -Fc -f /var/backups/lettersys/pre_cutover_<ts>.dump lettersys` + `cp .env .env.pre_cutover` + لقطةُ VPS إن قرّرها المالك | ملفّان >0 | — |
+| 3.2 | `CREATE DATABASE lettersys_new WITH OWNER lettersys_user ENCODING 'UTF8' LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8' TEMPLATE template0;` | `\l+` يُظهر C.UTF-8 | `DROP DATABASE lettersys_new` |
+| 3.3 | `pg_restore -h localhost -U lettersys_user --no-owner --no-privileges --exit-on-error -d lettersys_new <ship>` ثمّ `ANALYZE;` (إن تعثّر على pg_trgm: أنشئه بـpostgres ثمّ أعد بلا `--exit-on-error` مع `2>restore.err` وتأكّد الأخطاءُ سطرا الامتداد فقط) | خروجٌ 0 (أو أخطاءُ الامتداد وحدها) | `DROP DATABASE lettersys_new` |
+| 3.4 | بوّابةُ SQL على `lettersys_new`: عدُّ الكتب/المحذوف/التدريب · `count(core_entity)` · آخرُ هجرة · `imap_sync_enabled` · المستخدمون النشطون | 13,108/13/0 · 674 · 0077 · false · الحقيقيّون وحدهم | — |
+| 3.5 | بوّابةُ Django (المتغيّرُ يغلب `.env` لأنّ التحميل `setdefault`): `DB_NAME=lettersys_new migrate --check` · `... models_healthcheck --strict --load` · **إثباتُ المفتاح**: `shell -c "from core.models import EmailSettings as E; e=E.get(); print(len(e.smtp_password or ''), len(e.imap_password or ''))"` · **إثباتُ الجهات**: فحصُ var/*.json ضدّ القاعدة | خروجٌ 0 · «13095/674/5395» · طولان>0 بلا ValueError · not-in-db=0 | إن فشل المفتاح: راجع 0.7 قبل أيّ تبديل |
+
+## المرحلة 4 — التبديل (انقطاعٌ ≤ 10 دقائق) [م]
+
+| # | الخطوة | بوّابة | الرجوع (≤3د) |
+|---|---|---|---|
+| 4.1 | `systemctl stop celery-beat celery gunicorn` | `pg_stat_activity` للقاعدتين=0 (وإلّا terminate) | `systemctl start` |
+| 4.2 | psql واحدة: `ALTER DATABASE lettersys RENAME TO lettersys_old_<date>; ALTER DATABASE lettersys_new RENAME TO lettersys;` | `\l` يُظهر التبديل | العكسُ بإعادة التسمية |
+| 4.3 | مسحُ كاش Redis: `redis-cli -n <N> FLUSHDB` (لا FLUSHALL) | `DBSIZE`=0 | — |
+| 4.4 | `migrate --check`⟶`migrate`(لا-عمل)⟶`collectstatic --noinput`⟶`models_healthcheck --strict --load` | كلُّها 0 · لا «Applying» | — |
+| 4.5 | `systemctl start gunicorn celery celery-beat` | `journalctl -u gunicorn -n50` بلا traceback · `curl -sI /login/`=200 | إيقاف+4.2 عكسيّاً+`.env.pre_cutover` |
+| 4.6 | **دخانٌ بالعين** (مالك+ن): دخولٌ · القائمة 13,095 · كتابُ 2025 يعرض `825`+وسم · 2026 مجرّد · الرقمُ التالي 2433/358/455 · مرفقٌ يُفتح (بلا جلسة⟶login؛ غيرُ مالك⟶403) · بحثُ جهة · لوحةُ الأقسام · رفعُ مستندٍ وقياسُ زمن(<30ث) · `df -h` | كلُّها خضراء | كما 4.5 |
+
+## المرحلة 5 — بعد التبديل
+- **5.1** sarah تُدخل أوّلَ كتابٍ حقيقيّ (رقم 2433) بحضور المالك؛ قياسُ زمن OCR.
+- **5.2** الخادمُ المحلّيّ لا يعود: القفلُ باقٍ، المهمّةُ معطَّلةٌ دائماً، وإعلامُ الجميع بالعنوان الجديد (يمنع انقساماً).
+- **5.3** تفعيلُ IMAP عمداً في ساعة عملٍ ومراقبةُ `journalctl -u celery -f` 10 دقائق.
+- **5.4** الاحتفاظُ بـ`lettersys_old_<date>` والنسخ 7 أيّام ثمّ `DROP` · نسخةٌ خارج الخادم.
+- **5.5** إصلاحُ مفتاح النشر ثمّ تمكينُ السير (أدناه).
+
+## التوحيدُ (§قبل T-1)
+**الحال**: A=`main` نظيف · B=`../lettersys_rollout` قد يحمل فرعَ عملٍ بإيداعاتٍ غير مدفوعة · C=`.claude/worktrees/agent-*` بلا شيءٍ فريد.
+1. **B**: يُنهي بندَه ⟶ إيداعٌ بمساراتٍ صريحة ⟶ `push -u origin <فرع>` ⟶ `gh pr create --draft` («لا يُدمَج قبل الترحيل») ⟶ يُغلق التبويب (الشجرةُ تبقى — فيها `.env` والمفتاحُ الآخر).
+2. **C**: `git worktree remove --force …` ثمّ `git branch -D worktree-agent-…`.
+3. الفروعُ المدموجة (تأكّد `git log main..<فرع>` فارغ): تُحذف محلّيّاً وبعيداً.
+4. وسمٌ مرجعيّ: `git tag cutover-2026-09 <main> && git push origin cutover-2026-09`.
+5. **A هو الناجي**: قراءةٌ ووثائقُ فقط؛ أيُّ كود جديد في فرعٍ لا يُدمَج حتّى ما بعد الترحيل.
+
+**قواعدُ النافذة** (T-1 ⟶ القبول): لا دفعَ لـmain · لا دمجَ PR · لا `gh workflow run` · السيرُ disabled · لا `runserver/shell/seed_*/import_legacy/run_restore_job/prepare_entities` على أيّ قاعدةٍ حيّة · `Merge9.md` يُلحَق لا يُكتب فوقه.
+
+## §5 — سجلُّ المخاطر (الأخطر)
+1. **المفتاح** — شحنُ 67572ad5 أو تلفُ نسخٍ (CRLF/BOM) ⟵ `ValueError` صامتٌ في البريد. المنع: بوّابةُ sha+حجم (0.7) + إثباتُ الفكّ (3.5). احتياط: إعادةُ إدخال كلمتَي البريد من الإعدادات.
+2. **معرّفاتُ الجهات** — أيُّ إعادةِ استيراد/بذرٍ يقلب `var/*.json` بصمت. المنع: `pg_restore` فقط + حظرُ import/seed + فحصُ التطابق (3.5).
+3. **القرص 31GB** — 16GB وسائط+torch+PG+swap+مرآةُ نسخ ⟵ امتلاء. المنع: بوّابة ≥20GB/≥4GB + `BackupSettings` معطَّل خارج `/` + لا شحنَ scan_inbox/tmp.
+4. **IMAP فوراً** — سحبُ بريد الشركة من IP جديد بلا قرار. المنع: إطفاؤه في الشحن (2.3ب) + تفعيلٌ يدويٌّ مراقَب (5.3).
+5. **SECRET_KEY/الجلسات/الكاش** — جلساتٌ/كاشٌ من عهد القاعدة الفارغة. المنع: يبقى مفتاحُ الخادم + `TRUNCATE django_session` + `FLUSHDB` عند التبديل.
+6. **كتابةٌ عرضيّة في المصدر بعد اللقطة** ⟵ قفلُ القراءة (1.3).
+7. **الاستعادةُ تتعثّر على pg_trgm/ACL** ⟵ مالكُ القاعدة ينفّذ + `--no-privileges` + بديلُ 3.3.
+8. **أسماءٌ عربيّة عبر rsync** ⟵ WSL(UTF-8)+`LANG=C.UTF-8`+بيانُ sha256.
+
+## §6 — قراراتُ المالك المعلّقة (لا إقلاعَ قبل الحسم)
+1. موعدُ النافذة ومدّتها ومَن يبلّغ المُدخِلين.
+2. الحسابات: تعطيلُ الستّة؛ **`admin12` (9 كتب) تدريبٌ أم حقيقيّ؟** كتابا `testuser` يُنقلان لـadmin أم يبقيان معطَّلين؟
+3. حذفُ 131 تدريب + 117 مرفقاً — نهائيٌّ على الإنتاج (الرجوعُ عبر `cutover_raw`).
+4. البريد: متى IMAP، وهل SMTP من الخادم (كلمةُ تطبيق Gmail من IP جديد؟).
+5. القرص: هامش ~4–5GB أم ترقيةٌ قبل الوسائط؟ ووجهةُ النسخ خارج الخادم واحتفاظُها.
+6. حسابُ النقل لـrsync: يُنشئه [م]، أم يسحب من مخزنٍ نوفّره؟
+7. مصيرُ النسخة المحلّيّة: أرشيفٌ للقراءة (موصى) أم احتياطٌ (انقسامٌ محتمل).
+8. النشرُ التلقائيّ: إعادتُه على كلّ دفع أم يدويٌّ دائماً؟ وإصلاحُ المفتاح: تركيبُ العامّ المطابق (أ) أم تدويرُ الزوج (ب)؟
+9. TLS/النطاق وأعلامُ الكوكي — لا تُغيَّر في النافذة.
+10. لقطةُ VPS من Hostinger قبل التبديل.
+11. دمجُ `feat/mail-archive-attribution` بعد الاستقرار فقط.
+12. تدويرُ كلمة سرّ SQL Server القديمة (`docs/LAUNCH_RUNBOOK.md`).
+
+## إعادةُ تمكين النشر (بعد الاستقرار، §5.5)
+1. يومان عملٍ بلا رجوع و`lettersys_old` باقية.
+2. **إصلاحُ المفتاح** (يحسم المالك): (أ) [م] يُلحق العامَّ المطابقَ لسرّ GitHub في `authorized_keys`؛ أو (ب) [ن] يولّد زوجاً جديداً ⟶ `gh secret set DEPLOY_SSH_KEY` ⟶ [م] يركّب العامّ. التحقّق: `ssh-keygen -lf` تتطابق.
+3. مراجعةُ `lettersys-deploy` (لا `makemigrations` أبداً؛ `models_healthcheck --strict` بوّابة).
+4. `gh workflow enable deploy.yml` (والملفُّ `workflow_dispatch`-فقط) ⟶ `gh workflow run` يدويّاً ⟶ `gh run watch` ⟶ نجاحٌ + HEAD المتوقّع.
+5. بعد نجاحٍ يدويّ: PR يُعيد سطرَي `push` — دمجُه أوّلُ نشرٍ تلقائيّ.
+6. دمجُ `feat/mail-archive-attribution` (بعد rebase) — لا قبل.
+
+## توجيهُ المحادثة الجديدة
+1. اقرأ `MEMORY.md` + هذه الوثيقة، وأعد التحقّق من §1.
+2. **لا تلمس الخادمَ ولا تُفعّل النشر.**
+3. البدءُ الطبيعيّ: **المرحلة 0** (0.2 التوحيد ⟶ 0.4 الأساس المحلّيّ) — كلُّها محلّيّةٌ/قراءة، بلا مخاطرة، وتُجهّز كلَّ ما يلزم.
+4. لا تتقدّم للمرحلة 1 (التجميد) قبل حسم قرارات §6 وموعدِ النافذة من المالك.
+5. أَلحِق مخرَجاتِ كلّ خطوةٍ في هذه الوثيقة تحت «سجلُّ التنفيذ» أدناه.
+
+---
+
+## سجلُّ التنفيذ (يُلحَق فيه فقط)
+- 2026-09-08 — أُنشئت الوثيقة (خطّةُ فيبل المقيسة)؛ main=236ffec@0077؛ النشرُ disabled_manually؛ الترحيلُ لم يُبدأ.
