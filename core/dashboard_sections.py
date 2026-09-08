@@ -97,6 +97,48 @@ def _desk(user):
     }
 
 
+def _archive(user):
+    """الأرشفة — ما ينتظر الرفَّ، لمن يمسك الأرشيف.
+
+    الأعدادُ هنا **للحيّ وحده** (``source_ref=''`` و``is_training=False``):
+    القاعدةُ فيها 13 ألفَ كتابٍ دخلت بالجملة من الورق، وعدُّها عملاً ينتظر
+    يجعل العدّادَ رقماً مرعباً لا يُنقص أبداً — والعدّادُ الذي لا يُفرَغ يُهمَل.
+    """
+    from core.archive_service import unarchived_books
+    from core.models import Book, BookReferral, CustodyEvent
+    from core.scoping import scope_books_for
+
+    mine = scope_books_for(user, Book.objects.filter(is_deleted=False))
+    live = mine.filter(source_ref='', is_training=False)
+    pending = unarchived_books(live)
+    open_now = BookReferral.objects.filter(status__in=BookReferral.OPEN_STATUSES)
+
+    finished = (pending.filter(referrals__isnull=False)
+                .exclude(pk__in=open_now.values('book_id')).distinct().count())
+    idle = pending.filter(referrals__isnull=True).count()
+    no_file = live.filter(attachments__isnull=True).count()
+    filed = CustodyEvent.objects.filter(
+        event=CustodyEvent.ARCHIVE_DONE, book__in=mine).count()
+
+    return {
+        'counters': [
+            {'label': 'أُنجز ولم يُحفَظ', 'value': finished, 'tone': 'danger',
+             'href': '/books/desk/archive/'},
+            {'label': 'قُيِّد ولم يُحفَظ', 'value': idle, 'tone': 'warn',
+             'href': '/books/desk/archive/'},
+            {'label': 'بلا مرفق', 'value': no_file, 'tone': 'accent',
+             'href': '/books/desk/archive/'},
+            {'label': 'حُفظ عندنا', 'value': filed, 'tone': 'calm',
+             'href': '/books/desk/archive/'},
+        ],
+        'links': [
+            {'label': 'طاولة الأرشفة', 'href': '/books/desk/archive/',
+             'icon': 'bi-archive'},
+            {'label': 'الأضابير', 'href': '/books/dossiers/', 'icon': 'bi-folder2-open'},
+        ],
+    }
+
+
 def _register(user):
     """دفترُ القسم — حجمُ العمل ومساره، لمن يملك دفتراً."""
     from core.models import Book
@@ -213,6 +255,11 @@ def _has_register(user):
     return is_privileged(user) or user_department_id(user) is not None
 
 
+def _can_archive(user):
+    from core.scoping import can_archive
+    return can_archive(user)
+
+
 def _can_mail(user):
     from core.scoping import is_mail_officer, is_privileged
     return is_privileged(user) or is_mail_officer(user)
@@ -228,6 +275,7 @@ def _can_admin(user):
 SECTIONS = (
     ('mine', 'ما يخصّني اليوم', 'التزاماتي المفتوحة باسمي', _always, _my_queue),
     ('desk', 'طاولة الوارد', 'عملُ القسم اليوم', _can_desk, _desk),
+    ('archive', 'الأرشفة', 'ما ينتظر الرفَّ اليوم', _can_archive, _archive),
     ('dossier', 'أضبارة وحدتي', 'ما ذُكر فيه اسمُنا', _always, _dossier),
     ('register', 'دفتر القسم', 'حجمُ العمل ومساره', _has_register, _register),
     ('mail', 'البريد الإلكتروني', 'ما وصل وما أخفق', _can_mail, _mail),

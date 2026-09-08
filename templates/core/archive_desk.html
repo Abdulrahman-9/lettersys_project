@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}طاولة الأرشفة{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20260906">{% endblock %}
+
+{% block content %}
+<div class="queues-page">
+  <div class="queues-head">
+    <div>
+      <h4><i class="bi bi-archive"></i> طاولة الأرشفة</h4>
+      <p class="queues-sub">
+        ما ينتظر الرفَّ اليوم — والنقرُ يفتح الكتاب ليُقيَّد حفظُه.
+      </p>
+    </div>
+    <div class="queues-actions">
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'dossier_list' %}">
+        <i class="bi bi-folder2-open"></i> الأضابير
+      </a>
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">
+        <i class="bi bi-search"></i> الاستعلام عن كتاب
+      </a>
+    </div>
+  </div>
+
+  {% include "core/_queue_board.html" %}
+
+  {% comment %}
+    الصدقُ عن الإرث: 13 ألف كتابٍ دخلت بالجملة من القاعدة القديمة ولم تمرّ
+    بيدِ أرشيفيّ. عرضُها في طابورٍ يجعله لا يُفرَغ أبداً فيُهجَر؛ وإخفاؤها بلا
+    ذكرٍ يجعل الطاولةَ تدّعي أنّ الأرشيفَ فارغ. فتُذكر سطراً ولا تُعدّ عملاً.
+  {% endcomment %}
+  {% if legacy_total %}
+  <p class="qb-legacy">
+    <i class="bi bi-info-circle"></i>
+    وخارجَ هذه الطوابير <b>{{ legacy_total }}</b> كتاباً
+    منقولاً من القاعدة القديمة بالجملة — لم يمرّ بيدِ أرشيفيّ، ولا يُعالَج صفّاً صفّاً.
+  </p>
+  {% endif %}
+</div>
+{% endblock %}

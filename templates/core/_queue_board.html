@@ -21,8 +21,8 @@
           <span class="qb-title{% if r.restricted %} is-restricted{% endif %}">{{ r.title }}</span>
         </a>
         <span class="qb-meta">
-          {% if r.referral.to_department %}<span class="qb-to">{{ r.referral.to_department.name }}</span>{% endif %}
-          {% if r.referral.due_date %}<time datetime="{{ r.referral.due_date|date:'Y-m-d' }}">{{ r.referral.due_date|date:"Y-m-d" }}</time>{% endif %}
+          {% if r.meta_label %}<span class="qb-to">{{ r.meta_label }}</span>{% endif %}
+          {% if r.meta_date %}<time datetime="{{ r.meta_date|date:'Y-m-d' }}">{{ r.meta_date|date:"Y-m-d" }}</time>{% endif %}
         </span>
       </li>
       {% endfor %}

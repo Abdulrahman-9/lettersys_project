@@ -98,6 +98,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 # مخصّص — badge الإشعارات والبريد في الشريط الجانبي
                 'core.context_processors.notifications',
+                'core.context_processors.nav_gates',
                 'core.context_processors.mail_unread',
                 # مخصّص — هوية التطبيق المعروضة (اسم النظام + سطر الوصف)
                 'core.context_processors.system_settings',

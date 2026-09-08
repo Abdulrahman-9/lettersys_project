@@ -74,3 +74,11 @@
   .qb-grid { grid-template-columns: 1fr; }
   .qb-meta { display: none; }   /* الشاشةُ الضيّقة: العنوانُ أهمُّ من الوجهة */
 }
+
+/* سطرُ الإرث في طاولة الأرشفة — يُذكر ولا يُعدّ عملاً، فنبرتُه هامشيّة. */
+.qb-legacy {
+  margin: 1.25rem 0 0; padding: .7rem .9rem;
+  border: 1px dashed #e5e7eb; border-radius: 10px;
+  background: #fafafa; color: #64748b; font-size: .82rem;
+}
+.qb-legacy b { color: #475569; font-variant-numeric: tabular-nums; }
