@@ -33,7 +33,7 @@ _STATUS_DISPLAY = {
     'pending':   ('قيد المتابعة', 'pending'),
     'due_today': ('مستحق اليوم',  'due_today'),
     'overdue':   ('متأخر',         'overdue'),
-    'archived':  ('مؤرشف',         'archived'),
+    'archived':  ('انتهت المتابعة', 'archived'),
 }
 
 # توافق رجعي مع URLs قديمة (bookmarks خارجية، CSV exports قديم، إلخ)

@@ -231,3 +231,112 @@ class ArchiveNavGateTests(TestCase):
         self.client.force_login(_member('plain2', self.dept))
 
         self.assertNotContains(self.client.get('/'), 'طاولة الوارد')
+
+
+class ArchiveApiTests(TestCase):
+    """الغلافُ رقيقٌ: HTTP ⟵ استدعاء، والرسالةُ من الخادم بنصّها."""
+
+    def setUp(self):
+        self.dept = Department.objects.create(name='قسم الواجهة', code='و.ج')
+        self.archivist = _member('arch', self.dept, archivist=True)
+        self.officer = _member('officer', self.dept, controller=True)
+        self.book = Book.objects.create(
+            kind='incoming_external', title='كتابُ الواجهة', our_number='9950',
+            department=self.dept, created_by=self.archivist)
+        self.url = '/books/api/book/%d/archive/' % self.book.pk
+
+    def _post(self, url, payload):
+        import json
+        return self.client.post(url, data=json.dumps(payload),
+                                content_type='application/json')
+
+    def test_the_archivist_files_the_book_through_the_api(self):
+        self.client.force_login(self.archivist)
+
+        res = self._post(self.url, {'place': 'رفّ ب/12'})
+
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.json()['success'])
+        self.assertTrue(CustodyEvent.objects.filter(
+            book=self.book, event=CustodyEvent.ARCHIVE_DONE).exists())
+
+    def test_the_mail_officer_is_refused_with_403(self):
+        self.client.force_login(self.officer)
+
+        res = self._post(self.url, {})
+
+        self.assertEqual(res.status_code, 403)
+        self.assertIn('الأرشفة', res.json()['message'])
+
+    def test_a_book_outside_the_scope_is_missing_not_forbidden(self):
+        """خارجُ النطاق **404 لا 403** — و403 تُقرّ بوجود ما لا يُرى."""
+        other = Department.objects.create(name='قسمٌ آخر', code='و.خ')
+        hidden = Book.objects.create(
+            kind='incoming_external', title='خفيّ', our_number='9951',
+            department=other, created_by=_member('owner', other))
+        self.client.force_login(self.archivist)
+
+        res = self._post('/books/api/book/%d/archive/' % hidden.pk, {})
+
+        self.assertEqual(res.status_code, 404)
+
+    def test_the_open_obligation_message_reaches_the_browser_verbatim(self):
+        """رسالةُ الخطأ من الخادم بنصّها — لا تُخترع في الواجهة."""
+        unit = Department.objects.create(name='وحدة الردّ', code='و.ر',
+                                         parent=self.dept)
+        BookReferral.objects.create(
+            book=self.book, from_department=self.dept, to_department=unit,
+            status=BookReferral.SENT, created_by=self.archivist)
+        self.client.force_login(self.archivist)
+
+        res = self._post(self.url, {})
+
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('وحدة الردّ', res.json()['message'])
+
+    def test_reopening_needs_a_reason_through_the_api(self):
+        archive_book(self.book, by=self.archivist)
+        self.client.force_login(self.archivist)
+
+        res = self._post('/books/api/book/%d/archive/reopen/' % self.book.pk,
+                         {'reason': ''})
+
+        self.assertEqual(res.status_code, 400)
+
+
+class ArchiveButtonTests(TestCase):
+    """الزرُّ يظهر لصاحبه ويتبدّل بحال الكتاب — ولا شرطَ دورٍ في القالب."""
+
+    def setUp(self):
+        self.dept = Department.objects.create(name='قسم الزرّ', code='ز.ر')
+        self.archivist = _member('arch', self.dept, archivist=True)
+        self.book = Book.objects.create(
+            kind='incoming_external', title='كتابُ الزرّ', our_number='9960',
+            department=self.dept, created_by=self.archivist)
+
+    def _detail(self):
+        return self.client.get('/books/%d/' % self.book.pk)
+
+    def test_the_archivist_sees_the_filing_button_and_its_dialog(self):
+        self.client.force_login(self.archivist)
+
+        res = self._detail()
+
+        self.assertContains(res, 'تمامُ أرشفة')
+        self.assertContains(res, 'archiveModal')
+
+    def test_the_mail_officer_sees_neither(self):
+        self.client.force_login(_member('officer', self.dept, controller=True))
+
+        res = self._detail()
+
+        self.assertNotContains(res, 'archiveModal')
+
+    def test_a_filed_book_offers_reopening_instead(self):
+        archive_book(self.book, by=self.archivist)
+        self.client.force_login(self.archivist)
+
+        res = self._detail()
+
+        self.assertContains(res, 'فتحُ المؤرشَف')
+        self.assertNotContains(res, 'archiveModal')

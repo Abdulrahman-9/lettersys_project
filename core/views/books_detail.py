@@ -155,8 +155,10 @@ def _lifecycle_context(book, user):
     from core.linking_service import links_of
     from core.referral_service import reply_matrix
     from core.models import BookLink
+    from core.archive_service import is_archived
     from core.signature_service import can_sign
     from core.registration_service import registrations_of
+    from core.scoping import can_archive
 
     matrix = reply_matrix(book, user)
     return {
@@ -175,6 +177,9 @@ def _lifecycle_context(book, user):
         # ثانيةٍ في القالب.
         "signatures": list(book.signatures.select_related('signer').all()),
         "can_sign_book": can_sign(user, book),
+        # الأرشفة: الحالُ من الخدمة والحقُّ من البوّابة — والقالبُ يعرض ولا يقرّر.
+        "book_is_archived": is_archived(book),
+        "can_archive_book": can_archive(user),
     }
 
 
