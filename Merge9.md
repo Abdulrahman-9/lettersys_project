@@ -344,6 +344,22 @@ UNION ALL SELECT 'pgstat db: rollback='||xact_rollback||' size='||pg_size_pretty
 UNION ALL (SELECT 'migration_head='||name FROM django_migrations WHERE app='core' ORDER BY id DESC LIMIT 1);"
 ```
 
+**بديلٌ لا يحتاج `psql`** (مُوصىً به — صيغةُ `dbshell -- -Atc` تعتمد على عميل psql،
+وغيابُه عن مسار الخادم يوقف الاستطلاع عند أوّل خطوة؛ والسكربتُ مُجرَّبٌ على القاعدة
+المحلّيّة ويطبع خطَّ الأساس للمقارنة):
+
+```bash
+cd /var/www/lettersys && .venv/bin/python manage.py shell -c "exec(open('scripts/probe_s0.py').read())"
+```
+
+**خطُّ الأساس المحلّيّ** (قِيس 2026-09-09 على القاعدة المُجمَّدة — للمقارنة لا للحكم):
+`books=13239 | ids>13386=0 | training=131 | last_created=2026-08-30 07:38:39` ·
+`entities=674` · `history=22313 attachments=13187 sessions=282` · `users=12` ·
+`mail: enc=True len=125 imap_sync=True active=True` · `incoming_emails=1` ·
+`migration_head=0077_archive_events_and_history`.
+لاحظ: المحلّيّةُ تعدّ **13,239** بـ`all_objects` (تشمل 45 محذوفاً ناعماً)، والملفُّ
+صدَّر **13,194** — فالفارقُ 45 متوقَّعٌ لا عطب.
+
 **وإشاراتٌ ثانويّة (قراءةٌ فقط):**
 ```bash
 find / -xdev -name 'lettersys_data*.json' -printf '%TY-%Tm-%Td %TH:%TM %s %p\n' 2>/dev/null
