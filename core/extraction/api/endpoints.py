@@ -42,6 +42,7 @@ from core.models import (
     SuggestionItem,
     ExtractionStatistics,
 )
+from core.scoping import user_department_id
 from core.extraction.kinds import BOOK_KIND_LABELS, DEFAULT_BOOK_KIND, get_kind_label, normalize_book_kind
 logger = logging.getLogger(__name__)
 
@@ -308,6 +309,7 @@ def smart_extract_direct(request):
     upload = request.FILES.get('file')
     # نوعُ الكتاب من التبويب — بدونه تعمل خطّةُ اتّجاه الجهات عمياء (E‑100)
     _book_kind = normalize_book_kind(request.POST.get('book_kind'), default=None) or ''
+    _dept = user_department_id(request.user)   # افتراضُ القسم لجهة الصادر
     if not upload:
         logger.warning("[smart_extract_direct] No file uploaded")
         return _api_response(False, 'file is required', status_code=status.HTTP_400_BAD_REQUEST, error_code='MISSING_FILE')
@@ -337,7 +339,7 @@ def smart_extract_direct(request):
         try:
             logger.info("[smart_extract_direct] Starting AI processing...")
             service = AIExtractionService()
-            result = service.process_image(temp_path, book_kind=_book_kind)
+            result = service.process_image(temp_path, book_kind=_book_kind, department_id=_dept)
             if getattr(result, 'status', '') == 'failed':
                 # رسالة خطأ مفهومة للمستخدم من pipeline
                 user_msg = getattr(result, 'user_message', '') or 'تعذر معالجة الملف'
@@ -462,6 +464,7 @@ def smart_extract_stream(request):
     upload = request.FILES.get('file')
     # نوعُ الكتاب من التبويب — بدونه تعمل خطّةُ اتّجاه الجهات عمياء (E‑100)
     _book_kind = normalize_book_kind(request.POST.get('book_kind'), default=None) or ''
+    _dept = user_department_id(request.user)   # افتراضُ القسم لجهة الصادر
     if not upload:
         return JsonResponse({'ok': False, 'error': 'file مطلوب'}, status=400)
     if upload.content_type not in {'image/jpeg', 'image/png', 'application/pdf'}:
@@ -490,7 +493,7 @@ def smart_extract_stream(request):
 
         def _work():
             try:
-                box['result'] = AIExtractionService().process_image(temp_path, book_kind=_book_kind, on_progress=_on_progress)
+                box['result'] = AIExtractionService().process_image(temp_path, book_kind=_book_kind, department_id=_dept, on_progress=_on_progress)
             except Exception as exc:              # noqa: BLE001 — يُبلَّغ للعميل كسطر خطأ
                 logger.exception('[extract-stream] فشل الاستخراج')
                 box['error'] = str(exc)

@@ -48,7 +48,7 @@ for r in rows:
     rec = {'book': b.id, 'kind': kind}
     arms = {
         'issuer_full': (svc.resolve_entity_candidates('issuer', text, kind, recipient, register, cands,
-                                                      exclude_book_id=b.id), r['truth']),
+                                                      exclude_book_id=b.id, department_id=b.department_id), r['truth']),
         'issuer_memory_only': (svc.entity_matcher.match_from_memory(text, entity_type='issuer', top_k=3,
                                                                     exclude_book_id=b.id), r['truth']),
     }

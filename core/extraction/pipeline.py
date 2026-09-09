@@ -675,7 +675,7 @@ class AIExtractionService:
             return []
 
     def resolve_entity_candidates(self, etype, cleaned, kind, recipient_text, register_code,
-                                  entity_candidates, exclude_book_id=None):
+                                  entity_candidates, exclude_book_id=None, department_id=None):
         """ترتيب مصادر الجهة **بحسب اتّجاه الكتاب** — أفضلُ ثلاثةٍ مرشَّحين.
 
         كانت مُغلَقةً داخل `_process_image_internal` فلا تُقاس إلّا بتشغيل الأنبوب
@@ -710,6 +710,17 @@ class AIExtractionService:
         if etype == 'issuer' and register_code:
             _extend(lambda: self.entity_matcher.match_by_register_code(
                 register_code, entity_type='issuer'), 'register_code')
+        if etype == 'issuer' and department_id and str(kind or '').startswith('outgoing'):
+            # **افتراضُ القسم** (مقيس 2026-09-08، ترك‑واحد على 2,896 صادراً داخليّاً): الصادرُ
+            # مُصدِرُه وحدةٌ من قسم الكاتب المسجِّل — معلومةٌ يملكها النظامُ من الحساب لا من
+            # الصفحة (الوحداتُ الشقيقة تتقاسم ترويسةً واحدة فتتعادل عند الذاكرة: 32%).
+            # بالتواتر داخل (القسم، النوع): top‑1 41.9% · top‑3 66.5% · top‑5 86.9%.
+            # يلي رمزَ السجلّ (معرِّفٌ مسجَّل) ويسبق الذاكرةَ. الواردُ لا يُمسّ.
+            _extend(lambda: [
+                {'entity_id': eid, 'entity_name': name, 'entity_code': '', 'entity_type': 'issuer',
+                 'score': max(60.0 - 10.0 * i, 20.0), 'match_type': 'department_prior'}
+                for i, (eid, name, _n) in enumerate(dominant_issuing_entities(department_id, kind))
+            ], 'department_prior')
         _plan = entity_source_plan(etype, str(kind or ''), bool(recipient_text))
         if 'recipient_line_first' in _plan:
             _extend(lambda: self.entity_matcher.match_entity(
@@ -1246,6 +1257,7 @@ class AIExtractionService:
         skip_ocr: bool = False,
         on_progress: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         book_kind: str = '',
+        department_id=None,
     ) -> AIExtractionResult:
         """
         Process single image through complete extraction pipeline.
@@ -1269,7 +1281,7 @@ class AIExtractionService:
         # تنفيذ المعالجة الداخلية مع حد زمني
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(
-                self._process_image_internal, image_path, skip_ocr, on_progress, book_kind
+                self._process_image_internal, image_path, skip_ocr, on_progress, book_kind, department_id
             )
             try:
                 return future.result(timeout=timeout_sec)
@@ -1289,6 +1301,7 @@ class AIExtractionService:
         skip_ocr: bool = False,
         on_progress: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         book_kind: str = '',
+        department_id=None,
     ) -> AIExtractionResult:
         """المعالجة الداخلية — تُستدعى داخل thread منفصل."""
 
@@ -1533,7 +1546,8 @@ class AIExtractionService:
                     entity_candidates,
                     # **للقياس فقط**: يُقصي صفَّ الكتاب نفسِه من تصويت الذاكرة عند
                     # تشغيل الأنبوب كاملاً على كتابٍ محفوظ. None في الإنتاج دائماً.
-                    exclude_book_id=getattr(self, '_eval_exclude_book_id', None))
+                    exclude_book_id=getattr(self, '_eval_exclude_book_id', None),
+                    department_id=department_id)
 
             def _assign_entity(matches, id_attr, name_attr, conf_attr, matches_attr):
                 if not matches:
@@ -1548,7 +1562,7 @@ class AIExtractionService:
                 #   ذاكرة (hit@1 ≈ 62%) → 0.85، ترويسة (≈ 11%) → 0.5، نمط صريح → كاملة.
                 #   بروفايل (top-1 ≈ 23% وحده) → 0.45 — اقتراحٌ يملأ فجوة الذاكرة لا يحسم.
                 cap = {'memory': 0.85, 'letterhead': 0.5, 'profile': 0.45,
-                       'kind_prior': 0.30}.get(best.get('match_type'))
+                       'kind_prior': 0.30, 'department_prior': 0.45}.get(best.get('match_type'))
                 setattr(result, conf_attr, min(score, cap) if cap else score)
 
             _assign_entity(_resolve_entity('issuer'), 'issuing_entity_id',
@@ -1911,6 +1925,7 @@ def prefer_jmc_committee(ranked: list, text: str) -> list:
 
 
 _DOMINANT_CACHE = {}
+_DOMINANT_ISS_CACHE = {}   # (department_id, kind, top_k) -> ([(id, name, n)], ts)
 
 
 def dominant_receiving_entity(kind: str):
@@ -1939,6 +1954,34 @@ def dominant_receiving_entity(kind: str):
         except Exception as exc:          # noqa: BLE001
             logger.warning('[pipeline] الوجهةُ السائدة تعذّرت (%s)', type(exc).__name__)
             return None
+
+
+def dominant_issuing_entities(department_id, kind: str, top_k: int = 3):
+    """[(id, name, n)] الجهاتُ المُصدِرة الأكثر تكراراً لصادر **هذا القسم** — ذاكرةُ تواترٍ حيّة.
+
+    مفتاحُها (القسم، النوع)؛ كلُّ حفظٍ يغذّيها وكلُّ تصحيحٍ ينقضها (كالوجهة السائدة).
+    تُحسب مرّةً كلَّ 10 دقائق لكلّ مفتاح، ولا يُحفَظ الفراغُ (قاعدةٌ فارغةٌ ثمّ مُحمَّلة)."""
+    kind = str(kind or '')
+    if not department_id or not kind:
+        return []
+    key = (int(department_id), kind, int(top_k))
+    _hit = _DOMINANT_ISS_CACHE.get(key)
+    if _hit is not None and (time.time() - _hit[1]) < 600:
+        return _hit[0]
+    try:
+        from django.db.models import Count
+        from core.models import Book
+        rows = (Book.objects.filter(is_deleted=False, kind=kind, department_id=department_id,
+                                    issuing_entities__isnull=False)
+                .values('issuing_entities__id', 'issuing_entities__name')
+                .annotate(n=Count('id')).order_by('-n')[:top_k])
+        val = [(r['issuing_entities__id'], r['issuing_entities__name'], r['n']) for r in rows]
+        if val:
+            _DOMINANT_ISS_CACHE[key] = (val, time.time())
+        return val
+    except Exception as exc:          # noqa: BLE001
+        logger.warning('[pipeline] افتراضُ القسم تعذّر (%s)', type(exc).__name__)
+        return []
 
 
 def entity_source_plan(etype: str, kind: str, has_recipient: bool) -> set:
