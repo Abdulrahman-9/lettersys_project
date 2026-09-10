@@ -1146,7 +1146,6 @@ class ExtractionSmartSystem {
         setVal('senderDate', dateOnly(data.sender_date));
         applySenderDateSuggestion(data);
         setVal('senderNumber', data.sender_number);
-        setVal('gmOfficeNumber', data.gm_office_number);
         setVal('title', data.title);
         applyTitleSuggestion(data);
         setVal('secretLevel', data.secret_level);
@@ -1343,11 +1342,6 @@ class ExtractionSmartSystem {
             this.applyNumberMode(kind, config, bookNumber);
         }
 
-        const gmOfficeGroup = document.getElementById('gmOfficeNumberGroup');
-        if (gmOfficeGroup) {
-            // رقمُ مكتب المدير العام للصادر الخارجيّ وحدَه (قراراتُ الدورة §3)
-            gmOfficeGroup.classList.toggle('is-hidden', kind !== 'outgoing_external');
-        }
         if (senderNumberGroup) {
             senderNumberGroup.classList.toggle('is-hidden', !config.showSenderFields);
         }
@@ -4968,9 +4962,6 @@ class ExtractionSmartSystem {
         formData.append('secret_level', document.getElementById('secretLevel')?.value || 'normal');
         formData.append('document_type', documentTypeValue || '');
         formData.append('margin', document.getElementById('margin')?.value || '');
-        if (kindValue === 'outgoing_external') {
-            formData.append('gm_office_number', document.getElementById('gmOfficeNumber')?.value || '');
-        }
         // الجهات كوسوم (معرّفات + أسماء جديدة) — مصدر موحّد لكلا الوضعين
         this._appendEntityIds(formData);
 

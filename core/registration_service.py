@@ -57,48 +57,6 @@ def register_book_here(book, department, *, by, direction=None, via_referral=Non
     return registration
 
 
-GM_OFFICE_NAME = 'مكتب المدير العام'
-
-
-def gm_office_department():
-    """قسمُ «مكتب المدير العام» في الشجرة — يُنشأ إن غاب (قراراتُ الدورة §1 و§3)."""
-    from core.models import Department
-    dept = Department.objects.filter(name=GM_OFFICE_NAME).first()
-    if dept is None:
-        dept = Department.objects.create(name=GM_OFFICE_NAME, code='ر-م.ع')
-    return dept
-
-
-def record_gm_office_number(book, number, *, by):
-    """**الاستثناءُ المعلَن** لقاعدة «لا رقمَ بيدٍ هنا»: الصادرُ الخارجيّ يحمل رقمَ
-    مكتب المدير العام كما أتى مثبتاً على الورقة («ش13/…» أو بلا رمز) — قيدٌ في
-    دفتر ذلك المكتب **بلا استهلاك أيّ سلسلة** (قراراتُ الدورة §3). فارغٌ ⟵ يُزال القيد.
-    يُعيد القيدَ أو None."""
-    from core.models import BookRegistration
-    from core.scoping import can_open_content
-    if not can_open_content(book, by):
-        raise PermissionDenied('لا تملك صلاحيةَ قيدِ هذا الكتاب.')
-    number = (number or '').strip()[:20]
-    dept = gm_office_department()
-    current = BookRegistration.objects.filter(book=book, department=dept).first()
-    with transaction.atomic():
-        if not number:
-            if current is not None:
-                current.delete()
-                _record(book, 'registered', by, 'أُزيل رقمُ مكتب المدير العام')
-            return None
-        if current is None:
-            current = BookRegistration.objects.create(
-                book=book, department=dept, direction=_direction_of(book),
-                number=number, registered_by=by)
-            _record(book, 'registered', by, 'رقمُ مكتب المدير العام: %s' % number)
-        elif current.number != number:
-            current.number = number
-            current.save(update_fields=['number'])
-            _record(book, 'registered', by, 'صُحّح رقمُ مكتب المدير العام إلى %s' % number)
-    return current
-
-
 def register_reply(original, reply_book, *, by, note=''):
     """يربط جواباً بأصله **ويُقفل الالتزامَ المفتوح المطابق**.
 
