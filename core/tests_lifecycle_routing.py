@@ -277,3 +277,34 @@ class DossierRollupTests(RoutingTestCase):
     def test_an_entity_without_a_twin_is_itself_only(self):
         from core.views.dossiers import dossier_entity_ids
         self.assertEqual(dossier_entity_ids(self.ebs.pk), [self.ebs.pk])
+
+
+class DossierYearFoldersTests(RoutingTestCase):
+    """§4.5 الملفّاتُ بالنوع ثمّ بالسنة: داخل ملفّ النوع تظهر السنواتُ حين تتعدّد، و?year يضيّق."""
+
+    def setUp(self):
+        from datetime import date
+        self.dept.entity = Entity.objects.create(name='قسم المتابعة (توأم)'); self.dept.save()
+        for y, t in ((2024, 'ألفٌ قديم'), (2025, 'باءٌ وسط'), (2026, 'جيمٌ جديد')):
+            b = self._book(title=t, date=date(y, 3, 1), document_type='كتاب')
+            b.receiving_entities.add(self.unit_reports.entity)
+        self.client.force_login(self.clerk)
+
+    def test_type_folder_shows_year_subfolders_then_rows(self):
+        url = reverse('dossier_detail', args=[self.unit_reports.entity_id])
+        r = self.client.get(url + '?document_type=كتاب')
+        self.assertContains(r, 'folder-grid-years')
+        for y in ('2024', '2025', '2026'):
+            self.assertContains(r, f'year={y}')
+        r = self.client.get(url + '?document_type=كتاب&year=2025')
+        self.assertNotContains(r, 'folder-grid-years')
+        self.assertContains(r, 'باءٌ وسط'); self.assertNotContains(r, 'ألفٌ قديم'); self.assertNotContains(r, 'جيمٌ جديد')
+        self.assertContains(r, 'sf-crumb')
+
+    def test_a_single_year_skips_the_year_level(self):
+        url = reverse('dossier_detail', args=[self.unit_budget.entity_id])
+        from datetime import date
+        b = self._book(title='وحيد', date=date(2026, 1, 1), document_type='كتاب')
+        b.receiving_entities.add(self.unit_budget.entity)
+        r = self.client.get(url + '?document_type=كتاب')
+        self.assertNotContains(r, 'folder-grid-years'); self.assertContains(r, 'وحيد')

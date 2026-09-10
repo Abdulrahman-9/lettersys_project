@@ -243,3 +243,10 @@ body:not(.dd-js) .dd-pane-title { display:block; }
   color: #fff;
 }
 .dd-tab.kind:focus-visible { outline: 2px solid var(--brand, #0f766e); outline-offset: 2px; }
+
+/* ── ملفّاتُ السنوات داخل النوع (قراراتُ الدورة §4.5) ── */
+.folder-card.year .fc-icon { color: #0f766e; }
+.folder-grid-years { margin-top: .25rem; }
+.sf-open .sf-crumb { color: inherit; text-decoration: none; }
+.sf-open .sf-crumb:hover { text-decoration: underline; }
+.sf-open .sf-sep { font-size: .8em; opacity: .6; margin: 0 2px; }
