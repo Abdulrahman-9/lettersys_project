@@ -3,6 +3,8 @@ from datetime import timedelta
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password, check_password
 from django.db import models
+
+from .fields import EncryptedCharField
 from django.utils import timezone
 
 from . import numbering
@@ -1329,66 +1331,11 @@ class SuggestionItem(models.Model):
 # =============================
 # AI Integration Settings
 # =============================
-class EncryptedFieldsMixin(models.Model):
-    """تشفيرٌ شفّاف لحقولٍ نصّيّة حسّاسة — مصدرٌ واحد للقاعدة.
-
-    كان النمط مكتوباً داخل ``EmailSettings`` وحدها، بينما ``azure_key`` نصٌّ صريح
-    في القاعدة — ازدواجُ معيارٍ في الملف نفسه. نسخُ النمط مرّةً ثانية كان
-    سيُثبّت الازدواج بدل أن يرفعه، فوُحِّد هنا.
-
-    العقد: القيمة في الذاكرة **دائماً** نصّ صريح، وفي القاعدة **دائماً** مشفّرة
-    ببادئة ``enc::``؛ والمشفَّر مسبقاً لا يُشفَّر مرّتين.
-
-    حدٌّ مقيس (``encrypt_text``): مدخلُ 32 محرفاً ⟵ 145، و84 ⟵ 209، و120 ⟵ 253.
-    فـ``max_length=255`` يسع كلّ مفاتيح Azure الواقعيّة (32 أو 84) بهامش، ويضيق
-    عند ~121 محرفاً فأكثر — عندها يلزم توسيع العمود بهجرة.
-    """
-
-    #: أسماء الحقول التي تُشفَّر — يعرّفها كل نموذج.
-    ENCRYPTED_FIELDS: tuple = ()
-
-    class Meta:
-        abstract = True
-
-    @classmethod
-    def from_db(cls, db, field_names, values):
-        from .encryption import decrypt_text, is_encrypted
-
-        instance = super().from_db(db, field_names, values)
-        for name in cls.ENCRYPTED_FIELDS:
-            value = getattr(instance, name, '')
-            if is_encrypted(value):
-                try:
-                    setattr(instance, name, decrypt_text(value))
-                except Exception:
-                    # مفتاحٌ مفقود أو مُبدَّل: نترك القيمة مشفّرة كما هي ليظهر
-                    # العطل عند الاستعمال، لا أن يُبتلع صامتاً هنا.
-                    pass
-        return instance
-
-    def save(self, *args, **kwargs):
-        from .encryption import encrypt_text, is_encrypted
-
-        plaintexts = {}
-        for name in self.ENCRYPTED_FIELDS:
-            value = getattr(self, name, '') or ''
-            if value and not is_encrypted(value):
-                plaintexts[name] = value
-                setattr(self, name, encrypt_text(value))
-
-        super().save(*args, **kwargs)
-
-        # نُعيد النصّ الصريح إلى الكائن كي يبقى صالحاً للاستعمال بعد الحفظ.
-        for name, plaintext in plaintexts.items():
-            setattr(self, name, plaintext)
-
-
-class AIIntegrationSettings(EncryptedFieldsMixin):
+class AIIntegrationSettings(models.Model):
     """إعدادات ربط مزودات الذكاء الاصطناعي عبر الإنترنت.
     نخزّن اختيار المزود والمفاتيح ونمط العمل (تعطيل/تمكين/بديل عند ثقة منخفضة).
     """
 
-    ENCRYPTED_FIELDS = ('azure_key',)
 
     PROVIDER_CHOICES = (
         ('offline', 'Offline (EasyOCR)'),
@@ -1408,7 +1355,7 @@ class AIIntegrationSettings(EncryptedFieldsMixin):
 
     # Azure fields
     azure_endpoint = models.CharField(max_length=255, blank=True, help_text='مثال: https://<res>.cognitiveservices.azure.com')
-    azure_key = models.CharField(max_length=255, blank=True)
+    azure_key = EncryptedCharField(max_length=255, blank=True)
 
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2567,13 +2514,12 @@ class BackupSettings(models.Model):
 # ══════════════════════════════════════════════════════════════════
 #  إعدادات البريد الإلكتروني للمؤسسة (Singleton)
 # ══════════════════════════════════════════════════════════════════
-class EmailSettings(EncryptedFieldsMixin):
+class EmailSettings(models.Model):
     """
     إعدادات SMTP الخاصة بالمؤسسة — سجل وحيد (Singleton).
     يُفعَّل/يُعطَّل الإرسال من هنا دون تعديل settings.py.
     """
 
-    ENCRYPTED_FIELDS = ('smtp_password', 'imap_password')
 
     # ── هوية المؤسسة (تُستخدم في ترويسة التقارير المطبوعة + البريد) ──
     org_name        = models.CharField("اسم الشركة/المؤسسة", max_length=200, default="")
@@ -2594,7 +2540,7 @@ class EmailSettings(EncryptedFieldsMixin):
     smtp_use_tls    = models.BooleanField("TLS", default=True)
     smtp_use_ssl    = models.BooleanField("SSL", default=False)
     smtp_user       = models.CharField("المستخدم", max_length=200, blank=True, default="")
-    smtp_password   = models.CharField("كلمة المرور", max_length=200, blank=True, default="",
+    smtp_password   = EncryptedCharField("كلمة المرور", max_length=200, blank=True, default="",
                                        help_text="تُخزَّن مشفرة")
 
     # ── IMAP (استقبال الردود) ──
@@ -2603,7 +2549,8 @@ class EmailSettings(EncryptedFieldsMixin):
     imap_port        = models.PositiveSmallIntegerField("منفذ IMAP", default=993)
     imap_use_ssl     = models.BooleanField("SSL للـ IMAP", default=True)
     imap_user        = models.CharField("مستخدم IMAP", max_length=200, blank=True, default="")
-    imap_password    = models.CharField("كلمة مرور IMAP", max_length=200, blank=True, default="")
+    imap_password    = EncryptedCharField("كلمة مرور IMAP", max_length=200, blank=True, default="",
+                                          help_text="تُخزَّن مشفرة")
     imap_folder      = models.CharField("المجلد", max_length=100, blank=True, default="INBOX")
     imap_sync_enabled = models.BooleanField("تفعيل استقبال الردود تلقائياً", default=False)
     imap_last_sync   = models.DateTimeField("آخر مزامنة", null=True, blank=True)
