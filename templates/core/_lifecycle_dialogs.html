@@ -38,8 +38,16 @@
         </fieldset>
 
         <div class="mb-3">
+          {# هامشان لشخصين (قراراتُ الدورة §2): هامشُ المدير العام على الكتاب يُقرأ هنا،
+             وهامشُ مدير القسم يُكتب أدناه — لا يُنسَخ أحدُهما إلى الآخر #}
+          {% if book.margin %}
+          <div class="alert alert-light border small py-2 mb-2" id="distGmMargin">
+            <div class="text-muted" style="font-size:.75rem">هامشُ المدير العام على الكتاب</div>
+            <div>{{ book.margin }}</div>
+          </div>
+          {% endif %}
           <label for="distMargin" class="form-label" style="font-size:.85rem">
-            التوجيه / الهامش
+            هامشُ مدير القسم (التوجيه إلى الوحدات — مشتركٌ ما لم يُخصَّص لوحدة)
           </label>
           <textarea class="form-control form-control-sm" id="distMargin" rows="2"
                     placeholder="أعدّوا مذكّرةً بالتخصيصات المطلوبة"></textarea>

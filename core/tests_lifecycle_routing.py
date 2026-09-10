@@ -193,3 +193,17 @@ class ReplyClosesReferralTests(RoutingTestCase):
                              content_type='application/json')
         self.assertIn(r.status_code, (200, 400))
         row.refresh_from_db(); self.assertEqual(row.status, BookReferral.SENT)
+
+
+class TwoMarginsNamedTests(RoutingTestCase):
+    """§2 هامشان لشخصين: هامشُ المدير العام على الكتاب يُقرأ داخل حواريّة التفريق، وهامشُ
+    مدير القسم يُكتب فيها — لا يُنسَخ أحدُهما إلى الآخر."""
+
+    def test_the_dialog_shows_the_gm_margin_and_names_the_head_margin(self):
+        b = self._book(margin='قسم المتابعة — إجراء اللازم')
+        self.client.force_login(self.clerk)
+        r = self.client.get(reverse('book_detail', args=[b.pk]))
+        self.assertContains(r, 'id="distGmMargin"')
+        self.assertContains(r, 'هامشُ المدير العام على الكتاب')
+        self.assertContains(r, 'هامشُ مدير القسم')
+        self.assertNotContains(r, 'ملاحظات وهوامش')
