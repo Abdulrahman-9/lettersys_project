@@ -360,7 +360,7 @@
           <!-- قائمة التعليقات -->
           <div id="commentsList" class="comments-list">
               {% for comment in comments %}
-              <div class="comment-item" data-comment-id="{{ comment.id }}" data-can-edit="{% if comment.created_by == request.user or request.user.is_superuser %}true{% else %}false{% endif %}" data-author="{{ comment.created_by.username }}">
+              <div class="comment-item" data-comment-id="{{ comment.id }}" data-can-edit="{% if comment.can_edit %}true{% else %}false{% endif %}" data-author="{{ comment.created_by.username }}">
                 <div class="comment-header d-flex justify-content-between align-items-start mb-2">
                   <div class="d-flex align-items-center gap-2">
                     <div class="comment-avatar">
@@ -381,7 +381,7 @@
                       </small>
                     </div>
                   </div>
-                  {% if comment.created_by == request.user or request.user.is_superuser %}
+                  {% if comment.can_edit %}
                   <div class="comment-actions dropdown">
                     <button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown" aria-label="إجراءات التعليق">
                       <i class="bi bi-three-dots-vertical"></i>

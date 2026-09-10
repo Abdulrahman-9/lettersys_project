@@ -18,6 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from ..forms import AttachmentForm
 from ..models import Attachment, Book, BookHistory
+from .comments import can_edit_comment
 from core.scoping import (
     ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_open_content, can_view_book,
     is_privileged, secret_access,
@@ -127,7 +128,9 @@ def book_detail(request, pk):
 
     # الـ Prefetch أعلاه يُرشّح is_deleted=False مسبقاً؛ نستخدم .all() لإعادة استخدام كاش الـ prefetch
     attachments = book.attachments.all()
-    comments = book.comments.select_related('created_by').all()
+    comments = list(book.comments.select_related('created_by').all())
+    for c in comments:
+        c.can_edit = can_edit_comment(request.user, c)
 
     return render(
         request,
@@ -308,7 +311,9 @@ def book_report(request, pk):
     from core.audit_service import record_event
     record_event(request, 'PRINT', book=book)
 
-    comments = book.comments.select_related("created_by").order_by("created_at")
+    comments = list(book.comments.select_related("created_by").order_by("created_at"))
+    for c in comments:
+        c.can_edit = can_edit_comment(request.user, c)
     email_logs = BookEmailLog.objects.filter(book=book).order_by("sent_at")
     history = list(book.history.all())  # مُرتَّب تصاعدياً (أقدم → أحدث) عبر الـ prefetch
 

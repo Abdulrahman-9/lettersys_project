@@ -162,7 +162,7 @@
               <span>سلة المهملات</span>
             </a>
             {% endif %}
-            {% if request.user.is_staff %}
+            {% if nav.admin %}
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'entity_list' or request.resolver_match.url_name == 'entity_detail' or request.resolver_match.url_name == 'entity_create' or request.resolver_match.url_name == 'entity_edit' %} active{% endif %}" href="{% url 'entity_list' %}" title="الجهات">
               <i class="bi bi-buildings"></i>
               <span>الجهات</span>

@@ -387,7 +387,7 @@
       <i class="bi bi-pencil-square"></i>
       <span>إنشاء رسالة</span>
     </a>
-    {% if request.user.is_staff %}
+    {% if nav.admin %}
     <a href="{% url 'mail_templates' %}" class="mail-tab {% if active_tab == 'templates' or active_tab == 'template_edit' %}active{% endif %}">
       <i class="bi bi-file-earmark-richtext"></i>
       <span>القوالب</span>
@@ -550,7 +550,7 @@
         <span class="mail-tab-badge badge-danger">{{ unread_count }} غير مقروء</span>
         {% endif %}
       </div>
-      {% if request.user.is_staff %}
+      {% if can_sync_mail %}
       <button class="btn btn-sm" id="syncBtn"
               style="background:rgba(248,218,192,.7);border:1px solid var(--warm-clay);border-radius:8px;font-weight:700;font-size:.82rem;color:var(--deep-brown)"
               onclick="triggerSync()">
@@ -638,7 +638,7 @@
     <div class="alert alert-warning d-flex align-items-center gap-2" style="border-radius:10px;font-size:.87rem">
       <i class="bi bi-exclamation-triangle-fill"></i>
       <span>خدمة البريد غير مفعّلة.
-        {% if request.user.is_staff %}
+        {% if nav.admin %}
         <a href="{% url 'mail_settings' %}" class="fw-bold" style="color:var(--warm-clay)">افتح الإعدادات</a> لتكوين SMTP.
         {% else %}
         يرجى التواصل مع المدير.

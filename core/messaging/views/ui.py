@@ -188,10 +188,14 @@ def mail_inbox(request):
         IncomingEmail.objects.filter(is_read=False), request.user
     ).count()
 
+    from core.scoping import can_manage_system
+
     return render(request, 'core/mail/hub.html', {
         'active_tab':   'inbox',
         'page_obj':     page,
         'unread_count': unread_count,
+        # زرُّ «مزامنة الآن» بوّابةُ فعلٍ تُحسَب في العرض لا في القالب (§7.6).
+        'can_sync_mail': can_manage_system(request.user),
         'read_filter':  read_filter,
         'search':       search,
     })

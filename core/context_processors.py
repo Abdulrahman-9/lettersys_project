@@ -78,7 +78,7 @@ def nav_gates(request):
     if user is None or not user.is_authenticated:
         return {'nav': {}}
 
-    from core.scoping import can_archive, can_use_desk, can_view_audit
+    from core.scoping import can_archive, can_manage_system, can_use_desk, can_view_audit
 
     return {'nav': {
         'desk': can_use_desk(user),
@@ -88,4 +88,7 @@ def nav_gates(request):
         # `can_open_content`. فالأرشيفيُّ يستعيد ورقاً حُذف خطأً — وهو
         # عملُه — وكان الرابطُ محجوباً عنه بـ`is_staff` وحدَها.
         'trash': user.is_staff or can_archive(user),
+        # الجهاتُ والحسابات والنسخُ وقوالبُ البريد — كانت `is_staff` مكتوبةً في
+        # القالب مباشرةً (خرقُ §7.6)؛ الآن بوّابةٌ مسمّاةٌ يحرسها tests_wiring.
+        'admin': can_manage_system(user),
     }}
