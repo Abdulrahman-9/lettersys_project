@@ -1,485 +1,28 @@
 {
- "2": {
-  "name": "مكتب معاون المدير العام للشؤون الادارية",
-  "books": 45,
-  "entity_code": "ش.م.د",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 45,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 4,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.7,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.4372692441657958,
-   "y": 0.2629507389162562,
-   "n": 29
-  }
- },
- "3": {
-  "name": "مكتب معاون المدير العام للشؤون الفنية",
-  "books": 53,
-  "entity_code": "ش.م.ف",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 52,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 5,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.51,
-  "title_arabic_ratio": 0.96,
-  "number_label_prior": {
-   "x": 0.4712373737373737,
-   "y": 0.1938892857142857,
-   "n": 40
-  }
- },
- "4": {
-  "name": "القسم القانوني",
-  "books": 135,
-  "entity_code": "ش3",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 134,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.46,
-  "title_arabic_ratio": 0.97,
-  "number_label_prior": {
-   "x": 0.362260906941758,
-   "y": 0.18705015197568392,
-   "n": 94
-  }
- },
- "5": {
-  "name": "الهيأة المالية",
-  "books": 92,
-  "entity_code": "م",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 92,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.84,
-  "title_arabic_ratio": 0.95,
-  "number_label_prior": {
-   "x": 0.3717171717171718,
-   "y": 0.2248944099378882,
-   "n": 23
-  }
- },
- "6": {
-  "name": "مكتب السيد المدير العام",
-  "books": 99,
-  "entity_code": "ش",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 94,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 5,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "اعمام",
-  "doc_type_top_ratio": 0.43,
-  "title_arabic_ratio": 0.99,
-  "number_label_prior": {
-   "x": 0.3175446775446774,
-   "y": 0.21072161172161172,
-   "n": 39
-  }
- },
- "7": {
-  "name": "قسم الصحة والسلامة المهنية والبيئة",
-  "books": 199,
-  "entity_code": "ش8",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 199,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 6,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.62,
-  "title_arabic_ratio": 0.99,
-  "number_label_prior": {
-   "x": 0.32515555555555553,
-   "y": 0.16981714285714286,
-   "n": 75
-  }
- },
- "8": {
-  "name": "قسم المتابعة",
-  "books": 11,
-  "entity_code": "ش13",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 10,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 5,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 0.91,
-  "number_label_prior": {
-   "x": 0.27090909090909093,
-   "y": 0.17725,
-   "n": 4
-  }
- },
- "9": {
-  "name": "قسم الرقابة والتدقيق الداخلي",
-  "books": 40,
-  "entity_code": "ش2",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 40,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.79,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.29823185275190134,
-   "y": 0.15667857142857142,
-   "n": 24
-  }
- },
- "10": {
-  "name": "قسم الفحص الهندسي",
-  "books": 39,
-  "entity_code": "ش7",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 39,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.97,
-  "title_arabic_ratio": 0.72,
-  "number_label_prior": {
-   "x": 0.34345454545454546,
-   "y": 0.25302142857142856,
-   "n": 20
-  }
- },
- "19": {
-  "name": "وحدة الارشفة",
-  "books": 5,
+ "245": {
+  "name": "قسم نقل الملكية",
+  "books": 3,
   "entity_code": null,
-  "lang": "ar",
-  "number_grammar": null,
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
+  "lang": null,
+  "number_grammar": {
+   "n": 3,
+   "digits_ratio": 1.0,
+   "digit_len_min": 4,
+   "digit_len_max": 5,
+   "digit_len_mode": 5
+  },
+  "doc_type_top": "مراسلة خارجية",
+  "doc_type_top_ratio": 0.67,
   "title_arabic_ratio": 1.0,
   "number_label_prior": null
  },
- "28": {
-  "name": "هيأة الحقول",
-  "books": 75,
-  "entity_code": "ح",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 74,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 4,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.84,
-  "title_arabic_ratio": 0.56,
-  "number_label_prior": {
-   "x": 0.4376553412917049,
-   "y": 0.20989177489177493,
-   "n": 33
-  }
- },
- "29": {
-  "name": "الهيأة الهندسية",
-  "books": 39,
-  "entity_code": "ه",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 39,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 4,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.86,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.5060134680134681,
-   "y": 0.2389380952380953,
-   "n": 30
-  }
- },
- "32": {
-  "name": "هياة ادارة وتنمية الموارد البشرية",
-  "books": 740,
-  "entity_code": "د",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 399,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "امر اداري",
-  "doc_type_top_ratio": 0.34,
-  "title_arabic_ratio": 0.98,
-  "number_label_prior": {
-   "x": 0.420513617436694,
-   "y": 0.17318371372217534,
-   "n": 507
-  }
- },
- "37": {
-  "name": "قسم شؤون التراخيص البترولية",
-  "books": 2951,
-  "entity_code": "ش4",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 400,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 4,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.67,
-  "title_arabic_ratio": 0.82,
-  "number_label_prior": {
-   "x": 0.34441784691118976,
-   "y": 0.15896861327753462,
-   "n": 1502,
-   "seeded": true
-  }
- },
- "38": {
-  "name": "قسم العقود",
-  "books": 202,
-  "entity_code": "ش5",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 201,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.61,
-  "title_arabic_ratio": 0.92,
-  "number_label_prior": {
-   "x": 0.375038136466708,
-   "y": 0.18034110787172006,
-   "n": 98
-  }
- },
- "39": {
-  "name": "قسم رقابة عقود التراخيص البترولية",
-  "books": 489,
-  "entity_code": "ش6",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 400,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 6,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.79,
-  "title_arabic_ratio": 0.9,
-  "number_label_prior": {
-   "x": 0.34473295041922486,
-   "y": 0.18538001867413634,
-   "n": 306
-  }
- },
- "40": {
-  "name": "قسم قياسات نقل الملكية",
-  "books": 17,
-  "entity_code": "ش9",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 17,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 4,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.47,
-  "title_arabic_ratio": 0.71,
-  "number_label_prior": {
-   "x": 0.42363636363636364,
-   "y": 0.2603809523809524,
-   "n": 12
-  }
- },
- "41": {
-  "name": "قسم الاخراج الكمركي",
-  "books": 56,
-  "entity_code": "ش10",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 56,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 5,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.54,
-  "title_arabic_ratio": 0.79,
-  "number_label_prior": {
-   "x": 0.3667145135566188,
-   "y": 0.19659022556390976,
-   "n": 38
-  }
- },
- "43": {
-  "name": "لجنة الادارة المشتركة لحقل بدرة النفطي",
-  "books": 240,
-  "entity_code": "ل ب",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 239,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 4,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.69,
-  "title_arabic_ratio": 0.89,
-  "number_label_prior": {
-   "x": 0.45181865163260504,
-   "y": 0.12225647840531567,
-   "n": 215
-  }
- },
- "46": {
-  "name": "لجنة الادارة المشتركة المنطقة الجنوبية",
-  "books": 185,
-  "entity_code": "ل ج",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 185,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 5,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.63,
-  "title_arabic_ratio": 0.94,
-  "number_label_prior": {
-   "x": 0.5264048940105275,
-   "y": 0.18608249496981885,
-   "n": 142
-  }
- },
- "49": {
-  "name": "لجنة الادارة المشتركة لحقل المنصورية الغازي",
-  "books": 160,
-  "entity_code": "ل م",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 160,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 5,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.77,
-  "title_arabic_ratio": 0.83,
-  "number_label_prior": {
-   "x": 0.37895349895349895,
-   "y": 0.1659086229086229,
-   "n": 111
-  }
- },
- "50": {
-  "name": "اللجان",
-  "books": 226,
-  "entity_code": "ل",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 4,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 4,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.92,
-  "title_arabic_ratio": 0.88,
-  "number_label_prior": {
-   "x": 0.9096969696969697,
-   "y": 0.125,
-   "n": 1
-  }
- },
- "52": {
-  "name": "قسم حماية المنشات النفطية",
-  "books": 46,
-  "entity_code": "ح.م",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 45,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.53,
-  "title_arabic_ratio": 0.91,
-  "number_label_prior": {
-   "x": 0.2870383838383838,
-   "y": 0.1946914285714286,
-   "n": 25
-  }
- },
  "53": {
   "name": "شعبة ادارة الجودة",
-  "books": 53,
+  "books": 57,
   "entity_code": "ش.ج",
   "lang": "ar",
   "number_grammar": {
-   "n": 53,
+   "n": 57,
    "digits_ratio": 1.0,
    "digit_len_min": 2,
    "digit_len_max": 3,
@@ -494,41 +37,20 @@
    "n": 27
   }
  },
- "54": {
-  "name": "قسم تقنية المعلومات",
-  "books": 47,
-  "entity_code": "ش12",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 46,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 4,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.53,
-  "title_arabic_ratio": 0.96,
-  "number_label_prior": {
-   "x": 0.5529040404040405,
-   "y": 0.197125,
-   "n": 24
-  }
- },
  "55": {
   "name": "وحدة التقارير",
-  "books": 331,
+  "books": 367,
   "entity_code": "و.ت",
   "lang": "ar",
   "number_grammar": null,
   "doc_type_top": "مذكرة داخلية",
   "doc_type_top_ratio": 0.89,
-  "title_arabic_ratio": 0.62,
+  "title_arabic_ratio": 0.67,
   "number_label_prior": null
  },
  "56": {
   "name": "وحدة الموارد البشرية",
-  "books": 41,
+  "books": 65,
   "entity_code": "و.م.ب",
   "lang": "ar",
   "number_grammar": {
@@ -539,38 +61,17 @@
    "digit_len_mode": 4
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.92,
-  "title_arabic_ratio": 0.95,
+  "doc_type_top_ratio": 0.9,
+  "title_arabic_ratio": 0.94,
   "number_label_prior": null
- },
- "87": {
-  "name": "لجنة الادارة المشتركة لرقعة نفط خانة",
-  "books": 161,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 161,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 4,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.61,
-  "title_arabic_ratio": 0.93,
-  "number_label_prior": {
-   "x": 0.46680410664017224,
-   "y": 0.12719320843091345,
-   "n": 122
-  }
  },
  "95": {
   "name": "هيئة العمليات / قسم حقول الانبار",
-  "books": 96,
+  "books": 113,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 96,
+   "n": 113,
    "digits_ratio": 1.0,
    "digit_len_min": 2,
    "digit_len_max": 4,
@@ -583,27 +84,6 @@
    "x": 0.3131313131313132,
    "y": 0.1563894324853228,
    "n": 73
-  }
- },
- "96": {
-  "name": "هيئة العمليات /قسم عمليات المنطقة الجنوبية",
-  "books": 26,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 26,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 4,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.83,
-  "title_arabic_ratio": 0.88,
-  "number_label_prior": {
-   "x": 0.32915824915824915,
-   "y": 0.1820816326530612,
-   "n": 21
   }
  },
  "99": {
@@ -627,78 +107,822 @@
    "n": 5
   }
  },
- "90": {
-  "name": "لجنة الادارة المشتركة لحقل الاحدب",
-  "books": 185,
-  "entity_code": "ل ح",
-  "lang": "en",
-  "number_grammar": {
-   "n": 184,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 5,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.65,
-  "title_arabic_ratio": 0.98,
-  "number_label_prior": {
-   "x": 0.507807239057239,
-   "y": 0.1932559523809524,
-   "n": 144
-  }
- },
  "13": {
   "name": "شعبة متابعة تنفيذ الموازنة",
-  "books": 1040,
+  "books": 1247,
   "entity_code": "ش.ت",
   "lang": "ar",
   "number_grammar": null,
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.95,
-  "title_arabic_ratio": 0.74,
+  "doc_type_top_ratio": 0.93,
+  "title_arabic_ratio": 0.79,
   "number_label_prior": {
    "x": 0.2498989898989899,
    "y": 0.17057142857142857,
    "n": 1
   }
  },
- "101": {
-  "name": "هيئة عمليات قسم حقول الانبار",
-  "books": 14,
+ "148": {
+  "name": "هيئة العمليات / قسم الخطوط وحركة النفط",
+  "books": 11,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 14,
+   "n": 11,
    "digits_ratio": 1.0,
    "digit_len_min": 3,
    "digit_len_max": 4,
-   "digit_len_mode": 4
+   "digit_len_mode": 3
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.5,
-  "title_arabic_ratio": 1.0,
+  "doc_type_top_ratio": 1.0,
+  "title_arabic_ratio": 0.91,
   "number_label_prior": {
-   "x": 0.324040404040404,
-   "y": 0.15671428571428572,
+   "x": 0.6847979797979798,
+   "y": 0.3238214285714286,
    "n": 4
   }
  },
- "105": {
-  "name": "قسم عمليات المنطقة الجنوبية",
-  "books": 47,
+ "409": {
+  "name": "فريق التحليل الفني لعقود جولات التراخيص البترولية(الفريق الاول )",
+  "books": 5,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 47,
+   "n": 5,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 3,
+   "digit_len_mode": 2
+  },
+  "doc_type_top": "مذكرة داخلية/ سري",
+  "doc_type_top_ratio": 0.6,
+  "title_arabic_ratio": 0.8,
+  "number_label_prior": {
+   "x": 0.26545454545454544,
+   "y": 0.08085714285714286,
+   "n": 1
+  }
+ },
+ "411": {
+  "name": "فريق التحليل الفني لعطاءات عقود التراخيص البترولية (الفريق الثاني)",
+  "books": 15,
+  "entity_code": null,
+  "lang": "ar",
+  "number_grammar": {
+   "n": 15,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 2,
+   "digit_len_mode": 2
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.93,
+  "title_arabic_ratio": 0.93,
+  "number_label_prior": {
+   "x": 0.2817171717171717,
+   "y": 0.15285714285714286,
+   "n": 4
+  }
+ },
+ "438": {
+  "name": "فريق المشاهدة",
+  "books": 6,
+  "entity_code": null,
+  "lang": "ar",
+  "number_grammar": {
+   "n": 6,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 1,
+   "digit_len_mode": 1
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 1.0,
+  "title_arabic_ratio": 1.0,
+  "number_label_prior": {
+   "x": 0.8248484848484848,
+   "y": 0.17802857142857142,
+   "n": 5
+  }
+ },
+ "658": {
+  "name": "شعبة المتابعة الفنية / عكاس",
+  "books": 3,
+  "entity_code": null,
+  "lang": "ar",
+  "number_grammar": null,
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 1.0,
+  "title_arabic_ratio": 1.0,
+  "number_label_prior": null
+ },
+ "661": {
+  "name": "وحدة مشاريع المساهمة الاجتماعية والمادة 26",
+  "books": 373,
+  "entity_code": "و.م",
+  "lang": "ar",
+  "number_grammar": null,
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.94,
+  "title_arabic_ratio": 0.96,
+  "number_label_prior": null
+ },
+ "675": {
+  "name": "وحدة التعاقدات",
+  "books": 105,
+  "entity_code": "و.ت.ش",
+  "lang": "ar",
+  "number_grammar": null,
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.96,
+  "title_arabic_ratio": 0.54,
+  "number_label_prior": null
+ },
+ "691": {
+  "name": "فريق فتح عطاءات عقود جولات التراخيص",
+  "books": 8,
+  "entity_code": null,
+  "lang": null,
+  "number_grammar": {
+   "n": 8,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 2,
+   "digit_len_mode": 2
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 1.0,
+  "title_arabic_ratio": 0.75,
+  "number_label_prior": null
+ },
+ "2": {
+  "name": "مكتب معاون المدير العام للشؤون الادارية",
+  "books": 46,
+  "entity_code": "ش.م.د",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 46,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 4,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.71,
+  "title_arabic_ratio": 1.0,
+  "number_label_prior": {
+   "x": 0.4372692441657958,
+   "y": 0.2629507389162562,
+   "n": 29
+  }
+ },
+ "3": {
+  "name": "مكتب معاون المدير العام للشؤون الفنية",
+  "books": 59,
+  "entity_code": "ش.م.ف",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 58,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.49,
+  "title_arabic_ratio": 0.97,
+  "number_label_prior": {
+   "x": 0.4712373737373737,
+   "y": 0.1938892857142857,
+   "n": 40
+  }
+ },
+ "4": {
+  "name": "القسم القانوني",
+  "books": 150,
+  "entity_code": "ش3",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 149,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.49,
+  "title_arabic_ratio": 0.96,
+  "number_label_prior": {
+   "x": 0.362260906941758,
+   "y": 0.18705015197568392,
+   "n": 94
+  }
+ },
+ "5": {
+  "name": "الهيأة المالية",
+  "books": 130,
+  "entity_code": "م",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 130,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.76,
+  "title_arabic_ratio": 0.95,
+  "number_label_prior": {
+   "x": 0.3717171717171718,
+   "y": 0.2248944099378882,
+   "n": 23
+  }
+ },
+ "6": {
+  "name": "مكتب السيد المدير العام",
+  "books": 116,
+  "entity_code": "ش",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 110,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.48,
+  "title_arabic_ratio": 0.99,
+  "number_label_prior": {
+   "x": 0.3175446775446774,
+   "y": 0.21072161172161172,
+   "n": 39
+  }
+ },
+ "7": {
+  "name": "قسم الصحة والسلامة المهنية والبيئة",
+  "books": 230,
+  "entity_code": "ش8",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 230,
+   "digits_ratio": 1.0,
+   "digit_len_min": 3,
+   "digit_len_max": 6,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.64,
+  "title_arabic_ratio": 0.98,
+  "number_label_prior": {
+   "x": 0.32515555555555553,
+   "y": 0.16981714285714286,
+   "n": 75
+  }
+ },
+ "8": {
+  "name": "قسم المتابعة",
+  "books": 12,
+  "entity_code": "ش13",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 11,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 1.0,
+  "title_arabic_ratio": 0.92,
+  "number_label_prior": {
+   "x": 0.27090909090909093,
+   "y": 0.17725,
+   "n": 4
+  }
+ },
+ "9": {
+  "name": "قسم الرقابة والتدقيق الداخلي",
+  "books": 52,
+  "entity_code": "ش2",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 52,
+   "digits_ratio": 1.0,
+   "digit_len_min": 3,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.82,
+  "title_arabic_ratio": 1.0,
+  "number_label_prior": {
+   "x": 0.29823185275190134,
+   "y": 0.15667857142857142,
+   "n": 24
+  }
+ },
+ "10": {
+  "name": "قسم الفحص الهندسي",
+  "books": 61,
+  "entity_code": "ش7",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 61,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.93,
+  "title_arabic_ratio": 0.64,
+  "number_label_prior": {
+   "x": 0.34345454545454546,
+   "y": 0.25302142857142856,
+   "n": 20
+  }
+ },
+ "28": {
+  "name": "هيأة الحقول",
+  "books": 94,
+  "entity_code": "ح",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 93,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.84,
+  "title_arabic_ratio": 0.55,
+  "number_label_prior": {
+   "x": 0.4376553412917049,
+   "y": 0.20989177489177493,
+   "n": 33
+  }
+ },
+ "29": {
+  "name": "الهيأة الهندسية",
+  "books": 44,
+  "entity_code": "ه",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 44,
    "digits_ratio": 1.0,
    "digit_len_min": 1,
    "digit_len_max": 4,
    "digit_len_mode": 4
   },
-  "doc_type_top": "مراسلة خارجية",
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.85,
+  "title_arabic_ratio": 1.0,
+  "number_label_prior": {
+   "x": 0.5060134680134681,
+   "y": 0.2389380952380953,
+   "n": 30
+  }
+ },
+ "32": {
+  "name": "هياة ادارة وتنمية الموارد البشرية",
+  "books": 864,
+  "entity_code": "د",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 399,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.34,
+  "title_arabic_ratio": 1.0,
+  "number_label_prior": {
+   "x": 0.420513617436694,
+   "y": 0.17318371372217534,
+   "n": 507
+  }
+ },
+ "37": {
+  "name": "قسم شؤون التراخيص البترولية",
+  "books": 3605,
+  "entity_code": "ش4",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 400,
+   "digits_ratio": 1.0,
+   "digit_len_min": 3,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.68,
+  "title_arabic_ratio": 0.84,
+  "number_label_prior": {
+   "x": 0.34441784691118976,
+   "y": 0.15896861327753462,
+   "n": 1502,
+   "seeded": true
+  }
+ },
+ "38": {
+  "name": "قسم العقود",
+  "books": 225,
+  "entity_code": "ش5",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 224,
+   "digits_ratio": 1.0,
+   "digit_len_min": 3,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.6,
+  "title_arabic_ratio": 0.91,
+  "number_label_prior": {
+   "x": 0.375038136466708,
+   "y": 0.18034110787172006,
+   "n": 98
+  }
+ },
+ "39": {
+  "name": "قسم رقابة عقود التراخيص البترولية",
+  "books": 523,
+  "entity_code": "ش6",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 400,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 6,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.79,
+  "title_arabic_ratio": 0.9,
+  "number_label_prior": {
+   "x": 0.34473295041922486,
+   "y": 0.18538001867413634,
+   "n": 306
+  }
+ },
+ "40": {
+  "name": "قسم قياسات نقل الملكية",
+  "books": 28,
+  "entity_code": "ش9",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 28,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 4,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.54,
+  "title_arabic_ratio": 0.82,
+  "number_label_prior": {
+   "x": 0.42363636363636364,
+   "y": 0.2603809523809524,
+   "n": 12
+  }
+ },
+ "41": {
+  "name": "قسم الاخراج الكمركي",
+  "books": 59,
+  "entity_code": "ش10",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 59,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.56,
+  "title_arabic_ratio": 0.78,
+  "number_label_prior": {
+   "x": 0.3667145135566188,
+   "y": 0.19659022556390976,
+   "n": 38
+  }
+ },
+ "43": {
+  "name": "لجنة الادارة المشتركة لحقل بدرة النفطي",
+  "books": 288,
+  "entity_code": "ل ب",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 287,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.69,
+  "title_arabic_ratio": 0.9,
+  "number_label_prior": {
+   "x": 0.45181865163260504,
+   "y": 0.12225647840531567,
+   "n": 215
+  }
+ },
+ "46": {
+  "name": "لجنة الادارة المشتركة المنطقة الجنوبية",
+  "books": 217,
+  "entity_code": "ل ج",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 217,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.67,
+  "title_arabic_ratio": 0.93,
+  "number_label_prior": {
+   "x": 0.5264048940105275,
+   "y": 0.18608249496981885,
+   "n": 142
+  }
+ },
+ "49": {
+  "name": "لجنة الادارة المشتركة لحقل المنصورية الغازي",
+  "books": 182,
+  "entity_code": "ل م",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 182,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.78,
+  "title_arabic_ratio": 0.85,
+  "number_label_prior": {
+   "x": 0.37895349895349895,
+   "y": 0.1659086229086229,
+   "n": 111
+  }
+ },
+ "50": {
+  "name": "اللجان",
+  "books": 247,
+  "entity_code": "ل",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 4,
+   "digits_ratio": 1.0,
+   "digit_len_min": 3,
+   "digit_len_max": 4,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.93,
+  "title_arabic_ratio": 0.87,
+  "number_label_prior": {
+   "x": 0.9096969696969697,
+   "y": 0.125,
+   "n": 1
+  }
+ },
+ "52": {
+  "name": "قسم حماية المنشات النفطية",
+  "books": 60,
+  "entity_code": "ح.م",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 59,
+   "digits_ratio": 1.0,
+   "digit_len_min": 3,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
   "doc_type_top_ratio": 0.53,
-  "title_arabic_ratio": 0.28,
+  "title_arabic_ratio": 0.92,
+  "number_label_prior": {
+   "x": 0.2870383838383838,
+   "y": 0.1946914285714286,
+   "n": 25
+  }
+ },
+ "54": {
+  "name": "قسم تقنية المعلومات",
+  "books": 55,
+  "entity_code": "ش12",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 53,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 4,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.52,
+  "title_arabic_ratio": 0.96,
+  "number_label_prior": {
+   "x": 0.5529040404040405,
+   "y": 0.197125,
+   "n": 24
+  }
+ },
+ "90": {
+  "name": "لجنة الادارة المشتركة لحقل الاحدب",
+  "books": 231,
+  "entity_code": "ل ح",
+  "lang": "en",
+  "number_grammar": {
+   "n": 230,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.67,
+  "title_arabic_ratio": 0.97,
+  "number_label_prior": {
+   "x": 0.507807239057239,
+   "y": 0.1932559523809524,
+   "n": 144
+  }
+ },
+ "224": {
+  "name": "هيئة التخطيط و الدراسات",
+  "books": 100,
+  "entity_code": "ت",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 100,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "اعمام",
+  "doc_type_top_ratio": 0.47,
+  "title_arabic_ratio": 0.98,
+  "number_label_prior": {
+   "x": 0.324086846859956,
+   "y": 0.21559104161144976,
+   "n": 49
+  }
+ },
+ "92": {
+  "name": "لجنة الادارة المشتركة لحقلي (خشم الاحمر/انجانة)",
+  "books": 190,
+  "entity_code": "ل خ",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 189,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 5,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مراسلة خارجية",
+  "doc_type_top_ratio": 0.46,
+  "title_arabic_ratio": 0.99,
+  "number_label_prior": {
+   "x": 0.37336786670120004,
+   "y": 0.14823931623931622,
+   "n": 117
+  }
+ },
+ "31": {
+  "name": "هيئة العمليات",
+  "books": 81,
+  "entity_code": "ع",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 80,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 7,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.67,
+  "title_arabic_ratio": 0.95,
+  "number_label_prior": {
+   "x": 0.24818440818440818,
+   "y": 0.1952051282051282,
+   "n": 39
+  }
+ },
+ "30": {
+  "name": "هيئة الخدمات والمواد",
+  "books": 29,
+  "entity_code": "خ",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 28,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.59,
+  "title_arabic_ratio": 0.9,
+  "number_label_prior": {
+   "x": 0.31822222222222224,
+   "y": 0.2519142857142857,
+   "n": 5
+  }
+ },
+ "34": {
+  "name": "هيئة نفط واسط",
+  "books": 290,
+  "entity_code": "و",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 290,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.76,
+  "title_arabic_ratio": 0.92,
+  "number_label_prior": {
+   "x": 0.4767994409503844,
+   "y": 0.2007430368373766,
+   "n": 159
+  }
+ },
+ "35": {
+  "name": "هيئة تشغيل حقل المنصورية الغازي",
+  "books": 4,
+  "entity_code": "ت.م",
+  "lang": "ar",
+  "number_grammar": {
+   "n": 4,
+   "digits_ratio": 1.0,
+   "digit_len_min": 2,
+   "digit_len_max": 3,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.5,
+  "title_arabic_ratio": 1.0,
+  "number_label_prior": {
+   "x": 0.3545454545454545,
+   "y": 0.14333333333333334,
+   "n": 3
+  }
+ },
+ "87": {
+  "name": "لجنة الادارة المشتركة لرقعة نفط خانة",
+  "books": 193,
+  "entity_code": null,
+  "lang": "ar",
+  "number_grammar": {
+   "n": 193,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 4,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.64,
+  "title_arabic_ratio": 0.93,
+  "number_label_prior": {
+   "x": 0.46680410664017224,
+   "y": 0.12719320843091345,
+   "n": 122
+  }
+ },
+ "105": {
+  "name": "قسم عمليات المنطقة الجنوبية",
+  "books": 77,
+  "entity_code": null,
+  "lang": "ar",
+  "number_grammar": {
+   "n": 77,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 4,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.58,
+  "title_arabic_ratio": 0.52,
   "number_label_prior": {
    "x": 0.290563973063973,
    "y": 0.15122619047619043,
@@ -707,11 +931,11 @@
  },
  "115": {
   "name": "لجنة الادارة المشتركة لحقل شرقي بغداد الامتدادات الشمالية",
-  "books": 85,
+  "books": 99,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 85,
+   "n": 99,
    "digits_ratio": 1.0,
    "digit_len_min": 1,
    "digit_len_max": 3,
@@ -719,49 +943,28 @@
   },
   "doc_type_top": "مذكرة داخلية",
   "doc_type_top_ratio": 0.69,
-  "title_arabic_ratio": 0.96,
+  "title_arabic_ratio": 0.97,
   "number_label_prior": {
    "x": 0.46468013468013475,
    "y": 0.14575324675324672,
    "n": 66
   }
  },
- "119": {
-  "name": "نفط واسط",
-  "books": 19,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 19,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 4,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.7,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.49650953984287316,
-   "y": 0.20165079365079366,
-   "n": 18
-  }
- },
  "121": {
   "name": "لجنة الادارة المشتركة لحقل الفرات الاوسط",
-  "books": 54,
+  "books": 73,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 54,
+   "n": 73,
    "digits_ratio": 1.0,
    "digit_len_min": 1,
    "digit_len_max": 4,
    "digit_len_mode": 3
   },
-  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top": "مذكرة داخلية/ سري",
   "doc_type_top_ratio": 0.43,
-  "title_arabic_ratio": 0.94,
+  "title_arabic_ratio": 0.95,
   "number_label_prior": {
    "x": 0.651063011063011,
    "y": 0.12748979591836732,
@@ -770,18 +973,18 @@
  },
  "122": {
   "name": "لجنة الادارة المشتركة لرقعة خليصية",
-  "books": 121,
+  "books": 146,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 121,
+   "n": 145,
    "digits_ratio": 1.0,
    "digit_len_min": 1,
    "digit_len_max": 5,
    "digit_len_mode": 2
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.69,
+  "doc_type_top_ratio": 0.67,
   "title_arabic_ratio": 0.97,
   "number_label_prior": {
    "x": 0.6387243218703894,
@@ -791,19 +994,19 @@
  },
  "123": {
   "name": "لجنة الادارة المشتركة لمشروع الظفرية",
-  "books": 79,
+  "books": 81,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 79,
+   "n": 81,
    "digits_ratio": 1.0,
    "digit_len_min": 1,
    "digit_len_max": 3,
    "digit_len_mode": 2
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.79,
-  "title_arabic_ratio": 0.97,
+  "doc_type_top_ratio": 0.8,
+  "title_arabic_ratio": 0.98,
   "number_label_prior": {
    "x": 0.5517710437710438,
    "y": 0.12651999999999997,
@@ -812,19 +1015,19 @@
  },
  "127": {
   "name": "لجنة الادارة المشتركة للرقعة السابعة",
-  "books": 127,
+  "books": 257,
   "entity_code": null,
   "lang": "en",
   "number_grammar": {
-   "n": 127,
+   "n": 257,
    "digits_ratio": 1.0,
    "digit_len_min": 1,
    "digit_len_max": 3,
-   "digit_len_mode": 2
+   "digit_len_mode": 3
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.65,
-  "title_arabic_ratio": 0.93,
+  "doc_type_top_ratio": 0.57,
+  "title_arabic_ratio": 0.97,
   "number_label_prior": {
    "x": 0.5492342225675559,
    "y": 0.15405860805860797,
@@ -833,19 +1036,19 @@
  },
  "132": {
   "name": "لجنة الادارة المشتركة لمنطقة عقد زرباطية",
-  "books": 79,
+  "books": 115,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 79,
+   "n": 115,
    "digits_ratio": 1.0,
    "digit_len_min": 1,
    "digit_len_max": 4,
    "digit_len_mode": 2
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.56,
-  "title_arabic_ratio": 0.96,
+  "doc_type_top_ratio": 0.61,
+  "title_arabic_ratio": 0.97,
   "number_label_prior": {
    "x": 0.612829705505762,
    "y": 0.13094366197183088,
@@ -854,11 +1057,11 @@
  },
  "135": {
   "name": "لجنة الادارة المشتركة (رقعة القرنين)",
-  "books": 105,
+  "books": 130,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 105,
+   "n": 129,
    "digits_ratio": 1.0,
    "digit_len_min": 1,
    "digit_len_max": 5,
@@ -896,60 +1099,39 @@
  },
  "145": {
   "name": "الهيئة المالية / قسم حسابات العامة",
-  "books": 23,
+  "books": 37,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 23,
+   "n": 37,
    "digits_ratio": 1.0,
    "digit_len_min": 2,
    "digit_len_max": 4,
    "digit_len_mode": 4
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.91,
-  "title_arabic_ratio": 1.0,
+  "doc_type_top_ratio": 0.92,
+  "title_arabic_ratio": 0.97,
   "number_label_prior": {
    "x": 0.22848484848484849,
    "y": 0.32471428571428573,
    "n": 1
   }
  },
- "148": {
-  "name": "هيئة العمليات / قسم الخطوط وحركة النفط",
-  "books": 9,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 9,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 4,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.6847979797979798,
-   "y": 0.3238214285714286,
-   "n": 4
-  }
- },
  "151": {
   "name": "هيئة التخطيط و المتابعة / قسم التخطيط ودراسات المشاريع",
-  "books": 23,
+  "books": 37,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 23,
+   "n": 37,
    "digits_ratio": 1.0,
-   "digit_len_min": 4,
-   "digit_len_max": 4,
+   "digit_len_min": 2,
+   "digit_len_max": 5,
    "digit_len_mode": 4
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.61,
+  "doc_type_top_ratio": 0.7,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.46852974186307517,
@@ -957,42 +1139,21 @@
    "n": 9
   }
  },
- "157": {
-  "name": "السيد رئيس لجنة الادارة المشتركة لحقل نفط خانه",
-  "books": 5,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 5,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 4,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.865959595959596,
-   "y": 0.10785714285714286,
-   "n": 2
-  }
- },
  "159": {
   "name": "هيئة حقول ديالى",
-  "books": 14,
+  "books": 19,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 13,
+   "n": 18,
    "digits_ratio": 1.0,
    "digit_len_min": 3,
    "digit_len_max": 4,
    "digit_len_mode": 4
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 1.0,
+  "doc_type_top_ratio": 0.95,
+  "title_arabic_ratio": 0.95,
   "number_label_prior": {
    "x": 0.26467171717171717,
    "y": 0.1707857142857143,
@@ -1001,18 +1162,18 @@
  },
  "166": {
   "name": "لجنة الادارة المشتركة للرقعة الاستكشافية الثامنة",
-  "books": 4,
+  "books": 8,
   "entity_code": null,
   "lang": "en",
   "number_grammar": {
-   "n": 4,
+   "n": 8,
    "digits_ratio": 1.0,
    "digit_len_min": 3,
    "digit_len_max": 5,
    "digit_len_mode": 3
   },
-  "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.75,
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.5,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.8922222222222222,
@@ -1020,59 +1181,21 @@
    "n": 2
   }
  },
- "184": {
-  "name": "رئيس لجنة الادارة المشتركة لحقلي الخشم الاحمر - انجانة",
-  "books": 7,
-  "entity_code": null,
-  "lang": "en",
-  "number_grammar": {
-   "n": 6,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 5,
-   "digit_len_mode": 5
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.57,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.20133333333333336,
-   "y": 0.16617142857142855,
-   "n": 5
-  }
- },
- "185": {
-  "name": "الهيئة المالية / قسم الحسابات العامة",
-  "books": 12,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 12,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 4,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.92,
-  "title_arabic_ratio": 0.92,
-  "number_label_prior": null
- },
  "186": {
   "name": "هيئة الخدمات و المواد / قسم المخازن والسيطرة المخزنية",
-  "books": 10,
+  "books": 11,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 10,
+   "n": 11,
    "digits_ratio": 1.0,
    "digit_len_min": 2,
    "digit_len_max": 4,
    "digit_len_mode": 4
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.7,
-  "title_arabic_ratio": 0.9,
+  "doc_type_top_ratio": 0.73,
+  "title_arabic_ratio": 0.91,
   "number_label_prior": {
    "x": 0.4037710437710438,
    "y": 0.32147619047619047,
@@ -1081,18 +1204,18 @@
  },
  "187": {
   "name": "هيئة ادارة و تنمية الموارد البشرية / قسم التدريب والتطوير",
-  "books": 7,
+  "books": 10,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 7,
+   "n": 10,
    "digits_ratio": 1.0,
    "digit_len_min": 3,
    "digit_len_max": 4,
-   "digit_len_mode": 4
+   "digit_len_mode": 3
   },
-  "doc_type_top": "اعمام",
-  "doc_type_top_ratio": 0.57,
+  "doc_type_top": "مذكرة داخلية",
+  "doc_type_top_ratio": 0.6,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.4187878787878788,
@@ -1100,41 +1223,41 @@
    "n": 2
   }
  },
- "191": {
-  "name": "السيد رئيس لجنة الادارة المشتركة لرقعة القرنين",
-  "books": 3,
+ "196": {
+  "name": "الصادر السري المركزي",
+  "books": 6,
   "entity_code": null,
-  "lang": "ar",
+  "lang": null,
   "number_grammar": {
-   "n": 3,
+   "n": 6,
    "digits_ratio": 1.0,
    "digit_len_min": 3,
    "digit_len_max": 4,
    "digit_len_mode": 3
   },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
+  "doc_type_top": "مراسلة خارجية / سري",
+  "doc_type_top_ratio": 0.83,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
-   "x": 0.2776767676767677,
-   "y": 0.05014285714285714,
-   "n": 2
+   "x": 0.10727272727272727,
+   "y": 0.1392857142857143,
+   "n": 1
   }
  },
  "203": {
   "name": "وكيل الوزارة لشؤون الاستخراج",
-  "books": 3,
+  "books": 4,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 3,
+   "n": 4,
    "digits_ratio": 1.0,
    "digit_len_min": 4,
    "digit_len_max": 5,
-   "digit_len_mode": 5
+   "digit_len_mode": 4
   },
-  "doc_type_top": "طلب",
-  "doc_type_top_ratio": 0.67,
+  "doc_type_top": "مراسلة خارجية",
+  "doc_type_top_ratio": 0.5,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.298989898989899,
@@ -1165,18 +1288,18 @@
  },
  "206": {
   "name": "شركة الاستكشافات النفطية",
-  "books": 3,
+  "books": 4,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 3,
+   "n": 4,
    "digits_ratio": 1.0,
    "digit_len_min": 3,
    "digit_len_max": 5,
-   "digit_len_mode": 5
+   "digit_len_mode": 3
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.67,
+  "doc_type_top_ratio": 0.75,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.6331986531986532,
@@ -1205,83 +1328,20 @@
    "n": 2
   }
  },
- "226": {
-  "name": "هيئة التخطيط و الدراسات / قسم التخطيط ودراسات المشاريع",
-  "books": 13,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 13,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.85,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.24686868686868688,
-   "y": 0.2855714285714286,
-   "n": 1
-  }
- },
- "229": {
-  "name": "لجنة الادارة المشتركة لرقعة زرباطية",
-  "books": 17,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 17,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 3,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.88,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.5689646464646462,
-   "y": 0.13575892857142854,
-   "n": 16
-  }
- },
- "231": {
-  "name": "لجنة الادارة المشتركة للرقعة الاستكشافية السابعة",
-  "books": 60,
-  "entity_code": null,
-  "lang": "en",
-  "number_grammar": {
-   "n": 60,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 3,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.5,
-  "title_arabic_ratio": 0.93,
-  "number_label_prior": {
-   "x": 0.6405014430014431,
-   "y": 0.15073724489795928,
-   "n": 56
-  }
- },
  "233": {
   "name": "ادارة مشروع حقل عكاس بالجهد الوطني",
-  "books": 9,
+  "books": 11,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 9,
+   "n": 11,
    "digits_ratio": 1.0,
    "digit_len_min": 2,
    "digit_len_max": 3,
    "digit_len_mode": 3
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.89,
+  "doc_type_top_ratio": 0.91,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.4214718614718616,
@@ -1289,41 +1349,20 @@
    "n": 7
   }
  },
- "224": {
-  "name": "هيئة التخطيط و الدراسات",
-  "books": 86,
-  "entity_code": "ت",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 86,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 5,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "اعمام",
-  "doc_type_top_ratio": 0.52,
-  "title_arabic_ratio": 0.98,
-  "number_label_prior": {
-   "x": 0.324086846859956,
-   "y": 0.21559104161144976,
-   "n": 49
-  }
- },
  "178": {
   "name": "شركة نفط الواحة المحدودة",
-  "books": 129,
+  "books": 158,
   "entity_code": "nw",
   "lang": "en",
   "number_grammar": {
-   "n": 129,
+   "n": 158,
    "digits_ratio": 1.0,
    "digit_len_min": 3,
    "digit_len_max": 7,
    "digit_len_mode": 4
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.9,
+  "doc_type_top_ratio": 0.92,
   "title_arabic_ratio": 0.01,
   "number_label_prior": {
    "x": 0.22170436761986057,
@@ -1331,62 +1370,20 @@
    "n": 71
   }
  },
- "249": {
-  "name": "رئيس لجنة الادارة المشتركة لحقل بدرة النفطي",
-  "books": 3,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 3,
-   "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 3,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "تقرير",
-  "doc_type_top_ratio": 0.67,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.2878114478114478,
-   "y": 0.05604761904761905,
-   "n": 3
-  }
- },
- "263": {
-  "name": "السيد رئيس لجنة الادارة المشتركة لحقل الاحدب النفطي",
+ "265": {
+  "name": "لجنة احتساب النقاط للموظفين غير المستفيدين من قطع الاراضي",
   "books": 6,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
    "n": 6,
    "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 3,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.4004377104377104,
-   "y": 0.20869047619047618,
-   "n": 6
-  }
- },
- "265": {
-  "name": "لجنة احتساب النقاط للموظفين غير المستفيدين من قطع الاراضي",
-  "books": 5,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 5,
-   "digits_ratio": 1.0,
    "digit_len_min": 2,
    "digit_len_max": 3,
    "digit_len_mode": 3
   },
   "doc_type_top": "اعمام",
-  "doc_type_top_ratio": 0.8,
+  "doc_type_top_ratio": 0.83,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.527070707070707,
@@ -1396,18 +1393,18 @@
  },
  "283": {
   "name": "الامانة العامة لمجلس الوزراء",
-  "books": 6,
+  "books": 7,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 6,
+   "n": 7,
    "digits_ratio": 1.0,
    "digit_len_min": 4,
    "digit_len_max": 5,
    "digit_len_mode": 4
   },
-  "doc_type_top": "تقرير",
-  "doc_type_top_ratio": 0.25,
+  "doc_type_top": "مراسلة خارجية",
+  "doc_type_top_ratio": 0.4,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.8562121212121212,
@@ -1518,11 +1515,11 @@
  },
  "295": {
   "name": "cnooc",
-  "books": 13,
+  "books": 14,
   "entity_code": null,
   "lang": "en",
   "number_grammar": {
-   "n": 12,
+   "n": 13,
    "digits_ratio": 1.0,
    "digit_len_min": 4,
    "digit_len_max": 7,
@@ -1533,41 +1530,20 @@
   "title_arabic_ratio": 0.0,
   "number_label_prior": null
  },
- "299": {
-  "name": "GAZPROM",
-  "books": 21,
-  "entity_code": null,
-  "lang": "en",
-  "number_grammar": {
-   "n": 21,
-   "digits_ratio": 1.0,
-   "digit_len_min": 4,
-   "digit_len_max": 4,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 0.0,
-  "number_label_prior": {
-   "x": 0.44602020202020204,
-   "y": 0.20668571428571428,
-   "n": 5
-  }
- },
  "290": {
   "name": "EBS PETROLEUM COMPANY LIMITED",
-  "books": 155,
+  "books": 182,
   "entity_code": "ebs",
   "lang": "en",
   "number_grammar": {
-   "n": 24,
+   "n": 51,
    "digits_ratio": 0.88,
    "digit_len_min": 3,
    "digit_len_max": 8,
-   "digit_len_mode": 4
+   "digit_len_mode": 8
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.94,
+  "doc_type_top_ratio": 0.93,
   "title_arabic_ratio": 0.0,
   "number_label_prior": {
    "x": 0.8923232323232323,
@@ -1577,29 +1553,35 @@
  },
  "304": {
   "name": "NORTH  PETROLEUM",
-  "books": 4,
+  "books": 7,
   "entity_code": null,
   "lang": "en",
-  "number_grammar": null,
+  "number_grammar": {
+   "n": 4,
+   "digits_ratio": 1.0,
+   "digit_len_min": 4,
+   "digit_len_max": 7,
+   "digit_len_mode": 4
+  },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 1.0,
+  "doc_type_top_ratio": 0.83,
   "title_arabic_ratio": 0.0,
   "number_label_prior": null
  },
  "305": {
   "name": "وزارة النفط / الدائرة الفنية",
-  "books": 4,
+  "books": 6,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 4,
+   "n": 6,
    "digits_ratio": 1.0,
    "digit_len_min": 4,
    "digit_len_max": 5,
    "digit_len_mode": 4
   },
-  "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.67,
+  "doc_type_top": "مذكرة خارجية",
+  "doc_type_top_ratio": 0.4,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.8741414141414141,
@@ -1609,12 +1591,12 @@
  },
  "310": {
   "name": "qurnain petroleum",
-  "books": 32,
+  "books": 47,
   "entity_code": null,
   "lang": "en",
   "number_grammar": {
-   "n": 10,
-   "digits_ratio": 0.8,
+   "n": 25,
+   "digits_ratio": 0.88,
    "digit_len_min": 4,
    "digit_len_max": 8,
    "digit_len_mode": 8
@@ -1630,11 +1612,11 @@
  },
  "315": {
   "name": "nmf",
-  "books": 25,
+  "books": 27,
   "entity_code": null,
   "lang": "en",
   "number_grammar": {
-   "n": 25,
+   "n": 27,
    "digits_ratio": 1.0,
    "digit_len_min": 2,
    "digit_len_max": 6,
@@ -1651,19 +1633,19 @@
  },
  "318": {
   "name": "وزارة النفط / دائرة العقود والتراخيص البترولية",
-  "books": 79,
+  "books": 103,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 79,
+   "n": 103,
    "digits_ratio": 1.0,
    "digit_len_min": 2,
    "digit_len_max": 4,
    "digit_len_mode": 4
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.87,
-  "title_arabic_ratio": 0.92,
+  "doc_type_top_ratio": 0.9,
+  "title_arabic_ratio": 0.94,
   "number_label_prior": {
    "x": 0.7932228535353537,
    "y": 0.18763392857142858,
@@ -1693,18 +1675,18 @@
  },
  "320": {
   "name": "BADRA",
-  "books": 120,
+  "books": 174,
   "entity_code": null,
   "lang": "en",
   "number_grammar": {
-   "n": 120,
+   "n": 174,
    "digits_ratio": 1.0,
    "digit_len_min": 4,
    "digit_len_max": 5,
    "digit_len_mode": 4
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.97,
+  "doc_type_top_ratio": 0.98,
   "title_arabic_ratio": 0.0,
   "number_label_prior": {
    "x": 0.25294338736199196,
@@ -1714,18 +1696,18 @@
  },
  "321": {
   "name": "وزارة النفط / الدائرة القانونية",
-  "books": 3,
+  "books": 6,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 3,
+   "n": 6,
    "digits_ratio": 1.0,
    "digit_len_min": 4,
    "digit_len_max": 4,
    "digit_len_mode": 4
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.67,
+  "doc_type_top_ratio": 0.5,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.7278787878787879,
@@ -1735,11 +1717,11 @@
  },
  "322": {
   "name": "crescent petroleum dlyalawest llmltad",
-  "books": 5,
+  "books": 9,
   "entity_code": null,
   "lang": "en",
   "number_grammar": {
-   "n": 5,
+   "n": 9,
    "digits_ratio": 1.0,
    "digit_len_min": 2,
    "digit_len_max": 7,
@@ -1747,7 +1729,7 @@
   },
   "doc_type_top": "مراسلة خارجية",
   "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 0.6,
+  "title_arabic_ratio": 0.78,
   "number_label_prior": {
    "x": 0.17454545454545456,
    "y": 0.119,
@@ -1756,56 +1738,24 @@
  },
  "326": {
   "name": "وزارة النفط / الدائرة الاقتصادية",
-  "books": 26,
+  "books": 32,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 26,
+   "n": 32,
    "digits_ratio": 1.0,
    "digit_len_min": 3,
    "digit_len_max": 5,
    "digit_len_mode": 5
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.62,
-  "title_arabic_ratio": 0.73,
+  "doc_type_top_ratio": 0.69,
+  "title_arabic_ratio": 0.78,
   "number_label_prior": {
    "x": 0.6604224058769512,
    "y": 0.1376168831168831,
    "n": 22
   }
- },
- "328": {
-  "name": "وزارة النفط / شركة خطوط الانابيب النفطية",
-  "books": 3,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 3,
-   "digits_ratio": 1.0,
-   "digit_len_min": 4,
-   "digit_len_max": 5,
-   "digit_len_mode": 5
-  },
-  "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.67,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.5415353535353535,
-   "y": 0.15637142857142855,
-   "n": 5
-  }
- },
- "329": {
-  "name": "North Petroleum International Company Limited",
-  "books": 3,
-  "entity_code": null,
-  "lang": "en",
-  "number_grammar": null,
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.5,
-  "title_arabic_ratio": 0.0,
-  "number_label_prior": null
  },
  "331": {
   "name": "وزارة الكهرباء",
@@ -1851,19 +1801,19 @@
  },
  "334": {
   "name": "شركة خطوط الانابيب النفطية",
-  "books": 5,
+  "books": 10,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 5,
+   "n": 10,
    "digits_ratio": 1.0,
-   "digit_len_min": 5,
+   "digit_len_min": 4,
    "digit_len_max": 5,
    "digit_len_mode": 5
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.6,
-  "title_arabic_ratio": 1.0,
+  "doc_type_top_ratio": 0.7,
+  "title_arabic_ratio": 0.9,
   "number_label_prior": {
    "x": 0.844479957728133,
    "y": 0.18223809523809523,
@@ -1872,18 +1822,18 @@
  },
  "336": {
   "name": "وزارة النفط / الدائرة الادارية والمالية",
-  "books": 3,
+  "books": 4,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 3,
+   "n": 4,
    "digits_ratio": 1.0,
    "digit_len_min": 3,
    "digit_len_max": 4,
    "digit_len_mode": 4
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.33,
+  "doc_type_top_ratio": 0.5,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.7195454545454545,
@@ -1910,13 +1860,13 @@
  },
  "339": {
   "name": "وزارة النفط / مكتب ناب رئيس الوزراء لشؤون الطاقة وزير النفط",
-  "books": 3,
+  "books": 4,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 3,
+   "n": 4,
    "digits_ratio": 1.0,
-   "digit_len_min": 4,
+   "digit_len_min": 3,
    "digit_len_max": 5,
    "digit_len_mode": 5
   },
@@ -1929,20 +1879,37 @@
    "n": 2
   }
  },
- "347": {
-  "name": "وزارة النفط / دائرة المكائن وتطوير الحقول",
-  "books": 5,
+ "343": {
+  "name": "شركة شلمبرجير الشرق الاوسط",
+  "books": 37,
   "entity_code": null,
-  "lang": "ar",
+  "lang": null,
   "number_grammar": {
-   "n": 5,
+   "n": 36,
    "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 5,
+   "digit_len_min": 2,
+   "digit_len_max": 6,
    "digit_len_mode": 3
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.8,
+  "doc_type_top_ratio": 0.78,
+  "title_arabic_ratio": 0.27,
+  "number_label_prior": null
+ },
+ "347": {
+  "name": "وزارة النفط / دائرة المكائن وتطوير الحقول",
+  "books": 8,
+  "entity_code": null,
+  "lang": "ar",
+  "number_grammar": {
+   "n": 8,
+   "digits_ratio": 1.0,
+   "digit_len_min": 3,
+   "digit_len_max": 5,
+   "digit_len_mode": 4
+  },
+  "doc_type_top": "مراسلة خارجية",
+  "doc_type_top_ratio": 0.88,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.35649831649831654,
@@ -1952,13 +1919,13 @@
  },
  "348": {
   "name": "وزارة النفط / دائرة الدراسات والتخطيط والمتابعة",
-  "books": 3,
+  "books": 5,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 3,
+   "n": 5,
    "digits_ratio": 1.0,
-   "digit_len_min": 5,
+   "digit_len_min": 3,
    "digit_len_max": 5,
    "digit_len_mode": 5
   },
@@ -1971,26 +1938,22 @@
    "n": 3
   }
  },
- "354": {
-  "name": "CRESCENT PETROLEUM",
-  "books": 4,
+ "361": {
+  "name": "وزارة الكهرباء / مديرية الوقود",
+  "books": 3,
   "entity_code": null,
-  "lang": "en",
+  "lang": null,
   "number_grammar": {
-   "n": 4,
+   "n": 3,
    "digits_ratio": 1.0,
-   "digit_len_min": 3,
-   "digit_len_max": 3,
-   "digit_len_mode": 3
+   "digit_len_min": 4,
+   "digit_len_max": 4,
+   "digit_len_mode": 4
   },
   "doc_type_top": "مراسلة خارجية",
   "doc_type_top_ratio": 1.0,
   "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.3406060606060606,
-   "y": 0.071,
-   "n": 1
-  }
+  "number_label_prior": null
  },
  "363": {
   "name": "شركة المشاريع النفطية",
@@ -2013,11 +1976,11 @@
    "n": 2
   }
  },
- "364": {
-  "name": "Zurbatiya",
+ "367": {
+  "name": "وزارة النفط / دائرة التدريب والتطوير",
   "books": 4,
   "entity_code": null,
-  "lang": "en",
+  "lang": "ar",
   "number_grammar": {
    "n": 4,
    "digits_ratio": 1.0,
@@ -2027,49 +1990,11 @@
   },
   "doc_type_top": "مراسلة خارجية",
   "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 0.0,
-  "number_label_prior": null
- },
- "367": {
-  "name": "وزارة النفط / دائرة التدريب والتطوير",
-  "books": 3,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 3,
-   "digits_ratio": 1.0,
-   "digit_len_min": 4,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 0.67,
+  "title_arabic_ratio": 0.75,
   "number_label_prior": {
    "x": 0.3934343434343434,
    "y": 0.2237857142857143,
    "n": 2
-  }
- },
- "370": {
-  "name": "Slb",
-  "books": 17,
-  "entity_code": null,
-  "lang": "en",
-  "number_grammar": {
-   "n": 16,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 6,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.53,
-  "title_arabic_ratio": 0.29,
-  "number_label_prior": {
-   "x": 0.1223173867755911,
-   "y": 0.22871074380165288,
-   "n": 11
   }
  },
  "377": {
@@ -2091,12 +2016,12 @@
  },
  "369": {
   "name": "Zhongman",
-  "books": 72,
+  "books": 94,
   "entity_code": "zm",
   "lang": "en",
   "number_grammar": {
-   "n": 72,
-   "digits_ratio": 0.93,
+   "n": 94,
+   "digits_ratio": 0.94,
    "digit_len_min": 2,
    "digit_len_max": 7,
    "digit_len_mode": 3
@@ -2112,12 +2037,12 @@
  },
  "306": {
   "name": "NK Petroleum Company Limited",
-  "books": 97,
+  "books": 120,
   "entity_code": "nk",
   "lang": "en",
   "number_grammar": {
-   "n": 73,
-   "digits_ratio": 0.92,
+   "n": 96,
+   "digits_ratio": 0.93,
    "digit_len_min": 3,
    "digit_len_max": 8,
    "digit_len_mode": 7
@@ -2133,44 +2058,23 @@
  },
  "351": {
   "name": "Geo - Jade",
-  "books": 25,
+  "books": 34,
   "entity_code": "geo",
   "lang": "en",
   "number_grammar": {
-   "n": 24,
-   "digits_ratio": 0.96,
+   "n": 33,
+   "digits_ratio": 0.94,
    "digit_len_min": 4,
    "digit_len_max": 8,
    "digit_len_mode": 7
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.94,
-  "title_arabic_ratio": 0.2,
+  "doc_type_top_ratio": 0.92,
+  "title_arabic_ratio": 0.15,
   "number_label_prior": {
    "x": 0.7664217702060998,
    "y": 0.17960714285714285,
    "n": 4
-  }
- },
- "378": {
-  "name": "الدائرة الاقتصادية",
-  "books": 3,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 3,
-   "digits_ratio": 1.0,
-   "digit_len_min": 4,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.3753535353535354,
-   "y": 0.09478571428571428,
-   "n": 2
   }
  },
  "392": {
@@ -2187,23 +2091,6 @@
   },
   "doc_type_top": "مراسلة خارجية",
   "doc_type_top_ratio": 0.5,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": null
- },
- "394": {
-  "name": "فريق التحليل الفني لعقود جولات التراخيص البترولية(الفريق الثاني)",
-  "books": 5,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 5,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 2,
-   "digit_len_mode": 2
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
   "title_arabic_ratio": 1.0,
   "number_label_prior": null
  },
@@ -2228,6 +2115,27 @@
    "n": 3
   }
  },
+ "401": {
+  "name": "لجنة تقييم البحوث العلمية والتقارير الفنية وتنقية بحوث الدرجة الاولى",
+  "books": 3,
+  "entity_code": null,
+  "lang": null,
+  "number_grammar": {
+   "n": 3,
+   "digits_ratio": 1.0,
+   "digit_len_min": 1,
+   "digit_len_max": 3,
+   "digit_len_mode": 3
+  },
+  "doc_type_top": "اعمام",
+  "doc_type_top_ratio": 1.0,
+  "title_arabic_ratio": 1.0,
+  "number_label_prior": {
+   "x": 0.5223232323232323,
+   "y": 0.2975,
+   "n": 2
+  }
+ },
  "402": {
   "name": "لجنة دعم عوائل شهداء وجرحى الحشد الشعبي والمبادرات المجتعية",
   "books": 3,
@@ -2249,47 +2157,22 @@
    "n": 2
   }
  },
- "409": {
-  "name": "فريق التحليل الفني لعقود جولات التراخيص البترولية(الفريق الاول )",
-  "books": 5,
+ "407": {
+  "name": "اللجنة الفرعية لمكافحة التدخين",
+  "books": 3,
   "entity_code": null,
-  "lang": "ar",
+  "lang": null,
   "number_grammar": {
-   "n": 5,
+   "n": 3,
    "digits_ratio": 1.0,
    "digit_len_min": 1,
-   "digit_len_max": 3,
-   "digit_len_mode": 2
-  },
-  "doc_type_top": "مذكرة داخلية/ سري",
-  "doc_type_top_ratio": 0.6,
-  "title_arabic_ratio": 0.8,
-  "number_label_prior": {
-   "x": 0.26545454545454544,
-   "y": 0.08085714285714286,
-   "n": 1
-  }
- },
- "411": {
-  "name": "فريق التحليل الفني لعطاءات عقود التراخيص البترولية (الفريق الثاني)",
-  "books": 10,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 10,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 2,
-   "digit_len_mode": 2
+   "digit_len_max": 1,
+   "digit_len_mode": 1
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.9,
-  "title_arabic_ratio": 0.9,
-  "number_label_prior": {
-   "x": 0.2817171717171717,
-   "y": 0.15285714285714286,
-   "n": 4
-  }
+  "doc_type_top_ratio": 1.0,
+  "title_arabic_ratio": 1.0,
+  "number_label_prior": null
  },
  "424": {
   "name": "هيئة ادارة و تنمية الموارد البشرية / شعبة شؤون المرأة",
@@ -2312,35 +2195,14 @@
    "n": 2
   }
  },
- "438": {
-  "name": "فريق المشاهدة",
-  "books": 5,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 5,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 1,
-   "digit_len_mode": 1
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.8248484848484848,
-   "y": 0.17802857142857142,
-   "n": 5
-  }
- },
  "485": {
   "name": "الارشفة",
-  "books": 52,
+  "books": 59,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": null,
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.96,
+  "doc_type_top_ratio": 0.97,
   "title_arabic_ratio": 1.0,
   "number_label_prior": null
  },
@@ -2388,18 +2250,18 @@
  },
  "507": {
   "name": "ado digital energy dmcc",
-  "books": 69,
+  "books": 90,
   "entity_code": "ADE",
   "lang": "en",
   "number_grammar": {
-   "n": 69,
-   "digits_ratio": 1.0,
+   "n": 90,
+   "digits_ratio": 0.98,
    "digit_len_min": 2,
    "digit_len_max": 4,
    "digit_len_mode": 3
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.97,
+  "doc_type_top_ratio": 0.94,
   "title_arabic_ratio": 0.0,
   "number_label_prior": {
    "x": 0.8053030303030302,
@@ -2416,17 +2278,6 @@
   "doc_type_top": "مذكرة داخلية",
   "doc_type_top_ratio": 0.93,
   "title_arabic_ratio": 0.99,
-  "number_label_prior": null
- },
- "544": {
-  "name": "تنفيذموازنة",
-  "books": 3,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": null,
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 0.0,
   "number_label_prior": null
  },
  "553": {
@@ -2463,210 +2314,46 @@
  },
  "526": {
   "name": "الادارة",
-  "books": 282,
+  "books": 351,
   "entity_code": "follow-up2@mdoc.oil.gov.iq",
   "lang": "ar",
   "number_grammar": null,
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.91,
+  "doc_type_top_ratio": 0.92,
   "title_arabic_ratio": 1.0,
   "number_label_prior": null
  },
- "658": {
-  "name": "شعبة المتابعة الفنية / عكاس",
-  "books": 3,
+ "715": {
+  "name": "شركة تسويق النفط",
+  "books": 5,
   "entity_code": null,
-  "lang": "ar",
-  "number_grammar": null,
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": null
- },
- "668": {
-  "name": "وحدة لجان",
-  "books": 3,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": null,
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 0.0,
-  "number_label_prior": null
- },
- "670": {
-  "name": "وحدة مساهمة",
-  "books": 3,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": null,
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 1.0,
-  "title_arabic_ratio": 0.0,
-  "number_label_prior": null
- },
- "661": {
-  "name": "وحدة مشاريع المساهمة الاجتماعية والمادة 26",
-  "books": 316,
-  "entity_code": "و.م",
-  "lang": "ar",
-  "number_grammar": null,
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.94,
-  "title_arabic_ratio": 0.95,
-  "number_label_prior": null
- },
- "675": {
-  "name": "وحدة التعاقدات",
-  "books": 43,
-  "entity_code": "و.ت.ش",
-  "lang": "ar",
-  "number_grammar": null,
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.95,
-  "title_arabic_ratio": 0.42,
-  "number_label_prior": null
- },
- "92": {
-  "name": "لجنة الادارة المشتركة لحقلي (خشم الاحمر/انجانة)",
-  "books": 165,
-  "entity_code": "ل خ",
-  "lang": "ar",
+  "lang": null,
   "number_grammar": {
-   "n": 165,
+   "n": 5,
    "digits_ratio": 1.0,
-   "digit_len_min": 1,
+   "digit_len_min": 3,
    "digit_len_max": 5,
-   "digit_len_mode": 3
+   "digit_len_mode": 4
   },
   "doc_type_top": "مراسلة خارجية",
-  "doc_type_top_ratio": 0.5,
-  "title_arabic_ratio": 0.99,
-  "number_label_prior": {
-   "x": 0.37336786670120004,
-   "y": 0.14823931623931622,
-   "n": 117
-  }
- },
- "108": {
-  "name": "لجنة الادارة المشتركة لرقعة الخليصية",
-  "books": 6,
-  "entity_code": null,
-  "lang": "ar",
-  "number_grammar": {
-   "n": 6,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 5,
-   "digit_len_mode": 2
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.6,
+  "doc_type_top_ratio": 1.0,
   "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.47279461279461277,
-   "y": 0.2674761904761905,
-   "n": 3
-  }
- },
- "31": {
-  "name": "هيئة العمليات",
-  "books": 69,
-  "entity_code": "ع",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 68,
-   "digits_ratio": 1.0,
-   "digit_len_min": 1,
-   "digit_len_max": 7,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.68,
-  "title_arabic_ratio": 0.96,
-  "number_label_prior": {
-   "x": 0.24818440818440818,
-   "y": 0.1952051282051282,
-   "n": 39
-  }
- },
- "30": {
-  "name": "هيئة الخدمات والمواد",
-  "books": 18,
-  "entity_code": "خ",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 17,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.72,
-  "title_arabic_ratio": 0.94,
-  "number_label_prior": {
-   "x": 0.31822222222222224,
-   "y": 0.2519142857142857,
-   "n": 5
-  }
- },
- "34": {
-  "name": "هيئة نفط واسط",
-  "books": 219,
-  "entity_code": "و",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 219,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 5,
-   "digit_len_mode": 4
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.73,
-  "title_arabic_ratio": 0.93,
-  "number_label_prior": {
-   "x": 0.4767994409503844,
-   "y": 0.2007430368373766,
-   "n": 159
-  }
- },
- "35": {
-  "name": "هيئة تشغيل حقل المنصورية الغازي",
-  "books": 4,
-  "entity_code": "ت.م",
-  "lang": "ar",
-  "number_grammar": {
-   "n": 4,
-   "digits_ratio": 1.0,
-   "digit_len_min": 2,
-   "digit_len_max": 3,
-   "digit_len_mode": 3
-  },
-  "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.5,
-  "title_arabic_ratio": 1.0,
-  "number_label_prior": {
-   "x": 0.3545454545454545,
-   "y": 0.14333333333333334,
-   "n": 3
-  }
+  "number_label_prior": null
  },
  "156": {
   "name": "الهيئة المالية / قسم التكاليف والموازنة",
-  "books": 19,
+  "books": 22,
   "entity_code": null,
   "lang": "ar",
   "number_grammar": {
-   "n": 19,
+   "n": 22,
    "digits_ratio": 1.0,
    "digit_len_min": 1,
-   "digit_len_max": 4,
+   "digit_len_max": 5,
    "digit_len_mode": 4
   },
   "doc_type_top": "مذكرة داخلية",
-  "doc_type_top_ratio": 0.78,
+  "doc_type_top_ratio": 0.76,
   "title_arabic_ratio": 1.0,
   "number_label_prior": {
    "x": 0.26355555555555554,
