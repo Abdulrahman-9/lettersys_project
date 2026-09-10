@@ -207,3 +207,44 @@ class TwoMarginsNamedTests(RoutingTestCase):
         self.assertContains(r, 'هامشُ المدير العام على الكتاب')
         self.assertContains(r, 'هامشُ مدير القسم')
         self.assertNotContains(r, 'ملاحظات وهوامش')
+
+
+class GmOfficeNumberTests(RoutingTestCase):
+    """§3 الصادرُ الخارجيّ: رقمُ مكتب المدير العام قيدٌ في دفتره، يدويٌّ، لا يستهلك سلسلة؛
+    يُصحَّح ويُزال؛ ويعود في بيانات التعديل."""
+
+    def test_saving_an_outgoing_external_book_records_the_gm_office_number(self):
+        from core.models import BookRegistration, BookSequence
+        from core.registration_service import GM_OFFICE_NAME
+        before = BookSequence.objects.count()
+        self.client.force_login(self.clerk)
+        r = self.client.post(reverse('save-book-api'), {
+            'kind': 'outgoing_external', 'title': 'إلى EBS', 'our_number': '3201',
+            'date': '2026-09-11', 'gm_office_number': 'ش13/27189',
+            'receiving_entity_ids[]': [str(self.ebs.id)],
+        })
+        self.assertEqual(r.status_code, 201, r.content[:300])
+        book = Book.objects.get(title='إلى EBS')
+        reg = BookRegistration.objects.get(book=book, department__name=GM_OFFICE_NAME)
+        self.assertEqual(reg.number, 'ش13/27189')
+        self.assertEqual(BookSequence.objects.count(), before, 'قيدُ المكتب استهلك سلسلة')
+        self.assertEqual(book.our_number, '3201', 'رقمُنا يبقى رقمَ سجلّنا')
+        data = self.client.get(reverse('api_book_detail_json', args=[book.pk])).json()
+        self.assertEqual(data.get('gm_office_number'), 'ش13/27189')
+
+    def test_correct_and_remove(self):
+        from core.models import BookRegistration
+        from core.registration_service import GM_OFFICE_NAME, record_gm_office_number
+        b = Book.objects.create(kind='outgoing_external', title='ص', created_by=self.clerk,
+                                department=self.dept, our_number='3202')
+        record_gm_office_number(b, '109', by=self.clerk)
+        record_gm_office_number(b, '110', by=self.clerk)
+        self.assertEqual(BookRegistration.objects.get(book=b, department__name=GM_OFFICE_NAME).number, '110')
+        record_gm_office_number(b, '', by=self.clerk)
+        self.assertFalse(BookRegistration.objects.filter(book=b, department__name=GM_OFFICE_NAME).exists())
+
+    def test_the_input_page_has_the_field_hidden_by_default(self):
+        self.client.force_login(self.clerk)
+        r = self.client.get(reverse('extraction-smart-desktop'))
+        self.assertContains(r, 'id="gmOfficeNumberGroup"')
+        self.assertContains(r, 'id="gmOfficeNumber"')

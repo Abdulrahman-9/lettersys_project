@@ -42,6 +42,13 @@ from .books_helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _gm_office_number_of(book):
+    """رقمُ مكتب المدير العام إن قُيّد (الصادر الخارجيّ) — قراراتُ الدورة §3."""
+    from core.registration_service import GM_OFFICE_NAME
+    row = book.registrations.filter(department__name=GM_OFFICE_NAME).first()
+    return row.number if row else ''
+
+
 def _strip_sender_fields_for_outgoing(kind, sender_number, sender_date_str):
     """حقول الجهة المُرسِلة لا معنى لها في الصادر — تُفرَّغ **على الخادم**.
 
@@ -336,6 +343,9 @@ def save_book_api(request):
                 # الذكرُ يوجّه تلقائيّاً (قراراتُ الدورة §5.1)
                 from core.referral_service import auto_route_from_receivers
                 auto_route_from_receivers(book, by=request.user)
+                if kind_value == 'outgoing_external' and data.get('gm_office_number') is not None:
+                    from core.registration_service import record_gm_office_number
+                    record_gm_office_number(book, data.get('gm_office_number'), by=request.user)
 
                 if 'file' in request.FILES:
                     file_obj = request.FILES['file']
@@ -707,6 +717,7 @@ def api_book_detail_json(request, pk):
         'sender_date': str(book.sender_date) if book.sender_date else '',
         'secret_level': book.get_secret_level_display(),
         'margin': book.margin or '',
+        'gm_office_number': _gm_office_number_of(book),
         'due_date': str(book.due_date) if book.due_date else '',
         'is_archived': book.is_archived,
         'followup_state': book.followup_state,
@@ -866,6 +877,9 @@ def update_book_api(request):
             book.receiving_entities.set(receiving_entities_list)
             from core.referral_service import auto_route_from_receivers
             auto_route_from_receivers(book, by=request.user)
+            if book.kind == 'outgoing_external' and data.get('gm_office_number') is not None:
+                from core.registration_service import record_gm_office_number
+                record_gm_office_number(book, data.get('gm_office_number'), by=request.user)
             # تصحيحُ الجهة في التعديل يبلغ ذاكرةَ الترويسة (كان يضيع: لا التقاطَ هنا).
             # الوسمُ من الواجهة يمنع تعليمَ جانبٍ مُلئ آليّاً ولم يُلمَس.
             try:
