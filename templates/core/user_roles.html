@@ -14,16 +14,6 @@
   box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
   transform: translateY(-4px);
 }
-.role-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.8rem;
-  margin: 0 auto 1rem;
-}
 .user-avatar {
   width: 45px;
   height: 45px;
@@ -73,58 +63,20 @@
           </h6>
         </div>
         <div class="card-body p-3">
+          <div class="alert alert-warning border-0 small">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            الأدوارُ تُسنَد من <a href="{{ role_admin_url }}" class="alert-link">لوحة الإدارة</a>
+            مع القسم — وهي وحدَها ما تقرؤه بوّابات النظام.
+          </div>
           <div class="d-flex flex-column gap-3">
+            {% for code, meta in role_definitions.items %}
             <div class="role-card p-3">
-              <div class="role-icon" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1)); color: #3b82f6;">
-                <i class="bi bi-star-fill"></i>
-              </div>
               <div class="text-center">
-                <div class="fw-bold mb-1">مشرف النظام</div>
-                <small class="text-muted">وصول كامل لكل الخصائص</small>
-                <div class="mt-2">
-                  <span class="badge bg-primary">Admin</span>
-                </div>
+                <div class="fw-bold mb-1">{{ meta.label }}</div>
+                <small class="text-muted">{{ meta.description }}</small>
               </div>
             </div>
-
-            <div class="role-card p-3">
-              <div class="role-icon" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.1)); color: #f59e0b;">
-                <i class="bi bi-clipboard-check"></i>
-              </div>
-              <div class="text-center">
-                <div class="fw-bold mb-1">متابعة</div>
-                <small class="text-muted">تغيير حالات وعرض تقارير</small>
-                <div class="mt-2">
-                  <span class="badge bg-warning text-dark">Controller</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="role-card p-3">
-              <div class="role-icon" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(124, 58, 237, 0.1)); color: #8b5cf6;">
-                <i class="bi bi-pencil-square"></i>
-              </div>
-              <div class="text-center">
-                <div class="fw-bold mb-1">مدخل بيانات</div>
-                <small class="text-muted">إضافة/تعديل كتب وجهات</small>
-                <div class="mt-2">
-                  <span class="badge bg-secondary">Entry</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="role-card p-3">
-              <div class="role-icon" style="background: linear-gradient(135deg, rgba(148, 163, 184, 0.1), rgba(100, 116, 139, 0.1)); color: #94a3b8;">
-                <i class="bi bi-eye"></i>
-              </div>
-              <div class="text-center">
-                <div class="fw-bold mb-1">عرض فقط</div>
-                <small class="text-muted">استعراض بدون تعديل</small>
-                <div class="mt-2">
-                  <span class="badge bg-light text-dark">Viewer</span>
-                </div>
-              </div>
-            </div>
+            {% endfor %}
           </div>
         </div>
       </div>
@@ -164,17 +116,6 @@
                   <i class="bi bi-envelope me-1"></i>البريد الإلكتروني
                 </label>
                 <input class="form-control" name="email" type="email" placeholder="اختياري">
-              </div>
-              
-              <div class="col-md-12">
-                <label class="form-label fw-semibold">
-                  <i class="bi bi-shield-lock me-1"></i>الدور <span class="text-danger">*</span>
-                </label>
-                <select class="form-select" name="role_new" required>
-                  {% for code,label in role_choices %}
-                  <option value="{{ code }}">{{ label }}</option>
-                  {% endfor %}
-                </select>
               </div>
               
               <div class="col-md-6">
@@ -225,16 +166,7 @@
                   </td>
                   <td class="text-muted small">{{ u.email|default:"-" }}</td>
                   <td>
-                    {% if u.is_superuser %}<span class="badge bg-primary">مشرف النظام</span>
-                    {% elif u.groups.all|length %}
-                      {% with role=u.groups.first.name %}
-                        {% if role == "controller" %}<span class="badge bg-warning text-dark">متابعة</span>
-                        {% elif role == "data_entry" %}<span class="badge bg-secondary">مدخل بيانات</span>
-                        {% else %}<span class="badge bg-light text-dark">عرض فقط</span>
-                        {% endif %}
-                      {% endwith %}
-                    {% else %}<span class="badge bg-light text-dark">عرض فقط</span>
-                    {% endif %}
+                    <span class="badge bg-light text-dark">{{ u.role_label }}</span>
                   </td>
                   <td>
                     <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="tooltip" title="عرض كلمة المرور" onclick="showPassword('{{ u.id }}', '{{ u.username }}')">
@@ -243,20 +175,9 @@
                   </td>
                   <td class="text-end">
                     <div class="d-flex gap-2 justify-content-end flex-wrap">
-                      <form method="post" class="d-inline-flex gap-2 align-items-center">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="update">
-                        <input type="hidden" name="user_id" value="{{ u.id }}">
-                        <select name="role" class="form-select form-select-sm" style="width: 140px;">
-                          <option value="admin" {% if u.role == "admin" %}selected{% endif %}>مدير النظام</option>
-                          <option value="controller" {% if u.role == "controller" %}selected{% endif %}>متابعة</option>
-                          <option value="data_entry" {% if u.role == "data_entry" %}selected{% endif %}>مدخل بيانات</option>
-                          <option value="viewer" {% if u.role == "viewer" %}selected{% endif %}>عرض فقط</option>
-                        </select>
-                        <button class="btn btn-sm btn-outline-primary" type="submit" title="حفظ الدور">
-                          <i class="bi bi-save me-1"></i>حفظ
-                        </button>
-                      </form>
+                      <a class="btn btn-sm btn-outline-primary" href="{{ role_admin_url }}" title="إسناد القسم والدور">
+                        <i class="bi bi-shield-lock me-1"></i>الدور
+                      </a>
                       <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUser('{{ u.id }}', '{{ u.username }}')" title="حذف المستخدم">
                         <i class="bi bi-trash me-1"></i>حذف
                       </button>
@@ -271,7 +192,9 @@
           </div>
           <div class="alert alert-info border-0 shadow-sm small mb-0 mt-3">
             <i class="bi bi-info-circle-fill me-2"></i>
-            <strong>ملاحظة:</strong> اختيار "مدير النظام" يمنح صلاحية كاملة (superuser). الأدوار الأخرى تعيّن مجموعات صلاحيات مناسبة.
+            <strong>ملاحظة:</strong> هذه الصفحةُ للحسابات وحدَها — إنشاءً وحذفاً وكلمةَ مرورٍ مؤقّتة.
+            القسمُ والدورُ (رئاسةُ القسم · طاولةُ البريد · طاولةُ الأرشفة) يُسنَدان من
+            <a href="{{ role_admin_url }}" class="alert-link">لوحة الإدارة</a>.
           </div>
         </div>
       </div>
