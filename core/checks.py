@@ -16,11 +16,12 @@
 """
 import os
 
-from django.core.checks import Tags, Warning as CheckWarning, register
+from django.core.checks import Error as CheckError, Tags, Warning as CheckWarning, register
 
 from core.extraction.artifacts import ARTIFACTS, is_lfs_pointer
 
 MISSING_ARTIFACTS_ID = 'core.W001'
+PLAINTEXT_SECRET_ID = 'core.E001'
 
 
 @register(Tags.compatibility)
@@ -49,3 +50,37 @@ def check_runtime_artifacts(app_configs, **kwargs):
              'models_healthcheck --strict --load`.',
         id=MISSING_ARTIFACTS_ID,
     )]
+
+
+@register(Tags.database)
+def check_encrypted_columns(app_configs, databases=None, **kwargs):
+    """أعمدةُ الأسرار مشفَّرةٌ فعلاً في القاعدة — وإلّا **خطأٌ يوقف الأمر**.
+
+    **ولماذا `Error` هنا بينما جارُه `Warning`**: عتادُ النماذج غيابُه يُضعف
+    الاستخراجَ وحدَه، أمّا كلمةُ مرورٍ صريحةٌ في عمودٍ يُفترَض أنّه مشفَّرٌ فهي
+    نزفٌ واقعٌ لا يُنتظَر — والصمتُ عنه هو ما أخفى حادثةَ 2026-09-08 (§8.6).
+
+    **ووسمُ `Tags.database` لا الافتراضيّ**: فحوصُ القاعدة لا تُشغَّل إلّا حين
+    يُمرَّر `databases` (‏`migrate` و`check --database`)، فلا يدفع كلُّ
+    `manage.py` ثمنَ استعلامٍ ولا يحمرّ أمرٌ على جهازٍ بلا قاعدة.
+    """
+    if not databases:
+        return []
+
+    from core.encrypted_columns import find_plaintext, plaintext_lines
+
+    errors = []
+    for alias in databases:
+        findings = find_plaintext(alias)
+        if not findings:
+            continue
+        errors.append(CheckError(
+            'أعمدةٌ يجب أن تكون مشفَّرةً تحمل نصّاً صريحاً في القاعدة (%s):\n' % alias
+            + '\n'.join('  · %s' % line for line in plaintext_lines(findings)),
+            hint='الأرجحُ أنّ الصفوفَ حُمِّلت بـ`loaddata` (يتخطّى `save()` فلا '
+                 'يشفّر) أو كُتبت بـ`QuerySet.update()`. أعِد إدخالَ القيمة من '
+                 'الواجهة كي يشفّرها `save()`؛ **ولا يُصلحها هذا الفحصُ ذاتيّاً** '
+                 'لأنّ إعادةَ التشفير بمفتاحٍ مسكوكٍ حديثاً تُنتج بياناتٍ لا تُفكّ.',
+            id=PLAINTEXT_SECRET_ID,
+        ))
+    return errors

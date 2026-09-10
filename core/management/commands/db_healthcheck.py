@@ -7,6 +7,8 @@ from django.db import connections
 from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.loader import MigrationLoader
 
+from core.encrypted_columns import find_plaintext, plaintext_lines
+
 
 MigrationName = Tuple[str, str]
 
@@ -85,6 +87,18 @@ class Command(BaseCommand):
                 soft_issues.append(message)
         else:
             self.stdout.write(self.style.SUCCESS("OK: No unapplied migrations."))
+
+        # 3.5) حارسُ الأعمدة المشفَّرة (Merge9 §8.6-ب) — نصٌّ صريحٌ في عمودِ سرّ.
+        # **لا يخضع لـ--strict**: صريحٌ في القاعدة ليس «معلَّقاً» بل نزفٌ واقع.
+        # ولا شفاءَ ذاتيّاً هنا — الشفاءُ يسكّ مفتاحاً ثالثاً صامتاً.
+        findings = find_plaintext(db_alias)
+        if findings:
+            hard_issues.extend(
+                f"عمودٌ مشفَّرٌ فيه نصٌّ صريح: {line}" for line in plaintext_lines(findings)
+            )
+        else:
+            self.stdout.write(self.style.SUCCESS(
+                "OK: كلُّ الأعمدة المشفَّرة تحمل بادئة enc:: (لا نصَّ صريحاً)."))
 
         # 4) Model drift (makemigrations --check --dry-run)
         if not skip_model_check:
