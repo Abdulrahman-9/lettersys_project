@@ -67,11 +67,28 @@ def _visible_books(request):
     return scope_books_for(request.user, Book.objects.all())
 
 
+def dossier_entity_ids(pk):
+    """**التجمّعُ صعوداً** (قراراتُ الدورة §4.3): أضبارةُ جهةٍ لها قسمٌ توأمٌ تضمّ ما
+    ذُكرت فيه هي **وشعبُها ووحداتُها** (توائمُ شجرتها) — فمديرُ القسم يرى كلَّ شيء،
+    والوحدةُ ترى ما ذُكرت فيه هي وأشخاصُها. جهةٌ بلا توأم ⟵ نفسُها فقط."""
+    from core.models import Department, Entity
+    from core.scoping import subtree_ids
+    entity = Entity.objects.filter(pk=pk).select_related('department').first()
+    dept = getattr(entity, 'department', None) if entity else None
+    if dept is None:
+        return [pk]
+    ids = set(Department.objects.filter(id__in=subtree_ids(dept.id), entity_id__isnull=False)
+              .values_list('entity_id', flat=True))
+    ids.add(pk)
+    return sorted(ids)
+
+
 def _direction_bases(base, pk):
     """قاعدتا اتجاه الإضبارة: (صادر = الجهة مُصدِرة، وارد = الجهة مستقبِلة) —
-    تعبير M2M+distinct بمصدر واحد يخدم التفصيل والتقرير."""
-    return (base.filter(issuing_entities__id=pk).distinct(),
-            base.filter(receiving_entities__id=pk).distinct())
+    تعبير M2M+distinct بمصدر واحد يخدم التفصيل والتقرير — على الجهة **وشجرتها**."""
+    ids = dossier_entity_ids(pk)
+    return (base.filter(issuing_entities__id__in=ids).distinct(),
+            base.filter(receiving_entities__id__in=ids).distinct())
 
 
 # ════════════ الفلاتر (مصدر واحد للتفصيل والتقرير) ════════════

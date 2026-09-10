@@ -30,7 +30,10 @@ class RoutingTestCase(TestCase):
         UserProfile.objects.create(user=cls.clerk, department=cls.dept)
 
     def _book(self, **kw):
-        b = Book.objects.create(kind='incoming_external', title='ك', created_by=self.clerk,
+        kw.setdefault('title', 'ك')
+        from datetime import date as _d
+        kw.setdefault('date', _d(2026, 9, 11))
+        b = Book.objects.create(kind='incoming_external', created_by=self.clerk,
                                 department=self.dept, **kw)
         b.issuing_entities.add(self.ebs)
         return b
@@ -248,3 +251,29 @@ class GmOfficeNumberTests(RoutingTestCase):
         r = self.client.get(reverse('extraction-smart-desktop'))
         self.assertContains(r, 'id="gmOfficeNumberGroup"')
         self.assertContains(r, 'id="gmOfficeNumber"')
+
+
+class DossierRollupTests(RoutingTestCase):
+    """§4.3 التجمّعُ صعوداً: أضبارةُ القسم تضمّ ما ذُكرت فيه وحداتُه؛ الوحدةُ لا ترى أختَها."""
+
+    def setUp(self):
+        self.dept.entity = Entity.objects.create(name='قسم المتابعة (توأم)'); self.dept.save()
+        self.b_reports = self._book(title='للتقارير'); self.b_reports.receiving_entities.add(self.unit_reports.entity)
+        self.b_budget = self._book(title='للموازنة'); self.b_budget.receiving_entities.add(self.unit_budget.entity)
+        self.client.force_login(self.clerk)
+
+    def test_the_department_dossier_includes_its_units(self):
+        r = self.client.get(reverse('dossier_detail', args=[self.dept.entity_id]))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'واردة (2)')   # كتابا الوحدتين معاً
+        r2 = self.client.get(reverse('dossier_detail', args=[self.dept.entity_id]) + '?document_type=متفرقة')
+        self.assertContains(r2, 'للتقارير'); self.assertContains(r2, 'للموازنة')
+
+    def test_a_unit_dossier_shows_only_its_own_mentions(self):
+        r = self.client.get(reverse('dossier_detail', args=[self.unit_reports.entity_id]))
+        self.assertContains(r, 'واردة (1)')
+        self.assertNotContains(r, 'واردة (2)')
+
+    def test_an_entity_without_a_twin_is_itself_only(self):
+        from core.views.dossiers import dossier_entity_ids
+        self.assertEqual(dossier_entity_ids(self.ebs.pk), [self.ebs.pk])
