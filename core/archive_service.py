@@ -210,7 +210,8 @@ def _by_archive(qs, *, archived):
 
     from core.models import Book, CustodyEvent
 
-    qs = Book.objects.all() if qs is None else qs
+    # الافتراضُ يحمل شرطَي §7.2 — لا يفتح الدفترَ كلَّه لأوّل نداءٍ ينسى.
+    qs = Book.objects.live() if qs is None else qs
     latest = (CustodyEvent.objects
               .filter(book=OuterRef('pk'),
                       event__in=(CustodyEvent.ARCHIVE_DONE,

@@ -105,7 +105,7 @@ def _archive(user):
     يجعل العدّادَ رقماً مرعباً لا يُنقص أبداً — والعدّادُ الذي لا يُفرَغ يُهمَل.
     """
     from core.archive_service import unarchived_books
-    from core.models import Book, BookReferral, CustodyEvent
+    from core.models import Attachment, Book, BookReferral, CustodyEvent
     from core.scoping import scope_books_for
 
     mine = scope_books_for(user, Book.objects.all())
@@ -116,7 +116,8 @@ def _archive(user):
     finished = (pending.filter(referrals__isnull=False)
                 .exclude(pk__in=open_now.values('book_id')).distinct().count())
     idle = pending.filter(referrals__isnull=True).count()
-    no_file = live.filter(attachments__isnull=True).count()
+    # لا ``attachments__isnull``: الضمُّ لا يمرّ بمدير (المرفقُ المحذوفُ كان يُخفي الكتاب).
+    no_file = live.exclude(pk__in=Attachment.objects.values('book_id')).count()
     filed = CustodyEvent.objects.filter(
         event=CustodyEvent.ARCHIVE_DONE, book__in=mine).count()
 

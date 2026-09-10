@@ -65,7 +65,10 @@ def desk_ledger(request):
     department = _acting_department(request)
     date_from, date_to = _date_range(request)
 
-    visible = scope_books_for(request.user, Book.objects.all())
+    # §7.2 صراحةً: الحرزُ الذي كان يُبعد المنقولَ من الورق عن الدفتر **عرَضيّ**
+    # (``legacy_restore`` لا يكتب ``department`` فيسقط بـ``_in_our_register``)؛
+    # أوّلُ سكربتٍ يملأ ``department`` بأثرٍ رجعيّ كان سيطبع 13 ألفَ سطر.
+    visible = scope_books_for(request.user, Book.objects.live())
     books = visible.filter(
         _in_our_register(department)
     ).select_related('department', 'current_custody').prefetch_related(

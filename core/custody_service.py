@@ -112,7 +112,8 @@ def held_by(department, qs=None):
     """كلُّ ما هو **بعهدة** قسمٍ الآن — عمودُ كشف التسليم وطاولة الوارد."""
     from core.models import Book
 
-    qs = Book.objects.all() if qs is None else qs
+    # الافتراضُ يحمل شرطَي §7.2 — لا يفتح الدفترَ كلَّه لأوّل نداءٍ ينسى.
+    qs = Book.objects.live() if qs is None else qs
     return qs.filter(current_custody__to_holder_department=department)
 
 

@@ -221,6 +221,16 @@ class SoftDeleteManager(models.Manager):
         return super().get_queryset().filter(is_deleted=False)
 
 
+class BookManager(SoftDeleteManager):
+    """مديرُ الكتب: الحذفُ الناعم نفسُه + مدخلُ قاعدة §7.2."""
+
+    def live(self):
+        """قاعدةُ §7.2: الطوابيرُ والدفاترُ تُبنى على الحيّ وحده — لا المنقولُ من
+        الورق (``source_ref``) ولا كتبُ التدريب (``is_training``). الافتراضاتُ
+        التي كانت تفتح الدفترَ كلَّه (13 ألفَ صفّ) تمرّ من هنا."""
+        return self.get_queryset().filter(source_ref='', is_training=False)
+
+
 class Book(models.Model):
     """
     نموذج الكتاب - تخزين معلومات الكتب الواردة والصادرة
@@ -530,7 +540,7 @@ class Book(models.Model):
 
 
     #: الافتراضيّ لا يرى المحذوف؛ ``all_objects`` مخرجٌ صريح للسلّة والاستعادة.
-    objects = SoftDeleteManager()
+    objects = BookManager()
     all_objects = models.Manager()
 
     class Meta:

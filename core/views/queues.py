@@ -25,7 +25,7 @@ from django.db.models import Q
 from django.shortcuts import render
 from django.utils import timezone
 
-from core.models import Book, BookReferral, CustodyEvent
+from core.models import Attachment, Book, BookReferral, CustodyEvent
 from core.scoping import (ACCESS_STUB, STUB_TITLE, can_archive, can_use_desk,
                           scope_books_for, scope_referrals_for, secret_access,
                           subtree_ids, user_department_id)
@@ -177,8 +177,9 @@ def archive_desk(request):
                 .exclude(pk__in=open_now.values('book_id')).distinct())
     #: قُيِّد ولم يُفرَّق ولم يُحفظ — ورقةٌ على المكتب لا صاحبَ لها.
     never_moved = pending.filter(referrals__isnull=True)
-    #: قيدٌ بلا مسح: لا مرفقَ يُحفظ.
-    no_file = live.filter(attachments__isnull=True)
+    #: قيدٌ بلا مسح: لا مرفقَ يُحفظ. (لا ``attachments__isnull`` — الضمُّ لا يمرّ
+    #: بمدير، فكتابٌ مرفقُه الوحيدُ محذوفٌ ناعماً كان يختفي من الطابور بدل أن يظهر.)
+    no_file = live.exclude(pk__in=Attachment.objects.values('book_id'))
 
     filed = CustodyEvent.objects.filter(
         event=CustodyEvent.ARCHIVE_DONE, book__in=mine)

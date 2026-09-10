@@ -50,6 +50,26 @@ class DeskTestCase(TestCase):
         )
 
 
+class LedgerLiveOnlyTests(DeskTestCase):
+    """§7.2 صراحةً على الدفتر: كان الحرزُ عرَضيّاً (المنقولُ بلا ``department``)."""
+
+    def test_a_legacy_book_stays_out_of_the_ledger_even_with_a_department(self):
+        Book.objects.create(
+            kind='incoming_external', title='منقولٌ من الورق', created_by=self.officer,
+            department=self.dept, our_number='7001', source_ref='IIMAIL_2025#1',
+        )
+        Book.objects.create(
+            kind='incoming_external', title='كتابُ تدريب', created_by=self.officer,
+            department=self.dept, our_number='7002', is_training=True,
+        )
+        self.client.force_login(self.officer)
+        resp = self.client.get('/books/desk/ledger/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'تخصيصاتُ الحفر')
+        self.assertNotContains(resp, 'منقولٌ من الورق')
+        self.assertNotContains(resp, 'كتابُ تدريب')
+
+
 class DeskAccessTests(DeskTestCase):
     """بوّابةُ سطحٍ يخرج من الجهاز — لا بوّابةُ سرّيّة."""
 
