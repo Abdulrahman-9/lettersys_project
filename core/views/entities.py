@@ -13,6 +13,7 @@ from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.html import format_html
 from django.views.decorators.http import require_http_methods
 
 from ..forms import EntityForm
@@ -223,6 +224,15 @@ def entity_list(request):
 
 
 @login_required
+def _entity_back(request, entity):
+    """إلى أين يعود مَن عدّل جهةً: `next` **مسارٌ داخليّ فقط** (لا مضيفَ — يسدّ
+    التحويلَ المفتوح)، وإلّا تفاصيلُ الجهة نفسِها لا القائمة (تدقيقُ الانتقالات ب4)."""
+    nxt = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    if nxt.startswith("/") and not nxt.startswith("//") and len(nxt.splitlines()) == 1:
+        return nxt
+    return reverse("entity_detail", args=[entity.pk])
+
+
 def entity_detail(request, pk):
     """
     صفحة تفاصيل الجهة — الكتب المصدرة والمستلمة
@@ -283,8 +293,10 @@ def entity_create(request):
     if request.method == "POST":
         form = EntityForm(request.POST)
         if form.is_valid():
-            form.save()
-            messages.success(request, "تم حفظ الجهة بنجاح.")
+            entity = form.save()
+            messages.success(request, format_html(
+                'تم حفظ الجهة بنجاح. <a class="alert-link" href="{}">افتح «{}»</a>',
+                reverse("entity_detail", args=[entity.pk]), entity.name))
             return redirect("entity_create")
     else:
         form = EntityForm()
@@ -309,7 +321,7 @@ def entity_edit(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, "تم تحديث الجهة بنجاح.")
-            return redirect("entity_list")
+            return redirect(_entity_back(request, entity))
     else:
         form = EntityForm(instance=entity)
     return render(
@@ -319,6 +331,7 @@ def entity_edit(request, pk):
             "form": form,
             "is_edit": True,
             "editing_entity": entity,
+            "back_url": _entity_back(request, entity),
             "total_entities": Entity.objects.count(),
             "recent_entities": list(Entity.objects.order_by("-id").values_list("name", flat=True)[:5]),
             "suggested_entities": [],

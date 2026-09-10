@@ -18,6 +18,8 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.html import format_html
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -394,7 +396,9 @@ def restore_book(request, pk):
     book.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
     Attachment.all_objects.filter(book=book, is_deleted=True).update(is_deleted=False, deleted_at=None, deleted_by=None)
     BookHistory.objects.create(book=book, action="restore", by=request.user)
-    messages.success(request, "تمت استعادة الكتاب من سلة المهملات.")
+    messages.success(request, format_html(
+        'تمت استعادة الكتاب من سلة المهملات. <a class="alert-link" href="{}">افتحه</a>',
+        reverse("book_detail", args=[book.pk])))
     return redirect("trash_list")
 
 

@@ -176,6 +176,7 @@ BOOK UNIFIED CARD (Mobile View)
         data-book-id="{{ book.id }}"
         data-book-number="{{ book.our_number }}"
         data-delete-url="{% url 'api_delete_book' book.id %}"
+              data-undo-url="{% url 'api_undo_delete_book' book.id %}"
         aria-label="حذف"
       >
         <i class="bi bi-trash"></i>

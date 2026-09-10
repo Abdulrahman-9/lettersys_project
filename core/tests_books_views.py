@@ -1146,3 +1146,34 @@ class HelpersTests(TestCase):
         _resolve_entities([entity.pk], [], 'issuer')
         entity.refresh_from_db()
         self.assertTrue(entity.is_active)
+
+
+class UndoDeleteWiringTests(TestCase):
+    """تدقيقُ الانتقالات د1: التراجعُ عن الحذف موصولٌ في المسار الحيّ — الصفُّ يحمل
+    `data-undo-url` بالاسم، والمسارُ يُعيد الكتابَ ومرفقاتِه ويردّ 403 لغير المخوَّل."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('undo_u', password='pw-undo-11', is_staff=True)
+        self.book = Book.objects.create(kind='incoming_internal', title='للتراجع', created_by=self.user)
+
+    def test_the_row_carries_the_undo_url_next_to_the_delete_url(self):
+        from django.template.loader import render_to_string
+        html = render_to_string('core/partials/book_unified_row.html',
+                                {'book': self.book, 'request': None, 'user': self.user})
+        self.assertIn(reverse('api_delete_book', args=[self.book.pk]), html)
+        self.assertIn(reverse('api_undo_delete_book', args=[self.book.pk]), html)
+
+    def test_undo_restores_the_book_after_delete(self):
+        self.client.force_login(self.user)
+        r = self.client.post(reverse('api_delete_book', args=[self.book.pk]),
+                             HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(Book.all_objects.get(pk=self.book.pk).is_deleted)
+        r = self.client.post(reverse('api_undo_delete_book', args=[self.book.pk]),
+                             HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.assertFalse(Book.objects.get(pk=self.book.pk).is_deleted)
+
+    def test_undo_is_post_only(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(reverse('api_undo_delete_book', args=[self.book.pk])).status_code, 405)
