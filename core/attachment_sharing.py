@@ -101,7 +101,7 @@ def plan_book_attachments(book, max_bytes: int = MAX_EMAIL_ATTACH_BYTES):
     plan = {'attach': [], 'link': [], 'failed': [], 'attach_bytes': 0, 'total_bytes': 0}
 
     sized = []
-    for att in book.attachments.filter(is_deleted=False).order_by('uploaded_at'):
+    for att in book.attachments.order_by('uploaded_at'):
         try:
             sized.append((att.file.size, att))
         except Exception as e:  # الملف مفقود على القرص

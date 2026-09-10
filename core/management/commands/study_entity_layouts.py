@@ -103,7 +103,7 @@ class Command(BaseCommand):
             for b in books:
                 if seen >= opts['per_entity']:
                     break
-                att = b.attachments.filter(is_deleted=False).order_by('-uploaded_at').first()
+                att = b.attachments.order_by('-uploaded_at').first()
                 try:
                     path = att.file.path if att else None
                 except Exception:

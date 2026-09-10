@@ -104,7 +104,7 @@ class Command(BaseCommand):
             if os.path.exists(out_png) or str(b.id) in done:
                 skipped += 1
                 continue
-            att = b.attachments.filter(is_deleted=False).order_by('-uploaded_at').first()
+            att = b.attachments.order_by('-uploaded_at').first()
             eid = b.issuing_entities.values_list('id', flat=True).first()
             try:
                 path = att.file.path if att else None

@@ -47,7 +47,7 @@ class Command(BaseCommand):
 
         seen = hit_label = hit_prior = 0
         for b in qs.iterator():
-            att = b.attachments.filter(is_deleted=False).order_by('-uploaded_at').first()
+            att = b.attachments.order_by('-uploaded_at').first()
             eid = b.issuing_entities.values_list('id', flat=True).first()
             try:
                 path = att.file.path if att else None

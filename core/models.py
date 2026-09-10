@@ -434,7 +434,7 @@ class Book(models.Model):
                 return active[0] if active else None
         except AttributeError:
             pass
-        return self.attachments.filter(is_deleted=False).first()
+        return self.attachments.first()
 
     @property
     def first_issuing_entity(self):

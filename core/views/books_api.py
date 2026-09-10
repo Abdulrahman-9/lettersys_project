@@ -640,7 +640,7 @@ def api_book_detail_json(request, pk):
     try:
         book = Book.objects.select_related('created_by').prefetch_related(
             'issuing_entities', 'receiving_entities',
-            Prefetch('attachments', queryset=Attachment.objects.filter(is_deleted=False).order_by('-uploaded_at'))
+            Prefetch('attachments', queryset=Attachment.objects.order_by('-uploaded_at'))
         ).get(pk=pk, is_deleted=False)
     except Book.DoesNotExist:
         return JsonResponse({'error': 'الكتاب غير موجود'}, status=404)
@@ -877,7 +877,7 @@ def update_book_api(request):
                 # وضع التعديل = استبدال المرفق المُعدَّل تحديداً، لا أرشفة كل المرفقات:
                 # نستهدف المرفق الذي عُدِّلت صفحاته (attachment_id من الواجهة)، وإلا الأساسي.
                 # يمنع هذا أن يؤرشف تدويرُ/حذفُ صفحةٍ في مرفقٍ بقيةَ مرفقات الكتاب (فقدان/تدقيق).
-                active_attachments = book.attachments.filter(is_deleted=False)
+                active_attachments = book.attachments.all()
                 target_attachment = None
                 _target_id = (request.POST.get('attachment_id') or '').strip()
                 if _target_id:

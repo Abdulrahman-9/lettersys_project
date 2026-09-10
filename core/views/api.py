@@ -201,7 +201,6 @@ def attachment_ocr_text(request, att_id):
     att = get_object_or_404(
         Attachment.objects.select_related('book', 'ocr_result'),
         pk=att_id,
-        is_deleted=False,
     )
     book = att.book
     has_permission = (

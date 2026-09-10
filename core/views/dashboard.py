@@ -686,7 +686,7 @@ def _restore_state():
         'books': total,
         'stamped': stamped,
         'unstamped': total - stamped,
-        'attachments': Attachment.objects.filter(is_deleted=False).count(),
+        'attachments': Attachment.objects.count(),
         'entities': Entity.objects.count(),
     }
 

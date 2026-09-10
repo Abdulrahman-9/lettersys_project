@@ -35,7 +35,7 @@ def book_detail(request, pk):
             'receiving_entities',
             Prefetch(
                 'attachments',
-                queryset=Attachment.objects.filter(is_deleted=False)
+                queryset=Attachment.objects.all()
                     .prefetch_related('versions')
                     .order_by('-uploaded_at')
             ),
@@ -189,7 +189,7 @@ def _crop_source(book):
     نكتفي بالأوّل: الهامشُ على الصفحة الأولى في الغالب، ومنتقي الصفحة يتيح
     الانتقال داخل المرفق نفسِه. وقائمةُ مرفقاتٍ للاختيار تعقيدٌ بلا حاجةٍ مقيسة.
     """
-    return (book.attachments.filter(is_deleted=False)
+    return (book.attachments.all()
             .order_by('uploaded_at').first())
 
 
@@ -287,7 +287,7 @@ def book_report(request, pk):
             "receiving_entities",
             Prefetch(
                 "attachments",
-                queryset=Attachment.objects.filter(is_deleted=False)
+                queryset=Attachment.objects.all()
                     .prefetch_related("versions").order_by("-uploaded_at"),
             ),
             Prefetch(

@@ -517,7 +517,7 @@ class LegacyRestoreEngine:
         from django.conf import settings
         from .models import Attachment
         root = str(settings.MEDIA_ROOT)
-        qs = Attachment.objects.filter(is_deleted=False)
+        qs = Attachment.objects.all()
         if book_ids is not None:
             qs = qs.filter(book_id__in=list(book_ids))
         out = {}
@@ -634,7 +634,7 @@ class LegacyRestoreEngine:
         if verify_bytes and assign:
             root = str(settings.MEDIA_ROOT)
             att_of = {}
-            for bid, rel in (Attachment.objects.filter(is_deleted=False, book_id__in=list(assign))
+            for bid, rel in (Attachment.objects.filter(book_id__in=list(assign))
                              .order_by('book_id', 'id').values_list('book_id', 'file')):
                 att_of.setdefault(bid, rel)
 
@@ -1005,7 +1005,7 @@ class LegacyRestoreEngine:
         need_file, with_file = set(), set()
         if restore_files:
             from .models import Attachment
-            with_file = set(Attachment.objects.filter(is_deleted=False)
+            with_file = set(Attachment.objects.all()
                             .values_list('book_id', flat=True))
             need_file = {sref for sref, bid in by_sref.items() if bid not in with_file}
 
@@ -1258,7 +1258,7 @@ class LegacyRestoreEngine:
         if has_file is not None:
             if book.id in has_file:
                 return
-        elif Attachment.objects.filter(book=book, is_deleted=False).exists():
+        elif Attachment.objects.filter(book=book).exists():
             return
 
         fetch = rd.get('_blob')

@@ -76,7 +76,7 @@ def serve_shared_attachment(request, token):
     if attachment_id is None:
         raise Http404("رابط التحميل غير صالح أو انتهت صلاحيته.")
 
-    attachment = Attachment.objects.filter(pk=attachment_id, is_deleted=False).first()
+    attachment = Attachment.objects.filter(pk=attachment_id).first()
     if attachment is None:
         raise Http404("الملف لم يعد متاحاً.")
 
@@ -225,7 +225,7 @@ def attachment_delete(request, pk):
     Returns:
         Redirect to book detail page
     """
-    att = get_object_or_404(Attachment, id=pk, is_deleted=False)
+    att = get_object_or_404(Attachment, id=pk)
     book = att.book
     
     # فحص الصلاحيات: صاحب المستند أو الموظف
@@ -264,7 +264,7 @@ def attachment_replace(request, pk):
     Returns:
         Redirect to book detail page
     """
-    att = get_object_or_404(Attachment, id=pk, is_deleted=False)
+    att = get_object_or_404(Attachment, id=pk)
     book = att.book
     
     # فحص الصلاحيات
@@ -320,7 +320,7 @@ def attachment_merge_pages(request, pk):
     Returns:
         Redirect to book detail page
     """
-    att = get_object_or_404(Attachment, id=pk, is_deleted=False)
+    att = get_object_or_404(Attachment, id=pk)
     book = att.book
     
     # فحص الصلاحيات
@@ -408,7 +408,7 @@ def attachment_remove_pages(request, pk):
     Returns:
         Redirect to book detail page
     """
-    att = get_object_or_404(Attachment, id=pk, is_deleted=False)
+    att = get_object_or_404(Attachment, id=pk)
     book = att.book
     
     # فحص الصلاحيات
@@ -485,7 +485,7 @@ def attachment_page_image(request, pk, page):
     """
     from core.page_render import render_page
 
-    attachment = get_object_or_404(Attachment, id=pk, is_deleted=False)
+    attachment = get_object_or_404(Attachment, id=pk)
     if not can_open_content(attachment.book, request.user):
         raise Http404
 
