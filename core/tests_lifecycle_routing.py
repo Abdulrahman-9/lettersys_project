@@ -136,3 +136,60 @@ class ActivateFollowupTests(RoutingTestCase):
         self.assertEqual(row.purpose, BookReferral.ACTION)
         page = self.client.get(reverse('book_detail', args=[b.pk]))
         self.assertNotContains(page, f'data-followup-activate="{row.pk}"')
+
+
+class ReplyClosesReferralTests(RoutingTestCase):
+    """§5.5 الجوابُ يُقفل الإحالة — من حواريّة الربط، وللجهة الخارجيّة بوارِدها."""
+
+    def _distributed_to(self, target):
+        from core.referral_service import distribute
+        b = self._book()
+        rows = distribute(b, [target], by=self.clerk, purpose=BookReferral.ACTION)
+        return b, rows[0]
+
+    def test_linking_as_reply_from_the_picker_closes_the_unit_commitment(self):
+        import json
+        b, row = self._distributed_to(self.unit_reports)
+        reply = Book.objects.create(kind='outgoing_internal', title='جواب', created_by=self.clerk,
+                                    department=self.unit_reports, our_number='7')
+        self.client.force_login(self.clerk)
+        r = self.client.post(reverse('api_add_link', args=[reply.pk]),
+                             data=json.dumps({'to_book': b.pk, 'relation': 'reply'}),
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        row.refresh_from_db()
+        self.assertEqual(row.status, BookReferral.DONE)
+        self.assertIsNotNone(row.closed_by_link_id)
+
+    def test_an_external_entity_is_closed_by_its_incoming_reply(self):
+        from core.registration_service import register_reply
+        b, row = self._distributed_to(self.ebs)
+        reply = Book.objects.create(kind='incoming_external', title='ردُّ EBS', created_by=self.clerk,
+                                    department=self.dept, our_number='8')
+        reply.issuing_entities.add(self.ebs)
+        _link, closed = register_reply(b, reply, by=self.clerk)
+        self.assertIsNotNone(closed, 'إحالةُ الجهة الخارجيّة لم تُقفل بوارِدها')
+        self.assertEqual(closed.pk, row.pk)
+
+    def test_a_reply_from_someone_else_closes_nothing(self):
+        from core.registration_service import register_reply
+        b, row = self._distributed_to(self.ebs)
+        other = Entity.objects.create(name='جهةٌ أخرى')
+        reply = Book.objects.create(kind='incoming_external', title='ردٌّ غريب', created_by=self.clerk,
+                                    department=self.dept, our_number='9')
+        reply.issuing_entities.add(other)
+        _link, closed = register_reply(b, reply, by=self.clerk)
+        self.assertIsNone(closed)
+        row.refresh_from_db(); self.assertEqual(row.status, BookReferral.SENT)
+
+    def test_linking_as_something_else_keeps_the_commitment_open(self):
+        import json
+        b, row = self._distributed_to(self.unit_reports)
+        other = Book.objects.create(kind='outgoing_internal', title='إلحاق', created_by=self.clerk,
+                                    department=self.unit_reports, our_number='10')
+        self.client.force_login(self.clerk)
+        r = self.client.post(reverse('api_add_link', args=[other.pk]),
+                             data=json.dumps({'to_book': b.pk, 'relation': 'followup'}),
+                             content_type='application/json')
+        self.assertIn(r.status_code, (200, 400))
+        row.refresh_from_db(); self.assertEqual(row.status, BookReferral.SENT)

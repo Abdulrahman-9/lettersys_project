@@ -252,15 +252,23 @@ def close_by_reply(book, link, reply_book, *, by):
 
     يعيش هنا لا في وحدة القيد لأنّ ``status`` **لا يُكتب إلّا في هذا الملفّ**.
     """
-    from core.models import BookReferral
+    from django.db.models import Q
 
-    answering = reply_book.department_id
-    if not answering:
+    from core.models import BookReferral
+    # مَن أجاب؟ (١) قسمٌ داخليٌّ أصدر الجواب: قسمُ الجواب. (٢) جهةٌ خارجيّة أو وحدةٌ
+    #   أجابت بكتابٍ **وارد**: مصدِرو الجواب (قراراتُ الدورة §5.5) — كان الشرطُ
+    #   الأوّلُ وحدَه، فلا تُقفل إحالةُ الجهة الخارجيّة أبداً.
+    answered_by = Q()
+    if reply_book.department_id and not (reply_book.kind or '').startswith('incoming'):
+        answered_by |= Q(to_department_id=reply_book.department_id)
+    issuers = list(reply_book.issuing_entities.values_list('id', flat=True))
+    if issuers:
+        answered_by |= Q(to_entity_id__in=issuers)
+        answered_by |= Q(to_department__entity_id__in=issuers)   # توأمُ الوحدة
+    if not answered_by:
         return None
-    row = BookReferral.objects.filter(
-        book=book, to_department_id=answering,
-        status__in=BookReferral.OPEN_STATUSES,
-    ).order_by('created_at').first()
+    row = (BookReferral.objects.filter(book=book, status__in=BookReferral.OPEN_STATUSES)
+           .filter(answered_by).order_by('created_at').first())
     if row is None:
         return None
 
