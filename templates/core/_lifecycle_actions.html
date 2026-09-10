@@ -15,18 +15,5 @@
           title="امنحه رقمَ واردٍ من عدّاد قسمي">
     <i class="bi bi-journal-plus me-1"></i>قيّده عندنا
   </button>
-  {% if can_archive_book %}
-    {% if book_is_archived %}
-      <button type="button" class="btn btn-outline-secondary" id="reopenArchiveBtn"
-              title="أخرِجه من الأرشيف بسببٍ مسجَّل">
-        <i class="bi bi-box-arrow-up me-1"></i>فتحُ المؤرشَف
-      </button>
-    {% else %}
-      <button type="button" class="btn btn-outline-primary"
-              data-bs-toggle="modal" data-bs-target="#archiveModal"
-              title="قيّد تمامَ الأرشفة والحفظ">
-        <i class="bi bi-archive me-1"></i>تمامُ أرشفة
-      </button>
-    {% endif %}
-  {% endif %}
+  {# لا «تمامَ أرشفة» ولا موضعَ حفظٍ ورقيّ: الأرشفةُ تلقائيّةٌ لحظةَ الحفظ (قراراتُ الدورة §6) #}
 </div>

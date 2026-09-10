@@ -131,43 +131,7 @@
   </div>
 </div>
 
-{% if can_archive_book and not book_is_archived %}
-<div class="modal fade lc-scope" id="archiveModal" tabindex="-1"
-     aria-labelledby="archiveModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content rounded-4">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold" id="archiveModalLabel">
-          <i class="bi bi-archive text-primary me-2"></i>تمامُ الأرشفة
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label for="archPlace" class="form-label" style="font-size:.85rem">موضع الحفظ</label>
-          <input type="text" class="form-control form-control-sm" id="archPlace"
-                 maxlength="200" placeholder="الرفّ ب/12 — صندوق 3">
-          <div class="form-text" style="font-size:.75rem">
-            أين وُضعت الورقة فعلاً — وهو أوّلُ ما يُسأل عنه بعد سنة.
-          </div>
-        </div>
-        <div class="mb-1">
-          <label for="archNote" class="form-label" style="font-size:.85rem">ملاحظة</label>
-          <input type="text" class="form-control form-control-sm" id="archNote"
-                 maxlength="200" placeholder="اختياريّة">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary btn-sm"
-                data-bs-dismiss="modal">إلغاء</button>
-        <button type="button" class="btn btn-primary btn-sm" id="archSubmit">
-          <i class="bi bi-archive me-1"></i>قيّد الحفظ
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
+{# حواريّةُ «تمام الأرشفة» أُزيلت — الأرشفةُ تلقائيّةٌ (قراراتُ الدورة §6) #}
 
 <!-- فعِّل متابعة (§5.2): صفُّ «للعلم» ⟵ «للإجراء» بموعد -->
 <div class="modal fade lc-scope" id="followupModal" tabindex="-1" aria-labelledby="followupModalTitle" aria-hidden="true">

@@ -112,39 +112,26 @@ def _desk(user):
 
 
 def _archive(user):
-    """الأرشفة — ما ينتظر الرفَّ، لمن يمسك الأرشيف.
+    """الأرشفة — ما لم يكتمل قيدُه (بلا جهةٍ مستلِمة أو بلا مسح)، لمن يمسك الأرشيف.
 
     الأعدادُ هنا **للحيّ وحده** (``source_ref=''`` و``is_training=False``):
     القاعدةُ فيها 13 ألفَ كتابٍ دخلت بالجملة من الورق، وعدُّها عملاً ينتظر
     يجعل العدّادَ رقماً مرعباً لا يُنقص أبداً — والعدّادُ الذي لا يُفرَغ يُهمَل.
     """
-    from core.archive_service import unarchived_books
-    from core.models import Attachment, Book, BookReferral, CustodyEvent
+    from core.models import Attachment, Book
     from core.scoping import scope_books_for
 
-    mine = scope_books_for(user, Book.objects.all())
-    live = mine.filter(source_ref='', is_training=False)
-    pending = unarchived_books(live)
-    open_now = BookReferral.objects.filter(status__in=BookReferral.OPEN_STATUSES)
-
-    finished = (pending.filter(referrals__isnull=False)
-                .exclude(pk__in=open_now.values('book_id')).distinct().count())
-    idle = pending.filter(referrals__isnull=True).count()
+    live = scope_books_for(user, Book.objects.live())
+    idle = live.filter(referrals__isnull=True).count()
     # لا ``attachments__isnull``: الضمُّ لا يمرّ بمدير (المرفقُ المحذوفُ كان يُخفي الكتاب).
     no_file = live.exclude(pk__in=Attachment.objects.values('book_id')).count()
-    filed = CustodyEvent.objects.filter(
-        event=CustodyEvent.ARCHIVE_DONE, book__in=mine).count()
-
+    # (قراراتُ الدورة §6) لا عدّادَ حفظٍ ولا موضعٍ: الأرشفةُ تلقائيّة.
     return {
         'counters': [
-            {'label': 'أُنجز ولم يُحفَظ', 'value': finished, 'tone': 'danger',
-             'href': _to('archive_desk', anchor='finished')},
-            {'label': 'قُيِّد ولم يُحفَظ', 'value': idle, 'tone': 'warn',
+            {'label': 'قُيِّد ولم يُوجَّه', 'value': idle, 'tone': 'warn',
              'href': _to('archive_desk', anchor='idle')},
             {'label': 'بلا مرفق', 'value': no_file, 'tone': 'accent',
              'href': _to('archive_desk', anchor='nofile')},
-            {'label': 'حُفظ عندنا', 'value': filed, 'tone': 'calm',
-             'href': _to('archive_desk', anchor='recent')},
         ],
         'links': [
             {'label': 'طاولة الأرشفة', 'href': _to('archive_desk'),
@@ -294,7 +281,7 @@ def _can_admin(user):
 SECTIONS = (
     ('mine', 'ما يخصّني اليوم', 'التزاماتي المفتوحة باسمي', _always, _my_queue),
     ('desk', 'طاولة الوارد', 'عملُ القسم اليوم', _can_desk, _desk),
-    ('archive', 'الأرشفة', 'ما ينتظر الرفَّ اليوم', _can_archive, _archive),
+    ('archive', 'الأرشفة', 'ما لم يكتمل قيدُه اليوم', _can_archive, _archive),
     ('dossier', 'أضبارة وحدتي', 'ما ذُكر فيه اسمُنا', _always, _dossier),
     ('register', 'دفتر القسم', 'حجمُ العمل ومساره', _has_register, _register),
     ('mail', 'البريد الإلكتروني', 'ما وصل وما أخفق', _can_mail, _mail),

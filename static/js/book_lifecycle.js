@@ -306,35 +306,7 @@
     });
   }
 
-  // ── الأرشفة: تمامُ الحفظ وفتحُه ───────────────────────────────────────
-  var archSubmit = document.getElementById('archSubmit');
-  if (archSubmit) {
-    archSubmit.addEventListener('click', function (event) {
-      var button = event.currentTarget;
-      busy(button, true);
-      post('/books/api/book/' + bookId + '/archive/', {
-        place: document.getElementById('archPlace').value,
-        note: document.getElementById('archNote').value
-      }).then(function (data) { notify(data.message, true); })
-        .catch(function (err) { notify(err.message, false); })
-        .finally(function () { busy(button, false); });
-    });
-  }
-
-  var reopenBtn = document.getElementById('reopenArchiveBtn');
-  if (reopenBtn) {
-    reopenBtn.addEventListener('click', function (event) {
-      // السببُ إلزاميّ على الخادم؛ والإلغاءُ هنا لا يُرسل طلباً فارغاً.
-      var reason = window.prompt('سببُ إخراجه من الأرشيف:');
-      if (reason === null) return;
-      var button = event.currentTarget;
-      busy(button, true);
-      post('/books/api/book/' + bookId + '/archive/reopen/', { reason: reason })
-        .then(function (data) { notify(data.message, true); })
-        .catch(function (err) { notify(err.message, false); })
-        .finally(function () { busy(button, false); });
-    });
-  }
+  // (أُزيلت معالجاتُ «تمام الأرشفة» و«فتح المؤرشَف» — قراراتُ الدورة §6)
 
   // ── «قيِّده عندنا» ────────────────────────────────────────────────────
   var registerBtn = document.getElementById('registerHereBtn');

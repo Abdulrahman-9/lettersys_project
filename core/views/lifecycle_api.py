@@ -171,51 +171,6 @@ def api_register_here(request, pk):
 
 
 @login_required
-@require_http_methods(['POST'])
-def api_archive_book(request, pk):
-    """«تمامُ أرشفة» — والحقيقةُ كلُّها في `core/archive_service.py`."""
-    from core.archive_service import archive_book
-
-    book = _book(request, pk)
-    if book is None:
-        return _missing()
-
-    data = _json(request)
-    try:
-        moment = archive_book(book, by=request.user,
-                              place=data.get('place') or '',
-                              note=data.get('note') or '')
-    except ValidationError as exc:
-        return _bad(exc)
-    except PermissionDenied as exc:
-        return _denied(exc)
-
-    return JsonResponse({'success': True, 'message': 'قُيّد تمامُ الأرشفة — %s.'
-                         % (moment.note or 'بلا موضعِ حفظ')})
-
-
-@login_required
-@require_http_methods(['POST'])
-def api_reopen_archive(request, pk):
-    """فتحُ مؤرشَفٍ بسببٍ مسجَّل — ولا يمحو أثرَ حفظه."""
-    from core.archive_service import reopen_archive
-
-    book = _book(request, pk)
-    if book is None:
-        return _missing()
-
-    try:
-        reopen_archive(book, by=request.user, reason=_json(request).get('reason') or '')
-    except ValidationError as exc:
-        return _bad(exc)
-    except PermissionDenied as exc:
-        return _denied(exc)
-
-    return JsonResponse({'success': True,
-                         'message': 'أُخرج من الأرشيف — والسببُ مسجَّل.'})
-
-
-@login_required
 @require_http_methods(['GET'])
 def api_targets(request):
     """أهدافُ التفريق المتاحة — أقسامٌ وعناقيدُ وموظّفو قسمي.

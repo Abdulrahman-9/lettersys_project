@@ -73,10 +73,6 @@ urlpatterns = [
          lifecycle_api.api_referral_action, name="api_referral_action"),
     path("api/book/<int:pk>/custody/", lifecycle_api.api_record_custody, name="api_record_custody"),
     path("api/book/<int:pk>/register-here/", lifecycle_api.api_register_here, name="api_register_here"),
-    path("api/book/<int:pk>/archive/", lifecycle_api.api_archive_book,
-         name="api_archive_book"),
-    path("api/book/<int:pk>/archive/reopen/", lifecycle_api.api_reopen_archive,
-         name="api_reopen_archive"),
     # لوحةُ الإدارة — الأقسام والأدوار والعناقيد (مديرُ النظام)
     path("admin/", admin_panel.admin_panel, name="admin_panel"),
     # سجلُّ الحركات — رئيسُ القسم ومديرُ النظام حصراً
