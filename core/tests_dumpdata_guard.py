@@ -108,6 +108,24 @@ class SecretModelExclusionTests(TestCase):
         self.assertNotIn('"auth.user"', text.lower())
         self.assertNotIn('core.emailsettings', text.lower())
 
+    def test_a_crash_mid_write_leaves_no_unscanned_file(self):
+        """جانغو لا يحذف المكتوبَ جزئيّاً — فيبقى نصفُ نسخةٍ لم يمرّ عليها فحص."""
+        from django.core.management.commands.dumpdata import (
+            Command as Original)
+
+        def crash(command, *args, **options):
+            Path(options['output']).write_text('[{"model": "auth.user"',
+                                               encoding='utf-8')
+            raise RuntimeError('boom')
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'd.json'
+            with mock.patch.object(Original, 'handle', crash):
+                with self.assertRaises(RuntimeError):
+                    call_command('dumpdata', '--all', '-o', str(target), verbosity=0)
+
+            self.assertFalse(target.exists(), 'بقي ملفٌّ لم يُفحَص على القرص')
+
     def test_scan_deletes_the_file_when_the_exclusion_fails(self):
         """إعادةُ إنتاج حادثة 09-08: العمودُ enc:: سليم، والمُسلسِلُ يكتب الصريح."""
         with tempfile.TemporaryDirectory() as tmp:

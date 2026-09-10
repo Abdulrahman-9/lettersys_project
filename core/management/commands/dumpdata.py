@@ -167,7 +167,15 @@ class Command(DumpDataCommand):
                 '**صريحة**، و`loaddata` لا يُعيد تشفيرَها. ' + _ALTERNATIVE)
 
         options['exclude'] = list(options.get('exclude') or []) + list(secrets)
-        super().handle(*app_labels, **options)
+        try:
+            super().handle(*app_labels, **options)
+        except BaseException:
+            # العقدُ: **لا يبقى على القرص ملفٌّ لم يُفحَص**. جانغو يترك المكتوبَ
+            # جزئيّاً حين يفشل التسلسل (لا حذفَ في `finally`) — فيبقى ملفٌّ
+            # يبدو نسخةً وهو نصفُ نسخةٍ لم يمرّ عليها الفحص. والخطأُ يُرمى كما
+            # هو: تنظيفٌ لا ابتلاع.
+            target.unlink(missing_ok=True)
+            raise
 
         violations = scan_dump_for_secrets(target, options.get('format', 'json'))
         if violations:
