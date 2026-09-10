@@ -73,6 +73,14 @@ DEBUG = True
 # ─── تجاوز: السماح بـ testserver (العميل الافتراضي لـ Django TestCase) ──────
 ALLOWED_HOSTS = ['*', 'testserver', 'localhost', '127.0.0.1']
 
+# ─── تجاوز: السماحُ بسكّ مفتاح تعميةٍ في الاختبارات ───────────────────────
+# `get_or_create_encryption_key` صار يرفض السكَّ خارج DEBUG (Merge9 §10.4)،
+# و**مُشغّلُ اختبارات جانغو يفرض `DEBUG=False`** مهما كتبنا فوق. ونسخةٌ جديدةٌ
+# من المستودع تصل بلا `.encryption_key` (متجاهَلٌ في git) — فبلا هذا العلَم
+# تحمرّ كلُّ اختباراتِ البريد والنسخ على أوّل قراءةٍ لحقلٍ مشفَّر.
+# `setdefault` كي تغلبَ قيمةٌ صريحةٌ من البيئة.
+os.environ.setdefault('ENCRYPTION_KEY_ALLOW_CREATE', '1')
+
 # ─── تجاوز: تعطيل إعادة توجيه SSL في الاختبارات ─────────────────────────
 # settings.py يضبطها True عندما DEBUG=False — نُلغيها هنا لمنع 301
 SECURE_SSL_REDIRECT = False

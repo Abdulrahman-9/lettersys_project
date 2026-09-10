@@ -5,6 +5,7 @@ Utility functions for encrypting and decrypting files using Fernet (symmetric en
 from cryptography.fernet import Fernet, InvalidToken
 from pathlib import Path
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -14,18 +15,55 @@ ENCRYPTION_KEY_FILE = Path(__file__).resolve().parent.parent / '.encryption_key'
 # Marker used by transparent string encryption (model fields).
 ENCRYPTED_PREFIX = 'enc::'
 
+#: علَمُ البيئة الذي يأذن بسكّ مفتاحٍ جديد (تنصيبٌ أوّلُ مرّة).
+ALLOW_CREATE_ENV = 'ENCRYPTION_KEY_ALLOW_CREATE'
+
+
+class EncryptionKeyMissing(RuntimeError):
+    """المفتاحُ غائبٌ والسكُّ ممنوع — يُسمّي المسارَ ولا يطبع محتوىً."""
+
+
+def _minting_allowed():
+    """هل يُؤذَن بسكّ مفتاحٍ جديد؟ — ``DEBUG`` أو ``ENCRYPTION_KEY_ALLOW_CREATE=1``.
+
+    الافتراضُ **لا**: السكُّ الصامتُ على خادمٍ فقد مفتاحَه يُنتج مفتاحاً ثانياً
+    يبدو سليماً — فتُقرأ كلماتُ البريد المشفَّرة بالأوّل فيفشل الفكُّ **بصمت**
+    (``from_db`` يبتلعه) وتُكتَب النسخُ الجديدة بمفتاحٍ لا يفكّ القديمة. القرارُ
+    في Merge9.md §10.4 (دَين T10.4).
+    """
+    if os.environ.get(ALLOW_CREATE_ENV) == '1':
+        return True
+    from django.conf import settings
+    from django.core.exceptions import ImproperlyConfigured
+    try:
+        return bool(settings.DEBUG)
+    except ImproperlyConfigured:            # جانغو غيرُ مهيّأ — لا إذنَ ضمنيّ
+        return False
+
 
 def get_or_create_encryption_key():
-    """Get the encryption key, creating it if it doesn't exist."""
+    """يُعيد مفتاحَ التعمية من الملفّ؛ ويسكّ واحداً **بإذنٍ صريحٍ فقط**.
+
+    يرمي ``EncryptionKeyMissing`` (باسم المسار، بلا محتوى) حين يغيب الملفُّ
+    خارج ``DEBUG`` وبلا ``ENCRYPTION_KEY_ALLOW_CREATE=1``.
+    """
     if ENCRYPTION_KEY_FILE.exists():
         return ENCRYPTION_KEY_FILE.read_bytes()
-    else:
-        # Generate a new key
-        key = Fernet.generate_key()
-        ENCRYPTION_KEY_FILE.write_bytes(key)
-        ENCRYPTION_KEY_FILE.chmod(0o600)  # Restrict access to owner only
-        logger.info("Created new encryption key for backups")
-        return key
+
+    if not _minting_allowed():
+        raise EncryptionKeyMissing(
+            f"مفتاحُ التعمية غيرُ موجود: {ENCRYPTION_KEY_FILE}. "
+            f"انسخ المفتاحَ الصحيح إلى هذا المسار (chmod 600). "
+            f"السكُّ التلقائيّ ممنوع خارج DEBUG — اضبط {ALLOW_CREATE_ENV}=1 "
+            f"عمداً عند التنصيب الأوّل فقط؛ مفتاحٌ جديدٌ لا يفكّ ما شُفِّر قبله."
+        )
+
+    # Generate a new key (بإذنٍ صريح)
+    key = Fernet.generate_key()
+    ENCRYPTION_KEY_FILE.write_bytes(key)
+    ENCRYPTION_KEY_FILE.chmod(0o600)  # Restrict access to owner only
+    logger.warning("سُكَّ مفتاحُ تعميةٍ جديد في %s (بإذنٍ صريح)", ENCRYPTION_KEY_FILE)
+    return key
 
 
 def encrypt_file(file_path):
