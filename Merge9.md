@@ -1048,3 +1048,50 @@ python manage.py verify_backup <ملفّ.enc|.dump> [--key PATH] [--expect جد�
   **`lettersys-deploy` قُرئ كاملاً** (root:root 755): `git reset --hard origin/main` + `lfs pull` + pip المشروط + **`pg_dump -Fc` إلى `/root/backups/pre-deploy-<ts>.dump` (حفظُ 7 أيّام)** + `migrate --noinput` + `collectstatic` + `chown/chmod` + `restart lettersys.service` + `reload nginx` + `restart lettersys-celery.service`. **لا `makemigrations`** ✓ و**لا `models_healthcheck`** (يؤكّد نقصَ P3). ⚠️ تشغيلُه سهواً داخل النافذة = `reset --hard` + `migrate` على الإنتاج.
   **وتَبِعةٌ على حزمة [م]‑1**: أكثرُ بنود 0.3 صارت مقيسةً بيدي (④‑1/2/3 جزئيّاً/4 لا/7/8/9/11/13) ⟵ الحزمةُ تُختصر لِما يحتاج صلاحيّة. **الاستشارةُ جاريةٌ مع فيبل** في: توقيتِ إصلاح nginx · قائمةِ الصلاحيّات الدنيا · beat · نصِّ 4.1/4.5 البديل · تهيئةِ gunicorn/celery على 1 vCPU · والاختبارِ المقيَّد بالمنصّة.
 - 2026-09-10 — **بند 0.4 مُنجَزٌ على كاغل** (دفترٌ خاصّ، الوسمُ `cutover-2026-09`، `settings_test` بـSQLite في الذاكرة، `DJANGO_SECRET_KEY` عشوائيٌّ عابرٌ داخل العمليّة، **صفرُ بياناتِ عميل**): **1607 اختباراً في 26 ثانية · فشلٌ واحد · تخطٍّ 2**. الفشلُ الوحيد `core.tests_backup_dest.PgDumpDiscoveryTests.test_windows_install_is_found_when_path_is_empty` — **مقيَّدٌ بالمنصّة** (يؤكّد أنّ `_find_pg_dump` يجد تنصيبَ ويندوز حين يخلو PATH؛ ولا وجودَ لـ`C:/Program Files/PostgreSQL` على لينكس) ⟵ ليس عيباً في الكود، ومحلّيّاً يمرّ. القرارُ في يد فيبل (تخطٍّ بالمنصّة أم اختبارٌ محكم). السجلُّ في `D:/migration/kaggle/full_suite/out/full_suite.log`.
+
+---
+
+## §12 — مذكّرةُ فيبل بعد استطلاع الخادم (2026-09-10) — القراراتُ والبنودُ الجديدة N8–N15
+
+> **استشارةٌ لا تنفيذ.** استُشير فيبل بعد أوّل اتّصالٍ بالخادم (D6.16)، وقرأ §0/§2/§5/§6/المرحلتين 4‑5/§8/§10/§11 كاملاً + `docs/DEPLOY_MEDIA.md` + `core/views/attachments.py` + `lettersys/settings.py` + `core/messaging/views/ui.py` + `core/tasks.py` + `core/backup_service.py` + مخرَجاتِ المسابير. **الأحكامُ أدناه تُلحَق ولا تُكتب فوق §11؛ وحيث اختلفت مع بندٍ سابقٍ فهي الأحدثُ لأنّها مبنيّةٌ على قياس.**
+
+### 12.1 — أحكامٌ مقيسةٌ جديدة (تُغلق مجاهيلَ كانت معلَّقة)
+
+- **N7 محسوم**: `redis-cli INFO keyspace` ⟵ **db0 = وسيطُ Celery** (`_kombu.binding.*`) · **db1 = كاشُ جانغو** (`lettersys:1:*` = `KEY_PREFIX` في `settings.py:159`). ⟵ **بند 4.3 = `redis-cli -n 1 FLUSHDB`** (لا `-n 0` ولا `FLUSHALL`).
+- **N15 محسوم**: `REDIS_CACHE_URL` مضبوطٌ فعلاً (كتلةُ CACHES نشطة) ⟵ `SESSION_ENGINE = 'django.contrib.sessions.backends.cache'` (`settings.py:162`) ⟵ **الجلساتُ في Redis db1 لا في `django_session`**. فبندُ 10.k④ (`TRUNCATE django_session`) **لا يُسقط جلسةَ إنتاجٍ واحدة**، وبوّابةُ «جلسات 0» في S‑0 **خضرةٌ كاذبة**؛ والمُسقِطُ الحقيقيُّ هو 4.3. يبقى البندان معاً وتُصحَّح البوّابة.
+- **إعادةُ التشغيل المعلّقة مقيسة**: `/var/run/reboot-required` بتاريخ **2026-09-09 06:14** (لا ثمانيةَ أيّام) بسبب `linux-image-7.0.0-31-generic` · `linux-base` · `libc6` ⟵ **N12**.
+- **الإقلاعُ آمنٌ بعد reboot**: `is-enabled` = `enabled` لـ`lettersys` · `lettersys-celery` · `nginx` · `redis-server` · **و`postgresql` الجامعة `enabled`** (النسخةُ `postgresql@18-main` تظهر `enabled-runtime` وهو الطبيعيُّ للنسخ المولَّدة). و**swap دائمٌ**: `/etc/fstab:4` فيه `/swapfile none swap sw 0 0`.
+- **`proxy_read_timeout 120s`** مقيسٌ في `sites-enabled/lettersys:37` · و`expires 7d` على `/media/` في السطر 26.
+- **`X_ACCEL_MEDIA_PREFIX` افتراضُه `/protected_media/`** (`settings.py:218`) و`USE_X_ACCEL_REDIRECT` افتراضُه **False** (`settings.py:217`) ⟵ كتلةُ nginx يجب أن تطابق البادئةَ حرفيّاً.
+
+### 12.2 — القراراتُ السبعة
+
+1. **ثغرةُ `/media/` تُغلق أوّلاً وقبل أوّل بايت rsync (N9).** الضررُ المحدَّد: المساراتُ `books/<سنة>/<رقم>_<اسم>` متسلسلةٌ بالرقم، و`alias` يخدمها بلا جلسة **مع `expires 7d`** فتُكاش أسبوعاً. اليومَ المجلّدُ فارغٌ فالكلفةُ صفر — وهذه أرخصُ لحظة. **وحذفُ `alias` وحدَه يُغلق الثغرة** حتّى لو بقي `USE_X_ACCEL_REDIRECT=False`: يسقط `/media/` إلى `location /` ⟵ `serve_media` بـ`@login_required` وفحصِ الملكيّة. **لكن تُضاف كتلةُ `internal` في التعديل نفسِه**، وإلّا صار كلُّ مرفقٍ 404 لو كان العلَمُ مضبوطاً سلفاً. **فخُّ `alias` مقابل `root`**: `root` يُلحق الـURI كاملاً (`…/media/protected_media/books/…`) ⟵ 404 صامت.
+2. **الصلاحيّات: sudoers محدَّدٌ لا عضويّةُ `www-data` (N8).** الحجّةُ الفاصلة ليست تسريبَ `.env` (أيُّ `manage.py shell` يقرأ البيئةَ كلَّها) بل أنّ **sudo يُسجّل كلَّ أمرٍ في journal** — وهو عينُ قاعدة §0 «يُسجَّل قبل تنفيذه» — ويُلغى بحذف ملفّ؛ أمّا المجموعةُ فقراءةٌ دائمةٌ صامتةٌ لـ`media/` كلِّها **ولا تُنجز `systemctl` ولا nginx ولا `postgres`** فلا تكفي وتُسرّب أكثر. **`SETENV:` إلزاميّ** وإلّا سقط `DB_NAME=lettersys_new` في 10.j/10.l وعملا على **القاعدة الحيّة بلا رسالة خطأ** — أخطرُ فخٍّ في الحزمة؛ تُضاف بوّابةٌ تطبع `connection.settings_dict[NAME]` قبل أيّ أمر.
+3. **beat لا يُنصَّب قبل الترحيل؛ وحدةً ثالثةً في د8 قبل 5.3 (N14).** خطرُ R5.4 يهبط من «سحبٌ كلَّ 10 دقائق» إلى «سحبٌ عند فتح `/mail/inbox/` بتبريد 120 ث» — **وليس صفراً**: المستعادةُ تحمل `imap_sync_enabled=True` وأوّلُ موظّفٍ يفتح الوارد يسحب بريدَ الشركة. ⟵ **10.k① يبقى إلزاميّاً بلا تخفيف**، ويُضاف إلى S‑0 سطرا `imap_last_sync` و`count(core_incomingemail)`. وأثرٌ ثانٍ: **إشعاراتُ التأخّر لم تعمل دوريّاً في أيّ بيئة** (التبويبُ «متأخّر» يُحسَب لحظيّاً فلا يتأثّر) ⟵ دَينُ **N10**.
+4. **بندا 4.1/4.5 يُستبدَل نصُّهما** (الأسماءُ الحاليّة غيرُ موجودة): `lettersys.service` و`lettersys-celery.service` ولا beat · **`chmod 000 /usr/local/bin/lettersys-deploy` طوال النافذة (N13)** · بوّابةُ `pg_stat_activity` للقاعدتَين **تعود فارغةً** لا «0» · و`KillMode=mixed` مع `--graceful-timeout 30` ⟵ الإيقافُ قد يستغرق 35 ثانيةً تُحسَب من العشر دقائق.
+5. **0.8 الحدُّ الأدنى**: `--timeout 180` **مع `proxy_read_timeout 180s`** (رفعُ أحدهما وحدَه بلا أثرٍ — nginx يقطع أوّلاً) · celery `--concurrency=1` · **`--workers 3 --threads 2` يبقى** (الذاكرةُ المقدَّرة 2.0–3.2 GB من 3.9 + swap 4؛ الاختناقُ النواةُ لا الذاكرة، وOCR **يجري داخل طلب gunicorn** لا في Celery — مقيسٌ في `endpoints.py`). بـdrop-ins لا بتحرير الوحدات، و`ExecStart=` الفارغُ إلزاميٌّ قبل الإعادة.
+6. **الاختبارُ المنصّيُّ لا يُعدَّل الآن.** الوسمُ مدفوعٌ وسيسحبه الخادم؛ وإيداعٌ جديدٌ يعني تحريكَ الوسم (يهدم «رأسَ التجميد») أو وسماً ثانياً وإعادةَ الحزمة. **بوّابةُ 0.4 تُكتب**: «1607 نُفِّذت · 1606 خضراء · تخطٍّ 2 · الفشلُ الوحيدُ **بالاسم** `PgDumpDiscoveryTests.test_windows_install_is_found_when_path_is_empty` · صفرُ error»؛ وأيُّ فشلٍ ثانٍ = بوّابةٌ حمراء. البديلُ النظيف دَينُ **N11**.
+7. **الترتيبُ يتغيّر بندَين فقط**: **N8 يسبق د2** (S‑0 صار بيد [ن] لا [م] فتُغلَق د2 في يومها) · و**N9 وN12 في رأس د3 قبل 0.6**.
+
+### 12.3 — البنودُ الجديدة
+
+| المعرّف | البند | مَن | متى | البوّابة |
+|---|---|---|---|---|
+| **N8** | `/etc/sudoers.d/lettersys-admin` بقائمةٍ دنيا (`visudo -cf` ثمّ 440) | root | **الآن — يحجب كلَّ ما بعده** | `sudo -n -u www-data … manage.py check` = 0 · `sudo -n -u postgres psql -Atc "select version()"` = 18.6 · `sudo -n systemctl status lettersys` يطبع · **`sudo -n cat /etc/shadow` مرفوض** |
+| **N9** | حذفُ `location /media/` وإضافةُ `location /protected_media/ { internal; alias /var/www/lettersys/media/; }` | ن (بعد N8) | **قبل 0.6** | `curl … /media/x` ⟵ **302 إلى `/login/`** · `curl … /protected_media/x` ⟵ **404** |
+| **N10** | دَين: لا جدولَ لإشعارات التأخّر في أيّ بيئة | ن+مالك | د10/د11 | قرارٌ مكتوب |
+| **N11** | دَين: اختبارُ `_find_pg_dump` للمنصّتَين بجذورٍ قابلةٍ للترقيع | ن | د10 | يخضرّ على لينكس وويندوز |
+| **N12** | إعادةُ التشغيل المعلّقة (`linux-image` · `libc6`) | ن (بعد N8) | **د3، بعد 0.8 وقبل 0.6** | `uptime` جديد · الخدماتُ الأربع `active` · `swapon --show` يُظهر 4G · `journalctl -b -u lettersys` بلا `could not connect` |
+| **N13** | `chmod 000 lettersys-deploy` طوال النافذة و`755` بعد 4.6 | ن | د7 | `ls -l` = `----------` ثمّ `-rwxr-xr-x` |
+| **N14** | `lettersys-celery-beat.service` وحدةً ثالثة | ن | **د8 قبل 5.3** | ثلاثُ وحدات · `Scheduler: Sending due task` بلا traceback |
+| **N15** | **محسومٌ بالقياس** (12.1): الجلساتُ في Redis db1 | — | — | 4.3 = `redis-cli -n 1 FLUSHDB` |
+
+### 12.4 — مخاطرُ أضافها فيبل (لم تكن في §5)
+
+1. **`lettersys-deploy` داخل النافذة**: `restart lettersys.service` في ذيله يُعيد الخدمةَ بين 4.1 و4.2 ⟵ `ALTER DATABASE … RENAME` يفشل بـ«is being accessed by other users»، أو يفتح الخدمةَ على القديمة بعد أن رُسمت الخطّةُ على الجديدة ⟵ **N13**.
+2. **`pg_restore` كـ`postgres` يقرأ `ship.dump` الذي كتبه `www-data`** ⟵ `Permission denied` صامتٌ يُسقط 10.i؛ تُضاف `chmod 644` إلى بوّابة 10.h.
+3. **ملكيّةُ الوسائط بعد rsync**: ملفّاتٌ بمالك `lettersys-admin` داخل `media/books` (750 www-data) ⟵ التطبيقُ لا يحذف ولا ينسخ؛ يُحسَم في D6.6 بـ`setfacl` أو `--rsync-path="sudo -u www-data rsync"`.
+4. **`urlquote` للأسماء العربيّة في X‑Accel غيرُ مقيسٍ على nginx** ⟵ يُدرَج في دخان 4.6 مرفقٌ باسمٍ عربيّ.
+5. **زمنُ 4.4 على 1 vCPU غيرُ مقيس** (الأثقلُ `models_healthcheck --load` للأوزان) ⟵ يُقاس مرّةً في د3 ويُدوَّن قبل أن يُحسَب في ميزانيّة العشر دقائق.
+6. **`expires 7d` القديم**: أيُّ مرفقٍ فُتح عبر `/media/` قبل N9 يبقى في كاش متصفّحه أسبوعاً — لا فعلَ يلزم (لا وسائطَ حقيقيّةً بعد)، يُدوَّن.
