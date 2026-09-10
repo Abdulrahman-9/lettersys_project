@@ -17,7 +17,8 @@ from django.utils import timezone
 
 from core.models import Attachment, Book, Department, SecretAccessGrant, UserProfile
 from core.roles import CONTROLLER_GROUP_NAME
-from core.scoping import ACCESS_FULL, ACCESS_STUB, can_open_content, can_view_book, secret_access
+from core.scoping import (ACCESS_FULL, ACCESS_STUB, STUB_TITLE, can_open_content,
+                          can_view_book, secret_access)
 
 
 class SecrecyTestCase(TestCase):
@@ -118,6 +119,67 @@ class GrantTests(SecrecyTestCase):
         )
         SecretAccessGrant.objects.create(book=self.secret, user=self.clerk, granted_by=self.head)
         self.assertEqual(secret_access(self.clerk, other_secret), ACCESS_STUB)
+
+
+class GrantIsHonouredByTheIndexTests(SecrecyTestCase):
+    """الحقُّ يُمنح بالباب فلا يُنكَر بالفهرس (T7.5‑1).
+
+    كان ``secret_access`` يفتح الكتابَ لصاحب المنحة و``_unauthorized_secret_q``
+    يحجبه عن بحثه وقوائمه — فالرجلُ يفتح ما وصله رابطُه ولا يجد ما مُنح.
+    الاتّجاهُ محافظٌ (لا تسريب) لكنّه مصدران لقاعدةٍ واحدة، وانفراجُهما هو
+    صنفُ العيب الذي كلّف هذا المشروعَ مرّاتٍ.
+    """
+
+    def _titles(self, q=''):
+        params = {'q': q} if q else {}
+        resp = self.client.get('/books/api/unified/data/', params)
+        self.assertEqual(resp.status_code, 200)
+        return [b['title'] for b in resp.json()['books']]
+
+    def test_a_live_grant_makes_it_findable_by_title(self):
+        SecretAccessGrant.objects.create(book=self.secret, user=self.clerk,
+                                         granted_by=self.head)
+        self.client.force_login(self.clerk)
+
+        self.assertIn('مناقصةُ الحفر السرّيّة', self._titles('مناقصة'))
+
+    def test_a_live_grant_unstubs_the_list_row(self):
+        SecretAccessGrant.objects.create(book=self.secret, user=self.clerk,
+                                         granted_by=self.head)
+        self.client.force_login(self.clerk)
+
+        rows = {t for t in self._titles()}
+
+        self.assertIn('مناقصةُ الحفر السرّيّة', rows)
+        self.assertNotIn(STUB_TITLE, rows)
+
+    def test_an_expired_grant_keeps_the_search_shut(self):
+        """الشرطُ سريانٌ لا وجودُ صفّ — وإلّا صار كلُّ تفويضٍ ملغىً مفتاحاً دائماً."""
+        SecretAccessGrant.objects.create(
+            book=self.secret, user=self.clerk, granted_by=self.head,
+            expires_at=timezone.now() - timedelta(minutes=1))
+        self.client.force_login(self.clerk)
+
+        self.assertEqual(self._titles('مناقصة'), [])
+
+    def test_a_revoked_grant_keeps_the_search_shut(self):
+        SecretAccessGrant.objects.create(
+            book=self.secret, user=self.clerk, granted_by=self.head,
+            revoked_at=timezone.now())
+        self.client.force_login(self.clerk)
+
+        self.assertEqual(self._titles('مناقصة'), [])
+
+    def test_a_grant_on_one_book_does_not_open_another(self):
+        other = Book.objects.create(
+            kind='incoming_internal', title='سرٌّ آخرُ لا يُمنح', created_by=self.author,
+            department=self.dept, our_number='2438', secret_level='secret')
+        SecretAccessGrant.objects.create(book=self.secret, user=self.clerk,
+                                         granted_by=self.head)
+        self.client.force_login(self.clerk)
+
+        self.assertEqual(self._titles('آخرُ'), [])
+        self.assertEqual(secret_access(self.clerk, other), ACCESS_STUB)
 
 
 class SearchIsNotAnInterrogationToolTests(SecrecyTestCase):

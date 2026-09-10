@@ -174,16 +174,29 @@ def secret_access(user, book) -> str:
     return ACCESS_STUB
 
 
-def _has_live_grant(user, book) -> bool:
-    """أعنده تفويضٌ سارٍ على هذا الكتاب بعينه؟"""
-    if not getattr(user, 'pk', None):
-        return False
+def _live_grants_for(user):
+    """تفاويضُ هذا المستخدم السارية — **مسندٌ واحدٌ يُستهلك في موضعين**.
+
+    نظيرُ ``_department_custodian`` تماماً، وللسبب نفسِه: ``_has_live_grant``
+    (فتحُ المحتوى) و``_unauthorized_secret_q`` (حارسُ البحث والقوائم) كانا
+    يفترقان — الأوّلُ يعرف المنحةَ والثاني لا. فصاحبُ المنحة يفتح الكتابَ
+    السرّيَّ برابطه **ولا يجده في بحثٍ ولا قائمة**: حقٌّ يُمنح بالباب ويُنكَر
+    بالفهرس. والسريانُ هنا تعريفٌ واحد (غيرُ مسحوبٍ، وغيرُ منتهٍ) لا نسختان.
+    """
     from core.models import SecretAccessGrant
+
+    if not getattr(user, 'pk', None):
+        return SecretAccessGrant.objects.none()
 
     now = timezone.now()
     return SecretAccessGrant.objects.filter(
-        book=book, user=user, revoked_at__isnull=True,
-    ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now)).exists()
+        user=user, revoked_at__isnull=True,
+    ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+
+
+def _has_live_grant(user, book) -> bool:
+    """أعنده تفويضٌ سارٍ على هذا الكتاب بعينه؟"""
+    return _live_grants_for(user).filter(book=book).exists()
 
 
 def can_view_book(book, user) -> bool:
@@ -378,12 +391,20 @@ def _is_numeric_query(text) -> bool:
 
 
 def _unauthorized_secret_q(user):
-    """الكتبُ السرّيّة التي لا يملك هذا المستخدم محتواها."""
+    """الكتبُ السرّيّة التي لا يملك هذا المستخدم محتواها.
+
+    **شقّاً بشقٍّ مع ``secret_access``**: المُنشئُ · المخوَّلُ بالدور داخل قسمه ·
+    وصاحبُ المنحة الفرديّة. وأيُّ شقٍّ يُضاف إلى إحداهما دون الأخرى يُسقطه
+    حارسُ التطابق في ``tests_archivist_role``.
+    """
     q = Q(secret_level__in=RESTRICTED_SECRET_LEVELS) & ~Q(created_by=user)
     dept_id = user_department_id(user)
     if dept_id and _department_custodian(user):
         # مخوَّلٌ بالدور داخل قسمه — فلا يُستثنى منه إلّا سرّيُّ غيره.
         q &= ~Q(department_id=dept_id)
+    # ومُفوَّضٌ بعينه على كتابٍ بعينه — من المسند نفسِه الذي يقرؤه
+    # ``_has_live_grant``، لا من نسخةٍ ثانيةٍ تنحرف عنه.
+    q &= ~Q(pk__in=_live_grants_for(user).values('book_id'))
     return q
 
 

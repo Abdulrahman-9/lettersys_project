@@ -7,12 +7,15 @@
 الآخر، مهما بدا ذلك أنظف.
 """
 
+from datetime import timedelta
+
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
+from django.utils import timezone
 
 from core.admin_service import assign_user
 from core.logging_models import UserActivityLog
-from core.models import Book, Department, UserProfile
+from core.models import Book, Department, SecretAccessGrant, UserProfile
 from core.roles import (ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME,
                         ROLE_DEFINITIONS, get_user_role, role_capabilities)
 from core.scoping import (ACCESS_FULL, ACCESS_STUB, can_archive,
@@ -37,7 +40,7 @@ def _member(name, department, *, head=False, controller=False,
 
 
 class ArchivistRoleTests(TestCase):
-    """الفاعلون التسعة — ومن بينهم الجامعُ للدورين والغريبُ عن القسم."""
+    """الفاعلون الأحدَ عشرَ — الجامعُ للدورين، والغريبُ، وصاحبا المنحة."""
 
     @classmethod
     def setUpTestData(cls):
@@ -57,6 +60,20 @@ class ArchivistRoleTests(TestCase):
         cls.secret = Book.objects.create(
             kind='incoming_external', title='مناقصةٌ سرّيّة', our_number='9700',
             secret_level='secret', department=cls.dept, created_by=cls.head)
+
+        # الفاعلُ العاشر: موظّفٌ عاديٌّ **بمنحةٍ فرديّةٍ سارية** — لا دورَ له
+        # يفتح السرّيَّ، فالمنحةُ وحدَها هي ما يُقاس. وكانت `secret_access`
+        # تعرفها و`_unauthorized_secret_q` لا: يفتح الكتابَ برابطه ولا يجده
+        # في بحثٍ ولا قائمة.
+        cls.granted = _member('granted', cls.dept)
+        SecretAccessGrant.objects.create(book=cls.secret, user=cls.granted,
+                                         granted_by=cls.head)
+
+        # والحادي عشر: منحةٌ **منتهية** — وإلّا مرّ الحارسُ على شرطٍ بلا سريان.
+        cls.expired = _member('expired', cls.dept)
+        SecretAccessGrant.objects.create(
+            book=cls.secret, user=cls.expired, granted_by=cls.head,
+            expires_at=timezone.now() - timedelta(minutes=1))
 
     # ── التسمية ────────────────────────────────────────────────────────
     def test_the_archivist_has_a_role_label_of_its_own(self):
@@ -126,12 +143,21 @@ class ArchivistRoleTests(TestCase):
         """
         for user in (self.plain, self.entry, self.officer, self.head,
                      self.archivist, self.both, self.head_archivist,
-                     self.stranger, self.root):
+                     self.stranger, self.root, self.granted, self.expired):
             opens = secret_access(user, self.secret) == ACCESS_FULL
             found = guard_secret_text_search(
                 Book.objects.filter(pk=self.secret.pk), user, 'مناقصة').exists()
 
             self.assertEqual(opens, found, 'انفرجا على %s' % user.username)
+
+    def test_the_grant_clause_is_actually_exercised(self):
+        """الحارسُ لا يقيس شيئاً إن تساوى صاحبُ المنحة ومَن لا منحةَ له.
+
+        بلا هذا التأكيد يبقى الملفُّ أخضرَ ولو حُذف شرطُ المنحة من الطرفين معاً.
+        """
+        self.assertEqual(secret_access(self.granted, self.secret), ACCESS_FULL)
+        self.assertEqual(secret_access(self.expired, self.secret), ACCESS_STUB)
+        self.assertEqual(secret_access(self.plain, self.secret), ACCESS_STUB)
 
 
 class ArchivistGrantTests(TestCase):
