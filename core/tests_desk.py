@@ -8,6 +8,7 @@
 
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
+from django.urls import reverse
 
 from core.custody_service import record_custody
 from core.models import (Book, CustodyEvent, Department, Entity, UserProfile)
@@ -187,3 +188,15 @@ class LedgerTests(DeskTestCase):
     def test_a_broken_date_is_ignored_not_fatal(self):
         resp = self.client.get('/books/desk/ledger/', {'date_from': 'ليس تاريخاً'})
         self.assertEqual(resp.status_code, 200)
+
+
+class SheetsCarryTheCompanyNameTests(DeskTestCase):
+    """ق‑7: الورقتان الموقَّعتان تطبعان «شركة نفط الوسط» (من الإعدادات، لا «نفط ميسان»)."""
+
+    def test_both_sheets_name_the_company_from_settings(self):
+        self.client.force_login(self.officer)
+        for name in ('desk_handover', 'desk_ledger'):
+            r = self.client.get(reverse(name))
+            self.assertEqual(r.status_code, 200, name)
+            self.assertContains(r, 'شركة نفط الوسط')
+            self.assertNotContains(r, 'نفط ميسان')
