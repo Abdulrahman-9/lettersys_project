@@ -81,3 +81,23 @@ class ErrorPagesInsideTheShellTests(TestCase):
         r = self.client.get(reverse('book_edit', args=[b.pk]))
         self.assertEqual(r.status_code, 403)
         self.assertContains(r, 'data-error-back', status_code=403)
+
+
+class LifecycleRefreshInPlaceTests(TestCase):
+    """ح1: أفعالُ الدورة تُعيد رسمَ مناطقَ موسومةٍ في المكان — لا إعادةَ تحميلٍ للصفحة."""
+
+    def test_the_page_marks_the_regions_the_script_swaps(self):
+        u = User.objects.create_user('navlc', password='pw-navlc-11', is_staff=True)
+        b = Book.objects.create(kind='incoming_internal', title='دورة', created_by=u)
+        self.client.force_login(u)
+        r = self.client.get(reverse('book_detail', args=[b.pk]))
+        self.assertEqual(r.status_code, 200)
+        for region in ('lifecycleRegion', 'followupStateText', 'followupHistoryCard'):
+            self.assertContains(r, f'id="{region}" data-lifecycle-refresh')
+        self.assertContains(r, 'id="lifecycleCard"')
+
+    def test_the_script_no_longer_reloads_on_success(self):
+        src = open('static/js/book_lifecycle.js', encoding='utf-8').read()
+        self.assertIn('function refreshInPlace', src)
+        self.assertIn("region.addEventListener('click'", src)
+        self.assertNotIn("card.addEventListener('click'", src)

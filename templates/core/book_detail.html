@@ -25,7 +25,7 @@
       <span class="app-context-chip"><i class="bi bi-diagram-3"></i> تصنيف</span>
     </div>
     <div class="app-context-item">
-      <div>
+      <div id="followupStateText" data-lifecycle-refresh>
         <div class="app-context-meta">حالة المتابعة</div>
         <strong>{{ book.followup_label }}</strong>
       </div>
@@ -474,7 +474,7 @@
       {% endif %}
 
       <!-- بطاقة السجل -->
-      <div class="card border-0 shadow-sm">
+      <div class="card border-0 shadow-sm" id="followupHistoryCard" data-lifecycle-refresh>
         <div class="card-header bg-white d-flex justify-content-between align-items-center p-3 border-bottom">
           <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history text-info me-2"></i>سجل المتابعة</h6>
           <span class="badge bg-light text-dark">{{ book.history.count }} مدخل</span>
@@ -714,7 +714,7 @@
 {# قصاصةُ الهامش تُحمَّل قبل مُرسِل التفريق: الأخيرُ يقرأ حقلَها #}
 <script src="{% static 'js/margin_crop.js' %}?v=20260831"></script>
 <script src="{% static 'js/link_picker.js' %}?v=20260831"></script>
-<script src="{% static 'js/book_lifecycle.js' %}?v=20260906-arch"></script>
+<script src="{% static 'js/book_lifecycle.js' %}?v=20260910"></script>
 <script>
 // ── تحميل إيميلات الكتاب في البطاقة الجانبية ──
 (function() {

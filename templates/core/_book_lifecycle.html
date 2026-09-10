@@ -18,7 +18,8 @@
 <div id="lifecycleAlert" hidden></div>
 {# لوحةُ التسيير تستعمل مفرداتِ ألواح التصميم (lc-matrix · lc-state) #}
 <div class="lc-scope">
-
+{# lifecycleRegion: ما يُعاد رسمُه في المكان بعد كلّ فعلٍ (ح1) — الحواريّاتُ خارجَه #}
+<div id="lifecycleRegion" data-lifecycle-refresh>
 {% if not referrals and not custody and not links and not registrations %}
   <div class="card border-0 shadow-sm rounded-4 mb-3" id="lifecycleCard"
        data-book-id="{{ book.pk }}">
@@ -274,6 +275,7 @@
   </div>
 </div>
 {% endif %}
+</div>{# lifecycleRegion #}
 
 {% include "core/_lifecycle_dialogs.html" %}
 </div>{# lc-scope #}
