@@ -118,6 +118,9 @@ class SenderNumberProfiles:
             return
         from core.models import Book, LetterheadMemory
         through = Book.issuing_entities.through
+        # الضمُّ لا يمرّ بمدير: `through` نموذجٌ وسيطٌ بلا SoftDeleteManager،
+        # وشرطُ `book__is_deleted` يعبر إلى Book بضمٍّ خامّ ⟵ حذفُه يُدخل أرقامَ
+        # كتبٍ محذوفةٍ في بصمة الجهة بصمت (الفئة ب في 7.4‑هـ — لا يُكنَس).
         rows = (through.objects
                 .filter(book__is_deleted=False)
                 .exclude(book__sender_number__isnull=True)
@@ -141,6 +144,8 @@ class SenderNumberProfiles:
         lm_rows = (LetterheadMemory.objects
                    .exclude(issuing_entity=None)
                    .exclude(book=None)
+                   # الضمُّ لا يمرّ بمدير: LetterheadMemory مديرُه عاديٌّ والشرطُ حاملٌ
+                   # للحمل — بدونه تتعلّم الذاكرةُ من كتبٍ حُذفت (الفئة ب — لا يُكنَس).
                    .filter(book__is_deleted=False)
                    .exclude(book__sender_number__isnull=True)
                    .exclude(book__sender_number='')
