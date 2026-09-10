@@ -79,6 +79,16 @@ KNOWN_UNWIRED = {
     'extraction-wizard':        'مدخلٌ قديمٌ يُعيد التوجيه — يبقى للروابط المحفوظة',
     'extraction-results-ui':    'صفحةُ نتائجٍ قديمة بلا مدخل (الحيُّ سطحُ الاستخراج الذكيّ)',
     'media':                    'يُطلَب بمسار الملفّ (attachment.file.url) لا بالاسم — بحكم طبيعته',
+    # كشفتها قاعدةُ «مقطعان بعد آخر معلمة» (كان مقطعٌ واحدٌ يطابق روابطَ بريئة):
+    'book_create_incoming':     'مدخلٌ قديمٌ يُعيد التوجيه إلى سطح الاستخراج — يبقى للروابط المحفوظة',
+    'book_create_outgoing':     'مدخلٌ قديمٌ يُعيد التوجيه إلى سطح الاستخراج — يبقى للروابط المحفوظة',
+    'add_new_entity':           'API إضافةِ جهةٍ بلا مستهلك (السطحُ يستعمل entity-list والبحث)',
+    'email-send':               'الإرسالُ العامّ بلا مستهلك؛ الحيُّ book-email-send',
+    'attachment-merge-merge':   'ViewSet قديم (/api/attachments/…)؛ الحيُّ attachment_merge_pages عبر document_manager',
+    'attachment-merge-versions': 'ViewSet قديم — كما أعلاه',
+    'attachment-merge-history': 'ViewSet قديم — كما أعلاه',
+    'attachment-merge-restore': 'ViewSet قديم — كما أعلاه',
+    'attachment-merge-delete-file': 'ViewSet قديم — كما أعلاه',
 }
 
 
@@ -111,10 +121,19 @@ def _unwired_routes():
                    or re.search(r"pattern_name\s*=\s*['\"]" + q + r"['\"]", py))
         if by_name:
             continue
-        segs = [s for s in path.split('/')
-                if s and not s.startswith('<') and not s.startswith('^') and not s.startswith('(')]
-        last = segs[-1] if segs else ''
-        if last and re.search(r"/" + re.escape(last) + r"(/|['\"`?])", ui):
+        # المقاطعُ الحرفيّةُ بعد آخر معلمة (حتّى اثنين): «email/settings» لا «settings»
+        # وحدَها — مقطعٌ واحدٌ شائعٌ يطابق أيَّ رابطٍ بريء (تدقيقُ الانتقالات).
+        parts = [s for s in path.split('/') if s]
+        is_param = lambda seg: seg.startswith('<') or seg.startswith('^') or seg.startswith('(')
+        while parts and is_param(parts[-1]):          # معلمةٌ في الذيل: خذ ما قبلها
+            parts.pop()
+        tail_parts = []
+        for seg in reversed(parts):
+            if is_param(seg):
+                break
+            tail_parts.insert(0, seg)
+        tail = '/'.join(tail_parts[-2:])
+        if tail and re.search(r"/" + re.escape(tail) + r"(/|['\"`?])", ui):
             continue
         found.add(name)
     return found

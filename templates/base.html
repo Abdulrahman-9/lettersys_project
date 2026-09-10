@@ -303,10 +303,26 @@
       // فتُرسَم قشرة التطبيق كاملة داخل لوحة الإعدادات — «تطبيق داخل تطبيق».
       // نضع embed في *مسار* النموذج (query) لا كحقل مخفي، كي يراه request.GET
       // حتى في طلبات POST.
+      // ── نطاقُ الإعدادات: ما يبقى داخل الإطار ──
+      // كلُّ ما خرج عنه (القائمة، كتاب، سطحُ الاستخراج، لوحةُ الإدارة…) يُفتح في
+      // النافذة العليا بـ target=_top؛ وإلّا حُمِّل «التطبيقُ داخل التطبيق» بلا
+      // شريطٍ داخل لوحة الإعدادات (تدقيقُ الانتقالات §ج).
+      var EMBED_SCOPE = [
+        '/books/settings/', '/books/mail/settings/', '/books/mail/templates/',
+        '/books/mail/api/', '/books/api/', '/books/users/', '/books/trash/',
+        '/media/', '/static/'
+      ];
+      function inScope(u) {
+        for (var i = 0; i < EMBED_SCOPE.length; i++) {
+          if (u.pathname.indexOf(EMBED_SCOPE[i]) === 0) return true;
+        }
+        return false;
+      }
       function withEmbed(raw) {
         try {
           var u = new URL(raw, window.location.href);
           if (u.origin !== window.location.origin) return null;  // خارجي — اتركه
+          if (!inScope(u)) return '_top';                          // يغادر النطاق
           u.searchParams.set('embed', '1');
           return u.pathname + u.search + u.hash;
         } catch (e) { return null; }
@@ -318,11 +334,13 @@
           var href = a.getAttribute('href');
           if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) return;
           var next = withEmbed(href);
+          if (next === '_top') { a.setAttribute('target', '_top'); a.dataset.embedMarked = '1'; return; }
           if (next) { a.setAttribute('href', next); a.dataset.embedMarked = '1'; }
         });
         document.querySelectorAll('form').forEach(function (f) {
           if (f.dataset.embedMarked) return;
           var next = withEmbed(f.getAttribute('action') || window.location.href);
+          if (next === '_top') { f.setAttribute('target', '_top'); f.dataset.embedMarked = '1'; return; }
           if (next) { f.setAttribute('action', next); f.dataset.embedMarked = '1'; }
         });
       }

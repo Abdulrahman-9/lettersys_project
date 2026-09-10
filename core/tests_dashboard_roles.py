@@ -103,6 +103,34 @@ class DashboardSectionTests(TestCase):
             for counter in section['counters']:
                 self.assertTrue(counter.get('href'), msg=section['key'])
 
+    def test_every_link_resolves_and_never_passes_through_the_301(self):
+        """تدقيقُ الانتقالات أ1: كانت `'/books/?tab=…'` تمرّ بتحويلٍ دائمٍ **يُسقط
+        الاستعلام** ⟵ القائمةُ كاملةً. الآن كلُّ وجهةٍ من `reverse()` وتُحلّ مباشرةً."""
+        from urllib.parse import urlsplit
+        from django.urls import Resolver404, resolve
+        boss = self._user('boss3', self.dept, admin=True)
+        for section in sections_for(boss):
+            for item in section['counters'] + section.get('links', []):
+                path = urlsplit(item['href']).path
+                self.assertNotEqual(path, '/books/', msg=item['label'])
+                try:
+                    resolve(path)
+                except Resolver404:
+                    self.fail(f"وجهةٌ لا تُحلّ: {item['label']} ⟵ {item['href']}")
+
+    def test_counters_carry_the_filter_they_count(self):
+        """تدقيقُ الانتقالات أ1/أ3: «متأخّر» يفتح المتأخّرَ وحدَه (`followup=overdue`
+        لا `tab=overdue` المجهول)، وعدّاداتُ الطوابير تحمل مرساةَ طابورها."""
+        boss = self._user('boss4', self.dept, admin=True)
+        by_key = {s['key']: s for s in sections_for(boss)}
+        register = {c['label']: c['href'] for c in by_key['register']['counters']}
+        self.assertIn('followup=overdue', register['متأخّر'])
+        self.assertNotIn('tab=overdue', register['متأخّر'])
+        self.assertIn('date_from=', register['كتبُ اليوم'])
+        desk = {c['label']: c['href'] for c in by_key['desk']['counters']}
+        self.assertTrue(desk['متأخّر'].endswith('#qb-h-overdue'))
+        self.assertTrue(desk['غير مُستلَم'].endswith('#qb-h-unreceived'))
+
 
 class DashboardViewTests(TestCase):
     def setUp(self):
