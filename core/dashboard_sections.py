@@ -76,7 +76,7 @@ def _desk(user):
         unreceived=Count('id', filter=Q(status=BookReferral.SENT)),
     )
     secret_open = rows.filter(book__in=scope_books_for(
-        user, Book.objects.filter(is_deleted=False)).exclude(secret_level='normal')).count()
+        user, Book.objects.all()).exclude(secret_level='normal')).count()
 
     return {
         'counters': [
@@ -108,7 +108,7 @@ def _archive(user):
     from core.models import Book, BookReferral, CustodyEvent
     from core.scoping import scope_books_for
 
-    mine = scope_books_for(user, Book.objects.filter(is_deleted=False))
+    mine = scope_books_for(user, Book.objects.all())
     live = mine.filter(source_ref='', is_training=False)
     pending = unarchived_books(live)
     open_now = BookReferral.objects.filter(status__in=BookReferral.OPEN_STATUSES)
@@ -145,7 +145,7 @@ def _register(user):
     from core.scoping import scope_books_for
 
     today = timezone.localdate()
-    books = scope_books_for(user, Book.objects.filter(is_deleted=False))
+    books = scope_books_for(user, Book.objects.all())
     active = Q(is_archived=False, due_date__isnull=False)
 
     counts = books.aggregate(
@@ -181,8 +181,8 @@ def _dossier(user):
 
     entity = department.entity
     from core.models import Book
-    issued = Book.objects.filter(is_deleted=False, issuing_entities=entity).count()
-    received = Book.objects.filter(is_deleted=False, receiving_entities=entity).count()
+    issued = Book.objects.filter(issuing_entities=entity).count()
+    received = Book.objects.filter(receiving_entities=entity).count()
 
     return {
         'counters': [

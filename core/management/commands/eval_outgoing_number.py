@@ -43,7 +43,7 @@ class Command(BaseCommand):
         svc = AIExtractionService()
 
         for kind in kinds:
-            qs = (Book.objects.filter(is_deleted=False, kind=kind)
+            qs = (Book.objects.filter(kind=kind)
                   .exclude(our_number='').filter(attachments__isnull=False)
                   .order_by('-id').distinct())
             n_total = qs.count()

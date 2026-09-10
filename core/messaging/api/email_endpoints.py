@@ -260,7 +260,7 @@ def book_email_preview(request, book_id):
     from core.messaging.scoping import scope_books
 
     book = scope_books(
-        Book.objects.filter(is_deleted=False), request.user
+        Book.objects.all(), request.user
     ).filter(pk=book_id).first()
     if book is None:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
@@ -313,7 +313,7 @@ def send_book_to_entity(request, book_id):
     from core.messaging.scoping import scope_books
 
     book = scope_books(
-        Book.objects.filter(is_deleted=False), request.user
+        Book.objects.all(), request.user
     ).filter(pk=book_id).first()
     if book is None:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)

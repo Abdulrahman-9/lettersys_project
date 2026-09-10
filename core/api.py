@@ -163,7 +163,7 @@ def search_titles(request):
     if cached_result:
         return JsonResponse(cached_result)
 
-    queryset = Book.objects.filter(is_deleted=False)
+    queryset = Book.objects.all()
 
     if entity_id:
         queryset = queryset.filter(
@@ -211,7 +211,7 @@ def title_autocomplete(request):
     if cached:
         return JsonResponse(cached)
 
-    qs = Book.objects.filter(is_deleted=False)
+    qs = Book.objects.all()
     if kind:
         qs = qs.filter(kind=kind)
 
@@ -309,7 +309,7 @@ def title_words_api(request):
     }
 
     titles = list(
-        Book.objects.filter(is_deleted=False)
+        Book.objects.all()
         .values_list('title', flat=True)
         .distinct()[:8000]
     )
@@ -440,19 +440,19 @@ def get_entity_stats(request):
     # عدّ كتب كل جهة عبر استعلامين فرعيين مستقلّين — يتجنّب الضرب الديكارتي
     # الناتج عن ضمّ علاقتَي M2M (issued/received) في استعلام واحد.
     _issued_sq = (
-        Book.objects.filter(issuing_entities=OuterRef('pk'), is_deleted=False)
+        Book.objects.filter(issuing_entities=OuterRef('pk'))
         .order_by().values('issuing_entities').annotate(c=Count('id')).values('c')
     )
     _received_sq = (
-        Book.objects.filter(receiving_entities=OuterRef('pk'), is_deleted=False)
+        Book.objects.filter(receiving_entities=OuterRef('pk'))
         .order_by().values('receiving_entities').annotate(c=Count('id')).values('c')
     )
 
     stats = {
         'total_entities': Entity.objects.count(),
         'active_entities': Entity.objects.filter(is_active=True).count(),
-        'total_titles': Book.objects.filter(is_deleted=False).values('title').distinct().count(),
-        'total_books': Book.objects.filter(is_deleted=False).count(),
+        'total_titles': Book.objects.values('title').distinct().count(),
+        'total_books': Book.objects.count(),
         'most_used_entities': list(
             Entity.objects.annotate(
                 book_count=(
@@ -462,7 +462,7 @@ def get_entity_stats(request):
             ).order_by('-book_count').values('id', 'name', 'book_count')[:5]
         ),
         'most_used_titles': list(
-            Book.objects.filter(is_deleted=False)
+            Book.objects.all()
             .values('title')
             .annotate(count=Count('title'))
             .order_by('-count')[:5]

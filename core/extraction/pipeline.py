@@ -1944,7 +1944,7 @@ def dominant_receiving_entity(kind: str):
         try:
             from django.db.models import Count
             from core.models import Book
-            row = (Book.objects.filter(is_deleted=False, kind=kind, receiving_entities__isnull=False)
+            row = (Book.objects.filter(kind=kind, receiving_entities__isnull=False)
                    .values('receiving_entities__id', 'receiving_entities__name')
                    .annotate(n=Count('id')).order_by('-n').first())
             val = (row['receiving_entities__id'], row['receiving_entities__name']) if row else None
@@ -1971,7 +1971,7 @@ def dominant_issuing_entities(department_id, kind: str, top_k: int = 3):
     try:
         from django.db.models import Count
         from core.models import Book
-        rows = (Book.objects.filter(is_deleted=False, kind=kind, department_id=department_id,
+        rows = (Book.objects.filter(kind=kind, department_id=department_id,
                                     issuing_entities__isnull=False)
                 .values('issuing_entities__id', 'issuing_entities__name')
                 .annotate(n=Count('id')).order_by('-n')[:top_k])

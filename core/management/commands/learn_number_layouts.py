@@ -40,7 +40,7 @@ class Command(BaseCommand):
         priors = EntityLayoutPriors(PRIORS_PATH)
         locator = NumberStripLocator(priors)
 
-        qs = (Book.objects.filter(is_deleted=False, attachments__isnull=False,
+        qs = (Book.objects.filter(attachments__isnull=False,
                                   issuing_entities__isnull=False)
               .exclude(sender_number__isnull=True).exclude(sender_number='')
               .order_by('-id').distinct()[:opts['limit']])

@@ -86,7 +86,7 @@ def entity_list(request):
     # (I×R صفّاً لكل جهة) كان يستغرق ~17 ثانية. الاستعلام الفرعي يلغي الانفجار.
     _issued_sq = (
         Book.objects
-        .filter(issuing_entities=OuterRef('pk'), is_deleted=False)
+        .filter(issuing_entities=OuterRef('pk'))
         .order_by()
         .values('issuing_entities')
         .annotate(c=Count('id'))
@@ -94,7 +94,7 @@ def entity_list(request):
     )
     _received_sq = (
         Book.objects
-        .filter(receiving_entities=OuterRef('pk'), is_deleted=False)
+        .filter(receiving_entities=OuterRef('pk'))
         .order_by()
         .values('receiving_entities')
         .annotate(c=Count('id'))

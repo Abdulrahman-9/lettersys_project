@@ -1056,7 +1056,7 @@ class BookEditTests(BookViewsBase):
         att2.refresh_from_db()
         self.assertTrue(att1.is_deleted, 'المرفق المستهدَف يجب أن يُؤرشف')
         self.assertFalse(att2.is_deleted, 'المرفق غير المستهدَف يجب أن يبقى نشطاً (لا استبدال-كل)')
-        active = self.book.attachments.filter(is_deleted=False)
+        active = self.book.attachments.all()
         # المتبقّي: att2 + المرفق الجديد
         self.assertEqual(active.count(), 2)
         self.assertTrue(active.exclude(pk=att2.pk).exists(), 'يجب إنشاء مرفق جديد للملف المرفوع')

@@ -255,7 +255,7 @@ def _json(request):
 def _book(request, pk):
     """كتابٌ داخل نطاق المستخدم — والخارجُ عنه «غير موجود» لا «ممنوع»."""
     return scope_books_for(
-        request.user, Book.objects.filter(is_deleted=False)).filter(pk=pk).first()
+        request.user, Book.objects.all()).filter(pk=pk).first()
 
 
 def _targets(raw):

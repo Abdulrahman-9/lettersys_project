@@ -84,7 +84,7 @@ class Command(BaseCommand):
         done_f = open(done_path, 'a', encoding='utf-8')
 
         lo, hi = opts['offset'], opts['offset'] + opts['limit']
-        qs = Book.objects.filter(is_deleted=False, attachments__isnull=False,
+        qs = Book.objects.filter(attachments__isnull=False,
                                  issuing_entities__isnull=False)
         if field == 'number':
             qs = qs.exclude(sender_number__isnull=True).exclude(sender_number='')

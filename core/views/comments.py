@@ -49,7 +49,7 @@ def add_book_comment(request, book_id):
             }, status=400)
         
         # Get book
-        book = Book.objects.get(pk=book_id, is_deleted=False)
+        book = Book.objects.get(pk=book_id)
         
         # Check permission
         # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**

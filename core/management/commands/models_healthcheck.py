@@ -154,7 +154,7 @@ class Command(BaseCommand):
             from core.models import Book, Entity, LetterheadMemory
             n_e = Entity.objects.filter(is_active=True).count()
             n_m = LetterheadMemory.objects.count()
-            n_b = Book.objects.filter(is_deleted=False).count()
+            n_b = Book.objects.count()
         except Exception as exc:      # noqa: BLE001
             soft.append('تعذّر عدُّ بيانات القاعدة (%s) — لم يُتحقَّق من الجهات' % type(exc).__name__)
             return

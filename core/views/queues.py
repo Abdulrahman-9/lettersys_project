@@ -120,7 +120,7 @@ def desk_board(request):
     no_reply = open_here.filter(purpose=BookReferral.ACTION,
                                 closed_by_link__isnull=True, due_date__isnull=True)
 
-    visible_books = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    visible_books = scope_books_for(request.user, Book.objects.all())
     secret_open = open_here.filter(book__in=visible_books.exclude(secret_level='normal'))
 
     queues = [
@@ -166,7 +166,7 @@ def archive_desk(request):
         raise PermissionDenied('طاولةُ الأرشفة لمسؤول الأرشفة ومدير النظام.')
 
     user = request.user
-    mine = scope_books_for(user, Book.objects.filter(is_deleted=False))
+    mine = scope_books_for(user, Book.objects.all())
     #: الحيُّ وحدَه: المنقولُ من الورق دخل بالجملة ولم يمرّ بيدِ أرشيفيّ.
     live = mine.filter(source_ref='', is_training=False)
     pending = unarchived_books(live)

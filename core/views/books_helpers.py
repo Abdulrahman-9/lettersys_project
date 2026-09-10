@@ -58,7 +58,7 @@ def find_duplicate_candidates(*, kind, title, cmp_date, party_number,
 
     # مرشّحون أوّليّون على DB: نفس النوع + غير محذوف + أيّ إشارة قوية (تاريخ/رقم/عنوان/جهة).
     # OR-net واسع بما يكفي ليضمّ كل مطابقة حقيقية (3/4 قد لا تشمل العنوان)، ومحدود بسقف.
-    base = Book.objects.filter(kind=kind, is_deleted=False)
+    base = Book.objects.filter(kind=kind)
     if exclude_id:
         base = base.exclude(pk=exclude_id)
 

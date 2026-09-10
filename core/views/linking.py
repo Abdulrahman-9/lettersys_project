@@ -52,7 +52,7 @@ def api_link_picker(request):
     if not query:
         return JsonResponse({'success': True, 'results': []})
 
-    qs = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    qs = scope_books_for(request.user, Book.objects.all())
     exclude_id = request.GET.get('exclude')
     if exclude_id and str(exclude_id).isdigit():
         qs = qs.exclude(pk=int(exclude_id))
@@ -124,5 +124,5 @@ def _get_or_404(request, pk):
     if not pk or not str(pk).isdigit():
         return None
     return scope_books_for(
-        request.user, Book.objects.filter(is_deleted=False)
+        request.user, Book.objects.all()
     ).filter(pk=int(pk)).first()

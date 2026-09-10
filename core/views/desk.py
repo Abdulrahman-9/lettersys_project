@@ -33,7 +33,7 @@ def desk_handover(request):
     التي عليها التزاماتٌ غيرُ موقَّعة كي لا يبدأ الكاتبُ من فراغ.
     """
     department = _acting_department(request)
-    visible = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    visible = scope_books_for(request.user, Book.objects.all())
 
     targets = _units_with_pending(department, visible)
     chosen = _chosen_unit(request, targets)
@@ -65,7 +65,7 @@ def desk_ledger(request):
     department = _acting_department(request)
     date_from, date_to = _date_range(request)
 
-    visible = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    visible = scope_books_for(request.user, Book.objects.all())
     books = visible.filter(
         _in_our_register(department)
     ).select_related('department', 'current_custody').prefetch_related(

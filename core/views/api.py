@@ -119,7 +119,7 @@ def update_book_notes(request, book_id):
         >>> # Returns: {"status": "ok", "message": "تم حفظ الملاحظات بنجاح"}
     """
     try:
-        book = Book.objects.select_related('created_by').get(id=book_id, is_deleted=False)
+        book = Book.objects.select_related('created_by').get(id=book_id)
         
         # Enhanced permission check
         # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**

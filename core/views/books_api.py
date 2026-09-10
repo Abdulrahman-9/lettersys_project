@@ -493,7 +493,7 @@ def api_bulk_delete_books(request):
             return JsonResponse({"error": "No book IDs provided"}, status=400)
 
         now = timezone.now()
-        books_qs = Book.objects.filter(id__in=book_ids, is_deleted=False)
+        books_qs = Book.objects.filter(id__in=book_ids)
         if not is_privileged(request.user):
             books_qs = books_qs.filter(created_by=request.user)
 
@@ -554,7 +554,7 @@ def api_bulk_update_status_books(request):
         except (TypeError, ValueError):
             return JsonResponse({"error": "book_ids must be integers"}, status=400)
 
-        books_qs = Book.objects.filter(id__in=clean_ids, is_deleted=False)
+        books_qs = Book.objects.filter(id__in=clean_ids)
         if not is_privileged(request.user):
             books_qs = books_qs.filter(created_by=request.user)
 
@@ -641,7 +641,7 @@ def api_book_detail_json(request, pk):
         book = Book.objects.select_related('created_by').prefetch_related(
             'issuing_entities', 'receiving_entities',
             Prefetch('attachments', queryset=Attachment.objects.order_by('-uploaded_at'))
-        ).get(pk=pk, is_deleted=False)
+        ).get(pk=pk)
     except Book.DoesNotExist:
         return JsonResponse({'error': 'الكتاب غير موجود'}, status=404)
 
@@ -732,7 +732,7 @@ def api_book_inline_status(request, pk):
     if request.method != "POST":
         return JsonResponse({"error": "Only POST allowed"}, status=405)
 
-    book = get_object_or_404(Book, pk=pk, is_deleted=False)
+    book = get_object_or_404(Book, pk=pk)
     has_permission = (
         request.user.is_superuser
         or request.user.is_staff
@@ -788,7 +788,7 @@ def update_book_api(request):
         if not edit_pk:
             return JsonResponse({'success': False, 'message': 'edit_pk مطلوب', 'error_code': 'MISSING_EDIT_PK'}, status=400)
 
-        book = get_object_or_404(Book, pk=edit_pk, is_deleted=False)
+        book = get_object_or_404(Book, pk=edit_pk)
         # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
         # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
         # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.

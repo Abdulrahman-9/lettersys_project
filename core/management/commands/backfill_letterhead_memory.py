@@ -38,7 +38,7 @@ class Command(BaseCommand):
         # اجمع الحقول أولاً ثم افصل المسح عنها تماماً. بثٌّ بـiterator + استعلامات
         # خفيفة لكلّ كتاب (لا prefetch للكلّ) — آمن الذاكرة على داتا بيس بعشرات الآلاف.
         jobs = []   # (book_id, pdf_path, issuing_id, receiving_id)
-        qs = Book.objects.filter(is_deleted=False).order_by('-id').only('id')
+        qs = Book.objects.order_by('-id').only('id')
         for b in qs.iterator(chunk_size=200):
             if b.id in done_books:
                 continue

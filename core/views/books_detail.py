@@ -45,7 +45,6 @@ def book_detail(request, pk):
             )
         ),
         pk=pk,
-        is_deleted=False
     )
 
     # كانت هذه نسخةً يدويّةً ثامنةً وعشرين من قاعدة الرؤية، نجت من التوحيد لأنّها
@@ -196,7 +195,7 @@ def _crop_source(book):
 @login_required
 def book_edit(request, pk):
     """تعديل كتاب قائم."""
-    book = get_object_or_404(Book, pk=pk, is_deleted=False)
+    book = get_object_or_404(Book, pk=pk)
 
     # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
     # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
@@ -225,7 +224,7 @@ def book_change_status(request, pk):
     تبديل حالة المتابعة (أرشفة / إعادة فتح).
     POST action ∈ {'archived', 'reopen'}.
     """
-    book = get_object_or_404(Book, pk=pk, is_deleted=False)
+    book = get_object_or_404(Book, pk=pk)
 
     # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
     # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
@@ -296,7 +295,6 @@ def book_report(request, pk):
             ),
         ),
         pk=pk,
-        is_deleted=False,
     )
 
     if not can_open_content(book, request.user):

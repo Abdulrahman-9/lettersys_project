@@ -49,7 +49,7 @@ def dashboard(request):
     الرؤية («المشرف الكلّ، وغيرُه كتبَه فقط») سبقت بُعدَ القسم ولم تلحق به —
     فلوحةُ موظّفِ الوحدة كانت تُظهر أصفاراً وهو يعمل كلَّ يوم.
     """
-    books = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    books = scope_books_for(request.user, Book.objects.all())
     today = timezone.localdate()
 
     # المنطق الموحَّد: نشط = is_archived=False AND due_date IS NOT NULL
@@ -149,7 +149,7 @@ def followup_activity_report(request):
 def _reports_qs(request):
     """يبني queryset التقارير المفلتر والمرتّب حسب فلاتر الصفحة (kind/entity/date/bucket).
     مصدر تصفية واحد مشترك بين عرض التقارير والتصدير (DRY). يُعيد (qs, meta)."""
-    qs = Book.objects.filter(is_deleted=False) if request.user.is_superuser else Book.objects.filter(created_by=request.user, is_deleted=False)
+    qs = Book.objects.all() if request.user.is_superuser else Book.objects.filter(created_by=request.user)
     qs = qs.select_related("created_by").prefetch_related("issuing_entities", "receiving_entities")
     kind = request.GET.get("kind", "all")
     if kind == "incoming":
