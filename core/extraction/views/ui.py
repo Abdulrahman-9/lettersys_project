@@ -69,8 +69,11 @@ def extraction_wizard(request):
 @login_required
 def extraction_smart_desktop(request):
     """نظام الاستخراج الذكي المحسّن للـ Desktop — يدعم وضع التعديل عبر edit_pk"""
-    from django.core.exceptions import PermissionDenied
+    from django.http import Http404
+
     from core.models import Book
+    from core.scoping import (ACCESS_STUB, STUB_TITLE, can_open_content,
+                              scope_books_for, secret_access)
 
     edit_pk = request.GET.get('edit_pk', '').strip()
     edit_book_json = 'null'
@@ -83,37 +86,39 @@ def extraction_smart_desktop(request):
         except (Book.DoesNotExist, ValueError):
             book = None
 
-        if book is not None:
-            has_permission = (
-                request.user.is_superuser or
-                request.user.is_staff or
-                book.created_by == request.user
-            )
-            if not has_permission:
-                raise PermissionDenied
+        # **البوّابةُ الموحَّدة من `core/scoping.py`** — وكانت هنا نسخةً ثالثةً
+        # تشترط `is_staff`، فتمنع مسؤولَ الأرشفة من **تعديل** كتابٍ قائم بينما
+        # يُدخل الجديدَ بلا مانع. والتعديلُ عمليّةُ **محتوى** لا رؤيةَ صفّ:
+        # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
+        #
+        # و**404 لا 403**: الرمزان كانا يفترقان (غيرُ موجودٍ ⟵ وضعُ الإدخال،
+        # وممنوعٌ ⟵ 403) فيصير الفرقُ بينهما عرّافاً يُثبت وجودَ كتابٍ لا يملكه
+        # السائل. صارا واحداً.
+        if book is None or not can_open_content(book, request.user):
+            raise Http404('لا كتابَ بهذا المعرّف.')
 
-            # قاعدة موحّدة لاختيار الأساسي (تطابق لوحة الإدارة وشارة «أساسي»)
-            from core.attachment_service import pick_primary_attachment
-            _att = pick_primary_attachment(book.attachments.filter(is_deleted=False))
-            _att_info = ({'id': _att.id, 'name': (_att.file.name or '').rsplit('/', 1)[-1]}
-                         if _att and _att.file else None)
-            edit_book_json = json.dumps({
-                'pk': book.pk,
-                'attachment': _att_info,
-                'kind': book.kind,
-                'our_number': book.our_number or '',
-                'sender_number': book.sender_number or '',
-                'title': book.title or '',
-                'date': str(book.date) if book.date else '',
-                'sender_date': str(book.sender_date) if book.sender_date else '',
-                'due_date': str(book.due_date) if book.due_date else '',
-                'needs_followup': bool(book.due_date) and not book.is_archived,
-                'secret_level': book.secret_level or 'normal',
-                'margin': book.margin or '',
-                'document_type': book.document_type or '',
-                'issuing_entities': [{'id': e.id, 'name': e.name, 'code': e.code or ''} for e in book.issuing_entities.all()],
-                'receiving_entities': [{'id': e.id, 'name': e.name, 'code': e.code or ''} for e in book.receiving_entities.all()],
-            }, ensure_ascii=False)
+        # قاعدة موحّدة لاختيار الأساسي (تطابق لوحة الإدارة وشارة «أساسي»)
+        from core.attachment_service import pick_primary_attachment
+        _att = pick_primary_attachment(book.attachments.filter(is_deleted=False))
+        _att_info = ({'id': _att.id, 'name': (_att.file.name or '').rsplit('/', 1)[-1]}
+                     if _att and _att.file else None)
+        edit_book_json = json.dumps({
+            'pk': book.pk,
+            'attachment': _att_info,
+            'kind': book.kind,
+            'our_number': book.our_number or '',
+            'sender_number': book.sender_number or '',
+            'title': book.title or '',
+            'date': str(book.date) if book.date else '',
+            'sender_date': str(book.sender_date) if book.sender_date else '',
+            'due_date': str(book.due_date) if book.due_date else '',
+            'needs_followup': bool(book.due_date) and not book.is_archived,
+            'secret_level': book.secret_level or 'normal',
+            'margin': book.margin or '',
+            'document_type': book.document_type or '',
+            'issuing_entities': [{'id': e.id, 'name': e.name, 'code': e.code or ''} for e in book.issuing_entities.all()],
+            'receiving_entities': [{'id': e.id, 'name': e.name, 'code': e.code or ''} for e in book.receiving_entities.all()],
+        }, ensure_ascii=False)
 
     kind_raw = normalize_book_kind(request.GET.get('kind'), DEFAULT_BOOK_KIND)
     if edit_pk and edit_book_json != 'null':
@@ -140,15 +145,21 @@ def extraction_smart_desktop(request):
     back_url = _next if url_has_allowed_host_and_scheme(_next, allowed_hosts={request.get_host()}) else ''
 
     # آخر الكتب المسجّلة (ودجة إغلاق الحلقة) — وضع الإدخال فقط، بترتيب حداثة التسجيل
-    # (created_at لا date)، وبنفس بوابة وصول القائمة (المشرف/الطاقم يرى الكل، وغيرهما كتبه فقط).
+    # (created_at لا date)، **وبنطاق القائمة نفسِه من المصدر الوحيد**: كانت
+    # `is_staff` تفتح كتبَ الشركة كلَّها لحاملها وتحبس الأرشيفيَّ في كتبه هو.
     recent_books = []
     if edit_book_json == 'null':
-        _rb = Book.objects.filter(is_deleted=False)
-        if not (request.user.is_superuser or request.user.is_staff):
-            _rb = _rb.filter(created_by=request.user)
+        _rb = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
         recent_books = list(
-            _rb.order_by('-created_at', '-id').only('id', 'our_number', 'title', 'kind', 'created_at')[:4]
+            _rb.order_by('-created_at', '-id').only(
+                'id', 'our_number', 'title', 'kind', 'created_at',
+                'secret_level', 'department', 'created_by')[:4]
         )
+        # الصفُّ يُرى والمظروفُ مغلق — كما في القائمة والدفتر والتصدير: النطاقُ
+        # يُدخل سرّيَّ القسم، و`secret_access` وحدَها تقرّر أيُظهَر عنوانُه.
+        for _row in recent_books:
+            if secret_access(request.user, _row) == ACCESS_STUB:
+                _row.title = STUB_TITLE
         # ملاحظة: القالب يعرض rb.kind_label (خاصية Book جاهزة) — لا حاجة لتعيينها.
 
     return render(

@@ -163,3 +163,91 @@ class SmartExtractStreamTests(TestCase):
             data={"file": SimpleUploadedFile("a.exe", b"MZ", content_type="application/x-msdownload")},
         )
         self.assertEqual(resp.status_code, 400)
+
+
+class SmartDesktopEditGateTests(TestCase):
+    """بوّابةُ **تعديل** كتابٍ قائم من الإدخال الذكيّ — `can_open_content` لا `is_staff`.
+
+    الدَّينُ الذي يحرسه هذا الصفّ (T7.5‑2): كان الشرطُ نسخةً ثالثةً
+    (`is_superuser or is_staff or created_by`) خارجَ `core/scoping.py`، فمسؤولُ
+    الأرشفة — وهو **ليس staff** — يُدخل الكتابَ الجديدَ بلا مانع ثمّ يُمنع من
+    تعديل كتابٍ من قسمه. والرمزُ **404 لا 403**: ممنوعٌ وغيرُ موجودٍ سواء.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.contrib.auth.models import Group
+        from core.models import Department, UserProfile
+        from core.roles import ARCHIVIST_GROUP_NAME
+
+        cls.dept = Department.objects.create(name='قسم الإدخال الذكيّ', code='ذ.ق')
+        cls.other = Department.objects.create(name='قسمٌ بعيد', code='ذ.ب')
+
+        def member(name, dept, *, archivist=False):
+            user = User.objects.create_user(name, name + '@x.co', 'pass1234')
+            UserProfile.objects.update_or_create(user=user,
+                                                 defaults={'department': dept})
+            if archivist:
+                user.groups.add(Group.objects.get_or_create(name=ARCHIVIST_GROUP_NAME)[0])
+            return user
+
+        cls.clerk = member('sd-clerk', cls.dept)
+        cls.archivist = member('sd-arch', cls.dept, archivist=True)
+        cls.stranger = member('sd-stranger', cls.other)
+
+        cls.book = Book.objects.create(
+            kind='incoming_external', title='كتابُ القسم', our_number='7100',
+            department=cls.dept, created_by=cls.clerk)
+
+    def _edit(self, user):
+        self.client.force_login(user)
+        return self.client.get(reverse(URL) + '?edit_pk=%d' % self.book.pk)
+
+    def test_the_archivist_is_not_staff(self):
+        """لولا هذا لكان الاختبارُ التالي يمرّ بالبابِ القديم لا بالجديد."""
+        self.assertFalse(self.archivist.is_staff)
+        self.assertFalse(self.archivist.is_superuser)
+
+    def test_the_archivist_opens_the_edit_form_of_an_existing_book(self):
+        res = self._edit(self.archivist)
+
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('"pk": %d' % self.book.pk, res.context['edit_book_json'])
+
+    def test_a_stranger_gets_404_not_403(self):
+        self.assertEqual(self._edit(self.stranger).status_code, 404)
+
+    def test_a_missing_book_is_404_too(self):
+        """لا عرّافَ يفصل «ليس لك» عن «لا وجود له»."""
+        self.client.force_login(self.archivist)
+
+        res = self.client.get(reverse(URL) + '?edit_pk=%d' % (self.book.pk + 9999))
+
+        self.assertEqual(res.status_code, 404)
+
+    def test_the_recent_widget_shows_the_department_not_only_my_own(self):
+        """النطاقُ صار نطاقَ القائمة — الأرشيفيُّ كان محبوساً في كتبه هو."""
+        self.client.force_login(self.archivist)
+
+        nums = {b.our_number for b in self.client.get(reverse(URL)).context['recent_books']}
+
+        self.assertIn('7100', nums)
+
+    def test_the_recent_widget_stubs_a_secret_title(self):
+        """الصفُّ يُرى والمظروفُ مغلق — ولا يتحوّل توسيعُ النطاق إلى تسريب."""
+        from core.models import UserProfile
+        from core.scoping import STUB_TITLE
+
+        Book.objects.create(kind='incoming_external', title='مناقصةٌ سرّيّة',
+                            our_number='7101', secret_level='secret',
+                            department=self.dept, created_by=self.clerk)
+        plain = User.objects.create_user('sd-plain', 'p@x.co', 'pass1234')
+        UserProfile.objects.update_or_create(user=plain,
+                                             defaults={'department': self.dept})
+        self.client.force_login(plain)
+
+        rows = {b.our_number: b.title
+                for b in self.client.get(reverse(URL)).context['recent_books']}
+
+        self.assertEqual(rows.get('7101'), STUB_TITLE)
+        self.assertEqual(rows.get('7100'), 'كتابُ القسم')
