@@ -145,3 +145,36 @@ class QueueScreenTests(TestCase):
 
         self.assertEqual(res.context['assigned_total'], 0)
         self.assertContains(res, 'لا التزامَ مفتوحاً')
+
+
+class QueueExpandTests(TestCase):
+    """مواصفةُ الواجهات، الدفعتان 1–2: «و{n} غيرها» بابٌ لا طريقٌ مسدود — ``?expand=<key>``
+    يرفع القطعَ عن طابورٍ واحد، والبطاقةُ تحمل مرساةً ``id="q-<key>"`` تشير إليها عدّاداتُ الداشبورد."""
+
+    def setUp(self):
+        from core.models import Department, UserProfile
+        self.dept = Department.objects.create(name='قسمُ التوسيع', code='ق-ع')
+        self.me = User.objects.create_user('qexp', password='pw-qexp-11')
+        UserProfile.objects.create(user=self.me, department=self.dept)
+        today = timezone.localdate()
+        for i in range(15):
+            b = Book.objects.create(kind='incoming_internal', title=f'ك{i}', created_by=self.me,
+                                    department=self.dept)
+            BookReferral.objects.create(book=b, from_department=self.dept, to_department=self.dept,
+                                        assignee=self.me, purpose=BookReferral.ACTION,
+                                        due_date=today - timedelta(days=1), created_by=self.me)
+        self.client.force_login(self.me)
+
+    def test_the_card_is_cut_and_links_to_its_expansion(self):
+        r = self.client.get(reverse('my_today'))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'id="q-overdue"')
+        self.assertContains(r, '?expand=overdue#q-overdue')
+        self.assertContains(r, 'و3 غيرها')
+
+    def test_expand_lifts_the_cut_for_that_queue_only(self):
+        r = self.client.get(reverse('my_today') + '?expand=overdue')
+        self.assertNotContains(r, '?expand=overdue#q-overdue')   # لم يعد مقطوعاً
+        self.assertContains(r, 'is-expanded', count=1)            # طابورٌ واحدٌ فقط
+        self.assertContains(r, '?expand=action#q-action')         # الآخرُ ما زال مقطوعاً
+        self.assertContains(r, 'اطوِ')

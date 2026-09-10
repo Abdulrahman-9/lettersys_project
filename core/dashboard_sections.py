@@ -28,12 +28,12 @@ from django.utils.http import urlencode
 def _to(name, *args, anchor='', **query):
     """وجهةُ عدّادٍ **تصدق**: `reverse()` لا مساراً حرفيّاً (يشيخ بصمت)، ومرشّحٌ
     يطابق ما يعدّه العدّاد. `anchor` = مفتاحُ الطابور على لوحة الطوابير
-    (`_queue_board.html` يمنح كلَّ رأسٍ `id="qb-h-<key>"`)."""
+    (`_queue_board.html` يمنح كلَّ بطاقةٍ `id="q-<key>"`)."""
     url = reverse(name, args=args)
     if query:
         url += '?' + urlencode(query)
     if anchor:
-        url += '#qb-h-' + anchor
+        url += '#q-' + anchor
     return url
 
 

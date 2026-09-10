@@ -3,7 +3,7 @@
 {% block title %}لوحة التحكم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20260831">
+<link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20260910">
 {% endblock %}
 
 {% block extra_head %}
@@ -128,6 +128,7 @@
 
           <!-- بحث سريع — يُظهر حلقة التركيز الناعمة -->
           <form action="{% url 'book_unified' %}" method="get" class="d-flex justify-content-center mb-3">
+            <input type="hidden" name="tab" value="all">
             <div class="position-relative" style="width:100%; max-width:520px;">
               <input type="search" name="q" class="field-brand" placeholder="ابحث عن كتاب برقمه أو عنوانه أو جهته…" aria-label="بحث سريع" style="padding-inline-start:2.6rem;">
               <i class="bi bi-search" style="position:absolute; inset-block-start:50%; inset-inline-start:1rem; transform:translateY(-50%); color:#9ca3af; pointer-events:none;"></i>

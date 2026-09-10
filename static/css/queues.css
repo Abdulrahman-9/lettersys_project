@@ -2,7 +2,7 @@
    الشاشتان تتشاركان القالبَ والنمط. الألوانُ من متغيّرات الهويّة
    (`--brand`) لا بقيمٍ مُصلَّبة، فتتبع الصفحةَ التي تُدرَج فيها. */
 
-.queues-page { padding: 1rem 0; }
+.queues-page { padding: 1rem 0; max-width: 1180px; }
 
 .queues-head {
   display: flex; align-items: flex-start; justify-content: space-between;
@@ -28,6 +28,12 @@
 .qb-muted  { --qb-tone: #94a3b8; }
 .qb-secret { --qb-tone: #7c3aed; }
 
+.qb-card { scroll-margin-top: 96px; }
+.qb-card:hover, .qb-card:focus-within { box-shadow: 0 6px 18px rgba(15, 23, 42, .08); }
+.qb-head { text-decoration: none; color: inherit; }
+.qb-head:hover h3, .qb-head:focus-visible h3 { text-decoration: underline; }
+.qb-head:focus-visible { outline: 2px solid var(--brand-strong, #0f766e); outline-offset: 2px; border-radius: 6px; }
+.qb-more a { color: inherit; text-decoration: underline; }
 .qb-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: .5rem; margin-bottom: .15rem;
@@ -54,6 +60,7 @@
   color: var(--brand, #0f766e); flex: none;
 }
 .qb-title {
+  min-width: 0;
   font-size: .85rem; color: #334155;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }

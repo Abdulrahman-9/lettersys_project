@@ -128,8 +128,8 @@ class DashboardSectionTests(TestCase):
         self.assertNotIn('tab=overdue', register['متأخّر'])
         self.assertIn('date_from=', register['كتبُ اليوم'])
         desk = {c['label']: c['href'] for c in by_key['desk']['counters']}
-        self.assertTrue(desk['متأخّر'].endswith('#qb-h-overdue'))
-        self.assertTrue(desk['غير مُستلَم'].endswith('#qb-h-unreceived'))
+        self.assertTrue(desk['متأخّر'].endswith('#q-overdue'))
+        self.assertTrue(desk['غير مُستلَم'].endswith('#q-unreceived'))
 
 
 class DashboardViewTests(TestCase):
