@@ -77,12 +77,18 @@ class Command(BaseCommand):
             return
 
         with transaction.atomic():
-            # فكّ المرفقات أولاً (PROTECT) — يُبقي OCRResult عبر SET_NULL
-            Attachment.objects.filter(book_id__in=dev_ids).delete()
-            deleted, _detail = Book.objects.filter(id__in=dev_ids).delete()
+            # فكّ المرفقات أولاً (PROTECT) — يُبقي OCRResult عبر SET_NULL.
+            # **`all_objects` لا `objects`**: المديرُ الافتراضيّ يُخفي المحذوفَ ناعماً،
+            # فكان الحذفُ يترك 12 مرفقاً و32 كتاباً من أصل 131 — ثمّ يفشل الأمرُ كلُّه
+            # بـProtectedError لأنّ تلك المرفقاتِ الباقيةَ تحرس كتبَها (قِيس على الخادم
+            # في بروفة 2026-09-10). والمعاينةُ أعلاه تعدّ بـ`all_objects` أصلاً، فكان
+            # العددُ المعروضُ يخالف المحذوفَ فعلاً.
+            att_deleted, _ = Attachment.all_objects.filter(book_id__in=dev_ids).delete()
+            deleted, detail = Book.all_objects.filter(id__in=dev_ids).delete()
 
         w('=' * 60)
-        w(f'حُذف {len(dev_ids)} كتاباً تجريبياً (+ سجلات مرتبطة متتالية).')
+        w(f'حُذف {detail.get("core.Book", 0)} كتاباً تجريبياً من {len(dev_ids)} مرشَّحاً '
+          f'(+ {att_deleted} صفَّ مرفقاتٍ وسجلاتٍ مرتبطة).')
         w(f'ذاكرة الترويسة الباقية: {LetterheadMemory.objects.count()} '
           f'(المفصولة الآن book=NULL: {LetterheadMemory.objects.filter(book__isnull=True).count()})')
 
