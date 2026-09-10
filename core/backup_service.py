@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 #: وجهةُ النسخ الافتراضيّة — قرصٌ منفصلٌ عن قرص النظام بقرار المالك.
 DEFAULT_BACKUP_DIR = Path("D:/trackbackup")
 
+#: جذورُ تنصيبِ PostgreSQL على ويندوز — **ثابتُ وحدةٍ كي يُرقَّع في الاختبار**.
+#: كانت محشوّةً داخل ``find_pg_tool`` فصار اختبارُها رهينَ وجودِ تنصيبٍ حقيقيٍّ
+#: على القرص: يخضرّ على جهاز المالك ويحمرّ على لينكس (الفشلُ الوحيد في حزمة
+#: كاغل الكاملة، 1607 اختباراً) — أي أنّه كان يقيس الجهازَ لا الكود (N11).
+WINDOWS_PG_ROOTS = (Path(r"C:/Program Files/PostgreSQL"),
+                    Path(r"C:/Program Files (x86)/PostgreSQL"))
+
 
 def default_backup_dir() -> Path:
     """مجلّدُ النسخ — ``BACKUP_DIR`` في البيئة، وإلّا ``D:/trackbackup``.
@@ -64,10 +71,8 @@ def find_pg_tool(tool, env_var):
     if found:
         return found
 
-    roots = [Path(r"C:/Program Files/PostgreSQL"),
-             Path(r"C:/Program Files (x86)/PostgreSQL")]
     candidates = []
-    for root in roots:
+    for root in WINDOWS_PG_ROOTS:
         if not root.is_dir():
             continue
         for child in root.iterdir():

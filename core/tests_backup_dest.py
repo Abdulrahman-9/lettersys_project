@@ -2,6 +2,7 @@
 """حرّاسُ وجهة النسخ وأداتِه — عيبٌ لا يظهر إلّا يوم الحاجة."""
 
 import os
+import tempfile
 from pathlib import Path
 from unittest import mock
 
@@ -21,28 +22,71 @@ class PgDumpDiscoveryTests(TestCase):
                                return_value='/usr/bin/pg_dump'):
             self.assertEqual(backup_service._find_pg_dump(), '/usr/bin/pg_dump')
 
-    def test_windows_install_is_found_when_path_is_empty(self):
-        """مقيسٌ على هذا الجهاز: pg_dump ليس في PATH — وكانت كلُّ نسخةٍ ترمي خطأً."""
-        with mock.patch.dict(os.environ, {}, clear=True), \
-             mock.patch.object(backup_service.shutil, 'which', return_value=None):
-            found = backup_service._find_pg_dump()
+    def _install(self, root, *versions):
+        """هيكلُ تنصيبٍ مصنوع: ``<root>/<نسخة>/bin/pg_dump.exe``."""
+        for version in versions:
+            binary = Path(root) / version / 'bin' / 'pg_dump.exe'
+            binary.parent.mkdir(parents=True)
+            binary.write_text('')
 
-        self.assertIsNotNone(found, 'لم يُعثر على pg_dump — النسخُ معطَّل')
-        self.assertTrue(Path(found).exists())
+    def test_windows_install_is_found_when_path_is_empty(self):
+        """مقيسٌ على جهاز المالك: pg_dump ليس في PATH — وكانت كلُّ نسخةٍ ترمي خطأً.
+
+        الجذورُ تُرقَّع على ``tempfile``: الاختبارُ القديم كان يقرأ
+        ``C:/Program Files/PostgreSQL`` الحقيقيّ فيقيس **الجهازَ لا الكود**،
+        ويحمرّ على لينكس (الفشلُ الوحيد في حزمة كاغل الكاملة) — N11.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            self._install(tmp, '16')
+            with mock.patch.dict(os.environ, {}, clear=True), \
+                 mock.patch.object(backup_service.shutil, 'which', return_value=None), \
+                 mock.patch.object(backup_service, 'WINDOWS_PG_ROOTS', (Path(tmp),)):
+                found = backup_service._find_pg_dump()
+
+            self.assertEqual(found, str(Path(tmp) / '16' / 'bin' / 'pg_dump.exe'))
 
     def test_newest_install_wins_numerically(self):
-        """«9» أكبرُ من «16» نصّيّاً — والأقدمُ يرفض قاعدةً أحدثَ منه."""
-        found = backup_service._find_pg_dump()
+        """«9» أكبرُ من «16» نصّيّاً — والأقدمُ يرفض قاعدةً أحدثَ منه.
 
-        if found and 'PostgreSQL' in found:
-            versions = [int(p.name) for p in Path(found).parents
-                        if p.name.isdigit()]
-            self.assertTrue(versions)
+        وهذا ليس فرضاً: الإصدارُ 16 هو الذي يُنتج نسخةَ الشحن على هذا الجهاز.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            self._install(tmp, '9', '16')
+            with mock.patch.dict(os.environ, {}, clear=True), \
+                 mock.patch.object(backup_service.shutil, 'which', return_value=None), \
+                 mock.patch.object(backup_service, 'WINDOWS_PG_ROOTS', (Path(tmp),)):
+                found = backup_service._find_pg_dump()
+
+            self.assertEqual(found, str(Path(tmp) / '16' / 'bin' / 'pg_dump.exe'))
+
+    def test_none_when_nothing_is_installed(self):
+        """الغيابُ يُعيد ``None`` — والمُستدعي يرمي رسالةً واضحةً لا يصمت."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {}, clear=True), \
+                 mock.patch.object(backup_service.shutil, 'which', return_value=None), \
+                 mock.patch.object(backup_service, 'WINDOWS_PG_ROOTS', (Path(tmp),)):
+                self.assertIsNone(backup_service._find_pg_dump())
+
+    def test_the_real_roots_are_the_windows_ones(self):
+        """الترقيعُ لا يُخفي الحقيقة: الثابتُ نفسُه يبقى مقيساً."""
+        self.assertEqual(backup_service.WINDOWS_PG_ROOTS,
+                         (Path('C:/Program Files/PostgreSQL'),
+                          Path('C:/Program Files (x86)/PostgreSQL')))
+
+    def test_pg_restore_shares_the_same_discovery(self):
+        """فرعان بالمنطق نفسِه كانا سينحرفان — مصدرٌ واحدٌ للأداتين."""
+        with tempfile.TemporaryDirectory() as tmp:
+            binary = Path(tmp) / '16' / 'bin' / 'pg_restore.exe'
+            binary.parent.mkdir(parents=True)
+            binary.write_text('')
+            with mock.patch.dict(os.environ, {}, clear=True), \
+                 mock.patch.object(backup_service.shutil, 'which', return_value=None), \
+                 mock.patch.object(backup_service, 'WINDOWS_PG_ROOTS', (Path(tmp),)):
+                self.assertEqual(backup_service.find_pg_restore(), str(binary))
 
 
 class BackupDirTests(TestCase):
     def test_env_overrides_the_default(self):
-        import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.dict(os.environ, {'BACKUP_DIR': tmp}):
                 self.assertEqual(backup_service.default_backup_dir(), Path(tmp))
