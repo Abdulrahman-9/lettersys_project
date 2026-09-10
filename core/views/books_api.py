@@ -333,6 +333,9 @@ def save_book_api(request):
 
                 book.issuing_entities.set(issuing_entities_list)
                 book.receiving_entities.set(receiving_entities_list)
+                # الذكرُ يوجّه تلقائيّاً (قراراتُ الدورة §5.1)
+                from core.referral_service import auto_route_from_receivers
+                auto_route_from_receivers(book, by=request.user)
 
                 if 'file' in request.FILES:
                     file_obj = request.FILES['file']
@@ -861,6 +864,8 @@ def update_book_api(request):
             book.save()
             book.issuing_entities.set(issuing_entities_list)
             book.receiving_entities.set(receiving_entities_list)
+            from core.referral_service import auto_route_from_receivers
+            auto_route_from_receivers(book, by=request.user)
             # تصحيحُ الجهة في التعديل يبلغ ذاكرةَ الترويسة (كان يضيع: لا التقاطَ هنا).
             # الوسمُ من الواجهة يمنع تعليمَ جانبٍ مُلئ آليّاً ولم يُلمَس.
             try:

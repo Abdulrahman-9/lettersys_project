@@ -271,6 +271,48 @@ def _normalise(target):
     return {'target': target}
 
 
+def auto_route_from_receivers(book, *, by):
+    """**الذكرُ يوجّه تلقائيّاً** (قراراتُ الدورة §5.1): لكلّ جهةٍ مستلِمةٍ لها قسمٌ توأمٌ
+    **داخل شجرة القسم المالك** — أو خارجَها وله حسابٌ مفعَّل — يُنشأ صفُّ «للعلم» بلا
+    مدّةٍ إن لم يكن للكتاب إحالةٌ إلى ذلك القسم بعد. فيظهر الكتابُ عند الوحدة، ويصير
+    قابلاً لتتبّع الفتح لاحقاً، و«فعِّل متابعة» يحوّله إلى «للإجراء».
+
+    لا يمرّ بحرّاس التفريق اليدويّ (الفاعلُ هو مَن يحفظ الكتاب)، ولا يحذف صفّاً إن
+    أُزيلت الجهةُ من المستلِمين (التاريخُ لا يُكشط)، ولا يكرّر. يُعيد الصفوفَ المنشأة.
+    """
+    from django.contrib.auth.models import User
+
+    from core.models import BookReferral
+    from core.scoping import subtree_ids
+
+    origin = book.department
+    if origin is None:
+        return []
+    inside = set(subtree_ids(origin.id))
+    existing = set(BookReferral.objects.filter(book=book, to_department__isnull=False)
+                   .values_list('to_department_id', flat=True))
+    created = []
+    with transaction.atomic():
+        for entity in book.receiving_entities.all():
+            dept = getattr(entity, 'department', None)
+            if dept is None or dept.id in existing or dept.id == origin.id:
+                continue
+            if dept.id not in inside:
+                # خارج القسم: حين يُفتح له حساب، لا قبل (قرارُ المالك 2 في 5.1)
+                if not User.objects.filter(profile__department_id=dept.id, is_active=True).exists():
+                    continue
+            created.append(BookReferral.objects.create(
+                book=book, from_department=origin, to_department=dept,
+                purpose=BookReferral.INFO, created_by=by,
+            ))
+            existing.add(dept.id)
+        if created:
+            _record(book, 'referral', by,
+                    'وُجّه تلقائيّاً بالذكر إلى: ' + '، '.join(r.to_department.name for r in created))
+            _project_onto_m2m(book, created)
+    return created
+
+
 def _origin_department(book, by):
     """قسمُ المصدر: قسمُ الكتاب، وإلّا قسمُ الفاعل — ولا تفريقَ بلا أحدهما."""
     from core.models import Department
