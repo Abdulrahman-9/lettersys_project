@@ -45,19 +45,22 @@ def default_backup_dir() -> Path:
     return directory
 
 
-def _find_pg_dump():
-    """مسارُ ``pg_dump`` — من البيئة، أو المسار، أو تنصيبِ PostgreSQL على ويندوز.
+def find_pg_tool(tool, env_var):
+    """مسارُ أداةِ PostgreSQL — من البيئة، أو المسار، أو تنصيبِ ويندوز.
 
     **مقيسٌ على هذا الجهاز:** ``pg_dump`` ليس في PATH و``PG_DUMP_BIN`` غيرُ
     مضبوط — فكانت كلُّ نسخةٍ ترمي ``FileNotFoundError``. البحثُ عن التنصيب
-    يجعل الميزةَ تعمل بلا إعدادٍ يدويّ، وأحدثُ إصدارٍ أوّلاً لأنّ ``pg_dump``
-    الأقدم يرفض قاعدةً أحدث منه.
+    يجعل الميزةَ تعمل بلا إعدادٍ يدويّ، وأحدثُ إصدارٍ أوّلاً لأنّ الأداةَ
+    الأقدم ترفض قاعدةً/نسخةً أحدثَ منها.
+
+    مصدرٌ واحدٌ لـ``pg_dump`` (النسخ) و``pg_restore`` (``verify_backup``):
+    فرعان بالمنطق نفسِه كانا سينحرفان.
     """
-    explicit = os.environ.get("PG_DUMP_BIN")
+    explicit = os.environ.get(env_var)
     if explicit and Path(explicit).exists():
         return explicit
 
-    found = shutil.which("pg_dump")
+    found = shutil.which(tool)
     if found:
         return found
 
@@ -68,7 +71,7 @@ def _find_pg_dump():
         if not root.is_dir():
             continue
         for child in root.iterdir():
-            binary = child / "bin" / "pg_dump.exe"
+            binary = child / "bin" / f"{tool}.exe"
             if binary.exists():
                 # الترتيبُ بالرقم لا بالنصّ: "9" > "16" نصّيّاً.
                 version = int(child.name) if child.name.isdigit() else 0
@@ -76,6 +79,16 @@ def _find_pg_dump():
     if candidates:
         return max(candidates)[1]
     return None
+
+
+def _find_pg_dump():
+    """مسارُ ``pg_dump``."""
+    return find_pg_tool("pg_dump", "PG_DUMP_BIN")
+
+
+def find_pg_restore():
+    """مسارُ ``pg_restore`` — يستعمله ``verify_backup`` (غيابُه خروج 4)."""
+    return find_pg_tool("pg_restore", "PG_RESTORE_BIN")
 
 
 def _build_pg_dump_command(db_config, output_path):

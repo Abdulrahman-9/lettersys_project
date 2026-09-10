@@ -42,6 +42,11 @@ test.txt
 *.bak
 *.old
 *_backup.*
+# ...لكنّ مصدرَ بايثون ليس أثراً مؤقّتاً: `*_backup.*` ابتلع
+# `verify_backup.py` و`tests_verify_backup.py` **بصمت** (لا يظهران في
+# `git status` ولا يُودَعان). نسخةُ ملفٍّ حقيقيّةٌ تُسمّى `.bak`/`.old` وهما
+# متجاهَلان أعلاه.
+!*_backup.py
 *_recovered.*
 *_restored.*
 *.diff
