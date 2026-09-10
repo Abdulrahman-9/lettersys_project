@@ -182,6 +182,8 @@ def _lifecycle_context(book, user):
         # الأرشفة: الحالُ من الخدمة والحقُّ من البوّابة — والقالبُ يعرض ولا يقرّر.
         "book_is_archived": is_archived(book),
         "can_archive_book": can_archive(user),
+        # «فعِّل متابعة» و«تفريق» لمن يملك المحتوى — الحارسُ نفسُه في referral_service
+        "can_distribute": can_open_content(book, user),
     }
 
 

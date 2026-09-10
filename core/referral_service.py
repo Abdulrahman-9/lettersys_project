@@ -88,6 +88,33 @@ def distribute(book, targets, *, purpose=None, margin='', margin_crop=None,
     return created
 
 
+def activate_followup(referral, *, due_date, by, margin='', assignee=None):
+    """**«فعِّل متابعة»** (قراراتُ الدورة §5.2): صفُّ «للعلم» الذي وُلد بالذكر يصير
+    «للإجراء» بمدّةٍ فتبدأ المطاردة (التأخيرُ والمتبقّي والإنجاز). لا صفَّ جديد —
+    الصفُّ نفسُه يتحوّل، فيبقى تاريخُ الذكر متّصلاً بتاريخ المطاردة.
+    مَن يفعّل هو مَن يملك محتوى الكتاب (مسؤولُ البريد/مدير القسم) لا الهدف."""
+    from core.models import BookReferral
+    from core.scoping import can_open_content
+
+    if not can_open_content(referral.book, by):
+        raise PermissionDenied('لا تملك صلاحيةَ تفعيل المتابعة على هذا الكتاب.')
+    if referral.status not in (BookReferral.SENT, BookReferral.RECEIVED):
+        raise ValidationError('الإحالةُ مُقفلةٌ؛ لا متابعةَ على ما أُنجز أو أُعيد.')
+    if not due_date:
+        raise ValidationError('المتابعةُ بلا موعدٍ ليست متابعة — حدّد الموعد.')
+    with transaction.atomic():
+        referral.purpose = BookReferral.ACTION
+        referral.due_date = due_date
+        if margin:
+            referral.margin = margin
+        if assignee is not None:
+            referral.assignee = assignee
+        referral.save(update_fields=['purpose', 'due_date', 'margin', 'assignee'])
+        _record(referral.book, 'referral', by,
+                'فُعِّلت المتابعة على «%s» حتى %s' % (referral.target_name, due_date))
+    return referral
+
+
 def mark_received(referral, *, by):
     """«استلمتُه» — الوحدةُ تُقرّ بوصول الكتاب إليها."""
     from core.models import BookReferral

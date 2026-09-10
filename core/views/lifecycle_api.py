@@ -73,8 +73,8 @@ def api_distribute(request, pk):
 @require_http_methods(['POST'])
 def api_referral_action(request, pk, referral_id):
     """نقلةُ حالةٍ على صفّ إحالة، أو تنبيهٌ عليه."""
-    from core.referral_service import (mark_done, mark_received, mark_returned,
-                                       send_reminder)
+    from core.referral_service import (activate_followup, mark_done, mark_received,
+                                       mark_returned, send_reminder)
 
     referral = scope_referrals_for(request.user).filter(
         pk=referral_id, book_id=pk).select_related('book').first()
@@ -84,6 +84,9 @@ def api_referral_action(request, pk, referral_id):
     data = _json(request)
     note = (data.get('note') or '').strip()
     handlers = {
+        'activate': lambda: activate_followup(
+            referral, by=request.user, due_date=_date(data.get('due_date')),
+            margin=(data.get('margin') or '').strip()),
         'received': lambda: mark_received(referral, by=request.user),
         'done': lambda: mark_done(referral, by=request.user, note=note),
         'returned': lambda: mark_returned(referral, by=request.user, note=note),

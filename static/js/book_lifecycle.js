@@ -276,6 +276,36 @@
       .finally(function () { busy(button, false); });
   });
 
+  // ── فعِّل متابعة (§5.2): زرُّ الصفّ يفتح الحواريّةَ الصغيرة، وإرسالُها act=activate ──
+  region.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-followup-activate]');
+    if (!button) return;
+    event.preventDefault();
+    document.getElementById('followupReferralId').value = button.dataset.followupActivate;
+    document.getElementById('followupTarget').textContent = button.dataset.followupTarget || '';
+    document.getElementById('followupDue').value = '';
+    document.getElementById('followupMargin').value = '';
+    var modalEl = document.getElementById('followupModal');
+    if (modalEl && window.bootstrap && window.bootstrap.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+  });
+  var followupSubmit = document.getElementById('followupSubmit');
+  if (followupSubmit) {
+    followupSubmit.addEventListener('click', function (event) {
+      var button = event.currentTarget;
+      var referralId = document.getElementById('followupReferralId').value;
+      var due = document.getElementById('followupDue').value;
+      if (!due) { toast('حدّد موعدَ الإنجاز.', false); return; }
+      busy(button, true);
+      post('/books/api/book/' + bookId + '/referral/' + referralId + '/act/',
+           { act: 'activate', due_date: due, margin: document.getElementById('followupMargin').value })
+        .then(function () { notify('فُعِّلت المتابعة.', true); })
+        .catch(function (err) { notify(err.message, false); })
+        .finally(function () { busy(button, false); });
+    });
+  }
+
   // ── الأرشفة: تمامُ الحفظ وفتحُه ───────────────────────────────────────
   var archSubmit = document.getElementById('archSubmit');
   if (archSubmit) {

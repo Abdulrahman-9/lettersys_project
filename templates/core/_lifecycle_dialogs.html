@@ -161,6 +161,34 @@
 </div>
 {% endif %}
 
+<!-- فعِّل متابعة (§5.2): صفُّ «للعلم» ⟵ «للإجراء» بموعد -->
+<div class="modal fade lc-scope" id="followupModal" tabindex="-1" aria-labelledby="followupModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="followupModalTitle">فعِّل متابعة</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">على <strong id="followupTarget"></strong> — تصير «للإجراء» ويبدأ حسابُ التأخير والمتبقّي.</p>
+        <input type="hidden" id="followupReferralId">
+        <div class="mb-2">
+          <label class="form-label" for="followupDue">موعدُ الإنجاز</label>
+          <input type="date" class="form-control" id="followupDue" required>
+        </div>
+        <div class="mb-1">
+          <label class="form-label" for="followupMargin">توجيهٌ خاصٌّ (اختياريّ)</label>
+          <input type="text" class="form-control" id="followupMargin" placeholder="مثل: الردّ خلال أسبوع">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-primary" id="followupSubmit">فعِّل</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade lc-scope" id="custodyModal" tabindex="-1"
      aria-labelledby="custodyModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">

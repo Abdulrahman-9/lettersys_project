@@ -84,3 +84,55 @@ class AutoRouteTests(RoutingTestCase):
         book = Book.objects.get(title='عبر الواجهة')
         self.assertTrue(BookReferral.objects.filter(book=book, to_department=self.unit_reports,
                                                     purpose=BookReferral.INFO).exists())
+
+
+class ActivateFollowupTests(RoutingTestCase):
+    """§5.2 «فعِّل متابعة»: صفُّ «للعلم» يصير «للإجراء» بموعد؛ بلا موعدٍ يُرفض؛ المُقفلُ يُرفض؛
+    غيرُ مالكِ المحتوى يُرفض. الصفُّ نفسُه لا صفٌّ جديد."""
+
+    def _info_row(self):
+        b = self._book()
+        b.receiving_entities.set([self.unit_reports.entity])
+        return b, auto_route_from_receivers(b, by=self.clerk)[0]
+
+    def test_turns_the_same_row_into_action_with_a_due_date(self):
+        from datetime import date
+        from core.referral_service import activate_followup
+        b, row = self._info_row()
+        out = activate_followup(row, due_date=date(2026, 9, 30), by=self.clerk, margin='الردّ خلال أسبوع')
+        self.assertEqual(out.pk, row.pk)
+        self.assertEqual(out.purpose, BookReferral.ACTION)
+        self.assertEqual(str(out.due_date), '2026-09-30')
+        self.assertEqual(out.margin, 'الردّ خلال أسبوع')
+        self.assertEqual(BookReferral.objects.filter(book=b).count(), 1)
+
+    def test_rejects_missing_date_closed_row_and_non_owner(self):
+        from datetime import date
+        from django.core.exceptions import PermissionDenied, ValidationError
+        from core.referral_service import activate_followup, mark_done
+        b, row = self._info_row()
+        with self.assertRaises(ValidationError):
+            activate_followup(row, due_date=None, by=self.clerk)
+        outsider = User.objects.create_user('lout', password='pw-lout-11')
+        UserProfile.objects.create(user=outsider, department=self.legal)
+        with self.assertRaises(PermissionDenied):
+            activate_followup(row, due_date=date(2026, 9, 30), by=outsider)
+        mark_done(row, by=self.clerk)
+        with self.assertRaises(ValidationError):
+            activate_followup(row, due_date=date(2026, 9, 30), by=self.clerk)
+
+    def test_the_api_exposes_act_activate_and_the_page_shows_the_button(self):
+        import json
+        b, row = self._info_row()
+        self.client.force_login(self.clerk)
+        page = self.client.get(reverse('book_detail', args=[b.pk]))
+        self.assertContains(page, f'data-followup-activate="{row.pk}"')
+        self.assertContains(page, 'id="followupModal"')
+        r = self.client.post(reverse('api_referral_action', args=[b.pk, row.pk]),
+                             data=json.dumps({'act': 'activate', 'due_date': '2026-10-01'}),
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        row.refresh_from_db()
+        self.assertEqual(row.purpose, BookReferral.ACTION)
+        page = self.client.get(reverse('book_detail', args=[b.pk]))
+        self.assertNotContains(page, f'data-followup-activate="{row.pk}"')
