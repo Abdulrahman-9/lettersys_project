@@ -43,6 +43,7 @@
       .settings-embed-body { background: transparent !important; }
       .app-embed-main { display: block; padding: 20px 22px 28px; }
       .settings-embed-body .settings-embed-hide { display: none !important; }
+      .skip-link { position: absolute; inset-inline-start: .75rem; top: .5rem; z-index: 2000; background: #fff; color: var(--brand-strong, #b45309); padding: .5rem .9rem; border-radius: 8px; font-weight: 700; box-shadow: 0 4px 14px rgba(0,0,0,.15); }
       /* توحيد الهوية داخل المركز: الأدوات ذات لونها الخاص (البريد برتقالي) تُعاد
          إلى تركوازي الإعدادات ما دامت معروضة داخل لوحته — وتحتفظ بهويتها كاملةً
          حين تُفتح كتطبيق مستقل. */
@@ -55,10 +56,11 @@
     {% block extra_head %}{% endblock %}
   </head>
   <body class="bg-body{% if is_embed %} settings-embed-body{% elif request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %} app-shell-body{% endif %}">
+    {% if not is_embed %}<a class="visually-hidden-focusable skip-link" href="#main">تخطَّ إلى المحتوى</a>{% endif %}
     {% if is_embed %}
-    <main class="app-embed-main">
+    <main class="app-embed-main" id="main">
     {% elif request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
-    <main class="app-auth-main">
+    <main class="app-auth-main" id="main">
     {% else %}
     <header class="app-topbar">
       <div class="app-topbar-brand">
@@ -198,7 +200,7 @@
         {% endif %}
       </aside>
 
-      <main class="app-main">
+      <main class="app-main" id="main" tabindex="-1">
     {% endif %}
 
     {% block content %}{% endblock %}

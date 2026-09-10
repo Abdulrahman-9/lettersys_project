@@ -17,7 +17,7 @@
       {% if s.links %}
       <div class="db-links">
         {% for l in s.links %}
-          <a class="db-link" href="{{ l.href }}"><i class="bi {{ l.icon }}"></i>{{ l.label }}</a>
+          <a class="db-link" href="{{ l.href }}"><i class="bi {{ l.icon }}" aria-hidden="true"></i>{{ l.label }}</a>
         {% endfor %}
       </div>
       {% endif %}

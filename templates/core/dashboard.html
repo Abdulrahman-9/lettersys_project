@@ -151,7 +151,7 @@
 
   <div class="db-hero">
     <div>
-      <h4>مرحباً، {{ request.user.get_full_name|default:request.user.username }}</h4>
+      <h1 class="h4">مرحباً، {{ request.user.get_full_name|default:request.user.username }}</h1>
       <p>هذه لوحتُك — أقسامُها بحسب صلاحيّاتك.</p>
     </div>
     <div class="d-flex gap-2 flex-wrap align-items-center">

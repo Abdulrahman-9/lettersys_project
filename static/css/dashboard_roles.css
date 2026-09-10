@@ -61,7 +61,7 @@
   gap: .8rem; flex-wrap: wrap; margin-bottom: .8rem;
 }
 .db-section-hd h5 { margin: 0; font-size: .98rem; font-weight: 800; color: var(--ink); }
-.db-section-hd p  { margin: .1rem 0 0; font-size: .76rem; color: var(--ink-faint); font-weight: 600; }
+.db-section-hd p  { margin: .1rem 0 0; font-size: .76rem; color: var(--ink-soft); font-weight: 600; }
 
 .db-links { display: flex; gap: .4rem; flex-wrap: wrap; }
 .db-link {
@@ -104,7 +104,7 @@
 .db-l { font-size: .78rem; font-weight: 700; }
 
 .db-note {
-  margin: .8rem 0 0; font-size: .78rem; color: var(--ink-faint);
+  margin: .8rem 0 0; font-size: .78rem; color: var(--ink-soft);
   padding-top: .7rem; border-top: 1px dashed var(--rule);
 }
 
