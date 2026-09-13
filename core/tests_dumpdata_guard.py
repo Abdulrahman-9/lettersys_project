@@ -127,19 +127,27 @@ class SecretModelExclusionTests(TestCase):
             self.assertFalse(target.exists(), 'بقي ملفٌّ لم يُفحَص على القرص')
 
     def test_scan_deletes_the_file_when_the_exclusion_fails(self):
-        """إعادةُ إنتاج حادثة 09-08: العمودُ enc:: سليم، والمُسلسِلُ يكتب الصريح."""
+        """حادثةُ 09-08 **لم تعد قابلةً للإنتاج** بعد 8.6‑أ: المُسلسِلُ يمرّ بـ
+        ``value_to_string`` فيكتب ``enc::`` لا الصريح. ومع ذلك يبقى الحارسُ الخارجيّ:
+        سجلُّ نموذجٍ ذي أسرارٍ في المخرَج مخالفةٌ بذاته، فيُحذَف الملفُّ ويفشل الأمر."""
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / 'd.json'
             with mock.patch.object(shadow, 'secret_model_labels', return_value=()):
                 with self.assertRaises(CommandError) as caught:
                     call_command('dumpdata', '--all', '-o', str(target), verbosity=0)
 
-            self.assertFalse(target.exists(), 'الملفُّ المسرِّبُ بقي على القرص')
+            self.assertFalse(target.exists(), 'الملفُّ بقي على القرص')
 
         message = str(caught.exception)
         self.assertIn('core.emailsettings', message)
-        self.assertIn('smtp_password', message)
         self.assertNotIn(PLAIN, message, 'الحارسُ طبع السرَّ الذي يحرسه')
+
+    def test_serializer_itself_emits_enc_not_plaintext(self):
+        """8.6‑أ الحارسُ الأوّل: حتّى مُسلسِلُ جانغو العاري (بلا تظليل) يُخرج enc::."""
+        from django.core import serializers
+        out = serializers.serialize('json', [EmailSettings.get()])
+        self.assertNotIn(PLAIN, out, 'المُسلسِلُ كتب كلمةَ المرور صريحةً — عادت الحادثة')
+        self.assertIn('"smtp_password": "enc::', out)
 
 
 class DumpScanTests(TestCase):

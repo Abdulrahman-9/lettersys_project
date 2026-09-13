@@ -497,7 +497,7 @@ class IMAPEngine:
                 pass
 
         # ختمُ الانتهاء عبر ``save`` لا ``update``: الأخير يتجاوز منطق النموذج
-        # (تشفير الحقول الحسّاسة في ``EncryptedFieldsMixin.save``) وسيكسر أوّل
+        # (تشفير الحقول الحسّاسة في ``EncryptedCharField.get_prep_value``) وسيكسر أوّل
         # منطقٍ يُضاف إليه — وتعدّدُ حسابات البريد في المرحلة ج أوّلُ الطارقين.
         # ملاحظة: ختمُ **البدء** يكتبه ``_autosync_inbox_if_due`` (سجلّ العيوب م1).
         effective_cfg.imap_last_sync = timezone.now()
