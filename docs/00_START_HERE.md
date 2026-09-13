@@ -1,3 +1,5 @@
+> ⚠️ **تاريخيٌّ لا مرجع** (تقريرُ ميزةٍ من 2026-07). نقطةُ البدء الحاليّة: `docs/START_HERE.md`.
+
 # 🎊 FINAL SUMMARY - ALL FEATURES IMPLEMENTED ✅
 
 ## 📌 WHAT YOU ASKED FOR
