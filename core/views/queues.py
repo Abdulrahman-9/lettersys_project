@@ -224,4 +224,8 @@ def my_today(request):
         'queues': queues,
         'today': today,
         'assigned_total': assigned.count(),
+        # مشتقٌّ من الطوابير نفسِها لا من عدٍّ مستقلّ: فلا يمكن أن يُخفي صفّاً
+        # موجوداً (ي-4). `assigned_total` وحدَه لا يكفي حَكَماً لأنّ الطوابيرَ
+        # مرشّحاتٌ متقاطعة، فقد يختلف عن مجموعها (ي-6).
+        'queues_empty': not any(q.get('total') for q in queues),
     })
