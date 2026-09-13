@@ -777,12 +777,23 @@ class AIExtractionService:
             self._ensure_ocr_stack()
             prov = self._offline_provider
             if prov is not None:
-                import pytesseract as pt
+                # 2026-09-13: كان `Output.DATAFRAME` و**pandas ليس في المتطلّبات** ⟵
+                # استثناءٌ يبتلعه `except` أدناه ⟵ `lines=[]` فلا مراسٍ ولا مُدرِّج
+                # ولا صندوقٌ نسبيّ في الإنتاج كلِّه. وكان يستورد pytesseract خامّاً
+                # بلا `tesseract_cmd` ولا `TESSDATA_PREFIX` — بخلاف الكتلة العاملة
+                # أدناه — فيفشل على خادمٍ لا يكون فيه tesseract على PATH.
+                pt = prov._pytesseract
+                pt.pytesseract.tesseract_cmd = prov.cmd
+                if prov.tessdata_dir:
+                    os.environ['TESSDATA_PREFIX'] = prov.tessdata_dir
                 tsv = pt.image_to_data(img, lang=prov.lang, config=f'--psm {prov.psm}',
-                                       output_type=pt.Output.DATAFRAME)
+                                       output_type=pt.Output.DICT)
                 lines = sc.lines_from_tsv(tsv, img.width, img.height)
+                if not lines:
+                    logger.warning('[subject_box] TSV بلا أسطرٍ صالحة — المُدرِّجُ معطَّل')
         except Exception as exc:
-            logger.info('[subject_box] بلا هندسة أسطر (%s)', type(exc).__name__)
+            # تحذيرٌ لا معلومة: هذا المسارُ سقط صامتاً من 09-11 إلى 09-13.
+            logger.warning('[subject_box] بلا هندسة أسطر: %s: %s', type(exc).__name__, exc)
         entity_id = getattr(result, 'issuing_entity_id', None)
         # البوّابةُ الخضراء
         filled = sc.learned_fill(img, entity_id) if entity_id else None
