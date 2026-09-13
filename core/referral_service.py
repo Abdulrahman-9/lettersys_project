@@ -480,15 +480,6 @@ def _guard_chaser(referral, by):
 
     raise PermissionDenied('التنبيهُ لمن ينتظر الجواب — لا لمن عليه.')
 
-    if referral.to_department_id in subtree_ids(department_id):
-        return
-
-    owning = referral.book.department_id
-    if owning == department_id and (is_department_head(by) or is_mail_officer(by)):
-        return
-
-    raise PermissionDenied('هذه الإحالةُ ليست لك — الالتزامُ على وحدةٍ أخرى.')
-
 
 def _notify(referrals, book, by, *, urgent=False, lead='كتابٌ فُرِّق إليكم'):
     """إشعارٌ لكلّ موظّفٍ في الوحدة المستقبِلة — لا للمكلَّف وحده.

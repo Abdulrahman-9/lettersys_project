@@ -194,3 +194,17 @@ class PipelineHookTests(TestCase):
         r = self.client.get(reverse('extraction-smart-desktop'))
         self.assertContains(r, 'id="subjectLocate"')
         self.assertContains(r, 'js/subject_locate.js')
+
+
+class EntityProfileCacheSelfHealsTests(TestCase):
+    """الكاشُ «الذي يشفى ذاتيّاً» (إنتاج 2026‑09‑01) لم يكن يشفى: `Entity` غيرُ مستورَد
+    فيُبتلَع NameError ويبقى العدُّ القديم. الآن تغيّرُ عدد الجهات يُعيد البناء."""
+
+    def test_adding_an_entity_invalidates_the_cached_store(self):
+        from core.extraction.entity_profiles import EntityResolver
+        from core.models import Entity
+        EntityResolver._cache = None; EntityResolver._cache_n = -1
+        first = EntityResolver.get()
+        Entity.objects.create(name='جهةٌ جديدة تُعيد البناء')
+        second = EntityResolver.get()
+        self.assertIsNot(first, second, 'الكاشُ لم يُعَد بناؤه بعد تغيّر عدد الجهات')
