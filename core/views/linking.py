@@ -95,8 +95,15 @@ def api_add_link(request, pk):
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 
     try:
-        link = add_link(from_book, to_book, relation, by=request.user,
-                        note=data.get('note', ''))
+        if relation == BookLink.REPLY:
+            # الجوابُ يُقفل الإحالةَ المطابقة (قراراتُ الدورة §5.5) — كان الربطُ
+            # وحدَه يترك الكتابَ المُجاب في طابور المطاردة.
+            from core.registration_service import register_reply
+            link, _closed = register_reply(to_book, from_book, by=request.user,
+                                           note=data.get('note', ''))
+        else:
+            link = add_link(from_book, to_book, relation, by=request.user,
+                            note=data.get('note', ''))
     except ValidationError as exc:
         return JsonResponse({'success': False, 'message': exc.messages[0]}, status=400)
     except PermissionDenied as exc:

@@ -274,6 +274,16 @@ window.applySenderDateSuggestion = applySenderDateSuggestion;
 function _tsEl(id) { return document.getElementById(id); }
 
 function applyTitleSuggestion(data) {
+    // «أين الموضوع؟» — عند الصمت (لا موضوعَ مُلئ) يعرض السطحُ اقتراحَ الموضع؛ وعند
+    // الملء (ولو من الصندوق المتعلَّم) تُخفى البطاقة (قرارُ المالك 2026‑09‑11).
+    if (window.SubjectLocate) {
+        const filled = !!(data && (data.title || '').trim());
+        if (!filled && data && data.subject_box_proposal && data.subject_box_proposal.page_preview) {
+            window.SubjectLocate.show(data.subject_box_proposal);
+        } else {
+            window.SubjectLocate.hide();
+        }
+    }
     const card = _tsEl('titleSuggest');
     if (!card) return;
     const sug = data && data.title_suggestion;
@@ -5214,6 +5224,7 @@ class ExtractionSmartSystem {
                 this._pagesEditedInPreview = false;   // استُهلكت تعديلات الصفحات بالحفظ
                 if (window.__setExtractionBaseline) window.__setExtractionBaseline();  // لا يعترض beforeunload التوجيه
                 this.showToast('تم حفظ التعديلات بنجاح ✓', 'success', 3000);
+                if (window.SubjectLocate) window.SubjectLocate.confirmOnSave(formData.get('title'));
                 // «حفظ وإرسال» في وضع التعديل: نفتح الحوار ولا نغادر الصفحة —
                 // المغادرة أثناء الإرسال تقطع العملية على المستخدم.
                 if (this.sendToEntityAfterSave && result.book_id) {
@@ -5270,6 +5281,7 @@ class ExtractionSmartSystem {
                         ? `تم تجديد رقم القيد تلقائياً ثم حفظ الكتاب بنجاح (${formData.get('book_number') || ''}).`
                         : this.t('saveSuccess');
                     this.showToast(successMessage, 'success', retriedAfterReservationRefresh ? 6500 : 4000);
+                    if (window.SubjectLocate) window.SubjectLocate.confirmOnSave(formData.get('title'));
                     delete this.reservations[savedKind];
                     this.smartClearAndStay(savedKind);
                     this.clearFile();

@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260901a">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260911">
 <style>
 .scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
 .scan-agent-status:hover{filter:brightness(.97)}
@@ -329,6 +329,26 @@
                                 </button>
                             </div>
                         </div>
+                        <div class="subject-locate" id="subjectLocate" role="group" aria-label="تحديدُ موضع الموضوع" hidden>
+                            <div class="subject-locate__head">
+                                <span class="subject-locate__label"><i class="bi bi-crosshair" aria-hidden="true"></i> لم يُقرأ الموضوع — أين هو؟</span>
+                                <span class="subject-locate__src" id="subjectLocateSrc"></span>
+                            </div>
+                            <div class="subject-locate__stage" id="subjectLocateStage" data-tip="انقر سطراً مقترَحاً أو اسحب مستطيلاً">
+                                <img id="subjectLocateImg" alt="صورة الصفحة الأولى" draggable="false">
+                                <div class="subject-locate__rect" id="subjectLocateRect" hidden></div>
+                                <div id="subjectLocateCands"></div>
+                            </div>
+                            <div class="subject-locate__read" id="subjectLocateRead" hidden>
+                                <bdi id="subjectLocateText"></bdi>
+                                <span class="subject-locate__reason" id="subjectLocateReason"></span>
+                            </div>
+                            <div class="subject-locate__actions">
+                                <button type="button" class="title-suggest__btn" id="subjectLocateReadBtn"><i class="bi bi-eye" aria-hidden="true"></i> اقرأ من هنا</button>
+                                <button type="button" class="title-suggest__btn" id="subjectLocateApply" hidden><i class="bi bi-check2" aria-hidden="true"></i> استعمِله</button>
+                                <button type="button" class="title-suggest__btn title-suggest__btn--ghost" id="subjectLocateDismiss"><i class="bi bi-x" aria-hidden="true"></i> إغلاق</button>
+                            </div>
+                        </div>
                         <div class="input-hint">اكتب عنواناً واضحاً يسهل البحث عنه لاحقاً في الأرشيف.</div>
                     </div>
 
@@ -614,7 +634,8 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'extraction_smart.js' %}?v=20260901b"></script>
+<script src="{% static 'js/subject_locate.js' %}?v=20260911"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260911"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>

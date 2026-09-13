@@ -34,32 +34,14 @@ def record_custody(book, event, *, referral=None, to_department=None, to_user=No
     from core.models import CustodyEvent
 
     if event in CustodyEvent.ARCHIVE_EVENTS:
-        # **البابُ المجاور يُغلق هنا لا في الغلاف**: حواريّةُ العهدة تعرض
-        # `EVENT_CHOICES` كلَّها، فلو قُبل «تمامُ أرشفة» منها لاستطاع مختصُّ
-        # البريد أن يُغلق ملفَّ كتابٍ عليه التزامٌ مفتوح — وصارت قواعدُ
-        # `archive_service` كلُّها زينة.
-        raise ValidationError(
-            'تمامُ الأرشفة وفتحُها يُسجَّلان من مسار الأرشفة لا من كشف العهدة.')
+        # (قراراتُ الدورة §6) الأرشفةُ تلقائيّةٌ ولا موضعَ حفظٍ ورقيّ: حدثا
+        # «تمامُ أرشفة/فتحُ مؤرشَف» بقيا في الخيارات للسجلّ القديم ولا يُكتبان
+        # يدويّاً من كشف العهدة.
+        raise ValidationError('أحداثُ الأرشفة لا تُسجَّل يدويّاً — الأرشفةُ تلقائيّة.')
     return _write_event(book, event, referral=referral, to_department=to_department,
                         to_user=to_user, to_name=to_name, signed_at=signed_at,
                         mode=mode, note=note, by=by)
 
-
-def record_archive_event(book, event, *, to_department=None, to_user=None,
-                         note='', by):
-    """ميكانيكا حدثِ الأرشفة — **ولا قاعدةَ عملٍ هنا**.
-
-    القواعدُ (مَن يُؤرشف · متى يُرفض · ماذا يُكتب في السجلّ) في
-    ``core/archive_service.py`` وحدَه؛ وهذه تكتب الصفَّ وتُحرّك المؤشّر كأختها.
-    وفصلُهما هو ما يجعل الرفضَ في ``record_custody`` ممكناً بلا أن يُغلق البابَ
-    على صاحب الحقّ.
-    """
-    from core.models import CustodyEvent
-
-    if event not in CustodyEvent.ARCHIVE_EVENTS:
-        raise ValidationError('ليس حدثَ أرشفة.')
-    return _write_event(book, event, to_department=to_department,
-                        to_user=to_user, note=note, by=by)
 
 
 def _write_event(book, event, *, referral=None, to_department=None, to_user=None,

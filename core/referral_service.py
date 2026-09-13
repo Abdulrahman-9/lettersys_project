@@ -88,6 +88,33 @@ def distribute(book, targets, *, purpose=None, margin='', margin_crop=None,
     return created
 
 
+def activate_followup(referral, *, due_date, by, margin='', assignee=None):
+    """**«فعِّل متابعة»** (قراراتُ الدورة §5.2): صفُّ «للعلم» الذي وُلد بالذكر يصير
+    «للإجراء» بمدّةٍ فتبدأ المطاردة (التأخيرُ والمتبقّي والإنجاز). لا صفَّ جديد —
+    الصفُّ نفسُه يتحوّل، فيبقى تاريخُ الذكر متّصلاً بتاريخ المطاردة.
+    مَن يفعّل هو مَن يملك محتوى الكتاب (مسؤولُ البريد/مدير القسم) لا الهدف."""
+    from core.models import BookReferral
+    from core.scoping import can_open_content
+
+    if not can_open_content(referral.book, by):
+        raise PermissionDenied('لا تملك صلاحيةَ تفعيل المتابعة على هذا الكتاب.')
+    if referral.status not in (BookReferral.SENT, BookReferral.RECEIVED):
+        raise ValidationError('الإحالةُ مُقفلةٌ؛ لا متابعةَ على ما أُنجز أو أُعيد.')
+    if not due_date:
+        raise ValidationError('المتابعةُ بلا موعدٍ ليست متابعة — حدّد الموعد.')
+    with transaction.atomic():
+        referral.purpose = BookReferral.ACTION
+        referral.due_date = due_date
+        if margin:
+            referral.margin = margin
+        if assignee is not None:
+            referral.assignee = assignee
+        referral.save(update_fields=['purpose', 'due_date', 'margin', 'assignee'])
+        _record(referral.book, 'referral', by,
+                'فُعِّلت المتابعة على «%s» حتى %s' % (referral.target_name, due_date))
+    return referral
+
+
 def mark_received(referral, *, by):
     """«استلمتُه» — الوحدةُ تُقرّ بوصول الكتاب إليها."""
     from core.models import BookReferral
@@ -225,15 +252,23 @@ def close_by_reply(book, link, reply_book, *, by):
 
     يعيش هنا لا في وحدة القيد لأنّ ``status`` **لا يُكتب إلّا في هذا الملفّ**.
     """
-    from core.models import BookReferral
+    from django.db.models import Q
 
-    answering = reply_book.department_id
-    if not answering:
+    from core.models import BookReferral
+    # مَن أجاب؟ (١) قسمٌ داخليٌّ أصدر الجواب: قسمُ الجواب. (٢) جهةٌ خارجيّة أو وحدةٌ
+    #   أجابت بكتابٍ **وارد**: مصدِرو الجواب (قراراتُ الدورة §5.5) — كان الشرطُ
+    #   الأوّلُ وحدَه، فلا تُقفل إحالةُ الجهة الخارجيّة أبداً.
+    answered_by = Q()
+    if reply_book.department_id and not (reply_book.kind or '').startswith('incoming'):
+        answered_by |= Q(to_department_id=reply_book.department_id)
+    issuers = list(reply_book.issuing_entities.values_list('id', flat=True))
+    if issuers:
+        answered_by |= Q(to_entity_id__in=issuers)
+        answered_by |= Q(to_department__entity_id__in=issuers)   # توأمُ الوحدة
+    if not answered_by:
         return None
-    row = BookReferral.objects.filter(
-        book=book, to_department_id=answering,
-        status__in=BookReferral.OPEN_STATUSES,
-    ).order_by('created_at').first()
+    row = (BookReferral.objects.filter(book=book, status__in=BookReferral.OPEN_STATUSES)
+           .filter(answered_by).order_by('created_at').first())
     if row is None:
         return None
 
@@ -269,6 +304,48 @@ def _normalise(target):
             raise ValidationError('عنصرُ تفريقٍ بلا مفتاح «target».')
         return dict(target)
     return {'target': target}
+
+
+def auto_route_from_receivers(book, *, by):
+    """**الذكرُ يوجّه تلقائيّاً** (قراراتُ الدورة §5.1): لكلّ جهةٍ مستلِمةٍ لها قسمٌ توأمٌ
+    **داخل شجرة القسم المالك** — أو خارجَها وله حسابٌ مفعَّل — يُنشأ صفُّ «للعلم» بلا
+    مدّةٍ إن لم يكن للكتاب إحالةٌ إلى ذلك القسم بعد. فيظهر الكتابُ عند الوحدة، ويصير
+    قابلاً لتتبّع الفتح لاحقاً، و«فعِّل متابعة» يحوّله إلى «للإجراء».
+
+    لا يمرّ بحرّاس التفريق اليدويّ (الفاعلُ هو مَن يحفظ الكتاب)، ولا يحذف صفّاً إن
+    أُزيلت الجهةُ من المستلِمين (التاريخُ لا يُكشط)، ولا يكرّر. يُعيد الصفوفَ المنشأة.
+    """
+    from django.contrib.auth.models import User
+
+    from core.models import BookReferral
+    from core.scoping import subtree_ids
+
+    origin = book.department
+    if origin is None:
+        return []
+    inside = set(subtree_ids(origin.id))
+    existing = set(BookReferral.objects.filter(book=book, to_department__isnull=False)
+                   .values_list('to_department_id', flat=True))
+    created = []
+    with transaction.atomic():
+        for entity in book.receiving_entities.all():
+            dept = getattr(entity, 'department', None)
+            if dept is None or dept.id in existing or dept.id == origin.id:
+                continue
+            if dept.id not in inside:
+                # خارج القسم: حين يُفتح له حساب، لا قبل (قرارُ المالك 2 في 5.1)
+                if not User.objects.filter(profile__department_id=dept.id, is_active=True).exists():
+                    continue
+            created.append(BookReferral.objects.create(
+                book=book, from_department=origin, to_department=dept,
+                purpose=BookReferral.INFO, created_by=by,
+            ))
+            existing.add(dept.id)
+        if created:
+            _record(book, 'referral', by,
+                    'وُجّه تلقائيّاً بالذكر إلى: ' + '، '.join(r.to_department.name for r in created))
+            _project_onto_m2m(book, created)
+    return created
 
 
 def _origin_department(book, by):
@@ -402,15 +479,6 @@ def _guard_chaser(referral, by):
         return
 
     raise PermissionDenied('التنبيهُ لمن ينتظر الجواب — لا لمن عليه.')
-
-    if referral.to_department_id in subtree_ids(department_id):
-        return
-
-    owning = referral.book.department_id
-    if owning == department_id and (is_department_head(by) or is_mail_officer(by)):
-        return
-
-    raise PermissionDenied('هذه الإحالةُ ليست لك — الالتزامُ على وحدةٍ أخرى.')
 
 
 def _notify(referrals, book, by, *, urgent=False, lead='كتابٌ فُرِّق إليكم'):

@@ -168,8 +168,6 @@ def archive_desk(request):
     يولد الطابورُ بـ13 ألف صفٍّ لا يُغلقها عملُ إنسان — وطابورٌ لا يُفرَغ يُهجَر
     في أسبوع، فيصير الدورُ بلا أداة.
     """
-    from core.archive_service import unarchived_books
-
     if not can_archive(request.user):
         raise PermissionDenied('طاولةُ الأرشفة لمسؤول الأرشفة ومدير النظام.')
 
@@ -177,45 +175,21 @@ def archive_desk(request):
     mine = scope_books_for(user, Book.objects.all())
     #: الحيُّ وحدَه: المنقولُ من الورق دخل بالجملة ولم يمرّ بيدِ أرشيفيّ.
     live = mine.filter(source_ref='', is_training=False)
-    pending = unarchived_books(live)
-
-    open_now = BookReferral.objects.filter(status__in=BookReferral.OPEN_STATUSES)
-    #: أُنجزت الوحدةُ عملَها ولم يُقيَّد الحفظ — الطابورُ الذي يُعرِّف الدور.
-    finished = (pending.filter(referrals__isnull=False)
-                .exclude(pk__in=open_now.values('book_id')).distinct())
-    #: قُيِّد ولم يُفرَّق ولم يُحفظ — ورقةٌ على المكتب لا صاحبَ لها.
-    never_moved = pending.filter(referrals__isnull=True)
+    #: قُيِّد ولم يُوجَّه — لا صفَّ إحالةٍ له: نُسيت الجهاتُ المستلِمة أو لم يُهمَّش بعد.
+    never_moved = live.filter(referrals__isnull=True)
     #: قيدٌ بلا مسح: لا مرفقَ يُحفظ. (لا ``attachments__isnull`` — الضمُّ لا يمرّ
     #: بمدير، فكتابٌ مرفقُه الوحيدُ محذوفٌ ناعماً كان يختفي من الطابور بدل أن يظهر.)
     no_file = live.exclude(pk__in=Attachment.objects.values('book_id'))
-
-    filed = CustodyEvent.objects.filter(
-        event=CustodyEvent.ARCHIVE_DONE, book__in=mine)
-    #: حُفظ ولم يُقل أين — وهو أوّلُ ما يُسأل عنه بعد سنة.
-    placeless = filed.filter(note='')
-
+    # (قراراتُ الدورة §6) لا «أُنجز ولم يُحفَظ» ولا «حُفظ بلا موضع»: الأرشفةُ تلقائيّةٌ
+    # لحظةَ الحفظ وذكرِ الجهات، ولا موضعَ حفظٍ ورقيّ يُطلَب.
     queues = [
-        {'key': 'finished', 'label': 'أُنجز ولم يُحفَظ', 'tone': 'danger',
-         'hint': 'عادت الورقةُ من الوحدة وتنتظر الرفّ',
-         'action': 'archive', 'action_label': 'احفظه',
-         **_queue(finished, user, limit=_limit_for(request, 'finished'), row=_book_row, select=())},
-        {'key': 'idle', 'label': 'قُيِّد ولم يُحفَظ', 'tone': 'warn',
-         'hint': 'دخل الدفترَ ولم يُفرَّق ولم يُؤرشَف',
-         'action': 'archive', 'action_label': 'احفظه',
+        {'key': 'idle', 'label': 'قُيِّد ولم يُوجَّه', 'tone': 'warn',
+         'hint': 'دخل الدفترَ بلا جهةٍ مستلِمة — لم يذهب إلى أضبارة أحد',
          **_queue(never_moved, user, limit=_limit_for(request, 'idle'), row=_book_row, select=())},
         {'key': 'nofile', 'label': 'بلا مرفق', 'tone': 'accent',
-         'hint': 'قيدٌ بلا مسح — لا ورقةَ تُحفظ',
+         'hint': 'قيدٌ بلا مسح — لا ورقةَ في الأضبارة',
          **_queue(no_file, user, limit=_limit_for(request, 'nofile'), row=_book_row, select=())},
-        {'key': 'placeless', 'label': 'حُفظ بلا موضع', 'tone': 'muted',
-         'hint': 'أُرشف ولم يُسجَّل الرفّ', 'action': 'place', 'action_label': 'حدّد الرفّ',
-         **_queue(placeless, user, limit=_limit_for(request, 'placeless'), row=_custody_row,
-                  select=('book', 'to_holder_department', 'to_holder_user'))},
-        {'key': 'recent', 'label': 'حُفظ حديثاً', 'tone': 'muted',
-         'hint': 'آخرُ ما أُغلق — للمراجعة والتراجع',
-         **_queue(filed.order_by('-signed_at'), user, limit=_limit_for(request, 'recent'), row=_custody_row,
-                  select=('book', 'to_holder_department', 'to_holder_user'))},
     ]
-
     return render(request, 'core/archive_desk.html', {
         'queues': queues,
         'today': timezone.localdate(),

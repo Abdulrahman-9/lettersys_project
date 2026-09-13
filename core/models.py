@@ -256,7 +256,7 @@ class Book(models.Model):
         # **لا تُسمَّ «مؤرشف»**: الأرشفةُ صارت واقعةً أخرى (حفظُ الورقة على
         # الرفّ — `CustodyEvent.ARCHIVE_DONE`)، وكلمتان بمعنيين في الصفحة
         # الواحدة تُنتجان سؤالاً لا جواب. هذه حالُ **المتابعة** لا الورق.
-        ("archived",  "انتهت المتابعة"),
+        ("archived",  "مُنجَز / بلا متابعة"),
     )
     FOLLOWUP_COLOR = {
         "pending":   "#2563eb",  # أزرق
@@ -2091,6 +2091,8 @@ class CustodyEvent(models.Model):
 
     INTAKE = 'intake'
     UNIT_RECEIPT = 'unit_receipt'
+    #: (قراراتُ الدورة §6) الأرشفةُ تلقائيّةٌ ولا موضعَ حفظٍ ورقيّ — الحدثان باقيان
+    #: للسجلّ القديم فقط ولا يُكتبان من أيّ مسار.
     ARCHIVE_DONE = 'archive_done'
     COURIER_PICKUP = 'courier_pickup'
     RETURN = 'return'
