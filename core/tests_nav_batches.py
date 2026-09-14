@@ -101,3 +101,24 @@ class LifecycleRefreshInPlaceTests(TestCase):
         self.assertIn('function refreshInPlace', src)
         self.assertIn("region.addEventListener('click'", src)
         self.assertNotIn("card.addEventListener('click'", src)
+
+
+class EyeOpensFullDetailTests(TestCase):
+    """قرارُ المالك 2026‑09‑13: زرُّ العين في القائمة يفتح **صفحةَ الكتاب كاملةً**
+    لا الحوارَ السريع (الحوارُ لا يحمل دورةَ الحياة ولا التعليقات ولا السجلّ)."""
+
+    def setUp(self):
+        self.u = User.objects.create_user('eyev', password='pw-eyev-11', is_staff=True)
+        self.book = Book.objects.create(kind='incoming_internal', title='للعرض', created_by=self.u)
+        self.client.force_login(self.u)
+
+    def test_the_list_row_links_straight_to_the_detail_page(self):
+        r = self.client.get(reverse('book_unified'))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, reverse('book_detail', args=[self.book.pk]))
+        self.assertNotContains(r, f'data-book-preview="{self.book.pk}"')
+
+    def test_the_detail_page_carries_what_the_quick_dialog_lacked(self):
+        r = self.client.get(reverse('book_detail', args=[self.book.pk]))
+        for marker in ('id="lifecycleCard"', 'id="followupHistoryCard"', 'إضافة تعليق'):
+            self.assertContains(r, marker)

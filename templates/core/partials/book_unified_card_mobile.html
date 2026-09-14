@@ -150,13 +150,12 @@ BOOK UNIFIED CARD (Mobile View)
         <i class="bi bi-file-earmark-pdf"></i>
       </button>
       {% endif %}
-      {# نظرة سريعة: نقرة تفتح الحوار (المستند + التفاصيل)؛ Ctrl/الزر الأوسط ينتقل للصفحة الكاملة #}
+      {# العين ⟵ صفحةُ الكتاب كاملة (قرارُ المالك 2026‑09‑13) #}
       <a
         href="{% url 'book_detail' book.id %}"
         class="card-action-btn btn-view-mobile"
-        data-book-preview="{{ book.id }}"
-        title="نظرة سريعة"
-        aria-label="نظرة سريعة"
+        title="تفاصيل الكتاب"
+        aria-label="فتح تفاصيل الكتاب كاملة"
       >
         <i class="bi bi-eye"></i>
       </a>
