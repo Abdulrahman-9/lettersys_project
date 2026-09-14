@@ -208,3 +208,68 @@ class EntityProfileCacheSelfHealsTests(TestCase):
         Entity.objects.create(name='جهةٌ جديدة تُعيد البناء')
         second = EntityResolver.get()
         self.assertIsNot(first, second, 'الكاشُ لم يُعَد بناؤه بعد تغيّر عدد الجهات')
+
+
+class AttachmentPagesAndMergeLogTests(TestCase):
+    """قرارُ المالك 2026‑09‑13: كم ورقةً في المرفق، ومَن ألحق وكم أضاف.
+    `AttachmentVersion.page_count` كان حقلاً موجوداً **لا يُملأ أبداً** — فلا أحد يعرف
+    أنّ المرفقَ صار خمسَ ورقاتٍ بعد أن كان ورقتين."""
+
+    def _pdf(self, pages=1):
+        import fitz, io
+        doc = fitz.open()
+        for _ in range(pages):
+            doc.new_page()
+        buf = doc.tobytes()
+        doc.close()
+        return buf
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.models import Attachment, Book
+        self.user = User.objects.create_user('mrg', password='pw-mrg-11', is_staff=True)
+        self.book = Book.objects.create(kind='incoming_internal', title='مرفقات', created_by=self.user)
+        self.att = Attachment.objects.create(
+            book=self.book, file=SimpleUploadedFile('a.pdf', self._pdf(2), content_type='application/pdf'))
+
+    def test_merging_records_pages_added_and_who(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.merge_service import SmartMergeService
+        svc = SmartMergeService(self.att, self.user)
+        svc.merge_files(SimpleUploadedFile('b.pdf', self._pdf(3), content_type='application/pdf'))
+        v = self.att.versions.order_by('-version_number').first()
+        self.assertEqual(v.page_count, 5, 'عددُ ورقات المرفق بعد الإلحاق لم يُسجَّل')
+        self.assertEqual(v.merge_metadata.get('added_pages'), 3)
+        self.assertEqual(v.merge_metadata.get('pages_before'), 2)
+        self.assertEqual(v.created_by, self.user)
+
+    def test_the_attachment_exposes_pages_and_last_merge(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.merge_service import SmartMergeService
+        self.assertEqual(self.att.page_count, 2)
+        self.assertEqual(self.att.last_merge_by, '')
+        SmartMergeService(self.att, self.user).merge_files(
+            SimpleUploadedFile('c.pdf', self._pdf(1), content_type='application/pdf'))
+        att = type(self.att).objects.get(pk=self.att.pk)
+        self.assertEqual(att.page_count, 3)
+        self.assertEqual(att.last_merge_by, 'mrg')
+        self.assertEqual(att.last_merge_added, 1)
+
+    def test_the_preview_json_carries_the_merge_log(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.merge_service import SmartMergeService
+        SmartMergeService(self.att, self.user).merge_files(
+            SimpleUploadedFile('d.pdf', self._pdf(2), content_type='application/pdf'))
+        self.client.force_login(self.user)
+        data = self.client.get(reverse('api_book_detail_json', args=[self.book.pk])).json()
+        att = data['attachments'][0]
+        self.assertEqual(att['page_count'], 4)
+        self.assertEqual(att['merge_log'][0]['added_pages'], 2)
+        self.assertEqual(att['merge_log'][0]['by'], 'mrg')
+
+    def test_the_row_passes_pages_and_report_to_the_dialog(self):
+        self.client.force_login(self.user)
+        r = self.client.get(reverse('book_unified'))
+        self.assertContains(r, 'data-doc-pages=')
+        self.assertContains(r, 'data-doc-report=')
+        self.assertContains(r, 'id="docPreviewPrint"')

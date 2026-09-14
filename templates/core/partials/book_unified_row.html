@@ -150,6 +150,10 @@
               data-doc-preview
               data-doc-url="{{ book.attachment.file.url }}"
               data-doc-title="{{ book.title|default:'بدون عنوان' }}"
+              data-doc-pages="{{ book.attachment.page_count|default:'' }}"
+              data-doc-last-by="{{ book.attachment.last_merge_by|default:'' }}"
+              data-doc-last-added="{{ book.attachment.last_merge_added|default:'' }}"
+              data-doc-report="{% url 'book_report' book.id %}"
               title="عرض المستند">
         <i class="bi bi-file-earmark-pdf"></i>
       </button>

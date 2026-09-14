@@ -81,7 +81,41 @@
     return modalInstance;
   }
 
-  function open(url, title) {
+  /* ── الطباعة (قرارُ المالك 2026‑09‑13) ──────────────────────────────
+     خياران صريحان: «كما مُسحت» هنا، و«تقريرُ البيانات» رابطٌ إلى صفحة التقرير.
+     PDF: يُطبع من داخل الإطار — فيظهر حوارُ المتصفّح **بمدى الصفحات** جاهزاً،
+     فلا نبني منتقيَ صفحاتٍ خاصّاً بنا (ازدواجٌ أضعفُ ممّا في المتصفّح).
+     الصورة: نافذةٌ نظيفةٌ فيها الصورةُ وحدَها مضبوطةً على الورقة — لأنّ وسم img
+     داخل حوارٍ لا يطبع إلّا الصفحةَ التي خلفه.
+     وإن منع المتصفّحُ الطباعةَ من الإطار (سفاري/الهاتف) سقطنا إلى فتح تبويب. */
+  function printCurrent(url, title) {
+    var kind = fileKind(url);
+    if (kind === 'pdf') {
+      var frame = document.querySelector('#docPreviewBody iframe');
+      try {
+        if (frame && frame.contentWindow) {
+          frame.contentWindow.focus();
+          frame.contentWindow.print();
+          return;
+        }
+      } catch (err) { /* أصلٌ مختلف أو منعٌ — السقوطُ أدناه */ }
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+    var w = window.open('', '_blank');
+    if (!w) { window.open(url, '_blank', 'noopener'); return; }
+    var doc = w.document;
+    doc.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>' +
+      (title || 'مستند').replace(/[<>]/g, '') + '</title><style>' +
+      '@page{margin:8mm}body{margin:0;display:flex;align-items:center;justify-content:center}' +
+      'img{max-width:100%;max-height:100vh}</style></head><body><img alt=""></body></html>');
+    doc.close();
+    var img = doc.querySelector('img');
+    img.onload = function () { w.focus(); w.print(); };
+    img.src = url;
+  }
+
+  function open(url, title, opts) {
     var modal = getModal();
     if (!modal) return;
     var body = document.getElementById('docPreviewBody');
@@ -99,6 +133,23 @@
       }));
     }
     if (openEl) openEl.href = SAFE_URL.test(url || '') ? url : '#';
+
+    opts = opts || {};
+    var pagesEl = document.getElementById('docPreviewPages');
+    if (pagesEl) {
+      var bits = [];
+      if (opts.pages) bits.push(opts.pages + ' ' + (opts.pages === 1 ? 'ورقة' : 'ورقات'));
+      if (opts.lastBy) bits.push('آخرُ إلحاق: ' + opts.lastBy + (opts.lastAdded ? ' (+' + opts.lastAdded + ')' : ''));
+      pagesEl.textContent = bits.join(' · ');
+    }
+    var reportEl = document.getElementById('docPreviewReport');
+    if (reportEl) {
+      reportEl.hidden = !opts.reportUrl;
+      reportEl.href = opts.reportUrl || '#';
+      reportEl.target = '_blank';
+    }
+    var printEl = document.getElementById('docPreviewPrint');
+    if (printEl) printEl.onclick = function () { printCurrent(url, title); };
     modal.show();
   }
 
@@ -107,8 +158,13 @@
     var trigger = e.target.closest('[data-doc-preview]');
     if (!trigger) return;
     e.preventDefault();
-    open(trigger.getAttribute('data-doc-url'), trigger.getAttribute('data-doc-title'));
+    open(trigger.getAttribute('data-doc-url'), trigger.getAttribute('data-doc-title'), {
+      pages: parseInt(trigger.getAttribute('data-doc-pages') || '', 10) || 0,
+      lastBy: trigger.getAttribute('data-doc-last-by') || '',
+      lastAdded: parseInt(trigger.getAttribute('data-doc-last-added') || '', 10) || 0,
+      reportUrl: trigger.getAttribute('data-doc-report') || '',
+    });
   });
 
-  window.DocView = { fileKind: fileKind, buildNode: buildNode, open: open };
+  window.DocView = { fileKind: fileKind, buildNode: buildNode, open: open, print: printCurrent };
 })();

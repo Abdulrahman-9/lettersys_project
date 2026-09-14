@@ -684,6 +684,38 @@ class Attachment(models.Model):
         import os
         return os.path.basename(self.file.name) if self.file else ""
 
+    def _latest_version(self):
+        if not hasattr(self, '_lv_cache'):
+            self._lv_cache = self.versions.select_related('created_by').order_by('-version_number').first()
+        return self._lv_cache
+
+    @property
+    def page_count(self):
+        """عددُ ورقات المرفق — من آخر نسخةٍ إن سُجّل، وإلّا يُقرأ من الملفّ (قرارُ
+        المالك 2026‑09‑13: الورقاتُ تُعرَض، لا تُكتشف عند الطباعة)."""
+        v = self._latest_version()
+        if v is not None and v.page_count:
+            return v.page_count
+        try:
+            from core.page_render import page_count as _pc
+            return _pc(self.file.path) or None
+        except Exception:                       # noqa: BLE001
+            return None
+
+    @property
+    def last_merge_by(self):
+        """مَن ألحق آخرَ مرّة (فارغٌ إن لم يُلحق أحدٌ بعد الرفع الأوّل)."""
+        v = self._latest_version()
+        if v is None or not v.is_merged or v.created_by is None:
+            return ''
+        return v.created_by.get_full_name() or v.created_by.username
+
+    @property
+    def last_merge_added(self):
+        """كم ورقةً أضاف آخرُ إلحاق."""
+        v = self._latest_version()
+        return (v.merge_metadata or {}).get('added_pages') if v is not None and v.is_merged else None
+
 
 class AttachmentVersion(models.Model):
     """نموذج الإصدار المحسّن لتتبع التغييرات والدمج"""
