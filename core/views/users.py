@@ -79,7 +79,10 @@ def user_roles(request):
                 return redirect("user_roles")
 
             # إنشاء المستخدم
-            user = User.objects.create(username=username, email=email, is_staff=True)
+            # **بلا `is_staff`** (قرارُ المالك D‑1): هي بوّابةُ صفحات الإدارة
+            # (`staff_required`: النسخُ والاستعادةُ والإعداداتُ وإدارةُ الجهات)
+            # لا دورُ عمل — تُمنح عمداً من /admin/ لمن يحتاجها، لا لكلّ كاتبٍ جديد.
+            user = User.objects.create(username=username, email=email)
             # بلا ملفٍّ يسقط الموظّف الجديد إلى «كتبي أنا» بدل «كتب قسمي».
             from core.scoping import ensure_profile
             ensure_profile(user)

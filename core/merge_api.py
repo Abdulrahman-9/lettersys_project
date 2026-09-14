@@ -6,11 +6,12 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import PermissionDenied
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 
 from .models import Attachment, AttachmentVersion, MergeLog
 from .merge_service import SmartMergeService
+from .scoping import can_open_content
 
 
 class AttachmentMergeViewSet(viewsets.GenericViewSet):
@@ -28,11 +29,15 @@ class AttachmentMergeViewSet(viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_attachment(self, attachment_id):
-        """الحصول على الملف المرفق مع فرض ملكية الكتاب على كل الإجراءات (يسدّ IDOR في history/versions)."""
-        attachment = get_object_or_404(Attachment, id=attachment_id)
-        user = self.request.user
-        if attachment.book.created_by != user and not user.is_staff:
-            raise PermissionDenied('ليس لديك صلاحية للوصول إلى هذا الملف')
+        """الملفُّ المرفق ببوّابة المحتوى الموحّدة — على كلّ الأفعال (history/versions ضمناً).
+
+        كانت هنا وفي ثلاثة أفعالٍ نسخٌ يدويّة `created_by or is_staff` تمنح حاملَ
+        `is_staff` مرفقاتِ كلّ الكتب والسرّيَّ منها. و**404 لا 403**: الرفضُ لا
+        يُثبت وجودَ مرفقٍ خارج النطاق.
+        """
+        attachment = get_object_or_404(Attachment.objects.select_related('book'), id=attachment_id)
+        if not can_open_content(attachment.book, self.request.user):
+            raise Http404
         return attachment
     
     @action(detail=True, methods=['post'])
@@ -49,13 +54,6 @@ class AttachmentMergeViewSet(viewsets.GenericViewSet):
         - merge_log: سجل الدمج
         """
         attachment = self.get_attachment(pk)
-        
-        # التحقق من صلاحيات المستخدم
-        if attachment.book.created_by != request.user and not request.user.is_staff:
-            return Response(
-                {'error': 'ليس لديك صلاحية لتعديل هذا الملف'},
-                status=status.HTTP_403_FORBIDDEN
-            )
         
         # التحقق من وجود الملف الجديد
         if 'file' not in request.FILES:
@@ -106,13 +104,6 @@ class AttachmentMergeViewSet(viewsets.GenericViewSet):
         """
         attachment = self.get_attachment(pk)
         
-        # التحقق من صلاحيات المستخدم
-        if attachment.book.created_by != request.user and not request.user.is_staff:
-            return Response(
-                {'error': 'ليس لديك صلاحية لحذف هذا الملف'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
         try:
             reason = request.data.get('reason', '')
             
@@ -143,13 +134,6 @@ class AttachmentMergeViewSet(viewsets.GenericViewSet):
         - version_number: رقم النسخة المراد استعادتها
         """
         attachment = self.get_attachment(pk)
-        
-        # التحقق من صلاحيات المستخدم
-        if attachment.book.created_by != request.user and not request.user.is_staff:
-            return Response(
-                {'error': 'ليس لديك صلاحية لاستعادة نسخ هذا الملف'},
-                status=status.HTTP_403_FORBIDDEN
-            )
         
         version_number = request.data.get('version_number')
         

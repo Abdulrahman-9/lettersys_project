@@ -16,7 +16,7 @@ import json
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from core.models import Book, Department, UserProfile
+from core.models import Attachment, Book, Department, OCRResult, UserProfile
 
 
 class ContentGateTestCase(TestCase):
@@ -86,3 +86,78 @@ class CommentIsContentTests(ContentGateTestCase):
     def test_a_colleague_may_comment_on_a_plain_book(self):
         self.client.force_login(self.colleague)
         self.assertEqual(self._comment(self.plain).status_code, 200)
+
+
+class StaffIsNotAContentKeyTests(ContentGateTestCase):
+    """**ستُّ نسخٍ نجت من كنس T7.5‑2**: `merge_api` (×4) و`attachment_ocr_text`
+    و`api_book_inline_status` — كلُّها `created_by or is_staff`. فحاملُ `is_staff`
+    من قسمٍ آخر كان يفتح مرفقَ أيّ كتابٍ ونصَّ OCR السرّيّ ويُبدّل الحالة.
+
+    والرفضُ **404 لا 403**: رمزان مفترقان عرّافٌ يُثبت وجودَ ما لا يملكه السائل.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        elsewhere = Department.objects.create(name='الحسابات', code='ح-ش14')
+        cls.outsider = User.objects.create_user(
+            'houtsider', password='pw-houtsider-11111', is_staff=True)
+        UserProfile.objects.create(user=cls.outsider, department=elsewhere)
+
+        cls.secret_att = Attachment.objects.create(book=cls.secret)
+        cls.plain_att = Attachment.objects.create(book=cls.plain)
+        OCRResult.objects.create(attachment=cls.secret_att, cleaned_text='نصُّ المناقصة')
+
+    def _ocr(self, att):
+        return self.client.get('/books/api/attachment/%d/ocr/' % att.pk)
+
+    def _status(self, book):
+        return self.client.post(
+            '/books/api/book/%d/status-inline/' % book.pk,
+            data=json.dumps({'status': 'archived'}),
+            content_type='application/json',
+        )
+
+    # ── نصُّ OCR ──
+    def test_is_staff_does_not_read_the_ocr_of_a_secret(self):
+        self.client.force_login(self.staffer)
+        self.assertEqual(self._ocr(self.secret_att).status_code, 404)
+
+    def test_is_staff_from_another_department_does_not_read_ocr(self):
+        self.client.force_login(self.outsider)
+        self.assertEqual(self._ocr(self.plain_att).status_code, 404)
+
+    def test_the_author_still_reads_the_ocr_of_their_secret(self):
+        self.client.force_login(self.author)
+        res = self._ocr(self.secret_att)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()['text'], 'نصُّ المناقصة')
+
+    # ── الحالة ──
+    def test_is_staff_from_another_department_cannot_change_status(self):
+        before = Book.objects.get(pk=self.plain.pk).is_archived
+        self.client.force_login(self.outsider)
+        self.assertEqual(self._status(self.plain).status_code, 404)
+        self.assertEqual(Book.objects.get(pk=self.plain.pk).is_archived, before)
+
+    def test_a_colleague_may_change_the_status_of_a_plain_book(self):
+        """حارسُ عدم الانحدار: القسمُ يُنهي متابعةَ علنيِّه كما يعلّق عليه."""
+        self.client.force_login(self.colleague)
+        self.assertEqual(self._status(self.plain).status_code, 200)
+
+    # ── واجهةُ الدمج: مُوجَّهةٌ بلا زرّ فتُبلَغ بالرابط ──
+    def test_is_staff_from_another_department_cannot_list_versions(self):
+        self.client.force_login(self.outsider)
+        res = self.client.get('/books/api/attachments/%d/versions/' % self.plain_att.pk)
+        self.assertEqual(res.status_code, 404)
+
+    def test_is_staff_cannot_delete_an_attachment_of_a_secret(self):
+        self.client.force_login(self.staffer)
+        res = self.client.delete('/books/api/attachments/%d/delete_file/' % self.secret_att.pk)
+        self.assertEqual(res.status_code, 404)
+        self.assertFalse(Attachment.objects.get(pk=self.secret_att.pk).is_deleted)
+
+    def test_the_author_still_lists_versions_of_their_secret(self):
+        self.client.force_login(self.author)
+        res = self.client.get('/books/api/attachments/%d/versions/' % self.secret_att.pk)
+        self.assertEqual(res.status_code, 200)

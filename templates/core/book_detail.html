@@ -736,14 +736,16 @@
 
       const statusClass = { sent: 'success', failed: 'danger', pending: 'warning' };
       const statusLabel = { sent: 'أُرسِل', failed: 'فشل', pending: 'انتظار' };
+      // حقولُ السجلّ نصٌّ لا وسم — كلُّها تمرّ من esc() قبل innerHTML.
+      const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
       listEl.innerHTML = logs.slice(0, 8).map(l => `
         <div class="d-flex align-items-start gap-2 px-3 py-2 border-bottom" style="font-size:.78rem">
           <i class="bi bi-${l.status === 'sent' ? 'check-circle-fill text-success' : l.status === 'failed' ? 'x-circle-fill text-danger' : 'hourglass-split text-warning'}" style="margin-top:.15rem"></i>
           <div class="flex-grow-1 overflow-hidden">
-            <div class="text-truncate fw-semibold" style="color:var(--deep-brown)">${l.subject}</div>
-            <div class="text-truncate" style="color:var(--muted-brown);direction:ltr;text-align:right">${l.to_address}</div>
+            <div class="text-truncate fw-semibold" style="color:var(--deep-brown)">${esc(l.subject)}</div>
+            <div class="text-truncate" style="color:var(--muted-brown);direction:ltr;text-align:right">${esc(l.to_address)}</div>
           </div>
-          <div style="white-space:nowrap;color:var(--muted-brown)">${l.sent_at ? l.sent_at.substring(0,10) : ''}</div>
+          <div style="white-space:nowrap;color:var(--muted-brown)">${esc(l.sent_at ? l.sent_at.substring(0,10) : '')}</div>
         </div>`).join('');
     })
     .catch(() => {

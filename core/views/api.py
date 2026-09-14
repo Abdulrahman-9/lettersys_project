@@ -203,14 +203,10 @@ def attachment_ocr_text(request, att_id):
         pk=att_id,
         is_deleted=False,
     )
-    book = att.book
-    has_permission = (
-        request.user.is_superuser
-        or request.user.is_staff
-        or (book and book.created_by_id == request.user.id)
-    )
-    if not has_permission:
-        return JsonResponse({"status": "error", "message": "ليس لديك صلاحية"}, status=403)
+    # النصُّ **محتوى** — فالبوّابةُ من المصدر الوحيد: السرّيُّ لا يُقرأ بمن يرى
+    # سطرَه، و`is_staff` لا تفتح شيئاً. و404 لا 403 كي لا يُثبت الرفضُ وجودَ مرفق.
+    if not can_open_content(att.book, request.user):
+        return JsonResponse({"status": "error", "message": "غير موجود"}, status=404)
 
     ocr = getattr(att, 'ocr_result', None)
     text = ''
