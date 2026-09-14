@@ -111,6 +111,7 @@ urlpatterns = [
     path("settings/notifications/save/", views.settings_notifications_save, name="settings_notifications_save"),
     path("settings/security/save/", views.settings_security_save, name="settings_security_save"),
     path("settings/backup/save/", views.settings_backup_save, name="settings_backup_save"),
+    path("settings/ai/save/", views.settings_ai_save, name="settings_ai_save"),
     path("settings/sequences/", views.sequence_settings, name="sequence_settings"),
 
     # ─── إعدادات الماسح الضوئي ────────────────────────────────────────────────

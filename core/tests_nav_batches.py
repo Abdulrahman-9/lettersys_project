@@ -142,6 +142,32 @@ class SettingsHubStructureTests(TestCase):
             self.assertEqual(self.client.get(reverse(name)).status_code, 200, name)
 
     def test_the_hub_has_no_hardcoded_admin_path(self):
+        """كان تبويبُ الذكاء الاصطناعيّ رابطاً حرفيّاً يقذف المستخدم إلى لوحة جانغو؛
+        صار لوحةً داخل المركز (مراجعة 2026‑09‑13)."""
         src = open('templates/core/settings/hub.html', encoding='utf-8').read()
         self.assertNotIn('href="/admin/', src)
-        self.assertIn("{% url 'admin:core_aiintegrationsettings_changelist' %}", src)
+        self.assertNotIn('data-kind="external"', src)
+        self.assertIn('data-pane="ai"', src)
+
+    def test_the_ai_pane_never_renders_the_saved_key_and_saves_it(self):
+        from core.models import AIIntegrationSettings
+        self.client.force_login(self.staff)
+        r = self.client.post(reverse('settings_ai_save'), {
+            'provider': 'azure', 'azure_endpoint': 'https://x.example/',
+            'azure_key': 'SECRET-KEY-123', 'low_confidence_threshold': '0.5'})
+        self.assertEqual(r.status_code, 302)
+        cfg = AIIntegrationSettings.objects.first()
+        self.assertEqual(cfg.azure_key, 'SECRET-KEY-123')
+        page = self.client.get(reverse('settings_hub'))
+        self.assertNotContains(page, 'SECRET-KEY-123', msg_prefix='المفتاحُ ظهر في الصفحة')
+        # فارغٌ ⟵ يبقى المحفوظ؛ ومسحٌ صريحٌ ⟵ يُحذف
+        self.client.post(reverse('settings_ai_save'), {'provider': 'azure', 'azure_key': ''})
+        self.assertEqual(AIIntegrationSettings.objects.first().azure_key, 'SECRET-KEY-123')
+        self.client.post(reverse('settings_ai_save'), {'provider': 'azure', 'clear_key': 'on'})
+        self.assertEqual(AIIntegrationSettings.objects.first().azure_key, '')
+
+    def test_a_plain_user_gets_the_403_page_not_a_login_redirect(self):
+        """توحيدُ الحرّاس: مَن هو داخلٌ ولا يملك يرى 403 داخل القشرة لا تحويلاً للدخول."""
+        self.client.force_login(self.plain)
+        for name in ('settings_hub', 'network_settings', 'mail_settings'):
+            self.assertEqual(self.client.get(reverse(name)).status_code, 403, name)
