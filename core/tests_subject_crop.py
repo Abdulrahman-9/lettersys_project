@@ -273,3 +273,34 @@ class AttachmentPagesAndMergeLogTests(TestCase):
         self.assertContains(r, 'data-doc-pages=')
         self.assertContains(r, 'data-doc-report=')
         self.assertContains(r, 'id="docPreviewPrint"')
+
+
+class DocViewerToolsTests(TestCase):
+    """عارضُ الصور (تكبير/تدوير/سحب) والتنقّلُ بين المرفقات داخل الحوار (2026‑09‑13)."""
+
+    def test_the_dialog_carries_image_tools_and_navigation(self):
+        u = User.objects.create_user('dvt', password='pw-dvt-11')
+        self.client.force_login(u)
+        r = self.client.get(reverse('book_unified'))
+        for marker in ('id="docPreviewZoomIn"', 'id="docPreviewRotate"', 'id="docPreviewReset"',
+                       'id="docPreviewNav"', 'id="docPreviewCounter"'):
+            self.assertContains(r, marker)
+
+    def test_the_script_mounts_a_stage_only_for_images_and_exposes_series(self):
+        src = open('static/js/doc_view.js', encoding='utf-8').read()
+        self.assertIn('function mountImage', src)
+        self.assertIn("node.tagName === 'IMG'", src)
+        self.assertIn('openSeries', src)
+        self.assertIn('rotate(', src)
+
+    def test_the_detail_page_publishes_its_attachment_series(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.models import Attachment, Book
+        u = User.objects.create_user('dvs', password='pw-dvs-11', is_staff=True)
+        b = Book.objects.create(kind='incoming_internal', title='سلسلة', created_by=u)
+        for n in ('p1.pdf', 'p2.pdf'):
+            Attachment.objects.create(book=b, file=SimpleUploadedFile(n, b'%PDF-1.4'))
+        self.client.force_login(u)
+        r = self.client.get(reverse('book_detail', args=[b.pk]))
+        self.assertContains(r, 'id="bookAttachmentsSeries"')
+        self.assertContains(r, 'data-doc-series="1"')

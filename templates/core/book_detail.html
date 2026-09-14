@@ -566,12 +566,13 @@
                   {% else %}
                     <span class="fw-semibold text-muted d-block">مرفق بدون ملف</span>
                   {% endif %}
-                  <small class="text-muted d-block">{{ att.uploaded_at|date:"d/m/Y H:i" }}{% if att.file %} · {{ att.file.size|filesizeformat }}{% endif %}</small>
+                  <small class="text-muted d-block">{{ att.uploaded_at|date:"d/m/Y H:i" }}{% if att.file %} · {{ att.file.size|filesizeformat }}{% endif %}{% if att.page_count %} · {{ att.page_count }} ورقة{% endif %}</small>
+                  {% if att.last_merge_by %}<small class="text-muted d-block"><i class="bi bi-paperclip me-1"></i>آخرُ إلحاق: {{ att.last_merge_by }}{% if att.last_merge_added %} (+{{ att.last_merge_added }} ورقة){% endif %}</small>{% endif %}
                 </div>
                 <div class="ms-auto">
                   {% if att.file %}
                     <div class="btn-group btn-group-sm" role="group" aria-label="معاينة وتحميل">
-                      <button class="btn btn-gradient-primary preview-btn" data-file-url="{{ request.scheme }}://{{ request.META.HTTP_HOST }}{{ att.file.url }}" data-file-name="{{ att.file.name }}" data-att-id="{{ att.id }}" type="button" title="معاينة الملف">
+                      <button class="btn btn-gradient-primary preview-btn" data-doc-series="{{ forloop.counter0 }}" data-file-url="{{ request.scheme }}://{{ request.META.HTTP_HOST }}{{ att.file.url }}" data-file-name="{{ att.file.name }}" data-att-id="{{ att.id }}" type="button" title="معاينة الملف">
                         <i class="bi bi-eye-fill me-1"></i><span class="btn-text">معاينة</span>
                       </button>
                       <a href="{{ att.file.url }}" download class="btn btn-download" title="تحميل الملف">
@@ -751,4 +752,20 @@
 })();
 </script>
 
+
+{# سلسلةُ مرفقات الكتاب: التنقّل «2 من 5» داخل الحوار بدل إغلاقٍ وفتحٍ لكلّ ورقة #}
+<script id="bookAttachmentsSeries" type="application/json">[{% for att in attachments %}{% if att.file %}{"url": "{{ att.file.url|escapejs }}", "name": "{{ att.filename|escapejs }}", "page_count": {{ att.page_count|default:0 }}, "last_by": "{{ att.last_merge_by|escapejs }}", "last_added": {{ att.last_merge_added|default:0 }}}{% if not forloop.last %},{% endif %}{% endif %}{% endfor %}]</script>
+<script>
+(function () {
+  var items = [];
+  try { items = JSON.parse(document.getElementById('bookAttachmentsSeries').textContent || '[]'); } catch (e) { items = []; }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-doc-series]');
+    if (!btn || !window.DocView || !window.DocView.openSeries) return;
+    e.preventDefault(); e.stopPropagation();
+    window.DocView.openSeries(items, parseInt(btn.getAttribute('data-doc-series'), 10) || 0,
+                              { reportUrl: '{% url "book_report" book.id %}' });
+  }, true);
+})();
+</script>
 {% endblock %}  
