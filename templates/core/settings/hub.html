@@ -35,7 +35,7 @@
       <button class="settings-tab" role="tab" data-tab="scan"          data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'scan_settings' %}?embed=1"><i class="bi bi-printer-fill"></i><span>الماسح الضوئي</span></button>
       <button class="settings-tab" role="tab" data-tab="users"         data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'user_roles' %}?embed=1"><i class="bi bi-person-gear"></i><span>المستخدمون والأدوار</span></button>
       <button class="settings-tab" role="tab" data-tab="trash"         data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'trash_list' %}?embed=1"><i class="bi bi-trash3-fill"></i><span>سلة المحذوفات</span></button>
-      <a class="settings-tab" role="tab" data-tab="ai" data-kind="external" aria-selected="false" href="/admin/core/aiintegrationsettings/" target="_blank" rel="noopener"><i class="bi bi-robot"></i><span>الذكاء الاصطناعي</span></a>
+      <a class="settings-tab" role="tab" data-tab="ai" data-kind="external" aria-selected="false" href="{% url 'admin:core_aiintegrationsettings_changelist' %}" target="_blank" rel="noopener"><i class="bi bi-robot"></i><span>الذكاء الاصطناعي</span></a>
       <span class="settings-tab-indicator" id="settingsTabIndicator"></span>
     </div>
   </div>

@@ -122,3 +122,26 @@ class EyeOpensFullDetailTests(TestCase):
         r = self.client.get(reverse('book_detail', args=[self.book.pk]))
         for marker in ('id="lifecycleCard"', 'id="followupHistoryCard"', 'إضافة تعليق'):
             self.assertContains(r, marker)
+
+
+class SettingsHubStructureTests(TestCase):
+    """هيكلُ مركز الإعدادات (مراجعة 2026‑09‑13): حارسٌ واحدٌ لكلّ تبويب، ولا مساراتٍ حرفيّة."""
+
+    def setUp(self):
+        self.plain = User.objects.create_user('shp', password='pw-shp-11')
+        self.staff = User.objects.create_user('shs', password='pw-shs-11', is_staff=True)
+
+    def test_every_embedded_tab_is_guarded_like_the_hub(self):
+        """كانت صفحةُ إعدادات الماسح بـlogin_required وحدَها: أيُّ مستخدمٍ يفتحها بالمسار."""
+        self.client.force_login(self.plain)
+        for name in ('settings_hub', 'scan_settings', 'sequence_settings', 'network_settings', 'user_roles'):
+            r = self.client.get(reverse(name))
+            self.assertIn(r.status_code, (302, 403), f'{name} مفتوحٌ لغير الموظّف ({r.status_code})')
+        self.client.force_login(self.staff)
+        for name in ('settings_hub', 'scan_settings'):
+            self.assertEqual(self.client.get(reverse(name)).status_code, 200, name)
+
+    def test_the_hub_has_no_hardcoded_admin_path(self):
+        src = open('templates/core/settings/hub.html', encoding='utf-8').read()
+        self.assertNotIn('href="/admin/', src)
+        self.assertIn("{% url 'admin:core_aiintegrationsettings_changelist' %}", src)
