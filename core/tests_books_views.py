@@ -511,9 +511,10 @@ class InlineStatusTests(BookViewsBase):
         resp = self._post(self.book.pk, 'bad_status')
         self.assertEqual(resp.status_code, 400)
 
-    def test_unauthorized_returns_403(self):
+    def test_unauthorized_returns_404(self):
+        """بوّابةُ المحتوى الموحّدة: 404 لا 403 (الرفضُ لا يُثبت وجودَ الكتاب)."""
         resp = self._post(self.book.pk, 'archived', user=self.other)
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 404)
 
     def test_valid_update_returns_success(self):
         """أرشفة الكتاب القائم (قيد المتابعة) — يصبح مؤرشفاً."""
@@ -575,11 +576,12 @@ class AttachmentOcrTextTests(BookViewsBase):
         self.assertFalse(data['has_text'])
         self.assertEqual(data['text'], '')
 
-    def test_unauthorized_403(self):
+    def test_unauthorized_404(self):
+        """بوّابةُ المحتوى الموحّدة: 404 لا 403 (الرفضُ لا يُثبت وجودَ المرفق)."""
         att = self._att()
         self._login(self.other)
         resp = self.client.get(self._url(att.id))
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 404)
 
 
 class CommentNotesAPITests(BookViewsBase):

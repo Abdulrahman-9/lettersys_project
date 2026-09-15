@@ -732,14 +732,13 @@ def api_book_inline_status(request, pk):
     if request.method != "POST":
         return JsonResponse({"error": "Only POST allowed"}, status=405)
 
+    from core.scoping import can_open_content
+
     book = get_object_or_404(Book, pk=pk, is_deleted=False)
-    has_permission = (
-        request.user.is_superuser
-        or request.user.is_staff
-        or book.created_by == request.user
-    )
-    if not has_permission:
-        return JsonResponse({"error": "Unauthorized"}, status=403)
+    # تغييرُ الحالة عمليّةُ **محتوى** — البوّابةُ من المصدر الوحيد لا نسخةٌ
+    # يدويّةٌ تمنح `is_staff` كلَّ كتب الشركة. و404 لا 403.
+    if not can_open_content(book, request.user):
+        return JsonResponse({"error": "غير موجود"}, status=404)
 
     try:
         payload = json.loads(request.body)

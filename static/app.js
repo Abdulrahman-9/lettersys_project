@@ -1788,10 +1788,9 @@ if (window.LetterSystem) {
   window.LetterSystem.toast = window.ToastCenter;
 }
 
-// Backward-compatible wrapper for legacy showToast calls
-window.showToast = function(message, type, delay) {
-  return showToast(message, type, delay);
-};
+// لا غلافَ `window.showToast` هنا: `function showToast` أعلاه تصريحٌ في سكربتٍ
+// كلاسيكيّ فهو خاصّيّةُ window نفسُها. والغلافُ كان يستبدلها فيُحَلّ نداؤه
+// الداخليّ إليه هو ⟵ تكرارٌ لا نهائيّ (RangeError) عند كلّ رسالة.
 
 document.addEventListener('DOMContentLoaded', function(){
   initBootstrapToastsCenter();

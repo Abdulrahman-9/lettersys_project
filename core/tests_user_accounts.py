@@ -83,3 +83,11 @@ class DeadRoleSystemIsGoneTests(TestCase):
         self.client.post(URL, {'action': 'delete', 'user_id': temp.pk})
 
         self.assertFalse(User.objects.filter(username='temp').exists())
+
+    def test_a_created_account_is_not_staff(self):
+        """D‑1: `is_staff` بوّابةُ صفحات الإدارة (النسخُ والاستعادةُ والإعدادات)
+        لا دورُ عمل — وكان كلُّ حسابٍ جديدٍ يولد بها."""
+        self.client.post(URL, {'action': 'create', 'username': 'clerk',
+                               'password': 'pass12345', 'password2': 'pass12345'})
+
+        self.assertFalse(User.objects.get(username='clerk').is_staff)
