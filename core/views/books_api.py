@@ -511,6 +511,10 @@ def api_bulk_delete_books(request):
                     book_id=bid,
                     action="delete",
                     by=request.user,
+                    # `bulk_create` يتجاوز `save()` فلا تُملأ اللقطةُ تلقائيّاً —
+                    # وبدونها يفقد الصفُّ اسمَ فاعله يومَ يُحذف الموظّف.
+                    by_snapshot=(request.user.get_full_name()
+                                 or request.user.get_username()),
                     notes="Book moved to trash via bulk delete",
                 )
                 for bid in allowed_ids
@@ -576,6 +580,8 @@ def api_bulk_update_status_books(request):
                     book_id=bid,
                     action="status",
                     by=request.user,
+                    by_snapshot=(request.user.get_full_name()
+                                 or request.user.get_username()),
                     notes=f"{action_label} (bulk)",
                 )
                 for bid in eligible_ids

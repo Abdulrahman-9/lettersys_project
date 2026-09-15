@@ -90,6 +90,11 @@
                 <tr>
                   <td>
                     <span class="fw-semibold">{{ row.target }}</span>
+                    {% if row.referral.created_by %}
+                      <span class="text-muted" style="font-size:.8rem">
+                        · فرّقه {{ row.referral.created_by.get_full_name|default:row.referral.created_by.username }}
+                      </span>
+                    {% endif %}
                     {% if row.referral.assignee %}
                       <span class="text-muted">— {{ row.referral.assignee.get_full_name|default:row.referral.assignee.username }}</span>
                     {% endif %}
@@ -261,6 +266,16 @@
                 <span class="badge text-bg-light border">{{ event.get_event_display }}</span>
                 <span class="fw-semibold">{{ event.holder_name }}</span>
                 {% if event.note %}<span class="text-muted">— {{ event.note }}</span>{% endif %}
+                {% comment %}
+                  **مَن قيّد** لا مَن استلم: الحاملُ أعلاه هو مَن صارت العهدةُ
+                  إليه، وهذا مَن أثبتها في النظام. وهما مختلفان دائماً تقريباً
+                  (المختصُّ يُثبت استلامَ الوحدة)، والسؤالُ بعد شهرٍ عن الثاني.
+                {% endcomment %}
+                {% if event.recorded_by %}
+                  <span class="text-muted" style="font-size:.8rem">
+                    · قيّده {{ event.recorded_by.get_full_name|default:event.recorded_by.username }}
+                  </span>
+                {% endif %}
                 {% if event.signature_mode == 'paper' %}
                   <i class="bi bi-pen text-muted" title="توقيعٌ ورقيّ"></i>
                 {% endif %}

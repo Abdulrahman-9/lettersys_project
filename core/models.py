@@ -902,6 +902,7 @@ class BookHistory(models.Model):
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="history")
     action = models.CharField(max_length=50, choices=ACTION_CHOICES, db_index=True)
     by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+
     by_snapshot = models.CharField(
         'اسم المنفّذ (snapshot)', max_length=150, blank=True, default='',
         help_text='يُحفظ عند الإنشاء لضمان بقاء سجل التدقيق حتى بعد حذف المستخدم'
@@ -909,6 +910,24 @@ class BookHistory(models.Model):
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     attachment = models.ForeignKey('Attachment', on_delete=models.SET_NULL, null=True, blank=True, related_name='histories')
+
+    @property
+    def actor_name(self):
+        """مَن فعل هذا — **واللقطةُ أوّلاً لا المفتاحُ الأجنبيّ**.
+
+        `by` هي ``SET_NULL``: يُحذف الموظّفُ فيصير الصفُّ بلا فاعل، ويُعاد
+        تسميتُه فيصير الاسمُ المعروضُ غيرَ الذي وقّع. واللقطةُ `by_snapshot`
+        هي الاسمُ **وقتَ الفعل** — وهو ما يُسأل عنه في التدقيق.
+
+        والاحتياطيُّ `by` ضروريٌّ لا ترف: `bulk_create` يتجاوز `save()` فقد
+        يكتب صفّاً بلا لقطة. والفراغُ التامّ «النظام»: أوامرُ الجدولة
+        والمستوردُ يكتبان بلا فاعلٍ بشريّ، و«—» تترك القارئَ يخمّن.
+        """
+        if self.by_snapshot:
+            return self.by_snapshot
+        if self.by_id:
+            return self.by.get_full_name() or self.by.get_username()
+        return 'النظام'
 
     class Meta:
         ordering = ['-created_at']

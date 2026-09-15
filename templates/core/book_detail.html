@@ -477,12 +477,19 @@
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white d-flex justify-content-between align-items-center p-3 border-bottom">
           <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history text-info me-2"></i>سجل المتابعة</h6>
-          <span class="badge bg-light text-dark">{{ book.history.count }} مدخل</span>
+          <span class="badge bg-light text-dark">{{ history_total }} مدخل</span>
         </div>
         <div class="card-body p-0">
-          {% if book.history.all %}
+          {% if history %}
           <div class="timeline">
-            {% for h in book.history.all|slice:":50" %}
+            {% comment %}
+              السجلُّ يُجهَّز في العرض محدوداً بـ`HISTORY_PAGE` مع
+              `select_related('by')` — لا استعلامَ في القالب ولا قطعاً بعد
+              الجلب. والصفُّ يقول ثلاثةَ أشياء: **ماذا** (تسميةٌ عربيّةٌ من
+              `ACTION_CHOICES` لا مفتاحاً خاماً) · **مَن** (لقطةُ الاسم وقتَ
+              الفعل) · ومتى.
+            {% endcomment %}
+            {% for h in history %}
             <div class="timeline-item p-3 border-bottom">
               <div class="d-flex gap-3">
                 <div class="timeline-marker">
@@ -490,8 +497,11 @@
                 </div>
                 <div class="flex-grow-1">
                   <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h6 class="mb-0 fw-semibold">{{ h.action }}</h6>
-                    <small class="text-muted">{{ h.created_at|date:"d/m/Y H:i" }}</small>
+                    <h6 class="mb-0 fw-semibold">
+                      {{ h.get_action_display }}
+                      <span class="text-muted fw-normal" style="font-size:.82rem">— {{ h.actor_name }}</span>
+                    </h6>
+                    <small class="text-muted">{{ h.created_at|date:"Y/m/d H:i" }}</small>
                   </div>
                   {% if h.notes %}
                     <small class="text-muted d-block">{{ h.notes }}</small>
@@ -500,6 +510,11 @@
               </div>
             </div>
             {% endfor %}
+            {% if history_total > history|length %}
+            <div class="p-3 text-center text-muted" style="font-size:.8rem">
+              يُعرض آخر {{ history|length }} من {{ history_total }} قيداً
+            </div>
+            {% endif %}
           </div>
           {% else %}
           <div class="text-muted text-center py-5">

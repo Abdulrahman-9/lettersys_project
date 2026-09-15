@@ -186,7 +186,8 @@ def reply_matrix(book, user):
     from core.scoping import scope_referrals_for
 
     rows = scope_referrals_for(user, book.referrals.select_related(
-        'to_department', 'to_entity', 'assignee', 'closed_by_link__from_book'
+        'to_department', 'to_entity', 'assignee', 'created_by',
+        'closed_by_link__from_book',
     )).order_by('created_at')
 
     matrix = []
@@ -402,16 +403,6 @@ def _guard_chaser(referral, by):
         return
 
     raise PermissionDenied('التنبيهُ لمن ينتظر الجواب — لا لمن عليه.')
-
-    if referral.to_department_id in subtree_ids(department_id):
-        return
-
-    owning = referral.book.department_id
-    if owning == department_id and (is_department_head(by) or is_mail_officer(by)):
-        return
-
-    raise PermissionDenied('هذه الإحالةُ ليست لك — الالتزامُ على وحدةٍ أخرى.')
-
 
 def _notify(referrals, book, by, *, urgent=False, lead='كتابٌ فُرِّق إليكم'):
     """إشعارٌ لكلّ موظّفٍ في الوحدة المستقبِلة — لا للمكلَّف وحده.
