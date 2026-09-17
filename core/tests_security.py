@@ -179,9 +179,11 @@ class AzureKeyEncryptionTests(TestCase):
     KEY_84 = 'k' * 84   # أطول شكلٍ واقعيّ لمفتاح Azure
 
     def _raw(self, pk):
-        from core.models import AIIntegrationSettings
-        # values_list يقرأ العمود الخام بلا المرور بـfrom_db — أي بلا فكّ تشفير.
-        return AIIntegrationSettings.objects.values_list('azure_key', flat=True).get(pk=pk)
+        from django.db import connection
+        # بعد 8.6‑أ حتّى values_list يمرّ بـfrom_db_value فيفكّ — الخامُّ بـSQL وحدَه.
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT azure_key FROM core_aiintegrationsettings WHERE id = %s', [pk])
+            return cursor.fetchone()[0]
 
     def test_key_is_encrypted_at_rest_and_plain_in_memory(self):
         from core.models import AIIntegrationSettings

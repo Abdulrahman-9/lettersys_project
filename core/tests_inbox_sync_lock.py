@@ -86,7 +86,7 @@ class InboxAutosyncGuardTests(TestCase):
 class ImapStampGoesThroughSaveTests(TestCase):
     """م2: ختمُ الانتهاء عبر ``save`` لا ``update`` الذي يتجاوز منطق النموذج.
 
-    الاختبار سلوكيّ لا شكليّ: كلمةُ سرّ SMTP تُشفَّر في ``EncryptedFieldsMixin.save``
+    الاختبار سلوكيّ لا شكليّ: كلمةُ سرّ SMTP تُشفَّر في ``EncryptedCharField.get_prep_value``
     ويفكّها ``from_db``. فلو مرّ الختم عبر ``save`` بقيت الكلمة مقروءةً صحيحة،
     ولو تجاوزه بقيت الحالة سليمةً أيضاً — لذا نحرس الأثر المباشر: الختم كُتب
     والقيمة الحسّاسة لم تُفسَد، ثمّ نتحقّق أنّ لا كتابةً تتجاوز النموذج بقيت

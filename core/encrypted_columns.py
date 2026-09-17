@@ -3,7 +3,7 @@
 
 **لماذا هذا الملفّ موجود** (Merge9 §8.6-ب): في 2026-09-08 أُنتج ملفُّ `dumpdata`
 فكتب كلمتَي مرور البريد **صريحتين** بينما عمودُ القاعدة مشفَّرٌ سليمٌ ببادئة
-``enc::`` — لأنّ ``EncryptedFieldsMixin.from_db`` يفكّ عند التحميل. والعطبُ
+``enc::`` — لأنّ ``EncryptedCharField.from_db_value`` يفكّ عند التحميل. والعطبُ
 **صامت**: النظامُ يعمل بالصريح، فلا شيءَ يصرخ. ولا يُعيد ``loaddata`` تشفيرَه
 (``raw=True`` يتخطّى ``save()``) فتستقرّ الكلمةُ صريحةً في القاعدة إلى الأبد.
 
@@ -29,26 +29,34 @@ EncryptedColumn = namedtuple('EncryptedColumn', 'label table column field')
 
 
 def encrypted_models():
-    """النماذجُ التي تُعلن حقولاً مشفَّرة — من سجلّ التطبيقات لا من قائمةٍ مكتوبة.
+    """النماذجُ التي تحمل ``EncryptedCharField`` — من سجلّ التطبيقات لا من قائمةٍ مكتوبة.
 
     قائمةٌ مكتوبةٌ بيدٍ تشيخ بصمتٍ عند إضافة نموذجٍ رابعٍ بأسرار؛ والسجلُّ لا يشيخ.
     """
     from django.apps import apps
 
-    from core.models import EncryptedFieldsMixin
+    from core.fields import EncryptedCharField
 
     models = [
         model for model in apps.get_models()
-        if issubclass(model, EncryptedFieldsMixin) and getattr(model, 'ENCRYPTED_FIELDS', ())
+        if any(isinstance(f, EncryptedCharField) for f in model._meta.get_fields()
+               if hasattr(f, 'column'))
     ]
     return sorted(models, key=lambda m: m._meta.label_lower)
+
+
+def encrypted_fields(model):
+    """أسماءُ الحقول المشفَّرة في نموذج."""
+    from core.fields import EncryptedCharField
+    return tuple(f.name for f in model._meta.get_fields()
+                 if hasattr(f, 'column') and isinstance(f, EncryptedCharField))
 
 
 def encrypted_columns():
     """كلُّ (نموذج، جدول، عمود، حقل) مشفَّرٍ في المشروع."""
     columns = []
     for model in encrypted_models():
-        for name in model.ENCRYPTED_FIELDS:
+        for name in encrypted_fields(model):
             field = model._meta.get_field(name)
             columns.append(EncryptedColumn(
                 label=model._meta.label_lower,
