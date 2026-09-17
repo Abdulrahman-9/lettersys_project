@@ -23,7 +23,8 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
-from ..models import BackupSettings, NotificationSettings, SecuritySettings, SystemSettings
+from ..models import (AIIntegrationSettings, BackupSettings, NotificationSettings,
+                      SecuritySettings, SystemSettings)
 from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ def settings_hub(request):
         'notif_settings': NotificationSettings.get(),
         'sec_settings': SecuritySettings.get(),
         'backup_settings': BackupSettings.get(),
+        'ai_settings': AIIntegrationSettings.objects.first() or AIIntegrationSettings(),
     })
 
 
@@ -115,4 +117,35 @@ def settings_backup_save(request):
     cfg.retention_days = max(1, min(3650, int(retention_raw))) if retention_raw.isdigit() else cfg.retention_days
     cfg.save(update_fields=['enabled', 'frequency', 'hour', 'retention_days', 'updated_at'])
     messages.success(request, 'تم حفظ إعدادات النسخ الاحتياطي.')
+    return redirect(back)
+
+
+@login_required
+@staff_required
+@require_http_methods(["POST"])
+def settings_ai_save(request):
+    """إعداداتُ الربط بمزوّدٍ خارجيّ — داخل المركز بدل قذف المستخدم إلى لوحة جانغو.
+
+    **المفتاحُ لا يُعرض أبداً** (يُخزَّن مشفَّراً): الحقلُ فارغٌ دائماً، وتركُه فارغاً
+    يُبقي المحفوظَ، وكتابةُ قيمةٍ تستبدله، وزرُّ «امسح المفتاح» يحذفه.
+    """
+    cfg = AIIntegrationSettings.objects.first() or AIIntegrationSettings()
+    back = f"{reverse('settings_hub')}?tab=ai"
+    cfg.enabled = 'enabled' in request.POST
+    cfg.provider = (request.POST.get('provider') or 'offline').strip()[:20]
+    cfg.fallback_on_low_confidence = 'fallback_on_low_confidence' in request.POST
+    try:
+        thr = float(request.POST.get('low_confidence_threshold') or cfg.low_confidence_threshold)
+        cfg.low_confidence_threshold = min(1.0, max(0.0, thr))
+    except (TypeError, ValueError):
+        messages.error(request, 'حدُّ الثقة رقمٌ بين 0 و1.')
+        return redirect(back)
+    cfg.azure_endpoint = (request.POST.get('azure_endpoint') or '').strip()[:255]
+    new_key = (request.POST.get('azure_key') or '').strip()
+    if 'clear_key' in request.POST:
+        cfg.azure_key = ''
+    elif new_key:
+        cfg.azure_key = new_key
+    cfg.save()
+    messages.success(request, 'حُفظت إعداداتُ الاستخراج الخارجيّ.')
     return redirect(back)

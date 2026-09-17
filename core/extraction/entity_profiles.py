@@ -187,6 +187,7 @@ class EntityResolver:
         # فارغةً إلى الأبد وبقي «لا جهات» بعد تحميل البيانات حتّى إعادة التشغيل.
         # عدُّ الجهات النشطة استعلامٌ رخيص؛ تغيّرُه يُعيد البناء.
         try:
+            from core.models import Entity   # كان الاسمُ غيرَ مستورَد: NameError يُبتلَع فلا يُعاد البناءُ أبداً
             n = Entity.objects.filter(is_active=True).count()
         except Exception:      # noqa: BLE001
             n = cls._cache_n

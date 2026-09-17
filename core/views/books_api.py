@@ -42,6 +42,32 @@ from .books_helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _attachment_pages_and_log(att):
+    """``{page_count, merge_log}``: عددُ ورقات المرفق، وسجلُّ الإلحاق (مَن ألحق ومتى
+    وكم ورقةً أضاف). المصدرُ ``AttachmentVersion`` — لقطةٌ لكلّ إلحاق. الأولُ الأحدث."""
+    versions = list(att.versions.select_related('created_by').order_by('-version_number')[:12])
+    latest = versions[0] if versions else None
+    pages = latest.page_count if latest and latest.page_count else None
+    if pages is None:
+        try:
+            from core.page_render import page_count as _pc
+            pages = _pc(att.file.path) or None
+        except Exception:                       # noqa: BLE001
+            pages = None
+    log = []
+    for v in versions:
+        meta = v.merge_metadata or {}
+        log.append({
+            'version': v.version_number,
+            'by': (v.created_by.get_full_name() or v.created_by.username) if v.created_by else '',
+            'at': v.created_at.strftime('%Y-%m-%d %H:%M') if v.created_at else '',
+            'added_pages': meta.get('added_pages'),
+            'total_pages': v.page_count,
+            'note': v.note or '',
+        })
+    return {'page_count': pages, 'merge_log': log}
+
+
 def _strip_sender_fields_for_outgoing(kind, sender_number, sender_date_str):
     """حقول الجهة المُرسِلة لا معنى لها في الصادر — تُفرَّغ **على الخادم**.
 
@@ -333,6 +359,9 @@ def save_book_api(request):
 
                 book.issuing_entities.set(issuing_entities_list)
                 book.receiving_entities.set(receiving_entities_list)
+                # الذكرُ يوجّه تلقائيّاً (قراراتُ الدورة §5.1)
+                from core.referral_service import auto_route_from_receivers
+                auto_route_from_receivers(book, by=request.user)
 
                 if 'file' in request.FILES:
                     file_obj = request.FILES['file']
@@ -678,6 +707,8 @@ def api_book_detail_json(request, pk):
             'is_image': lower.endswith(image_exts),
             'content_type': content_type or '',
             'is_primary': False,
+            # كم ورقةً فيه، وسجلُّ مَن ألحق وكم أضاف (قرارُ المالك 2026‑09‑13)
+            **_attachment_pages_and_log(a),
         })
 
     # المستند الأساسي للعرض المضمّن: أول PDF، وإلا أول صورة، وإلا أول مرفق
@@ -861,6 +892,8 @@ def update_book_api(request):
             book.save()
             book.issuing_entities.set(issuing_entities_list)
             book.receiving_entities.set(receiving_entities_list)
+            from core.referral_service import auto_route_from_receivers
+            auto_route_from_receivers(book, by=request.user)
             # تصحيحُ الجهة في التعديل يبلغ ذاكرةَ الترويسة (كان يضيع: لا التقاطَ هنا).
             # الوسمُ من الواجهة يمنع تعليمَ جانبٍ مُلئ آليّاً ولم يُلمَس.
             try:

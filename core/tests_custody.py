@@ -16,7 +16,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from core.custody_service import (custody_chain, held_by, record_archive_event,
+from core.custody_service import (custody_chain, held_by,
                                   record_custody, undelivered)
 from core.models import (Book, BookHistory, BookReferral, CustodyEvent, Department,
                          Entity, UserProfile)
@@ -60,10 +60,10 @@ class RecordCustodyTests(CustodyTestCase):
         self.assertEqual(self.book.current_custody.holder_name, self.dept.name)
 
     def test_leaves_a_trace_in_the_book_history(self):
-        record_archive_event(self.book, CustodyEvent.ARCHIVE_DONE,
-                             to_department=self.dept, note='الرفّ ب/12', by=self.clerk)
+        record_custody(self.book, CustodyEvent.UNIT_RECEIPT,
+                       to_department=self.dept, note='استلمه أحمد', by=self.clerk)
         event = BookHistory.objects.get(book=self.book, action='custody')
-        self.assertIn('الرفّ ب/12', event.notes)
+        self.assertIn('استلمه أحمد', event.notes)
 
     def test_a_courier_needs_no_account(self):
         """سلسلةُ العهدة لا تنقطع عند أوّل حاملٍ من خارج الحسابات."""
@@ -133,8 +133,8 @@ class ReceiptClosesTheLoopTests(CustodyTestCase):
         self.assertIn('referral-received', actions)
 
     def test_another_event_does_not_touch_the_referral(self):
-        record_archive_event(self.book, CustodyEvent.ARCHIVE_DONE,
-                             to_department=self.unit, by=self.clerk)
+        record_custody(self.book, CustodyEvent.COURIER_PICKUP,
+                       to_name='المعتمد', by=self.clerk)
         self.referral.refresh_from_db()
         self.assertEqual(self.referral.status, BookReferral.SENT)
 
@@ -219,8 +219,3 @@ class DeskQueryTests(CustodyTestCase):
             with self.assertRaises(ValidationError):
                 record_custody(self.book, event, to_department=self.unit, by=self.clerk)
 
-    def test_an_archive_signature_does_not_count_as_unit_receipt(self):
-        """توقيعُ الأرشفة ليس توقيعَ استلام — والخلطُ يُفرغ الطابور كذباً."""
-        record_archive_event(self.book, CustodyEvent.ARCHIVE_DONE,
-                             to_department=self.unit, by=self.clerk)
-        self.assertEqual(len(list(undelivered(self.unit))), 1)

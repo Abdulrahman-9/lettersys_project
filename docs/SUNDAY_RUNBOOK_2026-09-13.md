@@ -8,13 +8,17 @@
 
 ## 1. إنزالُ عمل الجلسة ودفعُه (من جذر المستودع، على `main@01bae1a`)
 ```
-git fetch feat-is-deleted-sweep.bundle feat/is-deleted-sweep:feat/is-deleted-sweep
+git fetch feat-is-deleted-sweep.bundle     feat/is-deleted-sweep:feat/is-deleted-sweep
+git fetch feat-lifecycle-routing.bundle    feat/lifecycle-routing:feat/lifecycle-routing
 git fetch feat-encrypted-char-field.bundle feat/encrypted-char-field:feat/encrypted-char-field
-git log --oneline 01bae1a..feat/is-deleted-sweep | wc -l      # 18
-git push -u origin feat/is-deleted-sweep feat/encrypted-char-field
+git log --oneline 01bae1a..feat/is-deleted-sweep  | wc -l     # 21
+git log --oneline 01bae1a..feat/lifecycle-routing | wc -l     # 37 (يحوي الكنس)
+git push -u origin feat/is-deleted-sweep feat/lifecycle-routing feat/encrypted-char-field
 ```
-- PR 1: `feat/is-deleted-sweep` ⟵ `main` — **صفرُ هجرات** (`git diff 01bae1a -- core/migrations` فارغ). يُدمَج بعد §2.
-- PR 2: `feat/encrypted-char-field` ⟵ `main` — يحمل **0078** ⟵ **لا يُدمَج قبل T‑0** (§5). ضع «Do not merge» في العنوان.
+- PR 1: `feat/is-deleted-sweep` ⟵ `main` — **صفرُ هجرات**. يُدمَج بعد §2.
+- PR 2: `feat/lifecycle-routing` ⟵ `main` (بعد PR 1) — دورةُ الكتاب بلا هجرة + «أين الموضوع؟» + تدقيقُ الانتقالات + الواجهات 1–3. **صفرُ هجرات**. لقطاتُه في Merge9 (سطرا 2026‑09‑11).
+- PR 3: `feat/encrypted-char-field` ⟵ `main` — يحمل **0078** ⟵ **لا يُدمَج قبل T‑0** (§5). ضع «Do not merge» في العنوان.
+- **الوثائقُ المرجعيّة** كلُّها على رأس `feat/lifecycle-routing`: `docs/LIFECYCLE_DECISIONS_2026-09-11.md` (المرجعُ الناسخ) · `LIFECYCLE_REVIEW` · `NAV_AUDIT` · `EXTRACTION_REVIEW_2026-09-11` · `DESIGN_BRIEF_DOSSIERS` · `UI_PRO_REDESIGN`.
 
 ## 2. التحقّقُ الذي يحتاج عينَك (نصفُ ساعة) — على `feat/is-deleted-sweep` محلّيّاً
 1. **ق9**: كم كتاباً يظهر فجأةً في «بلا مرفق» بعد (د‑4)؟
@@ -30,8 +34,13 @@ git push -u origin feat/is-deleted-sweep feat/encrypted-char-field
    - طاولةُ الوارد ⟵ كشفُ التسليم ⟵ يطبع «شركة نفط الوسط» و«رجوع» يعود إلى الطاولة.
    - عنوانٌ لكتابٍ محذوف ⟵ 404 **بشريطٍ** وزرِّ عودة (يحتاج `DEBUG=False` محلّيّاً).
    - Tab من أوّل الصفحة ⟵ «تخطَّ إلى المحتوى» يظهر.
-3. **كاغل** على رأس الفرع: الحزمةُ الكاملة **بأوزان LFS** — `EXIT=0` صفرُ فشل (الجلسةُ السحابيّة لا تستطيع LFS).
-4. ثمّ **ادمج PR 1**.
+3. **كاغل** على رأس `feat/lifecycle-routing`: الحزمةُ الكاملة **بأوزان LFS** — `EXIT=0` صفرُ فشل (الجلسةُ السحابيّة لا تستطيع LFS).
+4. ثمّ **ادمج PR 1 ثمّ PR 2**.
+
+## 2‑ب. تشخيصُ الاستخراج (30 دقيقة — من `docs/EXTRACTION_REVIEW_2026-09-11.md` §11/§12)
+- على الخادم: `nproc` · `tesseract --version` · حجمُ `ara.traineddata` (fast ≈ 2–3 MB / best ≈ 20+ MB) · `AI_OFFLINE_ENGINE` الفعليّ.
+- زمنُ استخراجِ كتابٍ واحد من الخادم نفسِه (curl) مقابل من المكتب — الفرقُ = الشبكةُ وحدَها.
+- الجهة: آخرُ 40 كتاباً عبر السطح: المقترَحُ الأوّل مقابل المختار، مصنَّفاً: غيرُ موجود / توأمٌ مكرَّر / خطأٌ حقيقيّ / صمت. **لا يُبنى شيءٌ قبل هذا التوزيع.**
 
 ## 3. N1‑ب — الخادمُ يحمل الوسمَ القديم `aa9794c` ⚠️
 ```

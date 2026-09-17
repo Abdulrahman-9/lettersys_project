@@ -23,7 +23,7 @@
 بدل استعلام مقطوع لكل نوع (كان يتوسّع خطّياً مع عدد الأنواع).
 """
 import logging
-from datetime import datetime
+from datetime import date, datetime
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
@@ -67,11 +67,36 @@ def _visible_books(request):
     return scope_books_for(request.user, Book.objects.all())
 
 
+def dossier_entity_ids(pk):
+    """**التجمّعُ صعوداً** (قراراتُ الدورة §4.3): أضبارةُ جهةٍ لها قسمٌ توأمٌ تضمّ ما
+    ذُكرت فيه هي **وشعبُها ووحداتُها** (توائمُ شجرتها) — فمديرُ القسم يرى كلَّ شيء،
+    والوحدةُ ترى ما ذُكرت فيه هي وأشخاصُها. جهةٌ بلا توأم ⟵ نفسُها فقط."""
+    from core.models import Department, Entity
+    from core.scoping import subtree_ids
+    entity = Entity.objects.filter(pk=pk).select_related('department').first()
+    dept = getattr(entity, 'department', None) if entity else None
+    if dept is None:
+        return [pk]
+    ids = set(Department.objects.filter(id__in=subtree_ids(dept.id), entity_id__isnull=False)
+              .values_list('entity_id', flat=True))
+    ids.add(pk)
+    return sorted(ids)
+
+
+def _year_groups(qs):
+    """عدُّ كتب الملفّ بالسنة (تاريخُ الكتاب)، الأحدثُ أوّلاً؛ بلا تاريخ ⟵ «بلا تاريخ»."""
+    from django.db.models.functions import ExtractYear
+    rows = (qs.order_by().annotate(y=ExtractYear("date")).values("y")
+            .annotate(c=Count("id", distinct=True)).order_by("-y"))
+    return [{"year": r["y"], "label": str(r["y"]) if r["y"] else "بلا تاريخ", "count": r["c"]} for r in rows]
+
+
 def _direction_bases(base, pk):
     """قاعدتا اتجاه الإضبارة: (صادر = الجهة مُصدِرة، وارد = الجهة مستقبِلة) —
-    تعبير M2M+distinct بمصدر واحد يخدم التفصيل والتقرير."""
-    return (base.filter(issuing_entities__id=pk).distinct(),
-            base.filter(receiving_entities__id=pk).distinct())
+    تعبير M2M+distinct بمصدر واحد يخدم التفصيل والتقرير — على الجهة **وشجرتها**."""
+    ids = dossier_entity_ids(pk)
+    return (base.filter(issuing_entities__id__in=ids).distinct(),
+            base.filter(receiving_entities__id__in=ids).distinct())
 
 
 # ════════════ الفلاتر (مصدر واحد للتفصيل والتقرير) ════════════
@@ -107,7 +132,13 @@ def collect_filters(request):
     # اختصار الفترة يملأ المدى فقط إن لم يُحدَّد يدوياً (اليدوي يفوز)
     if period and not date_from and not date_to:
         date_from, date_to = BookFilterEngine.resolve_period_preset(period, timezone.localdate())
+    # الملفُّ داخل النوع **بالسنة** (قراراتُ الدورة §4.5): ?year=2025 يضبط المدى ما لم يُحدَّد يدويّاً
+    year_raw = (request.GET.get("year") or "").strip()
+    year = int(year_raw) if year_raw.isdigit() and 1900 < int(year_raw) < 2200 else None
+    if year and not date_from and not date_to and not period:
+        date_from, date_to = date(year, 1, 1), date(year, 12, 31)
     return {
+        "year": year,
         "q": (request.GET.get("q") or "").strip(),
         "document_type": (request.GET.get("document_type") or "").strip(),
         "period": period,
@@ -315,6 +346,9 @@ def dossier_detail(request, pk):
 
     out_count = sum(m["count"] for m in out_types.values())
     in_count = sum(m["count"] for m in in_types.values())
+    # داخل ملفّ النوع وبلا سنةٍ مختارة: ملفّاتٌ فرعيّة بالسنة (سنةُ تاريخ الكتاب)
+    out_years = _year_groups(outgoing_qs) if f["document_type"] and not f["year"] else []
+    in_years = _year_groups(incoming_qs) if f["document_type"] and not f["year"] else []
 
     # ── عدّادات المتابعة (شريط الرقائق): تُحسب بلا فلتر المتابعة كي تعكس كل الحالات،
     #    بحساب آمن ضدّ fan-out (aggregate لكل اتجاه، Count distinct). ──
@@ -347,6 +381,8 @@ def dossier_detail(request, pk):
     _qpt = params.copy()
     _qpt.pop("document_type", None)
     qs_no_type = _qpt.urlencode()
+    _qpy = params.copy(); _qpy.pop("year", None); _qpy.pop("page", None)
+    qs_no_year = _qpy.urlencode()
 
     return render(request, "core/dossier_detail.html", {
         "entity": entity,
@@ -363,6 +399,9 @@ def dossier_detail(request, pk):
         "qs_no_followup": qs_no_followup,
         "qs_no_period": qs_no_period,
         "qs_no_type": qs_no_type,
+        "qs_no_year": qs_no_year,
+        "outgoing_years": out_years,
+        "incoming_years": in_years,
         "period_presets": period_presets,
         "querystring": params.urlencode(),
         "secret_labels": _SECRET_LABELS,

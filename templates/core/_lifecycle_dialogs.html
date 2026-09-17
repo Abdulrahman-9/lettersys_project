@@ -38,8 +38,16 @@
         </fieldset>
 
         <div class="mb-3">
+          {% comment %}هامشان لشخصين (قراراتُ الدورة §2): هامشُ المدير العام على الكتاب يُقرأ هنا،
+             وهامشُ مدير القسم يُكتب أدناه — لا يُنسَخ أحدُهما إلى الآخر{% endcomment %}
+          {% if book.margin %}
+          <div class="alert alert-light border small py-2 mb-2" id="distGmMargin">
+            <div class="text-muted" style="font-size:.75rem">هامشُ المدير العام على الكتاب</div>
+            <div>{{ book.margin }}</div>
+          </div>
+          {% endif %}
           <label for="distMargin" class="form-label" style="font-size:.85rem">
-            التوجيه / الهامش
+            هامشُ مدير القسم (التوجيه إلى الوحدات — مشتركٌ ما لم يُخصَّص لوحدة)
           </label>
           <textarea class="form-control form-control-sm" id="distMargin" rows="2"
                     placeholder="أعدّوا مذكّرةً بالتخصيصات المطلوبة"></textarea>
@@ -123,43 +131,35 @@
   </div>
 </div>
 
-{% if can_archive_book and not book_is_archived %}
-<div class="modal fade lc-scope" id="archiveModal" tabindex="-1"
-     aria-labelledby="archiveModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content rounded-4">
+{# حواريّةُ «تمام الأرشفة» أُزيلت — الأرشفةُ تلقائيّةٌ (قراراتُ الدورة §6) #}
+
+<!-- فعِّل متابعة (§5.2): صفُّ «للعلم» ⟵ «للإجراء» بموعد -->
+<div class="modal fade lc-scope" id="followupModal" tabindex="-1" aria-labelledby="followupModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title fw-bold" id="archiveModalLabel">
-          <i class="bi bi-archive text-primary me-2"></i>تمامُ الأرشفة
-        </h5>
+        <h5 class="modal-title fw-bold" id="followupModalTitle">فعِّل متابعة</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
       </div>
       <div class="modal-body">
-        <div class="mb-3">
-          <label for="archPlace" class="form-label" style="font-size:.85rem">موضع الحفظ</label>
-          <input type="text" class="form-control form-control-sm" id="archPlace"
-                 maxlength="200" placeholder="الرفّ ب/12 — صندوق 3">
-          <div class="form-text" style="font-size:.75rem">
-            أين وُضعت الورقة فعلاً — وهو أوّلُ ما يُسأل عنه بعد سنة.
-          </div>
+        <p class="small text-muted mb-2">على <strong id="followupTarget"></strong> — تصير «للإجراء» ويبدأ حسابُ التأخير والمتبقّي.</p>
+        <input type="hidden" id="followupReferralId">
+        <div class="mb-2">
+          <label class="form-label" for="followupDue">موعدُ الإنجاز</label>
+          <input type="date" class="form-control" id="followupDue" required>
         </div>
         <div class="mb-1">
-          <label for="archNote" class="form-label" style="font-size:.85rem">ملاحظة</label>
-          <input type="text" class="form-control form-control-sm" id="archNote"
-                 maxlength="200" placeholder="اختياريّة">
+          <label class="form-label" for="followupMargin">توجيهٌ خاصٌّ (اختياريّ)</label>
+          <input type="text" class="form-control" id="followupMargin" placeholder="مثل: الردّ خلال أسبوع">
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary btn-sm"
-                data-bs-dismiss="modal">إلغاء</button>
-        <button type="button" class="btn btn-primary btn-sm" id="archSubmit">
-          <i class="bi bi-archive me-1"></i>قيّد الحفظ
-        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-primary" id="followupSubmit">فعِّل</button>
       </div>
     </div>
   </div>
 </div>
-{% endif %}
 
 <div class="modal fade lc-scope" id="custodyModal" tabindex="-1"
      aria-labelledby="custodyModalLabel" aria-hidden="true">

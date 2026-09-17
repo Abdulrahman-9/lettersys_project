@@ -128,6 +128,7 @@ from .settings_hub import (
     settings_notifications_save,
     settings_security_save,
     settings_backup_save,
+    settings_ai_save,
 )
 
 # إعدادات الماسح الضوئي (وكيل NAPS2 المحلي)

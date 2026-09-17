@@ -150,14 +150,19 @@
               data-doc-preview
               data-doc-url="{{ book.attachment.file.url }}"
               data-doc-title="{{ book.title|default:'بدون عنوان' }}"
+              data-doc-pages="{{ book.attachment.page_count|default:'' }}"
+              data-doc-last-by="{{ book.attachment.last_merge_by|default:'' }}"
+              data-doc-last-added="{{ book.attachment.last_merge_added|default:'' }}"
+              data-doc-report="{% url 'book_report' book.id %}"
               title="عرض المستند">
         <i class="bi bi-file-earmark-pdf"></i>
       </button>
       {% endif %}
-      {# نظرة سريعة: نقرة عادية تفتح الحوار (المستند + التفاصيل)؛ Ctrl/الزر الأوسط ينتقل للصفحة الكاملة #}
+      {% comment %}العين تفتح صفحةَ الكتاب كاملةً (قرارُ المالك 2026‑09‑13): الحوارُ السريع
+         كان يعرض المستندَ والبيانات الأساسيّة وحدَها — بلا دورة الحياة والتعليقات
+         والسجلّ — فيوهم أنّه «كلُّ التفاصيل». الحوارُ باقٍ حيث يناسب (صفوفُ الجهة).{% endcomment %}
       <a href="{% url 'book_detail' book.id %}" class="act-btn act-view"
-         data-book-preview="{{ book.id }}"
-         title="نظرة سريعة" aria-label="نظرة سريعة على الكتاب">
+         title="تفاصيل الكتاب" aria-label="فتح تفاصيل الكتاب كاملة">
         <i class="bi bi-eye"></i>
       </a>
       <a href="{% url 'book_edit' book.id %}" class="act-btn act-edit" title="تعديل">
