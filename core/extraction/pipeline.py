@@ -229,6 +229,10 @@ _EN_LETTERHEAD = {'no', 'date', 'oil', 'company', 'ministry', 'republic', 'iraq'
                   'state', 'gas', 'ims'}
 
 
+_ARABIC_BY_CONSTRUCTION_KINDS = ('incoming_internal', 'outgoing_internal', 'outgoing_external')
+_MIN_LAYER_ARABIC_CHARS = 20
+
+
 def _text_layer_is_readable(text: str) -> bool:
     """بوّابة جودة لطبقة النصّ المضمّنة: بعض برامج المسح تُضمّن OCR خاصّاً بها —
     عربيةً مقروءةً بمحرّك لاتيني («.hiill;Jljo» بدل «وزارة النفط») أو عربيةً
@@ -618,7 +622,8 @@ class AIExtractionService:
         if self._online_provider is None and self._settings.get('AI_PROVIDER') != 'offline':
             self._online_provider = build_online_provider_from_settings(self._settings)
 
-    def _extract_pdf_text_layer(self, path: str, min_chars: int = 120, min_words: int = 20):
+    def _extract_pdf_text_layer(self, path: str, min_chars: int = 120, min_words: int = 20,
+                                book_kind: str = ''):
         """يُعيد نصّ طبقة PDF المضمّنة إن كانت غنيّة (مستند رقمي/مُصدَّر أو مُمسوح-ومُعالَج)،
         وإلا None (صورة ممسوحة بلا نصّ → يلزم OCR).
 
@@ -650,6 +655,13 @@ class AIExtractionService:
             return None
         if not _text_layer_is_readable(text):
             logger.info('[pipeline] طبقة النصّ المضمّنة غير مقروءة (خردة/تشكيل بصري) — OCR بديلاً')
+            return None
+        # مذكّرة فيبل 8 (2026-09-17): كتبُ هذه الأنواع عربيّةٌ بالبناء؛ طبقةٌ بلا عربيّة فيها
+        # هي عربيّةٌ قرأها محرّكٌ لاتينيّ — كانت تعبر بإنكليزيّة الترويسة فتُنتج ملئاً خاطئاً
+        # (#7408، #9615). الرفضُ يعني OCR المُدرَّب، وهو يقرأ الإنكليزيّة إن كانت الرسالة كذلك.
+        if (book_kind in _ARABIC_BY_CONSTRUCTION_KINDS
+                and sum(1 for c in text if '؀' <= c <= 'ۿ') < _MIN_LAYER_ARABIC_CHARS):
+            logger.info('[pipeline] طبقة نصّ بلا عربيّة لكتابٍ عربيّ النوع (%s) — OCR بديلاً', book_kind)
             return None
         return text
 
@@ -1345,7 +1357,8 @@ class AIExtractionService:
             # PDF مُصدَّر أو مُمسوح-ومُعالَج) نصٌّ جاهز أدقّ وأسرع وأخفّ ذاكرة من إعادة
             # الرسم + Tesseract، ويعالج كل الصفحات تلقائياً. نسقط إلى تحسين الصورة + OCR
             # فقط للصور الممسوحة بلا طبقة نصّ غنيّة.
-            pdf_text = None if (skip_ocr or result.cached) else self._extract_pdf_text_layer(image_path)
+            pdf_text = None if (skip_ocr or result.cached) else self._extract_pdf_text_layer(
+                image_path, book_kind=book_kind)
             # نصُّ الصارم منفصلٌ عن `pdf_text`: بلا فرزٍ (الشكلُ المقيس) وبلا كاشٍ
             # وقبل بوّابة المسبار — انظر `pdf_first_page_text`.
             strict_text = pdf_first_page_text(image_path)

@@ -191,7 +191,7 @@ _REFERENCE_LINE_RE = re.compile(
     r'(?:^|\s)(?:إشارة|اشارة|بالإشارة|بالاشارة|إلحاقا|الحاقا|إلحاقاً|الحاقاً|عطفا|عطفاً)\s'
     r'|(?:مذكرت|كتابك|كتابنا|مذكرتنا)\S*\s+.{0,40}?(?:المرقم|ذات\s+العدد|ذي\s+العدد)')
 
-_TITLE_SOURCE_CONF = {'marker': 0.75, 'bracket_ar': 0.0, 'bracket_en': 0.0,
+_TITLE_SOURCE_CONF = {'marker': 0.75, 'marker_weak': 0.5, 'bracket_ar': 0.0, 'bracket_en': 0.0,
                       'fallback': 0.35, '': 0.0}
 
 
@@ -772,6 +772,25 @@ class PatternMatcher:
                             and 'أعلاه' not in m.group(1) and 'اعلاه' not in m.group(1)):
                         self.last_title_source = 'marker'
                         return _words(_join_wrapped(m.group(1).strip(), idx), cap=12)
+
+        # 1.2) علاماتٌ ضعيفة (مذكّرة فيبل 8، مقيسةٌ بالعين 2026-09-17): «Sub/» بلا «ject»
+        #      (#12695: «Sub/ Administrative Order» — `english_markers` لا تطابقها) و«/م» في
+        #      **آخر** سطرٍ إنكليزيّ (#13026، #13122: الكاتب يضع العلامة يميناً، وOCR يقرأها
+        #      «/a» أحياناً). مصدرٌ **خارج** `TITLE_DIRECT_FILL_SOURCES` ⟵ اقتراحٌ لا ملء.
+        _weak_markers = (
+            r'(?i:\bsub)\s*[/\x5c:.]\s*([^\n]{3,80})',
+            r'^\s*([A-Za-z][^\n]{5,80}?)\s*[/\x5c]\s*[مa]\s*$',
+        )
+        for idx, line in enumerate(lines):
+            for pat in _weak_markers:
+                m = re.search(pat, line)
+                if (m and len(m.group(1).strip()) >= 6
+                        and not _looks_garbled(m.group(1))
+                        and not _is_reference_line(line)
+                        and not _too_few_words(m.group(1))
+                        and len(re.findall(r'[A-Za-z]{3,}', m.group(1))) >= 2):
+                    self.last_title_source = 'marker_weak'
+                    return _words(_join_wrapped(m.group(1).strip(), idx), cap=12)
 
         # 1.5) قوس الموضع: الموضوع يقع **بين المُرسَل إليه والتحية** — «الى/» و«تحية
         #      طيبة» مطبوعان قياسيّان ينجوان من OCR غالباً حتى حين تُشوَّه «م/» (وهو
