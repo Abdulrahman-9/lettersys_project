@@ -34,6 +34,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 
 from .models import NetworkNode, NetworkSettings
 from .decorators import rate_limit
+from .netaddr import is_lan_peer
 from . import device_identity
 
 logger = logging.getLogger('lettersys')
@@ -254,20 +255,9 @@ def network_settings_page(request):
 
 # ─── Public health-check endpoint ────────────────────────────────────────────
 
-def _is_lan_peer(request) -> bool:
-    """أهذا الطلب من جارٍ على شبكة خاصة؟
-
-    نعتمد ``REMOTE_ADDR`` مباشرةً ولا نقرأ ``X-Forwarded-For``: قرارُ كشفٍ أمنيّ
-    لا يُبنى على ترويسةٍ يتحكّم بها العميل.
-    """
-    import ipaddress
-
-    raw = (request.META.get('REMOTE_ADDR') or '').strip()
-    try:
-        addr = ipaddress.ip_address(raw)
-    except ValueError:
-        return False
-    return addr.is_private or addr.is_loopback
+# القاعدةُ نفسُها انتقلت إلى ``core.netaddr`` (مصدرٌ وحيد) حين احتاجها حارسُ تشغيل
+# وكيل المسح؛ الاسمُ المحلّيُّ باقٍ كي لا يُلمَس نداءاه ولا اختباراتُهما.
+_is_lan_peer = is_lan_peer
 
 
 @require_GET

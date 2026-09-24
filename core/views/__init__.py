@@ -139,6 +139,6 @@ from .scan_settings import (
     scan_edit_page,
     scan_stage_attachment,
     scan_process_upload,
-    scan_agent_token,
+    scan_agent_info,
     scan_agent_start,
 )

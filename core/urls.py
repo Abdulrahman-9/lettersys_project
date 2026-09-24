@@ -122,7 +122,7 @@ urlpatterns = [
     path("api/scan/edit/<str:token>/",    views.scan_edit_page,        name="scan_edit_page"),
     path("api/scan/stage-attachment/<int:attachment_id>/", views.scan_stage_attachment, name="scan_stage_attachment"),
     path("api/scan/process-upload/",      views.scan_process_upload,   name="scan_process_upload"),
-    path("api/scan/agent-token/",         views.scan_agent_token,      name="scan_agent_token"),
+    path("api/scan/agent-info/",          views.scan_agent_info,       name="scan_agent_info"),
     path("api/scan/agent-start/",         views.scan_agent_start,      name="scan_agent_start"),
 
     # ─── الربط الشبكي — Network Binding ────────────────────────────────────────
