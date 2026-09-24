@@ -6,7 +6,8 @@ Views and APIs for multi-device LAN network binding.
 Architecture
 ────────────
 • Master device  — runs PostgreSQL + Django; all slaves connect to its DB.
-• Slave device   — runs Django; DB_HOST in .env points to master's IP.
+• Slave device   — runs Django; DB_HOST in the environment file points to the
+  master's IP. That file is edited by the administrator, never by this app.
 • Sequential counters  — already protected by F() atomic updates + SELECT FOR UPDATE.
   No extra sync logic needed once all devices share the same PostgreSQL instance.
 • NetworkNode table    — stored in the shared DB; every device can see every device.
@@ -16,8 +17,6 @@ Architecture
 import concurrent.futures
 import json
 import logging
-import os
-import re
 import socket
 import time
 from datetime import timedelta
@@ -127,26 +126,6 @@ def _test_db_connection(host: str, port: int, db_name: str, user: str, password:
             return False, str(exc)
     except Exception as exc:
         return False, str(exc)
-
-
-def _write_env_value(key: str, value: str):
-    """يكتب / يحدّث مفتاحاً في ملف .env ."""
-    env_path = os.path.join(settings.BASE_DIR, '.env')
-    new_line = f'{key}={value}'
-    try:
-        if os.path.exists(env_path):
-            content = open(env_path, 'r', encoding='utf-8').read()
-            pattern = rf'^{re.escape(key)}=.*'
-            if re.search(pattern, content, re.MULTILINE):
-                content = re.sub(pattern, new_line, content, flags=re.MULTILINE)
-            else:
-                sep = '' if content.endswith('\n') else '\n'
-                content = content + sep + new_line + '\n'
-            open(env_path, 'w', encoding='utf-8').write(content)
-        else:
-            open(env_path, 'w', encoding='utf-8').write(new_line + '\n')
-    except Exception as exc:
-        logger.warning('[NetworkSettings] cannot write .env [%s]: %s', key, exc)
 
 
 def _scan_subnet(subnet_base: str, port: int = 8000, timeout: float = 0.8) -> list:
@@ -295,7 +274,13 @@ def network_ping(request):
 @user_passes_test(_is_staff)
 @require_POST
 def network_save_config(request):
-    """يحفظ الإعدادات ويكتبها إلى .env إذا احتاجت إعادة تشغيل."""
+    """يحفظ الإعدادات في قاعدة البيانات — **ولا يكتب في ملفّ البيئة**.
+
+    كانت الدالّةُ تكتب ``DB_*`` (ومعها كلمةُ المرور صريحةً) في ملفّ البيئة ثمّ
+    تَعِد بإعادة تشغيلٍ «تُطبّق» التغيير — والكتابةُ يبتلع فشلَها ``except``
+    واسع، فتحت ACL الإنتاج (svc:R) كان الوعدُ كاذباً دائماً. الآن تُعاد
+    الأسطرُ للنسخ ويُقال صراحةً إنّ التحرير بيد مدير النظام.
+    """
     try:
         data = json.loads(request.body)
     except Exception:
@@ -313,7 +298,12 @@ def network_save_config(request):
     except (ValueError, TypeError):
         cfg.app_port = 8000
 
-    needs_restart = False
+    # لا يكتب هذا المُعالِجُ في ملفّ البيئة — لا سطرَ واحداً. القيمُ الخمسُ
+    # مخزَّنةٌ سلفاً في ``NetworkSettings`` (والكلمةُ مشفَّرةٌ هناك)، والكتابةُ
+    # كانت نسخةً ثانيةً مكشوفةً تدخل كلَّ نسخةٍ احتياطيّة عبر
+    # ``CONFIG_FILES = ('.env',)``. الأسطرُ تُعرَض لمدير النظام لينسخها بيده.
+    needs_admin_env = False
+    env_lines = []
 
     if role == NetworkSettings.ROLE_SLAVE:
         cfg.master_host     = data.get('master_host', '').strip()
@@ -327,14 +317,19 @@ def network_save_config(request):
         if pw:
             cfg.set_db_password(pw)
 
-        # كتابة إعدادات DB إلى .env لتُقرأ عند إعادة التشغيل
-        _write_env_value('DB_HOST',     cfg.master_host)
-        _write_env_value('DB_PORT',     str(cfg.master_db_port))
-        _write_env_value('DB_NAME',     cfg.master_db_name)
-        _write_env_value('DB_USER',     cfg.master_db_user)
+        # إقلاعُ الاتّصال يبقى في ملفّ البيئة بيد مدير النظام، ولا يجوز نقلُه
+        # إلى القاعدة: جهازٌ تابعٌ يحتاج ``DB_HOST`` **قبل** أن يفتح أيَّ
+        # اتّصال، وصفُّ ``NetworkSettings`` يقيم في قاعدة الماستر ⟵ دورٌ مغلق.
+        env_lines = [
+            f'DB_HOST={cfg.master_host}',
+            f'DB_PORT={cfg.master_db_port}',
+            f'DB_NAME={cfg.master_db_name}',
+            f'DB_USER={cfg.master_db_user}',
+        ]
         if pw:
-            _write_env_value('DB_PASSWORD', pw)
-        needs_restart = True
+            # **اسمٌ لا قيمة**: الكلمةُ لا تُصدَّر في JSON ولا تُطبع في سجلّ.
+            env_lines.append('DB_PASSWORD=<الكلمة التي أدخلتها>')
+        needs_admin_env = True
 
     cfg.is_configured = True
     cfg.configured_at = timezone.now()
@@ -345,11 +340,17 @@ def network_save_config(request):
     logger.info('[NetworkSettings] saved by %s — role=%s', request.user.username, role)
 
     return JsonResponse({
-        'ok':            True,
-        'needs_restart': needs_restart,
-        'message':       (
-            'تم الحفظ. يرجى إعادة تشغيل الخادم لتطبيق إعدادات قاعدة البيانات الجديدة.'
-            if needs_restart else 'تم حفظ الإعدادات.'
+        'ok':              True,
+        'needs_admin_env': needs_admin_env,
+        # يُبقى المفتاحُ القديم بالقيمة نفسها كي لا تُكسَر نسخةٌ قديمةٌ مُكاشة
+        # من ``static/network_settings.js``.
+        'needs_restart':   needs_admin_env,
+        'env_lines':       env_lines,
+        'message':         (
+            'حُفظت إعداداتُ الماستر في قاعدة البيانات. لتحويل هذا الجهاز إلى '
+            'تابعٍ فعلاً، على مدير النظام وضعُ هذه الأسطر في ملفّ البيئة ثمّ '
+            'إعادةُ تشغيل الخدمة.'
+            if needs_admin_env else 'تم حفظ الإعدادات.'
         ),
     })
 

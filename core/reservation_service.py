@@ -32,9 +32,16 @@ def _recyclable_qs(kind, now):
     )
 
 
-def reserve_number(user, kind, expire_minutes=45):
-    """يُعيد (reservation, outcome) حيث outcome ∈ {'existing','resumed','recycled','new'}."""
-    from .models import BookNumberReservation as R, BookSequence, Book
+def reserve_number(user, kind, expire_minutes=None):
+    """يُعيد (reservation, outcome) حيث outcome ∈ {'existing','resumed','recycled','new'}.
+
+    ``expire_minutes=None`` (الافتراض) ⟵ تُحَلُّ المدّةُ من
+    ``SystemSettings.reservation_ttl()``: قراءةٌ عند الاستعمال لا ثابتٌ وقتَ
+    الاستيراد، فيسري ضبطُ صفحة العدّادات على كلّ عمليّةٍ وخيطٍ بلا إعادةِ تشغيل.
+    """
+    from .models import BookNumberReservation as R, BookSequence, Book, SystemSettings
+    if expire_minutes is None:
+        expire_minutes = SystemSettings.reservation_ttl()
     now = timezone.now()
     with transaction.atomic():
         # 0) حجز نشط قائم لنفس المستخدم/النوع → أعِده (لا نُنشئ جديداً)

@@ -4,17 +4,14 @@ Book sequence/settings views extracted from books.py.
 """
 
 import logging
-import os
-import re
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
 from ..extraction.kinds import BOOK_KIND_CHOICES, normalize_book_kind
-from ..models import BookSequence
+from ..models import BookSequence, SystemSettings
 from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
@@ -38,11 +35,18 @@ def sequence_settings(request):
         obj, _ = BookSequence.objects.get_or_create(kind=kind_value, defaults={'next_number': 1})
         sequences.append({'obj': obj, 'label': kind_label, 'kind': kind_value})
 
-    from django.conf import settings as dj_settings
-    current_expire = getattr(dj_settings, 'RESERVATION_EXPIRE_MINUTES', 45)
+    # مدّةُ الحجز بيانٌ في القاعدة لا سطرٌ في ``.env``. الشارةُ «مخصَّص» تُقاس
+    # بالمقارنة مع الافتراض، لا بـ``hasattr`` على كائن الإعدادات (كان يكذب:
+    # يعود «افتراضي» بعد كلّ إقلاع مهما ضُبط).
+    cfg = SystemSettings.get()
     reservation_settings = {
-        'expire_minutes': current_expire,
-        'is_custom': hasattr(dj_settings, 'RESERVATION_EXPIRE_MINUTES'),
+        'expire_minutes': cfg.reservation_expire_minutes,
+        'is_custom': (
+            cfg.reservation_expire_minutes != SystemSettings.RESERVATION_TTL_DEFAULT
+        ),
+        'ttl_min': SystemSettings.RESERVATION_TTL_MIN,
+        'ttl_max': SystemSettings.RESERVATION_TTL_MAX,
+        'ttl_default': SystemSettings.RESERVATION_TTL_DEFAULT,
     }
 
     if request.method == 'POST':
@@ -61,11 +65,21 @@ def sequence_settings(request):
             if update_fields:
                 seq['obj'].save(update_fields=update_fields + ['updated_at'])
 
+        # المدى من ثوابت النموذج — لا رقمَ مكتوباً بيدٍ هنا ولا في القالب.
         new_expire = request.POST.get('reservation_expire_minutes', '').strip()
-        if new_expire.isdigit() and 5 <= int(new_expire) <= 480:
-            _write_reservation_expire_setting(int(new_expire))
-            reservation_settings['expire_minutes'] = int(new_expire)
-            reservation_settings['is_custom'] = True
+        if new_expire.isdigit() and (
+            SystemSettings.RESERVATION_TTL_MIN
+            <= int(new_expire)
+            <= SystemSettings.RESERVATION_TTL_MAX
+        ):
+            # بلا ``except`` واسع: إن فشل الحفظُ فليظهر. الرسالةُ كانت تُطلَق
+            # دائماً حتّى حين تفشل الكتابةُ بصمت — «حُفظ» صار يعني حُفظ.
+            cfg.reservation_expire_minutes = int(new_expire)
+            cfg.save(update_fields=['reservation_expire_minutes', 'updated_at'])
+            logger.info(
+                '[SequenceSettings] reservation_expire_minutes=%s by %s',
+                new_expire, request.user.username,
+            )
 
         messages.success(request, 'تم حفظ إعدادات العدّادات والحجز بنجاح.')
         return redirect('sequence_settings')
@@ -74,32 +88,3 @@ def sequence_settings(request):
         'sequences': sequences,
         'reservation_settings': reservation_settings,
     })
-
-
-def _write_reservation_expire_setting(minutes: int):
-    """Write RESERVATION_EXPIRE_MINUTES value to the project's .env."""
-    env_path = os.path.join(settings.BASE_DIR, '.env')
-    key = 'RESERVATION_EXPIRE_MINUTES'
-    new_line = f'{key}={minutes}\n'
-    try:
-        if os.path.exists(env_path):
-            with open(env_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            if re.search(rf'^{key}=.*', content, re.MULTILINE):
-                content = re.sub(rf'^{key}=.*', new_line.strip(), content, flags=re.MULTILINE)
-            else:
-                content += ('\n' if not content.endswith('\n') else '') + new_line
-            with open(env_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-        else:
-            with open(env_path, 'w', encoding='utf-8') as f:
-                f.write(new_line)
-
-        from django.conf import settings as dj_settings
-        dj_settings.RESERVATION_EXPIRE_MINUTES = minutes
-
-        import core.reservation_api as _rapi
-        _rapi.EXPIRE_MINUTES = minutes
-        logger.info(f'[SequenceSettings] RESERVATION_EXPIRE_MINUTES updated to {minutes}')
-    except Exception as exc:
-        logger.warning(f'[SequenceSettings] Could not write .env: {exc}')

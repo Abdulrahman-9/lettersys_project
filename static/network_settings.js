@@ -228,7 +228,12 @@
       if (data.ok) {
         res.style.display = 'inline-block';
         res.innerHTML = `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>${data.message}</span>`;
-        if (data.needs_restart) {
+        // الخادمُ لم يبقَ يكتب في ملفّ البيئة: يعيد الأسطرَ لينسخها المديرُ
+        // بيده. `needs_admin_env` هو المعنى الصادق، و`needs_restart` مُبقًى
+        // بالقيمة نفسها للتوافق مع نسخةٍ قديمةٍ مُكاشة من هذا الملفّ.
+        if (data.needs_admin_env || data.needs_restart) {
+          const pre = el('envLines');
+          if (pre) pre.textContent = (data.env_lines || []).join('\n');
           el('restartBanner').style.display = 'block';
         }
         // تحديث قائمة الأجهزة

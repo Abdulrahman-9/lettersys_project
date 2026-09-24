@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password, check_password
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -1829,8 +1830,14 @@ class BookNumberReservation(models.Model):
         self.voided_at  = timezone.now()
         self.save(update_fields=['status', 'void_reason', 'voided_at'])
 
-    def reactivate(self, extra_minutes=45):
-        """إعادة تفعيل حجز منتهي الصلاحية."""
+    def reactivate(self, extra_minutes=None):
+        """إعادة تفعيل حجز منتهي الصلاحية.
+
+        ``None`` ⟵ المدّةُ من ``SystemSettings`` (المصدرُ الوحيد). كان
+        الافتراضُ الرقمَ 45 مكتوباً بيدٍ — إحدى أربع نسخٍ تنافس الإعداد.
+        """
+        if extra_minutes is None:
+            extra_minutes = SystemSettings.reservation_ttl()
         self.status    = self.STATUS_REACTIVATED
         self.expires_at = timezone.now() + timedelta(minutes=extra_minutes)
         self.void_reason = ''
@@ -1862,9 +1869,12 @@ class BookNumberReservation(models.Model):
         return qs.order_by('-reserved_at').first()
 
     @classmethod
-    def reserve(cls, user, kind, expire_minutes=45):
+    def reserve(cls, user, kind, expire_minutes=None):
         """حجز رقم آمن من التضارب وبلا فجوات — يفوّض لخدمة الحجز الموحّدة
-        (أولوية عودة cooldown → إعادة تدوير أصغر رقم متروك → رقم جديد)."""
+        (أولوية عودة cooldown → إعادة تدوير أصغر رقم متروك → رقم جديد).
+
+        ``expire_minutes=None`` ⟵ الخدمةُ تحلّ القيمة من ``SystemSettings``.
+        """
         from .reservation_service import reserve_number
         reservation, _outcome = reserve_number(user, kind, expire_minutes)
         return reservation
@@ -2394,8 +2404,13 @@ class BookEmailLog(models.Model):
 #  إعدادات النظام العامة — هوية التطبيق المعروضة (Singleton)
 # ══════════════════════════════════════════════════════════════════
 class SystemSettings(models.Model):
-    """
-    هوية التطبيق المعروضة (اسم النظام وسطر الوصف) — سجل وحيد (Singleton).
+    """سجلُّ السلوك العامِّ للتنصيب — سجلٌّ وحيد (Singleton).
+
+    كان وصفُه «هويةُ التطبيق المعروضة»، وهذا لم يكن صادقاً حتّى قبل اليوم:
+    ``deployment_profile`` **سلوكٌ** يقرؤه ``core/scoping.py`` في كلّ استعلامٍ
+    مُنطَّق. فهو إذن سجلُّ ما يسري على التنصيب كلِّه — الهويّةُ المعروضة
+    (اسمُ النظام وسطرُ الوصف) **وسلوكٌ** عامٌّ لا يخصّ نوعاً ولا جهازاً.
+
     مستقلّة عن هوية المؤسسة في ``EmailSettings`` (تلك خاصّة بترويسة التقارير
     والبريد). تُعرَض في كل الصفحات عبر context processor ``system_settings``.
     """
@@ -2418,6 +2433,32 @@ class SystemSettings(models.Model):
         "سطر الوصف في الترويسة", max_length=200, blank=True,
         default="أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة",
     )
+
+    # ── مدّةُ صلاحية حجز الرقم ───────────────────────────────────────────────
+    # كانت تُكتب في ``.env`` من مُعالِج طلبٍ (``books_sequence.py``) ثمّ **لا
+    # تُقرأ أبداً**: ``settings.py`` لا يعرف ``RESERVATION_EXPIRE_MINUTES``
+    # إطلاقاً، فكان الأثرُ الفعليُّ طفرتين في الذاكرة تزولان مع كلّ إقلاع.
+    # وتحت ACL الإنتاج (``.env`` = svc:R) كانت الكتابةُ تفشل بصمتٍ فلا تُنفَّذ
+    # الطفرتان أصلاً، ومع ذلك تُعلن الواجهةُ النجاح. صارت القيمةُ **بياناً**:
+    # تُقرأ عند الاستعمال، وتصمد لإعادة التشغيل، وتدخل ``pg_dump``.
+    # هذه الثوابتُ هي **المصدرُ الوحيد** للافتراض والمدى — لا رقمَ مكتوباً بيدٍ
+    # في خدمةٍ ولا في قالبٍ ولا في اختبار.
+    RESERVATION_TTL_DEFAULT = 45
+    RESERVATION_TTL_MIN = 5
+    RESERVATION_TTL_MAX = 480
+
+    reservation_expire_minutes = models.PositiveSmallIntegerField(
+        "مدة صلاحية حجز الرقم (دقيقة)",
+        default=RESERVATION_TTL_DEFAULT,
+        validators=[
+            MinValueValidator(RESERVATION_TTL_MIN),
+            MaxValueValidator(RESERVATION_TTL_MAX),
+        ],
+        help_text=(
+            'تُطبَّق فوراً على الحجوزات الجديدة؛ والحجوزاتُ القائمة تُكمل مدّتها '
+            'القديمة لأنّ وقتَ الانتهاء يُبصَم لحظةَ الحجز.'
+        ),
+    )
     updated_at     = models.DateTimeField(auto_now=True)
 
     # مفتاح كاش موحّد يستخدمه context processor أيضاً (مصدر واحد لتفادي التضارب).
@@ -2435,6 +2476,16 @@ class SystemSettings(models.Model):
         """يعيد السجل الوحيد (ينشئه بالقيَم الافتراضية عند أول استدعاء)."""
         obj, _ = cls.objects.get_or_create(singleton=1)
         return obj
+
+    @classmethod
+    def reservation_ttl(cls):
+        """نقطةُ القراءة الوحيدة لمدّة حجز الرقم (بالدقائق).
+
+        **لا يُقرأ الحقلُ من الكاش هنا**: كاشُ ``CACHE_KEY`` للعرض وحدَه، وهو
+        LocMem فلا يُبطَل إلّا في العمليّة التي حفظت. القراءةُ من القاعدة في
+        مسار الحجز هي ما يجعل «حُفظ» يعني حُفظ لكلّ عمليّةٍ وخيط.
+        """
+        return cls.get().reservation_expire_minutes
 
     def save(self, *args, **kwargs):
         self.singleton = 1

@@ -13,15 +13,16 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from django.conf import settings
-
-from .models import BookNumberReservation, BookSequence
+from .models import BookNumberReservation, BookSequence, SystemSettings
 from .decorators import rate_limit
 
 logger = logging.getLogger('lettersys')
 
-# مدة صلاحية الحجز بالدقائق — قابلة للتخصيص عبر settings.py
-EXPIRE_MINUTES = getattr(settings, 'RESERVATION_EXPIRE_MINUTES', 45)
+# مدّةُ صلاحية الحجز: **لا ثابتَ وحدةٍ هنا**. كان
+# ``EXPIRE_MINUTES = getattr(settings, 'RESERVATION_EXPIRE_MINUTES', 45)``
+# يُحسَب وقتَ الاستيراد من مفتاحٍ لا يعرّفه ``settings.py`` أبداً ⟵ 45 دائماً،
+# وكلُّ ضبطٍ من الواجهة يزول مع الإقلاع. القيمةُ الآن في
+# ``SystemSettings.reservation_ttl()`` وتُقرأ عند كلّ استعمال.
 
 
 def _reservation_dict(r):
@@ -63,7 +64,7 @@ def reserve_number(request):
     # الخدمة الموحّدة تتكفّل بكل الحالات: قائم / استرجاع cooldown / إعادة تدوير / جديد
     try:
         from .reservation_service import reserve_number as _svc_reserve
-        reservation, outcome = _svc_reserve(request.user, kind, EXPIRE_MINUTES)
+        reservation, outcome = _svc_reserve(request.user, kind)
     except Exception as e:
         logger.error(f'[Reservation] Error: {e}', exc_info=True)
         return JsonResponse({'success': False, 'message': 'خطأ في الحجز'}, status=500)
@@ -192,11 +193,12 @@ def reactivate_reservation(request):
             'error_code': 'REACTIVATION_LIMIT',
         }, status=400)
 
-    r.reactivate(extra_minutes=EXPIRE_MINUTES)
+    ttl = SystemSettings.reservation_ttl()
+    r.reactivate(extra_minutes=ttl)
     logger.info(f'[Reservation] Reactivated {r.formatted} for user={request.user.username}')
     return JsonResponse({
         'success': True,
-        'message': f'تم إعادة تفعيل القيد {r.formatted} لمدة {EXPIRE_MINUTES} دقيقة',
+        'message': f'تم إعادة تفعيل القيد {r.formatted} لمدة {ttl} دقيقة',
         'reservation': _reservation_dict(r),
     })
 
