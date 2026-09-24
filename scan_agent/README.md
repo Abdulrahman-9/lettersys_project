@@ -22,6 +22,9 @@ scan_agent\run_agent.bat
 ```bash
 curl http://127.0.0.1:17865/agent/health
 # {"ok": true, "naps2_available": true/false, ...}
+
+# حارسُ الارتباط المُعاد (يجب أن يُعيد 403 bad_host):
+curl -i -H "Host: evil.example:17865" http://127.0.0.1:17865/agent/health
 ```
 
 ## الاختبار الكامل (بماسح فعلي)
@@ -45,4 +48,7 @@ curl http://127.0.0.1:17865/agent/health
 ## استكشاف الأخطاء
 - المؤشّر «NAPS2 غير مثبّت» → ثبّت NAPS2 أو اضبط `NAPS2_CONSOLE`.
 - «لا يوجد ماسح متصل» → تأكّد أن الماسح مشغّل ومتصل، وجرّب `NAPS2.Console.exe --listdevices --driver twain` يدوياً.
-- «وكيل المسح غير مشغّل» → شغّل `run_agent.bat`.
+- «وكيل المسح غير مشغّل» → شغّل `LetterSysScanAgent.exe` (أو `run_agent.bat`) **على جهاز
+  الكاتبة**، لا على الخادم: الوكيل يشغّل ماسحَ الجهاز الذي يعمل عليه.
+- «الوكيل يعمل لكنه لا يثق بعنوان هذا الخادم» → أصلُ الصفحة ليس في `agent.json`. أضفه
+  (بالصيغة التي يُظهرها لك المؤشّر) ثمّ أعد تشغيل الوكيل. السطرُ نفسه في `agent.log`.

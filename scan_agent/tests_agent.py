@@ -6,14 +6,18 @@
 يغطّي:
   - naps2: تحليل الأجهزة، نجاح/فشل المسح (returncode + حجم الملف)، القوائم
     البيضاء، قصّ DPI — عبر mock لـ subprocess (بلا ماسح حقيقي).
-  - server: فحص Origin (403)، التوكِن (401)، health بلا توكِن (200)، OPTIONS (204).
+  - server: بوّابةُ Host (الارتباطُ المُعاد) وبوّابةُ Origin (مَن يُشغّل الماسح)
+    والطلبُ الاستباقيّ وإسقاطُ التوكِن — عبر http.client كي تُضبَط ترويسةُ Host.
+  - config: قائمةُ الأصول من agent.json على محطّة العمل + تقنينُ الأصل.
 """
+import http.client
+import io
 import os
+import shutil
 import subprocess
+import tempfile
 import threading
 import unittest
-import urllib.error
-import urllib.request
 from http.server import ThreadingHTTPServer
 from unittest import mock
 
@@ -191,13 +195,18 @@ class Naps2AutoScanTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)   # مصدر واحد فقط — لا cascade على المهلة
 
 
-class ServerAuthTests(unittest.TestCase):
+class ServerGateTests(unittest.TestCase):
+    """بوّابتا الوكيل: Host (الارتباطُ المُعاد) و Origin (مَن يُشغّل الماسح).
+
+    الطلباتُ تُبنى بـ``http.client`` منخفضِ المستوى لأنّ ترويسةَ Host هي موضعُ القياس:
+    ``urllib`` يفرضها تلقائيّاً ولا يسمح بحذفها. ولا شيءَ هنا يُنفّذ CORS (لا متصفّح)،
+    فكلُّ ما يُؤكَّد رمزٌ أو ترويسةٌ — سلوكُ المتصفّح نفسه يُقاس في المتصفّح.
+    """
+
     @classmethod
     def setUpClass(cls):
-        server.AGENT_TOKEN = 'testtok'
         cls.httpd = ThreadingHTTPServer(('127.0.0.1', 0), server.Handler)
         cls.port = cls.httpd.server_address[1]
-        cls.base = 'http://127.0.0.1:%d' % cls.port
         cls.thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
         cls.thread.start()
 
@@ -206,47 +215,285 @@ class ServerAuthTests(unittest.TestCase):
         cls.httpd.shutdown()
         cls.httpd.server_close()
 
-    def _open(self, path, method='GET', headers=None):
-        req = urllib.request.Request(self.base + path, method=method, headers=headers or {})
+    def setUp(self):
+        # قائمةٌ صريحةٌ للقياس: أصلٌ باسمٍ على المنفذ الضمنيّ 80 وأصلٌ بـIP:منفذ.
+        p = mock.patch.object(config, 'ALLOWED_ORIGINS',
+                              {('http', '172.16.2.16', 8000), ('http', 'lettersys', 80)})
+        p.start()
+        self.addCleanup(p.stop)
+        # سجلُّ الأصول المرفوضة إلى مجلّدٍ مؤقّت وstderr مُعلَّق — لا نكتب في بيانات المستخدم
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        for patcher in (mock.patch.dict(os.environ, {'LOCALAPPDATA': tmp}),
+                        mock.patch('sys.stderr', io.StringIO())):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        server._LOGGED_ORIGINS.clear()
+
+    ALLOWED = 'http://172.16.2.16:8000'
+
+    def _req(self, path, method='GET', headers=None, host=None, send_host=True, body=None):
+        """(status, body, headers) — ``host=None`` يعني المضيفَ الصحيح، و``send_host=False``
+        يحذف الترويسةَ تماماً."""
+        conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
         try:
-            r = urllib.request.urlopen(req, timeout=5)
-            return r.status, r.read().decode('utf-8', 'ignore')
-        except urllib.error.HTTPError as e:
-            return e.code, e.read().decode('utf-8', 'ignore')
+            conn.putrequest(method, path, skip_host=True, skip_accept_encoding=True)
+            if send_host:
+                conn.putheader('Host', host or ('127.0.0.1:%d' % self.port))
+            for k, v in (headers or {}).items():
+                conn.putheader(k, v)
+            data = body.encode('utf-8') if isinstance(body, str) else body
+            if data is not None:
+                conn.putheader('Content-Length', str(len(data)))
+            conn.endheaders(data)
+            r = conn.getresponse()
+            return r.status, r.read().decode('utf-8', 'ignore'), dict(r.getheaders())
+        finally:
+            conn.close()
 
-    def test_health_no_token_ok(self):
-        status, _ = self._open('/agent/health')
-        self.assertEqual(status, 200)
+    # ═══════ بوّابةُ Host — الارتباطُ المُعاد ═══════
+    def test_host_attacker_name_rejected_403(self):
+        st, body, hdrs = self._req('/agent/health', host='evil.example:%d' % self.port,
+                                   headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 403)
+        self.assertIn('bad_host', body)
+        self.assertNotIn('Access-Control-Allow-Origin', hdrs)   # ولا حتى لأصلٍ مسموح
 
-    def test_devices_without_token_401(self):
-        status, _ = self._open('/agent/devices')
-        self.assertEqual(status, 401)
+    def test_host_loopback_suffix_rejected_403(self):
+        st, body, _ = self._req('/agent/health', host='127.0.0.1.evil.example:%d' % self.port)
+        self.assertEqual(st, 403)
+        self.assertIn('bad_host', body)
 
-    def test_devices_with_token_ok(self):
-        with mock.patch.object(naps2, 'list_devices', return_value=[]):
-            status, body = self._open('/agent/devices', headers={'X-LetterSys-Token': 'testtok'})
-        self.assertEqual(status, 200)
-        self.assertIn('devices', body)
+    def test_host_wrong_port_rejected_403(self):
+        st, body, _ = self._req('/agent/health', host='127.0.0.1:9999')
+        self.assertEqual(st, 403)
+        self.assertIn('bad_host', body)
 
-    def test_scan_without_token_401(self):
-        status, _ = self._open('/agent/scan', method='POST', headers={'Content-Type': 'application/json'})
-        self.assertEqual(status, 401)
+    def test_host_missing_rejected_403(self):
+        st, body, _ = self._req('/agent/health', send_host=False)
+        self.assertEqual(st, 403)
+        self.assertIn('bad_host', body)
+
+    def test_host_localhost_accepted(self):
+        st, body, _ = self._req('/agent/health', host='localhost:%d' % self.port)
+        self.assertEqual(st, 200)
+        self.assertIn('naps2_available', body)
+
+    def test_host_gate_applies_to_options(self):
+        st, _, hdrs = self._req('/agent/scan', method='OPTIONS',
+                                host='evil.example:%d' % self.port,
+                                headers={'Origin': self.ALLOWED,
+                                         'Access-Control-Request-Method': 'POST'})
+        self.assertEqual(st, 403)
+        self.assertNotIn('Access-Control-Allow-Origin', hdrs)
+
+    def test_host_gate_applies_to_devices(self):
+        with mock.patch.object(naps2, 'list_devices', return_value=[]) as m:
+            st, _, _ = self._req('/agent/devices', host='evil.example:%d' % self.port,
+                                 headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 403)
+        m.assert_not_called()
+
+    # ═══════ بوّابةُ Origin — مَن يُشغّل الماسح ═══════
+    def test_devices_requires_origin_403_before_naps2(self):
+        """بلا Origin (‎<img src>‎ · تنقّلٌ علويّ · no-cors GET): يُرفض قبل سردِ الأجهزة —
+        فلا يُحجَز خيطٌ ستّين ثانيةً (هذا ما كان التوكِنُ يسدّه، بـ401)."""
+        with mock.patch.object(naps2, 'list_devices', return_value=[]) as m:
+            st, body, hdrs = self._req('/agent/devices')
+        self.assertEqual(st, 403)
+        self.assertIn('origin_not_allowed', body)
+        self.assertNotIn('Access-Control-Allow-Origin', hdrs)
+        m.assert_not_called()
+
+    def test_scan_requires_origin_403(self):
+        st, body, _ = self._req('/agent/scan', method='POST',
+                                headers={'Content-Type': 'application/json'}, body='{}')
+        self.assertEqual(st, 403)
+        self.assertIn('origin_not_allowed', body)
+
+    def test_origin_null_rejected_403(self):
+        """‎iframe‎ معزولٌ أو file:// أو data: يرسل ``Origin: null`` — ليس في القائمة."""
+        st, _, _ = self._req('/agent/devices', headers={'Origin': 'null'})
+        self.assertEqual(st, 403)
 
     def test_bad_origin_rejected_403(self):
-        status, _ = self._open('/agent/health', headers={'Origin': 'http://evil.example'})
-        self.assertEqual(status, 403)
+        st, _, hdrs = self._req('/agent/health', headers={'Origin': 'http://evil.example'})
+        self.assertEqual(st, 403)
+        self.assertNotIn('Access-Control-Allow-Origin', hdrs)
 
     def test_allowed_origin_ok(self):
-        status, _ = self._open('/agent/health', headers={'Origin': 'http://127.0.0.1:8000'})
-        self.assertEqual(status, 200)
+        st, _, hdrs = self._req('/agent/health', headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 200)
+        self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), self.ALLOWED)
+        self.assertEqual(hdrs.get('Vary'), 'Origin')
 
+    def test_origin_implicit_port_80_matches_named_entry(self):
+        """المتصفّحُ يحذف ‎:80‎ من الأصل — ``http://lettersys`` = ``http://lettersys:80``."""
+        st, _, hdrs = self._req('/agent/health', headers={'Origin': 'http://lettersys'})
+        self.assertEqual(st, 200)
+        self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), 'http://lettersys')
+
+    def test_origin_case_insensitive_host(self):
+        st, _, _ = self._req('/agent/health', headers={'Origin': 'http://LETTERSYS'})
+        self.assertEqual(st, 200)
+
+    def test_origin_suffix_attack_rejected(self):
+        """مساواةُ tuple لا بادئةً: ``…:8000.evil.com`` مضيفٌ آخرُ تماماً."""
+        st, _, _ = self._req('/agent/health',
+                             headers={'Origin': 'http://172.16.2.16:8000.evil.com'})
+        self.assertEqual(st, 403)
+
+    def test_origin_other_port_rejected(self):
+        st, _, _ = self._req('/agent/health', headers={'Origin': 'http://172.16.2.16:8001'})
+        self.assertEqual(st, 403)
+
+    def test_health_without_origin_ok(self):
+        """curl والتشخيصُ ومسبارُ no-cors: بلا Origin ⟵ 200 (بلا آثارٍ غيرِ locate_exe)."""
+        st, body, hdrs = self._req('/agent/health')
+        self.assertEqual(st, 200)
+        self.assertIn('naps2_available', body)
+        self.assertNotIn('Access-Control-Allow-Origin', hdrs)
+
+    def test_health_with_disallowed_origin_403(self):
+        st, body, hdrs = self._req('/agent/health', headers={'Origin': 'http://evil.example'})
+        self.assertEqual(st, 403)
+        self.assertIn('origin_not_allowed', body)
+        self.assertNotIn('Access-Control-Allow-Origin', hdrs)
+
+    def test_devices_with_allowed_origin_and_no_token_ok(self):
+        """بديلُ ``test_devices_without_token_401``: لا توكِنَ بعد اليوم — الأصلُ هو البوّابة."""
+        with mock.patch.object(naps2, 'list_devices', return_value=[]):
+            st, body, hdrs = self._req('/agent/devices', headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 200)
+        self.assertIn('devices', body)
+        self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), self.ALLOWED)
+
+    def test_scan_error_json_carries_cors(self):
+        """خطأُ الوكيل يجب أن يُقرأ في الصفحة (نصٌّ عربيٌّ مفيد) ⟵ ACAO على الخطأ أيضاً."""
+        st, body, hdrs = self._req('/agent/scan', method='POST',
+                                   headers={'Origin': self.ALLOWED,
+                                            'Content-Type': 'application/json'}, body='{}')
+        self.assertEqual(st, 400)
+        self.assertIn('no_device', body)
+        self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), self.ALLOWED)
+
+    # ═══════ الطلبُ الاستباقيّ (preflight) ═══════
     def test_options_preflight_204(self):
-        status, _ = self._open('/agent/scan', method='OPTIONS', headers={'Origin': 'http://127.0.0.1:8000'})
-        self.assertEqual(status, 204)
+        st, _, hdrs = self._req('/agent/scan', method='OPTIONS',
+                                headers={'Origin': self.ALLOWED,
+                                         'Access-Control-Request-Method': 'POST',
+                                         'Access-Control-Request-Headers': 'content-type'})
+        self.assertEqual(st, 204)
+        self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), self.ALLOWED)
+        self.assertEqual(hdrs.get('Access-Control-Allow-Private-Network'), 'true')
+        self.assertEqual(hdrs.get('Access-Control-Allow-Headers'), 'Content-Type')
+        self.assertNotIn('Token', hdrs.get('Access-Control-Allow-Headers', ''))
+
+    def test_options_disallowed_origin_403(self):
+        st, _, hdrs = self._req('/agent/scan', method='OPTIONS',
+                                headers={'Origin': 'http://evil.example',
+                                         'Access-Control-Request-Method': 'POST'})
+        self.assertEqual(st, 403)
+        self.assertNotIn('Access-Control-Allow-Origin', hdrs)
+
+    def test_options_without_origin_403(self):
+        st, _, _ = self._req('/agent/scan', method='OPTIONS',
+                             headers={'Access-Control-Request-Method': 'POST'})
+        self.assertEqual(st, 403)
 
     def test_unknown_path_404(self):
-        status, _ = self._open('/agent/nope', headers={'X-LetterSys-Token': 'testtok'})
-        self.assertEqual(status, 404)
+        st, _, _ = self._req('/agent/nope', headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 404)
+
+    # ═══════ إسقاطُ التوكِن ═══════
+    def test_token_machinery_removed(self):
+        for name in ('AGENT_TOKEN', '_load_token'):
+            self.assertFalse(hasattr(server, name), 'بقي %s في server' % name)
+        self.assertFalse(hasattr(server.Handler, '_token_ok'))
+        for name in ('TOKEN_FILE', 'TOKEN_DIR'):
+            self.assertFalse(hasattr(config, name), 'بقي %s في config' % name)
+
+
+class OriginConfigTests(unittest.TestCase):
+    """قائمةُ الأصول تأتي من ملفٍّ على محطّة العمل، لا من ثابتٍ في مستودعٍ عامّ."""
+
+    def setUp(self):
+        p = mock.patch('sys.stderr', io.StringIO())     # سطرُ الرفض لا يُشوّش مخرَجَ الاختبار
+        p.start()
+        self.addCleanup(p.stop)
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        p = mock.patch.dict(os.environ, {'LOCALAPPDATA': self.tmp})
+        p.start()
+        self.addCleanup(p.stop)
+        self.cfg = os.path.join(self.tmp, 'LetterSys', 'agent.json')
+        os.makedirs(os.path.dirname(self.cfg), exist_ok=True)
+
+    def _write(self, text):
+        with open(self.cfg, 'w', encoding='utf-8') as f:
+            f.write(text)
+
+    def test_file_with_two_origins_parsed(self):
+        self._write('{"allowed_origins": ["http://lettersys", "http://172.16.2.16:8000"]}')
+        got = config.load_allowed_origins()
+        self.assertEqual(got, {('http', 'lettersys', 80), ('http', '172.16.2.16', 8000)})
+
+    def test_missing_file_falls_back_to_loopback_defaults(self):
+        """حالةُ الجهاز الواحد (كونسولُ الخادم/استنساخٌ جديد): تعمل بصفر إعداد كما اليوم."""
+        warns = []
+        got = config.load_allowed_origins(warnings=warns)
+        self.assertEqual(got, {('http', '127.0.0.1', 8000), ('http', 'localhost', 8000)})
+        self.assertTrue(warns)
+
+    def test_malformed_json_falls_back_to_defaults(self):
+        self._write('{ this is not json')
+        warns = []
+        got = config.load_allowed_origins(warnings=warns)
+        self.assertIn(('http', '127.0.0.1', 8000), got)
+        self.assertTrue(warns)
+
+    def test_key_of_wrong_type_falls_back(self):
+        self._write('{"allowed_origins": "http://lettersys"}')
+        got = config.load_allowed_origins()
+        self.assertIn(('http', 'localhost', 8000), got)
+
+    def test_invalid_entries_rejected(self):
+        self._write('{"allowed_origins": ["http://*", "lettersys", "http://x/path",'
+                    ' "ftp://x", "", "http://good:8000"]}')
+        warns = []
+        got = config.load_allowed_origins(warnings=warns)
+        self.assertEqual(got, {('http', 'good', 8000)})
+        self.assertEqual(len(warns), 5)
+
+    def test_trailing_slash_normalised(self):
+        self._write('{"allowed_origins": ["http://lettersys/"]}')
+        self.assertEqual(config.load_allowed_origins(), {('http', 'lettersys', 80)})
+
+    def test_all_entries_invalid_falls_back_to_defaults(self):
+        self._write('{"allowed_origins": ["http://*"]}')
+        got = config.load_allowed_origins()
+        self.assertIn(('http', '127.0.0.1', 8000), got)
+
+    def test_shipped_defaults_cover_the_single_machine_case(self):
+        """الاختبارُ يقرأ المصدرَ الذي تقرأه الشيفرةُ المُشحونة (لا ثابتاً مكرَّراً في
+        الاختبار)، فلا تخضرّ الاختباراتُ فوق افتراضٍ فارغٍ — نمطُ «النسخة بلا أوزان»."""
+        got = {config.normalize_origin(o) for o in config.DEFAULT_ORIGINS}
+        self.assertIn(('http', '127.0.0.1', 8000), got)
+        self.assertIn(('http', 'localhost', 8000), got)
+
+    def test_normalize_rejects_control_characters(self):
+        self.assertIsNone(config.normalize_origin('http://a\r\nX-Evil: 1'))
+        self.assertIsNone(config.normalize_origin('http://a b'))
+
+    def test_rejected_origin_logged_once(self):
+        server._LOGGED_ORIGINS.clear()
+        server._log_rejected_origin('http://evil.example')
+        server._log_rejected_origin('http://evil.example')
+        with open(config.log_file(), encoding='utf-8') as f:
+            lines = [ln for ln in f.read().splitlines() if ln.strip()]
+        self.assertEqual(len(lines), 1)
+        self.assertIn('http://evil.example', lines[0])
+        self.assertIn('agent.json', lines[0])
 
 
 if __name__ == '__main__':
