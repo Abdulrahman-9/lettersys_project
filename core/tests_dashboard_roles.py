@@ -256,6 +256,20 @@ class DashboardOverviewTests(TestCase):
         self.assertContains(dash, 'class="btn-brand"')
         self.assertContains(dash, 'class="btn-brand-ghost"')
 
+    def test_outgoing_active_count_equals_the_list_the_link_opens(self):
+        """OPT‑1: رقمُ الصادر الجاري رابطٌ بالقاعدة والتسمية نفسيهما، وقائمتُه تطابقه."""
+        dash = self._dash()
+        self.assertEqual(dash.context['outgoing_pending'], 1)
+        href = reverse('book_unified') + '?tab=outgoing&followup=active'
+        self.assertContains(dash, href)
+        self.assertNotContains(dash, 'قيد الإرسال')
+
+        listing = self.client.get(href)
+
+        self.assertEqual({b.our_number for b in listing.context['books']}, {'7106'})
+        self.assertContains(listing, '<strong id="paginationTotal">%d</strong>'
+                            % dash.context['outgoing_pending'])
+
     def test_overdue_alert_is_honest(self):
         """«تحتاج متابعة عاجلة» لا تُقال حين لا متأخّر."""
         self.overdue.is_archived = True
