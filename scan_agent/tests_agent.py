@@ -496,5 +496,102 @@ class OriginConfigTests(unittest.TestCase):
         self.assertIn('agent.json', lines[0])
 
 
+@unittest.skipUnless(os.name == 'nt', 'المُثبِّت سكربتُ ويندوز')
+class InstallerTests(unittest.TestCase):
+    """``install_agent.bat``: لا يُكتَب أصلٌ بلا تحقُّقٍ من شكله وبلا موافقةٍ صريحة.
+
+    كلُّ سطرٍ هنا يشغّل السكربتَ فعلاً بـ``LOCALAPPDATA``/``APPDATA`` مؤقّتَين — فلا
+    شيءَ يُكتب في بيانات المستخدم. والسببُ أنّ عقدَ هذا الملفّ لا يُقاس بالقراءة:
+    النسخةُ السابقة كانت تكتب ``[\\"http://…\\"]`` (شرطاتٌ خلفيّةٌ حرفيّة) فيسقط
+    ``json.load`` ويعود الوكيلُ إلى الحلقة المحلّيّة — قائمةٌ مكتوبةٌ ولا تعمل.
+    """
+
+    BAT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'install_agent.bat')
+    ORIGIN = 'http://192.0.2.10:8000'
+
+    def _sandbox(self, prefix='ls_inst_'):
+        tmp = tempfile.mkdtemp(prefix=prefix)
+        self.addCleanup(shutil.rmtree, tmp, True)
+        startup = os.path.join(tmp, 'app', 'Microsoft', 'Windows',
+                               'Start Menu', 'Programs', 'Startup')
+        os.makedirs(startup)
+        os.makedirs(os.path.join(tmp, 'local'))
+        return tmp, startup
+
+    def _run(self, args, answer, tmp):
+        env = dict(os.environ)
+        env['LOCALAPPDATA'] = os.path.join(tmp, 'local')
+        env['APPDATA'] = os.path.join(tmp, 'app')
+        proc = subprocess.run(['cmd', '/c', self.BAT] + list(args), input=answer,
+                              capture_output=True, text=True, encoding='utf-8',
+                              errors='replace', env=env, timeout=180)
+        return proc
+
+    def _json_path(self, tmp):
+        return os.path.join(tmp, 'local', 'LetterSys', 'agent.json')
+
+    # ═══════ التحقُّق من شكل الوسيط ═══════
+    def test_origin_with_path_is_refused_and_nothing_written(self):
+        """«install_agent.bat http://evil.example/x» أُرسل إلى الكاتبة ⟵ لا يُكتَب."""
+        tmp, _ = self._sandbox()
+        p = self._run(['http://evil.example/x'], 'y\n', tmp)
+        self.assertEqual(p.returncode, 2, p.stdout)
+        self.assertFalse(os.path.exists(self._json_path(tmp)), 'كُتب agent.json لوسيطٍ غيرِ صالح')
+
+    def test_non_http_scheme_refused(self):
+        tmp, _ = self._sandbox()
+        for bad in ('file://x', 'ftp://192.0.2.10', 'http://a b'):
+            p = self._run([bad], 'y\n', tmp)
+            self.assertEqual(p.returncode, 2, '%s قُبل: %s' % (bad, p.stdout))
+            self.assertFalse(os.path.exists(self._json_path(tmp)))
+
+    # ═══════ الموافقةُ الصريحة ═══════
+    def test_refusal_writes_nothing(self):
+        tmp, startup = self._sandbox()
+        p = self._run([self.ORIGIN], 'n\n', tmp)
+        self.assertEqual(p.returncode, 1, p.stdout)
+        self.assertFalse(os.path.exists(self._json_path(tmp)), 'كُتب agent.json بعد رفضٍ صريح')
+        self.assertEqual(os.listdir(startup), [], 'وُضع اختصارٌ بعد الرفض')
+
+    def test_no_answer_writes_nothing(self):
+        """مدخلٌ خالٍ (أنبوبٌ مغلق) ⟵ فشلٌ مغلق: لا كتابةَ بلا «y»."""
+        tmp, _ = self._sandbox()
+        p = self._run([self.ORIGIN], '', tmp)
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertFalse(os.path.exists(self._json_path(tmp)))
+
+    # ═══════ الناتجُ يعمل فعلاً ═══════
+    def test_accepted_file_is_parsed_by_the_agent_itself(self):
+        """المقياسُ ليس «كُتب ملفّ» بل «الوكيلُ قرأه»: ``load_allowed_origins`` بلا تحذير."""
+        tmp, startup = self._sandbox()
+        p = self._run([self.ORIGIN, 'https://SERVER-NAME'], 'y\n', tmp)
+        self.assertEqual(p.returncode, 0, p.stdout)
+        path = self._json_path(tmp)
+        self.assertTrue(os.path.exists(path), p.stdout)
+        warns = []
+        got = config.load_allowed_origins(path=path, warnings=warns)
+        self.assertEqual(got, {('http', '192.0.2.10', 8000), ('https', 'server-name', 443)})
+        self.assertEqual(warns, [], 'الوكيلُ لم يقرأ ما كتبه المُثبِّت')
+        self.assertIn('LetterSys Scan Agent.lnk', os.listdir(startup))
+
+    def test_shortcut_target_survives_an_apostrophe_in_the_path(self):
+        """اسمُ مستخدمٍ فيه فاصلةٌ عليا كان يكسر سطرَ PowerShell فيبقى الهدفُ فارغاً."""
+        tmp, startup = self._sandbox(prefix="ls_o'brien_")
+        p = self._run([self.ORIGIN], 'y\n', tmp)
+        self.assertEqual(p.returncode, 0, p.stdout)
+        lnk = os.path.join(startup, 'LetterSys Scan Agent.lnk')
+        self.assertTrue(os.path.exists(lnk), p.stdout)
+        with open(lnk, 'rb') as f:
+            blob = f.read()
+        self.assertIn(b'run_agent.bat', blob, 'الاختصارُ أُنشئ بهدفٍ فارغ')
+
+    # ═══════ الاسمُ المفردُ على http يُنبَّه عليه ═══════
+    def test_single_label_http_origin_warns_about_spoofing(self):
+        tmp, _ = self._sandbox()
+        p = self._run(['http://lettersys'], 'n\n', tmp)
+        self.assertIn('LLMNR', p.stdout, 'لا تنبيهَ على اسمٍ مفردٍ قابلٍ للانتحال')
+        self.assertFalse(os.path.exists(self._json_path(tmp)))
+
+
 if __name__ == '__main__':
     unittest.main()
