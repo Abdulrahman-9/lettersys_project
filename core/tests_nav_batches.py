@@ -101,3 +101,73 @@ class LifecycleRefreshInPlaceTests(TestCase):
         self.assertIn('function refreshInPlace', src)
         self.assertIn("region.addEventListener('click'", src)
         self.assertNotIn("card.addEventListener('click'", src)
+
+
+class EyeOpensFullDetailTests(TestCase):
+    """قرارُ المالك 2026‑09‑13: زرُّ العين في القائمة يفتح **صفحةَ الكتاب كاملةً**
+    لا الحوارَ السريع (الحوارُ لا يحمل دورةَ الحياة ولا التعليقات ولا السجلّ)."""
+
+    def setUp(self):
+        self.u = User.objects.create_user('eyev', password='pw-eyev-11', is_staff=True)
+        self.book = Book.objects.create(kind='incoming_internal', title='للعرض', created_by=self.u)
+        self.client.force_login(self.u)
+
+    def test_the_list_row_links_straight_to_the_detail_page(self):
+        r = self.client.get(reverse('book_unified'))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, reverse('book_detail', args=[self.book.pk]))
+        self.assertNotContains(r, f'data-book-preview="{self.book.pk}"')
+
+    def test_the_detail_page_carries_what_the_quick_dialog_lacked(self):
+        r = self.client.get(reverse('book_detail', args=[self.book.pk]))
+        for marker in ('id="lifecycleCard"', 'id="followupHistoryCard"', 'إضافة تعليق'):
+            self.assertContains(r, marker)
+
+
+class SettingsHubStructureTests(TestCase):
+    """هيكلُ مركز الإعدادات (مراجعة 2026‑09‑13): حارسٌ واحدٌ لكلّ تبويب، ولا مساراتٍ حرفيّة."""
+
+    def setUp(self):
+        self.plain = User.objects.create_user('shp', password='pw-shp-11')
+        self.staff = User.objects.create_user('shs', password='pw-shs-11', is_staff=True)
+
+    def test_every_embedded_tab_is_guarded_like_the_hub(self):
+        """كانت صفحةُ إعدادات الماسح بـlogin_required وحدَها: أيُّ مستخدمٍ يفتحها بالمسار."""
+        self.client.force_login(self.plain)
+        for name in ('settings_hub', 'scan_settings', 'sequence_settings', 'network_settings', 'user_roles'):
+            r = self.client.get(reverse(name))
+            self.assertIn(r.status_code, (302, 403), f'{name} مفتوحٌ لغير الموظّف ({r.status_code})')
+        self.client.force_login(self.staff)
+        for name in ('settings_hub', 'scan_settings'):
+            self.assertEqual(self.client.get(reverse(name)).status_code, 200, name)
+
+    def test_the_hub_has_no_hardcoded_admin_path(self):
+        """كان تبويبُ الذكاء الاصطناعيّ رابطاً حرفيّاً يقذف المستخدم إلى لوحة جانغو؛
+        صار لوحةً داخل المركز (مراجعة 2026‑09‑13)."""
+        src = open('templates/core/settings/hub.html', encoding='utf-8').read()
+        self.assertNotIn('href="/admin/', src)
+        self.assertNotIn('data-kind="external"', src)
+        self.assertIn('data-pane="ai"', src)
+
+    def test_the_ai_pane_never_renders_the_saved_key_and_saves_it(self):
+        from core.models import AIIntegrationSettings
+        self.client.force_login(self.staff)
+        r = self.client.post(reverse('settings_ai_save'), {
+            'provider': 'azure', 'azure_endpoint': 'https://x.example/',
+            'azure_key': 'SECRET-KEY-123', 'low_confidence_threshold': '0.5'})
+        self.assertEqual(r.status_code, 302)
+        cfg = AIIntegrationSettings.objects.first()
+        self.assertEqual(cfg.azure_key, 'SECRET-KEY-123')
+        page = self.client.get(reverse('settings_hub'))
+        self.assertNotContains(page, 'SECRET-KEY-123', msg_prefix='المفتاحُ ظهر في الصفحة')
+        # فارغٌ ⟵ يبقى المحفوظ؛ ومسحٌ صريحٌ ⟵ يُحذف
+        self.client.post(reverse('settings_ai_save'), {'provider': 'azure', 'azure_key': ''})
+        self.assertEqual(AIIntegrationSettings.objects.first().azure_key, 'SECRET-KEY-123')
+        self.client.post(reverse('settings_ai_save'), {'provider': 'azure', 'clear_key': 'on'})
+        self.assertEqual(AIIntegrationSettings.objects.first().azure_key, '')
+
+    def test_a_plain_user_gets_the_403_page_not_a_login_redirect(self):
+        """توحيدُ الحرّاس: مَن هو داخلٌ ولا يملك يرى 403 داخل القشرة لا تحويلاً للدخول."""
+        self.client.force_login(self.plain)
+        for name in ('settings_hub', 'network_settings', 'mail_settings'):
+            self.assertEqual(self.client.get(reverse(name)).status_code, 403, name)

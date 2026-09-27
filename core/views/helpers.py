@@ -8,7 +8,12 @@ Helper Functions - دوال مساعدة للمعالجات
 import re
 
 from django.db.models import Case, IntegerField, Q, Value, When
+from functools import wraps
+
+from django.conf import settings
 from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import PermissionDenied
 
 from .. import numbering
 
@@ -227,13 +232,20 @@ def is_ajax(request):
 
 
 def staff_required(view_func):
+    """الحارسُ **الواحد** لصفحات الإدارة: الموظّفون والمدراء (مراجعةُ 2026‑09‑13).
+
+    كان النظامُ يقول «هذه للموظّفين» بخمسة أساليب: مزيِّنٌ، و``user_passes_test``،
+    وفحصٌ في الجسم يعيد نصّاً عارياً، و``Http404`` مضلِّلة، ولا شيء. التوحيدُ هنا:
+    - **داخلٌ بلا صلاحيّة** ⟵ ``PermissionDenied`` فتظهر صفحةُ 403 داخل قشرة التطبيق
+      بزرّ عودة (كانت تحويلاً إلى صفحة الدخول — وهو يُربك مَن هو داخلٌ فعلاً).
+    - **غيرُ داخلٍ** ⟵ تحويلٌ إلى الدخول مع ``next`` كما يفعل ``login_required``.
     """
-    ديكور يسمح بدخول الموظفين أو المدراء فقط
-    
-    Args:
-        view_func: دالة المعالج المراد حمايتها
-    
-    Returns:
-        decorated_func: دالة المعالج المحمية
-    """
-    return user_passes_test(lambda u: u.is_staff or u.is_superuser)(view_func)
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        user = getattr(request, 'user', None)
+        if user is None or not user.is_authenticated:
+            return redirect_to_login(request.get_full_path(), settings.LOGIN_URL)
+        if not (user.is_staff or user.is_superuser):
+            raise PermissionDenied('هذه الصفحةُ لإدارة النظام.')
+        return view_func(request, *args, **kwargs)
+    return _wrapped

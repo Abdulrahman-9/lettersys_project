@@ -145,6 +145,23 @@
                          style="font-variant-numeric:tabular-nums">
                         <i class="bi bi-reply-fill me-1"></i>{{ row.reply_number }}
                       </a>
+                    {% elif row.is_open and row.referral.purpose == 'info' %}
+                      {# للعلم: لا مطاردة — استلامٌ (قرأته الوحدة) أو تفعيلُ متابعةٍ بمدّة (§5.2) #}
+                      <div class="btn-group btn-group-sm" role="group"
+                           aria-label="إجراءات {{ row.target }}">
+                        {% if row.referral.status == 'sent' %}
+                          <button type="button" class="btn btn-outline-secondary"
+                                  data-referral-act="received"
+                                  data-referral-id="{{ row.referral.pk }}"
+                                  title="استلمته الوحدة">استلم</button>
+                        {% endif %}
+                        {% if can_distribute %}
+                          <button type="button" class="btn btn-outline-primary"
+                                  data-followup-activate="{{ row.referral.pk }}"
+                                  data-followup-target="{{ row.target }}"
+                                  title="حوّلها إلى «للإجراء» بموعد">فعِّل متابعة</button>
+                        {% endif %}
+                      </div>
                     {% elif row.is_open %}
                       <div class="btn-group btn-group-sm" role="group"
                            aria-label="إجراءات {{ row.target }}">

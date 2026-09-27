@@ -14,6 +14,8 @@ import subprocess
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+
+from .helpers import staff_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
@@ -30,6 +32,7 @@ def _token_owner_ok(data, user):
 
 
 @login_required
+@staff_required
 def scan_settings_page(request):
     """صفحة حالة الماسح (وكيل NAPS2 المحلي) — الحالة تُجلب عميلياً عبر JS."""
     return render(request, 'core/scan_settings.html', {})

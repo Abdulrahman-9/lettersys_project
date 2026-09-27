@@ -73,8 +73,8 @@ def api_distribute(request, pk):
 @require_http_methods(['POST'])
 def api_referral_action(request, pk, referral_id):
     """نقلةُ حالةٍ على صفّ إحالة، أو تنبيهٌ عليه."""
-    from core.referral_service import (mark_done, mark_received, mark_returned,
-                                       send_reminder)
+    from core.referral_service import (activate_followup, mark_done, mark_received,
+                                       mark_returned, send_reminder)
 
     referral = scope_referrals_for(request.user).filter(
         pk=referral_id, book_id=pk).select_related('book').first()
@@ -84,6 +84,9 @@ def api_referral_action(request, pk, referral_id):
     data = _json(request)
     note = (data.get('note') or '').strip()
     handlers = {
+        'activate': lambda: activate_followup(
+            referral, by=request.user, due_date=_date(data.get('due_date')),
+            margin=(data.get('margin') or '').strip()),
         'received': lambda: mark_received(referral, by=request.user),
         'done': lambda: mark_done(referral, by=request.user, note=note),
         'returned': lambda: mark_returned(referral, by=request.user, note=note),
@@ -165,51 +168,6 @@ def api_register_here(request, pk):
 
     return JsonResponse({'success': True, 'number': row.number,
                          'message': 'قُيّد بالرقم %s.' % (row.number or '(بلا رقم)')})
-
-
-@login_required
-@require_http_methods(['POST'])
-def api_archive_book(request, pk):
-    """«تمامُ أرشفة» — والحقيقةُ كلُّها في `core/archive_service.py`."""
-    from core.archive_service import archive_book
-
-    book = _book(request, pk)
-    if book is None:
-        return _missing()
-
-    data = _json(request)
-    try:
-        moment = archive_book(book, by=request.user,
-                              place=data.get('place') or '',
-                              note=data.get('note') or '')
-    except ValidationError as exc:
-        return _bad(exc)
-    except PermissionDenied as exc:
-        return _denied(exc)
-
-    return JsonResponse({'success': True, 'message': 'قُيّد تمامُ الأرشفة — %s.'
-                         % (moment.note or 'بلا موضعِ حفظ')})
-
-
-@login_required
-@require_http_methods(['POST'])
-def api_reopen_archive(request, pk):
-    """فتحُ مؤرشَفٍ بسببٍ مسجَّل — ولا يمحو أثرَ حفظه."""
-    from core.archive_service import reopen_archive
-
-    book = _book(request, pk)
-    if book is None:
-        return _missing()
-
-    try:
-        reopen_archive(book, by=request.user, reason=_json(request).get('reason') or '')
-    except ValidationError as exc:
-        return _bad(exc)
-    except PermissionDenied as exc:
-        return _denied(exc)
-
-    return JsonResponse({'success': True,
-                         'message': 'أُخرج من الأرشيف — والسببُ مسجَّل.'})
 
 
 @login_required

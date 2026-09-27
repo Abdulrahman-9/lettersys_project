@@ -21,6 +21,8 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+
+from core.views.helpers import staff_required
 from django.core.paginator import Paginator
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
@@ -301,10 +303,8 @@ def mail_thread(request, thread_id):
 # ══════════════════════════════════════════════════════
 
 @login_required
+@staff_required
 def mail_settings(request):
-    if not request.user.is_staff:
-        return HttpResponseForbidden("غير مصرح لك بالوصول لهذه الصفحة")
-
     from core.models import EmailSettings
     cfg = EmailSettings.get()
 
@@ -356,10 +356,8 @@ def _update_email_settings(cfg, data):
 # ══════════════════════════════════════════════════════
 
 @login_required
+@staff_required
 def mail_templates(request):
-    if not request.user.is_staff:
-        return HttpResponseForbidden("غير مصرح لك بالوصول لهذه الصفحة")
-
     from core.models import EmailTemplate
     templates = EmailTemplate.objects.order_by('applicable_kind', 'name')
 
@@ -371,11 +369,9 @@ def mail_templates(request):
 
 @login_required
 @require_http_methods(['GET', 'POST'])
+@staff_required
 def mail_template_edit(request, template_id=None):
     """Create new template or edit existing one."""
-    if not request.user.is_staff:
-        return HttpResponseForbidden("غير مصرح لك بالوصول لهذه الصفحة")
-
     from core.models import EmailTemplate
     instance = None
     if template_id:

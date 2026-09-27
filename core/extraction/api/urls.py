@@ -14,13 +14,14 @@ from .endpoints import (
     smart_extract_direct,
     smart_extract_stream,
     scan_token_retrieve,
-    suggestions_api,
-)
+    suggestions_api, subject_box_read, subject_box_confirm)
 
 urlpatterns = [
     path('extract/smart/',                         smart_extract_direct,    name='ai_smart_extract'),
     path('extract/smart/stream/',                  smart_extract_stream,    name='ai_smart_extract_stream'),
     path('extract/scan-token/<str:token>/',        scan_token_retrieve,     name='ai_scan_token'),
+    path('extract/subject-box/read/',              subject_box_read,        name='ai_subject_box_read'),
+    path('extract/subject-box/confirm/',           subject_box_confirm,     name='ai_subject_box_confirm'),
     path('suggestions/',                           suggestions_api,          name='ai_suggestions'),
     path('extract/',                               start_extraction,         name='ai_start_extraction'),
     path('extract/<int:attachment_id>/',           get_extraction_result,    name='ai_get_extraction'),

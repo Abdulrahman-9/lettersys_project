@@ -367,6 +367,7 @@ def smart_extract_direct(request):
                 'title_confidence': result.title_confidence,
                 # اقتراحُ الموضوع الضعيف — المسارات الثلاثة تتساوى حمولةً
                 'title_suggestion': getattr(result, 'title_suggestion', None),
+                'subject_box_proposal': getattr(result, 'subject_box_proposal', None),
                 'issuing_entity': result.issuing_entity_name,
                 'issuing_entity_confidence': result.issuing_entity_confidence,
                 'issuing_entity_matches': slim_entity_matches(result.issuing_entity_matches),
@@ -590,3 +591,63 @@ def suggestions_api(request):
         fallback_used = True
 
     return _api_response(True, 'ok', details={'items': values, 'fallback': fallback_used})
+
+
+# ── «أين الموضوع؟» — قراءةُ صندوقٍ وتأكيدُه (قرارُ المالك 2026‑09‑11) ────────
+@login_required
+@require_http_methods(['POST'])
+@rate_limit('subject_box', max_attempts=60, window_seconds=60, by='user')
+def subject_box_read(request):
+    """يقرأ الموضوعَ من صندوقٍ اختاره الكاتبُ على صفحةٍ محفوظةٍ مؤقّتاً بالرمز.
+    الجسمُ JSON: ``{page_token, box:{x,y,w,h}}`` ⟵ ``{text, raw, accepted, reason}``."""
+    import io
+    import json
+
+    from django.core.cache import cache
+    from PIL import Image as PILImage
+
+    from core.extraction import subject_crop as sc
+
+    try:
+        data = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'message': 'جسمٌ غيرُ صالح'}, status=400)
+    token = str(data.get('page_token') or '')
+    raw = cache.get('subject_page:' + token) if token else None
+    if not raw:
+        return JsonResponse({'success': False, 'message': 'انتهت صلاحيةُ الصفحة — أعِد الاستخراج'}, status=410)
+    img = PILImage.open(io.BytesIO(raw))
+    out = sc.read_box(img, data.get('box') or {})
+    return JsonResponse({'success': True, **out})
+
+
+@login_required
+@require_http_methods(['POST'])
+@rate_limit('subject_box_confirm', max_attempts=60, window_seconds=60, by='user')
+def subject_box_confirm(request):
+    """يُعلّم الجهةَ من صندوقٍ **قُبل نصُّه بلا تعديل**. ``{page_token, entity_id, box,
+    text, edited}`` ⟵ ``{learned: bool, samples: n, gate: bool}``. المعدَّلُ لا يُعلّم."""
+    import json
+
+    from django.core.cache import cache
+
+    from core.extraction import subject_crop as sc
+
+    try:
+        data = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'message': 'جسمٌ غيرُ صالح'}, status=400)
+    entity_id = data.get('entity_id')
+    if not entity_id:
+        return JsonResponse({'success': True, 'learned': False, 'samples': 0, 'gate': False,
+                             'message': 'بلا جهةٍ مُصدِرة معروفة — لا تعلّم'})
+    if data.get('edited'):
+        n = len(sc.samples_of(entity_id))
+        return JsonResponse({'success': True, 'learned': False, 'samples': n,
+                             'gate': sc.learned_box(entity_id) is not None})
+    lines = cache.get('subject_lines:' + str(data.get('page_token') or '')) or []
+    saved = sc.record_sample_with_anchor(entity_id, data.get('box') or {}, data.get('text') or '',
+                                         lines, by=request.user)
+    n = len(sc.samples_of(entity_id))
+    return JsonResponse({'success': True, 'learned': saved is not None, 'samples': n,
+                         'gate': sc.learned_box(entity_id) is not None})
