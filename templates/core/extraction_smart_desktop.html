@@ -15,7 +15,7 @@
 @keyframes sasPulse{0%,100%{opacity:.35}50%{opacity:1}}
 .scan-agent-status[data-state=ready]{color:#166534;background:#dcfce7}
 .scan-agent-status[data-state=scanning]{color:#92400e;background:#fef3c7}
-.scan-agent-status[data-state=unavailable],.scan-agent-status[data-state=no_naps2],.scan-agent-status[data-state=no_device]{color:#991b1b;background:#fee2e2}
+.scan-agent-status[data-state=unavailable],.scan-agent-status[data-state=untrusted],.scan-agent-status[data-state=no_naps2],.scan-agent-status[data-state=no_device]{color:#991b1b;background:#fee2e2}
 /* ── لوحة حالة/تعليمات وكيل المسح (popover لكل حالة) ── */
 .scan-agent-wrap{position:relative;display:inline-flex}
 /* موضع fixed يُحسب بالـJS (_positionAgentHelp) ويُقصَر داخل الشاشة — لا يخرج عن الحوّاف مهما كان مكان الزرّ */
@@ -63,6 +63,7 @@
 .preview-scan-status .scan-agent-status[data-state=ready]::before{background:#6ee7b7}
 .preview-scan-status .scan-agent-status[data-state=scanning]::before{background:#fcd34d}
 .preview-scan-status .scan-agent-status[data-state=unavailable]::before,
+.preview-scan-status .scan-agent-status[data-state=untrusted]::before,
 .preview-scan-status .scan-agent-status[data-state=no_naps2]::before,
 .preview-scan-status .scan-agent-status[data-state=no_device]::before{background:#fca5a5}
 .preview-scan-status .scan-auto-badge{font-size:0;gap:0;color:#f0fdfa;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);padding:.28rem .5rem}
@@ -639,7 +640,7 @@
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
 <script src="{% static 'js/subject_locate.js' %}?v=20260929exc"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20261007"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20261007lan"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>

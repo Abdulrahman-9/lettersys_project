@@ -12,10 +12,18 @@
 3. المسارُ القديم ``agent-token/`` انتهى إلى 404: نقطةٌ اسمُها «توكِن» ولا تُعيد توكِناً
    مصيدةٌ لمن يقرأ الشيفرة بعدنا.
 """
+import io
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+import unittest
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth.models import User
-from django.test import Client, TestCase, override_settings
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 REMOTE = '172.16.2.50'          # كاتبةٌ على الشبكة المحلّيّة
@@ -168,3 +176,109 @@ class NetAddrHelperTests(TestCase):
         from core import network_views
         from core.netaddr import is_lan_peer
         self.assertIs(network_views._is_lan_peer, is_lan_peer)
+
+
+# ════════════ النصفُ الآخر: ما يفعله المتصفّح ════════════
+# النقطةُ الخلفيّة وحدَها لا تُثبت أنّ الميزةَ حيّة: الواجهةُ كانت لا تزال تنادي
+# ``agent-token/`` المحذوفة (404) وتُرسل ``X-LetterSys-Token`` التي لم يعد الوكيلُ
+# يعلنها في ``Access-Control-Allow-Headers`` — فالطلبُ الاستباقيّ يسقط. هذان الصفّان
+# يحرسان الطرفَ الذي لا يراه اختبارُ Django.
+
+class ScanFrontendContractTests(SimpleTestCase):
+    """عقدُ مصدرٍ: لا نقطةَ ميّتةً ولا ترويسةَ توكِن في الشيفرة المُشحونة."""
+
+    def _read(self, rel):
+        with io.open(str(settings.BASE_DIR / rel), encoding='utf-8') as f:
+            return f.read()
+
+    def test_frontend_calls_agent_info_not_the_deleted_endpoint(self):
+        for rel in ('static/extraction_smart.js', 'templates/core/scan_settings.html'):
+            src = self._read(rel)
+            self.assertFalse('agent-token' in src, '%s ما يزال ينادي النقطةَ المحذوفة (404)' % rel)
+            self.assertTrue('/books/api/scan/agent-info/' in src, '%s لا يسأل agent-info' % rel)
+
+    def test_frontend_sends_no_token_header(self):
+        """الوكيلُ لا يعلن إلّا ``Content-Type``؛ أيُّ ترويسةٍ أخرى تُفشل الطلبَ الاستباقيّ."""
+        for rel in ('static/extraction_smart.js', 'templates/core/scan_settings.html'):
+            self.assertFalse('X-LetterSys-Token' in self._read(rel), rel)
+
+    def test_browser_probes_the_local_agent_itself(self):
+        """المسبارُ على حلقة المتصفّح — لا على منفذ الخادم (وهو الجهازُ الخطأ للكاتبة)."""
+        src = self._read('static/extraction_smart.js')
+        self.assertTrue("`http://127.0.0.1:${port}`" in src, 'المسبار لا يبني عنوان الحلقة المحلّيّة')
+        self.assertTrue("'/agent/health'" in src, 'لا نداءَ /agent/health في الواجهة')
+
+
+# ملفُّ ``node`` صغيرٌ يحمّل السكربت المُشحون بمُجسَّمات DOM ثمّ يستدعي
+# ``_renderAgentHelp`` مرّتين: مرّةً كاتبةً على الشبكة ومرّةً كونسولَ الخادم.
+_HELP_HARNESS = r"""
+const fs = require('fs');
+const vm = require('vm');
+const els = {
+  scanAgentHelp: { innerHTML: '', hidden: true, addEventListener() {}, setAttribute() {},
+                   querySelector: () => null, contains: () => false },
+  scanAgentStatus: { dataset: { state: 'unavailable' }, addEventListener() {},
+                     setAttribute() {}, textContent: '', title: '' },
+};
+global.document = {
+  readyState: 'loading', cookie: '', addEventListener() {},
+  getElementById: (id) => els[id] || null,
+  querySelector: () => null, querySelectorAll: () => [],
+  createElement: () => ({ style: {}, dataset: {}, appendChild() {}, setAttribute() {} }),
+  body: { appendChild() {} },
+};
+global.window = global;
+global.location = { origin: 'http://192.0.2.10:8000', search: '', pathname: '/' };
+global.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+global.sessionStorage = global.localStorage;
+global.navigator = { userAgent: 'node' };
+global.fetch = () => Promise.reject(new Error('no network in this probe'));
+global.AbortController = class { constructor() { this.signal = {}; } abort() {} };
+
+const src = fs.readFileSync(process.argv[2], 'utf8');
+vm.runInThisContext(src + '\n;globalThis.__ESS = ExtractionSmartSystem;',
+                    { filename: 'extraction_smart.js' });
+
+function render(canStart) {
+  const self = { _scanDevices: [], _agentServerCanStart: canStart, _positionAgentHelp() {} };
+  els.scanAgentHelp.innerHTML = '';
+  globalThis.__ESS.prototype._renderAgentHelp.call(self, 'unavailable');
+  return els.scanAgentHelp.innerHTML;
+}
+const remote = render(false), consoleSide = render(true);
+console.log(JSON.stringify({
+  remote_has_start: remote.includes('data-action="start"'),
+  console_has_start: consoleSide.includes('data-action="start"'),
+  remote_has_recheck: remote.includes('data-action="recheck"'),
+  remote_tells_her_own_pc: remote.includes('هذا الجهاز'),
+}));
+"""
+
+
+@unittest.skipUnless(shutil.which('node'), 'node غير متوفّر — اختبارُ سلوكِ الواجهة يُتجاوَز')
+class ScanHelpPanelButtonTests(SimpleTestCase):
+    """سلوكٌ حقيقيّ (لا عقدُ نصٍّ): زرُّ «شغّل الوكيل الآن» لكونسول الخادم وحدَه.
+
+    الكاتبةُ على الشبكة لو ضغطته لولّدت عمليّةً على **الخادم** — بلا ماسحٍ لها هناك،
+    والخادمُ يرفضها بـ403 أصلاً. فالزرُّ وعدٌ كاذب، ووجودُه هو العطب.
+    """
+
+    def test_start_button_only_on_the_server_console(self):
+        js = str(settings.BASE_DIR / 'static' / 'extraction_smart.js')
+        tmp = tempfile.mkdtemp()
+        try:
+            harness = os.path.join(tmp, 'help_harness.js')
+            with io.open(harness, 'w', encoding='utf-8') as f:
+                f.write(_HELP_HARNESS)
+            out = subprocess.run([shutil.which('node'), harness, js],
+                                 capture_output=True, text=True, encoding='utf-8', timeout=120)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            got = json.loads(out.stdout.strip().splitlines()[-1])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        self.assertFalse(got['remote_has_start'],
+                         'زرُّ تشغيل الوكيل ظهر لكاتبةٍ على الشبكة (server_can_start=false)')
+        self.assertTrue(got['console_has_start'], 'الزرُّ غاب عن كونسول الخادم')
+        self.assertTrue(got['remote_has_recheck'], 'لا زرَّ «إعادة الفحص» للكاتبة')
+        self.assertTrue(got['remote_tells_her_own_pc'],
+                        'رسالةُ الكاتبة لا تقول لها إنّ الوكيلَ يُشغَّل على حاسبتها')

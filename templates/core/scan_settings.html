@@ -56,7 +56,8 @@
     <div class="settings-card-title"><i class="bi bi-info-circle"></i> التشغيل</div>
     <ol class="muted" style="padding-inline-start:1.2rem;line-height:1.9">
       <li>ثبّت <strong>NAPS2</strong> (مجاني) من <a href="https://www.naps2.com/" target="_blank" rel="noopener">naps2.com</a>.</li>
-      <li>شغّل وكيل المسح: <span class="code-inline">scan_agent\run_agent.bat</span> — أو ضع اختصاره في مجلد بدء التشغيل (<span class="code-inline">shell:startup</span>) ليعمل تلقائياً.</li>
+      <li>شغّل وكيل المسح <strong>على هذا الجهاز</strong> (لا على الخادم — الماسح موصولٌ بجهازك، والوكيلُ هو الذي يشغّله): <span class="code-inline">scan_agent\run_agent.bat</span> — أو ضع اختصاره في مجلد بدء التشغيل (<span class="code-inline">shell:startup</span>) ليعمل تلقائياً.</li>
+      <li>على حاسبة الكاتبة يفعل ذلك مسؤولُ النظام مرّةً واحدة بـ<span class="code-inline">install_agent.bat</span> (يكتب قائمةَ الأصول المسموحة ويضع اختصارَ بدء التشغيل).</li>
       <li>ضع الورق في الـADF واضغط «مسح من السكانر» في صفحة الإدخال الذكي.</li>
     </ol>
     <div class="mt-2">
@@ -81,41 +82,65 @@
     if (lbl) lbl.textContent = text;
   };
 
+  // الوكيلُ يعمل على **هذا الجهاز** (يشغّل ماسحَه) ويستمع على حلقته المحلّيّة وحدَها،
+  // فالخادمُ لا يراه: هو يقول المنفذَ فقط، والمتصفّحُ هو الذي يسأل الوكيلَ مباشرةً.
+  const withTimeout = (url, opts, ms) => {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), ms || 2500);
+    return fetch(url, Object.assign({}, opts, { signal: ctrl.signal })).finally(() => clearTimeout(id));
+  };
+
   async function check() {
     const list = document.getElementById('deviceList');
     set('dotAgent', 'lblAgent', false, 'جارٍ الفحص…');
     set('dotNaps2', 'lblNaps2', false, 'جارٍ الفحص…');
     list.innerHTML = '<li class="muted">جارٍ الفحص…</li>';
 
-    let td;
+    let port = 17865;
     try {
-      td = await (await fetch('/books/api/scan/agent-token/', { credentials: 'same-origin' })).json();
-    } catch (e) { td = { available: false }; }
+      const info = await (await fetch('/books/api/scan/agent-info/', { credentials: 'same-origin' })).json();
+      if (info && info.port) port = info.port;
+    } catch (e) { /* المنفذُ الافتراضيّ يكفي — الوكيلُ على حلقة هذا الجهاز */ }
 
-    if (!td.available) {
-      set('dotAgent', 'lblAgent', false, 'وكيل المسح غير مشغّل — شغّل run_agent.bat');
-      set('dotNaps2', 'lblNaps2', false, 'NAPS2: غير معروف (الوكيل متوقف)');
-      list.innerHTML = '<li class="muted">شغّل وكيل المسح أولاً</li>';
+    const bases = ['http://127.0.0.1:' + port, 'http://localhost:' + port];
+    let base = null, hd = null;
+    for (const b of bases) {
+      try {
+        const r = await withTimeout(b + '/agent/health', {}, 2500);
+        if (r.ok) { hd = await r.json(); base = b; break; }
+      } catch (e) { /* جرّب المضيف التالي */ }
+    }
+
+    if (!hd) {
+      // أيردُّ شيءٌ على المنفذ ولو رفض أصلَنا؟ مسبارُ no-cors ينجح حتّى على 403 بلا CORS،
+      // فنفرّق «غير مشغّل» عن «يعمل ولا يثق بعنوان هذا الخادم» بدل رسالةٍ واحدةٍ مضلّلة.
+      let responding = false;
+      for (const b of bases) {
+        try { await withTimeout(b + '/agent/health', { mode: 'no-cors' }, 2500); responding = true; break; }
+        catch (e) { /* جرّب المضيف التالي */ }
+      }
+      if (responding) {
+        set('dotAgent', 'lblAgent', false,
+            'الوكيل يعمل هنا لكنه يرفض ' + window.location.origin + ' — أضف هذا العنوان إلى allowed_origins ثمّ أعد تشغيله');
+        list.innerHTML = '<li class="muted">أضف عنوان هذا الخادم إلى %LOCALAPPDATA%\\LetterSys\\agent.json (مسؤولُ النظام)</li>';
+      } else {
+        set('dotAgent', 'lblAgent', false,
+            'وكيل المسح غير مشغّل على هذا الجهاز — شغّل «LetterSys Scan Agent» على الجهاز الذي أمامك (لا على الخادم)');
+        list.innerHTML = '<li class="muted">شغّل وكيل المسح على هذا الجهاز أوّلاً</li>';
+      }
+      set('dotNaps2', 'lblNaps2', false, 'NAPS2: غير معروف (لا جواب من الوكيل)');
       return;
     }
 
-    let hd;
-    try {
-      hd = await (await fetch(td.agent_url + '/agent/health')).json();
-    } catch (e) {
-      set('dotAgent', 'lblAgent', false, 'تعذّر الاتصال بالوكيل');
-      set('dotNaps2', 'lblNaps2', false, 'NAPS2: غير معروف');
-      list.innerHTML = '<li class="muted">تعذّر الاتصال</li>';
-      return;
-    }
-    set('dotAgent', 'lblAgent', true, 'وكيل المسح يعمل (إصدار ' + (hd.version || '?') + ')');
+    set('dotAgent', 'lblAgent', true, 'وكيل المسح يعمل على هذا الجهاز (إصدار ' + (hd.version || '?') + ')');
     set('dotNaps2', 'lblNaps2', !!hd.naps2_available,
         hd.naps2_available ? ('NAPS2 مثبّت: ' + hd.naps2_path) : 'NAPS2 غير مثبّت — ثبّته من naps2.com');
 
     if (!hd.naps2_available) { list.innerHTML = '<li class="muted">ثبّت NAPS2 لعرض الماسحات</li>'; return; }
 
     try {
-      const dd = await (await fetch(td.agent_url + '/agent/devices', { headers: { 'X-LetterSys-Token': td.token } })).json();
+      // بلا ترويسةِ توكِن: الوكيلُ يحرس نفسه بـHost وOrigin، وترويسةٌ زائدةٌ تُفشل الطلبَ الاستباقيّ.
+      const dd = await (await withTimeout(base + '/agent/devices', {}, 20000)).json();
       const devs = dd.devices || [];
       list.innerHTML = devs.length
         ? devs.map(d => `<li><i class="bi bi-printer-fill text-primary"></i> ${d.name} <span class="muted">(${d.driver})</span></li>`).join('')
