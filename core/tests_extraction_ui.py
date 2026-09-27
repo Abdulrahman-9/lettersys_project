@@ -5,7 +5,7 @@
 - بطاقتا P1 (quality-hero + needs_review) حاضرتان في وضع الإدخال.
 """
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -251,3 +251,44 @@ class SmartDesktopEditGateTests(TestCase):
 
         self.assertEqual(rows.get('7101'), STUB_TITLE)
         self.assertEqual(rows.get('7100'), 'كتابُ القسم')
+
+
+class StaleExtractionGuardTests(SimpleTestCase):
+    """بلاغُ المالك 2026‑09‑15: نتيجةُ استخراجٍ لملفٍّ أُلغي كانت تُطبَّق على النموذج
+    الجديد، و«تفريغُ الحقول» يمسح ثمّ يعود البثُّ فيملأ. الحارسُ: **رمزُ جيل**."""
+
+    SRC = 'static/extraction_smart.js'
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with open(cls.SRC, encoding='utf-8') as fh:
+            cls.src = fh.read()
+
+    def test_a_generation_token_exists_and_is_checked_before_every_apply(self):
+        self.assertIn('_bumpExtractGen()', self.src)
+        self.assertIn('_isStaleGen(gen)', self.src)
+        # يُحجز عند بدء الاستخراج ويُمرَّر إلى البثّ
+        self.assertIn('const gen = this._bumpExtractGen();', self.src)
+        self.assertIn('this._streamExtract(gen)', self.src)
+        self.assertIn('async _streamExtract(gen) {', self.src)
+
+    def test_clearing_the_file_or_the_form_cancels_the_running_extraction(self):
+        for fn in ('clearFile() {', 'clearForm() {'):
+            i = self.src.index(fn)
+            body = self.src[i:i + 900]
+            self.assertIn('_cancelRunningExtraction()', body,
+                          f'{fn} لا يوقف الاستخراجَ الجاري — سيعود البثُّ فيملأ الحقول')
+
+    def test_cancelling_aborts_the_stream_and_resets_extraction_state(self):
+        i = self.src.index('_cancelRunningExtraction() {')
+        body = self.src[i:i + 1200]
+        for marker in ('_extractAbort?.abort()', '_streamFilled = new Set()',
+                       '_hideExtractionOverlay', 'scanToken = null', 'SubjectLocate?.hide'):
+            self.assertIn(marker, body, f'الإلغاء لا يشمل: {marker}')
+
+    def test_a_late_result_is_dropped_and_announced_not_swallowed(self):
+        i = self.src.index('if (this._isStaleGen(gen)) {\n            // وصلت نتيجةُ ملفٍّ سابق')
+        body = self.src[i:i + 500]
+        self.assertIn('أُهملت', body)
+        self.assertIn('return null;', body)

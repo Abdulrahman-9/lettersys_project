@@ -3710,6 +3710,9 @@ class ExtractionSmartSystem {
 
     clearFile() {
         console.log('[ExtractionSmart] clearFile() called');
+        // حذفُ الصورة يُنهي استخراجَها: كان البثُّ يواصل ملءَ الحقول بعد الحذف
+        // (بلاغُ المالك 2026‑09‑15) فتختلط قيمُ مستندين.
+        this._cancelRunningExtraction();
         this.currentFile = null;
         this.scannedFiles = [];
         // أخفِ بانر التحذير عند تفريغ الملف
@@ -3808,6 +3811,39 @@ class ExtractionSmartSystem {
         }
     }
 
+    /** **رمزُ الجيل** (بلاغُ المالك 2026‑09‑15): كلُّ استخراجٍ يحمل رقمَ جيله، وكلُّ
+     *  حذفِ صورةٍ أو تفريغِ حقولٍ يرفع الرقم. نتيجةٌ من جيلٍ مضى **لا تُطبَّق**:
+     *  كان بثُّ الملفّ الملغى يواصل الكتابةَ فوق نموذج الملفّ الجديد، فتجتمع في
+     *  النموذج حقولٌ من مستندين. الجهاتُ كانت أظهرَ الضحايا لأنّها لا تُحمَّل إلّا
+     *  من حمولة `done` المتأخّرة، فتُمسح بالتفريغ ثمّ تعود. */
+    _bumpExtractGen() {
+        this._extractGen = (this._extractGen || 0) + 1;
+        return this._extractGen;
+    }
+
+    _isStaleGen(gen) {
+        return gen !== this._extractGen;
+    }
+
+    /** يُنهي أيَّ استخراجٍ جارٍ ويُبطل نتيجتَه — يُستدعى عند حذف الصورة وعند التفريغ. */
+    _cancelRunningExtraction() {
+        const running = !!this._extractAbort && !this._extractStopped;
+        this._bumpExtractGen();
+        try { this._extractAbort?.abort(); } catch (_) {}
+        this._extractAbort = null;
+        this._extractStopped = true;
+        this._streamFilled = new Set();
+        try { this._hideExtractionOverlay?.(); } catch (_) {}
+        try { _displayedSuggestions.clear(); } catch (_) {}
+        this.scanToken = null;
+        try { window.__subjectSample = null; window.SubjectLocate?.hide?.(); } catch (_) {}
+        const card = document.getElementById('titleSuggest');
+        if (card) card.hidden = true;
+        const btn = document.getElementById('extractButton');
+        if (btn) { btn.disabled = false; btn.innerHTML = '🔍 استخراج'; }
+        return running;
+    }
+
     extractData() {
         if (!this.currentFile) {
             this.showToast(this.t('uploadRequired'), 'warning');
@@ -3824,14 +3860,15 @@ class ExtractionSmartSystem {
         this._streamFilled = new Set();
         this._extractStopped = false;
         this._extractAbort = new AbortController();
+        const gen = this._bumpExtractGen();
         this._showExtractionOverlay(
             'جارٍ تجهيز المستند…',
             'ستُملأ الحقول تِباعاً فور استخراج كلٍّ منها',
             () => this._stopExtraction());
 
-        this._streamExtract()
+        this._streamExtract(gen)
             .then((data) => {
-                if (this._extractStopped) return;
+                if (this._extractStopped || this._isStaleGen(gen)) return;
                 const fallbackFlag = (data.details && data.details.fallback) || (data.message && data.message.toLowerCase().includes('mock'));
                 if (fallbackFlag) {
                     const reason = data.details && data.details.reason ? ` (سبب: ${data.details.reason})` : '';
@@ -3876,7 +3913,7 @@ class ExtractionSmartSystem {
     /** يبثّ الاستخراج ويملأ الحقول تِباعاً، ويُعيد الحصيلة النهائية.
      *  مسارٌ واحد يحلّ محلّ النداء المتزامن القديم: تقدّم حقيقي من الأنبوب + إيقاف
      *  يُبقي ما وصل (بدل انتظار كلّ شيء ثم لا شيء عند القطع). */
-    async _streamExtract() {
+    async _streamExtract(gen) {
         const form = new FormData();
         form.append('file', this.currentFile);
         // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
@@ -3924,18 +3961,29 @@ class ExtractionSmartSystem {
                 if (!line) continue;
                 let ev;
                 try { ev = JSON.parse(line); } catch (_) { continue; }   // سطر تالف يُتخطّى
-                if (ev.type === 'stage') this._onExtractStage(ev);
+                if (this._isStaleGen(gen)) {           // أُلغيت الصورةُ أو فُرّغت الحقول
+                    try { this._extractAbort?.abort(); } catch (_) {}
+                    return null;
+                }
+                if (ev.type === 'stage') this._onExtractStage(ev, gen);
                 else if (ev.type === 'error') throw new Error(ev.message || this.t('extractFail'));
                 else if (ev.type === 'done') final = ev;
             }
         }
         if (!final) throw new Error('انقطع البثّ قبل اكتمال الاستخراج — أعد المحاولة.');
+        if (this._isStaleGen(gen)) {
+            // وصلت نتيجةُ ملفٍّ سابق: تُهمَل **ويُعلَن إهمالُها** — الصمتُ هنا يترك
+            // الكاتبَ يشكّ في مصدر ما يراه (بلاغُ المالك 2026‑09‑15).
+            this.showToast('وصلت نتيجةُ استخراجٍ لملفٍّ سابق — أُهملت.', 'info', 5000);
+            return null;
+        }
         this.applyExtractionResult(final);   // الحصيلة الكاملة (جهات + مرشّحات + ملخّص الثقة)
         return final;
     }
 
     /** حدث مرحلة: رسالة تقدّم صادقة من الأنبوب + ملء ما اكتمل من حقول فوراً. */
-    _onExtractStage(ev) {
+    _onExtractStage(ev, gen) {
+        if (gen !== undefined && this._isStaleGen(gen)) return;
         this._applyPartialFields(ev.fields);
         const overlay = document.querySelector('#modalBody .extraction-loading-overlay');
         if (!overlay) return;
@@ -4763,6 +4811,11 @@ class ExtractionSmartSystem {
     // ===== Form Management =====
     clearForm() {
         console.log('[ExtractionSmart] clearForm() called');
+        // «تفريغُ الحقول» يعني إيقافَ ما يملؤها أيضاً — وإلّا عاد البثُّ فملأها
+        // بعد ثانيتين فبدا الزرُّ معطّلاً.
+        if (this._cancelRunningExtraction()) {
+            this.showToast('أُوقف الاستخراجُ الجاري مع التفريغ.', 'info', 4000);
+        }
 
         // Manual clear: void the active reservation for the current kind on the server.
         const kindSelect = document.getElementById('bookKind');
