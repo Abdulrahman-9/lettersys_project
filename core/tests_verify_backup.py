@@ -603,3 +603,17 @@ class ExpectLiveTests(CommandHarness, TestCase):
                                      expect_live=True)
         self.assertEqual(code, bv.EXIT_MISMATCH)
         self.assertIn('django_migrations.core_head', out)
+
+class LiveFingerprintsReadRawColumnTests(TestCase):
+    """N25: بعد 0078 يفكّ الحقلُ المشفَّر عند ``values()``؛ البصمةُ يجب أن تُقرأ من العمود الخامّ.
+    العيّنةُ **تُفكّ فعلاً** (``FAKE_SECRET`` سلسلةُ Z لا تُفكّ فكانت تمرّ زائفاً)."""
+
+    def test_a_real_fernet_secret_is_fingerprinted_as_enc_not_plain(self):
+        from core.encryption import encrypt_text
+        from core.models import EmailSettings
+        real = encrypt_text('plaintextpassword')
+        mail = EmailSettings.get()
+        EmailSettings.objects.filter(pk=mail.pk).update(smtp_password=real, imap_password=real)
+        live = bv.live_fingerprints()
+        for col in ('smtp_password', 'imap_password'):
+            self.assertEqual(live['core_emailsettings'][col], {'prefix': 'enc::', 'len': len(real)})

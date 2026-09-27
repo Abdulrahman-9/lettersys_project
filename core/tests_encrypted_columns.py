@@ -3,7 +3,7 @@
 
 كلُّ اختبارٍ هنا يُطفَّر: تعطيلُ الحارس (سطرُ `find_plaintext` في `db_healthcheck`
 أو في `core/checks.py`) يجب أن يُحمّرها. والقيمةُ الصريحةُ تُكتب بـ
-``QuerySet.update()`` عمداً — هو الطريقُ نفسُه الذي يتخطّى ``save()`` كما يفعل
+SQL خامّاً عمداً — بعد 8.6‑أ صار ``update()`` نفسُه يشفّر، فالطريقُ الوحيدُ الباقي للصريح ما يتخطّى الـORM كما يفعل
 ``loaddata`` بـ``raw=True``، أي **إعادةُ إنتاجٍ للحادثة لا محاكاةٌ لها**.
 """
 
@@ -19,6 +19,16 @@ from core.models import AIIntegrationSettings, EmailSettings
 
 #: قيمةٌ صريحةٌ مميّزة — يُتحقَّق أنّها **لا تظهر** في أيّ مخرَجٍ للحارس.
 PLAIN = 'p4ssw0rd-in-the-clear'
+
+
+def _plant(model, column, pk, value):
+    """زرعُ قيمةٍ **بـSQL خامّ**: بعد 8.6‑أ يشفّر ``QuerySet.update()`` أيضاً
+    (``get_prep_value``)، فالطريقُ الوحيدُ الباقي للنصّ الصريح هو ما يتخطّى الـORM
+    كلَّه — ``pg_restore`` لنسخةٍ معطوبة أو يدٌ على psql — وهذا ما يحرسه الفحص."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f'UPDATE {connection.ops.quote_name(model._meta.db_table)} SET '
+            f'{connection.ops.quote_name(column)} = %s WHERE id = %s', [value, pk])
 
 
 def _raw(model, column, pk):
@@ -57,7 +67,7 @@ class PlaintextScanTests(TestCase):
 
     def test_plaintext_row_written_around_save_is_found(self):
         settings_row = EmailSettings.get()
-        EmailSettings.objects.filter(pk=settings_row.pk).update(smtp_password=PLAIN)
+        _plant(EmailSettings, 'smtp_password', settings_row.pk, PLAIN)
 
         findings = find_plaintext()
 
@@ -69,7 +79,7 @@ class PlaintextScanTests(TestCase):
 
     def test_report_names_the_column_and_never_the_value(self):
         row = EmailSettings.get()
-        EmailSettings.objects.filter(pk=row.pk).update(imap_password=PLAIN)
+        _plant(EmailSettings, 'imap_password', row.pk, PLAIN)
 
         lines = plaintext_lines(find_plaintext())
 
@@ -93,7 +103,7 @@ class HealthcheckGuardTests(TestCase):
 
     def test_command_exits_nonzero_and_names_table_and_column(self):
         row = EmailSettings.get()
-        EmailSettings.objects.filter(pk=row.pk).update(smtp_password=PLAIN)
+        _plant(EmailSettings, 'smtp_password', row.pk, PLAIN)
 
         with self.assertRaises(CommandError):
             call_command('db_healthcheck', '--skip-model-check', verbosity=0)
@@ -102,7 +112,7 @@ class HealthcheckGuardTests(TestCase):
         from io import StringIO
 
         row = EmailSettings.get()
-        EmailSettings.objects.filter(pk=row.pk).update(smtp_password=PLAIN)
+        _plant(EmailSettings, 'smtp_password', row.pk, PLAIN)
         out = StringIO()
 
         with self.assertRaises(CommandError):
@@ -116,7 +126,7 @@ class HealthcheckGuardTests(TestCase):
     def test_guard_does_not_heal_the_row(self):
         """الشفاءُ الذاتيُّ يسكّ مفتاحاً ثالثاً صامتاً — الحارسُ يصرخ ولا يلمس."""
         row = EmailSettings.get()
-        EmailSettings.objects.filter(pk=row.pk).update(smtp_password=PLAIN)
+        _plant(EmailSettings, 'smtp_password', row.pk, PLAIN)
 
         with self.assertRaises(CommandError):
             call_command('db_healthcheck', '--skip-model-check', verbosity=0)
@@ -127,13 +137,13 @@ class HealthcheckGuardTests(TestCase):
 class BootCheckTests(TestCase):
     def test_silent_when_no_database_is_requested(self):
         row = EmailSettings.get()
-        EmailSettings.objects.filter(pk=row.pk).update(smtp_password=PLAIN)
+        _plant(EmailSettings, 'smtp_password', row.pk, PLAIN)
 
         self.assertEqual(check_encrypted_columns(None, databases=None), [])
 
     def test_error_when_a_database_is_requested(self):
         row = EmailSettings.get()
-        EmailSettings.objects.filter(pk=row.pk).update(smtp_password=PLAIN)
+        _plant(EmailSettings, 'smtp_password', row.pk, PLAIN)
 
         issues = check_encrypted_columns(None, databases=['default'])
 

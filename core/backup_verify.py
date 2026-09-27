@@ -391,6 +391,7 @@ def live_fingerprints():
     ``Book``/``Attachment`` بـ``all_objects``: المديرُ الافتراضيّ يُخفي المحذوفَ
     ناعماً فتُقارَن 13,194 بـ13,239 وتُعلَن «نسخةٌ ناقصة» وهي سليمة.
     """
+    from django.db import connection
     from django.contrib.auth.models import User
 
     from core.encryption import ENCRYPTED_PREFIX
@@ -440,8 +441,14 @@ def live_fingerprints():
 
     # البريد: بادئةٌ وطولٌ من الخام في القاعدة (لا عبر ``from_db`` الذي يفكّ).
     mail = {'rows': EmailSettings.objects.count()}
-    raw = EmailSettings.objects.values(
-        'smtp_password', 'imap_password', 'imap_sync_enabled', 'is_active').first()
+    # N25: قراءةٌ خامّة بـSQL — ``values()`` تمرّ بـ``from_db_value`` للحقل المشفَّر (0078) فتفكّه،
+    # فتُقرأ البصمةُ «plain» ويمرّ الحارسُ زائفاً على نسخةٍ سليمة أو مسرّبة سواء.
+    with connection.cursor() as cur:
+        cur.execute("select smtp_password, imap_password, imap_sync_enabled, is_active "
+                    "from core_emailsettings order by id limit 1")
+        row = cur.fetchone()
+    raw = (dict(zip(('smtp_password', 'imap_password', 'imap_sync_enabled', 'is_active'), row))
+           if row else None)
     if raw:
         for column in ('smtp_password', 'imap_password'):
             value = raw[column] or ''
@@ -453,7 +460,6 @@ def live_fingerprints():
         mail['is_active'] = 't' if raw['is_active'] else 'f'
     live['core_emailsettings'] = mail
 
-    from django.db import connection
     with connection.cursor() as cur:
         cur.execute("select name from django_migrations "
                     "where app='core' order by id desc limit 1")
