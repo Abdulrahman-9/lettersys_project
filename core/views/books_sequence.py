@@ -4,20 +4,34 @@ Book sequence/settings views extracted from books.py.
 """
 
 import logging
-import os
-import re
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
 from ..extraction.kinds import BOOK_KIND_CHOICES, normalize_book_kind
-from ..models import BookSequence
+from ..models import BookSequence, SystemSettings
 from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_int(raw):
+    """عددٌ صحيحٌ غيرُ سالب، أو ``None``. **لا ``isdigit()``.**
+
+    ``'²'.isdigit()`` صحيحٌ و``int('²')`` يرفع ``ValueError``: كان نمطُ
+    ``if raw.isdigit(): int(raw)`` يعطي 500 بعد أن حُفظت العدّاداتُ فعلاً
+    (والطلبُ غيرُ ذرّيّ — لا ``ATOMIC_REQUESTS``). و``isdecimal()`` لا يكفي
+    بديلاً: الأرقامَ العربيّةَ الهنديّة ('٤٥') ``isdecimal`` صحيحٌ لها
+    و``int`` يقبلها — فالحكمُ الصادقُ الوحيد هو ``int()`` نفسُه داخل حارس.
+    """
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value >= 0 else None
 
 
 @login_required
@@ -38,68 +52,76 @@ def sequence_settings(request):
         obj, _ = BookSequence.objects.get_or_create(kind=kind_value, defaults={'next_number': 1})
         sequences.append({'obj': obj, 'label': kind_label, 'kind': kind_value})
 
-    from django.conf import settings as dj_settings
-    current_expire = getattr(dj_settings, 'RESERVATION_EXPIRE_MINUTES', 45)
+    # مدّةُ الحجز بيانٌ في القاعدة لا سطرٌ في ``.env``. الشارةُ «مخصَّص» تُقاس
+    # بالمقارنة مع الافتراض، لا بـ``hasattr`` على كائن الإعدادات (كان يكذب:
+    # يعود «افتراضي» بعد كلّ إقلاع مهما ضُبط).
+    cfg = SystemSettings.get()
     reservation_settings = {
-        'expire_minutes': current_expire,
-        'is_custom': hasattr(dj_settings, 'RESERVATION_EXPIRE_MINUTES'),
+        'expire_minutes': cfg.reservation_expire_minutes,
+        'is_custom': (
+            cfg.reservation_expire_minutes != SystemSettings.RESERVATION_TTL_DEFAULT
+        ),
+        'ttl_min': SystemSettings.RESERVATION_TTL_MIN,
+        'ttl_max': SystemSettings.RESERVATION_TTL_MAX,
+        'ttl_default': SystemSettings.RESERVATION_TTL_DEFAULT,
     }
 
     if request.method == 'POST':
-        for seq in sequences:
-            prefix_key = f"prefix_{seq['kind']}"
-            number_key = f"next_number_{seq['kind']}"
-            new_prefix = request.POST.get(prefix_key, '').strip()
-            new_number = request.POST.get(number_key, '').strip()
-            update_fields = []
-            if new_prefix != seq['obj'].prefix:
-                seq['obj'].prefix = new_prefix
-                update_fields.append('prefix')
-            if new_number.isdigit() and int(new_number) != seq['obj'].next_number:
-                seq['obj'].next_number = int(new_number)
-                update_fields.append('next_number')
-            if update_fields:
-                seq['obj'].save(update_fields=update_fields + ['updated_at'])
+        ttl_error = None
+        # ذرّيّةٌ صريحة: لا ``ATOMIC_REQUESTS`` في هذا المشروع، وكان خطأُ تحليلٍ
+        # في حقل المدّة يترك العدّاداتَ محفوظةً والصفحةَ على 500.
+        with transaction.atomic():
+            for seq in sequences:
+                prefix_key = f"prefix_{seq['kind']}"
+                number_key = f"next_number_{seq['kind']}"
+                new_prefix = request.POST.get(prefix_key, '').strip()
+                new_number = _parse_int(request.POST.get(number_key, '').strip())
+                update_fields = []
+                if new_prefix != seq['obj'].prefix:
+                    seq['obj'].prefix = new_prefix
+                    update_fields.append('prefix')
+                if new_number is not None and new_number != seq['obj'].next_number:
+                    seq['obj'].next_number = new_number
+                    update_fields.append('next_number')
+                if update_fields:
+                    seq['obj'].save(update_fields=update_fields + ['updated_at'])
 
-        new_expire = request.POST.get('reservation_expire_minutes', '').strip()
-        if new_expire.isdigit() and 5 <= int(new_expire) <= 480:
-            _write_reservation_expire_setting(int(new_expire))
-            reservation_settings['expire_minutes'] = int(new_expire)
-            reservation_settings['is_custom'] = True
+            # المدى من ثوابت النموذج — لا رقمَ مكتوباً بيدٍ هنا ولا في القالب.
+            raw_expire = request.POST.get('reservation_expire_minutes', '').strip()
+            minutes = _parse_int(raw_expire) if raw_expire else None
+            if raw_expire and (
+                minutes is None
+                or not (SystemSettings.RESERVATION_TTL_MIN
+                        <= minutes
+                        <= SystemSettings.RESERVATION_TTL_MAX)
+            ):
+                # **الرفضُ يُقال**: كانت رسالةُ النجاح تُطلَق على كلّ طلبٍ، فقيمةٌ
+                # مرفوضةٌ تُسقَط بصمتٍ والصفحةُ تقول «حُفظ». حارسا ``min/max`` في
+                # القالب يمنعان متصفّحاً عاديّاً، لا طلباً مصنوعاً.
+                ttl_error = (
+                    'مدّةُ حجز الرقم مرفوضة: يجب أن تكون عدداً صحيحاً بين '
+                    f'{SystemSettings.RESERVATION_TTL_MIN} و'
+                    f'{SystemSettings.RESERVATION_TTL_MAX} دقيقة. بقيت على '
+                    f'{cfg.reservation_expire_minutes} دقيقة.'
+                )
+            elif minutes is not None:
+                # بلا ``except`` واسع: إن فشل الحفظُ فليظهر. الرسالةُ كانت تُطلَق
+                # دائماً حتّى حين تفشل الكتابةُ بصمت — «حُفظ» صار يعني حُفظ.
+                cfg.reservation_expire_minutes = minutes
+                cfg.save(update_fields=['reservation_expire_minutes', 'updated_at'])
+                logger.info(
+                    '[SequenceSettings] reservation_expire_minutes=%s by %s',
+                    minutes, request.user.username,
+                )
 
-        messages.success(request, 'تم حفظ إعدادات العدّادات والحجز بنجاح.')
+        if ttl_error:
+            messages.error(request, ttl_error)
+            messages.success(request, 'حُفظت إعداداتُ العدّادات.')
+        else:
+            messages.success(request, 'تم حفظ إعدادات العدّادات والحجز بنجاح.')
         return redirect('sequence_settings')
 
     return render(request, 'core/sequence_settings.html', {
         'sequences': sequences,
         'reservation_settings': reservation_settings,
     })
-
-
-def _write_reservation_expire_setting(minutes: int):
-    """Write RESERVATION_EXPIRE_MINUTES value to the project's .env."""
-    env_path = os.path.join(settings.BASE_DIR, '.env')
-    key = 'RESERVATION_EXPIRE_MINUTES'
-    new_line = f'{key}={minutes}\n'
-    try:
-        if os.path.exists(env_path):
-            with open(env_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            if re.search(rf'^{key}=.*', content, re.MULTILINE):
-                content = re.sub(rf'^{key}=.*', new_line.strip(), content, flags=re.MULTILINE)
-            else:
-                content += ('\n' if not content.endswith('\n') else '') + new_line
-            with open(env_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-        else:
-            with open(env_path, 'w', encoding='utf-8') as f:
-                f.write(new_line)
-
-        from django.conf import settings as dj_settings
-        dj_settings.RESERVATION_EXPIRE_MINUTES = minutes
-
-        import core.reservation_api as _rapi
-        _rapi.EXPIRE_MINUTES = minutes
-        logger.info(f'[SequenceSettings] RESERVATION_EXPIRE_MINUTES updated to {minutes}')
-    except Exception as exc:
-        logger.warning(f'[SequenceSettings] Could not write .env: {exc}')

@@ -80,17 +80,28 @@
                             </label>
                             <input type="number" name="reservation_expire_minutes"
                                    value="{{ reservation_settings.expire_minutes }}"
-                                   min="5" max="480" class="form-control form-control-sm"
-                                   placeholder="45">
-                            <div class="form-text">المدى المسموح: 5 – 480 دقيقة. القيمة الافتراضية: 45 دقيقة.</div>
+                                   min="{{ reservation_settings.ttl_min }}"
+                                   max="{{ reservation_settings.ttl_max }}"
+                                   class="form-control form-control-sm"
+                                   placeholder="{{ reservation_settings.ttl_default }}">
+                            <div class="form-text">
+                                المدى المسموح: {{ reservation_settings.ttl_min }} –
+                                {{ reservation_settings.ttl_max }} دقيقة.
+                                القيمة الافتراضية: {{ reservation_settings.ttl_default }} دقيقة.
+                            </div>
+                            <div class="form-text">
+                                <i class="bi bi-info-circle me-1"></i>يُطبَّق فوراً على
+                                <strong>الحجوزات الجديدة</strong>؛ والحجوزاتُ القائمة تُكمل
+                                مدّتها القديمة (وقتُ الانتهاء يُبصَم لحظةَ الحجز).
+                            </div>
                         </div>
                         <div class="col-md-7 d-flex align-items-end">
                             <div class="p-2 rounded" style="background:#f0f4ff; border:1px solid #c7d2fe; font-size:0.82rem; width:100%;">
                                 <div class="mb-1"><strong>🔒 الوضع الحالي:</strong>
                                     {% if reservation_settings.is_custom %}
-                                    <span class="badge" style="background:#16a34a;">مخصص</span>
+                                    <span class="badge" style="background:#16a34a;">مخصص ({{ reservation_settings.expire_minutes }} دق)</span>
                                     {% else %}
-                                    <span class="badge" style="background:#64748b;">افتراضي (45 دق)</span>
+                                    <span class="badge" style="background:#64748b;">افتراضي ({{ reservation_settings.ttl_default }} دق)</span>
                                     {% endif %}
                                 </div>
                                 <div class="mb-1"><strong>📡 نمط العمل:</strong> شبكي ذري — كل مستخدم يحجز رقمه لوحده</div>

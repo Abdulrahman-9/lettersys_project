@@ -514,13 +514,27 @@
     <div id="saveResult" class="ms-3" style="display:none;"></div>
   </div>
 
-  {# ── شريط إعادة التشغيل ── #}
+  {% comment %}
+    ── شريطُ «حرِّر ملفّ البيئة» ──
+    كان يقول «يجب إعادة تشغيل الخادم لتطبيق الإعدادات» ويعرض أمرَ
+    runserver/gunicorn — وعدٌ لا يملكه: التطبيقُ لم يبقَ يكتب في ملفّ البيئة،
+    والأمرُ المعروضُ ليس أمرَ نشرِنا (خدمةُ NSSM).
+    ومُلاحظةٌ للمحرِّر: تعليقُ السطرِ الواحد لا يمتدّ سطرين في Django، فنصُّه
+    يُعرَض وما فيه من وسومٍ يُنفَّذ — حارسُ core/tests_templates.py يمسك ذلك.
+  {% endcomment %}
   <div class="ns-restart-banner" id="restartBanner" style="display:none;">
     <i class="bi bi-exclamation-triangle-fill me-2"></i>
-    <strong>يجب إعادة تشغيل الخادم</strong> لتطبيق إعدادات قاعدة البيانات الجديدة.
+    <strong>حُفظ في قاعدة البيانات — ولم يُعدَّل ملفُّ البيئة.</strong>
+    على مدير النظام وضعُ هذه الأسطر في ملفّ البيئة على هذا الجهاز ثمّ إعادةُ
+    تشغيل الخدمة.
     <div class="mt-2 ns-restart-cmd">
-      <code>python manage.py runserver</code>
-      <small class="ms-2 text-muted">أو أعد تشغيل خدمة gunicorn / uwsgi</small>
+      <pre id="envLines" class="mb-2" style="white-space:pre-wrap; margin:0;"></pre>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="copyEnvLines"
+              title="نسخ الأسطر">
+        <i class="bi bi-clipboard"></i>
+      </button>
+      <code class="ms-2">nssm restart LetterSys</code>
+      <small class="ms-2 text-muted">أو من services.msc</small>
     </div>
   </div>
 
@@ -759,9 +773,17 @@ window.NS_CFG = {
   localIp:    "{{ local_ip }}",
 };
 </script>
-<script src="{% static 'network_settings.js' %}?v=20260705-order"></script>
+<script src="{% static 'network_settings.js' %}?v=20260924-envlines"></script>
 <script>
 // ─── نسخ سطر pg_hba ─────────────────────────────────────────────────────────
+document.getElementById('copyEnvLines')?.addEventListener('click', function () {
+  const text = document.getElementById('envLines')?.textContent || '';
+  navigator.clipboard.writeText(text.trim()).then(() => {
+    this.innerHTML = '<i class="bi bi-check-lg"></i>';
+    setTimeout(() => { this.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 2000);
+  }).catch(() => {});
+});
+
 document.getElementById('copyPgLine')?.addEventListener('click', function () {
   const text = document.getElementById('pgHbaLine')?.textContent?.replace(/\u00a0/g, ' ') || '';
   navigator.clipboard.writeText(text.trim()).then(() => {
