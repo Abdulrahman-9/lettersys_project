@@ -52,32 +52,49 @@
   <span class="fb-divider"></span>
 
   {# ── pills حالة المتابعة الأربع الموحَّدة ── #}
+  {# aria-pressed يتبع .active هنا وفي attachPillHandlers — حالةُ الزرّ تُسمَع كما تُرى #}
   <div class="fb-pills" role="group" aria-label="فلترة حالة المتابعة">
     <button type="button"
             class="fb-pill {% if not current_filter %}active{% endif %}"
+            aria-pressed="{% if not current_filter %}true{% else %}false{% endif %}"
             data-filter="all" title="كل الحالات">
       <i class="bi bi-list-ul"></i> الكل
     </button>
+    {% comment %}
+      «متابعة جارية» تُرسَم عند الوصول من اللوحة وحدَه (followup=active) — لا رقاقةَ دائمة.
+      بلا عدّاد عمداً: عدّاداتُ الرقاقات عبر التبويبات كلّها، ورقمُ اللوحة للوارد وحدَه؛
+      الرقمُ الوحيد هنا «من N» في القائمة نفسها، وهو رقمُ اللوحة.
+    {% endcomment %}
+    {% if current_filter == 'active' %}
+    <button type="button" class="fb-pill active" aria-pressed="true"
+            data-filter="active" title="{{ active_label }}">
+      <i class="bi bi-arrow-repeat" aria-hidden="true"></i> {{ active_label }}
+    </button>
+    {% endif %}
     <button type="button"
             class="fb-pill fb-pill-pending {% if current_filter == 'pending' %}active{% endif %}"
+            aria-pressed="{% if current_filter == 'pending' %}true{% else %}false{% endif %}"
             data-filter="pending" title="قيد المتابعة">
       <i class="bi bi-clock-history"></i> قيد المتابعة
       <span class="fb-pill-count" id="pill-count-pending">{{ pending_count|default:0 }}</span>
     </button>
     <button type="button"
             class="fb-pill fb-pill-due-today {% if current_filter == 'due_today' %}active{% endif %}"
+            aria-pressed="{% if current_filter == 'due_today' %}true{% else %}false{% endif %}"
             data-filter="due_today" title="مستحق اليوم">
       <i class="bi bi-calendar-event"></i> مستحق اليوم
       <span class="fb-pill-count" id="pill-count-due-today">{{ due_today_count|default:0 }}</span>
     </button>
     <button type="button"
             class="fb-pill fb-pill-overdue {% if current_filter == 'overdue' %}active{% endif %}"
+            aria-pressed="{% if current_filter == 'overdue' %}true{% else %}false{% endif %}"
             data-filter="overdue" title="متأخر">
       <i class="bi bi-exclamation-triangle"></i> متأخر
       <span class="fb-pill-count" id="pill-count-overdue">{{ overdue_count|default:0 }}</span>
     </button>
     <button type="button"
             class="fb-pill fb-pill-archived {% if current_filter == 'archived' %}active{% endif %}"
+            aria-pressed="{% if current_filter == 'archived' %}true{% else %}false{% endif %}"
             data-filter="archived" title="مؤرشف">
       <i class="bi bi-archive"></i> مؤرشف
       <span class="fb-pill-count" id="pill-count-archived">{{ archived_count|default:0 }}</span>

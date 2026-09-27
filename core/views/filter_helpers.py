@@ -2,11 +2,13 @@
 """
 Book Filtering Helpers — مساعدات فلترة الكتب الموحَّدة
 
-منطق المتابعة الموحَّد (4 حالات حصرية متبادلة، محسوبة من due_date + is_archived):
+منطق المتابعة الموحَّد (4 حالات حصريّة + فلترُ «جارية»، من due_date + is_archived — المصدرُ `followup_q`):
     pending   : due_date > today  ، is_archived=False
     due_today : due_date = today  ، is_archived=False
     overdue   : due_date < today  ، is_archived=False
     archived  : is_archived=True OR due_date IS NULL
+    active    : is_archived=False AND due_date IS NOT NULL  (= pending ∪ due_today ∪ overdue)
+الأربعُ الأولى حصريّةٌ متبادلة؛ و`active` اتّحادُ الثلاث الجارية لا حالةٌ خامسةٌ للصفّ.
 """
 
 from datetime import timedelta
@@ -25,8 +27,10 @@ _KIND_TABS = {
     "outgoing_internal", "outgoing_external",
 }
 
-# تبويبات/فلاتر حالة المتابعة الأربع
-_FOLLOWUP_TABS = {"pending", "due_today", "overdue", "archived"}
+# حالاتُ الصفّ الأربع الحصريّة — لكلٍّ منها رقاقةٌ بعدّاد (القائمة والأضبارة)
+_FOLLOWUP_STATES = ("pending", "due_today", "overdue", "archived")
+# فلاتر حالة المتابعة: الأربعُ + «جارية» (اتّحادُ الثلاث الجارية؛ فلترٌ بلا عدّاد رقاقة)
+_FOLLOWUP_TABS = {"active", *_FOLLOWUP_STATES}
 
 # تسميات عربية للحالات (مصدر واحد للعرض في الفلاتر/الـ summaries)
 FOLLOWUP_LABELS = {
@@ -36,7 +40,26 @@ FOLLOWUP_LABELS = {
     # المعنى هنا «انتهت المتابعة» لا «حُفظت الورقة» — والثانيةُ حدثُ عهدةٍ
     # في `core/archive_service.py`. كلمةٌ واحدةٌ لمعنيين تُربك الكاتبَ يوميّاً.
     "archived":  "مُنجَز / بلا متابعة",
+    # ≠ «قيد المتابعة» (المستقبليّ وحده) ≠ «مُنجَز / بلا متابعة».
+    "active":    "متابعة جارية",
 }
+
+
+def followup_q(state, today=None):
+    """كائنُ Q لحالةٍ واحدة — المصدرُ الوحيد: العدّادُ والقائمةُ التي يفتحها يقرآن من هنا فلا ينحرفان.
+
+    «جارية» = غيرُ مؤرشفٍ وله استحقاق = pending ∪ due_today ∪ overdue.
+    قيمةٌ مجهولة ⟵ KeyError صادق.
+    """
+    today = today or timezone.localdate()
+    active = Q(is_archived=False, due_date__isnull=False)
+    return {
+        "active":    active,
+        "archived":  Q(is_archived=True) | Q(due_date__isnull=True),
+        "overdue":   active & Q(due_date__lt=today),
+        "due_today": active & Q(due_date=today),
+        "pending":   active & Q(due_date__gt=today),
+    }[state]
 
 
 class BookFilterEngine:
@@ -97,22 +120,11 @@ class BookFilterEngine:
     def apply_followup_filter(queryset, state):
         """
         فلتر حالة المتابعة الموحَّد.
-        state ∈ {'pending', 'due_today', 'overdue', 'archived', None}
+        state ∈ {'active', 'pending', 'due_today', 'overdue', 'archived', None}
         """
         if not state or state not in _FOLLOWUP_TABS:
             return queryset
-        today = timezone.localdate()
-        if state == "archived":
-            return queryset.filter(Q(is_archived=True) | Q(due_date__isnull=True))
-        # الحالات النشطة الثلاث: غير مؤرشف + due_date موجود
-        active = queryset.filter(is_archived=False, due_date__isnull=False)
-        if state == "overdue":
-            return active.filter(due_date__lt=today)
-        if state == "due_today":
-            return active.filter(due_date=today)
-        if state == "pending":
-            return active.filter(due_date__gt=today)
-        return queryset
+        return queryset.filter(followup_q(state))
 
     # ── واجهة موحَّدة لتطبيق كل الفلاتر ────────────────────────────────
     @staticmethod
@@ -120,7 +132,7 @@ class BookFilterEngine:
         """
         كل الفلاتر تعمل معاً (orthogonal):
             - tab: نوع الكتاب (incoming/outgoing/all/...)
-            - followup: حالة المتابعة (pending/due_today/overdue/archived)
+            - followup: حالة المتابعة (active/pending/due_today/overdue/archived)
             - search_text / date_from / date_to / entity_id
 
         ``user`` يلزم لحارس البحث السرّي: البحث النصّي لا يكشف كتاباً سرّياً
@@ -150,17 +162,12 @@ class BookFilterEngine:
         Returns dict مع: all, incoming, outgoing, pending, due_today, overdue, archived.
         """
         today = timezone.localdate()
-        archived_q = Q(is_archived=True) | Q(due_date__isnull=True)
-        active_q = Q(is_archived=False, due_date__isnull=False)
 
         counts = queryset.aggregate(
             all=Count("id"),
             incoming=Count("id", filter=Q(kind__startswith="incoming")),
             outgoing=Count("id", filter=Q(kind__startswith="outgoing")),
-            archived=Count("id", filter=archived_q),
-            overdue=Count("id", filter=active_q & Q(due_date__lt=today)),
-            due_today=Count("id", filter=active_q & Q(due_date=today)),
-            pending=Count("id", filter=active_q & Q(due_date__gt=today)),
+            **{k: Count("id", filter=followup_q(k, today)) for k in _FOLLOWUP_STATES},
         )
         return {
             "all":       counts.get("all", 0),
@@ -178,13 +185,9 @@ class BookFilterEngine:
         M2M) ثم جمع الرقمين لكل حالة. Count(distinct=True) يتفادى fan-out الكارتيزي للكتب
         متعددة الجهات (distinct على مستوى الـqueryset تُتجاهَل داخل aggregate)."""
         today = timezone.localdate()
-        archived_q = Q(is_archived=True) | Q(due_date__isnull=True)
-        active_q = Q(is_archived=False, due_date__isnull=False)
         spec = {
-            "archived":  Count("id", distinct=True, filter=archived_q),
-            "overdue":   Count("id", distinct=True, filter=active_q & Q(due_date__lt=today)),
-            "due_today": Count("id", distinct=True, filter=active_q & Q(due_date=today)),
-            "pending":   Count("id", distinct=True, filter=active_q & Q(due_date__gt=today)),
+            k: Count("id", distinct=True, filter=followup_q(k, today))
+            for k in _FOLLOWUP_STATES
         }
         o = out_qs.aggregate(**spec)
         i = in_qs.aggregate(**spec)

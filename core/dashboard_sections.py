@@ -145,16 +145,16 @@ def _register(user):
     """دفترُ القسم — حجمُ العمل ومساره، لمن يملك دفتراً."""
     from core.models import Book
     from core.scoping import scope_books_for
+    from core.views.filter_helpers import followup_q
 
     today = timezone.localdate()
     books = scope_books_for(user, Book.objects.all())
-    active = Q(is_archived=False, due_date__isnull=False)
 
     counts = books.aggregate(
         total=Count('id'),
         today=Count('id', filter=Q(date=today)),
         week=Count('id', filter=Q(date__gte=today - timedelta(days=7))),
-        overdue=Count('id', filter=active & Q(due_date__lt=today)),
+        overdue=Count('id', filter=followup_q('overdue', today)),
     )
     return {
         'counters': [

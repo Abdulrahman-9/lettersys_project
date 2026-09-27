@@ -170,3 +170,101 @@ class DashboardViewTests(TestCase):
 
         for forbidden in ('is_superuser', 'dept_head', 'controller', 'archivist', 'role_key'):
             self.assertNotIn(forbidden, markup)
+
+
+class DashboardOverviewTests(TestCase):
+    """الإحصاءُ العامّ (q1/q2/q3): رقمٌ يُنقر يفتح القائمةَ التي عدّها — من تعريفٍ واحد."""
+
+    def setUp(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        self.today = timezone.localdate()
+        self.dept = Department.objects.create(name='قسم النظرة', code='ن.ق')
+        self.other_dept = Department.objects.create(name='قسمٌ آخر', code='ن.آ')
+        self.worker = User.objects.create_user('ov_worker', 'ow@x.co', 'pw')
+        UserProfile.objects.update_or_create(
+            user=self.worker, defaults={'department': self.dept})
+        self.stranger = User.objects.create_user('ov_stranger', 'os@x.co', 'pw')
+        UserProfile.objects.update_or_create(
+            user=self.stranger, defaults={'department': self.other_dept})
+
+        def book(num, due, *, kind='incoming_external', dept=None, archived=False):
+            return Book.objects.create(
+                kind=kind, title='كتاب ' + num, our_number=num,
+                department=dept or self.dept, created_by=self.stranger,
+                due_date=due, is_archived=archived)
+
+        day = timedelta(days=1)
+        self.overdue = book('7101', self.today - day)
+        self.due_today = book('7102', self.today)
+        self.future = book('7103', self.today + day * 5)
+        self.archived = book('7104', self.today + day, archived=True)
+        self.no_due = book('7105', None)                 # save() يؤرشفه
+        # صفٌّ بصيغة الإرث (غيرُ مؤرشفٍ بلا موعد) لا يصنعه save() — وهو وحده ما يفرّق
+        # «جارية» عن `is_archived=False` المجرّدة؛ بدونه تنجو الطفرةُ أ خضراء.
+        Book.objects.filter(pk=self.no_due.pk).update(is_archived=False)
+        book('7106', self.today + day, kind='outgoing_external')
+        book('7107', self.today + day, dept=self.other_dept)
+        self.client.force_login(self.worker)
+
+    def _dash(self):
+        return self.client.get(reverse('dashboard'))
+
+    def test_incoming_active_count_equals_the_list_the_link_opens(self):
+        """الرقمُ والقائمةُ التي يفتحها من تعريفٍ واحد — لا ينحرفان."""
+        dash = self._dash()
+        self.assertEqual(dash.context['incoming_pending'], 3)
+        href = reverse('book_unified') + '?tab=incoming&followup=active'
+        self.assertContains(dash, href)
+
+        listing = self.client.get(href)
+
+        self.assertEqual(listing.context['total_count'], 3)
+        self.assertEqual({b.our_number for b in listing.context['books']},
+                         {'7101', '7102', '7103'})
+        # الرقمُ الوحيد في الصفحة المفتوحة «من N» = رقمُ اللوحة. الرقاقةُ بلا عدّاد: عدّاداتُ
+        # الرقاقات عبر التبويبات كلّها، فكانت تقول 4 (مع الصادر الجاري 7106) مقابل 3.
+        self.assertContains(listing, '<strong id="paginationTotal">%d</strong>'
+                            % dash.context['incoming_pending'])
+        self.assertNotContains(listing, 'pill-count-active')
+
+    def test_incoming_number_keeps_its_blue(self):
+        """قاعدةُ المالك: لا تغييرَ صبغة بلا إذن — رقمُ الوارد أزرقُ كأيقونته، لا كهرمانُ `.stat-value`."""
+        dash = self._dash()
+        self.assertContains(dash, '<div class="stat-value text-primary">%d</div>'
+                            % dash.context['incoming_total'])
+
+    def test_active_label_is_its_own_words(self):
+        """«قيد المتابعة» تعني المستقبليَّ وحده؛ الجاريةُ كلُّها اسمٌ آخر."""
+        from core.views.filter_helpers import FOLLOWUP_LABELS
+
+        self.assertNotEqual(FOLLOWUP_LABELS['active'], FOLLOWUP_LABELS['pending'])
+        self.assertNotEqual(FOLLOWUP_LABELS['active'], FOLLOWUP_LABELS['archived'])
+        dash = self._dash()
+        self.assertContains(dash, FOLLOWUP_LABELS['active'])
+        self.assertNotContains(dash, 'قيد المتابعة:')
+
+    def test_quick_actions_and_brand_card_are_gone(self):
+        """q1‑ب وq2‑أ: البطاقةُ الضخمة والإجراءاتُ السريعة زالتا؛ البحثُ والفعلُ باقيان."""
+        dash = self._dash()
+        for gone in ('إجراءات سريعة', 'quick-action-card', 'مرحباً في لوحة التحكم'):
+            self.assertNotContains(dash, gone)
+        self.assertContains(dash, 'name="q"')
+        # علاماتُ الشريط وحدَه: رابطُ الإدخال موجودٌ في الشريط الجانبيّ أيضاً فلا يَثبت به شيء (مراجعةُ الصحّة 09‑27).
+        self.assertContains(dash, 'role="search"')
+        self.assertContains(dash, 'class="btn-brand"')
+        self.assertContains(dash, 'class="btn-brand-ghost"')
+
+    def test_overdue_alert_is_honest(self):
+        """«تحتاج متابعة عاجلة» لا تُقال حين لا متأخّر."""
+        self.overdue.is_archived = True
+        self.overdue.save()
+        self.assertNotContains(self._dash(), 'تحتاج متابعة عاجلة')
+
+        self.overdue.is_archived = False
+        self.overdue.save()
+        dash = self._dash()
+        self.assertContains(dash, 'تحتاج متابعة عاجلة')
+        # التنبيهُ نفسُه رابطٌ إلى المتأخّر (الشريطُ الجانبيّ يحمل followup=overdue أصلاً).
+        self.assertContains(dash, 'followup=overdue" class="alert alert-danger')
