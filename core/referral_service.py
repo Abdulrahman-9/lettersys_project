@@ -213,7 +213,8 @@ def reply_matrix(book, user):
     from core.scoping import scope_referrals_for
 
     rows = scope_referrals_for(user, book.referrals.select_related(
-        'to_department', 'to_entity', 'assignee', 'closed_by_link__from_book'
+        'to_department', 'to_entity', 'assignee', 'created_by',
+        'closed_by_link__from_book',
     )).order_by('created_at')
 
     matrix = []

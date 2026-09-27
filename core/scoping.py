@@ -51,10 +51,18 @@ def is_mail_officer(user) -> bool:
     شهادةُ موظّف البريد: «السرّي يُحفظ في السجلّ عاديّ، لكن فقط **مسؤول إدارة
     البريد والأرشفة** يحقّ لهم الاطّلاع». فهو أمينُ السرّيّ فعليّاً — يمسكه
     بيده ويفرّقه — فيُخوَّل بدوره لا بمنحةٍ فرديّة.
-    """
-    from core.roles import get_user_role
 
-    return get_user_role(user) == 'controller'
+    **والعضويّةُ لا التسمية** — كأختِها `is_archivist`: تسميةُ `get_user_role`
+    أحاديّةٌ بسلسلةِ أولويّة، فرئيسُ شعبةٍ عضوٌ في «مشرف المتابعة» كان يُعيد
+    `dept_head` فيفقد قسمَ البريد في لوحته **رغم أنّ خانتَه مؤشَّرة**. وهذا
+    شرطُ دمج الوظيفتين لا زينتُه: «مسؤول إدارة البريد والأرشفة» اجتماعُ
+    عضويّتين، ولا يصحّ أن تُلغي إحداهما الأخرى بترتيبِ سلسلةٍ للعرض.
+    """
+    from core.roles import CONTROLLER_GROUP_NAME
+
+    if not getattr(user, 'pk', None):
+        return False
+    return user.groups.filter(name=CONTROLLER_GROUP_NAME).exists()
 
 
 def is_archivist(user) -> bool:
