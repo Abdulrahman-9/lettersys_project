@@ -22,6 +22,7 @@ from http.server import ThreadingHTTPServer
 from unittest import mock
 
 from . import config, naps2, server
+from . import __version__ as VERSION
 
 
 def _fake_run_writes_pdf(cmd, *a, **k):
@@ -265,7 +266,10 @@ class ServerGateTests(unittest.TestCase):
         self.assertIn('bad_host', body)
 
     def test_host_wrong_port_rejected_403(self):
-        st, body, _ = self._req('/agent/health', host='127.0.0.1:9999')
+        # المنفذُ الخطأ يُشتقّ من المنفذ الحقيقيّ: ثابتٌ مثل 9999 قد يكون هو المنفذَ
+        # العابر الذي رُبِط في هذه الدورة، فيخضرّ الاختبارُ أو يحمرّ بالحظّ.
+        wrong = self.port + 1 if self.port < 65535 else self.port - 1
+        st, body, _ = self._req('/agent/health', host='127.0.0.1:%d' % wrong)
         self.assertEqual(st, 403)
         self.assertIn('bad_host', body)
 
@@ -334,8 +338,16 @@ class ServerGateTests(unittest.TestCase):
         self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), 'http://lettersys')
 
     def test_origin_case_insensitive_host(self):
-        st, _, _ = self._req('/agent/health', headers={'Origin': 'http://LETTERSYS'})
+        st, _, hdrs = self._req('/agent/health', headers={'Origin': 'http://LETTERSYS'})
         self.assertEqual(st, 200)
+        # ACAO هو **مدخلُ القائمة المُقنَّن**، لا نصُّ الترويسة الخامّ الذي أرسله العميل.
+        self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), 'http://lettersys')
+
+    def test_acao_never_echoes_the_raw_request_header(self):
+        """صيغةٌ مُقنَّنةٌ أخرى للأصل نفسِه (شرطةٌ ختاميّة): تُقبَل ويُعاد مدخلُ القائمة."""
+        st, _, hdrs = self._req('/agent/health', headers={'Origin': 'http://LetterSys:80/'})
+        self.assertEqual(st, 200)
+        self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), 'http://lettersys')
 
     def test_origin_suffix_attack_rejected(self):
         """مساواةُ tuple لا بادئةً: ``…:8000.evil.com`` مضيفٌ آخرُ تماماً."""
@@ -404,6 +416,44 @@ class ServerGateTests(unittest.TestCase):
     def test_unknown_path_404(self):
         st, _, _ = self._req('/agent/nope', headers={'Origin': self.ALLOWED})
         self.assertEqual(st, 404)
+
+    # ═══════ أفعالٌ لا مسارَ لها — قبل التوجيه لا بعده ═══════
+    def test_unrouted_methods_hit_the_host_gate_first(self):
+        """‎PUT/DELETE/PATCH/TRACE‎ كانت تُجاب بـ501 من المكتبة **قبل** حارس Host:
+        صفحةُ خطأٍ من عندها، وبترويسة ``Server``، ومن أيّ مضيف. الحارسُ أوّلاً الآن."""
+        for method in ('PUT', 'DELETE', 'PATCH', 'TRACE', 'FOO'):
+            st, body, hdrs = self._req('/agent/health', method=method,
+                                       host='evil.example:%d' % self.port,
+                                       headers={'Origin': self.ALLOWED})
+            self.assertEqual(st, 403, method)
+            self.assertIn('bad_host', body, method)
+            self.assertNotIn('Access-Control-Allow-Origin', hdrs)
+
+    def test_unrouted_method_with_good_host_is_405_not_501(self):
+        st, body, hdrs = self._req('/agent/scan', method='PUT',
+                                   headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 405)
+        self.assertIn('method_not_allowed', body)
+        self.assertEqual(hdrs.get('Allow'), 'GET, POST, OPTIONS')
+
+    def test_head_is_gated_and_carries_no_body(self):
+        st, body, _ = self._req('/agent/health', method='HEAD',
+                                host='evil.example:%d' % self.port)
+        self.assertEqual(st, 403)
+        self.assertEqual(body, '')          # HEAD بلا جسم، والحارسُ مع ذلك ردّ 403
+        st, body, _ = self._req('/agent/health', method='HEAD')
+        self.assertEqual(st, 405)
+        self.assertEqual(body, '')
+
+    def test_server_header_leaks_neither_python_nor_the_agent_version(self):
+        """الترويسةُ تُبعَث قبل أيّ حارس، فلا يُقرأ منها إصدارُ مفسّرٍ ولا إصدارُ وكيل."""
+        for method, host in (('GET', None), ('PUT', None),
+                             ('GET', 'evil.example:%d' % self.port)):
+            _, _, hdrs = self._req('/agent/health', method=method, host=host)
+            banner = hdrs.get('Server', '')
+            self.assertEqual(banner, 'LetterSysScanAgent', '%s %s' % (method, host))
+            self.assertNotIn('Python', banner)
+            self.assertNotIn(VERSION, banner)
 
     # ═══════ إسقاطُ التوكِن ═══════
     def test_token_machinery_removed(self):

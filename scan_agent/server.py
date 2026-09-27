@@ -59,7 +59,32 @@ def _log_rejected_origin(origin):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "LetterSysScanAgent/" + VERSION
+    # ترويسةُ ``Server`` تُبعَث على كلّ استجابةٍ **قبل** أيّ حارس (حتّى 403 الارتباط
+    # المُعاد)، فتبقى ثابتةً بلا إصدارِ وكيلٍ وبلا «Python/3.x»: الإصدارُ يُقرأ من
+    # ‎/agent/health‎ وحدَه، وهو خلف البوّابتين. (``sys_version=""`` يمنع لصقَ إصدار
+    # المفسّر الذي تضيفه المكتبةُ القياسيّة تلقائيّاً.)
+    server_version = "LetterSysScanAgent"
+    sys_version = ""
+
+    def version_string(self):
+        """نصُّ ``Server`` حرفيّاً: المكتبةُ تلصق ``sys_version`` وفراغاً بينهما."""
+        return self.server_version
+
+    # كلُّ فعلٍ يمرّ ببوّابة Host — حتّى فعلٌ لا مسارَ له. المكتبةُ القياسيّة تبحث عن
+    # ``do_<METHOD>``، فإن غاب ردّت ``501`` من عندها **قبل** حرّاسنا (بصفحة HTML
+    # وبترويسة Server). فنُعلن وجودَ كلّ ``do_*`` ونوجّهها إلى حارسنا.
+    def __getattr__(self, name):
+        if name.startswith('do_'):
+            return self._unrouted
+        raise AttributeError(name)
+
+    def _unrouted(self):
+        """‎PUT · DELETE · PATCH · HEAD · TRACE‎ وأيُّ اسمٍ آخر: بوّابةُ Host ثمّ 405."""
+        if not self._host_ok():
+            return self._bad_host()
+        return self._json(405, {"ok": False, "code": "method_not_allowed",
+                                "error": "فعل غير مسموح (الوكيل يقبل GET وPOST وOPTIONS)"},
+                          headers=(("Allow", "GET, POST, OPTIONS"),))
 
     # ───────── الحرّاس ─────────
     def _expected_port(self):
@@ -86,31 +111,42 @@ class Handler(BaseHTTPRequestHandler):
             return self._expected_port() == 80     # منفذٌ ضمنيٌّ = 80 وحدَه
         return port == self._expected_port()
 
-    def _origin_allowed(self):
-        """أهذا الأصلُ في قائمة محطّة العمل؟ مساواةُ tuple مُقنَّنة — لا بادئةَ ولا احتواء."""
+    def _allowed_origin(self):
+        """‎(scheme, host, port)‎ للأصل المسموح، أو ``None``. مساواةُ tuple مُقنَّنة —
+        لا بادئةَ ولا احتواء."""
         norm = config.normalize_origin(self.headers.get("Origin"))
-        return norm is not None and norm in config.ALLOWED_ORIGINS
+        return norm if (norm is not None and norm in config.ALLOWED_ORIGINS) else None
+
+    def _origin_allowed(self):
+        return self._allowed_origin() is not None
 
     # ───────── الاستجابات ─────────
     def _send_cors(self):
         """ترويساتُ CORS — تُبعَث للأصل المسموح وحدَه، وعلى كلّ استجابةٍ حتّى الخطأ
         (كي تقرأ الصفحةُ نصَّ خطأ الوكيل العربيّ بدل «فشلٌ مجهول»)."""
-        if not self._origin_allowed():
+        norm = self._allowed_origin()
+        if norm is None:
             return
-        self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
+        # يُعاد **مدخلُ القائمة المُقنَّن** لا نصُّ الترويسة الخامّ: القيمةُ المُعادة هي
+        # ما وثقنا به حرفيّاً، فلا يمرّ إلى ترويسةِ استجابةٍ شيءٌ جاء من العميل ولو
+        # تساوى معه بعد التقنين (اختلافُ حالةِ الأحرف أو منفذٌ ضمنيّ).
+        self.send_header("Access-Control-Allow-Origin", _describe_origin(norm))
         self.send_header("Vary", "Origin")
         # كي يقرأ المتصفح عدد الصفحات من استجابة المسح عبر الأصل المختلف
         self.send_header("Access-Control-Expose-Headers", "X-Scan-Pages")
 
-    def _json(self, status, payload, cors=True):
+    def _json(self, status, payload, cors=True, headers=()):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        for name, value in headers:
+            self.send_header(name, value)
         if cors:
             self._send_cors()
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":          # استجابةُ HEAD بلا جسم (الترويساتُ كما هي)
+            self.wfile.write(body)
 
     def _bad_host(self):
         """403 بلا أيّ ترويسةِ CORS — حتّى لأصلٍ مسموح: الارتباطُ المُعاد يموت قبل التوجيه،
