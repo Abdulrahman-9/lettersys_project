@@ -3,7 +3,7 @@
 
 {% block title %}ما يخصّني اليوم{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20260910">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20260913">{% endblock %}
 
 {% block content %}
 <div class="queues-page">
@@ -12,14 +12,43 @@
       <h1 class="h4 mb-0"><i class="bi bi-person-check" aria-hidden="true"></i> ما يخصّني اليوم</h1>
       <p class="queues-sub">
         {% if assigned_total %}
-          {{ assigned_total }} التزاماً مفتوحاً باسمك.
+          {{ assigned_total }} التزاماً مفتوحاً باسمك — صفوفٌ متمايزةٌ لا مجموعُ العدّادات.
         {% else %}
           لا التزامَ مفتوحاً باسمك الآن.
         {% endif %}
       </p>
     </div>
+    {# ي-9: صفرُ روابطَ خارجةٍ كان عيباً — والصفحةُ طريقٌ لا غرفةٌ مغلقة #}
+    <div class="queues-actions">
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">
+        <i class="bi bi-list-ul" aria-hidden="true"></i> القائمةُ الموحّدة
+      </a>
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'desk_board' %}">
+        <i class="bi bi-inboxes" aria-hidden="true"></i> طاولةُ الوارد
+      </a>
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'audit_log' %}">
+        <i class="bi bi-clock-history" aria-hidden="true"></i> سجلّي
+      </a>
+    </div>
   </div>
 
-  {% include "core/_queue_board.html" %}
+  {% comment %}
+    ي-3/ي-4: كانت الترويسةُ تقول «لا التزامَ» ثمّ تُطبع أربعُ بطاقاتٍ كلو تقول
+    «لا شيء هنا» = خمسُ رسائلِ فراغٍ في شاشةٍ واحدة. الآن رسالةٌ واحدةٌ وفيها
+    طريقٌ للخارج. والعلمُ `queues_empty` مشتقٌّ من الطوابير في العرض فلا يُخفي عملاً.
+  {% endcomment %}
+  {% if queues_empty %}
+    <div class="qb-blank">
+      <i class="bi bi-check2-circle qb-blank-icon" aria-hidden="true"></i>
+      <h2>يومُك نظيف</h2>
+      <p>لا التزامَ مفتوحاً باسمك الآن. وإن كنتَ تتوقّع كتاباً فلعلّه ما زال في طاولة الوارد ولم يُحَل إليك بعد.</p>
+      <div class="qb-blank-acts">
+        <a class="btn btn-primary btn-sm" href="{% url 'desk_board' %}">طاولةُ الوارد</a>
+        <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">القائمةُ الموحّدة</a>
+      </div>
+    </div>
+  {% else %}
+    {% include "core/_queue_board.html" %}
+  {% endif %}
 </div>
 {% endblock %}
