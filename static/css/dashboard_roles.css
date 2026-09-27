@@ -30,7 +30,7 @@
   border-radius: 1rem; padding: 1rem 1.15rem; margin-bottom: 1.1rem;
   box-shadow: 0 10px 24px rgba(77, 44, 25, .08);
 }
-.db-hero h4 { margin: 0 0 .15rem; font-weight: 800; font-size: 1.15rem; }
+.db-hero h1 { margin: 0 0 .15rem; font-weight: 800; font-size: 1.15rem; }
 .db-hero p  { margin: 0; font-size: .84rem; color: var(--ink-soft); font-weight: 600; }
 .db-role {
   display: inline-flex; align-items: center; gap: .4rem;
@@ -60,7 +60,7 @@
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: .8rem; flex-wrap: wrap; margin-bottom: .8rem;
 }
-.db-section-hd h5 { margin: 0; font-size: .98rem; font-weight: 800; color: var(--ink); }
+.db-section-hd h2 { margin: 0; font-size: .98rem; font-weight: 800; color: var(--ink); }
 .db-section-hd p  { margin: .1rem 0 0; font-size: .76rem; color: var(--ink-soft); font-weight: 600; }
 
 .db-links { display: flex; gap: .4rem; flex-wrap: wrap; }
@@ -102,6 +102,24 @@
 /* الصفرُ يبقى رماديّاً: لونُ التنبيه لِما يستحقّ التنبيه وحده. */
 .db-n[data-has] { color: var(--tone, var(--ink)); }
 .db-l { font-size: .78rem; font-weight: 700; }
+
+/* ── الإحصاءُ العامّ: بطاقاتٌ لا تُنقر — لا رفعَ ولا شريطَ هوفر ─────────
+   الرقمُ كهرمانيُّ الصفحة نفسُه (~5:1) بدل تدرّجٍ برتقاليٍّ شفّاف (2.2:1)
+   كان يطمس أيضاً `text-danger` على بطاقة المتأخّر. */
+.db-page .stat-card { border-radius: 16px; border: none; }
+.db-page .stat-icon {
+  width: 56px; height: 56px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; font-size: 24px;
+}
+.db-page .stat-value {
+  font-size: 2.5rem; font-weight: 800; line-height: 1;
+  color: var(--amber); font-variant-numeric: tabular-nums;
+}
+/* روابطُ البطاقات وتنبيهُ المتأخّر: حلقةُ تركيزٍ بعُرف الصفحة (.db-link) لا حلقةُ --accent العامّة (~2.2:1)،
+   وهدفُ نقرٍ ≥ 24px، والتنبيهُ الرابطُ يُظهر أنّه رابطٌ عند المرور والضغط (مراجعةُ العدسة البصريّة 09‑27). */
+.db-page .stat-card .small > a { min-height: 24px; align-items: center; }
+.db-page .stat-card a:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.db-page a.alert:hover, .db-page a.alert:active { text-decoration: underline; border-color: var(--bs-danger-text-emphasis); }
 
 .db-note {
   margin: .8rem 0 0; font-size: .78rem; color: var(--ink-soft);

@@ -2063,14 +2063,6 @@ tr.search-no-results strong {
   transform: translateY(-5px);
 }
 
-.hover-shadow {
-  transition: box-shadow 0.3s var(--animation-timing);
-}
-
-.hover-shadow:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
 /* Gradient Text */
 .gradient-text {
   background: linear-gradient(135deg, var(--accent-2), var(--accent));

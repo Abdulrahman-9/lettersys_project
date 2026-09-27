@@ -48,3 +48,44 @@ class BookMailCardEscapesTests(SimpleTestCase):
         raw = re.findall(r'\$\{l\.(?!status\s*===)\w+', src)
         self.assertEqual(raw, [])
         self.assertIn('${esc(l.subject)}', src)
+
+
+class UnifiedListKeepsFollowupTests(SimpleTestCase):
+    """q3 طرفاً إلى طرف: رابطُ اللوحة `?followup=active` يبقى بعد أوّل نقرةٍ في القائمة.
+
+    كانت القائمةُ تقرأ `status`/`due_status` وحدَهما من العنوان فتُسقط `followup`
+    عند أوّل ترقيمٍ أو فرز، وكانت رقاقتا «قيد المتابعة» و«مستحق اليوم» لا تُرسلان شيئاً.
+    """
+
+    def test_ajax_manager_reads_and_writes_followup(self):
+        src = (ROOT / 'static' / 'js' / 'book_unified_ajax_manager.js').read_text(encoding='utf-8')
+        for needle in ("p.get('followup')", 'params.followup'):
+            self.assertTrue(needle in src, needle)
+
+    def test_pill_click_moves_aria_pressed_with_active(self):
+        """الخادمُ يرسم aria-pressed؛ النقرةُ تنقله مع .active وإلّا بقيت الرقاقةُ «مضغوطةً» سمعاً."""
+        src = (ROOT / 'static' / 'js' / 'book_unified_ajax_manager.js').read_text(encoding='utf-8')
+        self.assertRegex(src, r"setAttribute\('aria-pressed', p === pill \? 'true' : 'false'\)")
+
+    def test_asset_versions_bumped(self):
+        """فخُّ الـPWA: بلا `?v=` و`CACHE_VERSION` جديدَين لا يصل التعديلُ إلى المتصفّح.
+
+        يثبّت الثابتَ لا قيمةَ اليوم: «لا أقدمَ من هذا الإيداع» — فرفعُ الدمج
+        القادم مع `feat/scan-lan` (v112) أو أيُّ رفعٍ لاحق يبقى أخضر.
+        """
+        assets = (
+            ('templates/core/dashboard.html', 'css/dashboard_roles.css'),
+            ('templates/base.html', 'design-system.css'),
+            ('templates/base.html', 'app.css'),
+            ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js'),
+        )
+        for rel, asset in assets:
+            with self.subTest(file=rel, asset=asset):
+                src = (ROOT / rel).read_text(encoding='utf-8')
+                m = re.search(r"\{% static '" + re.escape(asset) + r"' %\}\?v=(\d{8})", src)
+                self.assertIsNotNone(m, f'{asset}: لا ?v= بتاريخ')
+                self.assertGreaterEqual(int(m.group(1)), 20260927, asset)
+        sw = (ROOT / 'static' / 'service-worker.js').read_text(encoding='utf-8')
+        m = re.search(r"CACHE_VERSION = 'v(\d+)-", sw)
+        self.assertIsNotNone(m, 'CACHE_VERSION')
+        self.assertGreaterEqual(int(m.group(1)), 111)

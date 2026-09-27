@@ -226,6 +226,7 @@
     if (!badges) return;
     // المعرّفات الحيّة فقط (book_unified_tabs.html + book_unified_filter_bar.html)
     // ومفاتيح get_counter_badges: all/incoming/outgoing/pending/due_today/overdue/archived
+    // (رقاقةُ «جارية» بلا عدّادٍ عمداً — انظر book_unified_filter_bar.html)
     const MAP = {
       'badge-incoming':       badges.incoming,
       'badge-outgoing':       badges.outgoing,
@@ -259,7 +260,6 @@
         dateTo: '',
         entityId: '',
         status: '',
-        due_status: '',
         page: 1,
         sort: '-date'
       };
@@ -348,28 +348,22 @@
       });
     }
 
-    // ─── 2. Status pill handlers (متأخر/اليوم/منجز/مؤرشف/الكل) ────────────────
+    // ─── 2. Status pill handlers (جارية/قيد المتابعة/اليوم/متأخر/مؤرشف/الكل) ──
     attachPillHandlers() {
       const self = this;
       document.querySelectorAll('.fb-pill[data-filter]').forEach(pill => {
         pill.addEventListener('click', e => {
           e.preventDefault();
           const filter = pill.dataset.filter || 'all';
-          // Highlight active pill
-          document.querySelectorAll('.fb-pill').forEach(p => p.classList.remove('active'));
-          pill.classList.add('active');
+          // Highlight active pill — aria-pressed يتبع .active (كـaria-selected في التبويبات)
+          document.querySelectorAll('.fb-pill').forEach(p => {
+            p.classList.toggle('active', p === pill);
+            p.setAttribute('aria-pressed', p === pill ? 'true' : 'false');
+          });
 
-          // Map pill → due_status أو status — orthogonal to tab
-          if (filter === 'all') {
-            self.currentState.due_status = '';
-            self.currentState.status = '';
-          } else if (filter === 'overdue' || filter === 'today' || filter === 'upcoming') {
-            self.currentState.due_status = filter;
-            self.currentState.status = '';
-          } else if (filter === 'done' || filter === 'archived') {
-            self.currentState.status = filter;
-            self.currentState.due_status = '';
-          }
+          // الرقاقة ⟵ followup — مستقلٌّ عن التبويب؛ الخادمُ (_resolve_followup_param)
+          // يقبل الأسماءَ القانونيّةَ والقديمة معاً.
+          self.currentState.status = filter === 'all' ? '' : filter;
           self.currentState.page = 1;
           self.updateUrlAndLoadData();
         });
@@ -514,8 +508,7 @@
       if (this.currentState.dateFrom)  params.date_from  = this.currentState.dateFrom;
       if (this.currentState.dateTo)    params.date_to    = this.currentState.dateTo;
       if (this.currentState.entityId)  params.entity_id  = this.currentState.entityId;
-      if (this.currentState.status)    params.status     = this.currentState.status;
-      if (this.currentState.due_status) params.due_status = this.currentState.due_status;
+      if (this.currentState.status)    params.followup   = this.currentState.status;
       if (this.currentState.page > 1)  params.page       = this.currentState.page;
       if (this.currentState.sort && this.currentState.sort !== '-date') params.sort = this.currentState.sort;
 
@@ -593,8 +586,7 @@
       this.currentState.dateFrom   = p.get('date_from')  || '';
       this.currentState.dateTo     = p.get('date_to')    || '';
       this.currentState.entityId   = p.get('entity_id')  || '';
-      this.currentState.status     = p.get('status')     || '';
-      this.currentState.due_status = p.get('due_status') || '';
+      this.currentState.status     = p.get('followup') || p.get('status') || p.get('due_status') || '';
       this.currentState.page       = parseInt(p.get('page')) || 1;
       this.currentState.sort       = p.get('sort')       || '-date';
       this.applyTheme();
@@ -615,7 +607,7 @@
 
     clearAllFilters() {
       this.currentState = { tab: 'incoming', search: '', dateFrom: '', dateTo: '',
-                            entityId: '', status: '', due_status: '', page: 1, sort: '-date' };
+                            entityId: '', status: '', page: 1, sort: '-date' };
       history.pushState({}, '', window.location.pathname);
       this.updateUrlAndLoadData();
     }

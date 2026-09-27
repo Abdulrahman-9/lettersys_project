@@ -129,7 +129,7 @@ def book_unified(request):
     الصفحة الموحدة لإدارة الكتب.
     استخدام BookFilterEngine لتوحيد منطق الفلترة.
     """
-    from .filter_helpers import BookFilterEngine, BookSortEngine
+    from .filter_helpers import FOLLOWUP_LABELS, BookFilterEngine, BookSortEngine
 
     base_qs = scope_books_for(request.user, Book.objects.all()).select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
 
@@ -234,6 +234,9 @@ def book_unified(request):
         "due_today_count": counter_badges['due_today'],
         "overdue_count": counter_badges['overdue'],
         "archived_count": counter_badges['archived'],
+        # رقاقةُ «متابعة جارية» تُرسَم عند الوصول من اللوحة وحدَه (followup=active)،
+        # بلا عدّاد: `counter_badges` عبر التبويبات كلّها ورقمُ اللوحة للوارد وحدَه.
+        "active_label": FOLLOWUP_LABELS['active'],
         "entities": entities,
         "book_list_api_url": "/api/books/",
         "filters": json.dumps({

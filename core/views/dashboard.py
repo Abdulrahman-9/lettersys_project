@@ -27,6 +27,7 @@ from ..backup_service import create_encrypted_pg_backup, default_backup_dir
 from ..extraction.kinds import get_kind_label
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       RestoreJob)
+from .filter_helpers import FOLLOWUP_LABELS, followup_q
 from .helpers import staff_required
 from core.scoping import can_open_content, is_privileged, scope_books_for
 
@@ -54,8 +55,10 @@ def dashboard(request):
     books = scope_books_for(request.user, Book.objects.all())
     today = timezone.localdate()
 
-    # المنطق الموحَّد: نشط = is_archived=False AND due_date IS NOT NULL
-    active_q = Q(is_archived=False, due_date__isnull=False)
+    # «جارية» من المصدر الوحيد: الرقمُ هنا والقائمةُ التي يفتحها (`followup=active`)
+    # يقرآن القاعدةَ نفسَها فلا ينحرفان.
+    active_q = followup_q('active')
+    archived_q = followup_q('archived')
 
     stats = books.aggregate(
         total=Count('id'),
@@ -64,12 +67,10 @@ def dashboard(request):
         incoming_total=Count('id', filter=Q(kind__startswith='incoming')),
         outgoing_total=Count('id', filter=Q(kind__startswith='outgoing')),
         incoming_active=Count('id', filter=Q(kind__startswith='incoming') & active_q),
-        incoming_archived=Count('id', filter=Q(kind__startswith='incoming') & ~active_q),
+        incoming_archived=Count('id', filter=Q(kind__startswith='incoming') & archived_q),
         outgoing_active=Count('id', filter=Q(kind__startswith='outgoing') & active_q),
-        outgoing_archived=Count('id', filter=Q(kind__startswith='outgoing') & ~active_q),
-        overdue=Count('id', filter=active_q & Q(due_date__lt=today)),
-        due_today=Count('id', filter=active_q & Q(due_date=today)),
-        pending=Count('id', filter=active_q & Q(due_date__gt=today)),
+        outgoing_archived=Count('id', filter=Q(kind__startswith='outgoing') & archived_q),
+        overdue=Count('id', filter=followup_q('overdue', today)),
     )
 
     from core.dashboard_sections import sections_for
@@ -80,15 +81,13 @@ def dashboard(request):
 
     ctx = {
         "sections":         sections_for(request.user),
-        "role_key":         role,
         "role_label":       ROLE_DEFINITIONS.get(role, {}).get('label', role),
         "my_department":    profile.department if profile else None,
         "total":            stats['total'],
         "today_count":      stats['today_count'],
         "week_count":       stats['week_count'],
         "overdue":          stats['overdue'],
-        "due_today":        stats['due_today'],
-        "pending":          stats['pending'],
+        "active_label":     FOLLOWUP_LABELS['active'],
         "incoming_total":   stats['incoming_total'],
         "outgoing_total":   stats['outgoing_total'],
         "incoming_pending": stats['incoming_active'],
@@ -197,8 +196,8 @@ def _reports_qs(request):
         qs = qs.filter(due_date__lte=end_date)
 
     bucket = request.GET.get("bucket", "") or "today_overdue"
-    active_qs = qs.filter(is_archived=False, due_date__isnull=False)
-    archived_qs = qs.filter(Q(is_archived=True) | Q(due_date__isnull=True))
+    active_qs = qs.filter(followup_q('active'))
+    archived_qs = qs.filter(followup_q('archived'))
     if bucket == "today":
         qs = active_qs.filter(due_date=today)
     elif bucket == "overdue":
@@ -261,15 +260,12 @@ def reports(request):
     today = _m["today"]
 
     # ── إحصاءات عبر تجميع DB (بلا تحميل كل الصفوف في الذاكرة) ──
-    active = Q(is_archived=False, due_date__isnull=False)
     agg = qs.aggregate(
         total=Count("id"),
         incoming=Count("id", filter=Q(kind__startswith="incoming")),
         outgoing=Count("id", filter=Q(kind__startswith="outgoing")),
-        overdue=Count("id", filter=active & Q(due_date__lt=today)),
-        due_today=Count("id", filter=active & Q(due_date=today)),
-        pending=Count("id", filter=active & Q(due_date__gt=today)),
-        archived=Count("id", filter=Q(is_archived=True) | Q(due_date__isnull=True)),
+        **{k: Count("id", filter=followup_q(k, today))
+           for k in ("overdue", "due_today", "pending", "archived")},
     )
     stats = {k: (v or 0) for k, v in agg.items()}
     time_stats = {key: stats.get(key, 0) for key in ("overdue", "due_today", "pending", "archived")}

@@ -874,6 +874,74 @@ class ApiUnifiedDataTests(BookViewsBase):
         )
 
 
+class FollowupActiveListTests(BookViewsBase):
+    """q3: `followup=active` = غيرُ مؤرشفٍ وله استحقاق — القائمةُ التي يفتحها رقمُ اللوحة."""
+
+    def setUp(self):
+        super().setUp()
+        today = timezone.localdate()
+        day = timedelta(days=1)
+        # self.book: واردٌ جارٍ مستقبليّ (قيد المتابعة) — الثالثُ من الجارية.
+        self.overdue = Book.objects.create(
+            our_number='2024-002', title='متأخّر', date=date(2024, 1, 16),
+            kind='incoming_external', due_date=today - day, is_archived=False,
+            created_by=self.user)
+        self.due_today = Book.objects.create(
+            our_number='2024-003', title='مستحقّ اليوم', date=date(2024, 1, 17),
+            kind='incoming_internal', due_date=today, is_archived=False,
+            created_by=self.user)
+        Book.objects.create(
+            our_number='2024-004', title='مؤرشفٌ بموعد', date=date(2024, 1, 18),
+            kind='incoming_internal', due_date=today + day, is_archived=True,
+            created_by=self.user)
+        Book.objects.create(
+            our_number='2024-005', title='بلا موعد', date=date(2024, 1, 19),
+            kind='incoming_internal', created_by=self.user)
+        self.active_ids = {self.book.pk, self.overdue.pk, self.due_today.pk}
+        self._login()
+
+    def test_followup_active_returns_only_active_books(self):
+        from core.views.filter_helpers import FOLLOWUP_LABELS
+
+        for param in ('followup', 'status'):
+            with self.subTest(param=param):
+                data = self.client.get(reverse('api_unified_data'),
+                                       {'tab': 'incoming', param: 'active'}).json()
+                self.assertEqual({b['id'] for b in data['books']}, self.active_ids)
+                self.assertEqual(data['pagination']['count'], 3)
+                self.assertIn(FOLLOWUP_LABELS['active'], data['active_filters']['labels'])
+
+    def _pill(self, response, name):
+        """وسمُ فتح زرّ الرقاقة `data-filter=name` (يمتدّ على أسطر)."""
+        import re
+        m = re.search(r'<button[^>]*\bdata-filter="%s"[^>]*>' % name,
+                      response.content.decode('utf-8'))
+        self.assertIsNotNone(m, name)
+        return m.group(0)
+
+    def test_the_active_chip_shows_only_when_asked(self):
+        """رقاقةُ «جارية» تُرسَم لمن وصل بها من اللوحة وحدَه — لا رقاقةَ دائمة."""
+        url = reverse('book_unified')
+        asked = self.client.get(url, {'tab': 'incoming', 'followup': 'active'})
+        self.assertContains(asked, 'data-filter="active"')
+
+        plain = self.client.get(url, {'tab': 'incoming'})
+        self.assertNotContains(plain, 'data-filter="active"')
+
+    def test_pressed_state_is_announced_not_only_seen(self):
+        """aria-pressed يتبع .active على كلّ رقاقة — قارئُ الشاشة يسمع ما تراه العين."""
+        url = reverse('book_unified')
+        asked = self.client.get(url, {'tab': 'incoming', 'followup': 'active'})
+        self.assertIn('aria-pressed="true"', self._pill(asked, 'active'))
+        for other in ('all', 'pending', 'due_today', 'overdue', 'archived'):
+            with self.subTest(pill=other):
+                self.assertIn('aria-pressed="false"', self._pill(asked, other))
+
+        plain = self.client.get(url, {'tab': 'incoming'})
+        self.assertIn('aria-pressed="true"', self._pill(plain, 'all'))
+        self.assertIn('aria-pressed="false"', self._pill(plain, 'pending'))
+
+
 # ===========================================================================
 # books_list.py — trash_list
 # ===========================================================================
