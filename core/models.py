@@ -2862,9 +2862,19 @@ class NetworkSettings(models.Model):
     master_db_port        = models.PositiveSmallIntegerField(default=5432)
     master_db_name        = models.CharField(max_length=100, blank=True, default='lettersys')
     master_db_user        = models.CharField(max_length=100, blank=True, default='lettersys_user')
+    # عمودٌ موروثٌ **لا يُكتب ولا يُقرأ**. كان يُملأ بـ
+    # ``django.core.signing.dumps`` وهو **توقيعٌ لا تعمية**: القطعةُ الأولى
+    # base64 عاديّةٌ تُفكُّ بلا مفتاح، فكانت الكلمةُ مقروءةً في الجدول وفي كلّ
+    # ``pg_dump``. ولا قارئَ لها في الإنتاج ⟵ حُذفت دالّتا التعمية/الفكّ وصار
+    # ``network_save_config`` يُفرّغ العمودَ في كلّ حفظ. يُحذف العمودُ نفسُه في
+    # هجرةِ صيانةٍ لاحقة (``RemoveField`` = تغييرُ مخطَّط، لا يخلط مع 0078).
     master_db_password_enc = models.CharField(
-        max_length=500, blank=True, db_column='master_db_password',
-        help_text='كلمة المرور مشفّرة بـ django.core.signing'
+        max_length=500, blank=True, db_column='master_db_password', editable=False,
+        help_text=(
+            'عمودٌ موروثٌ مهجور — لا يُكتب ولا يُقرأ. لا تُخزَّن كلمةُ مرور '
+            'قاعدةِ البيانات في القاعدة: إقلاعُ الاتّصال في ملفّ البيئة بيد '
+            'مدير النظام.'
+        ),
     )
 
     is_configured  = models.BooleanField(default=False)
@@ -2887,24 +2897,10 @@ class NetworkSettings(models.Model):
         obj, _ = cls.objects.get_or_create(id=1)
         return obj
 
-    # ── تشفير / فك تشفير كلمة مرور قاعدة البيانات ────────────────────────────
-    def set_db_password(self, plain: str):
-        """يشفّر كلمة المرور ويحفظها."""
-        if plain:
-            from django.core import signing
-            self.master_db_password_enc = signing.dumps(plain, salt='lettersys_net_db_pw')
-        else:
-            self.master_db_password_enc = ''
-
-    def get_db_password(self) -> str:
-        """يفكّ تشفير كلمة المرور ويعيدها."""
-        if not self.master_db_password_enc:
-            return ''
-        try:
-            from django.core import signing
-            return signing.loads(self.master_db_password_enc, salt='lettersys_net_db_pw')
-        except Exception:
-            return ''
+    # ── لا دالّةَ تعميةٍ هنا، ولا فكَّ تعمية ──────────────────────────────────
+    # كانت ``set_db_password``/``get_db_password`` تُسمّيان أنفسهما تعميةً وهما
+    # ``django.core.signing`` = توقيعٌ + base64. حُذفتا مع ناديهما الوحيد، فلم
+    # يبقَ في الشيفرة ما يُخزّن كلمةَ مرور قاعدةِ البيانات أو يزعم حمايتَها.
 
 
 class NetworkNode(models.Model):

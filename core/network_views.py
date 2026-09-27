@@ -15,8 +15,10 @@ Architecture
 """
 
 import concurrent.futures
+import ipaddress
 import json
 import logging
+import re
 import socket
 import time
 from datetime import timedelta
@@ -41,6 +43,36 @@ APP_VERSION = '1.0'
 
 def _is_staff(user):
     return user.is_staff
+
+
+# ─── مُقنِّنات المُدخَل ─────────────────────────────────────────────────────────
+# الأسطرُ المعروضةُ للنسخ (``env_lines``) يلصقها مديرُ النظام في ملفّ البيئة
+# كما هي. و``.strip()`` وحدَه لا يُخرِج سطراً جديداً **داخل** القيمة: قيمةٌ
+# مِثل مضيفٍ تليه فاصلةُ أسطرٍ ثمّ ``DEBUG=True`` كانت تُنتج
+# سطرَ ``DEBUG=True`` كاملاً في ما يُنسَخ. فالتقنينُ هنا شرطُ صدقِ ما يُعرَض، لا تجميل.
+_HOST_RE = re.compile(r'^[A-Za-z0-9](?:[A-Za-z0-9._\-]{0,98}[A-Za-z0-9])?$')
+_IDENT_RE = re.compile(r'^[A-Za-z0-9_][A-Za-z0-9_.$\-]{0,99}$')
+
+
+def _clean_host(raw):
+    """مضيفٌ صالحٌ (IP أو اسم) أو ``None``. الفراغُ يعني «لم يُرسَل»."""
+    value = (raw or '').strip()
+    if not value:
+        return ''
+    try:
+        ipaddress.ip_address(value)
+        return value
+    except ValueError:
+        pass
+    return value if _HOST_RE.match(value) else None
+
+
+def _clean_identifier(raw, default):
+    """اسمُ قاعدةٍ أو مستخدمٍ بلا محارفِ تحكّمٍ ولا سطرٍ جديد، أو ``None``."""
+    value = (raw or '').strip()
+    if not value:
+        return default
+    return value if _IDENT_RE.match(value) else None
 
 
 # ─── Network utility functions ───────────────────────────────────────────────
@@ -298,24 +330,42 @@ def network_save_config(request):
     except (ValueError, TypeError):
         cfg.app_port = 8000
 
-    # لا يكتب هذا المُعالِجُ في ملفّ البيئة — لا سطرَ واحداً. القيمُ الخمسُ
-    # مخزَّنةٌ سلفاً في ``NetworkSettings`` (والكلمةُ مشفَّرةٌ هناك)، والكتابةُ
-    # كانت نسخةً ثانيةً مكشوفةً تدخل كلَّ نسخةٍ احتياطيّة عبر
+    # لا يكتب هذا المُعالِجُ في ملفّ البيئة — لا سطرَ واحداً. الأربعةُ غيرُ
+    # السرّيّة مخزَّنةٌ في ``NetworkSettings`` كسجلٍّ مرجعيّ، والكتابةُ كانت
+    # نسخةً ثانيةً مكشوفةً تدخل كلَّ نسخةٍ احتياطيّة عبر
     # ``CONFIG_FILES = ('.env',)``. الأسطرُ تُعرَض لمدير النظام لينسخها بيده.
+    #
+    # **وكلمةُ المرور لا تُخزَّن إطلاقاً.** كان السطرُ ``cfg.set_db_password(pw)``
+    # يُمرّرها على ``django.core.signing.dumps`` — وذلك **توقيعٌ لا تعمية**:
+    # القطعةُ الأولى base64 عاديّة تُفكّ بلا مفتاح، فالكلمةُ كانت مقروءةً في
+    # ``core_networksettings`` وفي كلّ ``pg_dump``. ولا قارئَ لها في الإنتاج
+    # أصلاً (``get_db_password`` كان بلا نداءٍ واحد) ⟵ سرٌّ مخزَّنٌ بلا فائدةٍ
+    # وبلا حماية. صار العمودُ يُفرَّغ عند كلّ حفظ.
     needs_admin_env = False
     env_lines = []
 
     if role == NetworkSettings.ROLE_SLAVE:
-        cfg.master_host     = data.get('master_host', '').strip()
+        host = _clean_host(data.get('master_host', ''))
+        db_name = _clean_identifier(data.get('master_db_name', ''), 'lettersys')
+        db_user = _clean_identifier(data.get('master_db_user', ''), 'lettersys_user')
+        bad = [name for name, value in (('master_host', host),
+                                        ('master_db_name', db_name),
+                                        ('master_db_user', db_user))
+               if value is None]
+        if bad:
+            return JsonResponse({
+                'ok': False,
+                'error': 'قيمةٌ غيرُ صالحة: ' + '، '.join(bad)
+                         + ' — يُسمح بحروفٍ وأرقامٍ و. _ - فقط، بلا فراغاتٍ ولا أسطر.',
+            }, status=400)
+        cfg.master_host = host
         try:
             cfg.master_db_port = int(data.get('master_db_port', 5432))
         except (ValueError, TypeError):
             cfg.master_db_port = 5432
-        cfg.master_db_name  = data.get('master_db_name', 'lettersys').strip()
-        cfg.master_db_user  = data.get('master_db_user', 'lettersys_user').strip()
+        cfg.master_db_name = db_name
+        cfg.master_db_user = db_user
         pw = data.get('master_db_password', '')
-        if pw:
-            cfg.set_db_password(pw)
 
         # إقلاعُ الاتّصال يبقى في ملفّ البيئة بيد مدير النظام، ولا يجوز نقلُه
         # إلى القاعدة: جهازٌ تابعٌ يحتاج ``DB_HOST`` **قبل** أن يفتح أيَّ
@@ -330,6 +380,10 @@ def network_save_config(request):
             # **اسمٌ لا قيمة**: الكلمةُ لا تُصدَّر في JSON ولا تُطبع في سجلّ.
             env_lines.append('DB_PASSWORD=<الكلمة التي أدخلتها>')
         needs_admin_env = True
+
+    # تفريغُ العمود الموروث في كلّ حفظ — أوّلُ زيارةٍ للصفحة تمحو أيَّ نسخةٍ
+    # قديمةٍ «موقَّعةٍ» كانت تُقرأ بـbase64 وحدَها.
+    cfg.master_db_password_enc = ''
 
     cfg.is_configured = True
     cfg.configured_at = timezone.now()

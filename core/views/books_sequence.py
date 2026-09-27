@@ -7,6 +7,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
@@ -15,6 +16,22 @@ from ..models import BookSequence, SystemSettings
 from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_int(raw):
+    """عددٌ صحيحٌ غيرُ سالب، أو ``None``. **لا ``isdigit()``.**
+
+    ``'²'.isdigit()`` صحيحٌ و``int('²')`` يرفع ``ValueError``: كان نمطُ
+    ``if raw.isdigit(): int(raw)`` يعطي 500 بعد أن حُفظت العدّاداتُ فعلاً
+    (والطلبُ غيرُ ذرّيّ — لا ``ATOMIC_REQUESTS``). و``isdecimal()`` لا يكفي
+    بديلاً: الأرقامَ العربيّةَ الهنديّة ('٤٥') ``isdecimal`` صحيحٌ لها
+    و``int`` يقبلها — فالحكمُ الصادقُ الوحيد هو ``int()`` نفسُه داخل حارس.
+    """
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value >= 0 else None
 
 
 @login_required
@@ -50,38 +67,58 @@ def sequence_settings(request):
     }
 
     if request.method == 'POST':
-        for seq in sequences:
-            prefix_key = f"prefix_{seq['kind']}"
-            number_key = f"next_number_{seq['kind']}"
-            new_prefix = request.POST.get(prefix_key, '').strip()
-            new_number = request.POST.get(number_key, '').strip()
-            update_fields = []
-            if new_prefix != seq['obj'].prefix:
-                seq['obj'].prefix = new_prefix
-                update_fields.append('prefix')
-            if new_number.isdigit() and int(new_number) != seq['obj'].next_number:
-                seq['obj'].next_number = int(new_number)
-                update_fields.append('next_number')
-            if update_fields:
-                seq['obj'].save(update_fields=update_fields + ['updated_at'])
+        ttl_error = None
+        # ذرّيّةٌ صريحة: لا ``ATOMIC_REQUESTS`` في هذا المشروع، وكان خطأُ تحليلٍ
+        # في حقل المدّة يترك العدّاداتَ محفوظةً والصفحةَ على 500.
+        with transaction.atomic():
+            for seq in sequences:
+                prefix_key = f"prefix_{seq['kind']}"
+                number_key = f"next_number_{seq['kind']}"
+                new_prefix = request.POST.get(prefix_key, '').strip()
+                new_number = _parse_int(request.POST.get(number_key, '').strip())
+                update_fields = []
+                if new_prefix != seq['obj'].prefix:
+                    seq['obj'].prefix = new_prefix
+                    update_fields.append('prefix')
+                if new_number is not None and new_number != seq['obj'].next_number:
+                    seq['obj'].next_number = new_number
+                    update_fields.append('next_number')
+                if update_fields:
+                    seq['obj'].save(update_fields=update_fields + ['updated_at'])
 
-        # المدى من ثوابت النموذج — لا رقمَ مكتوباً بيدٍ هنا ولا في القالب.
-        new_expire = request.POST.get('reservation_expire_minutes', '').strip()
-        if new_expire.isdigit() and (
-            SystemSettings.RESERVATION_TTL_MIN
-            <= int(new_expire)
-            <= SystemSettings.RESERVATION_TTL_MAX
-        ):
-            # بلا ``except`` واسع: إن فشل الحفظُ فليظهر. الرسالةُ كانت تُطلَق
-            # دائماً حتّى حين تفشل الكتابةُ بصمت — «حُفظ» صار يعني حُفظ.
-            cfg.reservation_expire_minutes = int(new_expire)
-            cfg.save(update_fields=['reservation_expire_minutes', 'updated_at'])
-            logger.info(
-                '[SequenceSettings] reservation_expire_minutes=%s by %s',
-                new_expire, request.user.username,
-            )
+            # المدى من ثوابت النموذج — لا رقمَ مكتوباً بيدٍ هنا ولا في القالب.
+            raw_expire = request.POST.get('reservation_expire_minutes', '').strip()
+            minutes = _parse_int(raw_expire) if raw_expire else None
+            if raw_expire and (
+                minutes is None
+                or not (SystemSettings.RESERVATION_TTL_MIN
+                        <= minutes
+                        <= SystemSettings.RESERVATION_TTL_MAX)
+            ):
+                # **الرفضُ يُقال**: كانت رسالةُ النجاح تُطلَق على كلّ طلبٍ، فقيمةٌ
+                # مرفوضةٌ تُسقَط بصمتٍ والصفحةُ تقول «حُفظ». حارسا ``min/max`` في
+                # القالب يمنعان متصفّحاً عاديّاً، لا طلباً مصنوعاً.
+                ttl_error = (
+                    'مدّةُ حجز الرقم مرفوضة: يجب أن تكون عدداً صحيحاً بين '
+                    f'{SystemSettings.RESERVATION_TTL_MIN} و'
+                    f'{SystemSettings.RESERVATION_TTL_MAX} دقيقة. بقيت على '
+                    f'{cfg.reservation_expire_minutes} دقيقة.'
+                )
+            elif minutes is not None:
+                # بلا ``except`` واسع: إن فشل الحفظُ فليظهر. الرسالةُ كانت تُطلَق
+                # دائماً حتّى حين تفشل الكتابةُ بصمت — «حُفظ» صار يعني حُفظ.
+                cfg.reservation_expire_minutes = minutes
+                cfg.save(update_fields=['reservation_expire_minutes', 'updated_at'])
+                logger.info(
+                    '[SequenceSettings] reservation_expire_minutes=%s by %s',
+                    minutes, request.user.username,
+                )
 
-        messages.success(request, 'تم حفظ إعدادات العدّادات والحجز بنجاح.')
+        if ttl_error:
+            messages.error(request, ttl_error)
+            messages.success(request, 'حُفظت إعداداتُ العدّادات.')
+        else:
+            messages.success(request, 'تم حفظ إعدادات العدّادات والحجز بنجاح.')
         return redirect('sequence_settings')
 
     return render(request, 'core/sequence_settings.html', {
