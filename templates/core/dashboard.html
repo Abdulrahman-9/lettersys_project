@@ -160,10 +160,8 @@
             </div>
           </div>
           <div class="small">
-            <div class="d-flex justify-content-between mb-1">
-              <span class="text-muted">قيد الإرسال:</span>
-              <strong class="text-warning-emphasis">{{ outgoing_pending }}</strong>
-            </div>
+            {# OPT‑1 (موافقةُ المالك 09‑27): القاعدةُ نفسُها والتسميةُ نفسُها — «الإرسال» كانت تسميةً خاطئة #}
+            <a href="{% url 'book_unified' %}?tab=outgoing&followup=active" class="d-flex justify-content-between mb-1 link-body-emphasis link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover"><span class="text-muted">{{ active_label }}:</span><strong class="text-warning-emphasis">{{ outgoing_pending }}</strong></a>
             <div class="d-flex justify-content-between">
               <span class="text-muted">تم الإرسال:</span>
               <strong class="text-success">{{ outgoing_done }}</strong>
