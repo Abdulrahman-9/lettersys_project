@@ -26,7 +26,10 @@ from django.contrib.auth.models import User
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
-REMOTE = '172.16.2.50'          # كاتبةٌ على الشبكة المحلّيّة
+# عنوانٌ محجوزٌ للتوثيق (RFC 5737) — والمستودعُ عامّ فلا عنوانَ شركةٍ فيه. وهو
+# يخدم القياسَ كما هو: ``ipaddress`` يَعُدّ 192.0.2.0/24 شبكةً خاصّةً، فبقي
+# ``is_lan_peer`` صادقاً عليه كما على عنوان كاتبةٍ حقيقيّ.
+REMOTE = '192.0.2.50'           # كاتبةٌ على الشبكة المحلّيّة
 LOOPBACK = '127.0.0.1'          # كونسولُ الخادم
 _PROXY = ('HTTP_X_FORWARDED_PROTO', 'https')
 
@@ -158,13 +161,13 @@ class NetAddrHelperTests(TestCase):
     def test_loopback_only_not_whole_lan(self):
         from core.netaddr import is_lan_peer, request_is_loopback
         self.assertTrue(request_is_loopback(self._req('127.0.0.1')))
-        self.assertFalse(request_is_loopback(self._req('172.16.2.50')))
+        self.assertFalse(request_is_loopback(self._req(REMOTE)))
         # الفرقُ عن ``is_lan_peer`` هو بيتُ القصيد: هذا يقبل كلَّ الشبكة الخاصّة
-        self.assertTrue(is_lan_peer(self._req('172.16.2.50')))
+        self.assertTrue(is_lan_peer(self._req(REMOTE)))
 
     def test_forwarded_header_is_ignored(self):
         from core.netaddr import request_is_loopback
-        r = self._req('172.16.2.50', HTTP_X_FORWARDED_FOR='127.0.0.1')
+        r = self._req(REMOTE, HTTP_X_FORWARDED_FOR='127.0.0.1')
         self.assertFalse(request_is_loopback(r))
 
     def test_garbage_address_is_not_loopback(self):

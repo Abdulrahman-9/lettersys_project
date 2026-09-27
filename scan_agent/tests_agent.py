@@ -219,7 +219,7 @@ class ServerGateTests(unittest.TestCase):
     def setUp(self):
         # قائمةٌ صريحةٌ للقياس: أصلٌ باسمٍ على المنفذ الضمنيّ 80 وأصلٌ بـIP:منفذ.
         p = mock.patch.object(config, 'ALLOWED_ORIGINS',
-                              {('http', '172.16.2.16', 8000), ('http', 'lettersys', 80)})
+                              {('http', '192.0.2.10', 8000), ('http', 'lettersys', 80)})
         p.start()
         self.addCleanup(p.stop)
         # سجلُّ الأصول المرفوضة إلى مجلّدٍ مؤقّت وstderr مُعلَّق — لا نكتب في بيانات المستخدم
@@ -231,7 +231,7 @@ class ServerGateTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
         server._LOGGED_ORIGINS.clear()
 
-    ALLOWED = 'http://172.16.2.16:8000'
+    ALLOWED = 'http://192.0.2.10:8000'
 
     def _req(self, path, method='GET', headers=None, host=None, send_host=True, body=None):
         """(status, body, headers) — ``host=None`` يعني المضيفَ الصحيح، و``send_host=False``
@@ -352,11 +352,11 @@ class ServerGateTests(unittest.TestCase):
     def test_origin_suffix_attack_rejected(self):
         """مساواةُ tuple لا بادئةً: ``…:8000.evil.com`` مضيفٌ آخرُ تماماً."""
         st, _, _ = self._req('/agent/health',
-                             headers={'Origin': 'http://172.16.2.16:8000.evil.com'})
+                             headers={'Origin': 'http://192.0.2.10:8000.evil.com'})
         self.assertEqual(st, 403)
 
     def test_origin_other_port_rejected(self):
-        st, _, _ = self._req('/agent/health', headers={'Origin': 'http://172.16.2.16:8001'})
+        st, _, _ = self._req('/agent/health', headers={'Origin': 'http://192.0.2.10:8001'})
         self.assertEqual(st, 403)
 
     def test_health_without_origin_ok(self):
@@ -484,9 +484,9 @@ class OriginConfigTests(unittest.TestCase):
             f.write(text)
 
     def test_file_with_two_origins_parsed(self):
-        self._write('{"allowed_origins": ["http://lettersys", "http://172.16.2.16:8000"]}')
+        self._write('{"allowed_origins": ["http://lettersys", "http://192.0.2.10:8000"]}')
         got = config.load_allowed_origins()
-        self.assertEqual(got, {('http', 'lettersys', 80), ('http', '172.16.2.16', 8000)})
+        self.assertEqual(got, {('http', 'lettersys', 80), ('http', '192.0.2.10', 8000)})
 
     def test_missing_file_falls_back_to_loopback_defaults(self):
         """حالةُ الجهاز الواحد (كونسولُ الخادم/استنساخٌ جديد): تعمل بصفر إعداد كما اليوم."""
