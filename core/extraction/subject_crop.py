@@ -245,11 +245,36 @@ _BODY_RE = re.compile(r'^\s*(?:نود|نرجو|يرجى|إشارة|اشارة|ا
 _MARK_HINT_RE = re.compile(r'^\s*[اأآ]?م\s*[/:\-.,،]|^\s*/|الموضوع|بشأن|بخصوص|(?i:subj)')
 
 
+def _tsv_records(tsv) -> List[Dict]:
+    """TSV ⟵ صفوفٌ. يقبل ثلاثةَ أشكال: ``DataFrame`` (``to_dict('records')``)،
+    و**قاموسَ أعمدة** كما يُعيده ``pytesseract.Output.DICT``، وقائمةَ صفوفٍ جاهزة.
+
+    2026-09-13: كان القبولُ ناقصاً — ``list(tsv)`` على قاموس الأعمدة يُعيد
+    **أسماءَ المفاتيح نصوصاً**، فيُرفع ``AttributeError`` في الحلقة ويبتلعه
+    ``except`` العريضُ عند المستدعي ⟵ ``lines=[]`` **بصمت**. فتحويلُ نداءِ
+    الأنبوب من ``DATAFRAME`` إلى ``DICT`` وحدَه كان سيُعيد الصمتَ نفسَه.
+    """
+    if hasattr(tsv, 'to_dict'):
+        try:
+            return list(tsv.to_dict('records'))
+        except Exception:
+            return []
+    if isinstance(tsv, dict):
+        cols = [k for k in tsv if isinstance(tsv.get(k), (list, tuple))]
+        if not cols:
+            return []
+        n = min(len(tsv[k]) for k in cols)
+        return [{k: tsv[k][i] for k in cols} for i in range(n)]
+    try:
+        return list(tsv)
+    except Exception:
+        return []
+
+
 def lines_from_tsv(tsv, width: int, height: int) -> List[Dict]:
     """أسطرُ Tesseract (block/par/line) ⟵ ``{text, x, y, w, h}`` بكسور، مرتّبةً من الأعلى."""
-    try:
-        rows = tsv.to_dict('records') if hasattr(tsv, 'to_dict') else list(tsv)
-    except Exception:
+    rows = _tsv_records(tsv)
+    if not rows:
         return []
     groups: Dict[tuple, List[Dict]] = {}
     for r in rows:
@@ -304,7 +329,11 @@ def _anchors(lines: List[Dict]) -> Dict[str, Optional[float]]:
     top = None; bottom = None; recip = None
     for l in lines:
         t = l.get('text', '')
-        if _RECIP_RE.match(t):
+        # 2026-09-13: حدُّ y — «إلى/» في الذيل أو «نسخة إلى» كان يدفع المرساةَ العليا
+        # **تحت** الموضوع فيُقصى السطرُ الصحيحُ من الحزام في 37% (قياسُ فيبل على 60
+        # صفحةً: 19/60 صفحةً فيها المطابقةُ في الذيل، و22/60 يسقط ذهبُها).
+        # الأثرُ المقيس: إصابةُ الأعلى 55⟵72 وإصابةُ الأربعة 58⟵80.
+        if _RECIP_RE.match(t) and l['y'] < 0.45:
             recip = l['y'] if recip is None else recip
             top = max(top or 0.0, l['y'] + l['h'])
         elif _FIELD_RE.match(t) and l['y'] < 0.45:
@@ -333,7 +362,13 @@ def score_lines(lines: List[Dict], img=None) -> List[Dict]:
         if ar_words + en_words < 1:
             continue
         score = 0.0; why = []
-        if any(l['y'] + l['h'] <= r <= l['y'] + l['h'] + 0.012 for r in ul):
+        # 2026-09-13: نافذةٌ متناظرةٌ حول خطّ الأساس. كانت `[y+h, y+h+0.012]` — أي
+        # «تحت السطر» وحدَه — وTesseract **يبتلع الخطَّ داخل صندوق السطر** فيقع
+        # الصفُّ الداكنُ فوق `y+h` لا تحته (قياس: «داخل» 33% مقابل «تحت» 18%،
+        # والخطُّ موجودٌ فعلاً في 98% بمسح المالك 59/60).
+        # الأثرُ المقيس: استردادُ الخطّ 22⟵47% وإصابةُ الأعلى +3 بصفرِ «خطٍّ‑ومخطئ».
+        _ul_base = l['y'] + l['h']
+        if any(_ul_base - 0.012 <= r <= _ul_base + 0.012 for r in ul):
             score += 2.0; why.append('underline')
         if 0.15 <= l['w'] <= 0.80 and (ar_words + en_words) >= 2:
             score += 1.0; why.append('width')

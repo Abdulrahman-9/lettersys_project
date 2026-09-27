@@ -71,6 +71,60 @@ class GeometryTests(SimpleTestCase):
 
 
 @override_settings(SUBJECT_BOXES_PATH='/tmp/lettersys_subject_boxes_test.json')
+class MeasuredFixesTests(SimpleTestCase):
+    """حرّاسُ الإصلاحات الثلاثة المقيسة (2026-09-13، مذكّرةُ فيبل الخامسة).
+
+    كلٌّ منها كان عطباً صامتاً لم يلتقطه اختبارٌ قائم: `test_silence_yields_a_proposal_with_a_cached_page`
+    يُطفئ حزمةَ OCR عمداً فيقبل `default`، فلا يرى هندسةَ أسطرٍ ميتة. وكلُّ حارسٍ هنا يُطفَّر فيحمرّ.
+    """
+
+    def _dict_tsv(self):
+        # شكلُ pytesseract.Output.DICT حرفيّاً: قاموسُ **أعمدة** لا قائمةُ صفوف.
+        return {
+            'level': [5, 5, 5], 'page_num': [1, 1, 1], 'block_num': [1, 1, 1], 'par_num': [1, 1, 1],
+            'line_num': [1, 1, 2], 'word_num': [1, 2, 1],
+            'left': [100, 300, 100], 'top': [50, 50, 120], 'width': [150, 120, 400], 'height': [30, 30, 30],
+            'conf': ['90', '88', '91'], 'text': ['تخصيص', 'مبالغ', 'الصيانة'],
+        }
+
+    def test_column_dict_tsv_yields_rows_not_key_names(self):
+        rows = sc._tsv_records(self._dict_tsv())
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]['text'], 'تخصيص')
+        self.assertEqual(int(rows[2]['line_num']), 2)
+
+    def test_lines_from_dict_tsv_is_not_silent(self):
+        # قبل الإصلاح: list(dict) يُعيد أسماءَ المفاتيح ⟵ AttributeError ⟵ lines=[] بصمتٍ عند المستدعي.
+        lines = sc.lines_from_tsv(self._dict_tsv(), 1000, 1000)
+        self.assertEqual(len(lines), 2)
+        self.assertLess(lines[0]['y'], lines[1]['y'])
+
+    def test_footer_recipient_does_not_drag_the_top_anchor_below_the_subject(self):
+        # «إلى/» في الذيل (نسخةٌ إلى) كان يدفع المرساةَ العليا تحت الموضوع فيُقصيه (37% مقيسة).
+        lines = _lines(
+            ('إلى/ السيد المدير العام', 0.15, 0.02),
+            ('تخصيص مبالغ صيانة المحطة', 0.30, 0.02, 0.2, 0.4),
+            ('تحية طيبة وبعد', 0.40, 0.02),
+            ('إلى/ السيد مدير الحسابات للعلم', 0.85, 0.02),
+        )
+        texts = [c['text'] for c in sc.score_lines(lines, None)]
+        self.assertIn('تخصيص مبالغ صيانة المحطة', texts)
+
+    def test_underline_swallowed_inside_the_line_box_still_counts(self):
+        # Tesseract يضع الخطَّ **داخل** صندوق السطر: الصفُّ الداكنُ فوق y+h بقليل.
+        # النافذةُ القديمة [y+h, y+h+0.012] لا تراه؛ المتناظرةُ [y+h−0.012, y+h+0.012] تراه.
+        img = Image.new('L', (1000, 1400), 255)
+        d = ImageDraw.Draw(img)
+        d.rectangle([200, 440, 800, 442], fill=0)           # y≈0.3143–0.3157 < y+h=0.32
+        lines = _lines(
+            ('إلى/ السيد المدير العام', 0.15, 0.02),
+            ('تخصيص مبالغ صيانة المحطة', 0.30, 0.02, 0.2, 0.4),
+            ('تحية طيبة وبعد', 0.40, 0.02),
+        )
+        cand = next(c for c in sc.score_lines(lines, img) if c['text'] == 'تخصيص مبالغ صيانة المحطة')
+        self.assertIn('underline', cand['why'])
+
+
 class StoreAndGateTests(TestCase):
 
     def setUp(self):
