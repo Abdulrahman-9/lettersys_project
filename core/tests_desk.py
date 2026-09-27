@@ -8,6 +8,7 @@
 
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
+from django.urls import reverse
 
 from core.custody_service import record_custody
 from core.models import (Book, CustodyEvent, Department, Entity, UserProfile)
@@ -48,6 +49,26 @@ class DeskTestCase(TestCase):
             kind='incoming_internal', title='مناقصةٌ سرّيّة', created_by=cls.officer,
             department=cls.dept, our_number='2437', secret_level='secret',
         )
+
+
+class LedgerLiveOnlyTests(DeskTestCase):
+    """§7.2 صراحةً على الدفتر: كان الحرزُ عرَضيّاً (المنقولُ بلا ``department``)."""
+
+    def test_a_legacy_book_stays_out_of_the_ledger_even_with_a_department(self):
+        Book.objects.create(
+            kind='incoming_external', title='منقولٌ من الورق', created_by=self.officer,
+            department=self.dept, our_number='7001', source_ref='IIMAIL_2025#1',
+        )
+        Book.objects.create(
+            kind='incoming_external', title='كتابُ تدريب', created_by=self.officer,
+            department=self.dept, our_number='7002', is_training=True,
+        )
+        self.client.force_login(self.officer)
+        resp = self.client.get('/books/desk/ledger/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'تخصيصاتُ الحفر')
+        self.assertNotContains(resp, 'منقولٌ من الورق')
+        self.assertNotContains(resp, 'كتابُ تدريب')
 
 
 class DeskAccessTests(DeskTestCase):
@@ -167,3 +188,15 @@ class LedgerTests(DeskTestCase):
     def test_a_broken_date_is_ignored_not_fatal(self):
         resp = self.client.get('/books/desk/ledger/', {'date_from': 'ليس تاريخاً'})
         self.assertEqual(resp.status_code, 200)
+
+
+class SheetsCarryTheCompanyNameTests(DeskTestCase):
+    """ق‑7: الورقتان الموقَّعتان تطبعان «شركة نفط الوسط» (من الإعدادات، لا «نفط ميسان»)."""
+
+    def test_both_sheets_name_the_company_from_settings(self):
+        self.client.force_login(self.officer)
+        for name in ('desk_handover', 'desk_ledger'):
+            r = self.client.get(reverse(name))
+            self.assertEqual(r.status_code, 200, name)
+            self.assertContains(r, 'شركة نفط الوسط')
+            self.assertNotContains(r, 'نفط ميسان')

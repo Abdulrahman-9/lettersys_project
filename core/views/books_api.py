@@ -493,7 +493,7 @@ def api_bulk_delete_books(request):
             return JsonResponse({"error": "No book IDs provided"}, status=400)
 
         now = timezone.now()
-        books_qs = Book.objects.filter(id__in=book_ids, is_deleted=False)
+        books_qs = Book.objects.filter(id__in=book_ids)
         if not is_privileged(request.user):
             books_qs = books_qs.filter(created_by=request.user)
 
@@ -554,7 +554,7 @@ def api_bulk_update_status_books(request):
         except (TypeError, ValueError):
             return JsonResponse({"error": "book_ids must be integers"}, status=400)
 
-        books_qs = Book.objects.filter(id__in=clean_ids, is_deleted=False)
+        books_qs = Book.objects.filter(id__in=clean_ids)
         if not is_privileged(request.user):
             books_qs = books_qs.filter(created_by=request.user)
 
@@ -640,8 +640,8 @@ def api_book_detail_json(request, pk):
     try:
         book = Book.objects.select_related('created_by').prefetch_related(
             'issuing_entities', 'receiving_entities',
-            Prefetch('attachments', queryset=Attachment.objects.filter(is_deleted=False).order_by('-uploaded_at'))
-        ).get(pk=pk, is_deleted=False)
+            Prefetch('attachments', queryset=Attachment.objects.order_by('-uploaded_at'))
+        ).get(pk=pk)
     except Book.DoesNotExist:
         return JsonResponse({'error': 'الكتاب غير موجود'}, status=404)
 
@@ -734,7 +734,7 @@ def api_book_inline_status(request, pk):
 
     from core.scoping import can_open_content
 
-    book = get_object_or_404(Book, pk=pk, is_deleted=False)
+    book = get_object_or_404(Book, pk=pk)
     # تغييرُ الحالة عمليّةُ **محتوى** — البوّابةُ من المصدر الوحيد لا نسخةٌ
     # يدويّةٌ تمنح `is_staff` كلَّ كتب الشركة. و404 لا 403.
     if not can_open_content(book, request.user):
@@ -787,7 +787,7 @@ def update_book_api(request):
         if not edit_pk:
             return JsonResponse({'success': False, 'message': 'edit_pk مطلوب', 'error_code': 'MISSING_EDIT_PK'}, status=400)
 
-        book = get_object_or_404(Book, pk=edit_pk, is_deleted=False)
+        book = get_object_or_404(Book, pk=edit_pk)
         # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
         # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
         # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
@@ -876,7 +876,7 @@ def update_book_api(request):
                 # وضع التعديل = استبدال المرفق المُعدَّل تحديداً، لا أرشفة كل المرفقات:
                 # نستهدف المرفق الذي عُدِّلت صفحاته (attachment_id من الواجهة)، وإلا الأساسي.
                 # يمنع هذا أن يؤرشف تدويرُ/حذفُ صفحةٍ في مرفقٍ بقيةَ مرفقات الكتاب (فقدان/تدقيق).
-                active_attachments = book.attachments.filter(is_deleted=False)
+                active_attachments = book.attachments.all()
                 target_attachment = None
                 _target_id = (request.POST.get('attachment_id') or '').strip()
                 if _target_id:

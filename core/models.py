@@ -202,8 +202,10 @@ class Tag(models.Model):
 class SoftDeleteManager(models.Manager):
     """المدير الافتراضي للنماذج ذات الحذف الناعم — لا يرى المحذوف.
 
-    كان الحذف الناعم قاعدةً منسوخة يدويّاً: ``is_deleted=False`` مكتوبة **73
-    مرّة** في كود الإنتاج وصفر managers مخصّصة. قاعدةٌ بهذا الانتشار تفشل
+    كان الحذف الناعم قاعدةً منسوخة يدويّاً: ``is_deleted=False`` مكتوبة **106
+    مرّةً في 49 ملفّاً** (مقيس 2026‑09‑10) وصفر managers مخصّصة — كُنِست منها 98
+    الزائدةُ في 7.4‑هـ، وبقي موضعا الضمّ في ``core/extraction/matchers/profile.py``
+    (الضمُّ لا يمرّ بمدير) وشرطُ ``UniqueConstraint`` أدناه. قاعدةٌ بهذا الانتشار تفشل
     بالصمت: استعلامٌ واحد ينسى الشرط يُظهر ما حُذف، ولا اختبارَ يلتقطه لأنّ
     النسيان لا يُخطئ — يُظهر فقط.
 
@@ -217,6 +219,16 @@ class SoftDeleteManager(models.Manager):
 
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
+
+
+class BookManager(SoftDeleteManager):
+    """مديرُ الكتب: الحذفُ الناعم نفسُه + مدخلُ قاعدة §7.2."""
+
+    def live(self):
+        """قاعدةُ §7.2: الطوابيرُ والدفاترُ تُبنى على الحيّ وحده — لا المنقولُ من
+        الورق (``source_ref``) ولا كتبُ التدريب (``is_training``). الافتراضاتُ
+        التي كانت تفتح الدفترَ كلَّه (13 ألفَ صفّ) تمرّ من هنا."""
+        return self.get_queryset().filter(source_ref='', is_training=False)
 
 
 class Book(models.Model):
@@ -434,7 +446,7 @@ class Book(models.Model):
                 return active[0] if active else None
         except AttributeError:
             pass
-        return self.attachments.filter(is_deleted=False).first()
+        return self.attachments.first()
 
     @property
     def first_issuing_entity(self):
@@ -528,7 +540,7 @@ class Book(models.Model):
 
 
     #: الافتراضيّ لا يرى المحذوف؛ ``all_objects`` مخرجٌ صريح للسلّة والاستعادة.
-    objects = SoftDeleteManager()
+    objects = BookManager()
     all_objects = models.Manager()
 
     class Meta:

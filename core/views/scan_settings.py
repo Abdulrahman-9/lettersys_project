@@ -326,7 +326,7 @@ def scan_stage_attachment(request, attachment_id: int):
     from django.shortcuts import get_object_or_404
     from core.models import Attachment
 
-    att = get_object_or_404(Attachment, id=attachment_id, is_deleted=False)
+    att = get_object_or_404(Attachment, id=attachment_id)
     book = att.book
     if not can_open_content(book, request.user):
         return JsonResponse({'ok': False, 'error': 'غير مصرح'}, status=403)

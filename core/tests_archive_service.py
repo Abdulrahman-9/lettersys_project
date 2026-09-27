@@ -242,6 +242,11 @@ class ArchiveQuerySetTests(TestCase):
     def test_the_queryset_splits_the_three_states(self):
         archived = set(archived_books().values_list('pk', flat=True))
         pending = set(unarchived_books().values_list('pk', flat=True))
+        # (د‑5) الافتراضُ `qs=None` يحمل §7.2: المنقولُ والتدريبُ خارجَه.
+        legacy = Book.objects.create(kind='incoming_external', title='إرث', created_by=self.archivist,
+                                     source_ref='IIMAIL_2025#9')
+        self.assertNotIn(legacy.pk, set(unarchived_books().values_list('pk', flat=True)))
+        self.assertIn(legacy.pk, set(unarchived_books(Book.objects.all()).values_list('pk', flat=True)))
 
         self.assertEqual(archived, {self.kept.pk})
         self.assertIn(self.open_again.pk, pending)

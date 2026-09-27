@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 @require_POST
 def sign_attachment_view(request, pk):
     """يوقّع مرفقاً — والعودةُ إلى صفحة الكتاب بأثرٍ مرئيّ."""
-    attachment = get_object_or_404(Attachment, pk=pk, is_deleted=False)
+    attachment = get_object_or_404(Attachment, pk=pk)
     book = attachment.book
 
     try:

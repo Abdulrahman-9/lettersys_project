@@ -42,7 +42,6 @@ class Command(BaseCommand):
         overdue_qs = Book.objects.filter(
             is_archived=False,
             due_date__lt=today,
-            is_deleted=False,
         ).select_related('created_by')
 
         # تفادي تكرار التنبيه ضمن نفس دورة المتابعة — لكن السماح به في دورة جديدة:

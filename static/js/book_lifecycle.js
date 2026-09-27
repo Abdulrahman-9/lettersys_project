@@ -17,6 +17,9 @@
   var bookId = card.dataset.bookId;
   if (!bookId) return;
 
+  // المنطقةُ الثابتة التي تُعاد رسمُ محتوياتها بعد الفعل (البطاقةُ تُستبدل، هي لا)
+  var region = document.getElementById('lifecycleRegion') || card.parentNode;
+
   var targetsCache = null;
 
   // ── أدواتٌ صغيرة ──────────────────────────────────────────────────────
@@ -77,12 +80,50 @@
     return true;
   }
 
+  // ── إعادةُ الرسم في المكان (ح1 في تدقيق الانتقالات) ─────────────────
+  // كانت كلُّ نقلةٍ تُعيد تحميلَ الصفحة كاملةً فتفقد التمريرَ وتُبطئ. الآن تُجلب
+  // الصفحةُ نفسُها في الخلفيّة وتُستبدل **المناطقُ الموسومة** `data-lifecycle-refresh`
+  // فقط (لوحةُ التسيير، شارةُ الحالة، سجلُّ المتابعة) — الخادمُ يبقى مصدرَ الحقيقة
+  // بلا مسارٍ جديدٍ ولا قالبٍ مكرَّر. وإن أخفق الجلبُ سقطنا إلى إعادة التحميل.
+  function closeOpenModal() {
+    var open = document.querySelector('.modal.show');
+    if (!open || !window.bootstrap || !window.bootstrap.Modal) return;
+    var inst = window.bootstrap.Modal.getInstance(open);
+    if (inst) inst.hide();
+  }
+
+  function refreshInPlace() {
+    return fetch(window.location.href, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+      cache: 'no-store'
+    }).then(function (res) {
+      if (!res.ok) throw new Error('refresh ' + res.status);
+      return res.text();
+    }).then(function (html) {
+      var fresh = new DOMParser().parseFromString(html, 'text/html');
+      var swapped = 0;
+      document.querySelectorAll('[data-lifecycle-refresh]').forEach(function (el) {
+        if (!el.id) return;
+        var next = fresh.getElementById(el.id);
+        if (next) { el.innerHTML = next.innerHTML; swapped++; }
+      });
+      if (!swapped) throw new Error('nothing to swap');
+      // البطاقةُ الجديدة تحمل المعرّفَ نفسَه؛ المعالجُ مفوَّضٌ على المنطقة فلا يُعاد ربطُه
+      card = document.getElementById('lifecycleCard') || card;
+    });
+  }
+
   function notify(message, ok) {
     if (!ok) { toast(message, false); return; }
-    // النجاحُ يُعيد تحميلَ الصفحة ليظهر أثرُه، فتوستٌ يُعرض الآن يموت قبل أن
-    // يُقرأ. تُحفظ الرسالةُ لتُعرض **بعد** التحميل — فيرى الكاتبُ ما جرى.
-    try { window.sessionStorage.setItem(PENDING_TOAST, message); } catch (e) { toast(message, true); }
-    setTimeout(function () { window.location.reload(); }, 250);
+    closeOpenModal();
+    refreshInPlace().then(function () {
+      toast(message, true);
+    }).catch(function () {
+      // سقوطٌ احتياطيّ: الرسالةُ تعبر إعادةَ التحميل
+      try { window.sessionStorage.setItem(PENDING_TOAST, message); } catch (e) { toast(message, true); }
+      setTimeout(function () { window.location.reload(); }, 250);
+    });
   }
 
   (function showWhatSurvivedTheReload() {
@@ -213,8 +254,8 @@
     });
   }
 
-  // ── أزرارُ صفوف الإحالة ───────────────────────────────────────────────
-  card.addEventListener('click', function (event) {
+  // ── أزرارُ صفوف الإحالة (تفويضٌ على المنطقة الثابتة لا البطاقة المُستبدَلة) ──
+  region.addEventListener('click', function (event) {
     var button = event.target.closest('[data-referral-act]');
     if (!button) return;
     event.preventDefault();

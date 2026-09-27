@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block title %}غير مصرَّح{% endblock %}
+{% block content %}
+{% include "core/_error_page.html" with code=403 title="ليس لديك صلاحيّةُ الوصول إلى هذه الصفحة" hint="إن كنتَ تظنّ أنّ لك حقّاً فيها فراجع مديرَ النظام." %}
+{% endblock %}

@@ -6,6 +6,7 @@ Notifications Views - معالجات الإشعارات
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpResponseNotAllowed
 
 from ..models import Notification
 
@@ -37,6 +38,8 @@ def notification_mark_read(request, pk):
     Returns:
         Redirect to notifications page
     """
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
     n = get_object_or_404(Notification, pk=pk, user=request.user)
     n.is_read = True
     n.save(update_fields=["is_read"])

@@ -5,11 +5,13 @@
 {% endcomment %}
 <div class="qb-grid">
   {% for q in queues %}
-  <section class="qb-card qb-{{ q.tone }}" aria-labelledby="qb-h-{{ q.key }}">
-    <header class="qb-head">
+  <section class="qb-card qb-{{ q.tone }}{% if q.expanded %} is-expanded{% endif %}" id="q-{{ q.key }}" aria-labelledby="qb-h-{{ q.key }}">
+    {# رأسُ البطاقة رابطٌ إلى الطابور كاملاً (?expand) — لا طريقَ مسدوداً #}
+    <a class="qb-head" href="{% if q.expanded %}?{% else %}?expand={{ q.key }}{% endif %}#q-{{ q.key }}"
+       title="{% if q.expanded %}اطوِ الطابور{% else %}اعرض الطابورَ كلَّه{% endif %}">
       <h3 id="qb-h-{{ q.key }}">{{ q.label }}</h3>
       <span class="qb-count" {% if q.total %}data-has="1"{% endif %}>{{ q.total }}</span>
-    </header>
+    </a>
     <p class="qb-hint">{{ q.hint }}</p>
 
     {% if q.rows %}
@@ -38,7 +40,8 @@
       </li>
       {% endfor %}
     </ul>
-    {% if q.more %}<p class="qb-more">و{{ q.more }} غيرها</p>{% endif %}
+    {% if q.more %}<p class="qb-more"><a href="?expand={{ q.key }}#q-{{ q.key }}">و{{ q.more }} غيرها ←</a></p>
+    {% elif q.expanded and q.total > 12 %}<p class="qb-more"><a href="?#q-{{ q.key }}">اطوِ ↑</a></p>{% endif %}
     {% else %}
     <p class="qb-empty">لا شيء هنا — وهذا خبرٌ جيّد.</p>
     {% endif %}

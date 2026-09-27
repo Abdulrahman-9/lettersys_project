@@ -171,10 +171,43 @@
         handlePaginationEdgeAfterDelete();
       }, 300);
 
-      showToast(payload.message || "تم حذف الكتاب", "success");
+      // «تراجع» في التوست نفسِه: الحذفُ ناعمٌ والمسارُ موجود — فلا يُترك المستخدمُ
+      // يبحث في السلّة عن ضغطةٍ خاطئة (تدقيقُ الانتقالات د1/د2).
+      const undoUrl = trigger.getAttribute("data-undo-url");
+      const ls = window.LetterSystem;
+      if (undoUrl && ls && typeof ls.showToastWithAction === "function") {
+        const undoBtn = document.createElement("button");
+        undoBtn.type = "button";
+        undoBtn.className = "btn btn-sm btn-warning";
+        undoBtn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>تراجع';
+        undoBtn.onclick = function () { undoDelete(undoUrl); };
+        ls.showToastWithAction(payload.message || "تم نقل الكتاب إلى السلة", "success", undoBtn, 8000);
+      } else {
+        showToast(payload.message || "تم حذف الكتاب", "success");
+      }
     } catch (error) {
       showToast(error.message || "حدث خطأ أثناء الحذف", "error");
       trigger.disabled = false;
+    }
+  }
+
+  async function undoDelete(undoUrl) {
+    try {
+      const response = await fetch(undoUrl, {
+        method: "POST",
+        headers: { "X-CSRFToken": getCsrfToken(), "X-Requested-With": "XMLHttpRequest" },
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.error) throw new Error(payload.error || "تعذّر التراجع");
+      showToast(payload.message || "أُعيد الكتاب", "success");
+      // الصفُّ أُزيل من DOM؛ أعِد تحميلَ القائمة في المكان بحالتها (تبويب/فلتر/صفحة)
+      if (window.bookAjaxManager && typeof window.bookAjaxManager.updateUrlAndLoadData === "function") {
+        window.bookAjaxManager.updateUrlAndLoadData();
+      } else {
+        window.location.reload();
+      }
+    } catch (error) {
+      showToast(error.message || "تعذّر التراجع", "error");
     }
   }
 

@@ -18,6 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from ..forms import AttachmentForm
 from ..models import Attachment, Book, BookHistory
+from .comments import can_edit_comment
 from core.scoping import (
     ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_open_content, can_view_book,
     is_privileged, secret_access,
@@ -35,7 +36,7 @@ def book_detail(request, pk):
             'receiving_entities',
             Prefetch(
                 'attachments',
-                queryset=Attachment.objects.filter(is_deleted=False)
+                queryset=Attachment.objects.all()
                     .prefetch_related('versions')
                     .order_by('-uploaded_at')
             ),
@@ -45,7 +46,6 @@ def book_detail(request, pk):
             )
         ),
         pk=pk,
-        is_deleted=False
     )
 
     # كانت هذه نسخةً يدويّةً ثامنةً وعشرين من قاعدة الرؤية، نجت من التوحيد لأنّها
@@ -128,7 +128,9 @@ def book_detail(request, pk):
 
     # الـ Prefetch أعلاه يُرشّح is_deleted=False مسبقاً؛ نستخدم .all() لإعادة استخدام كاش الـ prefetch
     attachments = book.attachments.all()
-    comments = book.comments.select_related('created_by').all()
+    comments = list(book.comments.select_related('created_by').all())
+    for c in comments:
+        c.can_edit = can_edit_comment(request.user, c)
 
     return render(
         request,
@@ -189,14 +191,14 @@ def _crop_source(book):
     نكتفي بالأوّل: الهامشُ على الصفحة الأولى في الغالب، ومنتقي الصفحة يتيح
     الانتقال داخل المرفق نفسِه. وقائمةُ مرفقاتٍ للاختيار تعقيدٌ بلا حاجةٍ مقيسة.
     """
-    return (book.attachments.filter(is_deleted=False)
+    return (book.attachments.all()
             .order_by('uploaded_at').first())
 
 
 @login_required
 def book_edit(request, pk):
     """تعديل كتاب قائم."""
-    book = get_object_or_404(Book, pk=pk, is_deleted=False)
+    book = get_object_or_404(Book, pk=pk)
 
     # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
     # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
@@ -225,7 +227,7 @@ def book_change_status(request, pk):
     تبديل حالة المتابعة (أرشفة / إعادة فتح).
     POST action ∈ {'archived', 'reopen'}.
     """
-    book = get_object_or_404(Book, pk=pk, is_deleted=False)
+    book = get_object_or_404(Book, pk=pk)
 
     # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
     # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
@@ -287,7 +289,7 @@ def book_report(request, pk):
             "receiving_entities",
             Prefetch(
                 "attachments",
-                queryset=Attachment.objects.filter(is_deleted=False)
+                queryset=Attachment.objects.all()
                     .prefetch_related("versions").order_by("-uploaded_at"),
             ),
             Prefetch(
@@ -296,7 +298,6 @@ def book_report(request, pk):
             ),
         ),
         pk=pk,
-        is_deleted=False,
     )
 
     if not can_open_content(book, request.user):
@@ -310,7 +311,9 @@ def book_report(request, pk):
     from core.audit_service import record_event
     record_event(request, 'PRINT', book=book)
 
-    comments = book.comments.select_related("created_by").order_by("created_at")
+    comments = list(book.comments.select_related("created_by").order_by("created_at"))
+    for c in comments:
+        c.can_edit = can_edit_comment(request.user, c)
     email_logs = BookEmailLog.objects.filter(book=book).order_by("sent_at")
     history = list(book.history.all())  # مُرتَّب تصاعدياً (أقدم → أحدث) عبر الـ prefetch
 

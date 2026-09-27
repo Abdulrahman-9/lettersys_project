@@ -18,6 +18,8 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.html import format_html
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -49,7 +51,7 @@ def dashboard(request):
     الرؤية («المشرف الكلّ، وغيرُه كتبَه فقط») سبقت بُعدَ القسم ولم تلحق به —
     فلوحةُ موظّفِ الوحدة كانت تُظهر أصفاراً وهو يعمل كلَّ يوم.
     """
-    books = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    books = scope_books_for(request.user, Book.objects.all())
     today = timezone.localdate()
 
     # المنطق الموحَّد: نشط = is_archived=False AND due_date IS NOT NULL
@@ -149,7 +151,7 @@ def followup_activity_report(request):
 def _reports_qs(request):
     """يبني queryset التقارير المفلتر والمرتّب حسب فلاتر الصفحة (kind/entity/date/bucket).
     مصدر تصفية واحد مشترك بين عرض التقارير والتصدير (DRY). يُعيد (qs, meta)."""
-    qs = Book.objects.filter(is_deleted=False) if request.user.is_superuser else Book.objects.filter(created_by=request.user, is_deleted=False)
+    qs = Book.objects.all() if request.user.is_superuser else Book.objects.filter(created_by=request.user)
     qs = qs.select_related("created_by").prefetch_related("issuing_entities", "receiving_entities")
     kind = request.GET.get("kind", "all")
     if kind == "incoming":
@@ -394,7 +396,9 @@ def restore_book(request, pk):
     book.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
     Attachment.all_objects.filter(book=book, is_deleted=True).update(is_deleted=False, deleted_at=None, deleted_by=None)
     BookHistory.objects.create(book=book, action="restore", by=request.user)
-    messages.success(request, "تمت استعادة الكتاب من سلة المهملات.")
+    messages.success(request, format_html(
+        'تمت استعادة الكتاب من سلة المهملات. <a class="alert-link" href="{}">افتحه</a>',
+        reverse("book_detail", args=[book.pk])))
     return redirect("trash_list")
 
 
@@ -686,7 +690,7 @@ def _restore_state():
         'books': total,
         'stamped': stamped,
         'unstamped': total - stamped,
-        'attachments': Attachment.objects.filter(is_deleted=False).count(),
+        'attachments': Attachment.objects.count(),
         'entities': Entity.objects.count(),
     }
 

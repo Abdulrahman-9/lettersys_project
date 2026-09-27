@@ -115,6 +115,20 @@ class ArchiveDeskQueueTests(TestCase):
 
         self.assertEqual(self._queues()['nofile']['total'], 1)
 
+    def test_a_book_whose_only_attachment_was_deleted_is_listed_too(self):
+        """(د‑4 في 7.4‑هـ) الضمُّ لا يمرّ بمدير: ``attachments__isnull`` كان يرى
+        المرفقَ المحذوفَ ناعماً فيُخفي الكتابَ عن طابور «بلا مرفق»."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.utils import timezone
+        from core.models import Attachment
+        book = self._book('9908')
+        Attachment.objects.create(
+            book=book, file=SimpleUploadedFile('x.pdf', b'%PDF-1.4'),
+            is_deleted=True, deleted_at=timezone.now())
+
+        self.assertEqual(self._queues()['nofile']['total'], 1,
+                         'كتابٌ مرفقُه الوحيدُ محذوفٌ يجب أن يظهر في «بلا مرفق»')
+
     def test_filing_without_a_place_is_surfaced_for_repair(self):
         """حُفظ ولم يُقل أين — وهو أوّلُ ما يُسأل عنه بعد سنة."""
         archive_book(self._book('9905'), by=self.archivist)

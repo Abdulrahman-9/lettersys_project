@@ -34,7 +34,7 @@ class Command(BaseCommand):
         out = None if opts['measure_only'] else PROFILES_PATH
         profiles, stats = learn_profiles(min_books=opts['min_books'], out_path=out)
 
-        total_books = Book.objects.filter(is_deleted=False).count()
+        total_books = Book.objects.count()
         total_entities = Entity.objects.filter(is_active=True).count()
         prev = {}
         if os.path.exists(SNAPSHOT):

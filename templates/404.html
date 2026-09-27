@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block title %}غير موجود{% endblock %}
+{% block content %}
+{% include "core/_error_page.html" with code=404 title="الصفحةُ غيرُ موجودة" hint="ربّما حُذف الكتابُ أو نُقل إلى سلّة المهملات، أو أنّ الرابطَ قديم." %}
+{% endblock %}

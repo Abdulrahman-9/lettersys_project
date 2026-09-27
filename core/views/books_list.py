@@ -131,7 +131,7 @@ def book_unified(request):
     """
     from .filter_helpers import BookFilterEngine, BookSortEngine
 
-    base_qs = scope_books_for(request.user, Book.objects.filter(is_deleted=False)).select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
+    base_qs = scope_books_for(request.user, Book.objects.all()).select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
 
     tab = (request.GET.get("tab") or "incoming").strip()
     search_text = (request.GET.get("q") or "").strip()
@@ -258,7 +258,7 @@ def api_unified_data(request):
     """
     from .filter_helpers import BookFilterEngine, BookSortEngine
 
-    base_qs = scope_books_for(request.user, Book.objects.filter(is_deleted=False)).select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
+    base_qs = scope_books_for(request.user, Book.objects.all()).select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
 
     tab = (request.GET.get('tab') or 'incoming').strip()
     search_text = (request.GET.get('q') or '').strip()
@@ -358,7 +358,7 @@ def api_export_csv(request):
     """تصدير الكتب المفلترة كـ CSV — يستخدم نفس فلاتر api_unified_data."""
     from .filter_helpers import BookFilterEngine, BookSortEngine
 
-    base_qs = scope_books_for(request.user, Book.objects.filter(is_deleted=False)).prefetch_related("issuing_entities", "receiving_entities")
+    base_qs = scope_books_for(request.user, Book.objects.all()).prefetch_related("issuing_entities", "receiving_entities")
 
     from datetime import datetime as _dt
     # `incoming` كالصفحة والنقطة تماماً: زرُّ التصدير ينسخ `window.location.search`

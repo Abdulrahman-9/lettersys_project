@@ -40,14 +40,14 @@ class Command(BaseCommand):
         priors = EntityLayoutPriors(PRIORS_PATH)
         locator = NumberStripLocator(priors)
 
-        qs = (Book.objects.filter(is_deleted=False, attachments__isnull=False,
+        qs = (Book.objects.filter(attachments__isnull=False,
                                   issuing_entities__isnull=False)
               .exclude(sender_number__isnull=True).exclude(sender_number='')
               .order_by('-id').distinct()[:opts['limit']])
 
         seen = hit_label = hit_prior = 0
         for b in qs.iterator():
-            att = b.attachments.filter(is_deleted=False).order_by('-uploaded_at').first()
+            att = b.attachments.order_by('-uploaded_at').first()
             eid = b.issuing_entities.values_list('id', flat=True).first()
             try:
                 path = att.file.path if att else None

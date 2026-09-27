@@ -129,6 +129,13 @@ def scope_activity_for(user, qs=None):
     return qs.filter(Q(department_id__in=mine) | Q(book__department_id__in=mine))
 
 
+def can_manage_system(user) -> bool:
+    """أيحقّ له **إدارةُ النظام** (الجهات · الحسابات · النسخ · قوالبُ البريد
+    وإعداداتُه ومزامنتُه)؟ — ``is_staff`` كما كان، لكن **باسمٍ واحدٍ في مكانٍ
+    واحد**: القوالبُ لا تحمل شرطَ دورٍ (§7.6)، وتغييرُ السياسة هنا يغيّرها كلَّها."""
+    return bool(user.is_staff)
+
+
 def can_use_desk(user) -> bool:
     """أيحقّ له فتحُ **طاولة البريد** (كشفُ التسليم ودفترُ الوارد المطبوع)؟
 

@@ -167,6 +167,7 @@
               data-book-id="{{ book.id }}"
               data-book-number="{{ book.our_number }}"
               data-delete-url="{% url 'api_delete_book' book.id %}"
+              data-undo-url="{% url 'api_undo_delete_book' book.id %}"
               title="نقل إلى السلة">
         <i class="bi bi-trash"></i>
       </button>

@@ -43,6 +43,7 @@
       .settings-embed-body { background: transparent !important; }
       .app-embed-main { display: block; padding: 20px 22px 28px; }
       .settings-embed-body .settings-embed-hide { display: none !important; }
+      .skip-link { position: absolute; inset-inline-start: .75rem; top: .5rem; z-index: 2000; background: #fff; color: var(--brand-strong, #b45309); padding: .5rem .9rem; border-radius: 8px; font-weight: 700; box-shadow: 0 4px 14px rgba(0,0,0,.15); }
       /* توحيد الهوية داخل المركز: الأدوات ذات لونها الخاص (البريد برتقالي) تُعاد
          إلى تركوازي الإعدادات ما دامت معروضة داخل لوحته — وتحتفظ بهويتها كاملةً
          حين تُفتح كتطبيق مستقل. */
@@ -55,10 +56,11 @@
     {% block extra_head %}{% endblock %}
   </head>
   <body class="bg-body{% if is_embed %} settings-embed-body{% elif request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %} app-shell-body{% endif %}">
+    {% if not is_embed %}<a class="visually-hidden-focusable skip-link" href="#main">تخطَّ إلى المحتوى</a>{% endif %}
     {% if is_embed %}
-    <main class="app-embed-main">
+    <main class="app-embed-main" id="main">
     {% elif request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'offline' %}
-    <main class="app-auth-main">
+    <main class="app-auth-main" id="main">
     {% else %}
     <header class="app-topbar">
       <div class="app-topbar-brand">
@@ -162,7 +164,7 @@
               <span>سلة المهملات</span>
             </a>
             {% endif %}
-            {% if request.user.is_staff %}
+            {% if nav.admin %}
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'entity_list' or request.resolver_match.url_name == 'entity_detail' or request.resolver_match.url_name == 'entity_create' or request.resolver_match.url_name == 'entity_edit' %} active{% endif %}" href="{% url 'entity_list' %}" title="الجهات">
               <i class="bi bi-buildings"></i>
               <span>الجهات</span>
@@ -198,7 +200,7 @@
         {% endif %}
       </aside>
 
-      <main class="app-main">
+      <main class="app-main" id="main" tabindex="-1">
     {% endif %}
 
     {% block content %}{% endblock %}
@@ -262,7 +264,7 @@
     <script src="{% static 'logging-system.js' %}"></script>
     
     <!-- نظام إدارة الكتب - JavaScript الحديث -->
-    <script src="{% static 'app.js' %}?v=20260914-t0p"></script>
+    <script src="{% static 'app.js' %}?v=20260927"></script>
 
     <!-- Sidebar Mini Toggle -->
     <script>
@@ -303,10 +305,26 @@
       // فتُرسَم قشرة التطبيق كاملة داخل لوحة الإعدادات — «تطبيق داخل تطبيق».
       // نضع embed في *مسار* النموذج (query) لا كحقل مخفي، كي يراه request.GET
       // حتى في طلبات POST.
+      // ── نطاقُ الإعدادات: ما يبقى داخل الإطار ──
+      // كلُّ ما خرج عنه (القائمة، كتاب، سطحُ الاستخراج، لوحةُ الإدارة…) يُفتح في
+      // النافذة العليا بـ target=_top؛ وإلّا حُمِّل «التطبيقُ داخل التطبيق» بلا
+      // شريطٍ داخل لوحة الإعدادات (تدقيقُ الانتقالات §ج).
+      var EMBED_SCOPE = [
+        '/books/settings/', '/books/mail/settings/', '/books/mail/templates/',
+        '/books/mail/api/', '/books/api/', '/books/users/', '/books/trash/',
+        '/media/', '/static/'
+      ];
+      function inScope(u) {
+        for (var i = 0; i < EMBED_SCOPE.length; i++) {
+          if (u.pathname.indexOf(EMBED_SCOPE[i]) === 0) return true;
+        }
+        return false;
+      }
       function withEmbed(raw) {
         try {
           var u = new URL(raw, window.location.href);
           if (u.origin !== window.location.origin) return null;  // خارجي — اتركه
+          if (!inScope(u)) return '_top';                          // يغادر النطاق
           u.searchParams.set('embed', '1');
           return u.pathname + u.search + u.hash;
         } catch (e) { return null; }
@@ -318,11 +336,13 @@
           var href = a.getAttribute('href');
           if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) return;
           var next = withEmbed(href);
+          if (next === '_top') { a.setAttribute('target', '_top'); a.dataset.embedMarked = '1'; return; }
           if (next) { a.setAttribute('href', next); a.dataset.embedMarked = '1'; }
         });
         document.querySelectorAll('form').forEach(function (f) {
           if (f.dataset.embedMarked) return;
           var next = withEmbed(f.getAttribute('action') || window.location.href);
+          if (next === '_top') { f.setAttribute('target', '_top'); f.dataset.embedMarked = '1'; return; }
           if (next) { f.setAttribute('action', next); f.dataset.embedMarked = '1'; }
         });
       }

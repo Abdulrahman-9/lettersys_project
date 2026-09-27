@@ -64,7 +64,7 @@ def _visible_books(request):
     لأنّه لم يُنشئ كتبَها بيده. وهي النسخةُ التي تُبطلها هذه الدفعة كلَّما
     وجدتها — والقاعدةُ الآن واحدةٌ للقائمة والتفاصيل والأضبارة.
     """
-    return scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    return scope_books_for(request.user, Book.objects.all())
 
 
 def _direction_bases(base, pk):

@@ -66,7 +66,7 @@ def learn_profiles(min_books=MIN_BOOKS, out_path=PROFILES_PATH):
     n_gram = self_ok = self_n = 0
     store = EntityProfileStore.__new__(EntityProfileStore)   # للفحص الذاتيّ بلا ملف
     for ent in Entity.objects.filter(is_active=True):
-        qs = Book.objects.filter(is_deleted=False, issuing_entities=ent)
+        qs = Book.objects.filter(issuing_entities=ent)
         n = qs.count()
         if n < min_books:
             continue
