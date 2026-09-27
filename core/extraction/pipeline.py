@@ -119,6 +119,8 @@ class AIExtractionResult:
         # فيبل15/16): الكاتب — القارئ الموثوق — ينسخها بنظرة. لا تُقرأ آلياً ولا تُبثّ
         # في الكاش/الحفظ؛ تعيش في scan_data (استجابة HTTP عابرة) فقط. None حين لا شريط.
         self.sender_date_crop: Optional[str] = None
+        # «أين الموضوع؟» — اقتراحُ موضع الموضوع عند الصمت (قصاصةٌ ورمزُ صفحةٍ ومرشّحون)
+        self.subject_box_proposal: Optional[Dict[str, Any]] = None
         # اقتراحُ قارئ التاريخ (D2) — قاموسٌ منفصلٌ لا يُكتب في الحقل
         self.sender_date_suggestion: Optional[dict] = None
 
@@ -227,6 +229,10 @@ _COMMON_AR = {'في', 'من', 'الى', 'إلى', 'على', 'عن', 'رقم', '�
 _EN_LETTERHEAD = {'no', 'date', 'oil', 'company', 'ministry', 'republic', 'iraq',
                   'integrated', 'management', 'system', 'doc', 'rev', 'midland',
                   'state', 'gas', 'ims'}
+
+
+_ARABIC_BY_CONSTRUCTION_KINDS = ('incoming_internal', 'outgoing_internal', 'outgoing_external')
+_MIN_LAYER_ARABIC_CHARS = 20
 
 
 def _text_layer_is_readable(text: str) -> bool:
@@ -618,7 +624,8 @@ class AIExtractionService:
         if self._online_provider is None and self._settings.get('AI_PROVIDER') != 'offline':
             self._online_provider = build_online_provider_from_settings(self._settings)
 
-    def _extract_pdf_text_layer(self, path: str, min_chars: int = 120, min_words: int = 20):
+    def _extract_pdf_text_layer(self, path: str, min_chars: int = 120, min_words: int = 20,
+                                book_kind: str = ''):
         """يُعيد نصّ طبقة PDF المضمّنة إن كانت غنيّة (مستند رقمي/مُصدَّر أو مُمسوح-ومُعالَج)،
         وإلا None (صورة ممسوحة بلا نصّ → يلزم OCR).
 
@@ -650,6 +657,13 @@ class AIExtractionService:
             return None
         if not _text_layer_is_readable(text):
             logger.info('[pipeline] طبقة النصّ المضمّنة غير مقروءة (خردة/تشكيل بصري) — OCR بديلاً')
+            return None
+        # مذكّرة فيبل 8 (2026-09-17): كتبُ هذه الأنواع عربيّةٌ بالبناء؛ طبقةٌ بلا عربيّة فيها
+        # هي عربيّةٌ قرأها محرّكٌ لاتينيّ — كانت تعبر بإنكليزيّة الترويسة فتُنتج ملئاً خاطئاً
+        # (#7408، #9615). الرفضُ يعني OCR المُدرَّب، وهو يقرأ الإنكليزيّة إن كانت الرسالة كذلك.
+        if (book_kind in _ARABIC_BY_CONSTRUCTION_KINDS
+                and sum(1 for c in text if '؀' <= c <= 'ۿ') < _MIN_LAYER_ARABIC_CHARS):
+            logger.info('[pipeline] طبقة نصّ بلا عربيّة لكتابٍ عربيّ النوع (%s) — OCR بديلاً', book_kind)
             return None
         return text
 
@@ -755,6 +769,91 @@ class AIExtractionService:
                                'entity_code': '', 'entity_type': 'receiver',
                                'score': 30.0, 'match_type': 'kind_prior'})
         return ranked[:3]
+
+    def _propose_subject_box(self, result, image_path):
+        """يبني اقتراحَ الموضع (أو يملأ من الصندوق المتعلَّم) ويضع صورةَ الصفحة في الذاكرة
+        المؤقّتة 15 دقيقةً كي تقرأ نقطةُ النهاية منها القصاصةَ التي يختارها الكاتب."""
+        import base64
+        import io
+        import uuid
+
+        from django.core.cache import cache
+
+        from . import subject_crop as sc
+
+        img = self._open_page_image(image_path)
+        if img is None:
+            return
+        lines = []
+        try:
+            self._ensure_ocr_stack()
+            prov = self._offline_provider
+            if prov is not None:
+                # 2026-09-13: كان `Output.DATAFRAME` و**pandas ليس في المتطلّبات** ⟵
+                # استثناءٌ يبتلعه `except` أدناه ⟵ `lines=[]` فلا مراسٍ ولا مُدرِّج
+                # ولا صندوقٌ نسبيّ في الإنتاج كلِّه. وكان يستورد pytesseract خامّاً
+                # بلا `tesseract_cmd` ولا `TESSDATA_PREFIX` — بخلاف الكتلة العاملة
+                # أدناه — فيفشل على خادمٍ لا يكون فيه tesseract على PATH.
+                pt = prov._pytesseract
+                pt.pytesseract.tesseract_cmd = prov.cmd
+                if prov.tessdata_dir:
+                    os.environ['TESSDATA_PREFIX'] = prov.tessdata_dir
+                tsv = pt.image_to_data(img, lang=prov.lang, config=f'--psm {prov.psm}',
+                                       output_type=pt.Output.DICT)
+                lines = sc.lines_from_tsv(tsv, img.width, img.height)
+                if not lines:
+                    logger.warning('[subject_box] TSV بلا أسطرٍ صالحة — المُدرِّجُ معطَّل')
+        except Exception as exc:
+            # تحذيرٌ لا معلومة: هذا المسارُ سقط صامتاً من 09-11 إلى 09-13.
+            logger.warning('[subject_box] بلا هندسة أسطر: %s: %s', type(exc).__name__, exc)
+        entity_id = getattr(result, 'issuing_entity_id', None)
+        # البوّابةُ الخضراء
+        filled = sc.learned_fill(img, entity_id) if entity_id else None
+        if filled:
+            result.title = filled['text']
+            result.title_confidence = filled['confidence']
+            result.title_suggestion = None
+            result.field_confidences = getattr(result, 'field_confidences', None) or {}
+            result.field_confidences['title'] = filled['confidence']
+            logger.info('[subject_box] مُلئ من الصندوق المتعلَّم للجهة %s', entity_id)
+            result.subject_box_proposal = {'box': filled['box'], 'source': 'learned-filled',
+                                           'candidates': [], 'samples': len(sc.samples_of(entity_id))}
+            return
+        prop = sc.propose(entity_id, lines, img)
+        token = uuid.uuid4().hex
+        buf = io.BytesIO()
+        page = img.convert('L')
+        if page.width > 1800:
+            page = page.resize((1800, int(page.height * 1800 / page.width)))
+        page.save(buf, format='JPEG', quality=80)
+        cache.set('subject_page:' + token, buf.getvalue(), 900)
+        cache.set('subject_lines:' + token, lines, 900)
+        preview = io.BytesIO()
+        small = page.resize((900, int(page.height * 900 / page.width))) if page.width > 900 else page
+        small.save(preview, format='JPEG', quality=70)
+        prop['page_token'] = token
+        prop['page_preview'] = 'data:image/jpeg;base64,' + base64.b64encode(preview.getvalue()).decode('ascii')
+        prop['entity_id'] = entity_id
+        result.subject_box_proposal = prop
+
+    def _open_page_image(self, image_path):
+        """صورةُ الصفحة الأولى رماديّةً (PDF أو صورة) — كما يفتحها القارئ اليدويّ."""
+        try:
+            from PIL import Image as PILImage
+            if str(image_path).lower().endswith('.pdf'):
+                import fitz
+                doc = fitz.open(image_path)
+                page = doc[0]
+                zoom = 300 / 72.0
+                longer = max(page.rect.width, page.rect.height) * zoom
+                if longer > 3500:
+                    zoom *= 3500 / longer
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), colorspace=fitz.csGRAY, alpha=False)
+                return PILImage.frombytes('L', (pix.width, pix.height), pix.samples)
+            return PILImage.open(image_path).convert('L')
+        except Exception as exc:
+            logger.info('[subject_box] تعذّر فتح الصفحة (%s)', type(exc).__name__)
+            return None
 
     def _read_handwritten_sender_number(self, image_path, entity_id, want_date_crop=False):
         """مرحلة 3 — رقم الجهة المخربش بخط اليد حيث تعجز كل الطبقات المطبوعة:
@@ -1345,7 +1444,8 @@ class AIExtractionService:
             # PDF مُصدَّر أو مُمسوح-ومُعالَج) نصٌّ جاهز أدقّ وأسرع وأخفّ ذاكرة من إعادة
             # الرسم + Tesseract، ويعالج كل الصفحات تلقائياً. نسقط إلى تحسين الصورة + OCR
             # فقط للصور الممسوحة بلا طبقة نصّ غنيّة.
-            pdf_text = None if (skip_ocr or result.cached) else self._extract_pdf_text_layer(image_path)
+            pdf_text = None if (skip_ocr or result.cached) else self._extract_pdf_text_layer(
+                image_path, book_kind=book_kind)
             # نصُّ الصارم منفصلٌ عن `pdf_text`: بلا فرزٍ (الشكلُ المقيس) وبلا كاشٍ
             # وقبل بوّابة المسبار — انظر `pdf_first_page_text`.
             strict_text = pdf_first_page_text(image_path)
@@ -1587,6 +1687,15 @@ class AIExtractionService:
                     logger.warning('[pipeline] prior نوع الوثيقة تعذّر (%s) — تدهورٌ رشيق',
                                    type(exc).__name__)
 
+            # ── «أين الموضوع؟» (قرارُ المالك 2026‑09‑11) ────────────────────
+            # الصمتُ قرارٌ مقيس؛ هنا يُعطى باباً: جهةٌ لها صندوقٌ متعلَّمٌ ⟵ يُقرأ
+            # صندوقُها ويُملأ الحقلُ بوّابةً خضراء (كالتاريخ)؛ وإلّا اقتراحُ موضعٍ
+            # بمرشّحيه للنقر. لا يمسّ مسارَ النصّ — إضافةٌ عند الفراغ فقط.
+            if not (result.title or '').strip():
+                try:
+                    self._propose_subject_box(result, image_path)
+                except Exception as exc:
+                    logger.warning('[subject_box] تعذّر الاقتراح (%s) — تدهورٌ رشيق', type(exc).__name__)
             # بصمة الجهة: بعد معرفة المُرسِل، ابحث عن رقمٍ بقالب أرقامه المُتعلَّم من
             # كتبه المؤكَّدة — يلتقط ما فاتته العلامات العامة ويُصحّح الالتقاط الناقص
             # (مثل «195» بدل «MF-2026-195»).
@@ -1944,7 +2053,7 @@ def dominant_receiving_entity(kind: str):
         try:
             from django.db.models import Count
             from core.models import Book
-            row = (Book.objects.filter(is_deleted=False, kind=kind, receiving_entities__isnull=False)
+            row = (Book.objects.filter(kind=kind, receiving_entities__isnull=False)
                    .values('receiving_entities__id', 'receiving_entities__name')
                    .annotate(n=Count('id')).order_by('-n').first())
             val = (row['receiving_entities__id'], row['receiving_entities__name']) if row else None
@@ -1971,7 +2080,7 @@ def dominant_issuing_entities(department_id, kind: str, top_k: int = 3):
     try:
         from django.db.models import Count
         from core.models import Book
-        rows = (Book.objects.filter(is_deleted=False, kind=kind, department_id=department_id,
+        rows = (Book.objects.filter(kind=kind, department_id=department_id,
                                     issuing_entities__isnull=False)
                 .values('issuing_entities__id', 'issuing_entities__name')
                 .annotate(n=Count('id')).order_by('-n')[:top_k])
@@ -2039,6 +2148,7 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         # اقتراحُ الموضوع ضعيفِ المسار — منفصلاً عن `title` بالبناء: الواجهةُ
         # القديمة تتجاهله فلا تملأ به حقلاً (نفسُ عقد `sender_date_suggestion`).
         'title_suggestion': getattr(result, 'title_suggestion', None),
+        'subject_box_proposal': getattr(result, 'subject_box_proposal', None),
         'issuing_entity': result.issuing_entity_name,
         'issuing_entity_confidence': result.issuing_entity_confidence,
         'issuing_entity_matches': slim_entity_matches(result.issuing_entity_matches),

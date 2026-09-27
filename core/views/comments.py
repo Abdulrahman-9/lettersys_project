@@ -19,6 +19,12 @@ from ..models import Book, BookComment
 logger = logging.getLogger(__name__)
 
 
+
+def can_edit_comment(user, comment) -> bool:
+    """مالكُ التعليق أو مديرُ النظام — الحارسُ الخادميُّ وبوّابةُ الزرّ في القالب معاً
+    (§7.6: القالبُ لا يحمل شرطَ دور؛ يقرأ ``comment.can_edit`` المحسوبةَ في العرض)."""
+    return user == comment.created_by or bool(user.is_superuser)
+
 @login_required
 @require_http_methods(["POST"])
 def add_book_comment(request, book_id):
@@ -49,7 +55,7 @@ def add_book_comment(request, book_id):
             }, status=400)
         
         # Get book
-        book = Book.objects.get(pk=book_id, is_deleted=False)
+        book = Book.objects.get(pk=book_id)
         
         # Check permission
         # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
@@ -133,7 +139,7 @@ def edit_book_comment(request, comment_id):
         comment = BookComment.objects.select_related('book', 'created_by').get(pk=comment_id)
         
         # Check permission (only owner or superuser can edit)
-        if not (request.user == comment.created_by or request.user.is_superuser):
+        if not can_edit_comment(request.user, comment):
             return JsonResponse({
                 "status": "error",
                 "message": "ليس لديك صلاحية تعديل هذا التعليق"
@@ -190,7 +196,7 @@ def delete_book_comment(request, comment_id):
         comment = BookComment.objects.select_related('book', 'created_by').get(pk=comment_id)
         
         # Check permission (only owner or superuser can delete)
-        if not (request.user == comment.created_by or request.user.is_superuser):
+        if not can_edit_comment(request.user, comment):
             return JsonResponse({
                 "status": "error",
                 "message": "ليس لديك صلاحية حذف هذا التعليق"

@@ -24,7 +24,9 @@ import time
 from datetime import timedelta
 
 from django.conf import settings
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import login_required
+
+from core.views.helpers import staff_required
 from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.utils import timezone
@@ -40,9 +42,6 @@ APP_VERSION = '1.0'
 
 
 # ─── Permission helper ────────────────────────────────────────────────────────
-
-def _is_staff(user):
-    return user.is_staff
 
 
 # ─── مُقنِّنات المُدخَل ─────────────────────────────────────────────────────────
@@ -230,7 +229,7 @@ def _register_self(cfg: NetworkSettings):
 # ─── Page view ────────────────────────────────────────────────────────────────
 
 @login_required
-@user_passes_test(_is_staff)
+@staff_required
 def network_settings_page(request):
     """صفحة إعدادات الربط الشبكي الرئيسية."""
     cfg = NetworkSettings.get()
@@ -303,7 +302,7 @@ def network_ping(request):
 # ─── Configuration API ────────────────────────────────────────────────────────
 
 @login_required
-@user_passes_test(_is_staff)
+@staff_required
 @require_POST
 def network_save_config(request):
     """يحفظ الإعدادات في قاعدة البيانات — **ولا يكتب في ملفّ البيئة**.
@@ -412,7 +411,7 @@ def network_save_config(request):
 # ─── Test endpoints ───────────────────────────────────────────────────────────
 
 @login_required
-@user_passes_test(_is_staff)
+@staff_required
 @require_POST
 @rate_limit('network_test_db', max_attempts=5, window_seconds=300, by='user')
 def network_test_db(request):
@@ -439,7 +438,7 @@ def network_test_db(request):
 
 
 @login_required
-@user_passes_test(_is_staff)
+@staff_required
 @require_POST
 @rate_limit('network_test_ping', max_attempts=10, window_seconds=60, by='user')
 def network_test_ping(request):
@@ -479,7 +478,7 @@ def network_test_ping(request):
 # ─── Subnet scanner ──────────────────────────────────────────────────────────
 
 @login_required
-@user_passes_test(_is_staff)
+@staff_required
 @require_POST
 @rate_limit('network_scan_subnet', max_attempts=3, window_seconds=300, by='user')
 def network_scan_subnet(request):
@@ -522,7 +521,7 @@ def network_scan_subnet(request):
 # ─── Device registry APIs ─────────────────────────────────────────────────────
 
 @login_required
-@user_passes_test(_is_staff)
+@staff_required
 @require_GET
 def network_devices(request):
     """يعيد قائمة الأجهزة المسجّلة مع حالتها الحالية."""
@@ -555,7 +554,7 @@ def network_devices(request):
 
 
 @login_required
-@user_passes_test(_is_staff)
+@staff_required
 @require_POST
 def network_ping_all(request):
     """يختبر الاتصال بجميع الأجهزة المسجّلة بالتوازي."""
@@ -579,7 +578,7 @@ def network_ping_all(request):
 
 
 @login_required
-@user_passes_test(_is_staff)
+@staff_required
 @require_POST
 def network_delete_device(request, pk):
     """يحذف جهازاً من السجل (لا يمكن حذف الجهاز الحالي)."""
@@ -590,7 +589,7 @@ def network_delete_device(request, pk):
 
 
 @login_required
-@user_passes_test(_is_staff)
+@staff_required
 @require_GET
 def network_get_local_ip(request):
     """يعيد IP هذا الجهاز المكتشف تلقائياً."""
@@ -600,7 +599,7 @@ def network_get_local_ip(request):
 # ─── SSE: Real-time device status stream ─────────────────────────────────────
 
 @login_required
-@user_passes_test(_is_staff)
+@staff_required
 @require_GET
 def network_devices_stream(request):
     """

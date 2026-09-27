@@ -68,9 +68,9 @@ def _canonical_sort_key(entity):
 def annotate_book_counts(qs):
     """يضيف issued_count/received_count لأي queryset جهات
        (استعلامان فرعيان مستقلّان — بلا ضرب ديكارتي)."""
-    issued = (Book.objects.filter(issuing_entities=OuterRef('pk'), is_deleted=False)
+    issued = (Book.objects.filter(issuing_entities=OuterRef('pk'))
               .order_by().values('issuing_entities').annotate(c=Count('id')).values('c'))
-    received = (Book.objects.filter(receiving_entities=OuterRef('pk'), is_deleted=False)
+    received = (Book.objects.filter(receiving_entities=OuterRef('pk'))
                 .order_by().values('receiving_entities').annotate(c=Count('id')).values('c'))
     return qs.annotate(
         issued_count=Coalesce(Subquery(issued, output_field=IntegerField()), 0),

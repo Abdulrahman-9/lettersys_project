@@ -84,7 +84,7 @@ class Command(BaseCommand):
         done_f = open(done_path, 'a', encoding='utf-8')
 
         lo, hi = opts['offset'], opts['offset'] + opts['limit']
-        qs = Book.objects.filter(is_deleted=False, attachments__isnull=False,
+        qs = Book.objects.filter(attachments__isnull=False,
                                  issuing_entities__isnull=False)
         if field == 'number':
             qs = qs.exclude(sender_number__isnull=True).exclude(sender_number='')
@@ -104,7 +104,7 @@ class Command(BaseCommand):
             if os.path.exists(out_png) or str(b.id) in done:
                 skipped += 1
                 continue
-            att = b.attachments.filter(is_deleted=False).order_by('-uploaded_at').first()
+            att = b.attachments.order_by('-uploaded_at').first()
             eid = b.issuing_entities.values_list('id', flat=True).first()
             try:
                 path = att.file.path if att else None

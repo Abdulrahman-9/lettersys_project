@@ -18,7 +18,8 @@
 <div id="lifecycleAlert" hidden></div>
 {# لوحةُ التسيير تستعمل مفرداتِ ألواح التصميم (lc-matrix · lc-state) #}
 <div class="lc-scope">
-
+{# lifecycleRegion: ما يُعاد رسمُه في المكان بعد كلّ فعلٍ (ح1) — الحواريّاتُ خارجَه #}
+<div id="lifecycleRegion" data-lifecycle-refresh>
 {% if not referrals and not custody and not links and not registrations %}
   <div class="card border-0 shadow-sm rounded-4 mb-3" id="lifecycleCard"
        data-book-id="{{ book.pk }}">
@@ -90,6 +91,11 @@
                 <tr>
                   <td>
                     <span class="fw-semibold">{{ row.target }}</span>
+                    {% if row.referral.created_by %}
+                      <span class="text-muted" style="font-size:.8rem">
+                        · فرّقه {{ row.referral.created_by.get_full_name|default:row.referral.created_by.username }}
+                      </span>
+                    {% endif %}
                     {% if row.referral.assignee %}
                       <span class="text-muted">— {{ row.referral.assignee.get_full_name|default:row.referral.assignee.username }}</span>
                     {% endif %}
@@ -144,6 +150,23 @@
                          style="font-variant-numeric:tabular-nums">
                         <i class="bi bi-reply-fill me-1"></i>{{ row.reply_number }}
                       </a>
+                    {% elif row.is_open and row.referral.purpose == 'info' %}
+                      {# للعلم: لا مطاردة — استلامٌ (قرأته الوحدة) أو تفعيلُ متابعةٍ بمدّة (§5.2) #}
+                      <div class="btn-group btn-group-sm" role="group"
+                           aria-label="إجراءات {{ row.target }}">
+                        {% if row.referral.status == 'sent' %}
+                          <button type="button" class="btn btn-outline-secondary"
+                                  data-referral-act="received"
+                                  data-referral-id="{{ row.referral.pk }}"
+                                  title="استلمته الوحدة">استلم</button>
+                        {% endif %}
+                        {% if can_distribute %}
+                          <button type="button" class="btn btn-outline-primary"
+                                  data-followup-activate="{{ row.referral.pk }}"
+                                  data-followup-target="{{ row.target }}"
+                                  title="حوّلها إلى «للإجراء» بموعد">فعِّل متابعة</button>
+                        {% endif %}
+                      </div>
                     {% elif row.is_open %}
                       <div class="btn-group btn-group-sm" role="group"
                            aria-label="إجراءات {{ row.target }}">
@@ -261,6 +284,16 @@
                 <span class="badge text-bg-light border">{{ event.get_event_display }}</span>
                 <span class="fw-semibold">{{ event.holder_name }}</span>
                 {% if event.note %}<span class="text-muted">— {{ event.note }}</span>{% endif %}
+                {% comment %}
+                  **مَن قيّد** لا مَن استلم: الحاملُ أعلاه هو مَن صارت العهدةُ
+                  إليه، وهذا مَن أثبتها في النظام. وهما مختلفان دائماً تقريباً
+                  (المختصُّ يُثبت استلامَ الوحدة)، والسؤالُ بعد شهرٍ عن الثاني.
+                {% endcomment %}
+                {% if event.recorded_by %}
+                  <span class="text-muted" style="font-size:.8rem">
+                    · قيّده {{ event.recorded_by.get_full_name|default:event.recorded_by.username }}
+                  </span>
+                {% endif %}
                 {% if event.signature_mode == 'paper' %}
                   <i class="bi bi-pen text-muted" title="توقيعٌ ورقيّ"></i>
                 {% endif %}
@@ -274,6 +307,7 @@
   </div>
 </div>
 {% endif %}
+</div>{# lifecycleRegion #}
 
 {% include "core/_lifecycle_dialogs.html" %}
 </div>{# lc-scope #}

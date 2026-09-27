@@ -81,7 +81,7 @@ def extraction_smart_desktop(request):
     if edit_pk:
         try:
             book = Book.objects.prefetch_related('issuing_entities', 'receiving_entities').get(
-                pk=edit_pk, is_deleted=False
+                pk=edit_pk
             )
         except (Book.DoesNotExist, ValueError):
             book = None
@@ -99,7 +99,7 @@ def extraction_smart_desktop(request):
 
         # قاعدة موحّدة لاختيار الأساسي (تطابق لوحة الإدارة وشارة «أساسي»)
         from core.attachment_service import pick_primary_attachment
-        _att = pick_primary_attachment(book.attachments.filter(is_deleted=False))
+        _att = pick_primary_attachment(book.attachments.all())
         _att_info = ({'id': _att.id, 'name': (_att.file.name or '').rsplit('/', 1)[-1]}
                      if _att and _att.file else None)
         edit_book_json = json.dumps({
@@ -149,7 +149,7 @@ def extraction_smart_desktop(request):
     # `is_staff` تفتح كتبَ الشركة كلَّها لحاملها وتحبس الأرشيفيَّ في كتبه هو.
     recent_books = []
     if edit_book_json == 'null':
-        _rb = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+        _rb = scope_books_for(request.user, Book.objects.all())
         recent_books = list(
             _rb.order_by('-created_at', '-id').only(
                 'id', 'our_number', 'title', 'kind', 'created_at',

@@ -51,10 +51,18 @@ def is_mail_officer(user) -> bool:
     شهادةُ موظّف البريد: «السرّي يُحفظ في السجلّ عاديّ، لكن فقط **مسؤول إدارة
     البريد والأرشفة** يحقّ لهم الاطّلاع». فهو أمينُ السرّيّ فعليّاً — يمسكه
     بيده ويفرّقه — فيُخوَّل بدوره لا بمنحةٍ فرديّة.
-    """
-    from core.roles import get_user_role
 
-    return get_user_role(user) == 'controller'
+    **والعضويّةُ لا التسمية** — كأختِها `is_archivist`: تسميةُ `get_user_role`
+    أحاديّةٌ بسلسلةِ أولويّة، فرئيسُ شعبةٍ عضوٌ في «مشرف المتابعة» كان يُعيد
+    `dept_head` فيفقد قسمَ البريد في لوحته **رغم أنّ خانتَه مؤشَّرة**. وهذا
+    شرطُ دمج الوظيفتين لا زينتُه: «مسؤول إدارة البريد والأرشفة» اجتماعُ
+    عضويّتين، ولا يصحّ أن تُلغي إحداهما الأخرى بترتيبِ سلسلةٍ للعرض.
+    """
+    from core.roles import CONTROLLER_GROUP_NAME
+
+    if not getattr(user, 'pk', None):
+        return False
+    return user.groups.filter(name=CONTROLLER_GROUP_NAME).exists()
 
 
 def is_archivist(user) -> bool:
@@ -127,6 +135,13 @@ def scope_activity_for(user, qs=None):
     if not mine:
         return qs.none()
     return qs.filter(Q(department_id__in=mine) | Q(book__department_id__in=mine))
+
+
+def can_manage_system(user) -> bool:
+    """أيحقّ له **إدارةُ النظام** (الجهات · الحسابات · النسخ · قوالبُ البريد
+    وإعداداتُه ومزامنتُه)؟ — ``is_staff`` كما كان، لكن **باسمٍ واحدٍ في مكانٍ
+    واحد**: القوالبُ لا تحمل شرطَ دورٍ (§7.6)، وتغييرُ السياسة هنا يغيّرها كلَّها."""
+    return bool(user.is_staff)
 
 
 def can_use_desk(user) -> bool:

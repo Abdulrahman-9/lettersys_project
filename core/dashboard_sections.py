@@ -20,7 +20,21 @@
 from datetime import timedelta
 
 from django.db.models import Count, Q
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import urlencode
+
+
+def _to(name, *args, anchor='', **query):
+    """وجهةُ عدّادٍ **تصدق**: `reverse()` لا مساراً حرفيّاً (يشيخ بصمت)، ومرشّحٌ
+    يطابق ما يعدّه العدّاد. `anchor` = مفتاحُ الطابور على لوحة الطوابير
+    (`_queue_board.html` يمنح كلَّ بطاقةٍ `id="q-<key>"`)."""
+    url = reverse(name, args=args)
+    if query:
+        url += '?' + urlencode(query)
+    if anchor:
+        url += '#q-' + anchor
+    return url
 
 
 # ═══════════════════════════ البنائيّات ═══════════════════════════
@@ -43,13 +57,13 @@ def _my_queue(user):
     return {
         'counters': [
             {'label': 'متأخّر عليّ', 'value': counts['overdue'], 'tone': 'danger',
-             'href': '/books/my/today/'},
+             'href': _to('my_today', anchor='overdue')},
             {'label': 'يستحقّ اليوم', 'value': counts['today'], 'tone': 'accent',
-             'href': '/books/my/today/'},
+             'href': _to('my_today', anchor='today')},
             {'label': 'لم أستلمه', 'value': counts['unreceived'], 'tone': 'warn',
-             'href': '/books/my/today/'},
+             'href': _to('my_today', anchor='new')},
             {'label': 'كلُّ التزاماتي', 'value': counts['total'], 'tone': 'calm',
-             'href': '/books/my/today/'},
+             'href': _to('my_today')},
         ],
         'empty': not counts['total'],
     }
@@ -76,65 +90,53 @@ def _desk(user):
         unreceived=Count('id', filter=Q(status=BookReferral.SENT)),
     )
     secret_open = rows.filter(book__in=scope_books_for(
-        user, Book.objects.filter(is_deleted=False)).exclude(secret_level='normal')).count()
+        user, Book.objects.all()).exclude(secret_level='normal')).count()
 
     return {
         'counters': [
             {'label': 'متأخّر', 'value': counts['overdue'], 'tone': 'danger',
-             'href': '/books/desk/'},
+             'href': _to('desk_board', anchor='overdue')},
             {'label': 'غير مُستلَم', 'value': counts['unreceived'], 'tone': 'warn',
-             'href': '/books/desk/'},
+             'href': _to('desk_board', anchor='unreceived')},
             {'label': 'يستحقّ اليوم', 'value': counts['today'], 'tone': 'accent',
-             'href': '/books/desk/'},
+             'href': _to('desk_board', anchor='today')},
             {'label': 'سرّي مفتوح', 'value': secret_open, 'tone': 'secret',
-             'href': '/books/desk/'},
+             'href': _to('desk_board', anchor='secret')},
         ],
         'links': [
-            {'label': 'طاولة الوارد', 'href': '/books/desk/', 'icon': 'bi-inboxes'},
-            {'label': 'دفتر الوارد', 'href': '/books/desk/ledger/', 'icon': 'bi-journal-text'},
-            {'label': 'كشف التسليم', 'href': '/books/desk/handover/', 'icon': 'bi-pen'},
+            {'label': 'طاولة الوارد', 'href': _to('desk_board'), 'icon': 'bi-inboxes'},
+            {'label': 'دفتر الوارد', 'href': _to('desk_ledger'), 'icon': 'bi-journal-text'},
+            {'label': 'كشف التسليم', 'href': _to('desk_handover'), 'icon': 'bi-pen'},
         ],
     }
 
 
 def _archive(user):
-    """الأرشفة — ما ينتظر الرفَّ، لمن يمسك الأرشيف.
+    """الأرشفة — ما لم يكتمل قيدُه (بلا جهةٍ مستلِمة أو بلا مسح)، لمن يمسك الأرشيف.
 
     الأعدادُ هنا **للحيّ وحده** (``source_ref=''`` و``is_training=False``):
     القاعدةُ فيها 13 ألفَ كتابٍ دخلت بالجملة من الورق، وعدُّها عملاً ينتظر
     يجعل العدّادَ رقماً مرعباً لا يُنقص أبداً — والعدّادُ الذي لا يُفرَغ يُهمَل.
     """
-    from core.archive_service import unarchived_books
-    from core.models import Book, BookReferral, CustodyEvent
+    from core.models import Attachment, Book
     from core.scoping import scope_books_for
 
-    mine = scope_books_for(user, Book.objects.filter(is_deleted=False))
-    live = mine.filter(source_ref='', is_training=False)
-    pending = unarchived_books(live)
-    open_now = BookReferral.objects.filter(status__in=BookReferral.OPEN_STATUSES)
-
-    finished = (pending.filter(referrals__isnull=False)
-                .exclude(pk__in=open_now.values('book_id')).distinct().count())
-    idle = pending.filter(referrals__isnull=True).count()
-    no_file = live.filter(attachments__isnull=True).count()
-    filed = CustodyEvent.objects.filter(
-        event=CustodyEvent.ARCHIVE_DONE, book__in=mine).count()
-
+    live = scope_books_for(user, Book.objects.live())
+    idle = live.filter(referrals__isnull=True).count()
+    # لا ``attachments__isnull``: الضمُّ لا يمرّ بمدير (المرفقُ المحذوفُ كان يُخفي الكتاب).
+    no_file = live.exclude(pk__in=Attachment.objects.values('book_id')).count()
+    # (قراراتُ الدورة §6) لا عدّادَ حفظٍ ولا موضعٍ: الأرشفةُ تلقائيّة.
     return {
         'counters': [
-            {'label': 'أُنجز ولم يُحفَظ', 'value': finished, 'tone': 'danger',
-             'href': '/books/desk/archive/'},
-            {'label': 'قُيِّد ولم يُحفَظ', 'value': idle, 'tone': 'warn',
-             'href': '/books/desk/archive/'},
+            {'label': 'قُيِّد ولم يُوجَّه', 'value': idle, 'tone': 'warn',
+             'href': _to('archive_desk', anchor='idle')},
             {'label': 'بلا مرفق', 'value': no_file, 'tone': 'accent',
-             'href': '/books/desk/archive/'},
-            {'label': 'حُفظ عندنا', 'value': filed, 'tone': 'calm',
-             'href': '/books/desk/archive/'},
+             'href': _to('archive_desk', anchor='nofile')},
         ],
         'links': [
-            {'label': 'طاولة الأرشفة', 'href': '/books/desk/archive/',
+            {'label': 'طاولة الأرشفة', 'href': _to('archive_desk'),
              'icon': 'bi-archive'},
-            {'label': 'الأضابير', 'href': '/books/dossiers/', 'icon': 'bi-folder2-open'},
+            {'label': 'الأضابير', 'href': _to('dossier_list'), 'icon': 'bi-folder2-open'},
         ],
     }
 
@@ -145,7 +147,7 @@ def _register(user):
     from core.scoping import scope_books_for
 
     today = timezone.localdate()
-    books = scope_books_for(user, Book.objects.filter(is_deleted=False))
+    books = scope_books_for(user, Book.objects.all())
     active = Q(is_archived=False, due_date__isnull=False)
 
     counts = books.aggregate(
@@ -157,13 +159,16 @@ def _register(user):
     return {
         'counters': [
             {'label': 'كتبُ اليوم', 'value': counts['today'], 'tone': 'accent',
-             'href': '/books/?tab=today'},
+             'href': _to('book_unified', tab='all', date_from=today.isoformat(),
+                         date_to=today.isoformat())},
             {'label': 'هذا الأسبوع', 'value': counts['week'], 'tone': 'calm',
-             'href': '/books/'},
+             'href': _to('book_unified', tab='all',
+                         date_from=(today - timedelta(days=7)).isoformat(),
+                         date_to=today.isoformat())},
             {'label': 'متأخّر', 'value': counts['overdue'], 'tone': 'danger',
-             'href': '/books/?tab=overdue'},
+             'href': _to('book_unified', tab='all', followup='overdue')},
             {'label': 'كلُّ الدفتر', 'value': counts['total'], 'tone': 'calm',
-             'href': '/books/'},
+             'href': _to('book_unified', tab='all')},
         ],
     }
 
@@ -181,15 +186,15 @@ def _dossier(user):
 
     entity = department.entity
     from core.models import Book
-    issued = Book.objects.filter(is_deleted=False, issuing_entities=entity).count()
-    received = Book.objects.filter(is_deleted=False, receiving_entities=entity).count()
+    issued = Book.objects.filter(issuing_entities=entity).count()
+    received = Book.objects.filter(receiving_entities=entity).count()
 
     return {
         'counters': [
             {'label': 'وارد إلينا', 'value': received, 'tone': 'accent',
-             'href': '/books/dossiers/%d/' % entity.pk},
+             'href': _to('dossier_detail', entity.pk)},
             {'label': 'صادر منّا', 'value': issued, 'tone': 'calm',
-             'href': '/books/dossiers/%d/' % entity.pk},
+             'href': _to('dossier_detail', entity.pk)},
         ],
         'note': 'أضبارةُ «%s» — يتدفّق إليها الكتابُ من ذكر اسمها في الصادر والوارد.'
                 % department.name,
@@ -208,10 +213,11 @@ def _mail(user):
 
     return {
         'counters': [
-            {'label': 'غير مقروء', 'value': unread, 'tone': 'accent', 'href': '/books/mail/inbox/'},
-            {'label': 'إرسالٌ أخفق', 'value': failed, 'tone': 'danger', 'href': '/books/mail/'},
+            {'label': 'غير مقروء', 'value': unread, 'tone': 'accent', 'href': _to('mail_inbox', read='0')},
+            {'label': 'إرسالٌ أخفق', 'value': failed, 'tone': 'danger',
+             'href': _to('mail_sent', status='failed')},
         ],
-        'links': [{'label': 'مركز البريد', 'href': '/books/mail/', 'icon': 'bi-envelope'}],
+        'links': [{'label': 'مركز البريد', 'href': _to('mail_hub'), 'icon': 'bi-envelope'}],
     }
 
 
@@ -223,17 +229,17 @@ def _administration(user):
     return {
         'counters': [
             {'label': 'أقسام', 'value': Department.objects.filter(is_active=True).count(),
-             'tone': 'calm', 'href': '/books/admin/?tab=departments'},
+             'tone': 'calm', 'href': _to('admin_panel', tab='departments')},
             {'label': 'مستخدمون', 'value': User.objects.filter(is_active=True).count(),
-             'tone': 'calm', 'href': '/books/admin/?tab=users'},
+             'tone': 'calm', 'href': _to('admin_panel', tab='users')},
             {'label': 'جهات', 'value': Entity.objects.filter(is_active=True).count(),
-             'tone': 'calm', 'href': '/books/entities/'},
+             'tone': 'calm', 'href': _to('entity_list')},
             {'label': 'عناقيد', 'value': EntityGroup.objects.filter(is_active=True).count(),
-             'tone': 'accent', 'href': '/books/entities/?view=groups'},
+             'tone': 'accent', 'href': _to('entity_list', view='groups')},
         ],
         'links': [
-            {'label': 'لوحة الإدارة', 'href': '/books/admin/', 'icon': 'bi-sliders'},
-            {'label': 'سجلّ الحركات', 'href': '/books/audit/', 'icon': 'bi-clock-history'},
+            {'label': 'لوحة الإدارة', 'href': _to('admin_panel'), 'icon': 'bi-sliders'},
+            {'label': 'سجلّ الحركات', 'href': _to('audit_log'), 'icon': 'bi-clock-history'},
         ],
     }
 
@@ -275,7 +281,7 @@ def _can_admin(user):
 SECTIONS = (
     ('mine', 'ما يخصّني اليوم', 'التزاماتي المفتوحة باسمي', _always, _my_queue),
     ('desk', 'طاولة الوارد', 'عملُ القسم اليوم', _can_desk, _desk),
-    ('archive', 'الأرشفة', 'ما ينتظر الرفَّ اليوم', _can_archive, _archive),
+    ('archive', 'الأرشفة', 'ما لم يكتمل قيدُه اليوم', _can_archive, _archive),
     ('dossier', 'أضبارة وحدتي', 'ما ذُكر فيه اسمُنا', _always, _dossier),
     ('register', 'دفتر القسم', 'حجمُ العمل ومساره', _has_register, _register),
     ('mail', 'البريد الإلكتروني', 'ما وصل وما أخفق', _can_mail, _mail),

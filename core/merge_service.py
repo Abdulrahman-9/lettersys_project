@@ -13,6 +13,16 @@ from .attachment_service import ensure_pdf_bytes, validate_attachment_file
 from .models import AttachmentVersion, MergeLog
 
 
+def _pdf_pages(data) -> int:
+    """عددُ صفحات PDF من بايتاته — صفرٌ إن تعذّر (لا يُفشل الدمجَ بحالٍ)."""
+    try:
+        import fitz
+        with fitz.open(stream=bytes(data), filetype='pdf') as doc:
+            return doc.page_count
+    except Exception:                       # noqa: BLE001
+        return 0
+
+
 def _file_bytes(file_obj):
     """قراءة كامل محتوى ملف (FieldFile أو ملف مرفوع) مع إعادة المؤشّر."""
     try:
@@ -115,6 +125,15 @@ class SmartMergeService:
             merged_file = self.merge_pdfs(BytesIO(new_pdf_bytes), BytesIO(current_pdf_bytes))
             filename = f"merged_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
 
+            # **كم ورقةً أُضيفت، ومَن أضافها** (قرارُ المالك 2026‑09‑13): الحقلُ
+            # ``page_count`` كان موجوداً في النموذج ولا يُملأ أبداً، فلم يكن أحدٌ يعرف
+            # أنّ المرفقَ صار خمسَ ورقاتٍ بعد أن كان ورقتين. يُحسَب من البايتات نفسِها
+            # (لا من القرص: الملفُّ لم يُحفظ بعد) ويُسجَّل الفرقُ في بيانات الدمج.
+            added_pages = _pdf_pages(new_pdf_bytes)
+            pages_before = _pdf_pages(current_pdf_bytes)
+            merged_bytes = merged_file.getbuffer().tobytes()
+            total_pages = _pdf_pages(merged_bytes) or (pages_before + added_pages)
+
             # حفظ النسخة الجديدة
             new_version = AttachmentVersion.objects.create(
                 attachment=self.attachment,
@@ -128,8 +147,11 @@ class SmartMergeService:
                     'source_filename': str(new_file.name),
                     'target_filename': str(getattr(current_file, 'name', '')),
                     'merge_type': 'pdf',
-                    'merged_at': timezone.now().isoformat()
+                    'merged_at': timezone.now().isoformat(),
+                    'added_pages': added_pages,
+                    'pages_before': pages_before,
                 },
+                page_count=total_pages,
                 file_size=merged_file.getbuffer().nbytes
             )
             

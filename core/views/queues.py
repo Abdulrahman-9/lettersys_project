@@ -25,7 +25,7 @@ from django.db.models import Q
 from django.shortcuts import render
 from django.utils import timezone
 
-from core.models import Book, BookReferral, CustodyEvent
+from core.models import Attachment, Book, BookReferral, CustodyEvent
 from core.scoping import (ACCESS_STUB, STUB_TITLE, can_archive, can_use_desk,
                           scope_books_for, scope_referrals_for, secret_access,
                           subtree_ids, user_department_id)
@@ -91,8 +91,16 @@ def _queue(qs, user, limit=ROW_LIMIT, row=_row,
     تمرّ من هنا بلا نسخِ الآلة ولا نسخِ القالب.
     """
     total = qs.count()
-    rows = [row(r, user) for r in qs.select_related(*select)[:limit]]
-    return {'total': total, 'rows': rows, 'more': max(0, total - len(rows))}
+    sliced = qs.select_related(*select)
+    rows = [row(r, user) for r in (sliced if limit is None else sliced[:limit])]
+    return {'total': total, 'rows': rows, 'more': max(0, total - len(rows)),
+            'expanded': limit is None}
+
+
+def _limit_for(request, key):
+    """«و{n} غيرها» يجب أن يُوصل: ``?expand=<key>`` يرفع القطعَ عن طابورٍ واحد
+    (لا عن الصفحة كلِّها) — الطريقُ المسدودُ صار باباً (مواصفةُ الواجهات، الدفعة 2)."""
+    return None if request.GET.get('expand') == key else ROW_LIMIT
 
 
 @login_required
@@ -120,20 +128,20 @@ def desk_board(request):
     no_reply = open_here.filter(purpose=BookReferral.ACTION,
                                 closed_by_link__isnull=True, due_date__isnull=True)
 
-    visible_books = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    visible_books = scope_books_for(request.user, Book.objects.all())
     secret_open = open_here.filter(book__in=visible_books.exclude(secret_level='normal'))
 
     queues = [
         {'key': 'overdue', 'label': 'متأخّر', 'tone': 'danger',
-         'hint': 'مرّ موعدُه ولم يُنجَز', **_queue(overdue, request.user)},
+         'hint': 'مرّ موعدُه ولم يُنجَز', **_queue(overdue, request.user, limit=_limit_for(request, 'overdue'))},
         {'key': 'unreceived', 'label': 'غير مُستلَم', 'tone': 'warn',
-         'hint': 'أُرسل ولم تُؤشَّر عهدتُه', **_queue(unreceived, request.user)},
+         'hint': 'أُرسل ولم تُؤشَّر عهدتُه', **_queue(unreceived, request.user, limit=_limit_for(request, 'unreceived'))},
         {'key': 'today', 'label': 'يستحقّ اليوم', 'tone': 'accent',
-         'hint': 'موعدُه اليوم', **_queue(due_today, request.user)},
+         'hint': 'موعدُه اليوم', **_queue(due_today, request.user, limit=_limit_for(request, 'today'))},
         {'key': 'no_reply', 'label': 'بلا ردّ', 'tone': 'muted',
-         'hint': 'للتنفيذ وبلا جوابٍ ولا موعد', **_queue(no_reply, request.user)},
+         'hint': 'للتنفيذ وبلا جوابٍ ولا موعد', **_queue(no_reply, request.user, limit=_limit_for(request, 'no_reply'))},
         {'key': 'secret', 'label': 'سرّي مفتوح', 'tone': 'secret',
-         'hint': 'التزامٌ قائمٌ على كتابٍ مقيَّد', **_queue(secret_open, request.user)},
+         'hint': 'التزامٌ قائمٌ على كتابٍ مقيَّد', **_queue(secret_open, request.user, limit=_limit_for(request, 'secret'))},
     ]
 
     return render(request, 'core/desk_board.html', {
@@ -160,53 +168,28 @@ def archive_desk(request):
     يولد الطابورُ بـ13 ألف صفٍّ لا يُغلقها عملُ إنسان — وطابورٌ لا يُفرَغ يُهجَر
     في أسبوع، فيصير الدورُ بلا أداة.
     """
-    from core.archive_service import unarchived_books
-
     if not can_archive(request.user):
         raise PermissionDenied('طاولةُ الأرشفة لمسؤول الأرشفة ومدير النظام.')
 
     user = request.user
-    mine = scope_books_for(user, Book.objects.filter(is_deleted=False))
+    mine = scope_books_for(user, Book.objects.all())
     #: الحيُّ وحدَه: المنقولُ من الورق دخل بالجملة ولم يمرّ بيدِ أرشيفيّ.
     live = mine.filter(source_ref='', is_training=False)
-    pending = unarchived_books(live)
-
-    open_now = BookReferral.objects.filter(status__in=BookReferral.OPEN_STATUSES)
-    #: أُنجزت الوحدةُ عملَها ولم يُقيَّد الحفظ — الطابورُ الذي يُعرِّف الدور.
-    finished = (pending.filter(referrals__isnull=False)
-                .exclude(pk__in=open_now.values('book_id')).distinct())
-    #: قُيِّد ولم يُفرَّق ولم يُحفظ — ورقةٌ على المكتب لا صاحبَ لها.
-    never_moved = pending.filter(referrals__isnull=True)
-    #: قيدٌ بلا مسح: لا مرفقَ يُحفظ.
-    no_file = live.filter(attachments__isnull=True)
-
-    filed = CustodyEvent.objects.filter(
-        event=CustodyEvent.ARCHIVE_DONE, book__in=mine)
-    #: حُفظ ولم يُقل أين — وهو أوّلُ ما يُسأل عنه بعد سنة.
-    placeless = filed.filter(note='')
-
+    #: قُيِّد ولم يُوجَّه — لا صفَّ إحالةٍ له: نُسيت الجهاتُ المستلِمة أو لم يُهمَّش بعد.
+    never_moved = live.filter(referrals__isnull=True)
+    #: قيدٌ بلا مسح: لا مرفقَ يُحفظ. (لا ``attachments__isnull`` — الضمُّ لا يمرّ
+    #: بمدير، فكتابٌ مرفقُه الوحيدُ محذوفٌ ناعماً كان يختفي من الطابور بدل أن يظهر.)
+    no_file = live.exclude(pk__in=Attachment.objects.values('book_id'))
+    # (قراراتُ الدورة §6) لا «أُنجز ولم يُحفَظ» ولا «حُفظ بلا موضع»: الأرشفةُ تلقائيّةٌ
+    # لحظةَ الحفظ وذكرِ الجهات، ولا موضعَ حفظٍ ورقيّ يُطلَب.
     queues = [
-        {'key': 'finished', 'label': 'أُنجز ولم يُحفَظ', 'tone': 'danger',
-         'hint': 'عادت الورقةُ من الوحدة وتنتظر الرفّ',
-         'action': 'archive', 'action_label': 'احفظه',
-         **_queue(finished, user, row=_book_row, select=())},
-        {'key': 'idle', 'label': 'قُيِّد ولم يُحفَظ', 'tone': 'warn',
-         'hint': 'دخل الدفترَ ولم يُفرَّق ولم يُؤرشَف',
-         'action': 'archive', 'action_label': 'احفظه',
-         **_queue(never_moved, user, row=_book_row, select=())},
+        {'key': 'idle', 'label': 'قُيِّد ولم يُوجَّه', 'tone': 'warn',
+         'hint': 'دخل الدفترَ بلا جهةٍ مستلِمة — لم يذهب إلى أضبارة أحد',
+         **_queue(never_moved, user, limit=_limit_for(request, 'idle'), row=_book_row, select=())},
         {'key': 'nofile', 'label': 'بلا مرفق', 'tone': 'accent',
-         'hint': 'قيدٌ بلا مسح — لا ورقةَ تُحفظ',
-         **_queue(no_file, user, row=_book_row, select=())},
-        {'key': 'placeless', 'label': 'حُفظ بلا موضع', 'tone': 'muted',
-         'hint': 'أُرشف ولم يُسجَّل الرفّ', 'action': 'place', 'action_label': 'حدّد الرفّ',
-         **_queue(placeless, user, row=_custody_row,
-                  select=('book', 'to_holder_department', 'to_holder_user'))},
-        {'key': 'recent', 'label': 'حُفظ حديثاً', 'tone': 'muted',
-         'hint': 'آخرُ ما أُغلق — للمراجعة والتراجع',
-         **_queue(filed.order_by('-signed_at'), user, row=_custody_row,
-                  select=('book', 'to_holder_department', 'to_holder_user'))},
+         'hint': 'قيدٌ بلا مسح — لا ورقةَ في الأضبارة',
+         **_queue(no_file, user, limit=_limit_for(request, 'nofile'), row=_book_row, select=())},
     ]
-
     return render(request, 'core/archive_desk.html', {
         'queues': queues,
         'today': timezone.localdate(),
@@ -226,19 +209,23 @@ def my_today(request):
 
     queues = [
         {'key': 'overdue', 'label': 'متأخّر عليّ', 'tone': 'danger',
-         'hint': 'مرّ موعدُه', **_queue(assigned.filter(due_date__lt=today), user)},
+         'hint': 'مرّ موعدُه', **_queue(assigned.filter(due_date__lt=today), user, limit=_limit_for(request, 'overdue'))},
         {'key': 'today', 'label': 'يستحقّ اليوم', 'tone': 'accent',
-         'hint': 'موعدُه اليوم', **_queue(assigned.filter(due_date=today), user)},
+         'hint': 'موعدُه اليوم', **_queue(assigned.filter(due_date=today), user, limit=_limit_for(request, 'today'))},
         {'key': 'new', 'label': 'محالٌ إليّ ولم أستلمه', 'tone': 'warn',
          'hint': 'لم أؤشّر استلامَه بعد',
-         **_queue(assigned.filter(status=BookReferral.SENT), user)},
+         **_queue(assigned.filter(status=BookReferral.SENT), user, limit=_limit_for(request, 'new'))},
         {'key': 'action', 'label': 'مطلوبٌ ردّي', 'tone': 'muted',
          'hint': 'للتنفيذ لا للعلم',
-         **_queue(assigned.filter(purpose=BookReferral.ACTION), user)},
+         **_queue(assigned.filter(purpose=BookReferral.ACTION), user, limit=_limit_for(request, 'action'))},
     ]
 
     return render(request, 'core/my_today.html', {
         'queues': queues,
         'today': today,
         'assigned_total': assigned.count(),
+        # مشتقٌّ من الطوابير نفسِها لا من عدٍّ مستقلّ: فلا يمكن أن يُخفي صفّاً
+        # موجوداً (ي-4). `assigned_total` وحدَه لا يكفي حَكَماً لأنّ الطوابيرَ
+        # مرشّحاتٌ متقاطعة، فقد يختلف عن مجموعها (ي-6).
+        'queues_empty': not any(q.get('total') for q in queues),
     })

@@ -14,6 +14,8 @@ import subprocess
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+
+from .helpers import staff_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
@@ -30,6 +32,7 @@ def _token_owner_ok(data, user):
 
 
 @login_required
+@staff_required
 def scan_settings_page(request):
     """صفحة حالة الماسح (وكيل NAPS2 المحلي) — الحالة تُجلب عميلياً عبر JS."""
     return render(request, 'core/scan_settings.html', {})
@@ -326,7 +329,7 @@ def scan_stage_attachment(request, attachment_id: int):
     from django.shortcuts import get_object_or_404
     from core.models import Attachment
 
-    att = get_object_or_404(Attachment, id=attachment_id, is_deleted=False)
+    att = get_object_or_404(Attachment, id=attachment_id)
     book = att.book
     if not can_open_content(book, request.user):
         return JsonResponse({'ok': False, 'error': 'غير مصرح'}, status=403)

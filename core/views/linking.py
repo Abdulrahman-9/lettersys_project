@@ -52,7 +52,7 @@ def api_link_picker(request):
     if not query:
         return JsonResponse({'success': True, 'results': []})
 
-    qs = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    qs = scope_books_for(request.user, Book.objects.all())
     exclude_id = request.GET.get('exclude')
     if exclude_id and str(exclude_id).isdigit():
         qs = qs.exclude(pk=int(exclude_id))
@@ -95,8 +95,15 @@ def api_add_link(request, pk):
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 
     try:
-        link = add_link(from_book, to_book, relation, by=request.user,
-                        note=data.get('note', ''))
+        if relation == BookLink.REPLY:
+            # الجوابُ يُقفل الإحالةَ المطابقة (قراراتُ الدورة §5.5) — كان الربطُ
+            # وحدَه يترك الكتابَ المُجاب في طابور المطاردة.
+            from core.registration_service import register_reply
+            link, _closed = register_reply(to_book, from_book, by=request.user,
+                                           note=data.get('note', ''))
+        else:
+            link = add_link(from_book, to_book, relation, by=request.user,
+                            note=data.get('note', ''))
     except ValidationError as exc:
         return JsonResponse({'success': False, 'message': exc.messages[0]}, status=400)
     except PermissionDenied as exc:
@@ -124,5 +131,5 @@ def _get_or_404(request, pk):
     if not pk or not str(pk).isdigit():
         return None
     return scope_books_for(
-        request.user, Book.objects.filter(is_deleted=False)
+        request.user, Book.objects.all()
     ).filter(pk=int(pk)).first()

@@ -22,13 +22,13 @@
     <noscript><button type="submit" class="back">عرض</button></noscript>
   </form>
   {% if rows %}<button class="print" onclick="window.print()">🖨️ طباعة</button>{% endif %}
-  <a class="btn back" href="/books/">رجوع</a>
+  <a class="btn back" href="{% url 'desk_board' %}">رجوع</a>
 </div>
 
 <div class="sheet">
   <div class="rep-head">
     <div class="rep-org">
-      شركة نفط ميسان
+      {{ org_name|default:"شركة نفط الوسط" }}
       <small>{{ department|default:"—" }}</small>
     </div>
     <div class="rep-meta">

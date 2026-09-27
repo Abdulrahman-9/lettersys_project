@@ -25,6 +25,16 @@ from core.scoping import (ACCESS_STUB, STUB_TITLE, can_use_desk, is_privileged,
                           user_department_id)
 
 
+
+def _org_name():
+    """اسمُ الشركة على الورقتين الموقَّعتين — من الإعدادات لا من القالب (قرارُ المالك
+    ق‑7، 2026‑09‑10: «شركة نفط الوسط»؛ كان القالبان يطبعان «نفط ميسان»)."""
+    from core.models import EmailSettings
+    try:
+        return (EmailSettings.get().org_name or '').strip() or 'شركة نفط الوسط'
+    except Exception:
+        return 'شركة نفط الوسط'
+
 @login_required
 def desk_handover(request):
     """كشفُ التسليم — ورقةُ توقيعٍ لوحدةٍ بعينها.
@@ -33,7 +43,7 @@ def desk_handover(request):
     التي عليها التزاماتٌ غيرُ موقَّعة كي لا يبدأ الكاتبُ من فراغ.
     """
     department = _acting_department(request)
-    visible = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    visible = scope_books_for(request.user, Book.objects.all())
 
     targets = _units_with_pending(department, visible)
     chosen = _chosen_unit(request, targets)
@@ -46,6 +56,7 @@ def desk_handover(request):
         rows = [_handover_row(r, request.user) for r in pending]
 
     return render(request, 'core/desk_handover.html', {
+        'org_name': _org_name(),
         'department': department,
         'targets': targets,
         'chosen': chosen,
@@ -65,7 +76,10 @@ def desk_ledger(request):
     department = _acting_department(request)
     date_from, date_to = _date_range(request)
 
-    visible = scope_books_for(request.user, Book.objects.filter(is_deleted=False))
+    # §7.2 صراحةً: الحرزُ الذي كان يُبعد المنقولَ من الورق عن الدفتر **عرَضيّ**
+    # (``legacy_restore`` لا يكتب ``department`` فيسقط بـ``_in_our_register``)؛
+    # أوّلُ سكربتٍ يملأ ``department`` بأثرٍ رجعيّ كان سيطبع 13 ألفَ سطر.
+    visible = scope_books_for(request.user, Book.objects.live())
     books = visible.filter(
         _in_our_register(department)
     ).select_related('department', 'current_custody').prefetch_related(
@@ -80,6 +94,7 @@ def desk_ledger(request):
     rows = [_ledger_row(b, department, request.user) for b in books.order_by('date', 'id')]
 
     return render(request, 'core/desk_ledger.html', {
+        'org_name': _org_name(),
         'department': department,
         'rows': rows,
         'date_from': request.GET.get('date_from', ''),

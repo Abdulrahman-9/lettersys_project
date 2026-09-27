@@ -89,7 +89,7 @@ class Command(BaseCommand):
         for ent in top:
             if opts['resume'] and str(ent.id) in profiles:
                 continue
-            books = (Book.objects.filter(is_deleted=False, issuing_entities=ent,
+            books = (Book.objects.filter(issuing_entities=ent,
                                          attachments__isnull=False)
                      .order_by('-id').distinct()[:opts['per_entity'] * 3])
             seen = 0
@@ -103,7 +103,7 @@ class Command(BaseCommand):
             for b in books:
                 if seen >= opts['per_entity']:
                     break
-                att = b.attachments.filter(is_deleted=False).order_by('-uploaded_at').first()
+                att = b.attachments.order_by('-uploaded_at').first()
                 try:
                     path = att.file.path if att else None
                 except Exception:

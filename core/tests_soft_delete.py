@@ -85,3 +85,56 @@ class TrashFlowStillWorksTests(TestCase):
         self.book.refresh_from_db()
         self.assertFalse(self.book.is_deleted)
         self.assertTrue(Book.objects.filter(pk=self.book.pk).exists())
+
+
+class SweepContractTests(TestCase):
+    """عقدُ كنس 7.4‑هـ: الثلاثةُ التي يُبنى عليها حذفُ ``is_deleted=False`` من 84 سطراً.
+
+    (أ) ``Prefetch`` مبنيٌّ على ``Attachment.objects`` يحجب المحذوف.
+    (ب) ``get_object_or_404(Attachment, pk=<محذوف>)`` يرمي 404 لأنّه يمرّ بـ``_default_manager``.
+    (ج) **الضمُّ لا يمرّ بمدير**: ``through.objects.filter(book__…)`` يرى كتباً محذوفة —
+        وهو ما يُبقي شرطَي ``core/extraction/matchers/profile.py`` (الفئة ب) حاملَين للحمل.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from core.models import Entity
+        cls.user = User.objects.create_user('sweeper', password='pw-sweep-11')
+        cls.entity = Entity.objects.create(name='جهةُ العقد')
+        cls.live = Book.objects.create(kind='incoming_internal', title='حيّ', created_by=cls.user)
+        cls.gone = Book.objects.create(
+            kind='incoming_internal', title='محذوف', created_by=cls.user,
+            is_deleted=True, deleted_at=timezone.now(),
+        )
+        cls.live.issuing_entities.add(cls.entity)
+        cls.gone.issuing_entities.add(cls.entity)
+        cls.att_live = Attachment.objects.create(
+            book=cls.live, file=SimpleUploadedFile('l.pdf', b'%PDF-1.4'))
+        cls.att_gone = Attachment.objects.create(
+            book=cls.live, file=SimpleUploadedFile('g.pdf', b'%PDF-1.4'),
+            is_deleted=True, deleted_at=timezone.now())
+
+    def test_prefetch_on_default_manager_hides_deleted(self):
+        from django.db.models import Prefetch
+        book = (Book.objects
+                .prefetch_related(Prefetch('attachments', queryset=Attachment.objects.all()))
+                .get(pk=self.live.pk))
+        pks = {a.pk for a in book.attachments.all()}
+        self.assertEqual(pks, {self.att_live.pk}, 'Prefetch على objects أظهر المرفقَ المحذوف')
+
+    def test_get_object_or_404_on_model_class_uses_default_manager(self):
+        from django.http import Http404
+        from django.shortcuts import get_object_or_404
+        with self.assertRaises(Http404):
+            get_object_or_404(Attachment, pk=self.att_gone.pk)
+        self.assertEqual(get_object_or_404(Attachment, pk=self.att_live.pk).pk, self.att_live.pk)
+
+    def test_join_is_not_filtered_by_manager(self):
+        """الفئة (ب): الجدولُ الوسيطُ لا يحمل SoftDeleteManager، والضمُّ إلى Book خامّ."""
+        through = Book.issuing_entities.through
+        raw = through.objects.filter(entity=self.entity).count()
+        guarded = through.objects.filter(entity=self.entity, book__is_deleted=False).count()
+        via_manager = through.objects.filter(entity=self.entity, book__in=Book.objects.all()).count()
+        self.assertEqual(raw, 2, 'الضمُّ الخامّ يجب أن يرى الكتابَ المحذوف')
+        self.assertEqual(guarded, 1)
+        self.assertEqual(via_manager, 1, 'book__in=Book.objects.all() بديلٌ مكافئٌ للشرط')

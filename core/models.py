@@ -4,6 +4,8 @@ from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
+from .fields import EncryptedCharField
 from django.utils import timezone
 
 from . import numbering
@@ -203,8 +205,10 @@ class Tag(models.Model):
 class SoftDeleteManager(models.Manager):
     """المدير الافتراضي للنماذج ذات الحذف الناعم — لا يرى المحذوف.
 
-    كان الحذف الناعم قاعدةً منسوخة يدويّاً: ``is_deleted=False`` مكتوبة **73
-    مرّة** في كود الإنتاج وصفر managers مخصّصة. قاعدةٌ بهذا الانتشار تفشل
+    كان الحذف الناعم قاعدةً منسوخة يدويّاً: ``is_deleted=False`` مكتوبة **106
+    مرّةً في 49 ملفّاً** (مقيس 2026‑09‑10) وصفر managers مخصّصة — كُنِست منها 98
+    الزائدةُ في 7.4‑هـ، وبقي موضعا الضمّ في ``core/extraction/matchers/profile.py``
+    (الضمُّ لا يمرّ بمدير) وشرطُ ``UniqueConstraint`` أدناه. قاعدةٌ بهذا الانتشار تفشل
     بالصمت: استعلامٌ واحد ينسى الشرط يُظهر ما حُذف، ولا اختبارَ يلتقطه لأنّ
     النسيان لا يُخطئ — يُظهر فقط.
 
@@ -218,6 +222,16 @@ class SoftDeleteManager(models.Manager):
 
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
+
+
+class BookManager(SoftDeleteManager):
+    """مديرُ الكتب: الحذفُ الناعم نفسُه + مدخلُ قاعدة §7.2."""
+
+    def live(self):
+        """قاعدةُ §7.2: الطوابيرُ والدفاترُ تُبنى على الحيّ وحده — لا المنقولُ من
+        الورق (``source_ref``) ولا كتبُ التدريب (``is_training``). الافتراضاتُ
+        التي كانت تفتح الدفترَ كلَّه (13 ألفَ صفّ) تمرّ من هنا."""
+        return self.get_queryset().filter(source_ref='', is_training=False)
 
 
 class Book(models.Model):
@@ -245,7 +259,7 @@ class Book(models.Model):
         # **لا تُسمَّ «مؤرشف»**: الأرشفةُ صارت واقعةً أخرى (حفظُ الورقة على
         # الرفّ — `CustodyEvent.ARCHIVE_DONE`)، وكلمتان بمعنيين في الصفحة
         # الواحدة تُنتجان سؤالاً لا جواب. هذه حالُ **المتابعة** لا الورق.
-        ("archived",  "انتهت المتابعة"),
+        ("archived",  "مُنجَز / بلا متابعة"),
     )
     FOLLOWUP_COLOR = {
         "pending":   "#2563eb",  # أزرق
@@ -435,7 +449,7 @@ class Book(models.Model):
                 return active[0] if active else None
         except AttributeError:
             pass
-        return self.attachments.filter(is_deleted=False).first()
+        return self.attachments.first()
 
     @property
     def first_issuing_entity(self):
@@ -529,7 +543,7 @@ class Book(models.Model):
 
 
     #: الافتراضيّ لا يرى المحذوف؛ ``all_objects`` مخرجٌ صريح للسلّة والاستعادة.
-    objects = SoftDeleteManager()
+    objects = BookManager()
     all_objects = models.Manager()
 
     class Meta:
@@ -672,6 +686,38 @@ class Attachment(models.Model):
         """اسم الملف المجرّد (دون مسار التخزين) للعرض."""
         import os
         return os.path.basename(self.file.name) if self.file else ""
+
+    def _latest_version(self):
+        if not hasattr(self, '_lv_cache'):
+            self._lv_cache = self.versions.select_related('created_by').order_by('-version_number').first()
+        return self._lv_cache
+
+    @property
+    def page_count(self):
+        """عددُ ورقات المرفق — من آخر نسخةٍ إن سُجّل، وإلّا يُقرأ من الملفّ (قرارُ
+        المالك 2026‑09‑13: الورقاتُ تُعرَض، لا تُكتشف عند الطباعة)."""
+        v = self._latest_version()
+        if v is not None and v.page_count:
+            return v.page_count
+        try:
+            from core.page_render import page_count as _pc
+            return _pc(self.file.path) or None
+        except Exception:                       # noqa: BLE001
+            return None
+
+    @property
+    def last_merge_by(self):
+        """مَن ألحق آخرَ مرّة (فارغٌ إن لم يُلحق أحدٌ بعد الرفع الأوّل)."""
+        v = self._latest_version()
+        if v is None or not v.is_merged or v.created_by is None:
+            return ''
+        return v.created_by.get_full_name() or v.created_by.username
+
+    @property
+    def last_merge_added(self):
+        """كم ورقةً أضاف آخرُ إلحاق."""
+        v = self._latest_version()
+        return (v.merge_metadata or {}).get('added_pages') if v is not None and v.is_merged else None
 
 
 class AttachmentVersion(models.Model):
@@ -903,6 +949,7 @@ class BookHistory(models.Model):
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="history")
     action = models.CharField(max_length=50, choices=ACTION_CHOICES, db_index=True)
     by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+
     by_snapshot = models.CharField(
         'اسم المنفّذ (snapshot)', max_length=150, blank=True, default='',
         help_text='يُحفظ عند الإنشاء لضمان بقاء سجل التدقيق حتى بعد حذف المستخدم'
@@ -910,6 +957,24 @@ class BookHistory(models.Model):
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     attachment = models.ForeignKey('Attachment', on_delete=models.SET_NULL, null=True, blank=True, related_name='histories')
+
+    @property
+    def actor_name(self):
+        """مَن فعل هذا — **واللقطةُ أوّلاً لا المفتاحُ الأجنبيّ**.
+
+        `by` هي ``SET_NULL``: يُحذف الموظّفُ فيصير الصفُّ بلا فاعل، ويُعاد
+        تسميتُه فيصير الاسمُ المعروضُ غيرَ الذي وقّع. واللقطةُ `by_snapshot`
+        هي الاسمُ **وقتَ الفعل** — وهو ما يُسأل عنه في التدقيق.
+
+        والاحتياطيُّ `by` ضروريٌّ لا ترف: `bulk_create` يتجاوز `save()` فقد
+        يكتب صفّاً بلا لقطة. والفراغُ التامّ «النظام»: أوامرُ الجدولة
+        والمستوردُ يكتبان بلا فاعلٍ بشريّ، و«—» تترك القارئَ يخمّن.
+        """
+        if self.by_snapshot:
+            return self.by_snapshot
+        if self.by_id:
+            return self.by.get_full_name() or self.by.get_username()
+        return 'النظام'
 
     class Meta:
         ordering = ['-created_at']
@@ -1318,66 +1383,11 @@ class SuggestionItem(models.Model):
 # =============================
 # AI Integration Settings
 # =============================
-class EncryptedFieldsMixin(models.Model):
-    """تشفيرٌ شفّاف لحقولٍ نصّيّة حسّاسة — مصدرٌ واحد للقاعدة.
-
-    كان النمط مكتوباً داخل ``EmailSettings`` وحدها، بينما ``azure_key`` نصٌّ صريح
-    في القاعدة — ازدواجُ معيارٍ في الملف نفسه. نسخُ النمط مرّةً ثانية كان
-    سيُثبّت الازدواج بدل أن يرفعه، فوُحِّد هنا.
-
-    العقد: القيمة في الذاكرة **دائماً** نصّ صريح، وفي القاعدة **دائماً** مشفّرة
-    ببادئة ``enc::``؛ والمشفَّر مسبقاً لا يُشفَّر مرّتين.
-
-    حدٌّ مقيس (``encrypt_text``): مدخلُ 32 محرفاً ⟵ 145، و84 ⟵ 209، و120 ⟵ 253.
-    فـ``max_length=255`` يسع كلّ مفاتيح Azure الواقعيّة (32 أو 84) بهامش، ويضيق
-    عند ~121 محرفاً فأكثر — عندها يلزم توسيع العمود بهجرة.
-    """
-
-    #: أسماء الحقول التي تُشفَّر — يعرّفها كل نموذج.
-    ENCRYPTED_FIELDS: tuple = ()
-
-    class Meta:
-        abstract = True
-
-    @classmethod
-    def from_db(cls, db, field_names, values):
-        from .encryption import decrypt_text, is_encrypted
-
-        instance = super().from_db(db, field_names, values)
-        for name in cls.ENCRYPTED_FIELDS:
-            value = getattr(instance, name, '')
-            if is_encrypted(value):
-                try:
-                    setattr(instance, name, decrypt_text(value))
-                except Exception:
-                    # مفتاحٌ مفقود أو مُبدَّل: نترك القيمة مشفّرة كما هي ليظهر
-                    # العطل عند الاستعمال، لا أن يُبتلع صامتاً هنا.
-                    pass
-        return instance
-
-    def save(self, *args, **kwargs):
-        from .encryption import encrypt_text, is_encrypted
-
-        plaintexts = {}
-        for name in self.ENCRYPTED_FIELDS:
-            value = getattr(self, name, '') or ''
-            if value and not is_encrypted(value):
-                plaintexts[name] = value
-                setattr(self, name, encrypt_text(value))
-
-        super().save(*args, **kwargs)
-
-        # نُعيد النصّ الصريح إلى الكائن كي يبقى صالحاً للاستعمال بعد الحفظ.
-        for name, plaintext in plaintexts.items():
-            setattr(self, name, plaintext)
-
-
-class AIIntegrationSettings(EncryptedFieldsMixin):
+class AIIntegrationSettings(models.Model):
     """إعدادات ربط مزودات الذكاء الاصطناعي عبر الإنترنت.
     نخزّن اختيار المزود والمفاتيح ونمط العمل (تعطيل/تمكين/بديل عند ثقة منخفضة).
     """
 
-    ENCRYPTED_FIELDS = ('azure_key',)
 
     PROVIDER_CHOICES = (
         ('offline', 'Offline (EasyOCR)'),
@@ -1397,7 +1407,7 @@ class AIIntegrationSettings(EncryptedFieldsMixin):
 
     # Azure fields
     azure_endpoint = models.CharField(max_length=255, blank=True, help_text='مثال: https://<res>.cognitiveservices.azure.com')
-    azure_key = models.CharField(max_length=255, blank=True)
+    azure_key = EncryptedCharField(max_length=255, blank=True)
 
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2089,6 +2099,8 @@ class CustodyEvent(models.Model):
 
     INTAKE = 'intake'
     UNIT_RECEIPT = 'unit_receipt'
+    #: (قراراتُ الدورة §6) الأرشفةُ تلقائيّةٌ ولا موضعَ حفظٍ ورقيّ — الحدثان باقيان
+    #: للسجلّ القديم فقط ولا يُكتبان من أيّ مسار.
     ARCHIVE_DONE = 'archive_done'
     COURIER_PICKUP = 'courier_pickup'
     RETURN = 'return'
@@ -2604,13 +2616,12 @@ class BackupSettings(models.Model):
 # ══════════════════════════════════════════════════════════════════
 #  إعدادات البريد الإلكتروني للمؤسسة (Singleton)
 # ══════════════════════════════════════════════════════════════════
-class EmailSettings(EncryptedFieldsMixin):
+class EmailSettings(models.Model):
     """
     إعدادات SMTP الخاصة بالمؤسسة — سجل وحيد (Singleton).
     يُفعَّل/يُعطَّل الإرسال من هنا دون تعديل settings.py.
     """
 
-    ENCRYPTED_FIELDS = ('smtp_password', 'imap_password')
 
     # ── هوية المؤسسة (تُستخدم في ترويسة التقارير المطبوعة + البريد) ──
     org_name        = models.CharField("اسم الشركة/المؤسسة", max_length=200, default="")
@@ -2631,7 +2642,7 @@ class EmailSettings(EncryptedFieldsMixin):
     smtp_use_tls    = models.BooleanField("TLS", default=True)
     smtp_use_ssl    = models.BooleanField("SSL", default=False)
     smtp_user       = models.CharField("المستخدم", max_length=200, blank=True, default="")
-    smtp_password   = models.CharField("كلمة المرور", max_length=200, blank=True, default="",
+    smtp_password   = EncryptedCharField("كلمة المرور", max_length=200, blank=True, default="",
                                        help_text="تُخزَّن مشفرة")
 
     # ── IMAP (استقبال الردود) ──
@@ -2640,7 +2651,8 @@ class EmailSettings(EncryptedFieldsMixin):
     imap_port        = models.PositiveSmallIntegerField("منفذ IMAP", default=993)
     imap_use_ssl     = models.BooleanField("SSL للـ IMAP", default=True)
     imap_user        = models.CharField("مستخدم IMAP", max_length=200, blank=True, default="")
-    imap_password    = models.CharField("كلمة مرور IMAP", max_length=200, blank=True, default="")
+    imap_password    = EncryptedCharField("كلمة مرور IMAP", max_length=200, blank=True, default="",
+                                          help_text="تُخزَّن مشفرة")
     imap_folder      = models.CharField("المجلد", max_length=100, blank=True, default="INBOX")
     imap_sync_enabled = models.BooleanField("تفعيل استقبال الردود تلقائياً", default=False)
     imap_last_sync   = models.DateTimeField("آخر مزامنة", null=True, blank=True)

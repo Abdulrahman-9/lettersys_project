@@ -42,6 +42,32 @@ from .books_helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _attachment_pages_and_log(att):
+    """``{page_count, merge_log}``: عددُ ورقات المرفق، وسجلُّ الإلحاق (مَن ألحق ومتى
+    وكم ورقةً أضاف). المصدرُ ``AttachmentVersion`` — لقطةٌ لكلّ إلحاق. الأولُ الأحدث."""
+    versions = list(att.versions.select_related('created_by').order_by('-version_number')[:12])
+    latest = versions[0] if versions else None
+    pages = latest.page_count if latest and latest.page_count else None
+    if pages is None:
+        try:
+            from core.page_render import page_count as _pc
+            pages = _pc(att.file.path) or None
+        except Exception:                       # noqa: BLE001
+            pages = None
+    log = []
+    for v in versions:
+        meta = v.merge_metadata or {}
+        log.append({
+            'version': v.version_number,
+            'by': (v.created_by.get_full_name() or v.created_by.username) if v.created_by else '',
+            'at': v.created_at.strftime('%Y-%m-%d %H:%M') if v.created_at else '',
+            'added_pages': meta.get('added_pages'),
+            'total_pages': v.page_count,
+            'note': v.note or '',
+        })
+    return {'page_count': pages, 'merge_log': log}
+
+
 def _strip_sender_fields_for_outgoing(kind, sender_number, sender_date_str):
     """حقول الجهة المُرسِلة لا معنى لها في الصادر — تُفرَّغ **على الخادم**.
 
@@ -333,6 +359,9 @@ def save_book_api(request):
 
                 book.issuing_entities.set(issuing_entities_list)
                 book.receiving_entities.set(receiving_entities_list)
+                # الذكرُ يوجّه تلقائيّاً (قراراتُ الدورة §5.1)
+                from core.referral_service import auto_route_from_receivers
+                auto_route_from_receivers(book, by=request.user)
 
                 if 'file' in request.FILES:
                     file_obj = request.FILES['file']
@@ -493,7 +522,7 @@ def api_bulk_delete_books(request):
             return JsonResponse({"error": "No book IDs provided"}, status=400)
 
         now = timezone.now()
-        books_qs = Book.objects.filter(id__in=book_ids, is_deleted=False)
+        books_qs = Book.objects.filter(id__in=book_ids)
         if not is_privileged(request.user):
             books_qs = books_qs.filter(created_by=request.user)
 
@@ -511,6 +540,10 @@ def api_bulk_delete_books(request):
                     book_id=bid,
                     action="delete",
                     by=request.user,
+                    # `bulk_create` يتجاوز `save()` فلا تُملأ اللقطةُ تلقائيّاً —
+                    # وبدونها يفقد الصفُّ اسمَ فاعله يومَ يُحذف الموظّف.
+                    by_snapshot=(request.user.get_full_name()
+                                 or request.user.get_username()),
                     notes="Book moved to trash via bulk delete",
                 )
                 for bid in allowed_ids
@@ -554,7 +587,7 @@ def api_bulk_update_status_books(request):
         except (TypeError, ValueError):
             return JsonResponse({"error": "book_ids must be integers"}, status=400)
 
-        books_qs = Book.objects.filter(id__in=clean_ids, is_deleted=False)
+        books_qs = Book.objects.filter(id__in=clean_ids)
         if not is_privileged(request.user):
             books_qs = books_qs.filter(created_by=request.user)
 
@@ -576,6 +609,8 @@ def api_bulk_update_status_books(request):
                     book_id=bid,
                     action="status",
                     by=request.user,
+                    by_snapshot=(request.user.get_full_name()
+                                 or request.user.get_username()),
                     notes=f"{action_label} (bulk)",
                 )
                 for bid in eligible_ids
@@ -640,8 +675,8 @@ def api_book_detail_json(request, pk):
     try:
         book = Book.objects.select_related('created_by').prefetch_related(
             'issuing_entities', 'receiving_entities',
-            Prefetch('attachments', queryset=Attachment.objects.filter(is_deleted=False).order_by('-uploaded_at'))
-        ).get(pk=pk, is_deleted=False)
+            Prefetch('attachments', queryset=Attachment.objects.order_by('-uploaded_at'))
+        ).get(pk=pk)
     except Book.DoesNotExist:
         return JsonResponse({'error': 'الكتاب غير موجود'}, status=404)
 
@@ -678,6 +713,8 @@ def api_book_detail_json(request, pk):
             'is_image': lower.endswith(image_exts),
             'content_type': content_type or '',
             'is_primary': False,
+            # كم ورقةً فيه، وسجلُّ مَن ألحق وكم أضاف (قرارُ المالك 2026‑09‑13)
+            **_attachment_pages_and_log(a),
         })
 
     # المستند الأساسي للعرض المضمّن: أول PDF، وإلا أول صورة، وإلا أول مرفق
@@ -734,7 +771,7 @@ def api_book_inline_status(request, pk):
 
     from core.scoping import can_open_content
 
-    book = get_object_or_404(Book, pk=pk, is_deleted=False)
+    book = get_object_or_404(Book, pk=pk)
     # تغييرُ الحالة عمليّةُ **محتوى** — البوّابةُ من المصدر الوحيد لا نسخةٌ
     # يدويّةٌ تمنح `is_staff` كلَّ كتب الشركة. و404 لا 403.
     if not can_open_content(book, request.user):
@@ -787,7 +824,7 @@ def update_book_api(request):
         if not edit_pk:
             return JsonResponse({'success': False, 'message': 'edit_pk مطلوب', 'error_code': 'MISSING_EDIT_PK'}, status=400)
 
-        book = get_object_or_404(Book, pk=edit_pk, is_deleted=False)
+        book = get_object_or_404(Book, pk=edit_pk)
         # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
         # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
         # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
@@ -860,6 +897,8 @@ def update_book_api(request):
             book.save()
             book.issuing_entities.set(issuing_entities_list)
             book.receiving_entities.set(receiving_entities_list)
+            from core.referral_service import auto_route_from_receivers
+            auto_route_from_receivers(book, by=request.user)
             # تصحيحُ الجهة في التعديل يبلغ ذاكرةَ الترويسة (كان يضيع: لا التقاطَ هنا).
             # الوسمُ من الواجهة يمنع تعليمَ جانبٍ مُلئ آليّاً ولم يُلمَس.
             try:
@@ -876,7 +915,7 @@ def update_book_api(request):
                 # وضع التعديل = استبدال المرفق المُعدَّل تحديداً، لا أرشفة كل المرفقات:
                 # نستهدف المرفق الذي عُدِّلت صفحاته (attachment_id من الواجهة)، وإلا الأساسي.
                 # يمنع هذا أن يؤرشف تدويرُ/حذفُ صفحةٍ في مرفقٍ بقيةَ مرفقات الكتاب (فقدان/تدقيق).
-                active_attachments = book.attachments.filter(is_deleted=False)
+                active_attachments = book.attachments.all()
                 target_attachment = None
                 _target_id = (request.POST.get('attachment_id') or '').strip()
                 if _target_id:

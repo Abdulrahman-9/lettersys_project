@@ -43,7 +43,7 @@
       <span>العودة للقائمة</span>
       <i class="bi bi-arrow-right"></i>
     </a>
-    <a class="app-context-link" href="{% url 'entity_edit' entity.pk %}">
+    <a class="app-context-link" href="{% url 'entity_edit' entity.pk %}?next={% url 'entity_detail' entity.pk %}">
       <span>تعديل الجهة</span>
       <i class="bi bi-pencil-square"></i>
     </a>
@@ -78,7 +78,7 @@
         </div>
         <div class="d-flex gap-2">
           <a href="{% url 'entity_list' %}" class="btn btn-sm btn-light"><i class="bi bi-arrow-right me-1"></i>القائمة</a>
-          <a href="{% url 'entity_edit' entity.pk %}" class="btn btn-sm btn-dark"><i class="bi bi-pencil-square me-1"></i>تعديل</a>
+          <a href="{% url 'entity_edit' entity.pk %}?next={% url 'entity_detail' entity.pk %}" class="btn btn-sm btn-dark"><i class="bi bi-pencil-square me-1"></i>تعديل</a>
         </div>
       </div>
     </div>
