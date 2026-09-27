@@ -148,8 +148,3 @@ var/models/*
 # النسخُ والترحيلُ بـ`pg_dump -Fc` / `pg_restore` حصراً (Merge9 §0 و§2).
 /lettersys_data*.json
 /data_backup*.json
-
-# ── وكيلُ المسح على محطّة العمل: إعدادٌ محلّيٌّ لكلّ حاسبة ──────────────
-# `scan_agent/agent.json` يحمل عنوانَ خادم الشركة، والمستودعُ عامّ.
-# المثالُ `agent.json.example` وحدَه يُلتزَم (بعناوين RFC 5737 المحجوزة).
-scan_agent/agent.json
