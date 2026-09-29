@@ -1,195 +1,65 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}لوحة التحكم{% endblock %}
+{% block body_class %} is-db{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20260927">
-{% endblock %}
-
-{% block page_sidebar %}
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">ملخص اليوم</div>
-  <div class="app-context-list">
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">إجمالي الكتب</div>
-        <strong>{{ total }}</strong>
-      </div>
-      <span class="app-context-chip is-info"><i class="bi bi-files" aria-hidden="true"></i> أرشيف</span>
-    </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">الكتب المتأخرة</div>
-        <strong>{{ overdue }}</strong>
-      </div>
-      {% if overdue %}<span class="app-context-chip is-danger"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> عاجل</span>{% endif %}
-    </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">كتب اليوم</div>
-        <strong>{{ today_count }}</strong>
-      </div>
-      <span class="app-context-chip"><i class="bi bi-calendar-day" aria-hidden="true"></i> اليوم</span>
-    </div>
-  </div>
-</div>
-
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">اختصارات تشغيلية</div>
-  <div class="app-context-list">
-    <a class="app-context-link" href="{% url 'extraction-smart-desktop' %}">
-      <span>إدخال كتاب جديد</span>
-      <i class="bi bi-plus-circle" aria-hidden="true"></i>
-    </a>
-    <a class="app-context-link" href="{% url 'book_unified' %}?tab=all&followup=overdue">
-      <span>متابعة المتأخرات</span>
-      <i class="bi bi-lightning-charge" aria-hidden="true"></i>
-    </a>
-    <a class="app-context-link" href="{% url 'reports' %}">
-      <span>فتح التقارير</span>
-      <i class="bi bi-bar-chart-line" aria-hidden="true"></i>
-    </a>
-  </div>
-</div>
+<link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20260929">
 {% endblock %}
 
 {% block content %}
 <div class="db-page">
+  <header class="db-top">
+    <h1>مرحباً، {{ request.user.get_full_name|default:request.user.username }}</h1>
+    <span class="db-role"><i class="bi bi-person-badge" aria-hidden="true"></i>{{ role_label }}</span>
+    {% if my_department %}<span class="db-dept"><i class="bi bi-diagram-3" aria-hidden="true"></i>{{ my_department.name }}</span>{% endif %}
+  </header>
+
   {# شريطُ الأدوات: بحثٌ سريع + الفعلان الأساسيّان (q1‑ب) #}
-  <div class="db-hero align-items-center">
-    <form action="{% url 'book_unified' %}" method="get" role="search" class="position-relative flex-grow-1" style="max-width:520px">
+  <div class="db-bar">
+    <form action="{% url 'book_unified' %}" method="get" role="search" class="db-search">
       <input type="hidden" name="tab" value="all">
-      <input type="search" name="q" class="field-brand" placeholder="ابحث عن كتاب برقمه أو عنوانه أو جهته…" aria-label="بحث سريع" enterkeyhint="search" style="padding-inline-start:2.6rem;">
-      <i class="bi bi-search" aria-hidden="true" style="position:absolute; inset-block-start:50%; inset-inline-start:1rem; transform:translateY(-50%); color:#9ca3af; pointer-events:none;"></i>
+      <input type="search" name="q" class="field-brand" placeholder="ابحث برقم القيد أو العنوان أو الجهة…" aria-label="بحث سريع" enterkeyhint="search">
+      <button type="submit" class="db-search-btn" aria-label="بحث"><i class="bi bi-search" aria-hidden="true"></i></button>
     </form>
-    <div class="d-flex gap-2 flex-wrap">
-      <a href="{% url 'extraction-smart-desktop' %}" class="btn-brand">
-        <i class="bi bi-plus-circle" aria-hidden="true"></i> إدخال كتاب جديد
-      </a>
-      <a href="{% url 'book_unified' %}" class="btn-brand-ghost">
-        <i class="bi bi-list-ul" aria-hidden="true"></i> قائمة الكتب
-      </a>
-    </div>
+    <a href="{% url 'extraction-smart-desktop' %}" class="btn-brand">
+      <i class="bi bi-plus-circle" aria-hidden="true"></i> إدخال كتاب جديد
+    </a>
+    <a href="{% url 'book_unified' %}" class="btn-brand-ghost">
+      <i class="bi bi-list-ul" aria-hidden="true"></i> قائمة الكتب
+    </a>
   </div>
 
-  <div class="db-hero">
-    <div>
-      <h1 class="h4">مرحباً، {{ request.user.get_full_name|default:request.user.username }}</h1>
-      <p>هذه لوحتُك — أقسامُها بحسب صلاحيّاتك.</p>
+  {# الملخّص أوّلاً (مرحلة نيلسن): البلاطةُ كلُّها رابط، والروابطُ الفرعيّة في سطرها الثاني #}
+  <section class="db-card db-summary" aria-labelledby="db-h-summary">
+    <div class="db-card-hd">
+      <h2 id="db-h-summary">الملخّص</h2>
+      <span class="db-asof">محدَّث {{ now|time:"H:i" }} · <a href="{% url 'dashboard' %}">تحديث</a></span>
     </div>
-    <div class="d-flex gap-2 flex-wrap align-items-center">
-      <span class="db-role"><i class="bi bi-person-badge" aria-hidden="true"></i>{{ role_label }}</span>
-      {% if my_department %}
-        <span class="db-dept"><i class="bi bi-diagram-3" aria-hidden="true"></i>{{ my_department.name }}</span>
-      {% endif %}
+    <div class="db-tiles">
+      <div class="db-tile db-tile--lg db-tone-danger">
+        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=all&followup=overdue"><span class="db-l">كتب متأخّرة</span><span class="db-n"{% if overdue %} data-has="1"{% endif %}>{{ overdue }}</span></a>
+        <p class="db-sub">{% if overdue %}تحتاج متابعة{% else %}لا كتبَ متأخّرة{% endif %}</p>
+      </div>
+      <div class="db-tile db-tile--lg db-tone-in">
+        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=incoming"><span class="db-l">الكتب الواردة</span><span class="db-n"{% if incoming_total %} data-has="1"{% endif %}>{{ incoming_total }}</span></a>
+        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=incoming&followup=active">{{ active_label }}: <strong>{{ incoming_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=incoming&followup=archived">منجزة: <strong>{{ incoming_done }}</strong></a></p>
+      </div>
+      <div class="db-tile db-tile--lg db-tone-accent">
+        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=outgoing"><span class="db-l">الكتب الصادرة</span><span class="db-n"{% if outgoing_total %} data-has="1"{% endif %}>{{ outgoing_total }}</span></a>
+        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=outgoing&followup=active">{{ active_label }}: <strong>{{ outgoing_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=outgoing&followup=archived">منجزة: <strong>{{ outgoing_done }}</strong></a></p>
+      </div>
+      <div class="db-tile db-tile--lg db-tone-accent">
+        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=all"><span class="db-l">إجمالي الكتب</span><span class="db-n"{% if total %} data-has="1"{% endif %}>{{ total }}</span></a>
+        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=all&date_from={{ today|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}">اليوم: <strong>{{ today_count }}</strong></a> · <a href="{% url 'book_unified' %}?tab=all&date_from={{ week_ago|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}">الأسبوع: <strong>{{ week_count }}</strong></a></p>
+      </div>
     </div>
-  </div>
+  </section>
 
   {% comment %}
-    أقسامُ الدور: ما يراه المستخدمُ حاصلُ صلاحيّاته لا قائمةٌ مكتوبةٌ هنا.
-    وتسبق الإحصاءَ العامّ لأنّها **عملُه**، والإحصاءُ سياقٌ حوله.
+    أقسامُ الدور تلي الملخّص: ما يراه المستخدمُ حاصلُ صلاحيّاته لا قائمةٌ مكتوبةٌ هنا،
+    والقسمُ الذي كلُّ عدّاداته صفرٌ يُطوى سطراً في بطاقةٍ ختاميّة (الحكمُ في dashboard_sections).
   {% endcomment %}
   {% include "core/_dashboard_sections.html" %}
-
-  {# إحصائيات سريعة #}
-  <div class="row g-4 mb-4 mt-1">
-    {# إجمالي الكتب #}
-    <div class="col-lg-3 col-md-6">
-      <div class="card stat-card h-100 shadow-sm">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start mb-3">
-            <div>
-              <p class="text-muted mb-1 small">إجمالي الكتب</p>
-              <div class="stat-value">{{ total }}</div>
-            </div>
-            <div class="stat-icon bg-primary-subtle text-primary">
-              <i class="bi bi-files" aria-hidden="true"></i>
-            </div>
-          </div>
-          <div class="d-flex gap-3 small">
-            <div class="d-flex align-items-center gap-1">
-              <i class="bi bi-calendar-day text-primary" aria-hidden="true"></i>
-              <span class="text-muted">اليوم:</span>
-              <strong>{{ today_count }}</strong>
-            </div>
-            <div class="d-flex align-items-center gap-1">
-              <i class="bi bi-calendar-week text-primary" aria-hidden="true"></i>
-              <span class="text-muted">الأسبوع:</span>
-              <strong>{{ week_count }}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {# الكتب الواردة #}
-    <div class="col-lg-3 col-md-6">
-      <div class="card stat-card h-100 shadow-sm">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start mb-3">
-            <div>
-              <p class="text-muted mb-1 small">الكتب الواردة</p>
-              <div class="stat-value text-primary">{{ incoming_total }}</div>
-            </div>
-            <div class="stat-icon bg-primary-subtle">
-              <i class="bi bi-inbox-fill text-primary" aria-hidden="true"></i>
-            </div>
-          </div>
-          <div class="small">
-            <a href="{% url 'book_unified' %}?tab=incoming&followup=active" class="d-flex justify-content-between mb-1 link-body-emphasis link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover"><span class="text-muted">{{ active_label }}:</span><strong>{{ incoming_pending }}</strong></a>
-            <div class="d-flex justify-content-between">
-              <span class="text-muted">منجزة:</span>
-              <strong class="text-success">{{ incoming_done }}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {# الكتب الصادرة #}
-    <div class="col-lg-3 col-md-6">
-      <div class="card stat-card h-100 shadow-sm">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start mb-3">
-            <div>
-              <p class="text-muted mb-1 small">الكتب الصادرة</p>
-              <div class="stat-value">{{ outgoing_total }}</div>
-            </div>
-            <div class="stat-icon bg-warning-subtle">
-              <i class="bi bi-send-fill text-warning-emphasis" aria-hidden="true"></i>
-            </div>
-          </div>
-          <div class="small">
-            {# OPT‑1 (موافقةُ المالك 09‑27): القاعدةُ نفسُها والتسميةُ نفسُها — «الإرسال» كانت تسميةً خاطئة #}
-            <a href="{% url 'book_unified' %}?tab=outgoing&followup=active" class="d-flex justify-content-between mb-1 link-body-emphasis link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover"><span class="text-muted">{{ active_label }}:</span><strong class="text-warning-emphasis">{{ outgoing_pending }}</strong></a>
-            <div class="d-flex justify-content-between">
-              <span class="text-muted">تم الإرسال:</span>
-              <strong class="text-success">{{ outgoing_done }}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {# الكتب المتأخرة #}
-    <div class="col-lg-3 col-md-6">
-      <div class="card stat-card h-100 shadow-sm">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start mb-3">
-            <div>
-              <p class="text-muted mb-1 small">كتب متأخرة</p>
-              <div class="stat-value text-danger {{ overdue|yesno:'animate-pulse,' }}">{{ overdue }}</div>
-            </div>
-            <div class="stat-icon bg-danger-subtle">
-              <i class="bi bi-exclamation-triangle-fill text-danger" aria-hidden="true"></i>
-            </div>
-          </div>
-          <div class="small">
-            {% if overdue %}<a href="{% url 'book_unified' %}?tab=all&followup=overdue" class="alert alert-danger p-2 mb-0 d-flex align-items-center gap-2 text-decoration-none"><i class="bi bi-clock-history" aria-hidden="true"></i><span>تحتاج متابعة عاجلة</span></a>{% else %}<span class="text-muted">لا كتبَ متأخّرة</span>{% endif %}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 {% endblock %}

@@ -78,9 +78,14 @@ def dashboard(request):
 
     role = get_user_role(request.user)
     profile = getattr(request.user, 'profile', None)
+    sections = sections_for(request.user)
 
     ctx = {
-        "sections":         sections_for(request.user),
+        "sections":         sections,
+        "has_quiet":        any(s['quiet'] for s in sections),
+        "today":            today,
+        "week_ago":         today - timedelta(days=7),
+        "now":              timezone.localtime(),
         "role_label":       ROLE_DEFINITIONS.get(role, {}).get('label', role),
         "my_department":    profile.department if profile else None,
         "total":            stats['total'],

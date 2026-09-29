@@ -62,7 +62,6 @@ class DashboardSectionTests(TestCase):
         keys = self._keys(head)
 
         self.assertIn('desk', keys)
-        self.assertIn('register', keys)
         self.assertNotIn('mail', keys)
         self.assertNotIn('admin', keys)
 
@@ -71,8 +70,10 @@ class DashboardSectionTests(TestCase):
 
         keys = self._keys(boss)
 
-        for key in ('mine', 'desk', 'register', 'mail', 'admin'):
+        for key in ('mine', 'desk', 'mail', 'admin'):
             self.assertIn(key, keys)
+        # مرحلة نيلسن: «دفتر القسم» كان يكرّر أرقامَ الملخّص حرفاً بحرف — حُذف.
+        self.assertNotIn('register', keys)
 
     def test_a_unit_without_a_twin_has_no_dossier_section(self):
         """القسمُ الذي يُعيد بانيه None يُسقَط — لا صندوقٌ فارغٌ يُعلّم التجاهل."""
@@ -123,13 +124,69 @@ class DashboardSectionTests(TestCase):
         لا `tab=overdue` المجهول)، وعدّاداتُ الطوابير تحمل مرساةَ طابورها."""
         boss = self._user('boss4', self.dept, admin=True)
         by_key = {s['key']: s for s in sections_for(boss)}
-        register = {c['label']: c['href'] for c in by_key['register']['counters']}
-        self.assertIn('followup=overdue', register['متأخّر'])
-        self.assertNotIn('tab=overdue', register['متأخّر'])
-        self.assertIn('date_from=', register['كتبُ اليوم'])
         desk = {c['label']: c['href'] for c in by_key['desk']['counters']}
         self.assertTrue(desk['متأخّر'].endswith('#q-overdue'))
         self.assertTrue(desk['غير مُستلَم'].endswith('#q-unreceived'))
+
+    def test_quiet_is_true_exactly_when_every_counter_is_zero(self):
+        """مرحلة نيلسن: القسمُ الذي كلُّ عدّاداته صفرٌ يُطوى سطراً — والحكمُ في بايثون.
+
+        وكلُّ قسمٍ يحمل ``home`` يُحلّ: عنوانُ السطر المطويّ رابطُه الوحيد.
+        """
+        from urllib.parse import urlsplit
+        from django.urls import Resolver404, resolve
+        from django.utils import timezone
+        from core.models import BookReferral
+
+        boss = self._user('boss5', self.dept, admin=True)
+        mine = {s['key']: s for s in sections_for(boss)}['mine']
+        self.assertIs(mine['quiet'], True)
+
+        book = Book.objects.create(kind='incoming_external', title='ك', our_number='6101',
+                                   department=self.dept, created_by=boss)
+        BookReferral.objects.create(book=book, from_department=self.dept,
+                                    to_department=self.dept, assignee=boss,
+                                    due_date=timezone.localdate(),
+                                    status=BookReferral.SENT)
+        by_key = {s['key']: s for s in sections_for(boss)}
+        self.assertIs(by_key['mine']['quiet'], False)
+
+        for section in by_key.values():
+            self.assertTrue(section.get('home'), msg=section['key'])
+            try:
+                resolve(urlsplit(section['home']).path)
+            except Resolver404:
+                self.fail(f"home لا يُحلّ: {section['key']} ⟵ {section['home']}")
+
+    def test_dossier_counts_only_the_books_the_dossier_page_shows(self):
+        """عددُ «أضبارة وحدتي» عددُ صفحة الأضبارة نفسِها — من `_direction_bases` لا عدٍّ ثانٍ.
+
+        العدُّ القديم (`receiving_entities=entity`) يُسقط شجرةَ القسم (توائمَ وحداته)
+        التي تعرضها الصفحة. وكتابٌ في قسمٍ آخر يذكر توأمَنا **مرئيٌّ** للموظّف بنصّ
+        `scope_books_for` (شقُّ الذكر) — فالفرقُ بين الموظّف والمدير لا يُختبر هنا.
+        """
+        sub_ent = Entity.objects.create(name='وحدة اللوحة', code='ل.ف')
+        Department.objects.create(name='وحدة اللوحة', code='ل.ف', parent=self.dept,
+                                  entity=sub_ent)
+        worker = self._user('dossier_worker', self.dept)
+        boss = self._user('dossier_boss', self.dept, admin=True)
+        other = Department.objects.create(name='قسمٌ بعيد', code='ب.ع')
+        to_unit = Book.objects.create(kind='incoming_external', title='ك', our_number='6201',
+                                      department=other, created_by=boss)
+        to_unit.receiving_entities.add(sub_ent)
+        to_both = Book.objects.create(kind='incoming_external', title='ك', our_number='6202',
+                                      department=other, created_by=boss)
+        to_both.receiving_entities.add(self.ent, sub_ent)
+
+        def received(user):
+            section = {s['key']: s for s in sections_for(user)}['dossier']
+            return {c['label']: c['value'] for c in section['counters']}['وارد إلينا']
+
+        for user in (worker, boss):
+            self.client.force_login(user)
+            page = self.client.get(reverse('dossier_detail', args=[self.ent.pk]))
+            self.assertEqual(page.context['incoming_count'], 2, msg=user.username)
+            self.assertEqual(received(user), page.context['incoming_count'], msg=user.username)
 
 
 class DashboardViewTests(TestCase):
@@ -231,9 +288,11 @@ class DashboardOverviewTests(TestCase):
 
     def test_incoming_number_keeps_its_blue(self):
         """قاعدةُ المالك: لا تغييرَ صبغة بلا إذن — رقمُ الوارد أزرقُ كأيقونته، لا كهرمانُ `.stat-value`."""
+        import io
         dash = self._dash()
-        self.assertContains(dash, '<div class="stat-value text-primary">%d</div>'
-                            % dash.context['incoming_total'])
+        self.assertContains(dash, 'class="db-tile db-tile--lg db-tone-in"')
+        with io.open('static/css/dashboard_roles.css', encoding='utf-8') as fh:
+            self.assertIn('.db-tone-in{--tone:var(--bs-primary)}', fh.read())
 
     def test_active_label_is_its_own_words(self):
         """«قيد المتابعة» تعني المستقبليَّ وحده؛ الجاريةُ كلُّها اسمٌ آخر."""
@@ -271,14 +330,40 @@ class DashboardOverviewTests(TestCase):
                             % dash.context['outgoing_pending'])
 
     def test_overdue_alert_is_honest(self):
-        """«تحتاج متابعة عاجلة» لا تُقال حين لا متأخّر."""
+        """«تحتاج متابعة» لا تُقال حين لا متأخّر — والبلاطةُ رابطٌ إلى المتأخّر دائماً."""
         self.overdue.is_archived = True
         self.overdue.save()
-        self.assertNotContains(self._dash(), 'تحتاج متابعة عاجلة')
+        dash = self._dash()
+        self.assertContains(dash, '?tab=all&followup=overdue"')
+        self.assertNotContains(dash, 'تحتاج متابعة')
 
         self.overdue.is_archived = False
         self.overdue.save()
         dash = self._dash()
-        self.assertContains(dash, 'تحتاج متابعة عاجلة')
-        # التنبيهُ نفسُه رابطٌ إلى المتأخّر (الشريطُ الجانبيّ يحمل followup=overdue أصلاً).
-        self.assertContains(dash, 'followup=overdue" class="alert alert-danger')
+        self.assertContains(dash, '?tab=all&followup=overdue"')
+        self.assertContains(dash, 'تحتاج متابعة')
+
+    def test_summary_comes_first_and_the_sidebar_is_gone(self):
+        """مرحلة نيلسن: الملخّصُ قبل الأقسام، والشريطُ الجانبيّ وبطاقاتُ `stat-card` زالت."""
+        content = self._dash().content.decode('utf-8')
+
+        self.assertLess(content.index('db-summary'), content.index('db-sections'))
+        for gone in ('ملخص اليوم', 'اختصارات تشغيلية', 'animate-pulse', 'stat-card'):
+            self.assertNotIn(gone, content)
+        self.assertIn('followup=archived', content)
+        self.assertIn('date_from=', content)
+
+    def test_the_neutral_body_is_scoped_to_the_dashboard(self):
+        """الخلفيّةُ المحايدة للوحة وحدها (ق‑7 قرارُ المالك): بقيّةُ الصفحات على تدرّجها."""
+        import io
+
+        def read(path):
+            with io.open(path, encoding='utf-8') as fh:
+                return fh.read()
+
+        self.assertIn('{% block body_class %} is-db{% endblock %}',
+                      read('templates/core/dashboard.html'))
+        self.assertIn('{% block body_class %}{% endblock %}', read('templates/base.html'))
+        self.assertIn('body.is-db{background-image:none', read('static/css/dashboard_roles.css'))
+        app_css = read('static/app.css').splitlines()
+        self.assertIn('linear-gradient', app_css[63])

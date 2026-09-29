@@ -17,8 +17,6 @@
 مخفيّاً: ما يراه كلٌّ منهم هو حاصلُ بوّاباتِه لا قائمةً مكتوبةً بيدٍ ثالثة.
 """
 
-from datetime import timedelta
-
 from django.db.models import Count, Q
 from django.urls import reverse
 from django.utils import timezone
@@ -65,7 +63,8 @@ def _my_queue(user):
             {'label': 'كلُّ التزاماتي', 'value': counts['total'], 'tone': 'calm',
              'href': _to('my_today')},
         ],
-        'empty': not counts['total'],
+        'quiet_msg': 'لا التزامَ مفتوحاً باسمك',
+        'home': _to('my_today'),
     }
 
 
@@ -108,6 +107,7 @@ def _desk(user):
             {'label': 'دفتر الوارد', 'href': _to('desk_ledger'), 'icon': 'bi-journal-text'},
             {'label': 'كشف التسليم', 'href': _to('desk_handover'), 'icon': 'bi-pen'},
         ],
+        'home': _to('desk_board'),
     }
 
 
@@ -138,38 +138,8 @@ def _archive(user):
              'icon': 'bi-archive'},
             {'label': 'الأضابير', 'href': _to('dossier_list'), 'icon': 'bi-folder2-open'},
         ],
-    }
-
-
-def _register(user):
-    """دفترُ القسم — حجمُ العمل ومساره، لمن يملك دفتراً."""
-    from core.models import Book
-    from core.scoping import scope_books_for
-    from core.views.filter_helpers import followup_q
-
-    today = timezone.localdate()
-    books = scope_books_for(user, Book.objects.all())
-
-    counts = books.aggregate(
-        total=Count('id'),
-        today=Count('id', filter=Q(date=today)),
-        week=Count('id', filter=Q(date__gte=today - timedelta(days=7))),
-        overdue=Count('id', filter=followup_q('overdue', today)),
-    )
-    return {
-        'counters': [
-            {'label': 'كتبُ اليوم', 'value': counts['today'], 'tone': 'accent',
-             'href': _to('book_unified', tab='all', date_from=today.isoformat(),
-                         date_to=today.isoformat())},
-            {'label': 'هذا الأسبوع', 'value': counts['week'], 'tone': 'calm',
-             'href': _to('book_unified', tab='all',
-                         date_from=(today - timedelta(days=7)).isoformat(),
-                         date_to=today.isoformat())},
-            {'label': 'متأخّر', 'value': counts['overdue'], 'tone': 'danger',
-             'href': _to('book_unified', tab='all', followup='overdue')},
-            {'label': 'كلُّ الدفتر', 'value': counts['total'], 'tone': 'calm',
-             'href': _to('book_unified', tab='all')},
-        ],
+        'home': _to('archive_desk'),
+        'quiet_msg': 'لا قيدَ ناقصاً',
     }
 
 
@@ -186,8 +156,12 @@ def _dossier(user):
 
     entity = department.entity
     from core.models import Book
-    issued = Book.objects.filter(issuing_entities=entity).count()
-    received = Book.objects.filter(receiving_entities=entity).count()
+    from core.scoping import scope_books_for
+    from core.views.dossiers import _direction_bases
+    # العددُ عددُ صفحة الأضبارة نفسِها: القاعدتان من مصدرها (نطاقٌ + شجرةٌ + distinct).
+    issued_qs, received_qs = _direction_bases(scope_books_for(user, Book.objects.all()), entity.pk)
+    issued = issued_qs.count()
+    received = received_qs.count()
 
     return {
         'counters': [
@@ -196,8 +170,8 @@ def _dossier(user):
             {'label': 'صادر منّا', 'value': issued, 'tone': 'calm',
              'href': _to('dossier_detail', entity.pk)},
         ],
-        'note': 'أضبارةُ «%s» — يتدفّق إليها الكتابُ من ذكر اسمها في الصادر والوارد.'
-                % department.name,
+        'home': _to('dossier_detail', entity.pk),
+        'quiet_msg': 'لا كتبَ بعد',
     }
 
 
@@ -218,6 +192,7 @@ def _mail(user):
              'href': _to('mail_sent', status='failed')},
         ],
         'links': [{'label': 'مركز البريد', 'href': _to('mail_hub'), 'icon': 'bi-envelope'}],
+        'home': _to('mail_hub'),
     }
 
 
@@ -241,6 +216,7 @@ def _administration(user):
             {'label': 'لوحة الإدارة', 'href': _to('admin_panel'), 'icon': 'bi-sliders'},
             {'label': 'سجلّ الحركات', 'href': _to('audit_log'), 'icon': 'bi-clock-history'},
         ],
+        'home': _to('admin_panel'),
     }
 
 
@@ -253,12 +229,6 @@ def _always(user):
 def _can_desk(user):
     from core.scoping import can_use_desk
     return can_use_desk(user)
-
-
-def _has_register(user):
-    """يملك دفتراً: مَن له قسمٌ — أو مديرُ النظام الذي يرى الكلّ."""
-    from core.scoping import is_privileged, user_department_id
-    return is_privileged(user) or user_department_id(user) is not None
 
 
 def _can_archive(user):
@@ -282,9 +252,8 @@ SECTIONS = (
     ('mine', 'ما يخصّني اليوم', 'التزاماتي المفتوحة باسمي', _always, _my_queue),
     ('desk', 'طاولة الوارد', 'عملُ القسم اليوم', _can_desk, _desk),
     ('archive', 'الأرشفة', 'ما لم يكتمل قيدُه اليوم', _can_archive, _archive),
-    ('dossier', 'أضبارة وحدتي', 'ما ذُكر فيه اسمُنا', _always, _dossier),
-    ('register', 'دفتر القسم', 'حجمُ العمل ومساره', _has_register, _register),
     ('mail', 'البريد الإلكتروني', 'ما وصل وما أخفق', _can_mail, _mail),
+    ('dossier', 'أضبارة وحدتي', 'ما ذُكر فيه اسمُنا', _always, _dossier),
     ('admin', 'الإدارة', 'الشجرةُ والناسُ والعناقيد', _can_admin, _administration),
 )
 
@@ -295,6 +264,9 @@ def sections_for(user):
     القسمُ الذي يُعيد بانيه ``None`` **يُسقَط**: «لا أضبارةَ لوحدةٍ بلا توأم»
     حالةٌ صحيحةٌ لا خطأ، وعرضُ صندوقٍ فارغٍ عليها ضجيجٌ يُعلّم المستخدمَ أن
     يتجاهل اللوحة.
+
+    و``quiet`` = كلُّ عدّاداته صفر: يُطوى سطراً واحداً (عنوانُه رابطٌ إلى ``home``
+    ورسالتُه ``quiet_msg``) بدل صفٍّ من البلاطات الصفريّة — والحكمُ هنا لا في القالب.
     """
     built = []
     for key, title, hint, gate, builder in SECTIONS:
@@ -303,5 +275,6 @@ def sections_for(user):
         data = builder(user)
         if data is None:
             continue
-        built.append({'key': key, 'title': title, 'hint': hint, **data})
+        built.append({'key': key, 'title': title, 'hint': hint, 'quiet_msg': 'لا شيء بانتظارك',
+                      **data, 'quiet': not any(c['value'] for c in data['counters'])})
     return built
