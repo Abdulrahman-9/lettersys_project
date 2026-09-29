@@ -4,10 +4,14 @@
 يتحقّق من إحصاءات التجميع عبر DB (بدل المرور على كل الصفوف في الذاكرة)
 ومن الترقيم — بعد إعادة الكتابة لمعالجة استهلاك الذاكرة.
 """
-from datetime import date, timedelta
+import csv
+import io
+from datetime import date, datetime, timedelta, timezone as dt_timezone
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 
@@ -51,10 +55,19 @@ class ReportsViewTests(TestCase):
         self.assertEqual(ctx['total'], ctx['page_obj'].paginator.count)
 
     def test_bucket_filters_stats(self):
+        """الدلوُ يحصر الجدولَ و``total`` — وعدّاداتُ الحالات على المجموعة كلّها
+        (كالقائمة)؛ كانت تُحسب بعد الدلو فيصير كلُّ ما خارجه صفراً بنائيّاً."""
         stats = self._get(bucket='overdue').context['stats']
         self.assertEqual(stats['total'], 2)      # المتأخرة فقط
         self.assertEqual(stats['overdue'], 2)
-        self.assertEqual(stats['pending'], 0)
+        self.assertEqual(stats['pending'], 1)
+
+    def test_active_bucket_matches_dashboard(self):
+        """«متابعة جارية» في التقارير = رقمُ اللوحة (``followup_q('active')``)."""
+        dash = self.client.get(reverse('dashboard')).context
+        total = self._get(bucket='active').context['total']
+        self.assertEqual(total, dash['incoming_pending'] + dash['outgoing_pending'])
+        self.assertEqual(total, 4)
 
     def test_kind_filter(self):
         stats = self._get(kind='incoming').context['stats']
@@ -72,3 +85,42 @@ class ReportsViewTests(TestCase):
         self.client.logout()
         resp = self.client.get(reverse('reports'))
         self.assertIn(resp.status_code, (301, 302))
+
+
+class ReportsExportTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser('xadmin', 'x@x.com', 'pass1234')
+        self.client.force_login(self.admin)
+        from .models import Book
+        self.book = Book.objects.create(our_number='20250825', title='موسومٌ', kind='incoming_internal',
+                                        date=date(2025, 3, 1), created_by=self.admin)
+
+    def _rows(self):
+        resp = self.client.get(reverse('reports_export'), {'bucket': 'all'})
+        body = b''.join(resp.streaming_content).decode('utf-8').lstrip('\ufeff')
+        return list(csv.reader(io.StringIO(body)))
+
+    def test_number_is_the_display_form(self):
+        """الرقمُ كما تعرضه الصفحةُ ويُطبع — ``core/numbering.py`` لا المخزَّنُ الخام."""
+        self.assertEqual(self._rows()[1][0], '825/2025')
+
+    @override_settings(TIME_ZONE='Asia/Baghdad')
+    def test_entry_date_is_local(self):
+        """22:30 UTC = 01:30 ببغداد من اليوم التالي — يومُ الإدخال محلّيّ."""
+        from .models import Book
+        Book.objects.filter(pk=self.book.pk).update(
+            created_at=datetime(2026, 9, 28, 22, 30, tzinfo=dt_timezone.utc))
+        self.assertEqual(self._rows()[1][8], '2026-09-29')
+
+    def test_export_is_an_audited_event(self):
+        from core.logging_models import UserActivityLog
+        before = UserActivityLog.objects.filter(action='EXPORT_DATA').count()
+        self._rows()
+        self.assertEqual(UserActivityLog.objects.filter(action='EXPORT_DATA').count(), before + 1)
+
+
+class ReportsTemplateBalanceTests(SimpleTestCase):
+    def test_divs_are_balanced(self):
+        """كان في القالب وسمُ ``</div>`` زائدٌ يُغلق حاويةَ الصفحة قبل أوانها."""
+        text = (Path(settings.BASE_DIR) / 'templates' / 'core' / 'reports.html').read_text(encoding='utf-8')
+        self.assertEqual(text.count('<div'), text.count('</div>'))

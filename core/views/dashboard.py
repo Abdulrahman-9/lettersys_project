@@ -29,7 +29,8 @@ from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       RestoreJob)
 from .filter_helpers import FOLLOWUP_LABELS, followup_q
 from .helpers import staff_required
-from core.scoping import can_open_content, is_privileged, scope_books_for
+from core.scoping import (STUB_TITLE, can_open_content, is_privileged,
+                          restricted_flag_sql, scope_books_for)
 
 logger = logging.getLogger(__name__)
 
@@ -154,9 +155,21 @@ def followup_activity_report(request):
 
 def _reports_qs(request):
     """يبني queryset التقارير المفلتر والمرتّب حسب فلاتر الصفحة (kind/entity/date/bucket).
-    مصدر تصفية واحد مشترك بين عرض التقارير والتصدير (DRY). يُعيد (qs, meta)."""
-    qs = Book.objects.all() if request.user.is_superuser else Book.objects.filter(created_by=request.user)
-    qs = qs.select_related("created_by").prefetch_related("issuing_entities", "receiving_entities")
+    مصدر تصفية واحد مشترك بين عرض التقارير والتصدير (DRY). يُعيد (qs, meta).
+
+    **النطاقُ من المصدر الوحيد** (``scope_books_for``) كاللوحة تماماً: كانت هنا
+    نسخةٌ خاصّة («المشرف الكلّ، وغيرُه كتبَه فقط») فيرى موظّفُ القسم في لوحته
+    رقمَ قسمه وفي التقارير كتبَه هو. و``restricted`` علَمُ الحجب من SQL
+    (``restricted_flag_sql``) تقرؤه ``_shape`` للعرض والتصدير.
+
+    ``meta['base']`` هي المجموعةُ **قبل** دلو الحالة: عدّاداتُ الحالات تُحسب
+    عليها (كالقائمة) — وإلّا صار كلُّ ما خارج الدلو صفراً بنائيّاً.
+    """
+    user = request.user
+    qs = scope_books_for(user, Book.objects.all())
+    qs = (qs.select_related("created_by", "department")
+            .prefetch_related("issuing_entities", "receiving_entities")
+            .annotate(restricted=restricted_flag_sql(user)))
     kind = request.GET.get("kind", "all")
     if kind == "incoming":
         qs = qs.filter(kind__startswith="incoming")
@@ -176,7 +189,10 @@ def _reports_qs(request):
 
     entity_id = request.GET.get("entity")
     if entity_id and entity_id.isdigit():
-        qs = qs.filter(Q(issuing_entities__id=entity_id) | Q(receiving_entities__id=entity_id)).distinct()
+        # السرّيُّ «لا يُطابَق بجهةٍ» لمن لا يملك محتواه (``guard_secret_text_search``):
+        # جهتاه محجوبتان في الصفّ، فإعادتُه بفلترها تكشفهما.
+        qs = (qs.filter(Q(issuing_entities__id=entity_id) | Q(receiving_entities__id=entity_id))
+                .filter(restricted=False).distinct())
 
     today = timezone.localdate()
     due_start = request.GET.get("due_start")
@@ -200,10 +216,14 @@ def _reports_qs(request):
     elif end_date:
         qs = qs.filter(due_date__lte=end_date)
 
+    base = qs
     bucket = request.GET.get("bucket", "") or "today_overdue"
     active_qs = qs.filter(followup_q('active'))
     archived_qs = qs.filter(followup_q('archived'))
-    if bucket == "today":
+    if bucket == "active":
+        # «متابعة جارية» — الرقمُ الذي تفتحه اللوحة (``followup=active``) بقاعدته نفسِها.
+        qs = active_qs
+    elif bucket == "today":
         qs = active_qs.filter(due_date=today)
     elif bucket == "overdue":
         qs = active_qs.filter(due_date__lt=today)
@@ -220,7 +240,26 @@ def _reports_qs(request):
         "kind": kind, "kind_label": kind_label,
         "entity_id": entity_id or "", "bucket": bucket,
         "due_start": due_start or "", "due_end": due_end or "", "today": today,
+        "base": base,
     }
+
+
+def _shape(b):
+    """يُلبس الصفَّ محتواه **كما يحقّ لقارئه** — للجدول والتصدير معاً.
+
+    القرارُ علَمُ ``restricted`` من ``_reports_qs`` (``restricted_flag_sql``)؛
+    والمحجوبُ ما يُفرَّغ في ``stub_book_payload``: العنوانُ ⟵ ``STUB_TITLE``،
+    والجهاتُ وعددُ الجهة وتاريخُها والهامشُ فارغة. والرقمُ والتاريخُ والنوعُ
+    والمتابعةُ تبقى — الدفترُ يكشفها. القالبُ والـCSV يقرآن ``shown_*`` وحدَها.
+    """
+    r = b.restricted
+    b.shown_title = STUB_TITLE if r else b.title
+    b.shown_issuing = [] if r else list(b.issuing_entities.all())
+    b.shown_receiving = [] if r else list(b.receiving_entities.all())
+    b.shown_sender_number = "" if r else b.sender_number
+    b.shown_sender_date = None if r else b.sender_date
+    b.shown_margin = "" if r else b.margin
+    return b
 
 
 # ── هياكلُ واجهةٍ (2026-09-01، بقرار المالك: تُودَع موسومةً) ─────────────────
@@ -265,8 +304,8 @@ def reports(request):
     today = _m["today"]
 
     # ── إحصاءات عبر تجميع DB (بلا تحميل كل الصفوف في الذاكرة) ──
-    agg = qs.aggregate(
-        total=Count("id"),
+    # على المجموعة **قبل** الدلو (كعدّادات القائمة)؛ و``total`` وحده عدُّ الدلو.
+    agg = _m["base"].aggregate(
         incoming=Count("id", filter=Q(kind__startswith="incoming")),
         outgoing=Count("id", filter=Q(kind__startswith="outgoing")),
         **{k: Count("id", filter=followup_q(k, today))
@@ -277,7 +316,8 @@ def reports(request):
 
     # ── ترقيم العرض: يمنع تحميل آلاف الكتب دفعةً (مهمّ على ذاكرة محدودة) ──
     page_obj = Paginator(qs, 200).get_page(request.GET.get("page"))
-    books = list(page_obj.object_list)
+    stats["total"] = page_obj.paginator.count
+    books = [_shape(b) for b in page_obj.object_list]
     for b in books:
         if b.due_date:
             diff = (b.due_date - today).days
@@ -335,6 +375,10 @@ def reports_export(request):
     from django.http import StreamingHttpResponse
 
     qs, meta = _reports_qs(request)
+    # ملفٌّ يخرج من الجهاز بصفوفٍ كثيرة — واقعةُ إخراجٍ لا تُطوى (كتصدير القائمة)
+    from core.audit_service import record_event
+    record_event(request, 'EXPORT_DATA', metadata={
+        'report': 'followup', 'kind': meta['kind'], 'bucket': meta['bucket']})
     status_labels = {"pending": "قيد المتابعة", "due_today": "مستحق اليوم",
                      "overdue": "متأخر", "archived": "مُنجَز / بلا متابعة"}
     # أعمدة تطابق جدول الصفحة الرسمي: تاريخا الكتاب (قيدنا + كتاب الجهة رقماً
@@ -350,22 +394,24 @@ def reports_export(request):
         csv.writer(buf).writerow(HEADERS)
         yield buf.getvalue()
         for b in qs.iterator(chunk_size=500):
+            _shape(b)
             buf = io.StringIO()
-            issuing = "، ".join(e.name for e in b.issuing_entities.all())
-            receiving = "، ".join(e.name for e in b.receiving_entities.all())
             csv.writer(buf).writerow([
-                b.our_number or "",
+                # الرقمُ كما يُعرض ويُطبع («825/2025») — ``core/numbering.py`` لا المخزَّنُ الخام
+                b.our_number_display,
                 b.date.isoformat() if b.date else "",
-                b.title or "",
+                b.shown_title or "",
                 b.kind_label,
-                issuing,
-                receiving,
-                b.sender_number or "",
-                b.sender_date.isoformat() if b.sender_date else "",
-                b.created_at.date().isoformat() if b.created_at else "",
+                "، ".join(e.name for e in b.shown_issuing),
+                "، ".join(e.name for e in b.shown_receiving),
+                b.shown_sender_number or "",
+                b.shown_sender_date.isoformat() if b.shown_sender_date else "",
+                # يومُ الإدخال **ببغداد** لا بـUTC: كتابٌ أُدخل بعد منتصف الليل
+                # محلّيّاً كان يُكتب بتاريخ الأمس.
+                timezone.localdate(b.created_at).isoformat() if b.created_at else "",
                 b.due_date.isoformat() if b.due_date else "",
                 status_labels.get(b.followup_state, b.followup_state or ""),
-                b.margin or "",
+                b.shown_margin or "",
             ])
             yield buf.getvalue()
 

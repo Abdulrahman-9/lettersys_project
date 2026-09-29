@@ -138,7 +138,8 @@ class ForeignBookIsUnreachableTests(TestCase):
         self._denied(self.client.get(f'/books/{self.book_b.pk}/edit/'))
 
     def test_report_page(self):
-        self._denied(self.client.get(f'/books/{self.book_b.pk}/report/'))
+        # صارمٌ: «غيرُ موجود» لا «ممنوع» — فرقُ الرمزين يُسرّب وجودَ الكتاب.
+        self.assertEqual(self.client.get(f'/books/{self.book_b.pk}/report/').status_code, 404)
 
     def test_delete_api(self):
         self._denied(self.client.post(f'/books/api/book/{self.book_b.pk}/delete/'))

@@ -480,6 +480,25 @@ def shown_field_sql(user, field, hidden):
                 output_field=CharField())
 
 
+def restricted_flag_sql(user):
+    """أمحجوبٌ محتوى هذا الصفّ عن المستخدم؟ — علَمٌ منطقيٌّ في SQL.
+
+    **توأمُ ``shown_field_sql`` على المسند نفسِه** (``_unauthorized_secret_q``،
+    المحروسِ بالتطابق مع ``secret_access``): صفحةٌ تعرض صفوفاً كثيرة وتصدّرها
+    تسأل الاستعلامَ مرّةً بدل ``secret_access`` لكلّ صفّ، وتُصفّي عليه ما لا يجوز
+    أن يُطابَق («لا يُطابَق بجهةٍ» — ``guard_secret_text_search``). ومديرُ النظام
+    لا محجوبَ عنه؛ و``user=None`` فشلٌ مغلق كأخيه.
+    """
+    from django.db.models import BooleanField, Case, Value, When
+
+    if user is not None and is_privileged(user):
+        return Value(False, output_field=BooleanField())
+    restricted = (Q(secret_level__in=RESTRICTED_SECRET_LEVELS) if user is None
+                  else _unauthorized_secret_q(user))
+    return Case(When(restricted, then=Value(True)), default=Value(False),
+                output_field=BooleanField())
+
+
 def stub_book_payload(payload):
     """يحجب محتوى كتابٍ سرّيّ من حمولةٍ **مُسلسَلةٍ سلفاً**.
 

@@ -274,7 +274,7 @@ class DetailAndAttachmentsAreClosedTests(SecrecyTestCase):
     def test_printable_report_is_refused(self):
         self.client.force_login(self.clerk)
         resp = self.client.get(f'/books/{self.secret.pk}/report/')
-        self.assertIn(resp.status_code, (403, 404))
+        self.assertEqual(resp.status_code, 404)
 
     def test_attachment_file_is_refused(self):
         self.client.force_login(self.clerk)
