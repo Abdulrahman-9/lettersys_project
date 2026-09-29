@@ -90,6 +90,25 @@ def registrations_of(book, user):
     return list(book.registrations.select_related('department').all())
 
 
+def register_here_ledger(book, user):
+    """دفترُ «قيِّده عندنا» لهذا المستخدم — القسمُ الذي سيُستهلك عدّادُه، أو ``None``.
+
+    ``None`` حيث يرفض الخادمُ الضغطةَ لا محالة: لا محتوى (``register_book_here``)،
+    أو لا قسمَ للمستخدم (``api_register_here`` ⟵ «لا قسمَ للقيد»)، أو الكتابُ
+    مقيَّدٌ في دفتره سلفاً (قيدُ التفرّد). فالزرُّ لا يُعرض لمن سيُرفض، واسمُ
+    الدفتر يُسمّى في التأكيد — الضغطةُ تستهلك رقماً حقيقيّاً لا يُستردّ.
+    """
+    from core.models import Department
+    from core.scoping import can_open_content, user_department_id
+
+    department_id = user_department_id(user)
+    if department_id is None or not can_open_content(book, user):
+        return None
+    if book.registrations.filter(department_id=department_id).exists():
+        return None
+    return Department.objects.filter(pk=department_id).first()
+
+
 # ───────────────────────────── الداخليّات ─────────────────────────────
 
 def _direction_of(book):

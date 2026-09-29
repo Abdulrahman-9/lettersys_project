@@ -266,12 +266,59 @@ class RegisterHereApiTests(LifecycleApiTestCase):
         self.assertEqual(before, after)
 
 
+class RegisterHereButtonTests(LifecycleApiTestCase):
+    """«قيِّده عندنا» يُعرض لمن يقبله الخادم ويسمّي دفترَه — P0 البند 5.
+
+    الضغطةُ تستهلك رقماً حقيقيّاً (``BookSequence.consume_next``)، ومَن بلا قسمٍ
+    كان يرى الزرَّ ثمّ يُرفض، ومَن قيّد مرّةً كان يراه ثمّ يُرفض بـ«سلفاً».
+    """
+
+    def _body(self, book=None):
+        return self.client.get('/books/%d/' % (book or self.book).pk).content.decode()
+
+    def test_the_button_names_the_ledger_it_will_consume(self):
+        body = self._body()
+        self.assertIn('id="registerHereBtn"', body)
+        self.assertIn('data-ledger="المتابعة"', body)
+
+    def test_no_button_for_a_user_without_a_department(self):
+        loner = User.objects.create_user('nlloner', password='pw-nlloner-111')
+        mine = Book.objects.create(kind='incoming_internal', title='كتابي',
+                                   created_by=loner, our_number='3001')
+        self.client.force_login(loner)
+        self.assertNotIn('registerHereBtn', self._body(mine))
+        # والخادمُ يرفضه فعلاً — العلمُ يوافق الحارس لا يخمّنه
+        resp = self._post('/books/api/book/%d/register-here/' % mine.pk)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_no_button_once_registered_here(self):
+        self.assertEqual(
+            self._post('/books/api/book/%d/register-here/' % self.book.pk).status_code, 200)
+        self.assertNotIn('registerHereBtn', self._body())
+
+
 class TargetsApiTests(LifecycleApiTestCase):
 
     def test_it_lists_departments_groups_people_and_events(self):
         data = self.client.get('/books/api/lifecycle/targets/').json()
         for key in ('departments', 'groups', 'people', 'events'):
             self.assertIn(key, data)
+
+    def test_archive_events_are_not_offered(self):
+        """P0 البند 8: الحواريّةُ تعرض ما يقبله `record_custody` وحدَه."""
+        ids = {e['id'] for e in self.client.get('/books/api/lifecycle/targets/').json()['events']}
+        self.assertTrue(ids)
+        for event in CustodyEvent.ARCHIVE_EVENTS:
+            self.assertNotIn(event, ids)
+
+    def test_every_offered_event_is_accepted(self):
+        """والوجهُ الآخر: كلُّ حدثٍ معروضٍ يُقبل فعلاً — لا خيارَ يُعرض ليُرفض."""
+        events = self.client.get('/books/api/lifecycle/targets/').json()['events']
+        for event in events:
+            with self.subTest(event=event['id']):
+                resp = self._post('/books/api/book/%d/custody/' % self.book.pk,
+                                  {'event': event['id'], 'to_name': 'متعهّد البريد'})
+                self.assertEqual(resp.status_code, 200, resp.content.decode())
 
     def test_all_departments_are_offered_not_only_my_tree(self):
         """التفريق يتجاوز حدودَ القسم بطبيعته — «إحالةٌ لقسمٍ آخر بالشركة»."""

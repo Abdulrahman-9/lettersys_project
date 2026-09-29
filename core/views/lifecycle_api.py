@@ -69,8 +69,15 @@ def api_distribute(request, pk):
     })
 
 
+#: كابحُ نقلات الصفّ والتنبيه — «تنبيه» يصل **كلَّ موظّفي الوحدة** عاجلاً، وبلا
+#: كابحٍ يصير الزرُّ مِضخّةَ إشعارات. القيمتان مؤقّتتان بقيمة التفريق نفسِها
+#: (60 في 5 دقائق)، **والمدّةُ النهائيّة قرارُ المالك** (تقريرُ فيبل، P0 البند 13).
+REFERRAL_ACTION_LIMIT = {'max_attempts': 60, 'window_seconds': 300}
+
+
 @login_required
 @require_http_methods(['POST'])
+@rate_limit('referral_action', by='user', **REFERRAL_ACTION_LIMIT)
 def api_referral_action(request, pk, referral_id):
     """نقلةُ حالةٍ على صفّ إحالة، أو تنبيهٌ عليه."""
     from core.referral_service import (activate_followup, mark_done, mark_received,
@@ -179,6 +186,7 @@ def api_targets(request):
     («إحالةٌ لقسمٍ آخر بالشركة» في مصفوفة الخطّة)، وقصرُها على الشجرة يمنع
     التدفّقَ الذي بُنيت لأجله.
     """
+    from core.custody_service import manual_event_choices
     from core.models import EntityGroup
     from core.scoping import subtree_ids, user_department_id
 
@@ -197,7 +205,8 @@ def api_targets(request):
             for u in User.objects.filter(is_active=True, profile__department_id__in=mine)
                                  .order_by('username')
         ],
-        'events': [{'id': v, 'label': label} for v, label in CustodyEvent.EVENT_CHOICES],
+        # ما يقبله `record_custody` وحدَه — حدثا الأرشفة كانا يُعرضان ليُرفضا.
+        'events': [{'id': v, 'label': label} for v, label in manual_event_choices()],
     })
 
 

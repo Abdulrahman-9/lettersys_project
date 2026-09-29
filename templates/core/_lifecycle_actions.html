@@ -11,9 +11,13 @@
           data-bs-toggle="modal" data-bs-target="#custodyModal">
     <i class="bi bi-person-badge me-1"></i>عهدة
   </button>
+  {% if can_register_here %}
+  {# لمن يقبله الخادمُ وحدَه (register_here_ledger)؛ والتأكيدُ في book_lifecycle.js يسمّي data-ledger #}
   <button type="button" class="btn btn-outline-secondary" id="registerHereBtn"
-          title="امنحه رقمَ واردٍ من عدّاد قسمي">
+          data-ledger="{{ register_ledger.name }}"
+          title="امنحه رقمَ واردٍ من عدّاد «{{ register_ledger.name }}»">
     <i class="bi bi-journal-plus me-1"></i>قيّده عندنا
   </button>
+  {% endif %}
   {# لا «تمامَ أرشفة» ولا موضعَ حفظٍ ورقيّ: الأرشفةُ تلقائيّةٌ لحظةَ الحفظ (قراراتُ الدورة §6) #}
 </div>

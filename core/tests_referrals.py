@@ -243,6 +243,39 @@ class ReminderTests(ReferralTestCase):
             send_reminder(self.row, by=self.clerk)
 
 
+class ReminderBrakeTests(ReferralTestCase):
+    """«تنبيه» بلا كابح — تقريرُ فيبل لتفاصيل الكتاب، P0 البند 13.
+
+    ``send_reminder`` يصل كلَّ موظّفي الوحدة عاجلاً، ولم يكن على نقطته
+    ``@rate_limit``: ضغطاتٌ متتالية = سيلُ إشعاراتٍ عاجلة. الحدُّ مؤقّتٌ
+    (``REFERRAL_ACTION_LIMIT``) والمدّةُ للمالك — والاختبارُ يقرأ الحدَّ ولا
+    يثبّت رقمه.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()                       # الحدُّ في الكاش — لا يرث اختبارٌ حصّةَ غيره
+        self.addCleanup(cache.clear)
+        self.row = distribute(self.book, [self.unit_budget], by=self.clerk)[0]
+        self.client.force_login(self.clerk)
+
+    def _remind(self):
+        return self.client.post(
+            '/books/api/book/%d/referral/%d/act/' % (self.book.pk, self.row.pk),
+            data='{"act": "remind"}', content_type='application/json')
+
+    def test_reminders_past_the_limit_are_refused(self):
+        from core.views.lifecycle_api import REFERRAL_ACTION_LIMIT
+
+        limit = REFERRAL_ACTION_LIMIT['max_attempts']
+        for _ in range(limit):
+            self.assertEqual(self._remind().status_code, 200)
+        before = Notification.objects.count()
+        self.assertEqual(self._remind().status_code, 429)
+        self.assertEqual(Notification.objects.count(), before, 'مرّ تنبيهٌ فوق الحدّ')
+
+
 class ReferralScopeTests(ReferralTestCase):
     """الحضورُ والغيابُ معاً — **الاختبارُ السلبيّ وحده لا يحرس** (درسُ البند ①)."""
 

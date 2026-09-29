@@ -455,7 +455,7 @@
                   </a>
                 </div>
               </div>
-              {% if sg.is_valid %}
+              {% if sg.is_valid and sg.can_revoke %}
               <form method="post" action="{% url 'revoke_signature' sg.pk %}"
                     onsubmit="return confirm('إبطالُ التوقيع لا يحذفه — أتمضي؟');">
                 {% csrf_token %}
@@ -727,7 +727,7 @@
 {# قصاصةُ الهامش تُحمَّل قبل مُرسِل التفريق: الأخيرُ يقرأ حقلَها #}
 <script src="{% static 'js/margin_crop.js' %}?v=20260831"></script>
 <script src="{% static 'js/link_picker.js' %}?v=20260831"></script>
-<script src="{% static 'js/book_lifecycle.js' %}?v=20260911"></script>
+<script src="{% static 'js/book_lifecycle.js' %}?v=20260929-bdp0"></script>
 <script>
 // ── تحميل إيميلات الكتاب في البطاقة الجانبية ──
 (function() {

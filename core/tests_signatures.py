@@ -157,6 +157,44 @@ class SignatureRevokeTests(TestCase):
             revoke(self.signature, by=other)
 
 
+class RevokeButtonTests(TestCase):
+    """«إبطال» لمن يقبله الخادم — تقريرُ فيبل لتفاصيل الكتاب، P0 البند 2.
+
+    كان الزرُّ يُعرض لكلّ ناظرٍ ثمّ يرفضه ``revoke`` (الموقِّعُ أو مديرُ النظام).
+    والحارسُ هنا يقرأ الصفحةَ لا الخدمة: الزرُّ نفسُه هو ما يراه الناظر.
+    """
+
+    def setUp(self):
+        self.dept = Department.objects.create(name='قسم الزرّ', code='ز.ق')
+        self.head = _member('rbhead', self.dept, head=True)
+        self.colleague = _member('rbcoll', self.dept)
+        self.root = _member('rbroot', self.dept, admin=True)
+        self.book = Book.objects.create(kind='incoming_external', title='ك',
+                                        our_number='9503', department=self.dept,
+                                        created_by=self.head)
+        att = Attachment.objects.create(
+            book=self.book, file=SimpleUploadedFile('d.pdf', _pdf()))
+        self.signature = sign_attachment(att, by=self.head)
+        self.action = reverse('revoke_signature', args=[self.signature.pk])
+
+    def _page(self, user):
+        self.client.force_login(user)
+        resp = self.client.get(reverse('book_detail', args=[self.book.pk]))
+        self.assertEqual(resp.status_code, 200)
+        return resp.content.decode('utf-8')
+
+    def test_a_colleague_sees_the_signature_but_no_revoke(self):
+        body = self._page(self.colleague)
+        self.assertIn(self.signature.verify_token, body)
+        self.assertNotIn(self.action, body)
+
+    def test_the_signer_sees_revoke(self):
+        self.assertIn(self.action, self._page(self.head))
+
+    def test_the_admin_sees_revoke(self):
+        self.assertIn(self.action, self._page(self.root))
+
+
 class VerifyPageTests(TestCase):
     def setUp(self):
         self.dept = Department.objects.create(name='قسم التحقّق', code='ح.ق')

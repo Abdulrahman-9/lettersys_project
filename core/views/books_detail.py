@@ -172,11 +172,16 @@ def _lifecycle_context(book, user):
     from core.linking_service import links_of
     from core.referral_service import reply_matrix
     from core.models import BookLink
-    from core.signature_service import can_sign
-    from core.registration_service import registrations_of
+    from core.signature_service import can_revoke, can_sign
+    from core.registration_service import register_here_ledger, registrations_of
     from core.scoping import can_archive
 
     matrix = reply_matrix(book, user)
+    # «إبطال» لمن يقبله الخادم وحدَه — المسندُ نفسُه الذي يحرس `revoke`.
+    signatures = list(book.signatures.select_related('signer').all())
+    for sg in signatures:
+        sg.can_revoke = can_revoke(user, sg)
+    ledger = register_here_ledger(book, user)
     return {
         "links": links_of(book, user),
         "referrals": matrix,
@@ -191,12 +196,16 @@ def _lifecycle_context(book, user):
         "relation_choices": BookLink.RELATION_CHOICES,
         # التواقيع: القائمةُ للعرض، والصلاحيّةُ من الخدمة لا من قائمةِ أدوارٍ
         # ثانيةٍ في القالب.
-        "signatures": list(book.signatures.select_related('signer').all()),
+        "signatures": signatures,
         "can_sign_book": can_sign(user, book),
         # الأرشفة: الحالُ من الخدمة والحقُّ من البوّابة — والقالبُ يعرض ولا يقرّر.
         "can_archive_book": can_archive(user),
         # «فعِّل متابعة» و«تفريق» لمن يملك المحتوى — الحارسُ نفسُه في referral_service
         "can_distribute": can_open_content(book, user),
+        # «قيِّده عندنا»: الزرُّ لمن يقبله الخادم، والتأكيدُ يسمّي الدفترَ الذي
+        # سيُستهلك عدّادُه — من الخدمة نفسِها لا من القالب.
+        "can_register_here": ledger is not None,
+        "register_ledger": ledger,
     }
 
 

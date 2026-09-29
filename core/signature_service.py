@@ -109,15 +109,24 @@ def sign_attachment(attachment, *, by, note=''):
     return signature
 
 
+def can_revoke(user, signature) -> bool:
+    """أيحقّ له إبطالُ هذا التوقيع؟ — الموقِّعُ نفسُه أو مديرُ النظام.
+
+    **مسندٌ واحدٌ يُستهلك في موضعين**: حارسُ ``revoke`` وزرُّ «إبطال» في صفحة
+    الكتاب. كان الزرُّ يُعرض لكلّ ناظرٍ ثمّ يرفضه الخادم.
+    """
+    from core.scoping import is_privileged
+
+    return is_privileged(user) or signature.signer_id == getattr(user, 'id', None)
+
+
 def revoke(signature, *, by, reason=''):
     """يُبطل توقيعاً — **ولا يحذفه**: التوقيعُ واقعةٌ حدثت.
 
     والختمُ البصريُّ على النسخة القديمة يبقى، فصفحةُ التحقّق هي التي تقول
     «أُبطل» — ولذلك وُجد رمزُ التحقّق على الختم أصلاً.
     """
-    from core.scoping import is_privileged
-
-    if not (is_privileged(by) or signature.signer_id == by.id):
+    if not can_revoke(by, signature):
         raise PermissionDenied('الإبطالُ للموقِّع نفسِه أو لمدير النظام.')
     if signature.revoked_at is not None:
         return signature

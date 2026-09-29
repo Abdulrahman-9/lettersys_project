@@ -94,3 +94,35 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
         m = re.search(r"CACHE_VERSION = 'v(\d+)-", sw)
         self.assertIsNotNone(m, 'CACHE_VERSION')
         self.assertGreaterEqual(int(m.group(1)), 113)
+
+
+class LifecycleScriptGuardsTests(SimpleTestCase):
+    """تقريرُ فيبل لتفاصيل الكتاب، P0 البندان 4 و5 — عطبان في `book_lifecycle.js`.
+
+    ④ **«إلغاء» كان يُنفّذ**: `prompt` يُعيد `null` فيصير `|| ''` ملاحظةً فارغةً
+    ويُرسَل «أُنجز/أُعيد» فيُقفَل الالتزام.
+    ⑤ **«قيِّده عندنا» بلا تأكيد ويموت بعد أوّل فعل**: كان مربوطاً بالزرّ نفسِه
+    داخل `lifecycleRegion` التي تُستبدل بعد كلّ فعل.
+    """
+
+    SRC = ROOT / 'static' / 'js' / 'book_lifecycle.js'
+
+    def src(self):
+        return self.SRC.read_text(encoding='utf-8')
+
+    def test_cancelling_the_prompt_sends_nothing(self):
+        src = self.src()
+        self.assertIn('if (note === null) return;', src)
+        self.assertNotRegex(src, r"prompt\([^;]*\)\s*\|\|\s*''")
+
+    def test_register_here_is_delegated_on_the_region(self):
+        src = self.src()
+        self.assertIn("event.target.closest('#registerHereBtn')", src)
+        self.assertNotIn("getElementById('registerHereBtn')", src)
+
+    def test_register_here_asks_before_consuming_a_number(self):
+        src = self.src()
+        handler = src[src.index("closest('#registerHereBtn')"):]
+        handler = handler[:handler.index('register-here/')]
+        self.assertRegex(handler, r'if \(!window\.confirm\(')
+        self.assertIn('button.dataset.ledger', handler)
