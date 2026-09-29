@@ -77,7 +77,6 @@ from .dashboard import (
     dashboard,
     reports,
     reports_export,
-    followup_activity_report,
     restore_book,
     purge_book,
     restore_attachment,

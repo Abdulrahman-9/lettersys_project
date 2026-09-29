@@ -182,3 +182,58 @@ class ReportsTemplateBalanceTests(SimpleTestCase):
         """كان في القالب وسمُ ``</div>`` زائدٌ يُغلق حاويةَ الصفحة قبل أوانها."""
         text = (Path(settings.BASE_DIR) / 'templates' / 'core' / 'reports.html').read_text(encoding='utf-8')
         self.assertEqual(text.count('<div'), text.count('</div>'))
+
+
+class ReportsLegacyPaperTests(TestCase):
+    """المنقولُ من الورق خارج التقرير افتراضاً (``Book.objects.live()``، قرارُ المالك
+    2026‑09‑29) — ومفتاحُ «يشمل الورق القديم» يُدخله في الصفحة والـCSV معاً."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser('ladmin', 'l@x.com', 'pass1234')
+        self.client.force_login(self.admin)
+        from .models import Book
+        today = date.today()
+        self.live = Book.objects.create(our_number='2451', title='حيّ', date=today,
+                                        kind='incoming_internal', created_by=self.admin,
+                                        due_date=today + timedelta(days=4))
+        self.paper = Book.objects.create(our_number='20250821', title='منقولٌ من الورق',
+                                         date=date(2025, 5, 4), kind='incoming_internal',
+                                         created_by=self.admin, source_ref='IIMAIL_2025#1')
+
+    def _page(self, **params):
+        html = self.client.get(reverse('reports'), {'bucket': 'all', **params}).content.decode('utf-8')
+        return re.search(r'id="reportTable".*?<tbody>(.*?)</tbody>', html, re.S).group(1), html
+
+    def _csv(self, **params):
+        resp = self.client.get(reverse('reports_export'), {'bucket': 'all', **params})
+        body = b''.join(resp.streaming_content).decode('utf-8').lstrip('﻿')
+        return [r[0] for r in list(csv.reader(io.StringIO(body)))[1:]]
+
+    def test_paper_books_are_out_by_default(self):
+        tbody, html = self._page()
+        self.assertIn(self.live.our_number_display, tbody)
+        self.assertNotIn(self.paper.our_number_display, tbody)
+        self.assertEqual(self._csv(), [self.live.our_number_display])
+        self.assertIn('name="legacy"', html)
+        self.assertNotIn('id="reportLegacy" checked', html)
+
+    def test_the_toggle_brings_them_in_everywhere(self):
+        tbody, html = self._page(legacy='1')
+        self.assertIn(self.paper.our_number_display, tbody)
+        self.assertEqual(set(self._csv(legacy='1')),
+                         {self.live.our_number_display, self.paper.our_number_display})
+        self.assertIn('id="reportLegacy" checked', html)
+        self.assertIn('legacy=1', html)   # يمرّ في رابط التصدير والترقيم
+
+
+class ActivityReportRemovedTests(SimpleTestCase):
+    """قرارُ المالك 2026‑09‑29: «تقريرُ الحركة» حُذف (رؤيةٌ خاصّة، سقفُ 50، فعلٌ بلا جدولة)."""
+
+    def test_the_route_and_the_template_are_gone(self):
+        from django.template import TemplateDoesNotExist
+        from django.template.loader import get_template
+        from django.urls import NoReverseMatch
+        with self.assertRaises(NoReverseMatch):
+            reverse('followup_activity_report')
+        with self.assertRaises(TemplateDoesNotExist):
+            get_template('core/followup_activity_report.html')

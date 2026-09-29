@@ -69,7 +69,7 @@
 
   <div class="rep-head">
     <div class="rep-org">
-      {{ org.org_name|default:"نظام إدارة الكتب" }}
+      {{ org_name }}
       <small>
         {% if org.org_section %}{{ org.org_section }}{% endif %}{% if org.org_section and org.org_unit %} — {% endif %}{% if org.org_unit %}{{ org.org_unit }}{% endif %}
         {% if not org.org_section and not org.org_unit %}تقرير أرشيفي للمراسلات{% endif %}

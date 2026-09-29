@@ -478,11 +478,13 @@ def dossier_report(request, pk):
         report_book = next(iter(outgoing + incoming), None)
 
     from ..models import EmailSettings
-    org = EmailSettings.get()   # هوية المؤسسة لترويسة التقرير (شركة/قسم/وحدة)
+    from core.branding import org_name
+    org = EmailSettings.get()   # القسمُ والوحدةُ لترويسة التقرير؛ والاسمُ من ``org_name()``
 
     return render(request, "core/dossier_report.html", {
         "entity": entity,
         "org": org,
+        "org_name": org_name(),
         "filters": f,
         "filter_summary": _filter_summary(f),
         "outgoing": outgoing,

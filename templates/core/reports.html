@@ -176,7 +176,7 @@
     <div class="rdh-org">
       <img src="{% static 'img/md-o-c-logo.png' %}" alt="" class="rdh-logo">
       <div class="rdh-org-txt">
-        <strong>{{ org.org_name|default:'نظام إدارة الكتب والمراسلات' }}</strong>
+        <strong>{{ org_name }}</strong>
         {% if org.org_section %}<span>{{ org.org_section }}</span>{% endif %}
         {% if org.org_unit %}<span>{{ org.org_unit }}</span>{% endif %}
       </div>
@@ -192,6 +192,7 @@
     {% if dept_label %}<span><b>القسم:</b> {{ dept_label }}</span>{% endif %}
     {% if selected_entity_name %}<span><b>الجهة:</b> {{ selected_entity_name }}</span>{% endif %}
     <span><b>الحالة:</b> {{ bucket_label }}</span>
+    {% if legacy %}<span><b>يشمل:</b> الورق القديم</span>{% endif %}
     {% if due_start or due_end %}<span><b>الاستحقاق:</b> {{ due_start|default:'…' }} — {{ due_end|default:'…' }}</span>{% endif %}
     <span><b>عدد النتائج:</b> {{ total }}</span>
   </div>
@@ -270,6 +271,12 @@
         <i class="bi bi-calendar-range me-1"></i>نهاية تاريخ الاستحقاق
       </label>
       <input class="form-control" type="date" name="due_end" value="{{ due_end }}">
+    </div>
+    <div class="col-sm-3 col-6">
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" name="legacy" value="1" id="reportLegacy"{% if legacy %} checked{% endif %}>
+        <label class="form-check-label" for="reportLegacy">يشمل الورق القديم</label>
+      </div>
     </div>
     <div class="col-12 d-flex gap-2 flex-wrap mt-2">
       <button class="btn btn-primary hover-lift" type="submit">

@@ -105,55 +105,6 @@ def dashboard(request):
     return render(request, "core/dashboard.html", ctx)
 
 
-@login_required
-def followup_activity_report(request):
-    """
-    تقرير تطوّر حالة المتابعة — يعتمد على BookHistory لمعرفة:
-      - الكتب التي انتقلت إلى "متأخر" خلال الفترة
-      - الكتب التي أُرشفت يدوياً (إنهاء متابعة)
-      - الكتب التي أُعيد فتح متابعتها
-    """
-    from ..models import BookHistory
-
-    try:
-        days = int(request.GET.get('days', '7'))
-        days = max(1, min(days, 90))
-    except (ValueError, TypeError):
-        days = 7
-
-    cutoff = timezone.now() - timedelta(days=days)
-    base_history = BookHistory.objects.filter(created_at__gte=cutoff).select_related('book', 'by')
-
-    if not is_privileged(request.user):
-        base_history = base_history.filter(book__created_by=request.user)
-
-    became_overdue = list(
-        base_history.filter(action='overdue').order_by('-created_at')[:50]
-    )
-    manually_archived = list(
-        base_history.filter(action='status', notes__icontains='أُرشف').order_by('-created_at')[:50]
-    )
-    reopened = list(
-        base_history.filter(action='status', notes__icontains='أُعيد فتح').order_by('-created_at')[:50]
-    )
-
-    stats = {
-        'days': days,
-        'became_overdue': len(became_overdue),
-        'manually_archived': len(manually_archived),
-        'reopened': len(reopened),
-    }
-
-    return render(request, 'core/followup_activity_report.html', {
-        'stats': stats,
-        'became_overdue': became_overdue,
-        'manually_archived': manually_archived,
-        'reopened': reopened,
-        'days': days,
-        'window_start': cutoff,
-    })
-
-
 #: دلاءُ التقارير — **مفاتيحُ فلتر المتابعة في القائمة نفسُها** (``_FOLLOWUP_TABS``)
 #: و«الكلّ»، بترتيب العرض. كانت للصفحة مفرداتُها الخاصّة (today/upcoming/completed/
 #: today_overdue) فلا يطابق رقمُها رقمَ القائمة ولا اللوحة.
@@ -179,9 +130,14 @@ def _reports_qs(request):
 
     ``meta['base']`` هي المجموعةُ **قبل** دلو الحالة: عدّاداتُ الحالات تُحسب
     عليها (كالقائمة) — وإلّا صار كلُّ ما خارج الدلو صفراً بنائيّاً.
+
+    **والحيُّ وحدَه افتراضاً** (``Book.objects.live()``، قاعدةُ §7.2 وقرارُ المالك
+    2026‑09‑29): المنقولُ من الورق بلا استحقاقٍ ولا متابعة، فيُضخّم «مُنجَز»
+    ودائرةَ النوع. ``?legacy=1`` يُدخله صراحةً — للصفحة والإحصاء والـCSV معاً.
     """
     user = request.user
-    qs = scope_books_for(user, Book.objects.all())
+    legacy = request.GET.get("legacy") == "1"
+    qs = scope_books_for(user, Book.objects.all() if legacy else Book.objects.live())
     qs = (qs.select_related("created_by", "department")
             .prefetch_related("issuing_entities", "receiving_entities")
             .annotate(restricted=restricted_flag_sql(user)))
@@ -257,6 +213,7 @@ def _reports_qs(request):
         "entity_id": entity_id or "", "bucket": bucket,
         "due_start": due_start or "", "due_end": due_end or "", "today": today,
         "base": base,
+        "legacy": legacy,
         "departments": departments,
         "dept": str(dept.pk) if dept else "",
         "dept_label": dept.name if dept else "",
@@ -349,8 +306,10 @@ def reports(request):
     page_params = request.GET.copy()
     page_params.pop("page", None)
 
-    # هوية المؤسسة + ملخّص الفلاتر لترويسة الطباعة الاحترافية
+    # هوية المؤسسة + ملخّص الفلاتر لترويسة الطباعة الاحترافية — الاسمُ من
+    # ``core.branding.org_name`` (مصدرٌ واحدٌ باحتياطيٍّ واحد)، والقسمُ والوحدةُ من الإعدادات
     from ..models import EmailSettings
+    from core.branding import org_name
     org = EmailSettings.get()
     selected_entity_name = ""
     if entity_id and entity_id.isdigit():
@@ -378,11 +337,13 @@ def reports(request):
             "due_start": due_start or "",
             "due_end": due_end or "",
             "org": org,
+            "org_name": org_name(),
             "departments": _m["departments"],
             "selected_dept": _m["dept"],
             "dept_label": _m["dept_label"],
             "show_department": show_department,
             "dept_rows": dept_rows,
+            "legacy": _m["legacy"],
         },
     )
 

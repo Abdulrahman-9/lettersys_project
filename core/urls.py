@@ -34,7 +34,6 @@ urlpatterns = [
     path("new/outgoing/", views.book_create_outgoing, name="book_create_outgoing"),
     path("reports/", views.reports, name="reports"),
     path("reports/export/", views.reports_export, name="reports_export"),
-    path("reports/followup-activity/", views.followup_activity_report, name="followup_activity_report"),
     path("trash/", views.trash_list, name="trash_list"),
     path("trash/book/<int:pk>/restore/", views.restore_book, name="restore_book"),
     path("trash/book/<int:pk>/purge/", views.purge_book, name="purge_book"),
