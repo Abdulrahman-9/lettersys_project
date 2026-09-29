@@ -250,7 +250,9 @@ class BookSortEngine:
     }
 
     @staticmethod
-    def apply_sort(queryset, sort_field="-date"):
+    def apply_sort(queryset, sort_field="-date", user=None):
+        """``user`` لفرز العنوان وحده: يُفرز على العنوان **كما يراه** (انظر أدناه)،
+        وبلا مستخدمٍ يُحجب كلُّ سرّيٍّ مقيَّد — فشلٌ مغلق لا مفتوح."""
         sort_field = (sort_field or "-date").strip()
         # «relevance»: لا نُعيد الترتيب — نحافظ على أولوية صلة البحث القادمة من
         # apply_search_filters (_exact ثم _num_pri: قيدنا قبل رقم الجهة). بدونه كان
@@ -269,5 +271,14 @@ class BookSortEngine:
             desc = resolved.startswith('-')
             keys = ('-_num_year', '-_num_seq') if desc else ('_num_year', '_num_seq')
             return queryset.annotate(**numbering.sort_key_sql()).order_by(*keys, "-id")
+
+        # الفرز بالعنوان على العنوان **كما يراه القارئ**: الصفُّ المحجوب يُطبع
+        # «— سرّي —» لكنّ فرزَه بعنوانه الحقيقيّ يضعه بين جارَين يكشفان بادئتَه،
+        # ومن يعدّل عنوانَ كتابٍ يملكه يستخرجه حرفاً حرفاً بالبحث الثنائيّ.
+        if resolved.lstrip('-') == 'title':
+            from core.scoping import STUB_TITLE, shown_field_sql
+            key = '-_shown_title' if resolved.startswith('-') else '_shown_title'
+            return (queryset.annotate(_shown_title=shown_field_sql(user, 'title', STUB_TITLE))
+                    .order_by(key, "-id"))
 
         return queryset.order_by(resolved, "-id")

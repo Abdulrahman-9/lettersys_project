@@ -21,6 +21,8 @@
 from django.db.models import Q
 from django.utils import timezone
 
+from core import numbering
+
 #: تصنيفاتٌ يُحجب محتواها داخل القسم.
 RESTRICTED_SECRET_LEVELS = ('secret', 'topsecret')
 
@@ -385,24 +387,22 @@ def guard_secret_text_search(qs, user, search_text):
     **أداةَ استنطاق**: تُجرّب الكلمات حتى تعرف الموضوع.
 
     والقاعدة: السرّيُّ يُطابَق **برقمه وتاريخه** — وهما ظاهران في الدفتر أصلاً —
-    ولا يُطابَق بعنوانٍ ولا جهةٍ ولا هامش. فالبحثُ الرقميّ يمرّ، والنصّيُّ
-    يستثنيه.
+    ولا يُطابَق بعنوانٍ ولا جهةٍ ولا هامش. فالنصّيُّ يستثنيه كلَّه.
+
+    **والرقميُّ لا يمرّ كما هو**: ``apply_search_filters`` يطابق الرقمَ على رقم
+    الجهة والرقم القديم والعنوان والهامش أيضاً، فكان «771» يُعيد السرّيَّ الظاهرَ
+    برقمه متى ورد في رقم جهته المحجوب — تأكيدُ محتوىً رقماً رقماً. فلا يبقى من
+    المقيَّد إلّا ما طابق **هويّتَه** (``numbering.identity_search_q``).
 
     (يُطبَّق في ``BookFilterEngine`` بعد البحث مباشرةً — نقطةُ اختناقٍ واحدة.)
     """
     text = (search_text or '').strip()
     if not text or is_privileged(user):
         return qs
-    if _is_numeric_query(text):
-        return qs
-    return qs.exclude(_unauthorized_secret_q(user))
-
-
-def _is_numeric_query(text) -> bool:
-    """أبحثٌ برقمٍ هو؟ — يطابق فرعَي ``apply_search_filters`` الرقميّين."""
-    import re
-
-    return bool(text.isdigit() or re.match(r'^(\d+)[-/](\d+)$', text))
+    identity = numbering.identity_search_q(text)
+    if identity is None:
+        return qs.exclude(_unauthorized_secret_q(user))
+    return qs.exclude(_unauthorized_secret_q(user) & ~identity)
 
 
 def _unauthorized_secret_q(user):
@@ -446,7 +446,8 @@ def ensure_profile(user):
 
 
 #: الحقولُ التي يُصفَّر محتواها في العرض المقيَّد — والباقي يمرّ كما هو.
-#: تُبقى **الأربعةُ الظاهرة في الدفتر الورقيّ**: الرقم والتاريخ والنوع والقسم.
+#: تُبقى **الأربعةُ الظاهرة في الدفتر الورقيّ**: الرقم والتاريخ والنوع (وارد/صادر
+#: — ``kind``، لا نوعُ المستند: ``document_type`` مُصفَّرٌ أدناه) والقسم.
 STUB_BLANK_FIELDS = (
     'sender_number', 'sender_date', 'sender_date_display', 'margin',
     'document_type', 'attachment_url', 'legacy_number',
@@ -456,6 +457,29 @@ STUB_BLANK_FIELDS = (
 STUB_TITLE = '— سرّي —'
 
 
+def shown_field_sql(user, field, hidden):
+    """قيمةُ حقلٍ **كما يراها المستخدم** — تعبيرُ SQL يُفرَز عليه ويُجمَّع ويُصفّى.
+
+    ``stub_book_payload`` وأخواتُه تحجب ما **يُطبع**؛ لكنّ الاستعلامَ نفسَه يكشف
+    ما لا يُطبع: الفرزُ بالعنوان يضع الصفَّ المحجوبَ في موضع عنوانه الحقيقيّ بين
+    جيرانه (فيُستخرج حرفاً حرفاً بتعديل عنوانِ كتابٍ يملكه الباحث)، والتجميعُ
+    بنوع المستند يُسمّي ملفّاً بنوع كتابٍ محجوب ويعدّه. فمن لا يملك المحتوى
+    يُفرَز ويُجمَّع ويُصفّى على ``hidden`` لا على القيمة.
+
+    المسندُ هو ``_unauthorized_secret_q`` — توأمُ ``secret_access`` المحروسُ
+    بالتطابق — فالمحجوبُ في SQL هو المحجوبُ في العرض. و``user=None`` فشلٌ
+    مغلق: لا أحدَ مخوَّل، فيُحجب كلُّ مقيَّد.
+    """
+    from django.db.models import Case, CharField, F, Value, When
+
+    if user is not None and is_privileged(user):
+        return F(field)
+    restricted = (Q(secret_level__in=RESTRICTED_SECRET_LEVELS) if user is None
+                  else _unauthorized_secret_q(user))
+    return Case(When(restricted, then=Value(hidden)), default=F(field),
+                output_field=CharField())
+
+
 def stub_book_payload(payload):
     """يحجب محتوى كتابٍ سرّيّ من حمولةٍ **مُسلسَلةٍ سلفاً**.
 
@@ -463,8 +487,8 @@ def stub_book_payload(payload):
     موضعٍ واحد، فالحجبُ بعده يضمن أنّ **كلّ حقلٍ يُضاف مستقبلاً إلى الحمولة
     يمرّ من هنا** — بينما الحجبُ داخل المُسلسِل كان سيُنسى مع أوّل حقلٍ جديد.
 
-    ولا يُحجب: الرقمُ والتاريخُ والنوعُ والقسم — لأنّ **الدفتر الورقيّ يكشفها
-    للجميع**، وإخفاؤها يكسر تسلسل الدفتر عند الكاتب.
+    ولا يُحجب: الرقمُ والتاريخُ والنوعُ (وارد/صادر) والقسم — لأنّ **الدفتر
+    الورقيّ يكشفها للجميع**، وإخفاؤها يكسر تسلسل الدفتر عند الكاتب.
     """
     payload = dict(payload)
     payload['title'] = STUB_TITLE
