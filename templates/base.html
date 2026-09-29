@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="{% static 'vendor/cairo/cairo.css' %}?v=20260705a">
     <!-- Design System (موحد للألوان والمسافات) -->
     <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260927">
-    <link rel="stylesheet" href="{% static 'app.css' %}?v=20260927">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20260929b">
     <!-- مكوّنات واجهة محايدة اللون (مستوحاة من صفحة الدخول) — اختيارية عبر أصناف .btn-brand/.card-brand/.field-brand -->
     <link rel="stylesheet" href="{% static 'css/brand-components.css' %}?v=20260705c">
     
@@ -55,7 +55,7 @@
 
     {% block extra_head %}{% endblock %}
   </head>
-  <body class="bg-body{% if is_embed %} settings-embed-body{% elif request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %} app-shell-body{% endif %}{% block body_class %}{% endblock %}">
+  <body class="{% if is_embed %}settings-embed-body{% elif request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %}app-shell-body{% endif %}{% block body_class %}{% endblock %}">
     {% if not is_embed %}<a class="visually-hidden-focusable skip-link" href="#main">تخطَّ إلى المحتوى</a>{% endif %}
     {% if is_embed %}
     <main class="app-embed-main" id="main">
@@ -64,6 +64,7 @@
     {% else %}
     <header class="app-topbar">
       <div class="app-topbar-brand">
+        <button type="button" class="app-topbar-menu d-xl-none" data-bs-toggle="offcanvas" data-bs-target="#appNav" aria-controls="appNav" aria-haspopup="dialog"><i class="bi bi-list" aria-hidden="true"></i><span>القائمة</span></button>
         <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'dashboard' %}">
           <img src="{% static 'img/md-o-c-logo.png' %}" alt="الشركة" style="height: 40px; width: auto;">
           <span class="brand-text">{{ system_settings.app_name|default:'نظام الكتب' }}</span>
@@ -74,7 +75,7 @@
         {% if request.user.is_authenticated %}
         <a class="app-topbar-alert" href="{% url 'notifications' %}">
           <i class="bi bi-bell"></i>
-          <span>التنبيهات</span>
+          <span class="app-topbar-label">التنبيهات</span>
           {% if navbar_unread_notifications %}
           <span class="app-topbar-alert-badge">{{ navbar_unread_notifications }}</span>
           {% endif %}
@@ -90,15 +91,16 @@
     </header>
 
     <div class="app-shell">
-      <aside class="app-sidebar">
+      <aside class="app-sidebar offcanvas-xl offcanvas-start" id="appNav" tabindex="-1" aria-labelledby="appNavTitle">
         <div class="app-sidebar-panel">
           <div class="app-sidebar-section-title">
-            <button type="button" class="app-sidebar-toggle-btn" id="sidebarToggleBtn" title="طي القائمة">
+            <button type="button" class="app-sidebar-toggle-btn d-none d-xl-inline-flex" id="sidebarToggleBtn" title="طي القائمة">
               <i class="bi bi-layout-sidebar-reverse"></i>
             </button>
-            <span class="sidebar-title-text">التنقل الرئيسي</span>
+            <span class="sidebar-title-text" id="appNavTitle">التنقل الرئيسي</span>
+            <button type="button" class="btn-close d-xl-none ms-auto" data-bs-dismiss="offcanvas" data-bs-target="#appNav" aria-label="إغلاق القائمة"></button>
           </div>
-          <nav class="app-sidebar-nav">
+          <nav class="app-sidebar-nav" aria-label="التنقل الرئيسي">
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" href="{% url 'dashboard' %}" title="لوحة التحكم">
               <i class="bi bi-grid-1x2-fill"></i>
               <span>لوحة التحكم</span>
@@ -273,6 +275,9 @@
       var PREF  = 'app_sidebar_mini';
       var btn   = document.getElementById('sidebarToggleBtn');
       var shell = document.querySelector('.app-shell');
+      // الصفحةُ الحاليّة تُعلَن سمعاً لا لوناً فقط — قبل حارس الزرّ كي لا يُسقطها غيابُه.
+      var cur = document.querySelector('.app-sidebar-link.active');
+      if (cur) cur.setAttribute('aria-current', 'page');
       if (!btn || !shell) return;
       var icon = btn.querySelector('i');
 
@@ -280,10 +285,12 @@
         shell.classList.toggle('sidebar-mini', mini);
         btn.title = mini ? 'توسيع القائمة' : 'طي القائمة';
         if (icon) icon.className = mini ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-reverse';
-        localStorage.setItem(PREF, mini ? '1' : '0');
+        try { localStorage.setItem(PREF, mini ? '1' : '0'); } catch (e) {}
       }
 
-      if (localStorage.getItem(PREF) === '1') setMini(true);
+      var saved = null;
+      try { saved = localStorage.getItem(PREF); } catch (e) {}
+      if (saved === '1') setMini(true);
 
       btn.addEventListener('click', function () {
         setMini(!shell.classList.contains('sidebar-mini'));

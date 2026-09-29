@@ -74,12 +74,15 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
         القادم مع `feat/scan-lan` (v112) أو أيُّ رفعٍ لاحق يبقى أخضر.
         """
         # لكلّ أصلٍ أرضيّتُه: ما تغيّر في مرحلة نيلسن (dashboard_roles.css) ⟵ 20260929،
+        # والأرضيّةُ العامّة ودرجُ الهاتف (app.css · extraction_smart.css) ⟵ 20260929b
+        # (اللاحقةُ حرفٌ بعد الخانات الثماني؛ النمطُ يقرأ التاريخ وحده)،
         # وما لم يُلمس يبقى على أرضيّته — رفعُ ?v= لملفٍّ لم يتغيّر يُبطل كاشَه بلا سبب.
         assets = (
             ('templates/core/dashboard.html', 'css/dashboard_roles.css', 20260929),
             ('templates/base.html', 'design-system.css', 20260927),
-            ('templates/base.html', 'app.css', 20260927),
+            ('templates/base.html', 'app.css', 20260929),
             ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js', 20260927),
+            ('templates/core/extraction_smart_desktop.html', 'extraction_smart.css', 20260929),
         )
         for rel, asset, floor in assets:
             with self.subTest(file=rel, asset=asset):
@@ -90,4 +93,4 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
         sw = (ROOT / 'static' / 'service-worker.js').read_text(encoding='utf-8')
         m = re.search(r"CACHE_VERSION = 'v(\d+)-", sw)
         self.assertIsNotNone(m, 'CACHE_VERSION')
-        self.assertGreaterEqual(int(m.group(1)), 112)
+        self.assertGreaterEqual(int(m.group(1)), 113)

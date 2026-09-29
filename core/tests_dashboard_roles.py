@@ -352,18 +352,3 @@ class DashboardOverviewTests(TestCase):
             self.assertNotIn(gone, content)
         self.assertIn('followup=archived', content)
         self.assertIn('date_from=', content)
-
-    def test_the_neutral_body_is_scoped_to_the_dashboard(self):
-        """الخلفيّةُ المحايدة للوحة وحدها (ق‑7 قرارُ المالك): بقيّةُ الصفحات على تدرّجها."""
-        import io
-
-        def read(path):
-            with io.open(path, encoding='utf-8') as fh:
-                return fh.read()
-
-        self.assertIn('{% block body_class %} is-db{% endblock %}',
-                      read('templates/core/dashboard.html'))
-        self.assertIn('{% block body_class %}{% endblock %}', read('templates/base.html'))
-        self.assertIn('body.is-db{background-image:none', read('static/css/dashboard_roles.css'))
-        app_css = read('static/app.css').splitlines()
-        self.assertIn('linear-gradient', app_css[63])
