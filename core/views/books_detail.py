@@ -8,10 +8,9 @@ from urllib.parse import urlencode, urlparse
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Prefetch
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -60,7 +59,9 @@ def book_detail(request, pk):
             f"Unauthorized book access attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
         )
-        raise PermissionDenied("ليس لديك صلاحية الوصول لهذا الكتاب")
+        # 404 لا 403: «ممنوع» يُثبت أنّ خلف الرقم كتاباً — والنطاقُ في الاستعلام
+        # (`scope_books_for`) يُجيب «غير موجود»؛ فلا يُفرَّق بين البابين.
+        raise Http404("الكتاب غير موجود")
 
     # الصفُّ مرئيٌّ والمحتوى قد لا يكون: قالبٌ مقيَّدٌ مستقلّ بدل رشّ الشروط في
     # قالبٍ من خمسمئة سطر — قائمةٌ بيضاء لا استثناءاتٌ من سوداء.
@@ -224,7 +225,7 @@ def book_edit(request, pk):
             f"Unauthorized book edit attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
         )
-        raise PermissionDenied("ليس لديك صلاحية تعديل هذا الكتاب")
+        raise Http404("الكتاب غير موجود")
 
     # تحويل GET لصفحة الاستخراج الذكي في وضع التعديل (مع تمرير وجهة العودة إن وُجدت)
     if request.method == "GET":
@@ -319,7 +320,7 @@ def book_report(request, pk):
             f"Unauthorized book report attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
         )
-        raise PermissionDenied("ليس لديك صلاحية عرض تقرير هذا الكتاب")
+        raise Http404("الكتاب غير موجود")
 
     # ورقةٌ تُطبع وتخرج من الجهاز — واقعةٌ لا تُطوى
     from core.audit_service import record_event

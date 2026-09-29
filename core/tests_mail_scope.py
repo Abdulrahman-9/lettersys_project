@@ -294,3 +294,129 @@ class BooklessMailTests(MailScopeTestCase):
         )
         self.assertEqual(resp.status_code, 404)
         self.assertFalse(BookEmailLog.objects.filter(subject='س').exists())
+
+
+class SecretBookMailTests(TestCase):
+    """البريدُ **محتوى** لا صفّ — تقريرُ فيبل لتفاصيل الكتاب، P0 البند 1.
+
+    مَن لا يرى من السرّيّ إلّا كعبَه (زميلُ القسم بلا دور) كان يأخذ من أربع نقاطٍ
+    ما يحجبه عنه الكعب: العنوانَ في تعبئة الموضوع، ومواضيعَ السجلّ، والعنوانَ
+    وأسماءَ الملفّات في المعاينة — **ويُرسل المرفقاتِ فعلاً**. والنقاطُ كانت تسأل
+    ``scope_books_for`` (الصفّ) لا ``can_open_content`` (المظروف).
+    """
+
+    TITLE = 'مناقصةُ الحفر السرّيّة'
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from core.models import Attachment, Department, EmailSettings, Entity, UserProfile
+
+        dept = Department.objects.create(name='المتابعة', code='ش13-mail')
+
+        def member(name, head=False):
+            u = User.objects.create_user(name, password=f'pw-{name}-1111')
+            UserProfile.objects.create(user=u, department=dept, is_department_head=head)
+            return u
+
+        cls.head = member('mailhead', head=True)     # مخوَّلٌ بالدور داخل قسمه
+        cls.member = member('mailmember')             # يرى الكعبَ وحده
+
+        cls.entity = Entity.objects.create(name='وزارة النفط', email='oil@example.com')
+        cls.book = Book.objects.create(
+            kind='incoming_external', title=cls.TITLE, created_by=cls.head,
+            department=dept, our_number='2440', secret_level='secret',
+        )
+        cls.book.issuing_entities.add(cls.entity)
+        Attachment.objects.create(
+            book=cls.book,
+            file=SimpleUploadedFile('secret-scan.pdf', b'%PDF-1.4 x', content_type='application/pdf'),
+        )
+        BookEmailLog.objects.create(
+            book=cls.book, to_address='oil@example.com',
+            subject='بشأن ' + cls.TITLE, status='sent',
+        )
+
+        cfg = EmailSettings.get()
+        cfg.smtp_host, cfg.smtp_user, cfg.smtp_password = 'smtp.x.com', 'me@x.com', 'app-pass-16'
+        cfg.is_active = True
+        cfg.save()
+
+    def _get(self, user, url):
+        self.client.force_login(user)
+        return self.client.get(url)
+
+    def _send(self, user):
+        from unittest.mock import patch
+
+        self.client.force_login(user)
+        with patch('core.messaging.engines.smtp.SMTPEngine.send_book_notification') as send:
+            send.return_value = type('L', (), {'status': 'sent', 'error_msg': '', 'pk': 1})()
+            resp = self.client.post(f'/books/api/email/book/{self.book.pk}/send/',
+                                    data='{}', content_type='application/json')
+        return resp, send
+
+    def assertSealed(self, resp):
+        self.assertEqual(resp.status_code, 404)
+        self.assertNotIn(self.TITLE, resp.content.decode('utf-8'))
+
+    # ── الأربعُ المسمّاةُ في التقرير ──
+    def test_compose_prefill_is_sealed(self):
+        self.assertSealed(self._get(self.member, f'/books/mail/compose/{self.book.pk}/'))
+
+    def test_logs_are_sealed(self):
+        self.assertSealed(self._get(self.member, f'/books/api/email/logs/{self.book.pk}/'))
+
+    def test_preview_is_sealed(self):
+        resp = self._get(self.member, f'/books/api/email/book/{self.book.pk}/preview/')
+        self.assertSealed(resp)
+        self.assertNotIn('2440.pdf', resp.content.decode('utf-8'))
+
+    def test_send_is_refused_and_nothing_leaves(self):
+        resp, send = self._send(self.member)
+        self.assertEqual(resp.status_code, 404)
+        send.assert_not_called()
+
+    # ── والمخوَّلُ يعمل كما كان ──
+    def test_the_custodian_composes(self):
+        resp = self._get(self.head, f'/books/mail/compose/{self.book.pk}/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(self.TITLE, resp.context['prefill']['subject'])
+
+    def test_the_custodian_reads_logs(self):
+        resp = self._get(self.head, f'/books/api/email/logs/{self.book.pk}/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()['logs']), 1)
+
+    def test_the_custodian_previews(self):
+        resp = self._get(self.head, f'/books/api/email/book/{self.book.pk}/preview/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['book']['title'], self.TITLE)
+
+    def test_the_custodian_sends(self):
+        resp, send = self._send(self.head)
+        self.assertEqual(resp.status_code, 200)
+        send.assert_called_once()
+
+    # ── وأخواتُها من الباب نفسِه (لم يسمّها التقرير) ──
+    def test_template_preview_does_not_render_the_secret_title(self):
+        from core.models import EmailTemplate
+
+        tpl = EmailTemplate.objects.create(
+            name='قالب', slug='t-secret',
+            subject_template='{{ book.title }}', body_html='{{ book.title }}',
+        )
+        url = f'/books/mail/api/template/{tpl.pk}/preview/?book_id={self.book.pk}'
+        self.assertNotIn(self.TITLE, self._get(self.member, url).json()['body'])
+        self.assertIn(self.TITLE, self._get(self.head, url).json()['body'])
+
+    def test_compose_api_refuses_to_hang_mail_on_the_sealed_book(self):
+        self.client.force_login(self.member)
+        resp = self.client.post(
+            '/books/mail/api/compose/',
+            data=('{"to": "x@example.com", "subject": "س", "body": "ب", '
+                  f'"book_id": {self.book.pk}}}'),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 404)

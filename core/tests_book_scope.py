@@ -147,3 +147,47 @@ class ForeignBookIsUnreachableTests(TestCase):
         resp = self.client.get('/books/unified/')
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, 'كتاب بوب')
+
+
+class HiddenBookIs404Tests(TestCase):
+    """«غير موجود» لا «ممنوع» — تقريرُ فيبل لتفاصيل الكتاب، P0 البند 12.
+
+    القائمةُ والبحثُ يُجيبان عن كتاب القسم الآخر بالغياب (النطاقُ في الاستعلام)،
+    وكانت الصفحةُ وحدَها تُجيب 403 — فيكفي تجريبُ الأرقام لرسم خريطةِ ما يوجد.
+    ``ForeignBookIsUnreachableTests`` أعلاه يقبل (302, 403, 404) فلا يلتقط الفرق؛
+    وهذا يُثبت الرمزَ نفسَه.
+    """
+
+    def setUp(self):
+        d1 = Department.objects.create(name='أ', code='ق-أ4')
+        d2 = Department.objects.create(name='ب', code='ق-ب4')
+        self.alice = User.objects.create_user('a4', password='pw-a4-11111')
+        UserProfile.objects.create(user=self.alice, department=d1)
+        bob = User.objects.create_user('b4', password='pw-b4-11111')
+        UserProfile.objects.create(user=bob, department=d1)
+        carol = User.objects.create_user('c4', password='pw-c4-11111')
+        UserProfile.objects.create(user=carol, department=d2)
+        self.foreign = _book('كتابُ القسم الآخر', carol, d2)
+        # سرّيُّ قسمي أنشأه زميلي: أرى صفَّه ولا أملك محتواه
+        self.sealed = _book('سرّيُّ زميلي', bob, d1, secret='secret')
+        self.client.force_login(self.alice)
+
+    def test_foreign_detail_is_404(self):
+        self.assertEqual(self.client.get(f'/books/{self.foreign.pk}/').status_code, 404)
+
+    def test_foreign_edit_is_404(self):
+        self.assertEqual(self.client.get(f'/books/{self.foreign.pk}/edit/').status_code, 404)
+
+    def test_foreign_report_is_404(self):
+        self.assertEqual(self.client.get(f'/books/{self.foreign.pk}/report/').status_code, 404)
+
+    def test_sealed_edit_and_report_are_404(self):
+        """مَن يرى الكعبَ لا يُعدّل ولا يطبع — والرمزُ نفسُه لا «ممنوعٌ» يُفصح."""
+        self.assertEqual(self.client.get(f'/books/{self.sealed.pk}/edit/').status_code, 404)
+        self.assertEqual(self.client.get(f'/books/{self.sealed.pk}/report/').status_code, 404)
+
+    def test_sealed_detail_still_shows_the_stub(self):
+        """الكعبُ نفسُه يبقى — الصفُّ مرئيٌّ في الدفتر."""
+        resp = self.client.get(f'/books/{self.sealed.pk}/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, 'core/book_detail_secret.html')

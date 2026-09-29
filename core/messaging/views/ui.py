@@ -24,7 +24,7 @@ from django.contrib.auth.decorators import login_required
 
 from core.views.helpers import staff_required
 from django.core.paginator import Paginator
-from django.http import HttpResponseForbidden
+from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
@@ -209,14 +209,16 @@ def mail_inbox(request):
 
 @login_required
 def mail_compose(request, book_id=None):
-    from core.models import Book, Entity, EmailTemplate, EmailSettings
-    from core.messaging.scoping import scope_books
+    from core.models import Entity, EmailTemplate, EmailSettings
+    from core.messaging.scoping import mailable_book
 
     book = None
     if book_id:
-        # النطاق داخل الاستعلام لا بعده: كتابُ غيرِك «غير موجود» لا «ممنوع»،
-        # فلا يُسرَّب وجودُه من فرق الرمزين.
-        book = get_object_or_404(scope_books(Book.objects.all(), request.user), pk=book_id)
+        # كتابُ غيرِك «غير موجود» لا «ممنوع»، فلا يُسرَّب وجودُه من فرق الرمزين.
+        # والموضوعُ أدناه يُعبَّأ بالعنوان — فالسرّيُّ المغلقُ «غير موجود» أيضاً.
+        book = mailable_book(request.user, book_id)
+        if book is None:
+            raise Http404('الكتاب غير موجود')
 
     entities  = Entity.objects.filter(is_active=True, email__gt='').order_by('name')
     templates = EmailTemplate.objects.filter(is_active=True).order_by('name')
@@ -260,7 +262,7 @@ def mail_thread(request, thread_id):
     if not can_view_thread(thread, request.user):
         # 403 لا 404 هنا عن قصد — على خلاف الكتب أعلاه: الخيط يُفتح من رابطٍ
         # قديم أو مشارَك، فرسالةٌ صريحة أنفع من «غير موجود»، ووجودُ رقم خيطٍ
-        # ليس سرّاً. النمط نفسه في صفحة تفاصيل الكتاب (books_detail.py).
+        # ليس سرّاً. (صفحةُ الكتاب نفسُها صارت 404 — رقمُ الكتاب هويّةُ مستند.)
         return HttpResponseForbidden("غير مصرح لك بالاطّلاع على هذه المراسلة")
 
     sent_emails = thread.sent_emails.select_related('sent_by').order_by('sent_at')

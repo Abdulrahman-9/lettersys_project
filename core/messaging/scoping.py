@@ -54,6 +54,28 @@ def scope_books(qs, user):
     return scope_books_for(user, qs)
 
 
+def mailable_book(user, book_id):
+    """الكتابُ الذي يحقّ للمستخدم مراسلةُ جهته عنه — أو ``None``.
+
+    **البريدُ محتوى لا صفّ**: الموضوعُ يحمل العنوان، والمعاينةُ أسماءَ الملفّات،
+    والإرسالُ الملفّاتِ نفسَها، والقالبُ يُصيَّر بـ``book.title``. فالسؤالُ
+    ``can_open_content`` لا ``can_view_book`` — وإلّا أخذ مَن لا يرى من السرّيّ
+    إلّا كعبَه عنوانَه ومرفقاتِه من باب البريد (وأرسلها فعلاً).
+
+    وجوابُ الحالتين واحد (``None`` ⟵ «غير موجود»): فلا يُفرَّق بين كتابٍ خارج
+    النطاق وسرّيٍّ مُغلق المظروف.
+    """
+    from core.models import Book
+    from core.scoping import can_open_content
+
+    if not str(book_id or '').isdigit():
+        return None
+    book = scope_books(Book.objects.all(), user).filter(pk=int(book_id)).first()
+    if book is None or not can_open_content(book, user):
+        return None
+    return book
+
+
 def scope_threads(qs, user):
     """خيوط المراسلة التي يحقّ للمستخدم رؤيتها/تعديل حالتها."""
     if sees_all_mail(user):

@@ -1010,11 +1010,11 @@ class BookDetailTests(BookViewsBase):
         self.assertEqual(resp.status_code, 200)
         self.assertTemplateUsed(resp, 'core/book_detail.html')
 
-    def test_unauthorized_gets_403(self):
+    def test_unauthorized_gets_404(self):
+        """«غير موجود» لا «ممنوع» — الفرقُ بين الرمزين يُثبت وجودَ الكتاب."""
         self._login(self.other)
-        from django.core.exceptions import PermissionDenied
         resp = self.client.get(self._url(self.book.pk))
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 404)
 
     def test_superuser_can_view_any(self):
         self._login(self.superuser)
@@ -1059,10 +1059,10 @@ class BookEditTests(BookViewsBase):
         self.assertIn('smart-desktop', location)
         self.assertIn(f'edit_pk={self.book.pk}', location)
 
-    def test_unauthorized_gets_403(self):
+    def test_unauthorized_gets_404(self):
         self._login(self.other)
         resp = self.client.get(self._url(self.book.pk))
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 404)
 
     def _entity_payload(self):
         """إنشاء جهة مستقبلة للاستخدام في اختبارات update_book_api."""

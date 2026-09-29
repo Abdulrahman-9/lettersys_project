@@ -49,13 +49,13 @@ class EditIsContentTests(ContentGateTestCase):
 
     def test_a_colleague_cannot_open_the_secret_edit_form(self):
         self.client.force_login(self.colleague)
-        self.assertEqual(self.client.get('/books/%d/edit/' % self.secret.pk).status_code, 403)
+        self.assertEqual(self.client.get('/books/%d/edit/' % self.secret.pk).status_code, 404)
 
     def test_a_colleague_may_edit_a_plain_book_of_the_department(self):
         """حارسُ عدم الانحدار: التضييقُ لا يُغلق العلنيّ في وجه القسم.
 
         و302 هي النجاح هنا: `book_edit` تُحوّل GET إلى شاشة الاستخراج في وضع
-        التعديل — والمرفوضُ يأتيه 403 قبل التحويل.
+        التعديل — والمرفوضُ يأتيه 404 قبل التحويل.
         """
         self.client.force_login(self.colleague)
         self.assertEqual(self.client.get('/books/%d/edit/' % self.plain.pk).status_code, 302)
@@ -63,7 +63,7 @@ class EditIsContentTests(ContentGateTestCase):
     def test_is_staff_no_longer_opens_a_secret(self):
         """`is_staff` صفةٌ إداريّةٌ في جانغو لا دورٌ عندنا — وقد فُصلت في المرحلة أ."""
         self.client.force_login(self.staffer)
-        self.assertEqual(self.client.get('/books/%d/edit/' % self.secret.pk).status_code, 403)
+        self.assertEqual(self.client.get('/books/%d/edit/' % self.secret.pk).status_code, 404)
 
     def test_the_author_still_edits_their_own_secret(self):
         self.client.force_login(self.author)
