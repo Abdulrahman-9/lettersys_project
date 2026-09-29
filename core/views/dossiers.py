@@ -37,7 +37,8 @@ from ..document_types import get_document_type_options, normalize_document_type_
 from core.entity_kinds import EXTERNAL, KIND_HINTS, KIND_LABELS, KINDS
 from ..models import Book, Entity
 from .filter_helpers import FOLLOWUP_LABELS, BookFilterEngine, BookSortEngine
-from core.scoping import can_view_book, is_privileged, scope_books_for
+from core.scoping import (ACCESS_STUB, STUB_TITLE, can_view_book, guard_secret_text_search,
+                          is_privileged, scope_books_for, secret_access, shown_field_sql)
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +50,10 @@ _REPORT_CAP = 2000            # سقف صفوف التقرير لكل اتجاه
 
 _SECRET_LABELS = dict(Book.SECRET_CHOICES)   # مصدر واحد (يتّحد مع get_secret_level_display)
 
-# حقول العرض الدنيا (.only) — تتجنّب جلب أعمدة ثقيلة لا تُعرض
+# حقول العرض الدنيا (.only) — تتجنّب جلب أعمدة ثقيلة لا تُعرض.
+# created_by/department يقرؤهما ``secret_access`` لكلّ صفّ — وبدونهما يصير كلُّ صفٍّ استعلاماً.
 _DETAIL_FIELDS = ("our_number", "title", "document_type", "date",
-                  "secret_level", "due_date", "is_archived")
+                  "secret_level", "due_date", "is_archived", "created_by", "department")
 _REPORT_FIELDS = _DETAIL_FIELDS + ("margin",)
 
 
@@ -150,19 +152,52 @@ def collect_filters(request):
     }
 
 
-def _apply_filters(qs, f):
-    """فلاتر الإضبارة (بلا فرز) عبر المحرّك المشترك."""
+def _apply_filters(qs, f, user):
+    """فلاتر الإضبارة (بلا فرز) عبر المحرّك المشترك.
+
+    ``user`` لحارس البحث السرّيّ — كما في ``apply_all_filters``: بحثُ الإضبارة
+    النصّيُّ كان بلا حارس، فتصير كلمةٌ من عنوان السرّيّ أو هامشه أداةَ استنطاق.
+    """
     qs = BookFilterEngine.apply_search_filter(qs, f["q"])
+    qs = guard_secret_text_search(qs, user, f["q"])
+    # نوعُ المستند **كما يراه القارئ** (``_dt``) — عليه تُفرز الملفّاتُ وتُعدّ وتُصفّى.
+    # نوعُ السرّيّ محجوبٌ كعنوانه (``STUB_BLANK_FIELDS``)، وكان يُسمّي ملفَّه:
+    # مجلّدُ «X (1)» صفُّه الوحيد المحجوبُ يُسمّي الكتاب، و?document_type=X يؤكّده.
+    # فالمقيَّدُ عند مَن لا يملكه بلا نوع ⟵ يسكن «متفرقة».
+    qs = qs.annotate(_dt=shown_field_sql(user, "document_type", ""))
     qs = BookFilterEngine.apply_date_filter(qs, f["date_from"], f["date_to"])
     if f["document_type"] == _MISC_LABEL:
         # سلّة «متفرقة» = الكتب بلا نوع — تُفتح كملف ثانوي مثل بقية الأنواع
         # (نوع حقيقي مُسمّى «متفرقة» حرفياً يندمج معها عرضاً — تصادم مقبول بنفس الدلالة)
-        qs = qs.filter(Q(document_type="") | Q(document_type=_MISC_LABEL))
-    else:
-        qs = BookFilterEngine.apply_document_type_filter(qs, f["document_type"])
+        qs = qs.filter(Q(_dt="") | Q(_dt=_MISC_LABEL))
+    elif f["document_type"]:
+        qs = qs.filter(_dt=f["document_type"])
     qs = BookFilterEngine.apply_secret_filter(qs, f["secret_level"])
     qs = BookFilterEngine.apply_followup_filter(qs, f["followup"])
     return qs
+
+
+def _present(books, user, *, with_margin=False):
+    """يُلبس كلَّ كتابٍ معروضٍ محتواه **كما يحقّ لقارئه** — والحجبُ هنا لا في القالب.
+
+    كانت الإضبارةُ تطبع العنوانَ والهامشَ خامَين، فيقرأ عضوُ القسم موضوعَ السرّيّ
+    الذي تحجبه عنه القائمةُ وصفحةُ التفاصيل. القرارُ من المصدر الوحيد
+    ``secret_access`` (كـ``queues._shape``)، والمحجوبُ ما يُفرَّغ في
+    ``stub_book_payload``: العنوانُ ⟵ ``STUB_TITLE``، ونوعُ المستند والهامشُ
+    والجهاتُ فارغة. والرقمُ والتاريخُ والسرّيّةُ والمتابعةُ تبقى — الدفترُ يكشفها.
+
+    القوالبُ تقرأ ``shown_*`` وحدَها. و``with_margin`` للتقرير وحده: هو وحده
+    يجلب الهامش (``_REPORT_FIELDS``)، ولمسُه مؤجَّلاً استعلامٌ لكلّ صفّ.
+    """
+    for b in books:
+        b.restricted = secret_access(user, b) == ACCESS_STUB
+        b.shown_title = STUB_TITLE if b.restricted else b.title
+        b.shown_document_type = "" if b.restricted else b.document_type
+        b.shown_issuing = None if b.restricted else b.first_issuing_entity
+        b.shown_receiving = None if b.restricted else b.first_receiving_entity
+        if with_margin:
+            b.shown_margin = "" if b.restricted else b.margin
+    return books
 
 
 def _active_filter_count(f):
@@ -183,13 +218,14 @@ def _filter_summary(f):
 
 # ════════════ تجميع الأنواع ════════════
 def _type_meta(qs):
-    """لكل نوع مستند (مطبَّع): عدده الدقيق — GROUP BY واحد DB.
+    """لكل نوع مستند (مطبَّع، **كما يراه القارئ** — ``_dt`` من ``_apply_filters``):
+    عدده الدقيق — GROUP BY واحد DB.
 
     order_by() إلزامي قبل values/annotate لئلا يتسرّب ترتيب موروث إلى GROUP BY.
     """
     meta = {}
-    for row in qs.order_by().values("document_type").annotate(c=Count("id", distinct=True)):
-        key = normalize_document_type_value(row["document_type"])
+    for row in qs.order_by().values("_dt").annotate(c=Count("id", distinct=True)):
+        key = normalize_document_type_value(row["_dt"])
         slot = meta.setdefault(key, {"count": 0})
         slot["count"] += row["c"]
     return meta
@@ -222,7 +258,7 @@ def _ordered_type_groups(scan_books, meta, row_limit=_GROUP_ROW_LIMIT):
     """
     sampled = {}
     for b in scan_books:
-        sampled.setdefault(normalize_document_type_value(b.document_type), []).append(b)
+        sampled.setdefault(normalize_document_type_value(b._dt), []).append(b)
 
     ordered, seen = [], set()
 
@@ -315,8 +351,8 @@ def dossier_detail(request, pk):
     base = _visible_books(request)
 
     out_base, in_base = _direction_bases(base, pk)
-    outgoing_qs = _apply_filters(out_base, f)
-    incoming_qs = _apply_filters(in_base, f)
+    outgoing_qs = _apply_filters(out_base, f, request.user)
+    incoming_qs = _apply_filters(in_base, f, request.user)
     out_types = _type_meta(outgoing_qs)
     in_types = _type_meta(incoming_qs)
 
@@ -325,8 +361,8 @@ def dossier_detail(request, pk):
     if f["document_type"]:
         fnt = {**f, "document_type": ""}
         available_types = _available_types(
-            _type_meta(_apply_filters(out_base, fnt)),
-            _type_meta(_apply_filters(in_base, fnt)),
+            _type_meta(_apply_filters(out_base, fnt, request.user)),
+            _type_meta(_apply_filters(in_base, fnt, request.user)),
         )
     else:
         available_types = _available_types(out_types, in_types)
@@ -334,8 +370,8 @@ def dossier_detail(request, pk):
     # مسح صفوف العرض دفعة واحدة لكل اتجاه (.only بلا prefetch) ثم تقسيم بايثوني.
     # داخل الملف الثانوي (نوع مُنتقى) نرفع سقف الصفوف — إنه العرض المخصّص لذلك النوع.
     row_limit = _SUBFILE_ROW_LIMIT if f["document_type"] else _GROUP_ROW_LIMIT
-    out_scan = list(BookSortEngine.apply_sort(outgoing_qs.only(*_DETAIL_FIELDS), f["sort"])[:_DETAIL_SCAN_CAP])
-    in_scan = list(BookSortEngine.apply_sort(incoming_qs.only(*_DETAIL_FIELDS), f["sort"])[:_DETAIL_SCAN_CAP])
+    out_scan = list(BookSortEngine.apply_sort(outgoing_qs.only(*_DETAIL_FIELDS), f["sort"], user=request.user)[:_DETAIL_SCAN_CAP])
+    in_scan = list(BookSortEngine.apply_sort(incoming_qs.only(*_DETAIL_FIELDS), f["sort"], user=request.user)[:_DETAIL_SCAN_CAP])
     outgoing_groups = _ordered_type_groups(out_scan, out_types, row_limit)
     incoming_groups = _ordered_type_groups(in_scan, in_types, row_limit)
 
@@ -343,6 +379,7 @@ def dossier_detail(request, pk):
     displayed = [b for g in outgoing_groups for b in g["books"]] \
         + [b for g in incoming_groups for b in g["books"]]
     prefetch_related_objects(displayed, "issuing_entities", "receiving_entities")
+    _present(displayed, request.user)
 
     out_count = sum(m["count"] for m in out_types.values())
     in_count = sum(m["count"] for m in in_types.values())
@@ -354,8 +391,8 @@ def dossier_detail(request, pk):
     #    بحساب آمن ضدّ fan-out (aggregate لكل اتجاه، Count distinct). ──
     if f["followup"]:
         _cf = {**f, "followup": ""}
-        out_for_cnt = _apply_filters(out_base, _cf)
-        in_for_cnt = _apply_filters(in_base, _cf)
+        out_for_cnt = _apply_filters(out_base, _cf, request.user)
+        in_for_cnt = _apply_filters(in_base, _cf, request.user)
     else:
         out_for_cnt, in_for_cnt = outgoing_qs, incoming_qs
     counters = BookFilterEngine.get_dossier_counter_badges(out_for_cnt, in_for_cnt)
@@ -417,8 +454,8 @@ def dossier_report(request, pk):
     f = collect_filters(request)
     base = _visible_books(request)
     out_base, in_base = _direction_bases(base, pk)
-    outgoing_qs = _apply_filters(out_base, f)
-    incoming_qs = _apply_filters(in_base, f)
+    outgoing_qs = _apply_filters(out_base, f, request.user)
+    incoming_qs = _apply_filters(in_base, f, request.user)
 
     book_id = (request.GET.get("book_id") or "").strip()
     single = book_id.isdigit()
@@ -428,12 +465,13 @@ def dossier_report(request, pk):
 
     # نجلب CAP+1 لكشف التجاوز بدقّة (لا off-by-one) ثم نقتطع للعرض
     sort = f["sort"]
-    out_raw = list(BookSortEngine.apply_sort(outgoing_qs.only(*_REPORT_FIELDS), sort)[:_REPORT_CAP + 1])
-    in_raw = list(BookSortEngine.apply_sort(incoming_qs.only(*_REPORT_FIELDS), sort)[:_REPORT_CAP + 1])
+    out_raw = list(BookSortEngine.apply_sort(outgoing_qs.only(*_REPORT_FIELDS), sort, user=request.user)[:_REPORT_CAP + 1])
+    in_raw = list(BookSortEngine.apply_sort(incoming_qs.only(*_REPORT_FIELDS), sort, user=request.user)[:_REPORT_CAP + 1])
     capped = (len(out_raw) > _REPORT_CAP or len(in_raw) > _REPORT_CAP) and not single
     outgoing = out_raw[:_REPORT_CAP]
     incoming = in_raw[:_REPORT_CAP]
     prefetch_related_objects(outgoing + incoming, "issuing_entities", "receiving_entities")
+    _present(outgoing + incoming, request.user, with_margin=True)
 
     report_book = None
     if single:
