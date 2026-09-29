@@ -16,7 +16,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import format_html
@@ -29,8 +29,9 @@ from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       RestoreJob)
 from .filter_helpers import _FOLLOWUP_STATES, FOLLOWUP_LABELS, followup_q
 from .helpers import staff_required
-from core.scoping import (STUB_TITLE, can_open_content, is_privileged,
-                          restricted_flag_sql, scope_books_for)
+from core.scoping import (STUB_TITLE, can_open_content, can_view_reports, is_privileged,
+                          report_departments, restricted_flag_sql, scope_books_for,
+                          subtree_ids)
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +209,17 @@ def _reports_qs(request):
         qs = (qs.filter(Q(issuing_entities__id=entity_id) | Q(receiving_entities__id=entity_id))
                 .filter(restricted=False).distinct())
 
+    # القسم: المسموحُ شجرةُ القارئ (``report_departments``)، وما خارجها «غيرُ موجود»
+    # لا «ممنوع». والفلترُ يسيل نزولاً كالنطاق: القسمُ يشمل شُعبَه.
+    departments = list(report_departments(user).order_by("code"))
+    dept = None
+    dept_id = request.GET.get("dept", "")
+    if dept_id.isdigit():
+        dept = next((d for d in departments if d.pk == int(dept_id)), None)
+        if dept is None:
+            raise Http404("لا قسم بهذا الرقم")
+        qs = qs.filter(department_id__in=subtree_ids(dept.pk))
+
     today = timezone.localdate()
     due_start = request.GET.get("due_start")
     due_end = request.GET.get("due_end")
@@ -245,6 +257,9 @@ def _reports_qs(request):
         "entity_id": entity_id or "", "bucket": bucket,
         "due_start": due_start or "", "due_end": due_end or "", "today": today,
         "base": base,
+        "departments": departments,
+        "dept": str(dept.pk) if dept else "",
+        "dept_label": dept.name if dept else "",
     }
 
 
@@ -284,6 +299,8 @@ def reports(request):
     Returns:
         Rendered reports template with filtered books and statistics
     """
+    if not can_view_reports(request.user):
+        raise Http404("لا صفحة بهذا العنوان")
     qs, _m = _reports_qs(request)
     kind = _m["kind"]
     selected_kind_label = _m["kind_label"]
@@ -301,6 +318,21 @@ def reports(request):
         **{k: Count("id", filter=followup_q(k, today)) for k in _FOLLOWUP_STATES},
     )
     stats = {k: (v or 0) for k, v in agg.items()}
+
+    # ── بحسب القسم: حين تجتمع في شجرة القارئ أقسامٌ عدّة (شرطُ عددٍ لا دور) ──
+    # على المجموعة قبل الدلو كالعدّادات؛ و``distinct`` لأنّ فلتر الجهة يضاعف الصفوف.
+    show_department = len(_m["departments"]) > 1
+    dept_rows = []
+    if show_department:
+        dept_rows = list(
+            _m["base"].prefetch_related(None).order_by()
+            .values("department__code", "department__name")
+            .annotate(total=Count("id", distinct=True),
+                      **{k: Count("id", distinct=True, filter=followup_q(k, today))
+                         for k in _FOLLOWUP_STATES})
+            .order_by("department__code"))
+        for row in dept_rows:
+            row["label"] = row["department__name"] or "بلا قسم"
 
     # ── ترقيم العرض: يمنع تحميل آلاف الكتب دفعةً (مهمّ على ذاكرة محدودة) ──
     page_obj = Paginator(qs, 200).get_page(request.GET.get("page"))
@@ -346,6 +378,11 @@ def reports(request):
             "due_start": due_start or "",
             "due_end": due_end or "",
             "org": org,
+            "departments": _m["departments"],
+            "selected_dept": _m["dept"],
+            "dept_label": _m["dept_label"],
+            "show_department": show_department,
+            "dept_rows": dept_rows,
         },
     )
 
@@ -358,6 +395,8 @@ def reports_export(request):
     import io
     from django.http import StreamingHttpResponse
 
+    if not can_view_reports(request.user):
+        raise Http404("لا صفحة بهذا العنوان")
     qs, meta = _reports_qs(request)
     # ملفٌّ يخرج من الجهاز بصفوفٍ كثيرة — واقعةُ إخراجٍ لا تُطوى (كتصدير القائمة)
     from core.audit_service import record_event

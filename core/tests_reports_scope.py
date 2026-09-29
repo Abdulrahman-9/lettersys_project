@@ -24,9 +24,10 @@ from core.scoping import ACCESS_STUB, STUB_TITLE, restricted_flag_sql, secret_ac
 
 
 def _tbody(resp):
-    """جسمُ جدول النتائج وحدَه — قائمةُ الجهات في النموذج تحمل كلَّ الأسماء عمداً."""
+    """جسمُ جدول النتائج وحدَه — قائمةُ الجهات في النموذج تحمل كلَّ الأسماء عمداً،
+    وجدولُ «بحسب القسم» يسبقه حين تجتمع أقسامٌ عدّة."""
     html = resp.content.decode('utf-8')
-    m = re.search(r'<tbody>(.*?)</tbody>', html, re.S)
+    m = re.search(r'id="reportTable".*?<tbody>(.*?)</tbody>', html, re.S)
     assert m, 'لا جدولَ نتائج في الصفحة'
     return m.group(1)
 
@@ -102,14 +103,14 @@ class ReportsScopeTestCase(TestCase):
 
 class ScopeTests(ReportsScopeTestCase):
 
-    def test_a_member_sees_his_colleagues_book_and_not_another_department(self):
-        for user in (self.clerk, self.head):
-            with self.subTest(user=user.username):
-                resp = self._reports(user, bucket='all')
-                self.assertEqual(resp.status_code, 200)
-                body = _tbody(resp)
-                self.assertIn('كتابُ الزميل', body)
-                self.assertNotIn('كتابُ القسم الآخر', body)
+    def test_the_head_sees_his_colleagues_book_and_not_another_department(self):
+        """الرئيسُ يرى كتابَ موظّفٍ في قسمه (لا كتبَه هو وحدَها) ولا يرى القسمَ الآخر.
+        (والتقاريرُ للرئيس والمدير وحدَهما — ``tests_reports_gate``.)"""
+        resp = self._reports(self.head, bucket='all')
+        self.assertEqual(resp.status_code, 200)
+        body = _tbody(resp)
+        self.assertIn('كتابُ الزميل', body)
+        self.assertNotIn('كتابُ القسم الآخر', body)
 
     def test_the_head_sees_the_units_books(self):
         """الشجرةُ تسيل نزولاً: رئيسُ «ق» يرى صفَّ «ش» (محجوبَ المحتوى)."""
@@ -118,7 +119,7 @@ class ScopeTests(ReportsScopeTestCase):
 
     def test_active_incoming_is_the_dashboards_number(self):
         """الرقمُ الذي تفتحه اللوحة هو الرقمُ الذي تعدّه التقارير — لا رقمٌ ثالث."""
-        for user in (self.clerk, self.head, self.admin):
+        for user in (self.head, self.admin):
             with self.subTest(user=user.username):
                 self.client.force_login(user)
                 dash = self.client.get(reverse('dashboard')).context['incoming_pending']
@@ -129,11 +130,11 @@ class ScopeTests(ReportsScopeTestCase):
 
 class SecretMaskingTests(ReportsScopeTestCase):
 
-    #: (القارئ، الكتابُ المحجوبُ عنه، جهتُه) — الكاتبُ على سرّيّ قسمه، والرئيسُ
-    #: على سرّيّ شعبته (الحقُّ بالدور على قسمه لا على شجرته — ``secret_access``).
+    #: (القارئ، الكتابُ المحجوبُ عنه، جهتُه) — الرئيسُ على سرّيّ شعبته (الحقُّ
+    #: بالدور على قسمه لا على شجرته — ``secret_access``). والكاتبُ لا تقاريرَ له
+    #: أصلاً منذ بوّابة الدور؛ حجبُه يحرسه ``test_the_restricted_flag_is_secret_access``.
     def _cases(self):
-        return ((self.clerk, self.secret_q, self.ent_secret),
-                (self.head, self.secret_sh, self.ent_secret_sh))
+        return ((self.head, self.secret_sh, self.ent_secret_sh),)
 
     def test_the_restricted_flag_is_secret_access(self):
         """علَمُ SQL توأمُ ``secret_access`` فاعلاً فاعلاً — لا ينحرفان."""

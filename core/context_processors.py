@@ -78,12 +78,14 @@ def nav_gates(request):
     if user is None or not user.is_authenticated:
         return {'nav': {}}
 
-    from core.scoping import can_archive, can_manage_system, can_use_desk, can_view_audit
+    from core.scoping import (can_archive, can_manage_system, can_use_desk, can_view_audit,
+                              can_view_reports)
 
     return {'nav': {
         'desk': can_use_desk(user),
         'archive': can_archive(user),
         'audit': can_view_audit(user),
+        'reports': can_view_reports(user),
         # السلّةُ مُنطَّقةٌ أصلاً بـ`scope_books_for`، والاستعادةُ بـ
         # `can_open_content`. فالأرشيفيُّ يستعيد ورقاً حُذف خطأً — وهو
         # عملُه — وكان الرابطُ محجوباً عنه بـ`is_staff` وحدَها.

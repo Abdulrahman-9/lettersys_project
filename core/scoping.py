@@ -117,6 +117,31 @@ def can_view_audit(user) -> bool:
     return is_privileged(user) or is_department_head(user)
 
 
+def can_view_reports(user) -> bool:
+    """أيحقّ له فتحُ **التقارير**؟ رئيسُ القسم ومديرُ النظام حصراً — كلٌّ بشجرته.
+
+    قرارُ المالك (2026‑09‑29، الخطّة v2 §10): التقريرُ أداةُ إشرافٍ على عمل القسم
+    لا أداةُ عمل، ومخرَجُه (الطباعة وCSV) يخرج من الجهاز. توأمُ ``can_view_audit``؛
+    و``roles.role_capabilities`` قاموسُ عرضٍ لا بوّابة.
+    """
+    return is_privileged(user) or is_department_head(user)
+
+
+def report_departments(user):
+    """الأقسامُ التي يُفلتَر بها التقرير — **الشجرةُ تسيل نزولاً** كالنطاق.
+
+    المديرُ: كلُّ قسمٍ نشط. رئيسُ القسم: قسمُه وشُعبُه (``subtree_ids``). وغيرُهما
+    لا تقريرَ له أصلاً (``can_view_reports``) فلا قسم.
+    """
+    from core.models import Department
+
+    if is_privileged(user):
+        return Department.objects.filter(is_active=True)
+    if is_department_head(user):
+        return Department.objects.filter(pk__in=subtree_ids(user_department_id(user)))
+    return Department.objects.none()
+
+
 def scope_activity_for(user, qs=None):
     """صفوفُ سجلّ الحركات المرئيّة — النطاقُ في الاستعلام لا في القالب.
 

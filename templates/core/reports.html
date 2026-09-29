@@ -140,16 +140,26 @@
   table.table td, table.table th { white-space: normal !important; min-width: 0 !important; overflow-wrap: break-word; }
   /* الرؤوس تلتفّ عند الفراغات فقط — لا انشطار لكلمة («الملاحظات») في منتصفها */
   table.table th { overflow-wrap: normal; word-break: keep-all; }
-  table.table td:nth-child(3) { white-space: nowrap !important; }  /* التاريخ لا يُشطر */
-  table.table th:nth-child(1) { width: 3.5%; }   /* # */
-  table.table th:nth-child(2) { width: 11%; }    /* رقم القيد */
-  table.table th:nth-child(3) { width: 11.5%; }  /* تاريخ القيد */
-  table.table th:nth-child(4) { width: 18.5%; }  /* العنوان */
-  table.table th:nth-child(5) { width: 8%; }     /* النوع */
-  table.table th:nth-child(6) { width: 18%; }    /* الجهات */
-  table.table th:nth-child(7) { width: 10.5%; }  /* كتاب الجهة */
-  table.table th:nth-child(8) { width: 10%; }    /* المتابعة */
-  table.table th:nth-child(9) { width: 9%; }     /* الملاحظات */
+  table.report-main td:nth-child(3) { white-space: nowrap !important; }  /* التاريخ لا يُشطر */
+  table.report-main th:nth-child(1) { width: 3.5%; }   /* # */
+  table.report-main th:nth-child(2) { width: 11%; }    /* رقم القيد */
+  table.report-main th:nth-child(3) { width: 11.5%; }  /* تاريخ القيد */
+  table.report-main th:nth-child(4) { width: 18.5%; }  /* العنوان */
+  table.report-main th:nth-child(5) { width: 8%; }     /* النوع */
+  table.report-main th:nth-child(6) { width: 18%; }    /* الجهات */
+  table.report-main th:nth-child(7) { width: 10.5%; }  /* كتاب الجهة */
+  table.report-main th:nth-child(8) { width: 10%; }    /* المتابعة */
+  table.report-main th:nth-child(9) { width: 9%; }     /* الملاحظات */
+  /* عمودُ القسم (حين تجتمع أقسامٌ عدّة) ثالثاً — يُقتطع من العنوان والجهات */
+  table.report-has-dept td:nth-child(4) { white-space: nowrap !important; }
+  table.report-has-dept th:nth-child(3) { width: 5%; }     /* القسم */
+  table.report-has-dept th:nth-child(4) { width: 11.5%; }  /* تاريخ القيد */
+  table.report-has-dept th:nth-child(5) { width: 16%; }    /* العنوان */
+  table.report-has-dept th:nth-child(6) { width: 8%; }     /* النوع */
+  table.report-has-dept th:nth-child(7) { width: 15.5%; }  /* الجهات */
+  table.report-has-dept th:nth-child(8) { width: 10.5%; }  /* كتاب الجهة */
+  table.report-has-dept th:nth-child(9) { width: 10%; }    /* المتابعة */
+  table.report-has-dept th:nth-child(10) { width: 9%; }    /* الملاحظات */
   /* غلاف المحتوى يفرض ارتفاع شاشة كاملة فيدفع صفحة أخيرة بيضاء — أبطِله ورقياً */
   html, body, .content-shell, main { min-height: 0 !important; height: auto !important; }
   table.table th { background: #f1f5f9 !important; border: 1px solid #94a3b8 !important; padding: 5px 6px !important; text-align: right; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -179,6 +189,7 @@
   <!-- ملخّص الفلاتر المطبَّقة -->
   <div class="report-filter-summary">
     <span><b>النوع:</b> {{ selected_kind_label }}</span>
+    {% if dept_label %}<span><b>القسم:</b> {{ dept_label }}</span>{% endif %}
     {% if selected_entity_name %}<span><b>الجهة:</b> {{ selected_entity_name }}</span>{% endif %}
     <span><b>الحالة:</b> {{ bucket_label }}</span>
     {% if due_start or due_end %}<span><b>الاستحقاق:</b> {{ due_start|default:'…' }} — {{ due_end|default:'…' }}</span>{% endif %}
@@ -202,6 +213,19 @@
         <option value="outgoing_external" {% if selected_kind == 'outgoing_external' %}selected{% endif %}>صادر خارجي</option>
       </select>
     </div>
+    {% if departments|length > 1 %}
+    <div class="col-sm-3 col-6">
+      <label class="form-label fw-semibold mb-1" for="reportDept">
+        <i class="bi bi-diagram-3 me-1"></i>القسم
+      </label>
+      <select class="form-select" name="dept" id="reportDept">
+        <option value="">كل الأقسام</option>
+        {% for d in departments %}
+        <option value="{{ d.pk }}"{% if selected_dept == d.pk|stringformat:'s' %} selected{% endif %}>{{ d.code }} — {{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
     <div class="col-sm-3 col-6">
       <label class="form-label fw-semibold mb-1" for="entitySearch">
         <i class="bi bi-building me-1"></i>الجهة
@@ -317,13 +341,49 @@
   </div>
 </div>
 
+{% if dept_rows %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white">
+    <h6 class="mb-0 fw-bold">بحسب القسم</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0" id="reportDeptTable">
+        <thead>
+          <tr>
+            <th>القسم</th>
+            <th>الإجمالي</th>
+            <th>{{ followup_labels.pending }}</th>
+            <th>{{ followup_labels.due_today }}</th>
+            <th>{{ followup_labels.overdue }}</th>
+            <th>{{ followup_labels.archived }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in dept_rows %}
+          <tr>
+            <td>{% if r.department__code %}<span class="text-muted small">{{ r.department__code }}</span> {% endif %}{{ r.label }}</td>
+            <td class="fw-bold">{{ r.total }}</td>
+            <td>{{ r.pending }}</td>
+            <td>{{ r.due_today }}</td>
+            <td>{{ r.overdue }}</td>
+            <td>{{ r.archived }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div class="card shadow-sm">
   <div class="card-header bg-white d-flex justify-content-between align-items-center">
     <h6 class="mb-0 fw-bold">نتائج التصفية</h6>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0 report-main{% if show_department %} report-has-dept{% endif %}" id="reportTable">
         {# أعمدة التقرير الرسمي: تسلسل للطباعة، رقم القيد (رابط)، تاريخا الكتاب #}
         {# الرسميان (تاريخنا + كتاب الجهة رقماً وتاريخاً)، الأطراف باتجاهيها، #}
         {# والمتابعة موحَّدة (حالة + مُهلة) — لا معرّفات داخلية ولا أعمدة مكررة. #}
@@ -331,6 +391,7 @@
           <tr>
             <th class="text-muted">#</th>
             <th>رقم القيد</th>
+            {% if show_department %}<th title="الرقمُ فريدٌ داخل القسم">القسم</th>{% endif %}
             <th>تاريخ القيد</th>
             <th>العنوان</th>
             <th>النوع</th>
@@ -348,6 +409,7 @@
               <a href="{% url 'book_detail' b.pk %}" class="fw-bold text-decoration-none report-book-link"
                  title="فتح الكتاب">{{ b.our_number_display|default:b.pk }}</a>
             </td>
+            {% if show_department %}<td class="text-nowrap small">{{ b.department.code|default:"—" }}</td>{% endif %}
             <td class="text-nowrap">{{ b.date|date:"d/m/Y"|default:"—" }}</td>
             <td style="word-wrap: break-word; white-space: normal; min-width: 100px;">{{ b.shown_title }}</td>
             <td>{% if b.is_outgoing %}<span class="kind-badge kind-outgoing">{{ b.kind_label }}</span>{% else %}<span class="kind-badge kind-incoming">{{ b.kind_label }}</span>{% endif %}</td>
@@ -371,7 +433,7 @@
             <td style="word-wrap: break-word; white-space: normal; min-width: 80px;">{{ b.shown_margin|default:"—" }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="9" class="text-center text-muted py-3">لا توجد سجلات</td></tr>
+          <tr><td colspan="{% if show_department %}10{% else %}9{% endif %}" class="text-center text-muted py-3">لا توجد سجلات</td></tr>
           {% endfor %}
         </tbody>
       </table>

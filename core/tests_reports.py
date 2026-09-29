@@ -113,7 +113,7 @@ class ReportsVocabularyTests(TestCase):
         src = (Path(settings.BASE_DIR) / 'templates' / 'core' / 'reports.html').read_text(encoding='utf-8')
         self.assertNotIn('مؤرشف', src)
         html = self.client.get(reverse('reports'), {'bucket': 'all'}).content.decode('utf-8')
-        tbody = re.search(r'<tbody>(.*?)</tbody>', html, re.S).group(1)
+        tbody = re.search(r'id="reportTable".*?<tbody>(.*?)</tbody>', html, re.S).group(1)
         cards = re.search(r'<div class="stats-summary(.*?)<div class="row', html, re.S).group(1)
         for part in (tbody, cards):
             self.assertIn(FOLLOWUP_LABELS['archived'], part)
