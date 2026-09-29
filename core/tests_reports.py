@@ -6,6 +6,7 @@
 """
 import csv
 import io
+import re
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 from pathlib import Path
 
@@ -87,6 +88,59 @@ class ReportsViewTests(TestCase):
         self.assertIn(resp.status_code, (301, 302))
 
 
+class ReportsVocabularyTests(TestCase):
+    """مفرداتُ المتابعة من مصدرها الوحيد (``FOLLOWUP_LABELS``/``followup_q``) —
+    ومفاتيحُ الدلو مفاتيحُ القائمة، والقديمةُ تُترجَم فلا تنكسر الروابطُ المحفوظة."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser('vadmin', 'v@x.com', 'pass1234')
+        self.client.force_login(self.admin)
+        from .models import Book
+        today = date.today()
+        Book.objects.create(our_number='v-1', title='ك', date=today, kind='incoming_internal',
+                            created_by=self.admin, due_date=today - timedelta(days=2))
+        Book.objects.create(our_number='v-2', title='ك', date=today, kind='incoming_internal',
+                            created_by=self.admin, is_archived=True)
+
+    def _ctx(self, **params):
+        return self.client.get(reverse('reports'), params).context
+
+    def test_no_archive_word_and_the_followup_label_instead(self):
+        """«مؤرشف» كلمةُ الورق لا المتابعة: لا يحملها قالبُ التقارير، وما يرسمه
+        في الجدول والبطاقات هو ``FOLLOWUP_LABELS``. (نافذةُ المعاينة العامّة في
+        ``base.html`` تحمل مفرداتِ القائمة — دفعةُ القائمة لا هذه.)"""
+        from .views.filter_helpers import FOLLOWUP_LABELS
+        src = (Path(settings.BASE_DIR) / 'templates' / 'core' / 'reports.html').read_text(encoding='utf-8')
+        self.assertNotIn('مؤرشف', src)
+        html = self.client.get(reverse('reports'), {'bucket': 'all'}).content.decode('utf-8')
+        tbody = re.search(r'<tbody>(.*?)</tbody>', html, re.S).group(1)
+        cards = re.search(r'<div class="stats-summary(.*?)<div class="row', html, re.S).group(1)
+        for part in (tbody, cards):
+            self.assertIn(FOLLOWUP_LABELS['archived'], part)
+            self.assertNotIn('مؤرشف', part)
+
+    def test_legacy_bucket_keys_map_to_the_unified_ones(self):
+        for old, new in (('completed', 'archived'), ('today_overdue', 'active'),
+                         ('today', 'due_today'), ('upcoming', 'pending')):
+            with self.subTest(old=old):
+                self.assertEqual(self._ctx(bucket=old)['bucket'], new)
+
+    def test_the_default_bucket_is_the_dashboards_active(self):
+        from .views.filter_helpers import FOLLOWUP_LABELS
+        for ctx in (self._ctx(), self._ctx(bucket='nonsense')):
+            self.assertEqual(ctx['bucket'], 'active')
+            self.assertEqual(ctx['bucket_label'], FOLLOWUP_LABELS['active'])
+
+    def test_bucket_keys_are_the_lists_followup_keys(self):
+        from .views.dashboard import REPORT_BUCKETS
+        from .views.filter_helpers import _FOLLOWUP_TABS
+        self.assertEqual(set(REPORT_BUCKETS), {'all'} | _FOLLOWUP_TABS)
+        self.assertEqual([k for k, _ in self._ctx()['bucket_options']], list(REPORT_BUCKETS))
+
+    def test_dead_context_is_gone(self):
+        self.assertNotIn('time_stats', self._ctx())
+
+
 class ReportsExportTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser('xadmin', 'x@x.com', 'pass1234')
@@ -111,6 +165,10 @@ class ReportsExportTests(TestCase):
         Book.objects.filter(pk=self.book.pk).update(
             created_at=datetime(2026, 9, 28, 22, 30, tzinfo=dt_timezone.utc))
         self.assertEqual(self._rows()[1][8], '2026-09-29')
+
+    def test_status_column_is_the_followup_label(self):
+        from .views.filter_helpers import FOLLOWUP_LABELS
+        self.assertEqual(self._rows()[1][10], FOLLOWUP_LABELS['archived'])
 
     def test_export_is_an_audited_event(self):
         from core.logging_models import UserActivityLog

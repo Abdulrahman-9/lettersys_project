@@ -27,7 +27,7 @@ from ..backup_service import create_encrypted_pg_backup, default_backup_dir
 from ..extraction.kinds import get_kind_label
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       RestoreJob)
-from .filter_helpers import FOLLOWUP_LABELS, followup_q
+from .filter_helpers import _FOLLOWUP_STATES, FOLLOWUP_LABELS, followup_q
 from .helpers import staff_required
 from core.scoping import (STUB_TITLE, can_open_content, is_privileged,
                           restricted_flag_sql, scope_books_for)
@@ -153,6 +153,20 @@ def followup_activity_report(request):
     })
 
 
+#: دلاءُ التقارير — **مفاتيحُ فلتر المتابعة في القائمة نفسُها** (``_FOLLOWUP_TABS``)
+#: و«الكلّ»، بترتيب العرض. كانت للصفحة مفرداتُها الخاصّة (today/upcoming/completed/
+#: today_overdue) فلا يطابق رقمُها رقمَ القائمة ولا اللوحة.
+REPORT_BUCKETS = ('all', 'active', *_FOLLOWUP_STATES)
+#: المفاتيحُ القديمة ⟵ الموحَّدة: روابطُ محفوظةٌ لا تنكسر. «المستحقّ الآن»
+#: (``today_overdue``) صار «متابعة جارية» = رقمُ اللوحة، وجزآه ظاهران في
+#: بطاقتي «متأخر» و«مستحق اليوم».
+_LEGACY_BUCKETS = {'today': 'due_today', 'upcoming': 'pending',
+                   'completed': 'archived', 'today_overdue': 'active'}
+REPORT_DEFAULT_BUCKET = 'active'
+#: التسمياتُ من ``FOLLOWUP_LABELS`` وحدَها — و«مؤرشف» كلمةُ الورق لا المتابعة (``models.py``).
+BUCKET_LABELS = {'all': 'كل الحالات', **FOLLOWUP_LABELS}
+
+
 def _reports_qs(request):
     """يبني queryset التقارير المفلتر والمرتّب حسب فلاتر الصفحة (kind/entity/date/bucket).
     مصدر تصفية واحد مشترك بين عرض التقارير والتصدير (DRY). يُعيد (qs, meta).
@@ -217,23 +231,13 @@ def _reports_qs(request):
         qs = qs.filter(due_date__lte=end_date)
 
     base = qs
-    bucket = request.GET.get("bucket", "") or "today_overdue"
-    active_qs = qs.filter(followup_q('active'))
-    archived_qs = qs.filter(followup_q('archived'))
-    if bucket == "active":
-        # «متابعة جارية» — الرقمُ الذي تفتحه اللوحة (``followup=active``) بقاعدته نفسِها.
-        qs = active_qs
-    elif bucket == "today":
-        qs = active_qs.filter(due_date=today)
-    elif bucket == "overdue":
-        qs = active_qs.filter(due_date__lt=today)
-    elif bucket == "upcoming":
-        qs = active_qs.filter(due_date__gt=today)
-    elif bucket == "completed":
-        qs = archived_qs
-    elif bucket == "today_overdue":
-        qs = active_qs.filter(due_date__lte=today)
-    # else: bucket == "all" — لا فلتر إضافي
+    bucket = request.GET.get("bucket", "")
+    bucket = _LEGACY_BUCKETS.get(bucket, bucket)
+    if bucket not in REPORT_BUCKETS:
+        bucket = REPORT_DEFAULT_BUCKET
+    if bucket != "all":
+        # المصدرُ الوحيد لقاعدة المتابعة — العدّادُ والقائمةُ واللوحةُ تقرأ من هنا.
+        qs = qs.filter(followup_q(bucket, today))
 
     qs = qs.order_by("due_date", "-date", "-id")
     return qs, {
@@ -259,25 +263,11 @@ def _shape(b):
     b.shown_sender_number = "" if r else b.sender_number
     b.shown_sender_date = None if r else b.sender_date
     b.shown_margin = "" if r else b.margin
+    b.followup_text = FOLLOWUP_LABELS[b.followup_state]
     return b
 
 
-# ── هياكلُ واجهةٍ (2026-09-01، بقرار المالك: تُودَع موسومةً) ─────────────────
-# الثلاثُ أدناه **تخطيطاتٌ ببياناتٍ ثابتةٍ في الكود**، لا استعلامَ ولا نموذج.
-# أُودعت لأنّها عملُ تصميمٍ قائم، بشرطِ أن تُعلن عن نفسها: كلُّ قالبٍ يبدأ
-# ببطاقة «هيكلُ واجهةٍ لا ميزة» ويحرسها اختبارٌ — فلا تُقرأ أرقامُها يوماً
-# على أنّها حقيقة. ولا رابطَ لها في التنقّل: تُفتح بعنوانها مباشرةً وحدَه.
-# متى تصير ميزةً حقيقيّة: `Book` + `BookHistory` + `UserActivityLog` تحمل
-# فعلاً ما تدّعيه هذه الصفحات (القيدُ اليوميّ · التسليم · أثرُ التدقيق).
 @login_required
-# ملاحظةُ دمج (2026-08-31): كانت هنا ثلاثةُ عروضٍ هيكليّةٍ من فرع `main`
-# (`desk_ledger` · `desk_handover` · `book_audit`) موسومةٍ بنصّها «بياناتٌ ثابتةٌ
-# لا من القاعدة». أُزيلت في الدمج لأنّ لها **تنفيذاً عاملاً** بالأسماء نفسِها:
-# `core/views/desk.py` و`core/views/audit.py`. وكانت مساراتُها تُسجَّل قبل
-# مساراتي في `urls.py` فتحجبها — وجانغو يأخذ أوّلَ مطابقة، فكان الدمجُ الصامت
-# سيُعيد الهياكلَ إلى الواجهة بلا أن يُخفق اختبارٌ واحد.
-
-
 def reports(request):
     """
     تقارير الكتب المستحقة مع فلاتر وتصدير/طباعة
@@ -286,7 +276,7 @@ def reports(request):
     - النوع (وارد/صادر)
     - الجهة
     - نطاق تاريخ الاستحقاق
-    - التصنيف الزمني (اليوم، متأخر، قادم، مكتمل)
+    - حالة المتابعة (``REPORT_BUCKETS`` — مفاتيحُ القائمة وتسمياتُ ``FOLLOWUP_LABELS``)
     
     Args:
         request: HTTP request with filter parameters
@@ -308,11 +298,9 @@ def reports(request):
     agg = _m["base"].aggregate(
         incoming=Count("id", filter=Q(kind__startswith="incoming")),
         outgoing=Count("id", filter=Q(kind__startswith="outgoing")),
-        **{k: Count("id", filter=followup_q(k, today))
-           for k in ("overdue", "due_today", "pending", "archived")},
+        **{k: Count("id", filter=followup_q(k, today)) for k in _FOLLOWUP_STATES},
     )
     stats = {k: (v or 0) for k, v in agg.items()}
-    time_stats = {key: stats.get(key, 0) for key in ("overdue", "due_today", "pending", "archived")}
 
     # ── ترقيم العرض: يمنع تحميل آلاف الكتب دفعةً (مهمّ على ذاكرة محدودة) ──
     page_obj = Paginator(qs, 200).get_page(request.GET.get("page"))
@@ -336,18 +324,12 @@ def reports(request):
     if entity_id and entity_id.isdigit():
         _e = Entity.objects.filter(pk=entity_id).only("name").first()
         selected_entity_name = _e.name if _e else ""
-    bucket_labels = {
-        "all": "كل الحالات", "today_overdue": "المتأخرة والمستحقة اليوم",
-        "overdue": "المتأخرة فقط", "today": "مستحقة اليوم",
-        "upcoming": "مستحقة للفترة القادمة", "completed": "المؤرشفة (انتهت المتابعة)",
-    }
 
     return render(
         request,
         "core/reports.html",
         {
             "stats": stats,
-            "time_stats": time_stats,
             "books": books,
             "page_obj": page_obj,
             "total": stats["total"],
@@ -358,7 +340,9 @@ def reports(request):
             "selected_entity": entity_id or "",
             "selected_entity_name": selected_entity_name,
             "bucket": bucket,
-            "bucket_label": bucket_labels.get(bucket, bucket),
+            "bucket_label": BUCKET_LABELS[bucket],
+            "bucket_options": [(k, BUCKET_LABELS[k]) for k in REPORT_BUCKETS],
+            "followup_labels": FOLLOWUP_LABELS,
             "due_start": due_start or "",
             "due_end": due_end or "",
             "org": org,
@@ -379,8 +363,6 @@ def reports_export(request):
     from core.audit_service import record_event
     record_event(request, 'EXPORT_DATA', metadata={
         'report': 'followup', 'kind': meta['kind'], 'bucket': meta['bucket']})
-    status_labels = {"pending": "قيد المتابعة", "due_today": "مستحق اليوم",
-                     "overdue": "متأخر", "archived": "مُنجَز / بلا متابعة"}
     # أعمدة تطابق جدول الصفحة الرسمي: تاريخا الكتاب (قيدنا + كتاب الجهة رقماً
     # وتاريخاً) حاضران، ولا معرّفات قاعدة بيانات داخلية في مخرجات رسمية.
     HEADERS = ["رقم القيد", "تاريخ القيد", "العنوان", "النوع",
@@ -410,7 +392,7 @@ def reports_export(request):
                 # محلّيّاً كان يُكتب بتاريخ الأمس.
                 timezone.localdate(b.created_at).isoformat() if b.created_at else "",
                 b.due_date.isoformat() if b.due_date else "",
-                status_labels.get(b.followup_state, b.followup_state or ""),
+                b.followup_text,
                 b.shown_margin or "",
             ])
             yield buf.getvalue()
