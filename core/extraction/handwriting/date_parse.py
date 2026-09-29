@@ -30,6 +30,18 @@ def _two_digit_year_ok(v: int, today: datetime.date) -> bool:
     return _YEAR_FLOOR <= 2000 + v <= today.year + 1
 
 
+def _two_end_candidates(a: int, m: int, b: int, today: datetime.date):
+    """الطرفان ≤ 31 وبخانتين ⟵ كلاهما قد يكون سنةً بخانتين أو يوماً. تواريخُ صالحةٌ مرتّبة بلا تكرار."""
+    cands = []
+    for year2, day in ((a, b), (b, a)):
+        if _two_digit_year_ok(year2, today):
+            try:
+                cands.append(datetime.date(2000 + year2, m, day))
+            except ValueError:
+                pass
+    return sorted(set(cands))
+
+
 def parse_drawn_date(raw: str, entry_date: Optional[datetime.date] = None,
                      window_days: int = 45,
                      today: Optional[datetime.date] = None) -> Tuple[Optional[str], str]:
@@ -72,15 +84,7 @@ def parse_drawn_date(raw: str, entry_date: Optional[datetime.date] = None,
     if a > 31 and b > 31:
         return None, 'invalid'
     # الطرفان ≤ 31 وبخانتين ⟵ كلاهما قد يكون سنةً بخانتين أو يوماً.
-    if _two_digit_year_ok(a, today):
-        d = _mk(2000 + a, b)
-        if d:
-            cands.append(d)
-    if _two_digit_year_ok(b, today):
-        d = _mk(2000 + b, a)
-        if d:
-            cands.append(d)
-    cands = sorted({c for c in cands})
+    cands = _two_end_candidates(a, m, b, today)
     if not cands:
         return None, 'invalid'
     if len(cands) == 1:
@@ -91,3 +95,18 @@ def parse_drawn_date(raw: str, entry_date: Optional[datetime.date] = None,
         if len(inside) == 1:
             return inside[0].isoformat(), 'ok'
     return None, 'ambiguous'
+
+
+def drawn_date_candidates(raw: str, entry_date: Optional[datetime.date] = None,
+                          window_days: int = 45,
+                          today: Optional[datetime.date] = None) -> list:
+    """المرشّحان (ISO مرتّبة) حين يمتنع `parse_drawn_date` بـ«ambiguous» — **للعرض على
+    الكاتب ليختار بنقرة، لا للحسم الآليّ** (بندُ نيلسن 7، مذكّرة فيبل 10): حظرُ التخمين
+    بالاحتمال الغالب قائم، والكاتبُ يتعرّف على الصحيح من القصاصة بدل أن يكتبه.
+    قائمةٌ فارغة لكلّ حالةٍ أخرى."""
+    today = today or datetime.date.today()
+    _iso, status = parse_drawn_date(raw, entry_date=entry_date, window_days=window_days, today=today)
+    if status != 'ambiguous':
+        return []
+    a, m, b = (int(p) for p in _SPLIT.split((raw or '').strip()) if p != '')
+    return [c.isoformat() for c in _two_end_candidates(a, m, b, today)]

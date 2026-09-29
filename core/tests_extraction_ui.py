@@ -292,3 +292,64 @@ class StaleExtractionGuardTests(SimpleTestCase):
         body = self.src[i:i + 500]
         self.assertIn('أُهملت', body)
         self.assertIn('return null;', body)
+
+
+class ExtractionClosureSourceGuardTests(SimpleTestCase):
+    """دفعةُ إغلاق صفحة الاستخراج (مذكّرة فيبل 10، موافقةُ المالك 2026‑09‑29) — حرّاسٌ على المصدر
+    (لا مُشغّلَ اختباراتٍ لـJS في المشروع): نيلسن 1 و2 و3 و11."""
+
+    SRC = 'static/extraction_smart.js'
+    LOCATE = 'static/js/subject_locate.js'
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with open(cls.SRC, encoding='utf-8') as fh:
+            cls.src = fh.read()
+        with open(cls.LOCATE, encoding='utf-8') as fh:
+            cls.locate = fh.read()
+
+    def _method(self, header):
+        i = self.src.index(header)
+        j = self.src.index('\n    }\n', i)
+        return self.src[i:j]
+
+    def test_escape_no_longer_clears_the_form(self):
+        """نيلسن 1: Escape مفتاحُ إغلاق القوائم — كان يمسح الكتابَ ويُلغي الرقمَ المحجوز."""
+        self.assertEqual(self.src.count('this.clearForm();'), 1)          # زرُّ «تفريغ الحقول» وحده
+        i = self.src.index('this.clearForm();')
+        self.assertIn('__isExtractionDirty', self.src[i - 400:i])          # بتأكيدٍ حين يوجد إدخال
+
+    def test_clear_keeps_our_reservation_and_the_current_tab(self):
+        body = self._method('    clearForm() {')
+        self.assertNotIn('voidReservation', body)
+        self.assertNotIn('applyInitialContext', body)
+        self.assertIn("field.id === 'bookNumber' && field.dataset.reservationId", body)
+        self.assertIn('this.syncKindUI(currentKind)', body)
+
+    def test_previous_suggestions_are_reset_on_every_clear_path(self):
+        """نيلسن 2: موضعٌ واحد يُفرغ سطوحَ الاقتراح، ويستدعيه التفريغُ والحذفُ والحفظ."""
+        for header in ('    clearForm() {', '    clearFile() {', '    smartClearAndStay(kind) {'):
+            self.assertIn('this.resetSuggestionSurfaces()', self._method(header), header)
+        reset = self._method('    resetSuggestionSurfaces() {')
+        for part in ('senderDateCrop', '_hideSenderDateSuggestion()', '.entity-candidates', 'titleSuggest',
+                     'SubjectLocate.hide()'):
+            self.assertIn(part, reset)
+
+    def test_final_payload_never_overwrites_the_clerks_own_value(self):
+        """نيلسن 3: ما كتبه الكاتبُ أو أكّده أثناء الاستخراج يبقى — في البثّ وفي حمولة done."""
+        self.assertIn('if (input && !_clerkOwnsField(input))', self._method('    applyExtractionResult(data) {'))
+        self.assertIn('if (_clerkOwnsField(el))', self._method('    _applyPartialFields(fields) {'))
+
+    def test_focus_is_not_stolen_and_uses_the_servers_confidence_keys(self):
+        focus = self._method('    _focusFirstReviewField(data) {')
+        self.assertIn('document.activeElement', focus)
+        self.assertIn("senderNumber: 'sender_number_confidence'", focus)
+        self.assertNotIn('_confidence`]', focus)                            # المفتاحُ المركّب الخاطئ
+
+    def test_use_it_in_where_is_the_subject_records_confirmed_not_typed(self):
+        """نيلسن 11: نصٌّ آليٌّ أكّده الكاتبُ بنقرة لا يُسجَّل `typed` (حلقةُ التسميم الذاتيّ)."""
+        i = self.locate.index('function applyText()')
+        body = self.locate[i:self.locate.index('\n  }\n', i)]
+        self.assertIn('window.codeFill(fire)', body)
+        self.assertIn("els.title.dataset.provenance = 'confirmed'", body)

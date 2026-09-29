@@ -770,13 +770,21 @@ class AIExtractionService:
                                'score': 30.0, 'match_type': 'kind_prior'})
         return ranked[:3]
 
-    def _propose_subject_box(self, result, image_path):
+    def _propose_subject_box(self, result, image_path, det_boxes=None):
         """يبني اقتراحَ الموضع (أو يملأ من الصندوق المتعلَّم) ويضع صورةَ الصفحة في الذاكرة
-        المؤقّتة 15 دقيقةً كي تقرأ نقطةُ النهاية منها القصاصةَ التي يختارها الكاتب."""
+        المؤقّتة 15 دقيقةً كي تقرأ نقطةُ النهاية منها القصاصةَ التي يختارها الكاتب.
+
+        **الموضعُ من det2 لا من قراءةٍ ثانيةٍ للصفحة** (مذكّرة فيبل 10، موافقةُ المالك
+        2026‑09‑29): المُقترِحُ القديم (Tesseract psm 3 على الصفحة كاملة ثمّ مُدرِّج
+        الأسطر) كلّف وسيطَ **1.60 ث** على ~38% من الصفحات ولم يُغيّر شيئاً مقيساً
+        (34 = 34 على 69 كتاباً لم يرها det2)، بينما قراءةُ قصاصة det2 وسيطُها **0.15 ث**
+        وأعطت 40/75 على البوّابة المختومة (4 خاطئة من 53). نصُّ القصاصة **اقتراحٌ دائماً**
+        يؤكّده الكاتب بنقرة — لا يبلغ الحقلَ وحده، فخطؤه لا يدخل السجلّ بلا يد."""
         import base64
         import io
         import uuid
 
+        from django.conf import settings as dj_settings
         from django.core.cache import cache
 
         from . import subject_crop as sc
@@ -784,28 +792,6 @@ class AIExtractionService:
         img = self._open_page_image(image_path)
         if img is None:
             return
-        lines = []
-        try:
-            self._ensure_ocr_stack()
-            prov = self._offline_provider
-            if prov is not None:
-                # 2026-09-13: كان `Output.DATAFRAME` و**pandas ليس في المتطلّبات** ⟵
-                # استثناءٌ يبتلعه `except` أدناه ⟵ `lines=[]` فلا مراسٍ ولا مُدرِّج
-                # ولا صندوقٌ نسبيّ في الإنتاج كلِّه. وكان يستورد pytesseract خامّاً
-                # بلا `tesseract_cmd` ولا `TESSDATA_PREFIX` — بخلاف الكتلة العاملة
-                # أدناه — فيفشل على خادمٍ لا يكون فيه tesseract على PATH.
-                pt = prov._pytesseract
-                pt.pytesseract.tesseract_cmd = prov.cmd
-                if prov.tessdata_dir:
-                    os.environ['TESSDATA_PREFIX'] = prov.tessdata_dir
-                tsv = pt.image_to_data(img, lang=prov.lang, config=f'--psm {prov.psm}',
-                                       output_type=pt.Output.DICT)
-                lines = sc.lines_from_tsv(tsv, img.width, img.height)
-                if not lines:
-                    logger.warning('[subject_box] TSV بلا أسطرٍ صالحة — المُدرِّجُ معطَّل')
-        except Exception as exc:
-            # تحذيرٌ لا معلومة: هذا المسارُ سقط صامتاً من 09-11 إلى 09-13.
-            logger.warning('[subject_box] بلا هندسة أسطر: %s: %s', type(exc).__name__, exc)
         entity_id = getattr(result, 'issuing_entity_id', None)
         # البوّابةُ الخضراء
         filled = sc.learned_fill(img, entity_id) if entity_id else None
@@ -819,7 +805,31 @@ class AIExtractionService:
             result.subject_box_proposal = {'box': filled['box'], 'source': 'learned-filled',
                                            'candidates': [], 'samples': len(sc.samples_of(entity_id))}
             return
-        prop = sc.propose(entity_id, lines, img)
+        if det_boxes is None:
+            det_boxes = self._detector_boxes_from_file(image_path)
+        box, subj_conf = None, 0.0
+        got = (det_boxes or {}).get('subject')
+        if got:
+            (x0, y0, x1, y1), subj_conf = got
+            box = sc.normalise_box({'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0})
+        prop = {'box': box or dict(sc.DEFAULT_BAND), 'source': 'det2' if box else 'default',
+                'candidates': [], 'samples': len(sc.samples_of(entity_id))}
+        if box and getattr(dj_settings, 'SUBJECT_DET2_SUGGESTION', True):
+            # Tesseract مُهيَّأٌ (المسار/TESSDATA) حتى في مسار الكاش حيث لم يُشغَّل OCR —
+            # وإلّا سقط `read_box` إلى EasyOCR (نفادُ ذاكرةٍ مقيس على 8 GB).
+            try:
+                self._ensure_ocr_stack()
+            except Exception as exc:
+                logger.warning('[subject_box] مكدّسُ OCR تعذّر: %s', type(exc).__name__)
+            rd = sc.read_box(img, box)
+            if rd.get('accepted') and (rd.get('text') or '').strip():
+                # يحلّ محلّ اقتراح المُنتقي الضعيف (احتياط/قوس) — القاعدةُ المقيسة:
+                # ملءُ العلامة إن وُجد، وإلّا قصاصةُ det2، وإلّا اقتراحُ المُنتقي.
+                result.title_suggestion = {'value': rd['text'].strip(),
+                                           'confidence': round(float(subj_conf), 4),
+                                           'source': 'det2_crop'}
+                logger.info('[subject_box] اقتراحُ الموضوع من قصاصة det2 (ثقة الصندوق %.2f)', subj_conf)
+        lines = []   # لا هندسةَ أسطرٍ بعد اليوم: مرساةُ «إلى/» للصندوق النسبيّ تبقى فارغة
         token = uuid.uuid4().hex
         buf = io.BytesIO()
         page = img.convert('L')
@@ -855,7 +865,7 @@ class AIExtractionService:
             logger.info('[subject_box] تعذّر فتح الصفحة (%s)', type(exc).__name__)
             return None
 
-    def _read_handwritten_sender_number(self, image_path, entity_id, want_date_crop=False):
+    def _read_handwritten_sender_number(self, image_path, entity_id, want_date_crop=False, det_boxes=None):
         """مرحلة 3 — رقم الجهة المخربش بخط اليد حيث تعجز كل الطبقات المطبوعة:
         تموضعٌ بمرساة «العدد» وبصمة تخطيط الجهة ← قصّ الشريط ← قراءة CRNN (v5:
         94.5% على شرائط محجوزة) ← بوابة الثقة المُعايَرة.
@@ -965,7 +975,7 @@ class AIExtractionService:
             # قِيس: صفٌّ واحدٌ من 12 كان يحمل صندوقاً)، ويُغذّي مرساةَ قصاصة التاريخ.
             det_box = None
             if number_result is None or want_date_crop:
-                det_box = self._detector_box_from_file(image_path)
+                det_box = self._detector_box_from_file(image_path, boxes=det_boxes)
 
             # ── قراءة CRNN على قصاصة الكاشف حين يُخفق المُموضِع القديم ─────────
             # تفكيك e2e‑A: في 35/100 وجد الكاشفُ الصندوقَ وبقي الحقل صامتاً لأن
@@ -1039,7 +1049,7 @@ class AIExtractionService:
         القصاصةُ معروضةٌ والكاتب يحسم، ولا تخمينَ باحتمالٍ غالب.
         """
         try:
-            from core.extraction.handwriting.date_parse import parse_drawn_date
+            from core.extraction.handwriting.date_parse import drawn_date_candidates, parse_drawn_date
             from core.extraction.handwriting.date_reader import (
                 DATE_CONF_GREEN, get_date_reader)
             rd = get_date_reader()
@@ -1050,13 +1060,16 @@ class AIExtractionService:
             raw, conf = rd.read(crop.convert('L'))
             if not raw:
                 return None
-            iso, status = parse_drawn_date(raw, entry_date=timezone.localdate())
+            entry = timezone.localdate()
+            iso, status = parse_drawn_date(raw, entry_date=entry)
             logger.info('[handwriting] اقتراح تاريخ: %r ⟵ %s (ثقة %.3f · %s)',
                         raw, iso or '—', conf, status)
             return {
                 'raw': raw,
                 'iso': iso,
                 'parse': status,
+                # الغامض: المرشّحان للعرض زرَّين يختار الكاتبُ أحدهما — لا حسمَ آليّ (نيلسن 7)
+                'candidates': drawn_date_candidates(raw, entry_date=entry) if status == 'ambiguous' else [],
                 'confidence': round(float(conf), 4),
                 'green_threshold': DATE_CONF_GREEN,
                 'bbox': [round(float(v), 4) for v in det_box],
@@ -1100,41 +1113,65 @@ class AIExtractionService:
     _last_detector_arm = 'det2'   # يُحدَّث في `_detector_box_from_file`
 
     @staticmethod
-    def _detector_box_from_file(image_path):
-        """صندوق «العدد» من **الملفّ الأصليّ** مرسوماً بوصفة التدريب حرفيّاً (175dpi، RGB).
+    def _render_for_detector(image_path):
+        """الصفحةُ الأولى **بوصفة تدريب الكاشف حرفيّاً** (175dpi، RGB).
 
         الجذر المقيس لفجوة e2e‑A (45/100 بلا صندوق): الأنبوب كان يُغذّي الكاشف صورته
         الرماديّة (`csGRAY` عند 300dpi) بينما دُرِّب على رسمٍ خام RGB — حبرُ القلم
         الأزرق يفقد تباينه رماديّاً. A/B على 12 صفحةً صامتة (2026-08-18): الرسم الخام
         يُطلق **10/12** والرماديّ **0/12**. الرسمُ هنا جزءٌ من عقد الهندسة كالقصّ سواء:
         يجري داخل الوحدة كي لا يستطيع مُستدعٍ أن يخطئ في تكراره."""
+        from PIL import Image as PILImage
+        if image_path.lower().endswith('.pdf'):
+            import fitz
+            doc = fitz.open(image_path)
+            page = doc[0]
+            zoom = 175 / 72.0
+            longer = max(page.rect.width, page.rect.height) * zoom
+            if longer > 3500:
+                zoom *= 3500 / longer
+            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+            im = PILImage.frombytes('RGB', (pix.width, pix.height), pix.samples)
+            doc.close()
+            del pix
+            return im
+        return PILImage.open(image_path).convert('RGB')
+
+    @staticmethod
+    def _detector_boxes_from_file(image_path):
+        """استدلالُ det2 **مرّةً واحدة** للاستخراج: صندوقا «العدد» و«الموضوع» معاً.
+
+        يتقاسمه اقتراحُ الموضوع (`_propose_subject_box`) ومسارُ العدد
+        (`_detector_box_from_file`) — كان صندوقُ الموضوع يُحسَب ثمّ يُرمى. يُعيد
+        `{'number': (box, conf)|None, 'subject': (box, conf)|None}`، وصمتٌ رشيقٌ عند العطب."""
         try:
-            from core.extraction.handwriting.detector import detect_number_box
-            from PIL import Image as PILImage
-            if image_path.lower().endswith('.pdf'):
-                import fitz
-                doc = fitz.open(image_path)
-                page = doc[0]
-                zoom = 175 / 72.0
-                longer = max(page.rect.width, page.rect.height) * zoom
-                if longer > 3500:
-                    zoom *= 3500 / longer
-                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-                im = PILImage.frombytes('RGB', (pix.width, pix.height), pix.samples)
-                doc.close()
-                del pix
-            else:
-                im = PILImage.open(image_path).convert('RGB')
-            got = detect_number_box(im)
+            from core.extraction.handwriting.detector import detect_boxes
+            im = AIExtractionService._render_for_detector(image_path)
+            boxes = detect_boxes(im)
+            del im
+            return boxes
+        except Exception as exc:
+            logger.warning('[detector] الاستدلالُ من الملفّ تعذّر: %s', type(exc).__name__)
+            return {'number': None, 'subject': None}
+
+    @staticmethod
+    def _detector_box_from_file(image_path, boxes=None):
+        """صندوق «العدد» من **الملفّ الأصليّ** بوصفة التدريب. `boxes` نتيجةُ
+        `_detector_boxes_from_file` إن حُسبت سلفاً في الاستخراج نفسه (لا استدلالَ ثانٍ)."""
+        try:
+            if boxes is None:
+                boxes = AIExtractionService._detector_boxes_from_file(image_path)
+            got = boxes.get('number')
             arm = 'det2'
             if not got:
                 # **S1**: حين يصمت det2 يُجرَّب det1 احتياطيّاً. لا يعمل إلّا على
                 # صفحةٍ كانت ستبقى صامتة، فأسوأُ حالاته صندوقٌ زائفٌ ⟵ قراءةٌ دون
                 # بوّابة الثقة لا تمسّ حارس «واثقٌ‑ومخطئ».
                 from core.extraction.handwriting.detector import detect_number_box_fallback
+                im = AIExtractionService._render_for_detector(image_path)
                 got = detect_number_box_fallback(im)
+                del im
                 arm = 'det1' if got else 'none'
-            del im
             if not got:
                 return None
             box, _conf = got
@@ -1691,9 +1728,12 @@ class AIExtractionService:
             # الصمتُ قرارٌ مقيس؛ هنا يُعطى باباً: جهةٌ لها صندوقٌ متعلَّمٌ ⟵ يُقرأ
             # صندوقُها ويُملأ الحقلُ بوّابةً خضراء (كالتاريخ)؛ وإلّا اقتراحُ موضعٍ
             # بمرشّحيه للنقر. لا يمسّ مسارَ النصّ — إضافةٌ عند الفراغ فقط.
+            # صندوقُ det2 يُحسَب مرّةً ويتقاسمه اقتراحُ الموضوع هنا ومسارُ العدد أدناه.
+            _det_boxes = None
             if not (result.title or '').strip():
                 try:
-                    self._propose_subject_box(result, image_path)
+                    _det_boxes = self._detector_boxes_from_file(image_path)
+                    self._propose_subject_box(result, image_path, det_boxes=_det_boxes)
                 except Exception as exc:
                     logger.warning('[subject_box] تعذّر الاقتراح (%s) — تدهورٌ رشيق', type(exc).__name__)
             # بصمة الجهة: بعد معرفة المُرسِل، ابحث عن رقمٍ بقالب أرقامه المُتعلَّم من
@@ -1737,7 +1777,8 @@ class AIExtractionService:
                 (num_res, date_crop, date_suggestion,
                  (det_box, _pw, _ph)) = self._read_handwritten_sender_number(
                     result.image_path, getattr(result, 'issuing_entity_id', None),
-                    want_date_crop=want_crop)
+                    want_date_crop=want_crop,
+                    det_boxes=_det_boxes if result.image_path == image_path else None)
                 # المرجعُ المطبوعُ الصارم **لا يُزاح**: قِيس 32/32 على صفّه مقابل
                 # 11 إصابةً وخطأين للبصريّ على نفس المستندات. والنداءُ هنا لم
                 # يُتخطَّ إلّا لأنّ التاريخ صامتٌ ونحتاج قصاصتَه — فيُؤخذ التاريخُ

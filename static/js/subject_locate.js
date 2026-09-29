@@ -36,6 +36,7 @@
     state.entityId = proposal.entity_id || null; state.text = '';
     els.img.src = proposal.page_preview;
     els.src.textContent = ({ 'learned-relative': 'من ذاكرة الجهة (نسبيّ)', learned: 'من ذاكرة الجهة',
+                             det2: 'موضعُ الموضوع كما حدّده الكاشف',
                              scored: 'مرشّحٌ مُدرَّج', structural: 'بين «إلى/» والتحيّة', 'default': 'حزامٌ افتراضيّ' })[proposal.source] || '';
     els.read.hidden = true; els.apply.hidden = true;
     els.card.hidden = false;
@@ -113,7 +114,12 @@
   function applyText() {
     if (!state.text || !els.title) return;
     els.title.value = state.text;
-    els.title.dispatchEvent(new Event('input', { bubbles: true }));
+    // **نيلسن 11** (مذكّرة فيبل 10): نصٌّ قرأته الآلة ونقر الكاتبُ «استعمِله» = `confirmed` لا `typed`.
+    // كان الحدثُ يُطلق خارج codeFill فتسجّله الصفحةُ كتابةً بيد الكاتب — الوسمُ الوحيد الذي يثق به
+    // الحصاد — فتُعاد حلقةُ التسميم الذاتيّ التي أُغلقت. نفسُ صنيع `_confirmTitleSuggestion`.
+    var fire = function () { els.title.dispatchEvent(new Event('input', { bubbles: true })); };
+    if (typeof window.codeFill === 'function') window.codeFill(fire); else fire();
+    els.title.dataset.provenance = 'confirmed';
     // يُرسَل التعلّمُ عند الحفظ — نُبقي ما يلزم لمقارنة النصّ آنذاك
     window.__subjectSample = { page_token: state.token, entity_id: state.entityId, box: state.box, text: state.text };
     hide();

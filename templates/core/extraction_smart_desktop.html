@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260911">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20260929exc">
 <style>
 .scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
 .scan-agent-status:hover{filter:brightness(.97)}
@@ -279,12 +279,15 @@
                                 <!-- اقتراحُ القارئ: **لا يملأ الحقل من تلقائه أبداً** — الكاتب يؤكّد.
                                      دقّةُ الأخضر مقيسة 93.5% بتغطية 68% (حجزٌ لم يُرَ، n=360). -->
                                 <div class="date-suggest" id="senderDateSuggest" hidden>
+                                    <!-- نيلسن 7 (مذكّرة فيبل 10): ما سيُكتب بالكلمات أوّلاً، والخامُّ تحته -->
+                                    <div class="date-suggest__will" id="senderDateWill" aria-live="polite"></div>
                                     <div class="date-suggest__head">
-                                        <span class="date-suggest__label">قراءةُ النظام</span>
+                                        <span class="date-suggest__label">القراءة كما رُسمت</span>
                                         <bdi class="date-suggest__raw" id="senderDateRaw"></bdi>
                                         <span class="confidence-badge" id="senderDateSuggestConf"></span>
                                     </div>
                                     <div class="date-suggest__warn" id="senderDateSuggestWarn" hidden></div>
+                                    <div class="date-suggest__choices" id="senderDateChoices" hidden></div>
                                     <button type="button" class="date-suggest__btn" id="senderDateApply">
                                         <i class="bi bi-check2"></i>
                                         <span id="senderDateApplyText">تأكيد</span>
@@ -634,8 +637,8 @@
 {# بيانات وضع التعديل: 'null' في الإدخال، أو كائن الكتاب في التعديل — يقرأها ExtractionSmartSystem #}
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
-<script src="{% static 'js/subject_locate.js' %}?v=20260927"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20260927"></script>
+<script src="{% static 'js/subject_locate.js' %}?v=20260929exc"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20260929exc"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
@@ -1253,6 +1256,7 @@
       return el && (el.value || '') !== (baseline[id] || '');
     });
   }
+  window.__isExtractionDirty = isDirty;   // تأكيدُ «تفريغ الحقول» حين يوجد إدخال (نيلسن 1، مذكّرة فيبل 10)
   // لقطة الأساس بعد استقرار النموذج (الافتراضات + الحجز + أي حقن أوّلي)
   setTimeout(setBaseline, 500);
 
