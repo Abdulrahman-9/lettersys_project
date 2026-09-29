@@ -116,6 +116,8 @@
         </div>
 
         {% comment %}شريطُ القيود — «المستندُ واحدٌ والقيدُ متعدّد»{% endcomment %}
+        {# الغلافُ حاضرٌ دائماً ليُنعَش في المكان بعد «قيِّده عندنا» (refreshInPlace) — ولو كان فارغاً #}
+        <div id="bookRegsBar" data-lifecycle-refresh>
         {% if registrations %}
         <div class="bd-regs">
           <span class="bd-regs-lbl">قُيِّد في</span>
@@ -128,10 +130,12 @@
           {% endfor %}
         </div>
         {% endif %}
+        </div>
       </div>
 
       {% comment %}بطاقةُ العهدة — أوّلُ ما تسأل عنه الشعبةُ حين يُطلب كتاب{% endcomment %}
-      <div class="bd-custody">
+      {# موسومةٌ للإنعاش في المكان: «عهدة» تُغيّر حاملَها فيلزم أن تتحدّث الترويسة #}
+      <div class="bd-custody" id="bookCustodyCard" data-lifecycle-refresh>
         <div class="bd-custody-lbl">العهدة الآن</div>
         {% if book.current_custody %}
           <div class="bd-custody-who">
@@ -547,7 +551,7 @@
               <span class="spinner-border spinner-border-sm me-1"></span>جارٍ التحميل...
             </div>
           </div>
-          {% if book.email_threads.exists %}
+          {% if email_log_count %}
           <div class="p-2 border-top text-center">
             <a href="{% url 'mail_sent' %}?book={{ book.pk }}"
                style="font-size:.76rem;color:var(--accent);font-weight:600">
@@ -587,7 +591,7 @@
                 <div class="ms-auto">
                   {% if att.file %}
                     <div class="btn-group btn-group-sm" role="group" aria-label="معاينة وتحميل">
-                      <button class="btn btn-gradient-primary preview-btn" data-doc-series="{{ forloop.counter0 }}" data-file-url="{{ request.scheme }}://{{ request.META.HTTP_HOST }}{{ att.file.url }}" data-file-name="{{ att.file.name }}" data-att-id="{{ att.id }}" type="button" title="معاينة الملف">
+                      <button class="btn btn-gradient-primary preview-btn" data-doc-series="{{ att.id }}" data-file-url="{{ request.scheme }}://{{ request.META.HTTP_HOST }}{{ att.file.url }}" data-file-name="{{ att.file.name }}" data-att-id="{{ att.id }}" type="button" title="معاينة الملف">
                         <i class="bi bi-eye-fill me-1"></i><span class="btn-text">معاينة</span>
                       </button>
                       <a href="{{ att.file.url }}" download class="btn btn-download" title="تحميل الملف">
@@ -723,7 +727,7 @@
 
 
 {% block extra_js %}
-<script src="{% static 'book_detail.js' %}?v=20260629-r2"></script>
+<script src="{% static 'book_detail.js' %}?v=20260929-bdp0"></script>
 {# قصاصةُ الهامش تُحمَّل قبل مُرسِل التفريق: الأخيرُ يقرأ حقلَها #}
 <script src="{% static 'js/margin_crop.js' %}?v=20260831"></script>
 <script src="{% static 'js/link_picker.js' %}?v=20260831"></script>
@@ -770,8 +774,8 @@
 </script>
 
 
-{# سلسلةُ مرفقات الكتاب: التنقّل «2 من 5» داخل الحوار بدل إغلاقٍ وفتحٍ لكلّ ورقة #}
-<script id="bookAttachmentsSeries" type="application/json">[{% for att in attachments %}{% if att.file %}{"url": "{{ att.file.url|escapejs }}", "name": "{{ att.filename|escapejs }}", "page_count": {{ att.page_count|default:0 }}, "last_by": "{{ att.last_merge_by|escapejs }}", "last_added": {{ att.last_merge_added|default:0 }}}{% if not forloop.last %},{% endif %}{% endif %}{% endfor %}]</script>
+{# سلسلةُ مرفقات الكتاب: التنقّل «2 من 5» داخل الحوار — تُبنى في العرض (_attachment_series) وتُفهرَس بـatt.id #}
+{{ attachment_series|json_script:"bookAttachmentsSeries" }}
 <script>
 (function () {
   var items = [];
@@ -779,9 +783,15 @@
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-doc-series]');
     if (!btn || !window.DocView || !window.DocView.openSeries) return;
+    var id = btn.getAttribute('data-doc-series');
+    var index = -1;
+    for (var i = 0; i < items.length; i++) {
+      if (String(items[i].id) === id) { index = i; break; }
+    }
+    // خارجَ السلسلة: لا نوقف الانتشار — فيعمل العارضُ المضمَّن بدل فشلٍ صامت
+    if (index < 0) return;
     e.preventDefault(); e.stopPropagation();
-    window.DocView.openSeries(items, parseInt(btn.getAttribute('data-doc-series'), 10) || 0,
-                              { reportUrl: '{% url "book_report" book.id %}' });
+    window.DocView.openSeries(items, index, { reportUrl: '{% url "book_report" book.id %}' });
   }, true);
 })();
 </script>

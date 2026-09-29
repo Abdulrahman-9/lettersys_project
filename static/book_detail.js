@@ -439,9 +439,47 @@
     });
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // نسخُ الرقم: `data-copy-target` يسمّي العنصرَ الذي يُنسخ نصُّه. كان الزرُّ
+  // في القالب بلا معالجٍ في أيّ ملفّ — زرٌّ ميّت. تفويضٌ على المستند فيعمل
+  // لكلّ زرٍّ بهذه الصفة الآن ولاحقاً.
+  // ─────────────────────────────────────────────────────────────
+  function copyText(text) {
+    // `navigator.clipboard` لا يوجد إلّا في سياقٍ آمن (HTTPS/localhost)، والتطبيقُ
+    // يُخدَم على شبكة المكتب — فالاحتياطيُّ `execCommand` ليس ترفاً.
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      const area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(area);
+      if (ok) resolve(); else reject(new Error('copy'));
+    });
+  }
+
+  function initCopy() {
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('[data-copy-target]');
+      if (!btn) return;
+      const source = document.getElementById(btn.dataset.copyTarget);
+      const text = source ? source.textContent.trim() : '';
+      if (!text) return;
+      copyText(text)
+        .then(function () { toast('success', 'نُسخ الرقم ' + text); })
+        .catch(function () { toast('danger', 'تعذّر النسخ — انسخه يدويّاً'); });
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     // عزل كل تهيئة: فشل واحدة (مثلاً العارض) لا يُجهض البقية (العودة/الطباعة)
-    [initNotes, initComments, initDocViewer, initBackNav, initPrint].forEach(function (fn) {
+    [initNotes, initComments, initDocViewer, initBackNav, initPrint, initCopy].forEach(function (fn) {
       try { fn(); } catch (e) { if (window.console) console.error('book_detail init:', e); }
     });
   });

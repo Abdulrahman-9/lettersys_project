@@ -49,14 +49,22 @@ def mail_hub(request):
 @login_required
 def mail_sent(request):
     from core.models import BookEmailLog, Entity
-    from core.messaging.scoping import scope_sent_logs
+    from core.messaging.scoping import mailable_book, scope_sent_logs
 
     # النطاق أوّلاً ثم المرشّحات، والإحصاءات أدناه على المصفَّى نفسه — كي لا
     # يُسرّب العدّادُ ما تُخفيه القائمة.
-    qs = scope_sent_logs(
-        BookEmailLog.objects.select_related('book', 'entity', 'sent_by', 'thread'),
-        request.user,
-    ).order_by('-sent_at')
+    logs = BookEmailLog.objects.select_related('book', 'entity', 'sent_by', 'thread')
+    qs = scope_sent_logs(logs, request.user).order_by('-sent_at')
+
+    # «عرض كل المراسلات ←» من صفحة الكتاب (`?book=`) — كان الرابطُ يُمرَّر ولا
+    # يُقرأ فيفتح الصادرَ كلَّه. المجموعةُ هنا هي **ما تعرضه بطاقةُ الكتاب نفسُها**
+    # (email/logs ببوّابة `mailable_book`) لا أضيقَ منها: نطاقُ «صادري» يُحسب
+    # بمُنشئ الكتاب، فزميلُ القسم كان يرى البطاقةَ ملأى والرابطَ فارغاً.
+    book_filter = None
+    if request.GET.get('book'):
+        book_filter = mailable_book(request.user, request.GET.get('book'))
+        qs = (logs.filter(book=book_filter).order_by('-sent_at')
+              if book_filter is not None else logs.none())
 
     status_filter  = request.GET.get('status', '')
     entity_filter  = request.GET.get('entity', '')
@@ -94,6 +102,7 @@ def mail_sent(request):
         'entity_filter':  entity_filter,
         'trigger_filter': trigger_filter,
         'search':         search,
+        'book_filter':    book_filter,
         'STATUS_CHOICES':  BookEmailLog.STATUS_CHOICES,
         'TRIGGER_CHOICES': BookEmailLog.TRIGGER_CHOICES,
     })

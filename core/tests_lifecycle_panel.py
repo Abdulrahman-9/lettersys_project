@@ -190,3 +190,35 @@ class RowButtonsFollowTheGuardsTests(TestCase):
             with self.subTest(user=user.username):
                 self.assertEqual(items[0]['can_act'], allowed(_guard_target, self.row, user))
                 self.assertEqual(items[0]['can_chase'], allowed(_guard_chaser, self.row, user))
+
+
+class HeaderRefreshesInPlaceTests(LifecyclePanelTestCase):
+    """P0 البند 11: الترويسةُ تتحدّث بعد «عهدة» و«قيِّده عندنا».
+
+    `refreshInPlace` يستبدل **المناطقَ الموسومة** وحدَها (`[data-lifecycle-refresh]`
+    بمعرّف) — وبطاقةُ العهدة وشريطُ القيود في الترويسة كانا بلا وسم، فيبقى
+    «لم تُسجَّل عهدة» بعد تسجيلها. والشريطُ كان يغيب كلُّه حين لا قيد، فلا
+    يجد السكربتُ عنصراً يملؤه بعد أوّل قيد.
+    """
+
+    REGIONS = ('bookCustodyCard', 'bookRegsBar')
+
+    def test_both_header_regions_are_tagged_even_when_empty(self):
+        body = self._page(self.bare)
+        for region in self.REGIONS:
+            self.assertIn('id="%s" data-lifecycle-refresh' % region, body)
+
+    def test_the_fresh_page_carries_the_new_holder_and_register(self):
+        """ما يجلبه السكربتُ بعد الفعل يحمل الحقيقةَ الجديدة في المعرّف نفسِه."""
+        import re
+
+        record_custody(self.bare, CustodyEvent.UNIT_RECEIPT, to_department=self.unit,
+                       by=self.clerk)
+        register_book_here(self.bare, self.gm, by=self.clerk)
+        body = self._page(self.bare)
+        custody = re.search(r'id="bookCustodyCard" data-lifecycle-refresh>(.*?)</div>\s*</div>\s*</div>',
+                            body, re.S)
+        self.assertIsNotNone(custody)
+        self.assertIn('شعبة الموازنة', custody.group(1))
+        regs = body[body.index('id="bookRegsBar"'):]
+        self.assertIn('مكتب المدير العام', regs[:1500])

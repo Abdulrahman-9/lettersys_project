@@ -126,3 +126,18 @@ class LifecycleScriptGuardsTests(SimpleTestCase):
         handler = handler[:handler.index('register-here/')]
         self.assertRegex(handler, r'if \(!window\.confirm\(')
         self.assertIn('button.dataset.ledger', handler)
+
+
+class CopyNumberButtonTests(SimpleTestCase):
+    """P0 البند 7: زرُّ نسخ الرقم (`data-copy-target`) كان بلا معالجٍ في أيّ ملفّ."""
+
+    def test_the_template_still_carries_the_button(self):
+        src = (ROOT / 'templates' / 'core' / 'book_detail.html').read_text(encoding='utf-8')
+        self.assertIn('data-copy-target="bookNumberText"', src)
+
+    def test_book_detail_js_handles_it_and_runs_the_handler(self):
+        src = (ROOT / 'static' / 'book_detail.js').read_text(encoding='utf-8')
+        self.assertIn("closest('[data-copy-target]')", src)
+        self.assertIn('navigator.clipboard', src)
+        # معالجٌ مكتوبٌ ولا يُستدعى زرٌّ ميّتٌ أيضاً
+        self.assertRegex(src, r'\[[^\]]*initCopy[^\]]*\]\.forEach')

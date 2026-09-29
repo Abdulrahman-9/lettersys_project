@@ -438,6 +438,11 @@
 
     <!-- شريط الفلاتر -->
     <form class="mail-filter-bar" method="get">
+      {% if book_filter %}
+      {# مرشّحُ الكتاب يعبر «تصفية» والترقيم — وإلّا سقط عند أوّل نقرة #}
+      <input type="hidden" name="book" value="{{ book_filter.pk }}">
+      <a href="{% url 'book_detail' book_filter.pk %}" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;font-size:.82rem">كتاب {{ book_filter.our_number_display|default:book_filter.pk }}</a>
+      {% endif %}
       <input type="text" name="q" class="form-control" placeholder="بحث بالموضوع أو العنوان..." value="{{ search }}" style="max-width:240px">
       <select name="status" class="form-select" style="max-width:145px">
         <option value="">كل الحالات</option>
@@ -460,7 +465,7 @@
       <button type="submit" class="btn-filter">
         <i class="bi bi-funnel me-1"></i>تصفية
       </button>
-      {% if search or status_filter or entity_filter or trigger_filter %}
+      {% if search or status_filter or entity_filter or trigger_filter or book_filter %}
       <a href="{% url 'mail_sent' %}" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;font-size:.82rem">مسح</a>
       {% endif %}
     </form>
@@ -530,11 +535,11 @@
     {% if page_obj.has_other_pages %}
     <div class="mail-pagination">
       {% if page_obj.has_previous %}
-      <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"><i class="bi bi-chevron-right"></i></a>
+      <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if book_filter %}&book={{ book_filter.pk }}{% endif %}"><i class="bi bi-chevron-right"></i></a>
       {% endif %}
       <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
       {% if page_obj.has_next %}
-      <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"><i class="bi bi-chevron-left"></i></a>
+      <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if book_filter %}&book={{ book_filter.pk }}{% endif %}"><i class="bi bi-chevron-left"></i></a>
       {% endif %}
     </div>
     {% endif %}

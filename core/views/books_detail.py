@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from ..forms import AttachmentForm
-from ..models import Attachment, Book, BookHistory
+from ..models import Attachment, Book, BookEmailLog, BookHistory
 from .comments import can_edit_comment
 from core.scoping import (
     ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_open_content, can_view_book,
@@ -73,12 +73,17 @@ def book_detail(request, pk):
 
     # فتحٌ متعمَّدٌ يُطوى في صفٍّ لليوم؛ وفتحُ السرّيّ **واقعةٌ لا تُطوى**:
     # عددُ مرّاته ومواقيتُه هي الدليل.
+    #
+    # **والإنعاشُ في المكان ليس فتحاً**: `refreshInPlace` (book_lifecycle.js) يجلب
+    # الصفحةَ نفسَها بعد كلّ فعلِ تسيير — فكان كلُّ تفريقٍ أو عهدةٍ يكتب شاهدَ
+    # اطّلاعٍ جديداً ويُضخّم العددَ الذي هو الدليل. الشاهدُ لفتح الإنسان؛
+    # وصفُّ اليوم المطويّ يبقى للجلبين معاً فلا يمرّ جلبٌ بلا أثر.
+    _ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
     record_view(request, book)
-    if book.secret_level in RESTRICTED_SECRET_LEVELS:
+    if book.secret_level in RESTRICTED_SECRET_LEVELS and not _ajax:
         record_event(request, 'SECRET_VIEW', book=book)
 
     if request.method == 'POST' and 'file' in request.FILES:
-        _ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
         form = AttachmentForm(request.POST, request.FILES)
         if form.is_valid():
             try:
@@ -151,14 +156,40 @@ def book_detail(request, pk):
         {
             "book": book,
             "attachments": attachments,
+            "attachment_series": _attachment_series(attachments),
             "comments": comments,
             "back_url": back_url,
             "back_label": back_label,
             "history": history,
             "history_total": history_total,
+            # بطاقةُ البريد تعرض `BookEmailLog` (email/logs)، فشرطُ «عرض كل
+            # المراسلات» على السجلّات نفسِها — كان على `email_threads` فيغيب
+            # الرابطُ عن كتابٍ له بريدٌ بلا خيطٍ ويظهر لخيطٍ بلا صادر.
+            "email_log_count": BookEmailLog.objects.filter(book=book).count(),
             **_lifecycle_context(book, request.user),
         },
     )
+
+
+def _attachment_series(attachments):
+    """سلسلةُ معاينة المرفقات «2 من 5» — تُبنى هنا وتُبثّ بـ`json_script`.
+
+    كانت تُكتب JSON يدويّاً في القالب والفاصلةُ داخل `{% if att.file %}`: مرفقٌ
+    أخيرٌ بلا ملفّ يترك فاصلةً معلّقة فيسقط التحليلُ صامتاً، وزرُّ المعاينة يحمل
+    `forloop.counter0` الذي يعدّ **كلَّ** المرفقات فيفتح الملفَّ الخطأ بعد أوّل
+    مرفقٍ بلا ملفّ. الآن: ما له ملفٌّ وحده، ومفتاحُ الزرّ `att.id` لا موضعُه.
+    """
+    return [
+        {
+            'id': att.pk,
+            'url': att.file.url,
+            'name': att.filename,
+            'page_count': att.page_count or 0,
+            'last_by': att.last_merge_by,
+            'last_added': att.last_merge_added or 0,
+        }
+        for att in attachments if att.file
+    ]
 
 
 def _lifecycle_context(book, user):

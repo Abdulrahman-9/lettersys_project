@@ -136,6 +136,21 @@ class NotFoldedTests(AuditTestCase):
         self.assertEqual(UserActivityLog.objects.filter(
             action=UserActivityLog.VIEW_BOOK, book=self.secret).count(), 1)
 
+    def test_an_in_place_refresh_is_not_a_new_secret_view(self):
+        """P0 البند 10: `refreshInPlace` يجلب الصفحةَ بعد كلّ فعلِ تسيير — وليس فتحاً.
+
+        كان كلُّ تفريقٍ أو عهدةٍ يكتب شاهدَ اطّلاعٍ جديداً فيُضخّم العددَ الذي هو
+        الدليل. والجلبُ لا يمرّ بلا أثر: صفُّ اليوم المطويّ يبقى.
+        """
+        self.client.force_login(self.head)
+        self.client.get('/books/%d/' % self.secret.pk)
+        for _ in range(3):
+            self.client.get('/books/%d/' % self.secret.pk,
+                            HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(UserActivityLog.objects.filter(action='SECRET_VIEW').count(), 1)
+        self.assertEqual(UserActivityLog.objects.filter(
+            action=UserActivityLog.VIEW_BOOK, book=self.secret).count(), 1)
+
     def test_downloading_an_attachment_is_raw_and_viewing_is_folded(self):
         att = Attachment.objects.create(
             book=self.book, file=SimpleUploadedFile('s.pdf', b'%PDF-1.4'))

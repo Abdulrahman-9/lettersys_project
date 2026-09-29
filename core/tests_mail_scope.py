@@ -296,6 +296,51 @@ class BooklessMailTests(MailScopeTestCase):
         self.assertFalse(BookEmailLog.objects.filter(subject='س').exists())
 
 
+class BookMailLinkTests(MailScopeTestCase):
+    """«عرض كل المراسلات ←» في صفحة الكتاب — تقريرُ فيبل، P0 البند 6.
+
+    الرابطُ كان يمرّر ``?book=`` و``mail_sent`` لا يقرؤه (فيفتح الصادرَ كلَّه)،
+    وشرطُ ظهوره على ``email_threads`` بينما البطاقةُ تعرض ``BookEmailLog``.
+    """
+
+    def setUp(self):
+        self.client.force_login(self.alice)
+
+    def _subjects(self, book):
+        page = self.client.get('/books/mail/sent/', {'book': book.pk}).context['page_obj']
+        return {log.subject for log in page.object_list}
+
+    def test_the_link_filters_to_its_book(self):
+        other_mine = Book.objects.create(kind='incoming_internal', title='كتابٌ آخر لأليس',
+                                         created_by=self.alice)
+        BookEmailLog.objects.create(book=other_mine, to_address='c@example.com',
+                                    subject='صادر أليس الثاني', status='sent')
+        self.assertEqual(self._subjects(self.book_a), {'صادر أليس'})
+
+    def test_a_foreign_book_filter_shows_nothing(self):
+        self.assertEqual(self._subjects(self.book_b), set())
+
+    def test_the_filter_survives_paging_and_filtering(self):
+        body = self.client.get('/books/mail/sent/', {'book': self.book_a.pk}).content.decode()
+        self.assertIn('name="book" value="%d"' % self.book_a.pk, body)
+
+    def test_the_detail_link_follows_the_logs_not_the_threads(self):
+        logged = Book.objects.create(kind='incoming_internal', title='بريدٌ بلا خيط',
+                                     created_by=self.alice)
+        BookEmailLog.objects.create(book=logged, to_address='d@example.com',
+                                    subject='صادرٌ بلا خيط', status='sent')
+        threaded = Book.objects.create(kind='incoming_internal', title='خيطٌ بلا صادر',
+                                       created_by=self.alice)
+        EmailThread.objects.create(book=threaded, subject='خيطٌ فقط')
+
+        def link_in(book):
+            body = self.client.get('/books/%d/' % book.pk).content.decode()
+            return '/books/mail/sent/?book=%d' % book.pk in body
+
+        self.assertTrue(link_in(logged))
+        self.assertFalse(link_in(threaded))
+
+
 class SecretBookMailTests(TestCase):
     """البريدُ **محتوى** لا صفّ — تقريرُ فيبل لتفاصيل الكتاب، P0 البند 1.
 
