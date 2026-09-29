@@ -15,6 +15,7 @@ import io
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -568,11 +569,12 @@ class InstallerTests(unittest.TestCase):
         os.makedirs(os.path.join(tmp, 'local'))
         return tmp, startup
 
-    def _run(self, args, answer, tmp):
+    def _run(self, args, answer, tmp, bat=None):
         env = dict(os.environ)
         env['LOCALAPPDATA'] = os.path.join(tmp, 'local')
         env['APPDATA'] = os.path.join(tmp, 'app')
-        proc = subprocess.run(['cmd', '/c', self.BAT] + list(args), input=answer,
+        env['LETTERSYS_INSTALL_NO_START'] = '1'      # لا وكيلَ حقيقيّاً من الاختبار
+        proc = subprocess.run(['cmd', '/c', bat or self.BAT] + list(args), input=answer,
                               capture_output=True, text=True, encoding='utf-8',
                               errors='replace', env=env, timeout=180)
         return proc
@@ -641,6 +643,79 @@ class InstallerTests(unittest.TestCase):
         p = self._run(['http://lettersys'], 'n\n', tmp)
         self.assertIn('LLMNR', p.stdout, 'لا تنبيهَ على اسمٍ مفردٍ قابلٍ للانتحال')
         self.assertFalse(os.path.exists(self._json_path(tmp)))
+
+    # ═══════ حزمةُ التوزيع: حاسبةٌ بلا Python ═══════
+    def test_distribution_copies_runtime_and_targets_embedded_pythonw(self):
+        """من حزمة التوزيع (python\\ بجوار scan_agent\\) ينسخ المُثبِّتُ الاثنين إلى
+        LOCALAPPDATA ويوجّه الاختصارَ إلى pythonw المنسوخ بـ«-m scan_agent» — لا إلى
+        run_agent.bat الذي يطلب Python مثبَّتاً («Python was not found» على الحاسبة الثانية)."""
+        tmp, startup = self._sandbox()
+        dist = os.path.join(tmp, 'dist')
+        os.makedirs(os.path.join(dist, 'python'))
+        with open(os.path.join(dist, 'python', 'pythonw.exe'), 'wb') as f:
+            f.write(b'MZ fake runtime')
+        pkg = os.path.join(dist, 'scan_agent')
+        shutil.copytree(os.path.dirname(self.BAT), pkg, ignore=shutil.ignore_patterns('__pycache__'))
+        p = self._run([self.ORIGIN], 'y\n', tmp, bat=os.path.join(pkg, 'install_agent.bat'))
+        self.assertEqual(p.returncode, 0, p.stdout)
+        agent = os.path.join(tmp, 'local', 'LetterSys', 'agent')
+        self.assertTrue(os.path.isfile(os.path.join(agent, 'python', 'pythonw.exe')), p.stdout)
+        self.assertTrue(os.path.isfile(os.path.join(agent, 'scan_agent', 'server.py')), p.stdout)
+        self.assertFalse(os.path.exists(os.path.join(agent, 'scan_agent', 'tests_agent.py')))
+        with open(os.path.join(startup, 'LetterSys Scan Agent.lnk'), 'rb') as f:
+            blob = f.read()
+        self.assertIn(b'pythonw.exe', blob, 'الاختصارُ لا يشير إلى pythonw المنسوخ')
+        self.assertNotIn(b'run_agent.bat', blob)
+        self.assertIn('-m scan_agent'.encode('utf-16-le'), blob, 'الاختصارُ بلا «-m scan_agent»')
+
+
+class WindowlessEntrypointTests(unittest.TestCase):
+    """اختصارُ بدء التشغيل يشغّل pythonw: ‏sys.stdout وsys.stderr ‏None."""
+
+    def _localappdata(self):
+        tmp = tempfile.mkdtemp(prefix='ls_log_')
+        self.addCleanup(shutil.rmtree, tmp, True)
+        p = mock.patch.dict(os.environ, {'LOCALAPPDATA': tmp})
+        p.start()
+        self.addCleanup(p.stop)
+        return tmp
+
+    def test_streams_go_to_agent_log_when_windowless(self):
+        """بلا التوجيه يرمي ``sys.stderr.write`` (سطرُ الأصل المرفوض) AttributeError فيسقط
+        المعالجُ قبل الاستجابة، ويضيع كلُّ print الإقلاع."""
+        from . import __main__ as entry
+        tmp = self._localappdata()
+        with mock.patch.object(sys, 'stdout', None), mock.patch.object(sys, 'stderr', None):
+            log = entry.attach_log_when_windowless()
+            try:
+                sys.stderr.write('rejected-origin-line\n')
+                print('startup-line')
+            finally:
+                log.close()
+        with open(os.path.join(tmp, 'LetterSys', 'agent.log'), encoding='utf-8') as f:
+            text = f.read()
+        self.assertIn('rejected-origin-line', text)
+        self.assertIn('startup-line', text)
+
+    def test_console_run_is_left_alone(self):
+        from . import __main__ as entry
+        tmp = self._localappdata()
+        self.assertIsNone(entry.attach_log_when_windowless())
+        self.assertFalse(os.path.exists(os.path.join(tmp, 'LetterSys', 'agent.log')))
+
+
+class StdlibOnlyTests(unittest.TestCase):
+    """حزمةُ التوزيع = Python المضمَّن، و``._pth`` يعزل site-packages: أيُّ استيرادٍ من
+    خارج المكتبة القياسيّة عند الإقلاع يُسقط الوكيلَ على حاسبة الكاتبة بصمت
+    (``fitz`` اختياريٌّ داخل دالّة، فلا يُحسب)."""
+
+    def test_agent_imports_without_site_packages(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        code = ('import sys; sys.path.insert(0, %r); import scan_agent.__main__, '
+                'scan_agent.server, scan_agent.naps2, scan_agent.config' % root)
+        p = subprocess.run([sys.executable, '-E', '-S', '-c', code],
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(p.returncode, 0, p.stderr)
 
 
 if __name__ == '__main__':

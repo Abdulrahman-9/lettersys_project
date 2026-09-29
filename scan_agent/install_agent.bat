@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 REM ════════════════════════════════════════════════════════════════════════════
 REM  تركيبُ وكيل المسح على حاسبة كاتبة — يُنفَّذ مرّةً واحدةً لكلّ حاسبة بيد المسؤول،
 REM  والكاتبةُ لا تكتب شيئاً.
@@ -17,10 +18,13 @@ REM       وصول شهادة. التفصيلُ في README.md (قسم «قائ�
 REM  وسطرُ أمرٍ لم تكتبه أنت خارجَ النطاق: مَن يختار أمرَك يستطيع تشغيلَ أيّ شيء —
 REM  الحارسُ هنا لوسيطٍ يبدو بريئاً (عنوانٌ فقط) أُرسل إلى مَن ينفّذ المُثبِّت.
 REM
-REM  يفعل ثلاثةَ أشياء فقط:
+REM  يفعل هذا فقط:
 REM    1. يكتب %LOCALAPPDATA%\LetterSys\agent.json بالأصول المُمرَّرة (بعد الموافقة).
-REM    2. يضع اختصارَ التشغيل التلقائيّ في shell:startup.
-REM    3. يحذف agent_token.txt القديم (لم يبقَ له معنى بعد إسقاط التوكِن).
+REM    2. إن جاء من حزمة التوزيع (python\ بجوار scan_agent\ — يبنيها build_dist.ps1):
+REM       ينسخهما إلى %LOCALAPPDATA%\LetterSys\agent فلا يحتاج الجهازُ Python مثبَّتاً
+REM       ولا يعمل الوكيلُ من مسار شبكة. (من نسخة المشروع: run_agent.bat كما كان.)
+REM    3. يضع اختصارَ التشغيل التلقائيّ في shell:startup ويشغّل الوكيلَ الآن.
+REM    4. يحذف agent_token.txt القديم (لم يبقَ له معنى بعد إسقاط التوكِن).
 REM ════════════════════════════════════════════════════════════════════════════
 setlocal
 
@@ -96,25 +100,59 @@ if not exist "%DATA_DIR%" mkdir "%DATA_DIR%"
 move /y "%LS_TMP%" "%JSON_FILE%" >nul
 echo [تمّ] كُتب %JSON_FILE%
 
-REM ── 3) اختصارُ بدء التشغيل ──
+REM ── 3) الوقتُ التشغيليّ: Python المضمَّن + الحزمة إلى مجلّد المستخدم ──
+REM `robocopy "%SCRIPT_DIR%."`: الشرطةُ الخلفيّة الختاميّة قبل علامة الاقتباس تُفسد
+REM تحليلَ robocopy للوسيط؛ النقطةُ تُنهي المسارَ بلا شرطة.
+set "AGENT_DIR=%DATA_DIR%\agent"
+set "LS_TARGET=%SCRIPT_DIR%run_agent.bat"
+set "LS_ARGS="
+set "LS_WORKDIR=%SCRIPT_DIR%.."
+if exist "%SCRIPT_DIR%..\python\pythonw.exe" (
+    call :stop_running_agent
+    robocopy "%SCRIPT_DIR%..\python" "%AGENT_DIR%\python" /MIR /NFL /NDL /NJH /NJS /NP >nul
+    if errorlevel 8 goto copyfail
+    robocopy "%SCRIPT_DIR%." "%AGENT_DIR%\scan_agent" /MIR /XD __pycache__ naps2_portable /XF tests_agent.py /NFL /NDL /NJH /NJS /NP >nul
+    if errorlevel 8 goto copyfail
+    set "LS_TARGET=%AGENT_DIR%\python\pythonw.exe"
+    set "LS_ARGS=-m scan_agent"
+    set "LS_WORKDIR=%AGENT_DIR%"
+    echo [تمّ] نُسخ الوكيلُ ووقتُه التشغيليّ إلى %AGENT_DIR%
+)
+
+REM ── 4) اختصارُ بدء التشغيل، ثمّ شغّله الآن (بلا إعادة إقلاع) ──
 REM المساراتُ تُمرَّر إلى PowerShell عبر البيئة لا بالاقتباس المفرد: مسارٌ فيه فاصلةٌ
 REM عليا (اسمُ مستخدمٍ مثل O'Brien) كان يكسر السطرَ أو يُحقن فيه شيفرة.
-set "LS_TARGET=%SCRIPT_DIR%run_agent.bat"
-if exist "%SCRIPT_DIR%..\LetterSysScanAgent.exe" set "LS_TARGET=%SCRIPT_DIR%..\LetterSysScanAgent.exe"
 set "LS_LINK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\LetterSys Scan Agent.lnk"
-powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:LS_LINK); $s.TargetPath=$env:LS_TARGET; $s.WorkingDirectory=(Split-Path -LiteralPath $env:LS_TARGET); $s.Save()"
+powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:LS_LINK); $s.TargetPath=$env:LS_TARGET; $s.Arguments=$env:LS_ARGS; $s.WorkingDirectory=$env:LS_WORKDIR; $s.Save()"
 echo [تمّ] اختصارُ التشغيل التلقائيّ: %LS_LINK%
+REM الاختباراتُ تشغّل هذا السكربتَ فعلاً في صندوقٍ مؤقّت — لا تُطلق وكيلاً حقيقيّاً منها.
+if not defined LETTERSYS_INSTALL_NO_START (
+    start "" "%LS_LINK%"
+    echo [تمّ] شُغّل الوكيل
+)
 
-REM ── 4) توكِنٌ قديم لم يبقَ له معنى ──
+REM ── 5) توكِنٌ قديم لم يبقَ له معنى ──
 if exist "%DATA_DIR%\agent_token.txt" (
     del /q "%DATA_DIR%\agent_token.txt"
     echo [تمّ] حُذف agent_token.txt القديم
 )
 
 echo.
-echo انتهى. شغّل الوكيل الآن (أو أعد إقلاع الحاسبة) ثمّ افتح صفحةَ الإدخال الذكي.
+echo انتهى. افتح صفحةَ الإدخال الذكي — يظهر المؤشّر «جاهز» خلال ثوانٍ.
 endlocal
 exit /b 0
+
+:stop_running_agent
+REM تحديثٌ فوق وكيلٍ يعمل: ملفّاتُه مقفلةٌ ومنفذُه محجوز. نوقف نسختَنا المنسوخة وحدها
+REM (pythonw من مجلّد agent)، لا أيَّ pythonw آخر على الجهاز.
+powershell -NoProfile -Command "Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like ($env:AGENT_DIR + '\*') } | Stop-Process -Force"
+goto :eof
+
+:copyfail
+echo.
+echo [خطأ] تعذّر نسخُ الوكيل إلى %AGENT_DIR% — لم يُنشأ اختصارُ التشغيل.
+echo.
+exit /b 4
 
 :cancel
 del /q "%LS_TMP%" 2>nul
