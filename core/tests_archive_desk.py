@@ -222,10 +222,20 @@ class ArchiveToolsTests(TestCase):
         self.assertNotContains(self.client.get('/'), 'سلة المهملات')
 
     def test_his_dashboard_carries_the_archive_section(self):
+        # مرحلة نيلسن: القسمُ الذي كلُّ عدّاداته صفرٌ يُطوى سطراً (العنوانُ + «لا قيدَ ناقصاً»)،
+        # والبلاطاتُ تعود حين يوجد ما يُعَدّ.
         res = self.client.get('/')
 
         self.assertContains(res, 'الأرشفة')
+        self.assertContains(res, 'لا قيدَ ناقصاً')
+        self.assertNotContains(res, 'قُيِّد ولم يُوجَّه')
+
+        Book.objects.create(kind='incoming_external', title='ك', our_number='8801',
+                            department=self.dept, created_by=self.archivist)
+        res = self.client.get('/')
+
         self.assertContains(res, 'قُيِّد ولم يُوجَّه')
+        self.assertNotContains(res, 'لا قيدَ ناقصاً')
 
     def test_a_plain_employee_gets_no_archive_section(self):
         self.client.force_login(_member('plain2', self.dept))

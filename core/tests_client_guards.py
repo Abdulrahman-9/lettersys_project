@@ -73,19 +73,21 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
         يثبّت الثابتَ لا قيمةَ اليوم: «لا أقدمَ من هذا الإيداع» — فرفعُ الدمج
         القادم مع `feat/scan-lan` (v112) أو أيُّ رفعٍ لاحق يبقى أخضر.
         """
+        # لكلّ أصلٍ أرضيّتُه: ما تغيّر في مرحلة نيلسن (dashboard_roles.css) ⟵ 20260929،
+        # وما لم يُلمس يبقى على أرضيّته — رفعُ ?v= لملفٍّ لم يتغيّر يُبطل كاشَه بلا سبب.
         assets = (
-            ('templates/core/dashboard.html', 'css/dashboard_roles.css'),
-            ('templates/base.html', 'design-system.css'),
-            ('templates/base.html', 'app.css'),
-            ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js'),
+            ('templates/core/dashboard.html', 'css/dashboard_roles.css', 20260929),
+            ('templates/base.html', 'design-system.css', 20260927),
+            ('templates/base.html', 'app.css', 20260927),
+            ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js', 20260927),
         )
-        for rel, asset in assets:
+        for rel, asset, floor in assets:
             with self.subTest(file=rel, asset=asset):
                 src = (ROOT / rel).read_text(encoding='utf-8')
                 m = re.search(r"\{% static '" + re.escape(asset) + r"' %\}\?v=(\d{8})", src)
                 self.assertIsNotNone(m, f'{asset}: لا ?v= بتاريخ')
-                self.assertGreaterEqual(int(m.group(1)), 20260927, asset)
+                self.assertGreaterEqual(int(m.group(1)), floor, asset)
         sw = (ROOT / 'static' / 'service-worker.js').read_text(encoding='utf-8')
         m = re.search(r"CACHE_VERSION = 'v(\d+)-", sw)
         self.assertIsNotNone(m, 'CACHE_VERSION')
-        self.assertGreaterEqual(int(m.group(1)), 111)
+        self.assertGreaterEqual(int(m.group(1)), 112)

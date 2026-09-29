@@ -7,13 +7,11 @@
 {% endcomment %}
 
 <div class="db-sections">
-  {% for s in sections %}
-  <section class="db-section db-{{ s.key }}" aria-labelledby="db-h-{{ s.key }}">
-    <header class="db-section-hd">
-      <div>
-        <h2 class="h5" id="db-h-{{ s.key }}">{{ s.title }}</h2>
-        <p>{{ s.hint }}</p>
-      </div>
+  {% for s in sections %}{% if not s.quiet %}
+  <section class="db-card db-row db-{{ s.key }}" aria-labelledby="db-h-{{ s.key }}">
+    <div class="db-row-hd">
+      <h2 id="db-h-{{ s.key }}">{{ s.title }}</h2>
+      <p class="db-hint">{{ s.hint }}</p>
       {% if s.links %}
       <div class="db-links">
         {% for l in s.links %}
@@ -21,21 +19,32 @@
         {% endfor %}
       </div>
       {% endif %}
-    </header>
-
-    <div class="db-counters">
+    </div>
+    <div class="db-tiles">
       {% for c in s.counters %}
-        <a class="db-counter db-tone-{{ c.tone }}" href="{{ c.href }}">
-          <span class="db-n"{% if c.value %} data-has="1"{% endif %}>{{ c.value }}</span>
-          <span class="db-l">{{ c.label }}</span>
-        </a>
+        <a class="db-tile db-tone-{{ c.tone }}" href="{{ c.href }}"{% if not c.value %} data-zero{% endif %}><span class="db-l">{{ c.label }}</span><span class="db-n"{% if c.value %} data-has="1"{% endif %}>{{ c.value }}</span></a>
       {% endfor %}
     </div>
-
-    {% if s.note %}<p class="db-note">{{ s.note }}</p>{% endif %}
-    {% if s.empty %}
-      <p class="db-note">لا التزامَ مفتوحاً باسمك — وهذا خبرٌ جيّد.</p>
-    {% endif %}
   </section>
-  {% endfor %}
+  {% endif %}{% endfor %}
+
+  {% if has_quiet %}
+  <section class="db-card db-quiet" aria-label="أقسامٌ لا شيءَ فيها الآن">
+    <ul>
+      {% for s in sections %}{% if s.quiet %}
+      <li>
+        <h2 class="db-quiet-t" id="db-h-{{ s.key }}"><a href="{{ s.home }}">{{ s.title }}</a></h2>
+        <span class="db-msg"><i class="bi bi-check2-circle" aria-hidden="true"></i> {{ s.quiet_msg }}</span>
+        {% if s.links %}
+        <div class="db-links">
+          {% for l in s.links %}
+            <a class="db-link" href="{{ l.href }}"><i class="bi {{ l.icon }}" aria-hidden="true"></i>{{ l.label }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </li>
+      {% endif %}{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
 </div>
