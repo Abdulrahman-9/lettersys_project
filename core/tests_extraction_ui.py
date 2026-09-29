@@ -353,3 +353,44 @@ class ExtractionClosureSourceGuardTests(SimpleTestCase):
         body = self.locate[i:self.locate.index('\n  }\n', i)]
         self.assertIn('window.codeFill(fire)', body)
         self.assertIn("els.title.dataset.provenance = 'confirmed'", body)
+
+    # ── ما كشفه التحقّقُ العدائيّ للدفعة (تراجعاتٌ من صنعها، أُصلحت قبل التسليم) ──
+
+    def _fn(self, header):
+        i = self.src.index(header)
+        return self.src[i:self.src.index('\n}\n', i)]
+
+    def test_entity_provenance_does_not_leak_into_the_next_book(self):
+        """C1: وسمُ `typed` على حقلَي الجهة (tag-text-input لا .form-control-smart) كان يبقى بعد
+        الحفظ/التفريغ فتتخطّى بوّابةُ نيلسن 3 وسمَ `autofilled` بينما تُضاف جهةُ الآلة ⟵ تُحفظ
+        `typed` وتتعلّم ذاكرةُ الترويسة من مخرجها هي."""
+        for header in ('    clearForm() {', '    smartClearAndStay(kind) {'):
+            self.assertIn('this._resetEntityProvenance()', self._method(header), header)
+        reset = self._method('    _resetEntityProvenance() {')
+        for part in ("'issuingEntity'", "'receivingEntity'", 'resetCaptureProvenance('):
+            self.assertIn(part, reset)
+
+    def test_a_new_document_releases_the_old_documents_confirmations(self):
+        """C3: بعد حذف الملف كانت تأكيداتُ قراءاته تحجب قيمَ الملف الجديد بصمت (خلطُ مستندين،
+        بلاغ 09‑15). `confirmed` ينزل إلى `autofilled` — لا حذفُ الوسم (فراغُه يُقرأ `typed`)."""
+        release = self._fn('function _releaseDocBoundOwnership() {')
+        self.assertIn('=== PROV_CONFIRMED', release)
+        self.assertIn('= PROV_AUTOFILLED', release)
+        self.assertNotIn('delete ', release)
+        self.assertNotIn('PROV_TYPED', release)                            # يدُ الكاتب تبقى ملكاً
+        self.assertIn('_releaseDocBoundOwnership();', self._method('    clearFile() {'))
+        self.assertIn('_releaseDocBoundOwnership();', self._method('    processFile(file) {'))
+        i = self.src.index('this._loadScanToken(ud.token')
+        self.assertIn('_releaseDocBoundOwnership();', self.src[i - 200:i])   # مسحٌ جديد لا إلحاق
+
+    def test_det2_card_never_shows_the_box_score_as_a_reading_confidence(self):
+        """F4: ثقةُ صندوق الكاشف تموضعٌ لا قراءة — كانت تُعرض «87%» تحت «قراءةٌ ضعيفة»."""
+        body = self._fn('function applyTitleSuggestion(data) {')
+        self.assertIn("const boxOnly = sug.source === 'det2_crop';", body)
+        self.assertIn('badge.hidden = boxOnly;', body)
+
+    def test_ambiguous_choices_never_offer_a_date_after_the_entry_date(self):
+        """C2: «غامض» يعني أنّ المرشّحَين خارج النافذة، فقد يقع أحدُهما بعد تاريخ القيد — ونقرةٌ
+        عليه تصير `confirmed` في ذهب التدريب. الواجهةُ تُسقطه بتاريخ القيد الذي في الحقل الآن."""
+        body = self._fn('function applySenderDateSuggestion(data) {')
+        self.assertIn('const g = _senderDateGap(iso); return g === null || g >= 0;', body)

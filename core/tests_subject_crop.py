@@ -276,6 +276,42 @@ class PipelineHookTests(TestCase):
         self.assertIsNone(getattr(res, 'title_suggestion', None))
         ocr.assert_not_called()
 
+    @override_settings(SUBJECT_BOXES_PATH='/tmp/lettersys_subject_boxes_order.json')
+    def test_ocr_stack_is_ready_before_the_green_gate_reads(self):
+        """F1: البوّابةُ الخضراء تقرأ بـ`_default_ocr` — في مسار الكاش (لا OCR قبلها) كان أوّلُ
+        استخراجٍ في العمليّة يسقط إلى EasyOCR لأنّ التهيئةَ صارت في فرع det2 وحدَه."""
+        from core.extraction.pipeline import AIExtractionResult
+        svc = self._service()
+        res = AIExtractionResult()
+        res.title = ''; res.issuing_entity_id = 56
+        calls = []
+        with mock.patch.object(svc, '_ensure_ocr_stack', side_effect=lambda: calls.append('stack')), \
+             mock.patch.object(sc, 'learned_fill', side_effect=lambda *a, **k: calls.append('gate')):
+            svc._propose_subject_box(res, self._tmp_page(), det_boxes={'number': None, 'subject': None})
+        self.assertEqual(calls[:2], ['stack', 'gate'])
+
+    @override_settings(SUBJECT_BOXES_PATH='/tmp/lettersys_subject_boxes_learned.json')
+    def test_det2_silence_proposes_the_entity_learned_box(self):
+        """F3: صمتُ det2 وقراءةٌ متعلَّمةٌ لم تجتز الحرّاس ⟵ صندوقُ الجهة موضعاً للسحب (كما كان
+        `sc.propose`) لا الحزامُ الافتراضيّ — ولا اقتراحَ نصّيّاً منه."""
+        import os
+        from core.extraction.pipeline import AIExtractionResult
+        path = sc.store_path()
+        if os.path.exists(path): os.remove(path)
+        for _ in range(3):
+            sc.record_sample(57, {'x': 0.1, 'y': 0.33, 'w': 0.7, 'h': 0.04}, 'م')
+        svc = self._service()
+        res = AIExtractionResult()
+        res.title = ''; res.issuing_entity_id = 57
+        with mock.patch.object(svc, '_ensure_ocr_stack'), \
+             mock.patch.object(sc, '_default_ocr', return_value=',+ t? I \\\\,('):
+            svc._propose_subject_box(res, self._tmp_page(), det_boxes={'number': None, 'subject': None})
+        prop = res.subject_box_proposal
+        self.assertEqual(prop['source'], 'learned')
+        self.assertAlmostEqual(prop['box']['y'], 0.33, places=3)
+        self.assertEqual(res.title, '')
+        self.assertIsNone(getattr(res, 'title_suggestion', None))
+
     def test_number_path_reuses_the_shared_detector_result(self):
         """استدلالٌ واحدٌ للاستخراج: مسارُ العدد يأخذ صندوقَه من النتيجة المشتركة."""
         from core.extraction.pipeline import AIExtractionService as S

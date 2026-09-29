@@ -73,6 +73,15 @@ class DrawnDateCandidatesTests(SimpleTestCase):
         self.assertEqual(drawn_date_candidates('24/8/26', entry_date=datetime.date(2026, 8, 26),
                                                today=self.TODAY), [])
 
+    def test_no_candidate_after_the_entry_date(self):
+        """«26/12/15» ⟵ 2015‑12‑26 و2026‑12‑15؛ الثاني بعد اليوم/القيد فلا يُعرض زرّاً (نقرةٌ عليه
+        كانت تكتبه `confirmed`). الباقي وحدَه يبقى **مرشّحاً** يُنقر لا حسماً (الامتناعُ قائم)."""
+        from core.extraction.handwriting.date_parse import drawn_date_candidates
+        self.assertEqual(drawn_date_candidates('26/12/15', today=self.TODAY), ['2015-12-26'])
+        self.assertEqual(drawn_date_candidates('26/12/15', entry_date=datetime.date(2026, 9, 20),
+                                               today=self.TODAY), ['2015-12-26'])
+        self.assertEqual(parse_drawn_date('26/12/15', today=self.TODAY), (None, 'ambiguous'))
+
     def test_parse_behaviour_unchanged_by_the_refactor(self):
         """استخراجُ المرشّحين دالّةً مشتركة لا يغيّر حكمَ التحليل (مصدرٌ واحد)."""
         self.assertEqual(parse_drawn_date('26/9/15', today=self.TODAY), (None, 'ambiguous'))

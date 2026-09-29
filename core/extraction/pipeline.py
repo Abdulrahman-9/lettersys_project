@@ -792,6 +792,13 @@ class AIExtractionService:
         img = self._open_page_image(image_path)
         if img is None:
             return
+        # Tesseract مُهيَّأٌ (المسار/TESSDATA) **قبل أيّ قراءة** — البوّابةُ الخضراء وقصاصةُ det2
+        # كلتاهما تمرّان بـ`_default_ocr`. في مسار الكاش لم يُشغَّل OCR، فبلا هذا يسقط أوّلُ
+        # استخراجٍ في العمليّة إلى EasyOCR (نفادُ ذاكرةٍ مقيس على 8 GB). كسولٌ: لا كلفةَ بعد الأولى.
+        try:
+            self._ensure_ocr_stack()
+        except Exception as exc:
+            logger.warning('[subject_box] مكدّسُ OCR تعذّر: %s', type(exc).__name__)
         entity_id = getattr(result, 'issuing_entity_id', None)
         # البوّابةُ الخضراء
         filled = sc.learned_fill(img, entity_id) if entity_id else None
@@ -812,15 +819,13 @@ class AIExtractionService:
         if got:
             (x0, y0, x1, y1), subj_conf = got
             box = sc.normalise_box({'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0})
-        prop = {'box': box or dict(sc.DEFAULT_BAND), 'source': 'det2' if box else 'default',
+        # صمتُ det2 ⟵ صندوقُ الجهة المتعلَّم **موضعاً للسحب** (قراءتُه فشلت في البوّابة أعلاه)،
+        # ثمّ الحزامُ الافتراضيّ. القراءةُ والاقتراحُ النصّيّ لـdet2 وحدَه.
+        learned = None if box else sc.learned_box(entity_id)
+        prop = {'box': box or learned or dict(sc.DEFAULT_BAND),
+                'source': 'det2' if box else ('learned' if learned else 'default'),
                 'candidates': [], 'samples': len(sc.samples_of(entity_id))}
         if box and getattr(dj_settings, 'SUBJECT_DET2_SUGGESTION', True):
-            # Tesseract مُهيَّأٌ (المسار/TESSDATA) حتى في مسار الكاش حيث لم يُشغَّل OCR —
-            # وإلّا سقط `read_box` إلى EasyOCR (نفادُ ذاكرةٍ مقيس على 8 GB).
-            try:
-                self._ensure_ocr_stack()
-            except Exception as exc:
-                logger.warning('[subject_box] مكدّسُ OCR تعذّر: %s', type(exc).__name__)
             rd = sc.read_box(img, box)
             if rd.get('accepted') and (rd.get('text') or '').strip():
                 # يحلّ محلّ اقتراح المُنتقي الضعيف (احتياط/قوس) — القاعدةُ المقيسة:

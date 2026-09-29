@@ -103,10 +103,16 @@ def drawn_date_candidates(raw: str, entry_date: Optional[datetime.date] = None,
     """المرشّحان (ISO مرتّبة) حين يمتنع `parse_drawn_date` بـ«ambiguous» — **للعرض على
     الكاتب ليختار بنقرة، لا للحسم الآليّ** (بندُ نيلسن 7، مذكّرة فيبل 10): حظرُ التخمين
     بالاحتمال الغالب قائم، والكاتبُ يتعرّف على الصحيح من القصاصة بدل أن يكتبه.
-    قائمةٌ فارغة لكلّ حالةٍ أخرى."""
+    قائمةٌ فارغة لكلّ حالةٍ أخرى.
+
+    **لا مرشّحَ بعد تاريخ القيد** (ولا بعد اليوم بلا قيد): تاريخُ الجهة يسبق وصولَ الكتاب،
+    و«غامض» يعني بالبناء أنّ المرشّحَين كليهما خارج النافذة — فقد يقع أحدُهما في المستقبل،
+    ونقرةٌ خاطئةٌ عليه تصير `confirmed` في ذهب التدريب. المرشّحُ الباقي وحدَه يبقى **زرّاً**
+    لا حسماً. التصفيةُ هنا لا في `parse_drawn_date` (القيدُ هناك لفضّ الالتباس لا حارس)."""
     today = today or datetime.date.today()
     _iso, status = parse_drawn_date(raw, entry_date=entry_date, window_days=window_days, today=today)
     if status != 'ambiguous':
         return []
     a, m, b = (int(p) for p in _SPLIT.split((raw or '').strip()) if p != '')
-    return [c.isoformat() for c in _two_end_candidates(a, m, b, today)]
+    latest = entry_date or today
+    return [c.isoformat() for c in _two_end_candidates(a, m, b, today) if c <= latest]

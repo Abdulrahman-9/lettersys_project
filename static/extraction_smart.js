@@ -107,6 +107,18 @@ function _clerkOwnsField(el) {
     return p === PROV_TYPED || p === PROV_CONFIRMED;
 }
 
+/** الملفُّ تغيّر (حُذف، أو أُسقط غيرُه فوقه، أو وصل مسحٌ جديد) ⟵ `confirmed` ينزل إلى
+ *  `autofilled`: القيمةُ مشتقّةٌ من قراءة آلةٍ لملفٍّ ذهب، فلا تبقى «ملكَ الكاتب» تحجب قيمَ
+ *  الملف الجديد بصمت (خلطُ مستندين — بلاغ المالك 09‑15). **لا حذفُ الوسم**: فراغُه يُقرأ
+ *  `typed`، أقوى ذهبٍ لقيمةٍ لم يكتبها أحد. `typed` يبقى ملكاً. الثمنُ الموثَّق: تصحيحٌ ثمّ
+ *  إعادةُ رفعِ **الملفّ نفسه** يُكتب فوقه. */
+function _releaseDocBoundOwnership() {
+    PROVENANCE_FIELD_IDS.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el && el.dataset && el.dataset.provenance === PROV_CONFIRMED) el.dataset.provenance = PROV_AUTOFILLED;
+    });
+}
+
 function _onHumanTouch(ev) {
     if (_codeFillDepth) return;
     const el = ev.target;
@@ -205,7 +217,12 @@ function applySenderDateSuggestion(data) {
         autofilled = _autofillSenderDate(sug.iso) || (el && el.value === sug.iso);
     }
     let msg = '', blocked = false, enterOk = true;
-    const cands = (sug.parse === 'ambiguous' && Array.isArray(sug.candidates)) ? sug.candidates.filter(Boolean) : [];
+    // لا مرشّحَ بعد تاريخ القيد الذي في الحقل الآن (الكاتبُ قد يغيّره عن نافذة الخادم) —
+    // النقرةُ تكتب `confirmed` فلا تُعرض قراءةٌ مستحيلة. الأقدمُ من النافذة يبقى زرّاً بسطر.
+    const cands = (sug.parse === 'ambiguous' && Array.isArray(sug.candidates))
+        ? sug.candidates.filter((iso) => { if (!iso) return false; const g = _senderDateGap(iso); return g === null || g >= 0; })
+        : [];
+    const candsOld = cands.some((iso) => { const g = _senderDateGap(iso); return g !== null && g > SENDER_DATE_GAP_MAX; });
 
     // **نيلسن 7** (مذكّرة فيبل 10): البطاقةُ تقول ما سيُكتب بالكلمات — كانت تعرض الخامَّ
     // بترتيب البكسل («26/9/15») فلا يُعرف أكان «26» سنةً أم يوماً — وتُسمّي البوّابةَ التي
@@ -229,7 +246,8 @@ function applySenderDateSuggestion(data) {
 
     if (!sug.iso) {
         msg = cands.length
-            ? 'لم نعرف أيّ الرقمين هو السنة — اختر التاريخ الصحيح كما في القصاصة.'
+            ? ('لم نعرف أيّ الرقمين هو السنة — اختر التاريخ الصحيح كما في القصاصة.'
+               + (candsOld ? ' (أقدمُ من ' + SENDER_DATE_GAP_MAX + ' يوماً من تاريخ القيد — تأكّد.)' : ''))
             : 'تعذّرت قراءةُ تاريخٍ صالح — اكتبه من القصاصة.';
         blocked = true; enterOk = false;
     } else if (conf < green) {
@@ -367,7 +385,11 @@ function applyTitleSuggestion(data) {
     const warn = _tsEl('titleSuggestWarn');
     if (val) val.textContent = sug.value;
     if (badge) {
-        badge.textContent = Math.round(Number(sug.confidence || 0) * 100) + '%';
+        // det2_crop: الرقمُ ثقةُ صندوق الكاشف (تموضُّعٌ لا قراءة — «96% للكاشف تموضعٌ لا قراءة»)
+        // فلا يُعرض نسبةَ قراءة. الحمولةُ تحمله للسجلّ فقط.
+        const boxOnly = sug.source === 'det2_crop';
+        badge.hidden = boxOnly;
+        badge.textContent = boxOnly ? '' : Math.round(Number(sug.confidence || 0) * 100) + '%';
         badge.className = 'confidence-badge low';
     }
     if (warn) {
@@ -2726,6 +2748,7 @@ class ExtractionSmartSystem {
                 await this.appendFromSourceToken(ud.token);   // مسح وإلحاق: يُدرج بنهاية المستند القائم
                 this._hideExtractionOverlay();
             } else {
+                _releaseDocBoundOwnership();   // مسحٌ جديد (لا إلحاقٌ ولا إعادةُ تجهيز) = مستندٌ جديد
                 this._loadScanToken(ud.token, { notice: ud.warning || null });
             }
         } catch (err) {
@@ -3624,6 +3647,7 @@ class ExtractionSmartSystem {
         }
 
         this.displayFileName(file.name);
+        _releaseDocBoundOwnership();         // ملفٌّ جديد فوق القديم: تأكيداتُ قراءات القديم لا تحجبه
         // المسار الموحّد: نُجهّز الملف على الخادم (صورة→PDF) ونحصل على token كي تعمل
         // معاينة الصفحات وأدوات التحرير (تدوير/حذف/إعادة ترتيب) على الرفع كما المسح.
         this.stageAndPreview(file).catch(err => {
@@ -3800,6 +3824,7 @@ class ExtractionSmartSystem {
         // (بلاغُ المالك 2026‑09‑15) فتختلط قيمُ مستندين.
         this._cancelRunningExtraction();
         this.resetSuggestionSurfaces();      // نيلسن 2: قصاصةُ الصورة المحذوفة واقتراحاتُها تذهب معها
+        _releaseDocBoundOwnership();         // وتأكيداتُ قراءاتها لا تحجب الملفَّ التالي
         this.currentFile = null;
         this.scannedFiles = [];
         // أخفِ بانر التحذير عند تفريغ الملف
@@ -4941,6 +4966,7 @@ class ExtractionSmartSystem {
         // امسح وسوم الجهات: مكوّن EntityTagInput مخصّص (ليست .form-control-smart) فلا تطالها الحلقة أعلاه.
         window.entityTagManagers?.issuing?.clear();
         window.entityTagManagers?.receiving?.clear();
+        this._resetEntityProvenance();
 
         // صفّر «بلا رقم» كي لا يعلق مؤشَّراً بعد التفريغ (عبر معالج القالب الواحد).
         const _nlCbClear = document.getElementById('numberlessCheckbox');
@@ -4976,6 +5002,14 @@ class ExtractionSmartSystem {
         if (window.__setExtractionBaseline) window.__setExtractionBaseline();
 
         this.showToast('تم مسح النموذج — الرقمُ المحجوز باقٍ لك', 'success');
+    }
+
+    /** وسمُ الجهتين يسقط مع وسومهما: حقلا الجهة `tag-text-input` لا `.form-control-smart`، فكان
+     *  وسمُ `typed` من الكتاب السابق يبقى فتتخطّى بوّابةُ نيلسن 3 وسمَ `autofilled` في الكتاب
+     *  التالي بينما يضيف غلافُ القالب جهةَ الآلة — فتُحفظ `typed` وتتعلّم ذاكرةُ الترويسة من
+     *  مخرجها هي (التسميمُ الذاتيّ). البوّابةُ سليمة؛ العطبُ الحالةُ الراكدة. */
+    _resetEntityProvenance() {
+        ['issuingEntity', 'receivingEntity'].forEach((id) => resetCaptureProvenance(document.getElementById(id)));
     }
 
     /** **نيلسن 2** (مذكّرة فيبل 10): اقتراحاتُ الكتاب السابق لا تعيش بعد حذف صورته أو تفريغ
@@ -5016,6 +5050,7 @@ class ExtractionSmartSystem {
         // امسح وسوم الجهات (مكوّن مخصّص خارج .form-control-smart) — «تفريغ» يشمل الجهات.
         window.entityTagManagers?.issuing?.clear();
         window.entityTagManagers?.receiving?.clear();
+        this._resetEntityProvenance();
 
         // صفّر «بلا رقم» كي لا يعلق مؤشَّراً للكتاب التالي (عبر معالج القالب الواحد → يُعيد الحجز).
         const _nlCb = document.getElementById('numberlessCheckbox');
