@@ -1228,9 +1228,12 @@ class ExtractionSmartSystem {
 
     _fillExtractionFields(data) {
         this.beginTextUndoBatch?.();   // لقطة قبل التعبئة → يصير الاستخراج خطوة تراجع واحدة
+        // نيلسن 3 على مسار الماسح أيضاً (قرارُ المالك 2026‑09‑29): ما كتبته الكاتبةُ أثناء المسح
+        // يبقى — كان هذا المسارُ وحدَه يكتب فوقه. (`confirmed` من مستندٍ سابق نزل إلى `autofilled`
+        // قبل الوصول هنا عبر `_releaseDocBoundOwnership`، فلا يحجب المسحَ الجديد.)
         const setVal = (id, val) => {
             const el = document.getElementById(id);
-            if (el && val != null && val !== '') {
+            if (el && val != null && val !== '' && !_clerkOwnsField(el)) {
                 el.value = val;
                 noteSuggestionFilled(id, val);   // مُلئ تلقائيّاً وعُرض — عقدُ الالتقاط
             }
@@ -1260,11 +1263,11 @@ class ExtractionSmartSystem {
         }
         if (data.issuing_entity) {
             const issuingInput = document.querySelector('[data-field="issuingEntity"] input, #issuingEntity');
-            if (issuingInput) { issuingInput.value = data.issuing_entity; noteSuggestionFilled('issuingEntity', data.issuing_entity); }
+            if (issuingInput && !_clerkOwnsField(issuingInput)) { issuingInput.value = data.issuing_entity; noteSuggestionFilled('issuingEntity', data.issuing_entity); }
         }
         if (data.receiving_entity) {
             const receivingInput = document.querySelector('[data-field="receivingEntity"] input, #receivingEntity');
-            if (receivingInput) { receivingInput.value = data.receiving_entity; noteSuggestionFilled('receivingEntity', data.receiving_entity); }
+            if (receivingInput && !_clerkOwnsField(receivingInput)) { receivingInput.value = data.receiving_entity; noteSuggestionFilled('receivingEntity', data.receiving_entity); }
         }
         // حافّة الثقة + بطاقتا P1 في مسار المسح أيضاً — البيانات مُصدَّرة في result_to_scan_data
         const confMap = {
@@ -1279,7 +1282,8 @@ class ExtractionSmartSystem {
         };
         Object.keys(confMap).forEach(fid => {
             const c = data[confMap[fid]];
-            if (typeof c === 'number') this.setFieldConfidence(fid, c);
+            // حافّةُ ثقة الآلة لا تُرسم على قيمةٍ كتبتها الكاتبة (لم تُكتب القراءةُ فوقها أصلاً)
+            if (typeof c === 'number' && !_clerkOwnsField(document.getElementById(fid))) this.setFieldConfidence(fid, c);
         });
         if (window.__autoGrowTitle) window.__autoGrowTitle();   // وسّع الموضوع لطول النصّ المملوء
         this.updateQualitySummary(data);

@@ -389,6 +389,15 @@ class ExtractionClosureSourceGuardTests(SimpleTestCase):
         self.assertIn("const boxOnly = sug.source === 'det2_crop';", body)
         self.assertIn('badge.hidden = boxOnly;', body)
 
+    def test_scan_path_keeps_what_the_clerk_typed_during_the_scan(self):
+        """C4 (قرارُ المالك 2026‑09‑29): مسارُ الماسح (`_fillExtractionFields`) كان الوحيدَ من مسارات
+        الملء الثلاثة الذي يكتب فوق ما كتبته الكاتبةُ أثناء المسح — ثمّ يسمه `autofilled`."""
+        body = self._method('    _fillExtractionFields(data) {')
+        self.assertIn("val !== '' && !_clerkOwnsField(el)", body)
+        self.assertIn('issuingInput && !_clerkOwnsField(issuingInput)', body)
+        self.assertIn('receivingInput && !_clerkOwnsField(receivingInput)', body)
+        self.assertIn("!_clerkOwnsField(document.getElementById(fid))", body)   # ولا حافّةُ ثقةٍ آليّة فوقها
+
     def test_ambiguous_choices_never_offer_a_date_after_the_entry_date(self):
         """C2: «غامض» يعني أنّ المرشّحَين خارج النافذة، فقد يقع أحدُهما بعد تاريخ القيد — ونقرةٌ
         عليه تصير `confirmed` في ذهب التدريب. الواجهةُ تُسقطه بتاريخ القيد الذي في الحقل الآن."""
