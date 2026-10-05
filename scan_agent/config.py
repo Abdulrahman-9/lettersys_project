@@ -1,14 +1,41 @@
 """إعدادات وكيل المسح المحلي — قيم ثابتة وقوائم بيضاء (لا تُمرَّر مدخلات المستخدم خاماً)."""
 import os
 
-HOST = "127.0.0.1"                                      # محلي فقط — لا وصول من الشبكة
+
+def _split_csv(value):
+    return [item.strip() for item in (value or "").split(",") if item.strip()]
+
+
+def get_host():
+    """إرجاع عنوان الربط الخاص بالخادم: افتراضياً localhost، أو 0.0.0.0 عند الشبكة المحلية."""
+    return os.environ.get("LETTERSYS_AGENT_HOST", "127.0.0.1")
+
+
+def get_allowed_origins():
+    """يُعيد قائمة الأصول المسموح بها، مع دعم URL التطبيق على الشبكة المحلية."""
+    origins = {
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+    }
+    for env_name in (
+        "LETTERSYS_AGENT_ALLOWED_ORIGINS",
+        "LETTERSYS_ALLOWED_ORIGINS",
+        "CSRF_TRUSTED_ORIGINS",
+    ):
+        origins.update(_split_csv(os.environ.get(env_name)))
+    # دعم التطبيق الذي يفتح عبر IP الشبكة (مثلاً http://172.16.2.16:8000)
+    for env_name in ("LETTERSYS_APP_URL", "LETTERSYS_DASHBOARD_URL", "DJANGO_BASE_URL"):
+        value = os.environ.get(env_name)
+        if value:
+            origins.add(value.rstrip("/"))
+    return sorted(origins)
+
+
+HOST = get_host()
 PORT = int(os.environ.get("LETTERSYS_AGENT_PORT", "17865"))
 
 # الأصول المسموح لها باستدعاء الوكيل (مكافحة استغلال المتصفح / DNS-rebinding)
-ALLOWED_ORIGINS = {
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-}
+ALLOWED_ORIGINS = set(get_allowed_origins())
 
 # حدود التشغيل (ثوانٍ)
 SCAN_TIMEOUT = 300

@@ -249,5 +249,17 @@ class ServerAuthTests(unittest.TestCase):
         self.assertEqual(status, 404)
 
 
+class ConfigEnvironmentTests(unittest.TestCase):
+    def test_get_host_uses_lan_when_configured(self):
+        with mock.patch.dict(os.environ, {'LETTERSYS_AGENT_HOST': '0.0.0.0'}, clear=False):
+            self.assertEqual(config.get_host(), '0.0.0.0')
+
+    def test_get_allowed_origins_includes_dashboard_ip(self):
+        with mock.patch.dict(os.environ, {'LETTERSYS_AGENT_ALLOWED_ORIGINS': 'http://localhost:8000,http://172.16.2.16:8000'}, clear=False):
+            origins = config.get_allowed_origins()
+            self.assertIn('http://172.16.2.16:8000', origins)
+            self.assertIn('http://localhost:8000', origins)
+
+
 if __name__ == '__main__':
     unittest.main()

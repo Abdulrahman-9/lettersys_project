@@ -1,7 +1,7 @@
-"""خادم HTTP محلي لوكيل المسح (127.0.0.1 فقط).
+"""خادم HTTP لوكيل المسح.
 
 ثلاث نقاط فقط: /agent/health و/agent/devices و/agent/scan.
-الأمن: ربط محلي + فحص Origin + token مشترك + قوائم بيضاء للمعاملات.
+الأمن: ربط حسب HOST + فحص Origin + token مشترك + قوائم بيضاء للمعاملات.
 النجاح في /agent/scan يُعاد كـ PDF ثنائي؛ الفشل يُعاد كـ JSON.
 """
 import json
@@ -43,7 +43,7 @@ class Handler(BaseHTTPRequestHandler):
     def _origin_ok(self):
         # المتصفح يرسل Origin دائماً؛ طلبات بلا Origin (curl/الكشف) مقبولة.
         origin = self.headers.get("Origin")
-        return origin is None or origin in config.ALLOWED_ORIGINS
+        return origin is None or origin.rstrip("/") in {o.rstrip("/") for o in config.ALLOWED_ORIGINS}
 
     def _token_ok(self):
         return secrets.compare_digest(self.headers.get("X-LetterSys-Token") or "", AGENT_TOKEN)
