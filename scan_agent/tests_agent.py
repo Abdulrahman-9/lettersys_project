@@ -644,6 +644,18 @@ class InstallerTests(unittest.TestCase):
         self.assertIn('LLMNR', p.stdout, 'لا تنبيهَ على اسمٍ مفردٍ قابلٍ للانتحال')
         self.assertFalse(os.path.exists(self._json_path(tmp)))
 
+    # ═══════ لا «تمّ» بلا اختصار ═══════
+    def test_failed_shortcut_is_reported_not_claimed(self):
+        """الحفظُ قد يفشل (مسارٌ فوق 260 حرفاً — مقيسٌ في صندوقٍ عميق — أو مجلّدٌ غيرُ قابلٍ
+        للكتابة)، وكان المُثبِّت يطبع «تمّ» على أيّ حال فلا يبدأ الوكيلُ مع ويندوز بصمت."""
+        tmp, startup = self._sandbox()
+        os.rmdir(startup)
+        with open(startup, 'w') as f:          # ملفٌّ مكانَ مجلّد بدء التشغيل ⟵ يتعذّر الحفظ
+            f.write('x')
+        p = self._run([self.ORIGIN], 'y\n', tmp)
+        self.assertEqual(p.returncode, 5, p.stdout)
+        self.assertIn('تعذّر إنشاءُ اختصار التشغيل التلقائيّ', p.stdout)
+
     # ═══════ حزمةُ التوزيع: حاسبةٌ بلا Python ═══════
     def test_distribution_copies_runtime_and_targets_embedded_pythonw(self):
         """من حزمة التوزيع (python\\ بجوار scan_agent\\) ينسخ المُثبِّتُ الاثنين إلى

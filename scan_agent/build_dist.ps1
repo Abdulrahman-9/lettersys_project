@@ -19,11 +19,12 @@ if (-not $pth) { throw 'No ._pth file in the embeddable zip' }
 # '..' (relative to the ._pth file) puts <Out> on sys.path, so `pythonw -m scan_agent` resolves.
 @(Get-Content -LiteralPath $pth.FullName) + '..' | Set-Content -LiteralPath $pth.FullName -Encoding ascii
 
-robocopy $PSScriptRoot (Join-Path $Out 'scan_agent') /E /XD __pycache__ naps2_portable /XF tests_agent.py *.pyc /NFL /NDL /NJH /NJS /NP | Out-Null
+robocopy $PSScriptRoot (Join-Path $Out 'scan_agent') /E /XD __pycache__ naps2_portable /XF tests_agent.py build_dist.ps1 *.pyc /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
 
 # Smoke test with the embedded interpreter itself: the agent must import with no site-packages.
-& (Join-Path $py 'python.exe') -c 'import scan_agent.__main__, scan_agent.server; print("import-ok")'
+# (No inner double quotes: Windows PowerShell 5.1 strips them from native-command arguments.)
+& (Join-Path $py 'python.exe') -c 'import scan_agent.__main__, scan_agent.server'
 if ($LASTEXITCODE -ne 0) { throw 'The embedded interpreter could not import scan_agent' }
 
 $base = (Resolve-Path -LiteralPath $Out).Path.TrimEnd('\') + '\'

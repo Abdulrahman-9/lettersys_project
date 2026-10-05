@@ -124,6 +124,9 @@ REM المساراتُ تُمرَّر إلى PowerShell عبر البيئة لا
 REM عليا (اسمُ مستخدمٍ مثل O'Brien) كان يكسر السطرَ أو يُحقن فيه شيفرة.
 set "LS_LINK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\LetterSys Scan Agent.lnk"
 powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:LS_LINK); $s.TargetPath=$env:LS_TARGET; $s.Arguments=$env:LS_ARGS; $s.WorkingDirectory=$env:LS_WORKDIR; $s.Save()"
+REM لا «تمّ» بلا ملفّ: الحفظُ قد يفشل (مسارٌ فوق 260 حرفاً، مجلّدٌ غيرُ قابلٍ للكتابة) وPowerShell
+REM يطبع خطأه ويخرج — فكان المسؤولُ يرى «تمّ» والوكيلُ لن يبدأ مع ويندوز أبداً.
+if not exist "%LS_LINK%" goto shortcutfail
 echo [تمّ] اختصارُ التشغيل التلقائيّ: %LS_LINK%
 REM الاختباراتُ تشغّل هذا السكربتَ فعلاً في صندوقٍ مؤقّت — لا تُطلق وكيلاً حقيقيّاً منها.
 if not defined LETTERSYS_INSTALL_NO_START (
@@ -147,6 +150,13 @@ REM تحديثٌ فوق وكيلٍ يعمل: ملفّاتُه مقفلةٌ وم�
 REM (pythonw من مجلّد agent)، لا أيَّ pythonw آخر على الجهاز.
 powershell -NoProfile -Command "Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like ($env:AGENT_DIR + '\*') } | Stop-Process -Force"
 goto :eof
+
+:shortcutfail
+echo.
+echo [خطأ] تعذّر إنشاءُ اختصار التشغيل التلقائيّ: %LS_LINK%
+echo   agent.json كُتب؛ أصلح السببَ الظاهرَ أعلاه ثمّ أعد تشغيلَ المُثبِّت.
+echo.
+exit /b 5
 
 :copyfail
 echo.
