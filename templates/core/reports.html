@@ -3,6 +3,53 @@
 {% load static %}
 {% block title %}التقارير{% endblock %}
 
+{% block page_sidebar %}
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">ملخص التقرير الحالي</div>
+  <div class="app-context-list">
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">نوع الكتاب</div>
+        <strong>{{ selected_kind_label|default:'كل الأنواع' }}</strong>
+      </div>
+      <span class="app-context-chip"><i class="bi bi-funnel"></i> تصفية</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">الحالة الزمنية</div>
+        <strong>{{ bucket|default:'all' }}</strong>
+      </div>
+      <span class="app-context-chip is-info"><i class="bi bi-calendar-range"></i> فترة</span>
+    </div>
+    <div class="app-context-item">
+      <div>
+        <div class="app-context-meta">عدد النتائج</div>
+        <strong>{{ total }}</strong>
+      </div>
+      <span class="app-context-chip is-success"><i class="bi bi-table"></i> نتائج</span>
+    </div>
+  </div>
+</div>
+
+<div class="app-sidebar-panel app-sidebar-context-panel">
+  <div class="app-sidebar-section-title">اختصارات التقرير</div>
+  <div class="app-context-list">
+    <a class="app-context-link" href="{% url 'reports' %}">
+      <span>إعادة تعيين التقرير</span>
+      <i class="bi bi-arrow-counterclockwise"></i>
+    </a>
+    <a class="app-context-link" href="{% url 'book_unified' %}">
+      <span>فتح الكتب الموحدة</span>
+      <i class="bi bi-journal-text"></i>
+    </a>
+    <a class="app-context-link" href="{% url 'dashboard' %}">
+      <span>العودة للوحة التحكم</span>
+      <i class="bi bi-grid-1x2"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
 {% block content %}
 <style>
 .chart-card {
@@ -231,10 +278,14 @@
     <div class="text-muted small fw-semibold">قيد المتابعة</div>
   </div>
   <div class="stat-item animate-fade-in" style="animation-delay: 0.3s;">
+    <div class="stat-value" style="color: #d97706;" id="dueTodayCount">{{ stats.due_today|default:0 }}</div>
+    <div class="text-muted small fw-semibold">مستحق اليوم</div>
+  </div>
+  <div class="stat-item animate-fade-in" style="animation-delay: 0.4s;">
     <div class="stat-value" style="color: #dc2626;" id="overdueCount">{{ stats.overdue|default:0 }}</div>
     <div class="text-muted small fw-semibold">متأخر</div>
   </div>
-  <div class="stat-item animate-fade-in" style="animation-delay: 0.4s;">
+  <div class="stat-item animate-fade-in" style="animation-delay: 0.5s;">
     <div class="stat-value" style="color: #64748b;" id="archivedCount">{{ stats.archived|default:0 }}</div>
     <div class="text-muted small fw-semibold">مؤرشف</div>
   </div>
