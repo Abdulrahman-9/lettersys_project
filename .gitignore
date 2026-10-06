@@ -59,6 +59,9 @@ releases.html
 .env
 .env.local
 .env.*.local
+# نسخُ .env الاحتياطيّة تحمل أسراراً حقيقيّة — لا تُتعقَّب أبداً (تسريبُ d4722e2، 2026-09-27)
+.env.*
+!.env.example
 
 # Per-device local identity (device name/uuid) — must NOT be shared/committed
 .device_identity.json
