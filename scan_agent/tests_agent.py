@@ -569,8 +569,10 @@ class InstallerTests(unittest.TestCase):
         os.makedirs(os.path.join(tmp, 'local'))
         return tmp, startup
 
-    def _run(self, args, answer, tmp, bat=None):
+    def _run(self, args, answer, tmp, bat=None, path_prefix=None):
         env = dict(os.environ)
+        if path_prefix:                              # أدواتٌ مزيّفة (whoami) قبل System32
+            env['PATH'] = path_prefix + os.pathsep + env.get('PATH', '')
         env['LOCALAPPDATA'] = os.path.join(tmp, 'local')
         env['APPDATA'] = os.path.join(tmp, 'app')
         env['LETTERSYS_INSTALL_NO_START'] = '1'      # لا وكيلَ حقيقيّاً من الاختبار
@@ -622,7 +624,9 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(os.path.exists(path), p.stdout)
         warns = []
         got = config.load_allowed_origins(path=path, warnings=warns)
-        self.assertEqual(got, {('http', '192.0.2.10', 8000), ('https', 'server-name', 443)})
+        # أصلا الحلقة المحلّيّة يبقيان دائماً: القائمةُ المكتوبة تحلّ محلّ افتراض الوكيل.
+        self.assertEqual(got, {('http', '192.0.2.10', 8000), ('https', 'server-name', 443),
+                               ('http', '127.0.0.1', 8000), ('http', 'localhost', 8000)})
         self.assertEqual(warns, [], 'الوكيلُ لم يقرأ ما كتبه المُثبِّت')
         self.assertIn('LetterSys Scan Agent.lnk', os.listdir(startup))
 
@@ -643,6 +647,20 @@ class InstallerTests(unittest.TestCase):
         p = self._run(['http://lettersys'], 'n\n', tmp)
         self.assertIn('LLMNR', p.stdout, 'لا تنبيهَ على اسمٍ مفردٍ قابلٍ للانتحال')
         self.assertFalse(os.path.exists(self._json_path(tmp)))
+
+    # ═══════ لا تشغيلَ مرفوعاً ═══════
+    def test_elevated_run_is_refused_and_nothing_written(self):
+        """«تشغيل كمسؤول» بحساب المسؤول يكتب كلَّ شيءٍ في ملفّه هو، فلا يبدأ وكيلٌ في جلسة
+        الكاتبة. ‏whoami المزيّف يعلن مستوى High كما يفعل الحقيقيُّ في عمليّةٍ مرفوعة."""
+        tmp, startup = self._sandbox()
+        fake = os.path.join(tmp, 'fakebin')
+        os.makedirs(fake)
+        with open(os.path.join(fake, 'whoami.bat'), 'w') as f:
+            f.write('@echo Mandatory Label\\High Mandatory Level  Label  S-1-16-12288\r\n')
+        p = self._run([self.ORIGIN], 'y\n', tmp, path_prefix=fake)
+        self.assertEqual(p.returncode, 6, p.stdout)
+        self.assertFalse(os.path.exists(self._json_path(tmp)), 'كُتب agent.json في تشغيلٍ مرفوع')
+        self.assertEqual(os.listdir(startup), [])
 
     # ═══════ لا «تمّ» بلا اختصار ═══════
     def test_failed_shortcut_is_reported_not_claimed(self):
@@ -714,6 +732,16 @@ class WindowlessEntrypointTests(unittest.TestCase):
         tmp = self._localappdata()
         self.assertIsNone(entry.attach_log_when_windowless())
         self.assertFalse(os.path.exists(os.path.join(tmp, 'LetterSys', 'agent.log')))
+
+
+class Naps2PerUserInstallTests(unittest.TestCase):
+    def test_per_user_install_path_is_probed(self):
+        """NAPS2 «لي وحدي» يُثبَّت في ‎%LOCALAPPDATA%\\Programs\\NAPS2‎ — بدونه «NAPS2 غير مثبّت»."""
+        tmp = tempfile.mkdtemp(prefix='ls_naps_')
+        self.addCleanup(shutil.rmtree, tmp, True)
+        with mock.patch.dict(os.environ, {'LOCALAPPDATA': tmp}):
+            self.assertIn(os.path.join(tmp, 'Programs', 'NAPS2', 'NAPS2.Console.exe'),
+                          config.naps2_candidates())
 
 
 class StdlibOnlyTests(unittest.TestCase):

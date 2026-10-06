@@ -28,6 +28,13 @@ REM    4. يحذف agent_token.txt القديم (لم يبقَ له معنى ب�
 REM ════════════════════════════════════════════════════════════════════════════
 setlocal
 
+REM ── 0) لا تشغيلَ مرفوعاً: كلُّ شيءٍ يُكتب في ملفّ المستخدم الذي يشغّل المُثبِّت ──
+REM «تشغيل كمسؤول» بحساب المسؤول على حاسبة كاتبةٍ عاديّة يكتب agent.json والوكيلَ والاختصارَ
+REM في ملفّ المسؤول، فلا يبدأ وكيلٌ في جلسة الكاتبة أبداً. والمُثبِّتُ لا يحتاج صلاحيّاتٍ أصلاً.
+REM (High = S-1-16-12288، System = S-1-16-16384.)
+whoami /groups | findstr /c:"S-1-16-12288" /c:"S-1-16-16384" >nul
+if not errorlevel 1 goto elevated
+
 if "%~1"=="" (
     echo.
     echo [خطأ] مرّر أصلاً واحداً على الأقل، مثلاً:
@@ -78,7 +85,9 @@ goto :eof
 
 REM ── 2) اكتب الملفَّ المرشَّح في مسارٍ مؤقّت واعرضه قبل أيّ تثبيت ──
 :compose
-powershell -NoProfile -Command "@{allowed_origins=@($env:LS_ORIGINS -split ' ' | Where-Object { $_ })} | ConvertTo-Json | Set-Content -LiteralPath $env:LS_TMP -Encoding utf8"
+REM أصلا الحلقة المحلّيّة يبقيان دائماً: القائمةُ المكتوبة **تحلّ محلّ** افتراضِ الوكيل، فكان
+REM خادمٌ يُفتح على 127.0.0.1:8000 في الحاسبة نفسِها يصير «لا يثق بي» بعد التثبيت.
+powershell -NoProfile -Command "@{allowed_origins=@(($env:LS_ORIGINS + ' http://127.0.0.1:8000 http://localhost:8000') -split ' ' | Where-Object { $_ } | Select-Object -Unique)} | ConvertTo-Json | Set-Content -LiteralPath $env:LS_TMP -Encoding utf8"
 if not exist "%LS_TMP%" (
     echo [خطأ] تعذّر تجهيزُ agent.json المؤقّت — لم يُكتب شيء.
     exit /b 3
@@ -109,9 +118,9 @@ set "LS_ARGS="
 set "LS_WORKDIR=%SCRIPT_DIR%.."
 if exist "%SCRIPT_DIR%..\python\pythonw.exe" (
     call :stop_running_agent
-    robocopy "%SCRIPT_DIR%..\python" "%AGENT_DIR%\python" /MIR /NFL /NDL /NJH /NJS /NP >nul
+    robocopy "%SCRIPT_DIR%..\python" "%AGENT_DIR%\python" /MIR /R:5 /W:2 /NFL /NDL /NJH /NJS /NP >nul
     if errorlevel 8 goto copyfail
-    robocopy "%SCRIPT_DIR%." "%AGENT_DIR%\scan_agent" /MIR /XD __pycache__ naps2_portable /XF tests_agent.py /NFL /NDL /NJH /NJS /NP >nul
+    robocopy "%SCRIPT_DIR%." "%AGENT_DIR%\scan_agent" /MIR /XD __pycache__ naps2_portable /XF tests_agent.py /R:5 /W:2 /NFL /NDL /NJH /NJS /NP >nul
     if errorlevel 8 goto copyfail
     set "LS_TARGET=%AGENT_DIR%\python\pythonw.exe"
     set "LS_ARGS=-m scan_agent"
@@ -150,6 +159,13 @@ REM تحديثٌ فوق وكيلٍ يعمل: ملفّاتُه مقفلةٌ وم�
 REM (pythonw من مجلّد agent)، لا أيَّ pythonw آخر على الجهاز.
 powershell -NoProfile -Command "Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like ($env:AGENT_DIR + '\*') } | Stop-Process -Force"
 goto :eof
+
+:elevated
+echo.
+echo [خطأ] شُغّل المُثبِّتُ بصلاحيّات المسؤول. شغّله بنقرٍ مزدوجٍ عاديٍّ من جلسة الكاتبة نفسِها
+echo   (لا «تشغيل كمسؤول»): الوكيلُ واختصارُه يُكتبان في ملفّ المستخدم الذي يشغّله. لم يُكتب شيء.
+echo.
+exit /b 6
 
 :shortcutfail
 echo.

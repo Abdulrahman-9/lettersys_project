@@ -145,6 +145,8 @@ def naps2_candidates():
     cands += [
         r"C:\Program Files\NAPS2\NAPS2.Console.exe",
         r"C:\Program Files (x86)\NAPS2\NAPS2.Console.exe",
+        # تثبيتُ «لي وحدي» (بلا صلاحيّات مسؤول) — الشائعُ على حاسبة كاتبةٍ بحسابٍ عاديّ.
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "NAPS2", "NAPS2.Console.exe"),
         os.path.join(here, "naps2_portable", "NAPS2.Console.exe"),
     ]
     return [c for c in cands if c]
