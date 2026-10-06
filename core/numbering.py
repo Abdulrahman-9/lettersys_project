@@ -202,6 +202,45 @@ def year_search_pattern(year):
     return r'^%d\d{4,}$' % y
 
 
+#: «X-Y» أو «X/Y» — رقمٌ مركّبٌ (تسلسلٌ ونسخة) من بقايا البيانات القديمة.
+COMPOUND_QUERY_RE = re.compile(r'^(\d+)[-/](\d+)$')
+
+
+def identity_search_q(search_text):
+    """مطابقةُ البحث على **هويّة الكتاب في دفترنا وحدها** — أو ``None`` إن لم يكن رقماً.
+
+    الهويّةُ: رقمُ قيدنا بكلّ صيغه المخزَّنة، والتسلسلُ المركّب (``series_no``
+    و``version``)، والسنةُ الموسومة — وهي ما يكشفه الدفترُ الورقيّ للجميع.
+    أمّا رقمُ الجهة والرقمُ القديم والعنوانُ والهامش — وهي ما يطابقه البحثُ
+    الرقميّ أيضاً — فمحتوىً لا هويّة.
+
+    **مصدرٌ واحدٌ لمستهلكَين**: ``apply_search_filters`` يبني فروعَه الرقميّة
+    فوقه، و``guard_secret_text_search`` لا يُبقي به من السرّيّ إلّا ما طابق
+    هويّتَه. ولو افترقا لصار رقمُ الجهة المحجوبُ أداةَ استنطاق: كتابٌ مقيَّدٌ
+    يظهر لرقمٍ ورد في مظروفه فيُثبت ما فيه.
+    """
+    from django.db.models import Q
+
+    text = (search_text or '').strip()
+    compound = COMPOUND_QUERY_RE.match(text)
+    if compound:
+        return Q(series_no=int(compound.group(1)), version=int(compound.group(2)))
+    if not text.isdigit():
+        return None
+
+    ival = int(text)
+    if len(text) > 5:
+        return Q(our_number__icontains=text)
+    q = Q(series_no=ival)                       # الأرقام المركّبة — بقايا لم تُرحَّل
+    for pat in search_patterns(ival):           # سلسلة جارية / موسوم / تدريب
+        q |= Q(our_number__regex=pat)
+    if len(text) == 4:                          # سنةٌ وحدها ⟵ كلُّ كتب سجلّها
+        year_pat = year_search_pattern(ival)
+        if year_pat:
+            q |= Q(our_number__regex=year_pat)
+    return q
+
+
 def sort_key_sql():
     """
     مفتاح فرزٍ رقميّ لا نصّي.

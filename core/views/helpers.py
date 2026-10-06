@@ -32,13 +32,16 @@ def apply_search_filters(queryset, search_text):
         return queryset
 
     search_text = search_text.strip()
+    # هويّةُ الكتاب في دفترنا (رقمُنا بكلّ صيغه · التسلسلُ المركّب · السنةُ الموسومة)
+    # من المصدر الوحيد — وعليها وحدها يُبقي ``guard_secret_text_search`` المقيَّد.
+    identity = numbering.identity_search_q(search_text)
 
     # ── بحث برقم مركّب: "X-Y" أو "X/Y" (مثل 2-15 أو 1304/3) ──
-    compound_m = re.match(r'^(\d+)[-/](\d+)$', search_text)
+    compound_m = numbering.COMPOUND_QUERY_RE.match(search_text)
     if compound_m:
         x, y = int(compound_m.group(1)), int(compound_m.group(2))
         return queryset.filter(
-            Q(series_no=x, version=y)
+            identity
             | Q(legacy_number__icontains=f"{x}-{y}")
         ).distinct().order_by('-our_number', '-date')
 
@@ -46,23 +49,11 @@ def apply_search_filters(queryset, search_text):
     if search_text.isdigit():
         n = len(search_text)
         ival = int(search_text)
-        q = Q()
+        # ≤5 خانات: الرقم المجرّد في كل صيغه المخزَّنة + series_no + سنةُ السجلّ؛
+        # وما فوقها: جزءٌ من our_number — كلاهما من ``identity_search_q``.
+        q = identity
 
         if n <= 5:
-            # الرقم المجرّد يجد كل صيغه المخزَّنة (سلسلة جارية / موسوم بسنة /
-            # تدريب) — والأنماط من المصدر الوحيد، فلا تنحرف قراءتها عن العرض.
-            for pat in numbering.search_patterns(ival):
-                q |= Q(our_number__regex=pat)
-
-            # الأرقام المركّبة (series_no) — بقايا بيانات لم تُرحَّل بعد
-            q |= Q(series_no=ival)
-
-            # كتابة سنةٍ وحدها تجد كل كتب سجلّ تلك السنة
-            if n == 4:
-                year_pat = numbering.year_search_pattern(ival)
-                if year_pat:
-                    q |= Q(our_number__regex=year_pat)
-
             # رقم الجهة المرسلة: رقم مستقل (لا يُطابَق كجزء من رقم أطول)
             _sn_pat = r'(^|[^0-9])' + re.escape(search_text) + r'([^0-9]|$)'
             q |= Q(sender_number__iregex=_sn_pat)
@@ -74,8 +65,6 @@ def apply_search_filters(queryset, search_text):
             q |= Q(title__icontains=search_text)
             q |= Q(margin__icontains=search_text)
         else:
-            # ≥5 خانات: رقم طويل أو جزء من our_number
-            q |= Q(our_number__icontains=search_text)
             q |= Q(legacy_number__icontains=search_text)
             q |= Q(sender_number__icontains=search_text)
             q |= Q(title__icontains=search_text)
@@ -84,6 +73,9 @@ def apply_search_filters(queryset, search_text):
         # الترتيب (الرقم نفسه يتكرّر عبر السجلّات والسنوات، فالترتيب هو ما يفرزه):
         #   1) _exact   : مطابقة رقم القيد الكامل حرفياً (كتابة 825) تتصدّر.
         #   2) _num_pri : مطابقات حقول الأرقام (0-1) قبل ضوضاء العنوان/الهامش (2).
+        #                 **ومطابقُ الهويّة في الرتبة 0 دائماً**: وإلّا رتّب رقمُ
+        #                 الجهة المحجوبُ السرّيَّ الظاهرَ برقمه («0825» يطابق قيدَ
+        #                 '825' نمطاً لا احتواءً) — فيصير الترتيبُ نفسُه جواباً.
         #   3) -date    : الأحدث أولاً — يضع كتاب السلسلة الجارية فوق الموسوم
         #                 بسنته لنفس الرقم، وهو ما يريده الباحث غالباً.
         #   4) -our_number : كسر تعادل ثابت.
@@ -95,7 +87,7 @@ def apply_search_filters(queryset, search_text):
                     default=Value(1), output_field=IntegerField(),
                 ),
                 _num_pri=Case(
-                    When(Q(our_number__icontains=search_text) | Q(series_no=ival),
+                    When(identity | Q(our_number__icontains=search_text) | Q(series_no=ival),
                          then=Value(0)),
                     When(Q(sender_number__icontains=search_text)
                          | Q(legacy_number__icontains=search_text), then=Value(1)),

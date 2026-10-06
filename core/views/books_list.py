@@ -169,7 +169,7 @@ def book_unified(request):
         entity_id=entity_id,
         followup=followup,
     )
-    qs = BookSortEngine.apply_sort(qs, sort)
+    qs = BookSortEngine.apply_sort(qs, sort, user=request.user)
 
     paginator = Paginator(qs, 12)
     page_num = request.GET.get("page", 1)
@@ -290,7 +290,7 @@ def api_unified_data(request):
         date_from=date_from, date_to=date_to,
         entity_id=entity_id, followup=followup,
     )
-    qs = BookSortEngine.apply_sort(qs, sort)
+    qs = BookSortEngine.apply_sort(qs, sort, user=request.user)
 
     paginator = Paginator(qs, per_page)
     try:
@@ -389,7 +389,7 @@ def api_export_csv(request):
         date_from=date_from, date_to=date_to,
         entity_id=entity_id, followup=followup,
     )
-    qs = BookSortEngine.apply_sort(qs, sort)
+    qs = BookSortEngine.apply_sort(qs, sort, user=request.user)
 
     # ملفٌّ يخرج من الجهاز بصفوفٍ كثيرة — أثقلُ واقعةِ إخراجٍ في النظام
     from core.audit_service import record_event
