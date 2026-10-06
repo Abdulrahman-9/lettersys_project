@@ -329,6 +329,18 @@ SUBJECT_DET2_SUGGESTION = os.environ.get('SUBJECT_DET2_SUGGESTION', 'True').lowe
 # ─── إعدادات OCR والاستخراج ──────────────────────────────────────────────────
 # تحميل نموذج EasyOCR مسبقاً عند بدء Django (يمنع التأخير في أول طلب)
 AI_PRELOAD_OCR = os.environ.get('AI_PRELOAD_OCR', 'False').lower() in ('true', '1')
+# فهارسُ الاستخراج المشتركة على مستوى العمليّة (core/extraction/shared_index.py): ذاكرةُ
+# الترويسة وبصماتُ الترقيم كانت تُبنى في كلّ طلب (~1.8 ث). العمرُ بالثواني شبكةُ أمانٍ لما
+# لا تراه الإشاراتُ ولا بصمةُ القاعدة؛ صفرٌ = بلا مشاركة (كما في الاختبارات).
+LETTERHEAD_MEMORY_INDEX_TTL = int(os.environ.get('LETTERHEAD_MEMORY_INDEX_TTL', '300'))
+SENDER_PROFILES_INDEX_TTL = int(os.environ.get('SENDER_PROFILES_INDEX_TTL', '900'))
+# بناءُ الفهرسين في الخلفيّة بعد كلّ حفظ — فيجدهما الاستخراجُ التالي جاهزَين.
+EXTRACTION_BACKGROUND_INDEXING = os.environ.get(
+    'EXTRACTION_BACKGROUND_INDEXING', 'True').lower() in ('true', '1')
+# إحماءُ الاستخراج عند إقلاع الخادم (wsgi/asgi وحدهما): الفهرسان وجلساتُ ONNX ونداءُ Tesseract.
+# مُطفأٌ افتراضيّاً مع DEBUG: خادمُ التطوير يُعاد كثيراً، وكلُّ إعادةٍ تحمل sklearn وONNX فوراً.
+EXTRACTION_WARMUP = os.environ.get(
+    'EXTRACTION_WARMUP', str(not DEBUG)).lower() in ('true', '1')
 # الحد الزمني الأقصى لعملية الاستخراج الكاملة (ثوانٍ)
 AI_EXTRACTION_TIMEOUT = int(os.environ.get('AI_EXTRACTION_TIMEOUT', '120'))
 # تشغيل OCR تلقائياً عند رفع/مسح مستند. مؤجَّل افتراضياً: EasyOCR ثقيل وقد يتعطّل

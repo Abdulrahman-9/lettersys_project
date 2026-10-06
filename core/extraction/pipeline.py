@@ -932,8 +932,11 @@ class AIExtractionService:
             pt.pytesseract.tesseract_cmd = prov.cmd
             if prov.tessdata_dir:
                 os.environ['TESSDATA_PREFIX'] = prov.tessdata_dir
-            tsv = pt.image_to_data(img, lang=prov.lang, config=f'--psm {prov.psm}',
-                                   output_type=pt.Output.DICT)
+            # الصورةُ نفسُها والنداءُ نفسُه — بلا ضغط PNG البطيء الذي كان pytesseract يُجريه
+            # قبل كلّ نداء (انظر `tesseract_image_to_data`): البكسلاتُ لا تتغيّر.
+            from core.extraction.ocr.providers import tesseract_image_to_data
+            tsv = tesseract_image_to_data(pt, img, lang=prov.lang, config=f'--psm {prov.psm}',
+                                          output_type=pt.Output.DICT)
 
             # ── العدد اليدويّ (قراءة) ── لا early-return: نحسب التاريخ من نفس الرسم+TSV
             number_result = None

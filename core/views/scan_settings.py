@@ -25,6 +25,28 @@ from core.scoping import can_open_content, is_privileged
 logger = logging.getLogger('lettersys')
 
 
+#: المعاينةُ العاديّة (130dpi) والمصغّرات (46dpi) JPEG؛ التكبيرُ (220dpi) يبقى PNG بلا فقد.
+PREVIEW_JPEG_MAX_DPI = 150
+PREVIEW_JPEG_QUALITY = 90
+
+
+def _preview_bytes(pix, dpi):
+    """``(bytes, mimetype)`` لصورة معاينةٍ من pixmap.
+
+    **JPEG حتّى 150dpi**: الصفحةُ صورةُ ورقٍ ممسوح، وPNG كان يُرسل ~1.2 MB للصفحة
+    (وسيطُ 18 كتاباً، قياس 2026‑10‑05). وفرعُ WebP القديم كان ميّتاً: PyMuPDF هنا
+    بلا WebP فكان يرمي ويسقط إلى PNG دائماً. **والتكبيرُ (220dpi) PNG**: هناك يقرأ
+    الكاتبُ بعينه الأرقامَ اليدويّة الباهتة، فلا نُدخل عليها أثرَ ضغطٍ.
+    لا أثرَ للمعاينة على الاستخراج: الأنبوبُ يقرأ الملفَّ لا هذه الصورة.
+    """
+    if dpi <= PREVIEW_JPEG_MAX_DPI:
+        try:
+            return pix.tobytes('jpg', jpg_quality=PREVIEW_JPEG_QUALITY), 'image/jpeg'
+        except (ValueError, RuntimeError):
+            pass
+    return pix.tobytes('png'), 'image/png'
+
+
 def _token_owner_ok(data, user):
     """صاحب رمز المسح فقط (أو superuser) — يسدّ IDOR على الرموز المُسرَّبة.
     الرموز القديمة بلا user_id تُقبل (توافق رجعي)."""
@@ -72,9 +94,9 @@ def scan_file_serve(request, token: str):
 @login_required
 @require_http_methods(['GET'])
 def scan_preview_page(request, token: str):
-    """يعرض صفحةً من PDF الممسوح كصورة PNG (عبر PyMuPDF).
+    """يعرض صفحةً من PDF الممسوح كصورة (عبر PyMuPDF) — JPEG للعاديّة وPNG للتكبير.
 
-    المستند الممسوح صورة بلا نص؛ تحويله إلى PNG يجعل المعاينة <img> تلائم اللوحة
+    المستند الممسوح صورة بلا نص؛ تحويله إلى صورة يجعل المعاينة <img> تلائم اللوحة
     دائماً (object-fit) بدل عارض PDF المدمج غير الموثوق. المسار من الكاش لا المستخدم.
     """
     from django.http import HttpResponse, FileResponse, Http404
@@ -112,11 +134,7 @@ def scan_preview_page(request, token: str):
                 raise Http404('page out of range')
             mat = fitz.Matrix(dpi / 72, dpi / 72)
             pix = doc[page - 1].get_pixmap(matrix=mat, alpha=False)
-            # WebP أصغر حجماً وأسرع فكَّ ترميز؛ سقوط إلى PNG إن لم يدعمه إصدار PyMuPDF
-            try:
-                body, ctype = pix.tobytes('webp'), 'image/webp'
-            except Exception:
-                body, ctype = pix.tobytes('png'), 'image/png'
+            body, ctype = _preview_bytes(pix, dpi)
             del pix
         finally:
             doc.close()                        # تحرير الذاكرة فوراً

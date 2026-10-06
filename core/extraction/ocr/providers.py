@@ -21,6 +21,35 @@ from core.extraction.ocr.service import OCRService
 
 logger = logging.getLogger('lettersys')
 
+# ما يحمله PNG وتُسقطه إعادةُ كتابة PIL (فيختلف ما يراه tesseract لو قرأ الأصلَ مباشرة).
+_PNG_INFO_DROPPED_ON_RESAVE = frozenset({'dpi', 'gamma', 'transparency', 'icc_profile',
+                                         'srgb', 'chromaticity'})
+
+
+def tesseract_image_to_data(pytesseract_mod, image, **kwargs):
+    """`image_to_data` كما يستدعيه pytesseract حرفاً، لكن بلا ضغطِه البطيء لصور PIL.
+
+    pytesseract يكتب صورةَ PIL ملفَّ PNG مؤقّتاً (ضغطُ zlib الافتراضيّ، مستوى 6) ثمّ يمرّر
+    مسارَه إلى tesseract.exe — وعلى صفحةٍ 3500px يكلّف ذلك جزءاً ملموساً من النداء. هنا
+    نكتب **الملفَّ نفسَه** (PNG، النمطُ نفسُه، بلا pHYs ولا قطعٍ إضافيّة) بمستوى ضغطٍ 1:
+    مستوى الضغط يغيّر الحجمَ والزمنَ لا بكسلاً واحداً، ويُحذف الملفُّ في كلّ حال (C: امتلأ
+    مرّةً من مؤقّتاتٍ منسيّة). المسارُ النصّيّ والأنماطُ غيرُ
+    L (الرماديّة — وهي كلُّ ما يمرّ به الأنبوب) تمرّ إليه كما هي."""
+    from PIL import Image
+    if not isinstance(image, Image.Image) or image.mode != 'L':
+        return pytesseract_mod.image_to_data(image, **kwargs)
+    import tempfile
+    fd, path = tempfile.mkstemp(suffix='.png', prefix='lettersys_tess_')
+    os.close(fd)
+    try:
+        image.save(path, format='PNG', compress_level=1)
+        return pytesseract_mod.image_to_data(path, **kwargs)
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
 
 def _validate_azure_endpoint(endpoint: str) -> str:
     """التحقق من أن endpoint يشير فقط إلى Azure Cognitive Services (حماية SSRF)"""
@@ -238,10 +267,30 @@ class TesseractOCRProvider(BaseOCRProvider):
             return Image.fromarray(arr)
         raise ValueError('Unsupported image input for Tesseract OCR')
 
+    @staticmethod
+    def _png_read_as_is(src) -> bool:
+        """هل يقرأ tesseract.exe هذا الملفَّ كما هو ويرى البكسلاتِ نفسَها التي كان يراها؟
+
+        pytesseract لا يُمرِّر صورةَ PIL إلى tesseract: يكتبها PNG في ملفٍّ مؤقّتٍ آخر —
+        فكان ملفُّ الأنبوب (PNG كتبه cv2) يُفكّ ثمّ يُعاد ضغطُه قبل كلّ نداء. PNG بلا فقد،
+        فالإعادةُ لا تغيّر بكسلاً **ما لم** يحمل الملفُّ ما تُسقطه إعادةُ الكتابة (الدقّة
+        pHYs، غاما، شفافيّة، ملفّ لون) أو نمطاً يُحوِّله pytesseract (ألفا). فهذه تبقى على
+        المسار القديم، وغيرُ PNG كذلك (JPEG تُغيّر إعادةُ ضغطه البكسلات).
+        يُفتح الملفّ ويُغلق فوراً: مقبضٌ مفتوح يمنع حذفَه على ويندوز."""
+        if not isinstance(src, (str, Path)):
+            return False
+        from PIL import Image
+        try:
+            with Image.open(str(src)) as im:
+                return (im.format == 'PNG' and im.mode == 'L'
+                        and not (_PNG_INFO_DROPPED_ON_RESAVE & set(im.info)))
+        except Exception:                      # noqa: BLE001 — ملفٌّ لا يُقرأ يبقى على المسار القديم
+            return False
+
     def _run_tesseract(self, pil_img) -> tuple:
         """تمريرة OCR واحدة → (raw_text, avg_conf 0-1, num_lines)."""
-        data = self._pytesseract.image_to_data(
-            pil_img, lang=self.lang, config=f'--psm {self.psm}',
+        data = tesseract_image_to_data(
+            self._pytesseract, pil_img, lang=self.lang, config=f'--psm {self.psm}',
             output_type=self._pytesseract.Output.DICT,
         )
         # إعادة بناء النص: تجميع الكلمات حسب (block, par, line) ثم سطر لكل مجموعة.
@@ -262,8 +311,12 @@ class TesseractOCRProvider(BaseOCRProvider):
 
     def extract(self, image_path_or_bytes: Any) -> Dict[str, Any]:
         start = time.time()
-        img = self._to_pil(image_path_or_bytes)
-        raw_text, avg_conf, num_lines = self._run_tesseract(img)
+        img = None
+        if self._png_read_as_is(image_path_or_bytes):
+            raw_text, avg_conf, num_lines = self._run_tesseract(str(image_path_or_bytes))
+        else:
+            img = self._to_pil(image_path_or_bytes)
+            raw_text, avg_conf, num_lines = self._run_tesseract(img)
 
         # تصعيد تكيّفي: عند ثقة منخفضة جرّب نسخة ثنائية (adaptive) واحتفظ بالأعلى ثقةً.
         # adaptive يرفع المستند النموذجي لكنه قد يدمّر شواذّ — «احتفظ بالأعلى» يلتقط
@@ -271,6 +324,8 @@ class TesseractOCRProvider(BaseOCRProvider):
         if avg_conf < self.adaptive_threshold:
             try:
                 from PIL import Image
+                if img is None:
+                    img = self._to_pil(image_path_or_bytes)
                 gray = np.array(img.convert('L'))
                 binary = cv2.adaptiveThreshold(
                     gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)

@@ -11,6 +11,7 @@ import time
 from fuzzywuzzy import fuzz
 from typing import Dict, List, Tuple, Optional
 from core.models import Entity
+from core.extraction.shared_index import SharedIndex, db_signature
 import logging
 
 logger = logging.getLogger('lettersys')
@@ -56,6 +57,31 @@ def letterhead_region(text: str) -> str:
     if not lines:
         return ''
     return ' '.join(lines[: max(8, int(0.4 * len(lines)))])
+
+
+def _build_memory_index():
+    """فهرسُ TF-IDF على ترويسات الذاكرة: ``(vec, matrix, rows, count)``.
+
+    البناءُ نفسُه حرفاً كما كان على النسخة — نُقل إلى دالّةٍ ليُشارَك على مستوى العمليّة
+    (`MEMORY_INDEX`). الترجيحُ بالحداثة يُحسب عند الاستعلام (`match_from_memory`) لا هنا،
+    فمحتوى الفهرس لا يتعلّق بلحظة بنائه."""
+    from core.models import LetterheadMemory
+    rows = list(LetterheadMemory.objects.values_list(
+        'letterhead',
+        'issuing_entity_id', 'issuing_entity__name', 'issuing_entity__code',
+        'receiving_entity_id', 'receiving_entity__name', 'receiving_entity__code',
+        'book__date', 'created_at',        # 7,8: إشارتا الحداثة للترجيح
+        'book_id'))                        # 9: لإقصاء المستند المُقاس عن نفسه (قياسٌ نظيف)
+    if not rows:
+        return (None, None, [], 0)
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    vec = TfidfVectorizer(analyzer='char_wb', ngram_range=(3, 5))
+    matrix = vec.fit_transform([_normalize_ar(r[0]) for r in rows])
+    return (vec, matrix, rows, len(rows))
+
+
+MEMORY_INDEX = SharedIndex('letterhead-memory', _build_memory_index, db_signature,
+                           'LETTERHEAD_MEMORY_INDEX_TTL', _ENTITY_CACHE_TTL)
 
 
 class EntityMatcher:
@@ -246,28 +272,13 @@ class EntityMatcher:
         return matches
 
     def _ensure_memory_index(self):
-        """يبني فهرس TF-IDF على ترويسات الذاكرة، ويُعيد بناءه عند تغيّر العدد أو مرور TTL."""
-        from core.models import LetterheadMemory
-        now = time.monotonic()
-        count = LetterheadMemory.objects.count()
-        if (self._memory_index is not None and self._memory_index[3] == count
-                and (now - self._memory_built_at) <= _ENTITY_CACHE_TTL):
-            return self._memory_index
-        rows = list(LetterheadMemory.objects.values_list(
-            'letterhead',
-            'issuing_entity_id', 'issuing_entity__name', 'issuing_entity__code',
-            'receiving_entity_id', 'receiving_entity__name', 'receiving_entity__code',
-            'book__date', 'created_at',        # 7,8: إشارتا الحداثة للترجيح
-            'book_id'))                        # 9: لإقصاء المستند المُقاس عن نفسه (قياسٌ نظيف)
-        if not rows:
-            self._memory_index = (None, None, [], count)
-            self._memory_built_at = now
-            return self._memory_index
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        vec = TfidfVectorizer(analyzer='char_wb', ngram_range=(3, 5))
-        matrix = vec.fit_transform([_normalize_ar(r[0]) for r in rows])
-        self._memory_index = (vec, matrix, rows, count)
-        self._memory_built_at = now
+        """فهرسُ TF-IDF على ترويسات الذاكرة — **مشتركٌ على مستوى العمليّة** (`MEMORY_INDEX`).
+
+        كان يُخزَّن على النسخة، والنسخةُ تُبنى لكلّ طلب، فكان يُبنى من الصفر في كلّ
+        استخراج (1.6–1.8 ث مقيسة، 2026‑10‑05). البناءُ نفسُه حرفاً (`_build_memory_index`)
+        ويُعاد حين يتغيّر مصدرُه — عقدُ «النتيجةُ نفسُها» في `core/extraction/shared_index.py`."""
+        self._memory_index = MEMORY_INDEX.get()
+        self._memory_built_at = time.monotonic()
         return self._memory_index
 
     def match_from_memory(self, text: str, entity_type: str = 'issuer',

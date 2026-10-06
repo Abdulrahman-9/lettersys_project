@@ -10,7 +10,7 @@ from django.core.cache import cache
 from django.db.models.signals import post_save, post_delete, m2m_changed
 from django.dispatch import receiver
 
-from .models import Entity, Book
+from .models import Entity, Book, LetterheadMemory
 
 ENTITY_CACHE_VERSION_KEY = 'cache_version_entity'
 BOOK_CACHE_VERSION_KEY = 'cache_version_book'
@@ -45,6 +45,41 @@ def invalidate_book_m2m_cache(sender, action, **kwargs):
     """أبطل كاش العناوين عند تعديل M2M للجهات (يؤثّر على فلترة بحث العناوين بـ entity_id)."""
     if action in ('post_add', 'post_remove', 'post_clear'):
         _bump(BOOK_CACHE_VERSION_KEY)
+
+
+# ── فهارسُ الاستخراج المشتركة (ذاكرةُ الترويسة وبصماتُ الترقيم) ──────────────────
+#
+# الفهرسان يقرآن صفوفَ الذاكرة والكتب والجهات وروابطها؛ أيُّ حفظٍ أو حذفٍ عبر التطبيق
+# يُبطلهما عند الإيداع ويُجدوِل بناءهما في الخلفيّة — فيجدهما الاستخراجُ التالي جاهزَين.
+# ما يجري خارج الإشارات (أوامرُ الإدارة، `queryset.update`) تلتقطه بصمةُ القاعدة والعمرُ.
+# العقدُ كاملاً في `core/extraction/shared_index.py`.
+
+# ما يقرؤه البناءان من الكتاب والجهة: حفظٌ مُحدَّدُ الحقول لا يمسّها (هامشٌ، أرشفةٌ، عهدة)
+# لا يُغيّر المصدر فلا يُبطل شيئاً — كان سيُعيد بناءَ ~1.8 ث في الخلفيّة بلا داع. والحفظُ
+# العاديّ (بلا `update_fields`) والحذفُ يُبطلان دائماً: لا نعرف ما تغيّر.
+_INDEX_READ_FIELDS = {
+    Book: frozenset({'date', 'sender_number', 'is_deleted'}),
+    Entity: frozenset({'name', 'code'}),
+}
+
+
+@receiver([post_save, post_delete], sender=LetterheadMemory)
+@receiver([post_save, post_delete], sender=Entity)
+@receiver([post_save, post_delete], sender=Book)
+def invalidate_extraction_indexes_on_save(sender, update_fields=None, **kwargs):
+    read = _INDEX_READ_FIELDS.get(sender)
+    if read is not None and update_fields is not None and not (read & set(update_fields)):
+        return
+    from core.extraction.shared_index import invalidate_extraction_indexes
+    invalidate_extraction_indexes()
+
+
+@receiver(m2m_changed, sender=Book.issuing_entities.through)
+@receiver(m2m_changed, sender=Book.receiving_entities.through)
+def invalidate_extraction_indexes_on_links(sender, action, **kwargs):
+    if action in ('post_add', 'post_remove', 'post_clear'):
+        from core.extraction.shared_index import invalidate_extraction_indexes
+        invalidate_extraction_indexes()
 
 
 # ── سجلُّ الحسابات: دخولٌ وخروجٌ وفشلُ دخول ──────────────────────────────────
