@@ -73,8 +73,8 @@ def extraction_smart_desktop(request):
     from django.http import Http404
 
     from core.models import Book
-    from core.scoping import (ACCESS_STUB, STUB_TITLE, can_edit_book, can_open_content,
-                              scope_books_for, secret_access)
+    from core.scoping import (ACCESS_STUB, STUB_TITLE, books_in_scope, can_edit_book,
+                              can_open_content, secret_access)
 
     edit_pk = request.GET.get('edit_pk', '').strip()
     edit_book_json = 'null'
@@ -155,7 +155,10 @@ def extraction_smart_desktop(request):
     # `is_staff` تفتح كتبَ الشركة كلَّها لحاملها وتحبس الأرشيفيَّ في كتبه هو.
     recent_books = []
     if edit_book_json == 'null':
-        _rb = scope_books_for(request.user, Book.objects.all())
+        # والحيُّ وحدَه كالقائمة (``books_in_scope``): الودجةُ تفتح القائمةَ على كتابٍ
+        # بعينه (``?focus=``)، وبعد استيرادٍ من الورق تصير ``created_at`` الورق «الآن»
+        # فتعرضه هنا ولا تجده القائمةُ — فيصمت الإبراز.
+        _rb = books_in_scope(request.user)
         recent_books = list(
             _rb.order_by('-created_at', '-id').only(
                 'id', 'our_number', 'title', 'kind', 'created_at',

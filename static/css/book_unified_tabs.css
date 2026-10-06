@@ -362,6 +362,16 @@
   box-shadow: 0 0 0 2px var(--theme-glow);
 }
 
+/* «يشمل الورق القديم» — مفتاحُ الحيّ وحدَه (قرارُ المالك 2026‑10‑06) */
+.fb-advanced-switch { display: flex; flex-direction: column; justify-content: center; gap: 0.15rem; }
+.fb-switch { display: inline-flex !important; align-items: center; gap: 0.45rem; margin: 0 !important;
+  font-size: 0.83rem !important; color: var(--text, #1f2937) !important; cursor: pointer; }
+.fb-switch input { width: auto !important; accent-color: var(--theme-accent); }
+.fb-advanced-switch small { font-size: 0.7rem; color: var(--muted); }
+.fb-hint { flex-basis: 100%; margin: 0.35rem 0.4rem 0; font-size: 0.78rem; color: var(--muted);
+  display: flex; align-items: center; gap: 0.35rem; }
+.fb-hint[hidden] { display: none; }
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }

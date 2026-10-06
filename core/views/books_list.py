@@ -17,7 +17,8 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from ..models import Attachment, Book, Entity
-from core.scoping import can_edit_book, is_privileged, present_book_payload, scope_books_for
+from core.scoping import (books_in_scope, can_edit_book, is_privileged, present_book_payload,
+                          scope_books_for)
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,26 @@ def _serialize_book(book):
     }
 
 
+def _list_scope(request):
+    """أساسُ القائمة — **قاعدةٌ واحدة** للصفحة وتحديثها والتصدير (قرارُ المالك 2026‑10‑06).
+
+    الحيُّ وحدَه افتراضاً كاللوحة والتقارير (``books_in_scope``)، فرقمُ كلِّ بلاطةٍ
+    في اللوحة هو عددُ ما تفتحه هنا؛ و``?legacy=1`` يُدخل الورقَ القديم.
+    **والبحثُ يجد الكلّ**: أرقامُ الدفتر القديم («825» ⟵ ``20250825``، «قديم-544»)
+    أوّلُ ما يُبحث عنه، وإخضاعُها للمفتاح يُفشل البحثَ بلا رسالة — فنصُّ البحث
+    يوسّع **الصفوفَ وحدَها**، والعدّاداتُ تتبع المفتاحَ لا النصّ (وإلّا قفزت
+    الشاراتُ من المئات إلى الآلاف مع كلّ حرف).
+
+    يُعيد ``(rows, counters, legacy, widened)``: ``widened`` = بحثٌ وسّع الصفوفَ
+    إلى الورق القديم والمفتاحُ مطفأ — والواجهةُ تقوله للكاتب.
+    """
+    legacy = request.GET.get('legacy') == '1'
+    widened = bool((request.GET.get('q') or '').strip()) and not legacy
+    counters = books_in_scope(request.user, legacy=legacy)
+    rows = books_in_scope(request.user, legacy=True) if widened else counters
+    return rows, counters, legacy, widened
+
+
 @login_required
 def book_unified(request):
     """
@@ -131,7 +152,8 @@ def book_unified(request):
     """
     from .filter_helpers import FOLLOWUP_LABELS, BookFilterEngine, BookSortEngine
 
-    base_qs = scope_books_for(request.user, Book.objects.all()).select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
+    rows_qs, counters_qs, legacy, widened = _list_scope(request)
+    base_qs = rows_qs.select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
 
     tab = (request.GET.get("tab") or "incoming").strip()
     search_text = (request.GET.get("q") or "").strip()
@@ -181,7 +203,7 @@ def book_unified(request):
 
     books = list(page_obj.object_list)
 
-    counter_badges = BookFilterEngine.get_counter_badges(base_qs)
+    counter_badges = BookFilterEngine.get_counter_badges(counters_qs)
 
     from django.core.cache import cache
     cache_key = 'active_entities_list'
@@ -198,7 +220,7 @@ def book_unified(request):
         pagination_to = pagination_from + len(books) - 1
 
     active_filters_count = sum(
-        1 for v in [search_text, date_from, date_to, entity_id, followup] if v
+        1 for v in [search_text, date_from, date_to, entity_id, followup, legacy] if v
     )
 
     query_copy = request.GET.copy()
@@ -224,6 +246,8 @@ def book_unified(request):
         "followup": followup,
         "current_filter": followup,
         "sort_by": sort,
+        "legacy": legacy,
+        "search_widened": widened,
         "show_filters": active_filters_count > 0,
         "has_active_filters": active_filters_count > 0,
         "active_filters_count": active_filters_count,
@@ -247,6 +271,7 @@ def book_unified(request):
             "entity_id": entity_id,
             "followup": followup,
             "sort": sort,
+            "legacy": "1" if legacy else "",
         }),
     }
 
@@ -261,7 +286,8 @@ def api_unified_data(request):
     """
     from .filter_helpers import BookFilterEngine, BookSortEngine
 
-    base_qs = scope_books_for(request.user, Book.objects.all()).select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
+    rows_qs, counters_qs, legacy, widened = _list_scope(request)
+    base_qs = rows_qs.select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
 
     tab = (request.GET.get('tab') or 'incoming').strip()
     search_text = (request.GET.get('q') or '').strip()
@@ -315,10 +341,10 @@ def api_unified_data(request):
     active_filters = BookFilterEngine.active_filters_summary(
         tab=tab, search_text=search_text,
         date_from=date_from_s, date_to=date_to_s,
-        entity_id=entity_id, followup=followup,
+        entity_id=entity_id, followup=followup, legacy=legacy,
     )
 
-    counter_badges = BookFilterEngine.get_counter_badges(base_qs)
+    counter_badges = BookFilterEngine.get_counter_badges(counters_qs)
 
     return JsonResponse({
         'books': books_data,
@@ -333,6 +359,8 @@ def api_unified_data(request):
         },
         'active_filters': active_filters,
         'badges': counter_badges,
+        'legacy': legacy,
+        'search_widened': widened,
     })
 
 
@@ -373,7 +401,8 @@ def api_export_csv(request):
     """تصدير الكتب المفلترة كـ CSV — يستخدم نفس فلاتر api_unified_data."""
     from .filter_helpers import BookFilterEngine, BookSortEngine
 
-    base_qs = scope_books_for(request.user, Book.objects.all()).prefetch_related("issuing_entities", "receiving_entities")
+    rows_qs, _counters, _legacy, _widened = _list_scope(request)
+    base_qs = rows_qs.prefetch_related("issuing_entities", "receiving_entities")
 
     from datetime import datetime as _dt
     # `incoming` كالصفحة والنقطة تماماً: زرُّ التصدير ينسخ `window.location.search`
@@ -415,6 +444,10 @@ def api_export_csv(request):
         from core.scoping import ACCESS_STUB, STUB_TITLE, secret_access
 
         buf = io.StringIO()
+        # BOM مرّةً واحدة صراحةً (كتصدير التقارير): ``charset=utf-8-sig`` في الترويسة
+        # كان يُرمِّز **كلَّ دفعةٍ** وحدَها فيُلصق BOM ببداية كلّ صفّ — محرفٌ خفيٌّ أوّلَ
+        # خانةٍ في كلّ سطرٍ من Excel.
+        buf.write("﻿")
         writer = csv.writer(buf)
         writer.writerow(HEADERS)
         yield buf.getvalue()
@@ -438,7 +471,7 @@ def api_export_csv(request):
             ])
             yield buf.getvalue()
 
-    response = StreamingHttpResponse(_rows(), content_type="text/csv; charset=utf-8-sig")
+    response = StreamingHttpResponse(_rows(), content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="books_export.csv"'
     return response
 

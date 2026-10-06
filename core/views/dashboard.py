@@ -30,8 +30,8 @@ from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
 from .filter_helpers import (_FOLLOWUP_STATES, FOLLOWUP_LABELS, days_ar, followup_phrase,
                              followup_q)
 from .helpers import staff_required
-from core.scoping import (STUB_TITLE, can_edit_book, can_view_reports, is_privileged,
-                          report_departments, restricted_flag_sql, scope_books_for,
+from core.scoping import (STUB_TITLE, books_in_scope, can_edit_book, can_view_reports,
+                          is_privileged, report_departments, restricted_flag_sql,
                           subtree_ids)
 
 logger = logging.getLogger(__name__)
@@ -54,8 +54,11 @@ def dashboard(request):
     **والنظرةُ العامّة صارت على المصدر الوحيد**: كانت هنا نسخةٌ خاصّةٌ من قاعدة
     الرؤية («المشرف الكلّ، وغيرُه كتبَه فقط») سبقت بُعدَ القسم ولم تلحق به —
     فلوحةُ موظّفِ الوحدة كانت تُظهر أصفاراً وهو يعمل كلَّ يوم.
+
+    **والحيُّ وحدَه** (``books_in_scope``، قرارُ المالك 2026‑10‑06): كلُّ رقمٍ هنا
+    رابطٌ إلى القائمة، والقائمةُ تعرض الحيَّ افتراضاً — فالرقمُ عددُ ما يفتحه.
     """
-    books = scope_books_for(request.user, Book.objects.all())
+    books = books_in_scope(request.user)
     today = timezone.localdate()
 
     # «جارية» من المصدر الوحيد: الرقمُ هنا والقائمةُ التي يفتحها (`followup=active`)
@@ -138,7 +141,7 @@ def _reports_qs(request):
     """
     user = request.user
     legacy = request.GET.get("legacy") == "1"
-    qs = scope_books_for(user, Book.objects.all() if legacy else Book.objects.live())
+    qs = books_in_scope(user, legacy=legacy)
     qs = (qs.select_related("created_by", "department", "current_custody__to_holder_user",
                             "current_custody__to_holder_department")
             .prefetch_related("issuing_entities", "receiving_entities")

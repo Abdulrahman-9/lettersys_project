@@ -38,8 +38,9 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("إشعارات التأخّر معطّلة من الإعدادات."))
             return
 
-        # الكتب المتأخرة حالياً (نشطة + due_date في الماضي)
-        overdue_qs = Book.objects.filter(
+        # الكتب المتأخرة حالياً (نشطة + due_date في الماضي) — **من الحيّ وحدَه**
+        # (§7.2 وقرارُ المالك 2026‑10‑06): الإشعارُ يعدّ ما تعدّه اللوحةُ والقائمة.
+        overdue_qs = Book.objects.live().filter(
             is_archived=False,
             due_date__lt=today,
         ).select_related('created_by')

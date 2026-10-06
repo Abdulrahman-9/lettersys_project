@@ -81,7 +81,8 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
             ('templates/core/dashboard.html', 'css/dashboard_roles.css', 20260929),
             ('templates/base.html', 'design-system.css', 20260927),
             ('templates/base.html', 'app.css', 20260929),
-            ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js', 20260927),
+            ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js', 20261006),
+            ('templates/core/book_unified.html', 'css/book_unified_tabs.css', 20261006),
             ('templates/core/extraction_smart_desktop.html', 'extraction_smart.css', 20260929),
             ('templates/core/reports.html', 'css/reports.css', 20261006),
             ('templates/core/book_detail.html', 'css/book_detail_v2.css', 20261006),
@@ -95,7 +96,7 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
         sw = (ROOT / 'static' / 'service-worker.js').read_text(encoding='utf-8')
         m = re.search(r"CACHE_VERSION = 'v(\d+)-", sw)
         self.assertIsNotNone(m, 'CACHE_VERSION')
-        self.assertGreaterEqual(int(m.group(1)), 117)
+        self.assertGreaterEqual(int(m.group(1)), 118)
 
 
 class LifecycleScriptGuardsTests(SimpleTestCase):
