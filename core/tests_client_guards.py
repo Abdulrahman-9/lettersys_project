@@ -84,6 +84,7 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
             ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js', 20260927),
             ('templates/core/extraction_smart_desktop.html', 'extraction_smart.css', 20260929),
             ('templates/core/reports.html', 'css/reports.css', 20261006),
+            ('templates/core/book_detail.html', 'css/book_detail_v2.css', 20261006),
         )
         for rel, asset, floor in assets:
             with self.subTest(file=rel, asset=asset):
@@ -94,7 +95,7 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
         sw = (ROOT / 'static' / 'service-worker.js').read_text(encoding='utf-8')
         m = re.search(r"CACHE_VERSION = 'v(\d+)-", sw)
         self.assertIsNotNone(m, 'CACHE_VERSION')
-        self.assertGreaterEqual(int(m.group(1)), 116)
+        self.assertGreaterEqual(int(m.group(1)), 117)
 
 
 class LifecycleScriptGuardsTests(SimpleTestCase):
@@ -127,6 +128,18 @@ class LifecycleScriptGuardsTests(SimpleTestCase):
         handler = handler[:handler.index('register-here/')]
         self.assertRegex(handler, r'if \(!window\.confirm\(')
         self.assertIn('button.dataset.ledger', handler)
+
+    def test_register_here_is_delegated_on_the_document(self):
+        """«ملفّ الكتاب»: الزرُّ انتقل إلى قائمة «⋯» في الترويسة (``bookActions``) — خارجَ
+        ``lifecycleRegion``؛ فالتفويضُ على المنطقة لا يبلغه، والربطُ المباشر يموت بعد الإنعاش."""
+        self.assertRegex(self.src(), r"document\.addEventListener\('click', function \(event\) \{\s*"
+                                     r"var button = event\.target\.closest\('#registerHereBtn'\)")
+
+    def test_printing_the_document_is_delegated(self):
+        """زرُّ «المستند المرفق» في قائمة «طباعة» داخل ``bookActions`` التي يُعاد رسمُها."""
+        src = (ROOT / 'static' / 'book_detail.js').read_text(encoding='utf-8')
+        self.assertIn("closest('[data-print-doc]')", src)
+        self.assertNotIn("getElementById('printDocBtn')", src)
 
 
 class CopyNumberButtonTests(SimpleTestCase):

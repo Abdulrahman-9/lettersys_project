@@ -20,7 +20,7 @@ from .helpers import staff_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
-from core.scoping import can_open_content, is_privileged
+from core.scoping import can_edit_book, is_privileged
 
 logger = logging.getLogger('lettersys')
 
@@ -350,7 +350,8 @@ def scan_stage_attachment(request, attachment_id: int):
 
     att = get_object_or_404(Attachment, id=attachment_id)
     book = att.book
-    if not can_open_content(book, request.user):
+    # تجهيزُ المرفق للتحرير بدايةُ كتابةٍ عليه — للقسم المالك وطاولته والمدير (Q1‑ج)
+    if not can_edit_book(book, request.user):
         return JsonResponse({'ok': False, 'error': 'غير مصرح'}, status=403)
     if not att.file:
         return JsonResponse({'ok': False, 'error': 'لا يوجد ملف لهذا المرفق'}, status=404)

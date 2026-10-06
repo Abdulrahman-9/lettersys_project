@@ -30,7 +30,7 @@ from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
 from .filter_helpers import (_FOLLOWUP_STATES, FOLLOWUP_LABELS, days_ar, followup_phrase,
                              followup_q)
 from .helpers import staff_required
-from core.scoping import (STUB_TITLE, can_open_content, can_view_reports, is_privileged,
+from core.scoping import (STUB_TITLE, can_edit_book, can_view_reports, is_privileged,
                           report_departments, restricted_flag_sql, scope_books_for,
                           subtree_ids)
 
@@ -488,7 +488,8 @@ def restore_book(request, pk):
         Redirect to trash list with success message
     """
     book = get_object_or_404(Book.all_objects, pk=pk, is_deleted=True)
-    if not can_open_content(book, request.user):
+    # الاستعادةُ عكسُ الحذف — للقسم المالك وطاولته والمدير (Q1‑ج)
+    if not can_edit_book(book, request.user):
         messages.error(request, "غير مصرح بالاستعادة.")
         return redirect("trash_list")
     book.is_deleted = False
@@ -555,7 +556,7 @@ def restore_attachment(request, attachment_id):
     if att.book.is_deleted:
         messages.error(request, "لا يمكن استعادة مرفق لكتاب محذوف.")
         return redirect("trash_list")
-    if not can_open_content(att.book, request.user):
+    if not can_edit_book(att.book, request.user):
         messages.error(request, "غير مصرح بالاستعادة.")
         return redirect("trash_list")
     att.is_deleted = False

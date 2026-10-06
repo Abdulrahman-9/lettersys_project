@@ -65,14 +65,20 @@
             <td>{{ book.first_issuing_entity|default:'—' }}</td>
             <td>{{ book.deleted_at|date:"Y-m-d H:i" }}</td>
             <td class="text-end">
+              {# لا زرَّ يُعرض ليُرفض: الحقّان من العرض (can_edit_book · is_privileged) #}
+              {% if book.can_restore %}
               <form method="post" action="{% url 'restore_book' book.id %}" class="d-inline">
                 {% csrf_token %}
                 <button class="btn btn-sm btn-outline-success" type="submit">استعادة</button>
               </form>
+              {% endif %}
+              {% if can_purge %}
               <form method="post" action="{% url 'purge_book' book.id %}" class="d-inline">
                 {% csrf_token %}
                 <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('حذف نهائي للكتاب؟');">حذف نهائي</button>
               </form>
+              {% endif %}
+              {% if not book.can_restore and not can_purge %}<span class="text-muted small">للقسم المالك</span>{% endif %}
             </td>
           </tr>
           {% empty %}
@@ -106,14 +112,19 @@
             <td>{{ att.book.our_number_display|default:att.book.id }}</td>
             <td>{{ att.deleted_at|date:"Y-m-d H:i" }}</td>
             <td class="text-end">
+              {% if att.can_restore %}
               <form method="post" action="{% url 'restore_attachment' att.id %}" class="d-inline">
                 {% csrf_token %}
                 <button class="btn btn-sm btn-outline-success" type="submit">استعادة</button>
               </form>
+              {% endif %}
+              {% if not att.can_restore and not can_purge %}<span class="text-muted small">للقسم المالك</span>{% endif %}
+              {% if can_purge %}
               <form method="post" action="{% url 'purge_attachment' att.id %}" class="d-inline">
                 {% csrf_token %}
                 <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('حذف نهائي للمرفق؟');">حذف نهائي</button>
               </form>
+              {% endif %}
             </td>
           </tr>
           {% empty %}

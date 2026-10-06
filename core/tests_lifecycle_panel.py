@@ -106,7 +106,7 @@ class EmptyStateTests(LifecyclePanelTestCase):
     def test_one_movement_opens_the_full_panel(self):
         distribute(self.bare, [self.unit], by=self.clerk)
         body = self._page(self.bare)
-        self.assertIn('دورة حياة الكتاب', body)
+        self.assertIn('التفريق والردود', body)
         self.assertNotIn('لا حركةَ تسييرٍ على هذا الكتاب', body)
 
 

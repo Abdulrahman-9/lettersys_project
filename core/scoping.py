@@ -229,16 +229,47 @@ def _live_grants_for(user):
 
     if not getattr(user, 'pk', None):
         return SecretAccessGrant.objects.none()
+    return _live_grants().filter(user=user)
+
+
+def _live_grants():
+    """التفويضاتُ السارية كلُّها — **تعريفُ السريان الوحيد** (غيرُ مسحوبٍ وغيرُ منتهٍ)."""
+    from core.models import SecretAccessGrant
 
     now = timezone.now()
-    return SecretAccessGrant.objects.filter(
-        user=user, revoked_at__isnull=True,
-    ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    return SecretAccessGrant.objects.filter(revoked_at__isnull=True).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=now))
 
 
 def _has_live_grant(user, book) -> bool:
     """أعنده تفويضٌ سارٍ على هذا الكتاب بعينه؟"""
     return _live_grants_for(user).filter(book=book).exists()
+
+
+def secret_openers(book):
+    """مَن يفتح محتوى هذا الكتاب السرّيّ — سطرُ «مَن يفتحه» في صفحته (قرارُ Q5).
+
+    **التوأمُ المقروء لـ``secret_access``** بمسنداته نفسِها: مُنشئُه، وأمناءُ
+    ورق قسمه (``_department_custodian``)، وحمَلةُ التفويض الساري — ومديرُ النظام
+    دائماً (يُسمّى دوراً لا أشخاصاً). يُعيد المستخدمين مرتّبين بالاسم؛ وحارسُ
+    التطابق يتحقّق أنّ كلَّ مَن تُسمّيه يلقى ``ACCESS_FULL`` وأنّ زميلَ القسم لا.
+    """
+    from django.contrib.auth.models import User
+
+    openers = {}
+    if book.created_by_id:
+        openers[book.created_by_id] = book.created_by
+    if book.department_id:
+        colleagues = User.objects.filter(profile__department_id=book.department_id
+                                         ).select_related('profile')
+        for user in colleagues:
+            if _department_custodian(user):
+                openers[user.pk] = user
+    for grant in _live_grants().filter(book=book).select_related('user'):
+        openers[grant.user_id] = grant.user
+    # مَن عُطِّل حسابُه لا يفتح شيئاً — ذكرُه ضجيج؛ والمديرُ يُذكر دوراً في القالب
+    return sorted((u for u in openers.values() if u.is_active and not u.is_superuser),
+                  key=lambda u: u.get_full_name() or u.get_username())
 
 
 def can_view_book(book, user) -> bool:
@@ -277,6 +308,29 @@ def can_open_content(book, user) -> bool:
     (خدمةً أو رفعاً أو حذفاً أو دمجاً) تمرّ من هنا لا من ``can_view_book``.
     """
     return can_view_book(book, user) and secret_access(user, book) == ACCESS_FULL
+
+
+def can_edit_book(book, user) -> bool:
+    """أيحقّ له **الكتابةُ على الكتاب نفسِه**: حقولِه وهامشِه ومرفقاته وحالةِ
+    متابعته — أو حذفُه واستعادتُه؟
+
+    قرارُ المالك 2026‑09‑29 (Q1‑ج): لشجرة **القسم المالك** وطاولته ومدير النظام.
+    والوحدةُ التي فُرِّق إليها الكتابُ أو ذُكرت فيه تراه وتفتح محتواه
+    (``can_open_content``) وتُبقي أفعالَ صفّها وعهدتها وتعليقها — لكنّها لا تكتب
+    فوق ورقة غيرها. كان حقُّ الكتابة هو حقَّ الفتح، فتعدّل الوحدةُ المُحالُ إليها
+    عنوانَ القسم وتحذف كتابَه وتكتب فوق هامش مديره.
+
+    مَن بلا قسمٍ (تنصيبٌ لم تُبذَر أقسامُه) وكتابٌ بلا قسم: يكتب عليه مُنشئُه —
+    كما يراه وحدَه في ``scope_books_for``.
+    """
+    if not can_open_content(book, user):
+        return False
+    if is_privileged(user):
+        return True
+    dept_id = user_department_id(user)
+    if dept_id is None or book.department_id is None:
+        return book.created_by_id == user.id
+    return book.department_id in subtree_ids(dept_id)
 
 
 def scope_books_for(user, qs=None):

@@ -1,0 +1,4 @@
+{% comment %}شاراتُ الجهات في «بيانات الكتاب» — النشطةُ تفتح أضبارتَها، والمحذوفةُ أرشيفٌ نصّيّ.{% endcomment %}
+{% for e in entities %}{% if e.is_active %}<a class="bx-tag" href="{% url 'dossier_detail' e.pk %}" title="أضبارة {{ e.name }}"><i class="bi bi-folder2" aria-hidden="true"></i>{{ e.name }}</a>{% else %}<span class="bx-tag">{{ e.name }}</span>{% endif %}{% endfor %}
+{% for name in archived %}<span class="bx-tag bx-tag--gone" title="جهةٌ محذوفة (أرشيفٌ نصّيّ)"><i class="bi bi-archive" aria-hidden="true"></i>{{ name }}</span>{% endfor %}
+{% if not entities and not archived %}<span class="bx-muted">—</span>{% endif %}

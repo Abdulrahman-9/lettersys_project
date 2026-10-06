@@ -22,7 +22,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from core.scoping import can_open_content
+from core.scoping import can_edit_book, can_open_content
 
 
 from ..models import Attachment, Book, BookHistory
@@ -121,11 +121,9 @@ def update_book_notes(request, book_id):
     try:
         book = Book.objects.select_related('created_by').get(id=book_id)
         
-        # Enhanced permission check
-        # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
-        # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
-        # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
-        has_permission = can_open_content(book, request.user)
+        # الهامشُ كتابةٌ على الكتاب نفسِه — لشجرة القسم المالك وطاولته والمدير
+        # (Q1‑ج، ``can_edit_book``): الوحدةُ المُحالُ إليها تقرؤه ولا تكتب فوقه.
+        has_permission = can_edit_book(book, request.user)
         
         if not has_permission:
             logger.warning(
@@ -155,16 +153,18 @@ def update_book_notes(request, book_id):
                 "message": f"الملاحظات طويلة جداً (الحد الأقصى 10000 حرف، أنت أدخلت {len(margin)} حرف)"
             }, status=400)
         
-        # Update notes
+        # Update notes — والسجلُّ يحفظ **النصَّ السابق** (Q1‑ج): الهامشُ توجيهُ
+        # المدير، وما كُتب فوقه بلا أثرٍ يُضيع مَن قال ماذا.
+        previous = book.margin or ''
         book.margin = margin
         book.save(update_fields=['margin', 'updated_at'])
-        
-        # Log history
+
         BookHistory.objects.create(
             book=book,
             action='update_notes',
             by=request.user,
-            notes='تحديث الملاحظات'
+            notes=('تحديث الملاحظات — النصُّ السابق: «%s»' % previous) if previous
+                  else 'تحديث الملاحظات (لم يكن هامش)'
         )
         
         logger.info(

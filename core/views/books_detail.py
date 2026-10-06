@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Prefetch
+from django.core.exceptions import PermissionDenied
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -20,9 +21,10 @@ from ..forms import AttachmentForm
 from ..models import Attachment, Book, BookEmailLog, BookHistory
 from .comments import can_edit_comment
 from core.scoping import (
-    ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_open_content, can_view_book,
-    is_privileged, secret_access,
+    ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_edit_book, can_open_content, can_view_book,
+    is_privileged, secret_access, secret_openers,
 )
+from .book_state import citation, due_pill, is_paper, journey, primary_action
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +37,10 @@ HISTORY_PAGE = 50
 def book_detail(request, pk):
     """عرض تفاصيل كتاب واحد مع المرفقات والسجل."""
     book = get_object_or_404(
-        Book.objects.select_related('created_by').prefetch_related(
+        Book.objects.select_related(
+            'created_by', 'department', 'current_custody__to_holder_user',
+            'current_custody__to_holder_department',
+        ).prefetch_related(
             'issuing_entities',
             'receiving_entities',
             Prefetch(
@@ -83,6 +88,13 @@ def book_detail(request, pk):
     record_view(request, book)
     if book.secret_level in RESTRICTED_SECRET_LEVELS and not _ajax:
         record_event(request, 'SECRET_VIEW', book=book)
+
+    if request.method == 'POST' and 'file' in request.FILES and not can_edit_book(book, request.user):
+        # الإرفاقُ كتابةٌ على الكتاب (Q1‑ج): الوحدةُ المُحالُ إليها تقرأ ولا تُضيف إلى ملفّ غيرها
+        if _ajax:
+            return JsonResponse({'success': False, 'message': 'الإرفاقُ للقسم المالك.'}, status=403)
+        messages.error(request, "الإرفاقُ على هذا الكتاب للقسم المالك.")
+        return redirect("book_detail", pk=pk)
 
     if request.method == 'POST' and 'file' in request.FILES:
         form = AttachmentForm(request.POST, request.FILES)
@@ -151,6 +163,9 @@ def book_detail(request, pk):
                    .order_by('-created_at')[:HISTORY_PAGE])
     history_total = history_rows.count()
 
+    lifecycle = _lifecycle_context(book, request.user)
+    can_edit = can_edit_book(book, request.user)
+
     return render(
         request,
         "core/book_detail.html",
@@ -167,7 +182,20 @@ def book_detail(request, pk):
             # المراسلات» على السجلّات نفسِها — كان على `email_threads` فيغيب
             # الرابطُ عن كتابٍ له بريدٌ بلا خيطٍ ويظهر لخيطٍ بلا صادر.
             "email_log_count": BookEmailLog.objects.filter(book=book).count(),
-            **_lifecycle_context(book, request.user),
+            # التعديلُ والهامشُ والمرفقاتُ وإنهاءُ المتابعة لمن يقبلها الخادم (Q1‑ج)
+            "can_edit": can_edit,
+            # الترويسةُ من دالّاتٍ خالصة (``book_state``) — القالبُ يعرض ولا يقرّر
+            "journey": journey(book, referrals=lifecycle["referrals"]),
+            "primary": primary_action(book, referrals=lifecycle["referrals"],
+                                      can_distribute=lifecycle["can_distribute"],
+                                      can_edit=can_edit),
+            "due": due_pill(book),
+            "citation": citation(book),
+            "paper": is_paper(book),
+            # «مَن يفتحه» (Q5) — للسرّيّ وحدَه، من توأم ``secret_access``
+            "secret_openers": (secret_openers(book)
+                               if book.secret_level in RESTRICTED_SECRET_LEVELS else None),
+            **lifecycle,
         },
     )
 
@@ -256,17 +284,20 @@ def book_edit(request, pk):
     """تعديل كتاب قائم."""
     book = get_object_or_404(Book, pk=pk)
 
-    # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
-    # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
-    # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
-    has_permission = can_open_content(book, request.user)
+    # كتابةٌ على الكتاب نفسِه — لشجرة القسم المالك وطاولته والمدير (Q1‑ج،
+    # ``can_edit_book``)؛ والوحدةُ المُحالُ إليها تقرؤه ولا تعدّله.
+    has_permission = can_edit_book(book, request.user)
 
     if not has_permission:
         logger.warning(
             f"Unauthorized book edit attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
         )
-        raise Http404("الكتاب غير موجود")
+        # «غيرُ موجود» لمن لا يفتح المحتوى (والكعبُ منه — الرمزُ لا يُفصح)، و«ممنوع»
+        # صادقةٌ لمن يفتحه ولا يكتب عليه: الوحدةُ المُحالُ إليها.
+        if not can_open_content(book, request.user):
+            raise Http404("الكتاب غير موجود")
+        raise PermissionDenied("التعديلُ للقسم المالك.")
 
     # تحويل GET لصفحة الاستخراج الذكي في وضع التعديل (مع تمرير وجهة العودة إن وُجدت)
     if request.method == "GET":
@@ -285,10 +316,8 @@ def book_change_status(request, pk):
     """
     book = get_object_or_404(Book, pk=pk)
 
-    # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
-    # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
-    # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
-    has_permission = can_open_content(book, request.user)
+    # إنهاءُ المتابعة وإعادةُ فتحها قرارُ القسم المالك (Q1‑ج، ``can_edit_book``).
+    has_permission = can_edit_book(book, request.user)
 
     if not has_permission:
         logger.warning(
