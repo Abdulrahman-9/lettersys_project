@@ -114,10 +114,15 @@ class ImageProcessor:
                     logger.warning("[ImageProcessor] نقص ذاكرة عند الرسم — إعادة المحاولة بدقّة أدنى (~%d DPI)",
                                    round(zoom * 72))
 
-            # تحويل لـ numpy array
-            img_data = pix.tobytes("png")
-            nparr = np.frombuffer(img_data, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            # تحويل لـ numpy array **من عيّنات الـpixmap مباشرةً** لا عبر ضغطِ PNG ثمّ فكِّه:
+            # PNG بلا فقد، فـ`imdecode(png(pix))` هو عيّناتُ pix نفسُها مرتّبةً BGR — بكسلاً
+            # ببكسل. الجولةُ كانت تكلّف ~0.6 ث لصفحة 3500px (قياس 2026-10-05). غيرُ RGB
+            # المرصوص (لا يقع مع alpha=False) يبقى على المسار القديم.
+            if pix.n == 3 and pix.stride == pix.width * 3:
+                rgb = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
+                img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            else:
+                img = cv2.imdecode(np.frombuffer(pix.tobytes("png"), np.uint8), cv2.IMREAD_COLOR)
 
             doc.close()
             logger.info(f"[ImageProcessor] PDF converted (~{round(zoom * 72)} DPI), size: {img.shape}")

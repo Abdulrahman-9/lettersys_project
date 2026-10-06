@@ -19,6 +19,8 @@ import time
 from collections import Counter, defaultdict
 from typing import NamedTuple, Optional
 
+from core.extraction.shared_index import SharedIndex, db_signature
+
 logger = logging.getLogger(__name__)
 
 _AR_DIGITS = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
@@ -106,6 +108,77 @@ def _template_regex(template: str, prefixes) -> Optional[re.Pattern]:
         return None
 
 
+def _build_profiles() -> dict:
+    """جهة ⟵ قوالبُها وبادئاتُها — البناءُ نفسُه حرفاً كما كان على النسخة، نُقل إلى دالّةٍ
+    ليُشارَك على مستوى العمليّة (`PROFILES_INDEX`). المستهلكون (`find`/`repair`/
+    `_known_prefixes`) يقرؤون فقط — لا فهرسةَ تُنشئ مفتاحاً في defaultdict."""
+    from core.models import Book, LetterheadMemory
+    through = Book.issuing_entities.through
+    # الضمُّ لا يمرّ بمدير: `through` نموذجٌ وسيطٌ بلا SoftDeleteManager،
+    # وشرطُ `book__is_deleted` يعبر إلى Book بضمٍّ خامّ ⟵ حذفُه يُدخل أرقامَ
+    # كتبٍ محذوفةٍ في بصمة الجهة بصمت (الفئة ب في 7.4‑هـ — لا يُكنَس).
+    rows = (through.objects
+            .filter(book__is_deleted=False)
+            .exclude(book__sender_number__isnull=True)
+            .exclude(book__sender_number='')
+            .values_list('entity_id', 'book__sender_number'))
+    profiles = defaultdict(lambda: {'templates': Counter(),
+                                    'prefixes': defaultdict(Counter),
+                                    'ctx_prefixes': defaultdict(Counter)})
+    for eid, num in rows.iterator(chunk_size=2000):
+        tmpl = induce_template(num)
+        p = profiles[eid]
+        p['templates'][tmpl] += 1
+        prefix = _leading_letters(num)
+        if prefix:
+            p['prefixes'][tmpl][prefix] += 1
+
+    # تعلّم الكود الكامل من ذاكرة الترويسة: المستخدمون يخزّنون آخر مقطعٍ فقط
+    # («195») بينما الترويسة تحمل الكود الكامل («MF-2026-195») — نجد القيمة
+    # المخزَّنة في النصّ ونوسّعها إلى الرمز المتّصل حولها، فنتعلّم قالبه الكامل
+    # وبادئته. هذا «كيف التُقط الرقم في كل مرة سابقة» — مُكتشَفاً من الداتا بيس.
+    lm_rows = (LetterheadMemory.objects
+               .exclude(issuing_entity=None)
+               .exclude(book=None)
+               # الضمُّ لا يمرّ بمدير: LetterheadMemory مديرُه عاديٌّ والشرطُ حاملٌ
+               # للحمل — بدونه تتعلّم الذاكرةُ من كتبٍ حُذفت (الفئة ب — لا يُكنَس).
+               .filter(book__is_deleted=False)
+               .exclude(book__sender_number__isnull=True)
+               .exclude(book__sender_number='')
+               .values_list('issuing_entity_id', 'book__sender_number', 'letterhead'))
+    code_chars = set('0123456789-–—/ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
+    for eid, num, head in lm_rows.iterator(chunk_size=1000):
+        num = str(num).strip().translate(_AR_DIGITS)
+        head = (head or '').translate(_AR_DIGITS)
+        if not num or len(num) < 2:
+            continue
+        for m in re.finditer(r'(?<!\d)' + re.escape(num) + r'(?!\d)', head):
+            lo, hi = m.start(), m.end()
+            while lo > 0 and head[lo - 1] in code_chars:
+                lo -= 1
+            while hi < len(head) and head[hi] in code_chars:
+                hi += 1
+            token = head[lo:hi].strip('-–—/')
+            prefix = _leading_letters(token)
+            if (token == num or len(token) > 24 or len(prefix) < _MIN_PREFIX_LEN
+                    or prefix.upper() in _CTX_STOPWORDS):
+                continue
+            profiles[eid]['ctx_prefixes'][induce_template(token)][prefix.upper()] += 1
+            break   # ظهور واحد يكفي لكل كتاب
+
+    logger.info('[SenderNumberProfiles] فهرس البصمات جاهز — %d جهة', len(profiles))
+    # يُجمَّد قبل النشر: الفهرسُ مشتركٌ بين خيوط الخادم، و`defaultdict` يُنشئ مفتاحاً عند أوّل
+    # فهرسةٍ بقوسين — كتابةٌ صامتة في حالٍ مشتركة لو فعلها مستهلكٌ يوماً. القراءاتُ الحاليّة
+    # (`get`/`in`/`values`/`items`) تُعيد الشيءَ نفسَه على dict، والترتيبُ محفوظ.
+    return {eid: {'templates': p['templates'], 'prefixes': dict(p['prefixes']),
+                  'ctx_prefixes': dict(p['ctx_prefixes'])}
+            for eid, p in profiles.items()}
+
+
+PROFILES_INDEX = SharedIndex('sender-number-profiles', _build_profiles, db_signature,
+                             'SENDER_PROFILES_INDEX_TTL', _REFRESH_SEC)
+
+
 class SenderNumberProfiles:
     """فهرس بصمات الترقيم: جهة → قوالبها وبادئاتها المُتعلَّمة من الكتب المؤكَّدة."""
 
@@ -114,65 +187,11 @@ class SenderNumberProfiles:
         self._built_at = 0.0
 
     def _ensure_index(self):
-        if self._profiles and (time.monotonic() - self._built_at) < _REFRESH_SEC:
-            return
-        from core.models import Book, LetterheadMemory
-        through = Book.issuing_entities.through
-        # الضمُّ لا يمرّ بمدير: `through` نموذجٌ وسيطٌ بلا SoftDeleteManager،
-        # وشرطُ `book__is_deleted` يعبر إلى Book بضمٍّ خامّ ⟵ حذفُه يُدخل أرقامَ
-        # كتبٍ محذوفةٍ في بصمة الجهة بصمت (الفئة ب في 7.4‑هـ — لا يُكنَس).
-        rows = (through.objects
-                .filter(book__is_deleted=False)
-                .exclude(book__sender_number__isnull=True)
-                .exclude(book__sender_number='')
-                .values_list('entity_id', 'book__sender_number'))
-        profiles = defaultdict(lambda: {'templates': Counter(),
-                                        'prefixes': defaultdict(Counter),
-                                        'ctx_prefixes': defaultdict(Counter)})
-        for eid, num in rows.iterator(chunk_size=2000):
-            tmpl = induce_template(num)
-            p = profiles[eid]
-            p['templates'][tmpl] += 1
-            prefix = _leading_letters(num)
-            if prefix:
-                p['prefixes'][tmpl][prefix] += 1
-
-        # تعلّم الكود الكامل من ذاكرة الترويسة: المستخدمون يخزّنون آخر مقطعٍ فقط
-        # («195») بينما الترويسة تحمل الكود الكامل («MF-2026-195») — نجد القيمة
-        # المخزَّنة في النصّ ونوسّعها إلى الرمز المتّصل حولها، فنتعلّم قالبه الكامل
-        # وبادئته. هذا «كيف التُقط الرقم في كل مرة سابقة» — مُكتشَفاً من الداتا بيس.
-        lm_rows = (LetterheadMemory.objects
-                   .exclude(issuing_entity=None)
-                   .exclude(book=None)
-                   # الضمُّ لا يمرّ بمدير: LetterheadMemory مديرُه عاديٌّ والشرطُ حاملٌ
-                   # للحمل — بدونه تتعلّم الذاكرةُ من كتبٍ حُذفت (الفئة ب — لا يُكنَس).
-                   .filter(book__is_deleted=False)
-                   .exclude(book__sender_number__isnull=True)
-                   .exclude(book__sender_number='')
-                   .values_list('issuing_entity_id', 'book__sender_number', 'letterhead'))
-        code_chars = set('0123456789-–—/ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
-        for eid, num, head in lm_rows.iterator(chunk_size=1000):
-            num = str(num).strip().translate(_AR_DIGITS)
-            head = (head or '').translate(_AR_DIGITS)
-            if not num or len(num) < 2:
-                continue
-            for m in re.finditer(r'(?<!\d)' + re.escape(num) + r'(?!\d)', head):
-                lo, hi = m.start(), m.end()
-                while lo > 0 and head[lo - 1] in code_chars:
-                    lo -= 1
-                while hi < len(head) and head[hi] in code_chars:
-                    hi += 1
-                token = head[lo:hi].strip('-–—/')
-                prefix = _leading_letters(token)
-                if (token == num or len(token) > 24 or len(prefix) < _MIN_PREFIX_LEN
-                        or prefix.upper() in _CTX_STOPWORDS):
-                    continue
-                profiles[eid]['ctx_prefixes'][induce_template(token)][prefix.upper()] += 1
-                break   # ظهور واحد يكفي لكل كتاب
-
-        self._profiles = dict(profiles)
+        """الفهرسُ **مشتركٌ على مستوى العمليّة** (`PROFILES_INDEX`): كان يُبنى على النسخة،
+        والنسخةُ تُبنى لكلّ طلب — بل مرّتين حين يعمل حارسُ المطبوع (نسخةٌ ثانية في
+        `_printed_number_vetoed`). عقدُ «النتيجةُ نفسُها» في `core/extraction/shared_index.py`."""
+        self._profiles = PROFILES_INDEX.get()
         self._built_at = time.monotonic()
-        logger.info('[SenderNumberProfiles] فهرس البصمات جاهز — %d جهة', len(self._profiles))
 
     @staticmethod
     def _edit_distance(a: str, b: str) -> int:

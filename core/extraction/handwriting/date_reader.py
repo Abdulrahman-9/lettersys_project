@@ -22,6 +22,7 @@
 """
 import logging
 import os
+import threading
 from typing import Optional, Tuple
 
 from core.extraction.artifacts import date_charset_path, date_model_path
@@ -56,11 +57,15 @@ class HandwrittenDateReader(HandwrittenNumberReader):
 
 
 _reader: Optional[HandwrittenDateReader] = None
+_reader_lock = threading.Lock()
 
 
 def get_date_reader() -> HandwrittenDateReader:
-    """مفردٌ كسول — تحميلُ ONNX مرّةً واحدة لكلّ عمليّة."""
+    """مفردٌ كسول — تحميلُ ONNX مرّةً واحدة لكلّ عمليّة. تحت قفل: إحماءُ الإقلاع وأوّلُ
+    طلبٍ قد يصلان معاً فيُنشئ كلٌّ منهما قارئاً (كما يفعل الكاشف — `detector._get_session`)."""
     global _reader
     if _reader is None:
-        _reader = HandwrittenDateReader()
+        with _reader_lock:
+            if _reader is None:
+                _reader = HandwrittenDateReader()
     return _reader

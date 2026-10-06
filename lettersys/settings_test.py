@@ -56,6 +56,15 @@ MEDIA_ROOT = Path(tempfile.mkdtemp())
 import atexit, shutil
 atexit.register(shutil.rmtree, str(MEDIA_ROOT), True)
 
+# ─── تجاوز: فهارسُ الاستخراج بلا مشاركةٍ ولا خيوطٍ خلفيّة ──────────────────
+# التراجعُ بين الاختبارات لا يُطلق إشارات، فالمشاركةُ قد تُسرّب فهرسَ اختبارٍ إلى تاليه؛
+# والخيطُ الخلفيّ يفتح اتّصالاً لا يرى قاعدةَ الذاكرة. المشاركةُ نفسُها مختبَرةٌ باختباراتٍ
+# تضبطها صراحةً (core/tests_shared_index.py).
+LETTERHEAD_MEMORY_INDEX_TTL = 0
+SENDER_PROFILES_INDEX_TTL = 0
+EXTRACTION_BACKGROUND_INDEXING = False
+EXTRACTION_WARMUP = False
+
 # ─── تجاوز: كلمة مرور بسيطة مسموح بها للاختبارات ─────────────────────────
 AUTH_PASSWORD_VALIDATORS = []
 

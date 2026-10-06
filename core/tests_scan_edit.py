@@ -279,7 +279,13 @@ class StageAttachmentTests(TestCase):
         # المعاينة تعمل على المرفق المُهيّأ
         prev = self.client.get(reverse("scan_preview_page", args=[token]) + "?page=1&dpi=80")
         self.assertEqual(prev.status_code, 200)
-        self.assertEqual(prev["Content-Type"], "image/png")
+        # المعاينةُ العاديّة JPEG (كانت PNG ~1.2 MB للصفحة)، والتكبيرُ PNG بلا فقد
+        self.assertEqual(prev["Content-Type"], "image/jpeg")
+        self.assertEqual(prev.content[:3], b"\xff\xd8\xff")
+        zoom = self.client.get(reverse("scan_preview_page", args=[token]) + "?page=1&dpi=220")
+        self.assertEqual(zoom.status_code, 200)
+        self.assertEqual(zoom["Content-Type"], "image/png")
+        self.assertEqual(zoom.content[:8], b"\x89PNG\r\n\x1a\n")
 
     def test_stage_requires_ownership(self):
         other = User.objects.create_user("other", password="p")

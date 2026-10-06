@@ -24,3 +24,8 @@ application = ProtocolTypeRouter({
         AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
     ),
 })
+
+# إحماءُ الاستخراج في الخلفيّة — هنا لا في AppConfig.ready: عمليّاتُ الخدمة وحدها تستورد
+# هذا الملفّ (runserver عبر daphne)، فلا يجري أثناء migrate أو الاختبارات.
+from core.extraction.warmup import start_extraction_warmup  # noqa: E402
+start_extraction_warmup()
