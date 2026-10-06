@@ -69,7 +69,7 @@ def api_compose(request):
       "thread_id": 7                       // optional — send within existing thread
     }
     """
-    from core.models import Book, Entity, EmailTemplate, EmailThread
+    from core.models import Entity, EmailTemplate, EmailThread
     from core.messaging.engines.smtp import send_book_notification
 
     data = _json(request)
@@ -89,11 +89,11 @@ def api_compose(request):
         return JsonResponse({'success': False, 'message': 'عنوان البريد الإلكتروني غير صالح'}, status=400)
 
     # Fetch optional entities — الكتاب ضمن نطاق المستخدم لا مطلقاً: وإلاّ عُلّقت
-    # الرسالة على كتاب غيره وظهرت في سجلّه.
-    from core.messaging.scoping import scope_books
+    # الرسالة على كتاب غيره وظهرت في سجلّه. والقالبُ أدناه يُصيَّر بعنوانه —
+    # فالمحتوى شرطٌ لا الصفّ.
+    from core.messaging.scoping import mailable_book
 
-    visible_books = scope_books(Book.objects.all(), request.user)
-    book   = visible_books.filter(pk=book_id).first()     if book_id   else None
+    book   = mailable_book(request.user, book_id)             if book_id   else None
     entity = Entity.objects.filter(pk=entity_id).first() if entity_id else None
 
     # كتابٌ طُلب ولم يُحلَّ (غير موجود أو خارج نطاقك) = رفضٌ صريح، لا سقوطٌ
@@ -290,7 +290,7 @@ def api_bulk_send(request):
       "template_id": 3          // optional — overrides subject+body
     }
     """
-    from core.models import Entity, Book, EmailTemplate
+    from core.models import Entity, EmailTemplate
     from core.messaging.engines.smtp import send_book_notification
 
     data       = _json(request)
@@ -303,11 +303,11 @@ def api_bulk_send(request):
     if not entity_ids:
         return JsonResponse({'success': False, 'message': 'entity_ids مطلوب'}, status=400)
 
-    from core.messaging.scoping import scope_books
+    from core.messaging.scoping import mailable_book
 
-    visible_books = scope_books(Book.objects.all(), request.user)
     # اختياريّ: إرسالٌ جماعيّ لجهاتٍ قد لا يخصّ كتاباً بعينه (انظر هجرة 0061).
-    book = visible_books.filter(pk=book_id).first() if book_id else None
+    # والقالبُ يُصيَّر بعنوانه ويخرج إلى الجهات — فالمحتوى شرط.
+    book = mailable_book(request.user, book_id) if book_id else None
 
     entities = Entity.objects.filter(pk__in=entity_ids, email__gt='')
     results  = {'sent': 0, 'skipped': 0, 'errors': []}
@@ -343,17 +343,18 @@ def api_bulk_send(request):
 
 @login_required
 def api_template_preview(request, pk):
-    from core.models import EmailTemplate, Book, Entity
+    from core.models import EmailTemplate, Entity
     tpl = EmailTemplate.objects.filter(pk=pk).first()
     if not tpl:
         return JsonResponse({'success': False, 'message': 'القالب غير موجود'}, status=404)
 
-    from core.messaging.scoping import scope_books
+    from core.messaging.scoping import mailable_book
 
     book_id   = request.GET.get('book_id')
     entity_id = request.GET.get('entity_id')
-    # القالب يُصيَّر برقم الكتاب وعنوانه — فمعاينةٌ بكتابِ غيرك تُسرّبهما.
-    book   = scope_books(Book.objects.all(), request.user).filter(pk=book_id).first() if book_id else None
+    # القالب يُصيَّر برقم الكتاب وعنوانه — فمعاينةٌ بكتابِ غيرك (أو بسرّيٍّ لا
+    # تملك محتواه) تُسرّبهما.
+    book   = mailable_book(request.user, book_id) if book_id else None
     entity = Entity.objects.filter(pk=entity_id).first() if entity_id else None
 
     ctx = {'book': book, 'entity': entity, 'user': request.user}

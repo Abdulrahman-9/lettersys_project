@@ -60,7 +60,7 @@ def send_email(request):
       "entity_id": 5                    // optional
     }
     """
-    from core.models import Book, Entity
+    from core.models import Entity
     from core.messaging.engines.smtp import send_manual_email
 
     try:
@@ -83,12 +83,12 @@ def send_email(request):
     if invalid:
         return JsonResponse({'success': False, 'message': f'عناوين بريد غير صالحة: {invalid}'}, status=400)
 
-    from core.messaging.scoping import scope_books
+    from core.messaging.scoping import mailable_book
 
-    # الإرسال باسم كتابٍ يضع سجلّه في تاريخ ذلك الكتاب — فيلزم أن يكون ضمن نطاقك.
-    try:
-        book = scope_books(Book.objects.all(), request.user).get(pk=book_id)
-    except Book.DoesNotExist:
+    # الإرسال باسم كتابٍ يضع سجلّه في تاريخ ذلك الكتاب — فيلزم أن يكون ضمن نطاقك
+    # **وأن تملك محتواه** (السرّيُّ لا يُراسَل عنه مَن يرى كعبَه وحده).
+    book = mailable_book(request.user, book_id)
+    if book is None:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 
     entity = None
@@ -120,15 +120,14 @@ def send_email(request):
 @login_required
 @require_http_methods(['GET'])
 def book_email_logs(request, book_id):
-    from core.models import Book, BookEmailLog
-    from core.messaging.scoping import scope_books
+    from core.models import BookEmailLog
+    from core.messaging.scoping import mailable_book
 
     # كانت النقطة تُعيد سجلّات بريد **أيّ** كتاب برقمه (عناوين المستلمين
     # والمواضيع) لأيّ مستخدمٍ مسجَّل. النطاق داخل الاستعلام: كتابُ غيرك
-    # «غير موجود» لا «ممنوع».
-    try:
-        book = scope_books(Book.objects.all(), request.user).get(pk=book_id)
-    except Book.DoesNotExist:
+    # «غير موجود» لا «ممنوع» — ومواضيعُ السجلّ تحمل عنوانَ السرّيّ، فالمحتوى شرط.
+    book = mailable_book(request.user, book_id)
+    if book is None:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 
     logs = BookEmailLog.objects.filter(book=book).order_by('-sent_at').values(
@@ -254,14 +253,13 @@ def book_email_preview(request, book_id):
 
     لا تقرأ بايتات الملفات — الأحجام فقط (انظر ``plan_book_attachments``).
     """
-    from core.models import Book, EmailSettings
+    from core.models import EmailSettings
     from core.attachment_sharing import MAX_EMAIL_ATTACH_BYTES, human_size, plan_book_attachments
 
-    from core.messaging.scoping import scope_books
+    from core.messaging.scoping import mailable_book
 
-    book = scope_books(
-        Book.objects.all(), request.user
-    ).filter(pk=book_id).first()
+    # المعاينةُ تحمل العنوانَ وأسماءَ الملفّات — محتوى، فالبوّابةُ بوّابتُه.
+    book = mailable_book(request.user, book_id)
     if book is None:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 
@@ -306,15 +304,14 @@ def send_book_to_entity(request, book_id):
     ما يتجاوز ميزانية الإرفاق يُستبدَل برابط تحميل موقّع محدود المدة في متن
     الرسالة (خوادم البريد ترفض الرسائل الكبيرة).
     """
-    from core.models import Book, EmailSettings
+    from core.models import EmailSettings
     from core.attachment_sharing import collect_book_attachments, human_size
     from core.messaging.engines.smtp import SMTPEngine
 
-    from core.messaging.scoping import scope_books
+    from core.messaging.scoping import mailable_book
 
-    book = scope_books(
-        Book.objects.all(), request.user
-    ).filter(pk=book_id).first()
+    # الإرسالُ يُخرج المرفقاتِ نفسَها من الجهاز — محتوى، فالبوّابةُ بوّابتُه.
+    book = mailable_book(request.user, book_id)
     if book is None:
         return JsonResponse({'success': False, 'message': 'الكتاب غير موجود'}, status=404)
 

@@ -43,6 +43,18 @@ def record_custody(book, event, *, referral=None, to_department=None, to_user=No
                         mode=mode, note=note, by=by)
 
 
+def manual_event_choices():
+    """الأحداثُ التي يقبلها ``record_custody`` — **ما تعرضه حواريّةُ العهدة**.
+
+    كانت الحواريّةُ تعرض ``EVENT_CHOICES`` كاملةً وفيها حدثا الأرشفة اللذان
+    يرفضهما الحارسُ أعلاه: خيارٌ يُعرض ليُرفض. والاستثناءُ من الثابت نفسِه.
+    """
+    from core.models import CustodyEvent
+
+    return [(value, label) for value, label in CustodyEvent.EVENT_CHOICES
+            if value not in CustodyEvent.ARCHIVE_EVENTS]
+
+
 
 def _write_event(book, event, *, referral=None, to_department=None, to_user=None,
                  to_name='', signed_at=None, mode=None, note='', by):

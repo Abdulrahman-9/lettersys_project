@@ -154,7 +154,7 @@
                       {# للعلم: لا مطاردة — استلامٌ (قرأته الوحدة) أو تفعيلُ متابعةٍ بمدّة (§5.2) #}
                       <div class="btn-group btn-group-sm" role="group"
                            aria-label="إجراءات {{ row.target }}">
-                        {% if row.referral.status == 'sent' %}
+                        {% if row.referral.status == 'sent' and row.can_act %}
                           <button type="button" class="btn btn-outline-secondary"
                                   data-referral-act="received"
                                   data-referral-id="{{ row.referral.pk }}"
@@ -167,29 +167,36 @@
                                   title="حوّلها إلى «للإجراء» بموعد">فعِّل متابعة</button>
                         {% endif %}
                       </div>
-                    {% elif row.is_open %}
+                    {% elif row.can_act or row.can_chase %}
+                      {# الأزرارُ لمن يقبلها الخادم: can_act (الطرفُ المُلتزِم) · can_chase (المُنتظِر) — من الحارسَين في reply_matrix #}
                       <div class="btn-group btn-group-sm" role="group"
                            aria-label="إجراءات {{ row.target }}">
-                        {% if row.referral.status == 'sent' %}
+                        {% if row.can_act and row.referral.status == 'sent' %}
                           <button type="button" class="btn btn-outline-secondary"
                                   data-referral-act="received"
                                   data-referral-id="{{ row.referral.pk }}"
                                   title="استلمته الوحدة">استلم</button>
                         {% endif %}
+                        {% if row.can_act %}
                         <button type="button" class="btn btn-outline-success"
                                 data-referral-act="done"
                                 data-referral-id="{{ row.referral.pk }}"
                                 title="أُنجز ما وُجّه">أُنجز</button>
+                        {% endif %}
+                        {% if row.can_chase %}
                         <button type="button" class="btn btn-outline-warning"
                                 data-referral-act="remind"
                                 data-referral-id="{{ row.referral.pk }}"
                                 title="تنبيهٌ على الوحدة">
                           <i class="bi bi-bell"></i><span class="visually-hidden">تنبيه</span>
                         </button>
+                        {% endif %}
+                        {% if row.can_act %}
                         <button type="button" class="btn btn-outline-danger"
                                 data-referral-act="returned"
                                 data-referral-id="{{ row.referral.pk }}"
                                 title="أُعيد بلا إنجاز">أُعيد</button>
+                        {% endif %}
                       </div>
                     {% else %}
                       <span class="text-muted">—</span>

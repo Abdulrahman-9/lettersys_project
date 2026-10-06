@@ -74,11 +74,11 @@ class ErrorPagesInsideTheShellTests(TestCase):
         self.assertContains(r, 'data-error-back', status_code=404)
 
     def test_403_carries_the_shell(self):
+        # كان المصدرُ تعديلَ كتابِ غيرك — وصار 404 (تقريرُ فيبل، P0 البند 12:
+        # «ممنوع» يُثبت وجودَ الكتاب). والـ403 الباقي: صفحةُ إدارةٍ لغير الإداريّ.
         other = User.objects.create_user('nav3a', password='pw-nav3a-11')
-        owner = User.objects.create_user('nav3b', password='pw-nav3b-11')
-        b = Book.objects.create(kind='incoming_internal', title='ممنوع', created_by=owner)
         self.client.force_login(other)
-        r = self.client.get(reverse('book_edit', args=[b.pk]))
+        r = self.client.get(reverse('settings_hub'))
         self.assertEqual(r.status_code, 403)
         self.assertContains(r, 'data-error-back', status_code=403)
 

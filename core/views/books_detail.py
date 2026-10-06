@@ -9,7 +9,6 @@ from urllib.parse import urlencode, urlparse
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Prefetch
 from django.http import Http404, JsonResponse
@@ -18,7 +17,7 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from ..forms import AttachmentForm
-from ..models import Attachment, Book, BookHistory
+from ..models import Attachment, Book, BookEmailLog, BookHistory
 from .comments import can_edit_comment
 from core.scoping import (
     ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_open_content, can_view_book,
@@ -61,7 +60,9 @@ def book_detail(request, pk):
             f"Unauthorized book access attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
         )
-        raise PermissionDenied("ليس لديك صلاحية الوصول لهذا الكتاب")
+        # 404 لا 403: «ممنوع» يُثبت أنّ خلف الرقم كتاباً — والنطاقُ في الاستعلام
+        # (`scope_books_for`) يُجيب «غير موجود»؛ فلا يُفرَّق بين البابين.
+        raise Http404("الكتاب غير موجود")
 
     # الصفُّ مرئيٌّ والمحتوى قد لا يكون: قالبٌ مقيَّدٌ مستقلّ بدل رشّ الشروط في
     # قالبٍ من خمسمئة سطر — قائمةٌ بيضاء لا استثناءاتٌ من سوداء.
@@ -73,12 +74,17 @@ def book_detail(request, pk):
 
     # فتحٌ متعمَّدٌ يُطوى في صفٍّ لليوم؛ وفتحُ السرّيّ **واقعةٌ لا تُطوى**:
     # عددُ مرّاته ومواقيتُه هي الدليل.
+    #
+    # **والإنعاشُ في المكان ليس فتحاً**: `refreshInPlace` (book_lifecycle.js) يجلب
+    # الصفحةَ نفسَها بعد كلّ فعلِ تسيير — فكان كلُّ تفريقٍ أو عهدةٍ يكتب شاهدَ
+    # اطّلاعٍ جديداً ويُضخّم العددَ الذي هو الدليل. الشاهدُ لفتح الإنسان؛
+    # وصفُّ اليوم المطويّ يبقى للجلبين معاً فلا يمرّ جلبٌ بلا أثر.
+    _ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
     record_view(request, book)
-    if book.secret_level in RESTRICTED_SECRET_LEVELS:
+    if book.secret_level in RESTRICTED_SECRET_LEVELS and not _ajax:
         record_event(request, 'SECRET_VIEW', book=book)
 
     if request.method == 'POST' and 'file' in request.FILES:
-        _ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
         form = AttachmentForm(request.POST, request.FILES)
         if form.is_valid():
             try:
@@ -151,14 +157,40 @@ def book_detail(request, pk):
         {
             "book": book,
             "attachments": attachments,
+            "attachment_series": _attachment_series(attachments),
             "comments": comments,
             "back_url": back_url,
             "back_label": back_label,
             "history": history,
             "history_total": history_total,
+            # بطاقةُ البريد تعرض `BookEmailLog` (email/logs)، فشرطُ «عرض كل
+            # المراسلات» على السجلّات نفسِها — كان على `email_threads` فيغيب
+            # الرابطُ عن كتابٍ له بريدٌ بلا خيطٍ ويظهر لخيطٍ بلا صادر.
+            "email_log_count": BookEmailLog.objects.filter(book=book).count(),
             **_lifecycle_context(book, request.user),
         },
     )
+
+
+def _attachment_series(attachments):
+    """سلسلةُ معاينة المرفقات «2 من 5» — تُبنى هنا وتُبثّ بـ`json_script`.
+
+    كانت تُكتب JSON يدويّاً في القالب والفاصلةُ داخل `{% if att.file %}`: مرفقٌ
+    أخيرٌ بلا ملفّ يترك فاصلةً معلّقة فيسقط التحليلُ صامتاً، وزرُّ المعاينة يحمل
+    `forloop.counter0` الذي يعدّ **كلَّ** المرفقات فيفتح الملفَّ الخطأ بعد أوّل
+    مرفقٍ بلا ملفّ. الآن: ما له ملفٌّ وحده، ومفتاحُ الزرّ `att.id` لا موضعُه.
+    """
+    return [
+        {
+            'id': att.pk,
+            'url': att.file.url,
+            'name': att.filename,
+            'page_count': att.page_count or 0,
+            'last_by': att.last_merge_by,
+            'last_added': att.last_merge_added or 0,
+        }
+        for att in attachments if att.file
+    ]
 
 
 def _lifecycle_context(book, user):
@@ -172,11 +204,16 @@ def _lifecycle_context(book, user):
     from core.linking_service import links_of
     from core.referral_service import reply_matrix
     from core.models import BookLink
-    from core.signature_service import can_sign
-    from core.registration_service import registrations_of
+    from core.signature_service import can_revoke, can_sign
+    from core.registration_service import register_here_ledger, registrations_of
     from core.scoping import can_archive
 
     matrix = reply_matrix(book, user)
+    # «إبطال» لمن يقبله الخادم وحدَه — المسندُ نفسُه الذي يحرس `revoke`.
+    signatures = list(book.signatures.select_related('signer').all())
+    for sg in signatures:
+        sg.can_revoke = can_revoke(user, sg)
+    ledger = register_here_ledger(book, user)
     return {
         "links": links_of(book, user),
         "referrals": matrix,
@@ -191,12 +228,16 @@ def _lifecycle_context(book, user):
         "relation_choices": BookLink.RELATION_CHOICES,
         # التواقيع: القائمةُ للعرض، والصلاحيّةُ من الخدمة لا من قائمةِ أدوارٍ
         # ثانيةٍ في القالب.
-        "signatures": list(book.signatures.select_related('signer').all()),
+        "signatures": signatures,
         "can_sign_book": can_sign(user, book),
         # الأرشفة: الحالُ من الخدمة والحقُّ من البوّابة — والقالبُ يعرض ولا يقرّر.
         "can_archive_book": can_archive(user),
         # «فعِّل متابعة» و«تفريق» لمن يملك المحتوى — الحارسُ نفسُه في referral_service
         "can_distribute": can_open_content(book, user),
+        # «قيِّده عندنا»: الزرُّ لمن يقبله الخادم، والتأكيدُ يسمّي الدفترَ الذي
+        # سيُستهلك عدّادُه — من الخدمة نفسِها لا من القالب.
+        "can_register_here": ledger is not None,
+        "register_ledger": ledger,
     }
 
 
@@ -225,7 +266,7 @@ def book_edit(request, pk):
             f"Unauthorized book edit attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
         )
-        raise PermissionDenied("ليس لديك صلاحية تعديل هذا الكتاب")
+        raise Http404("الكتاب غير موجود")
 
     # تحويل GET لصفحة الاستخراج الذكي في وضع التعديل (مع تمرير وجهة العودة إن وُجدت)
     if request.method == "GET":
@@ -322,7 +363,7 @@ def book_report(request, pk):
         )
         # «غيرُ موجود» لا «ممنوع» — كأخواتها (``scope_books_for``): فرقُ الرمزين
         # يُسرّب وجودَ كتابٍ لا يراه السائل.
-        raise Http404("لا يوجد كتاب بهذا الرقم")
+        raise Http404("الكتاب غير موجود")
 
     # ورقةٌ تُطبع وتخرج من الجهاز — واقعةٌ لا تُطوى
     from core.audit_service import record_event

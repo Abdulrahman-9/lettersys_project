@@ -210,8 +210,10 @@ def reply_matrix(book, user):
     **«للعلم» لا يُعدّ متأخّراً أبداً**: المطاردةُ على «للتنفيذ» فقط، وإلّا
     امتلأ الطابورُ بما لا إجابةَ له فأهمله قارئُه.
     """
-    from core.scoping import scope_referrals_for
+    from core.scoping import can_open_content, scope_referrals_for
 
+    # بوّابةُ الكتاب (`_open_gate`) واحدةٌ لكلّ الصفوف — تُحسب مرّةً لا لكلّ صفّ.
+    opens = can_open_content(book, user)
     rows = scope_referrals_for(user, book.referrals.select_related(
         'to_department', 'to_entity', 'assignee', 'created_by',
         'closed_by_link__from_book',
@@ -231,6 +233,10 @@ def reply_matrix(book, user):
             'reminded_at': row.last_reminder_at,
             'reply_id': reply.pk if reply else None,
             'reply_number': reply.our_number_display if reply else '',
+            # أزرارُ الصفّ لمن يقبلها الخادم — **الحارسان نفسُهما** (بوّابةُ الكتاب
+            # + مسندُ الطرف) لا شرطُ دورٍ في القالب. كانت تُعرض لكلّ ناظرٍ ثمّ تُرفض.
+            'can_act': opens and row.is_open and _target_side(row, user),
+            'can_chase': opens and row.is_open and _chaser_side(row, user),
         })
     return matrix
 
@@ -439,22 +445,24 @@ def _guard_target(referral, by):
     والقسمُ المُرسِل **ليس** منهم: إقفالُ عملٍ لم يُنجَز بعدُ ليس حقّاً للمُرسِل
     — وله بابُه في ``_guard_chaser``.
     """
+    _open_gate(referral, by)
+    if not _target_side(referral, by):
+        raise PermissionDenied('هذه الإحالةُ ليست لك — الالتزامُ على وحدةٍ أخرى.')
+
+
+def _target_side(referral, by) -> bool:
+    """أهو من الطرف المُلتزِم؟ — يقرؤه ``_guard_target`` و``reply_matrix`` (``can_act``)."""
     from core.scoping import is_privileged, subtree_ids, user_department_id
 
-    _open_gate(referral, by)
-
     if is_privileged(by) or referral.assignee_id == getattr(by, 'id', None):
-        return
+        return True
 
     department_id = user_department_id(by)
     if (department_id is not None
             and referral.to_department_id in subtree_ids(department_id)):
-        return
+        return True
 
-    if _desk_of(referral, by):
-        return
-
-    raise PermissionDenied('هذه الإحالةُ ليست لك — الالتزامُ على وحدةٍ أخرى.')
+    return _desk_of(referral, by)
 
 
 def _guard_chaser(referral, by):
@@ -464,22 +472,24 @@ def _guard_chaser(referral, by):
     الجواب. توحيدُ الحارسين منع موظّفَ البريد من التنبيه على وحدةٍ تأخّرت —
     وهو الاستعمالُ الذي بُنيت الدالّةُ لأجله (كشفه اختبارٌ قائم).
     """
+    _open_gate(referral, by)
+    if not _chaser_side(referral, by):
+        raise PermissionDenied('التنبيهُ لمن ينتظر الجواب — لا لمن عليه.')
+
+
+def _chaser_side(referral, by) -> bool:
+    """أهو من الطرف المُنتظِر؟ — يقرؤه ``_guard_chaser`` و``reply_matrix`` (``can_chase``)."""
     from core.scoping import is_privileged, subtree_ids, user_department_id
 
-    _open_gate(referral, by)
-
     if is_privileged(by):
-        return
+        return True
 
     department_id = user_department_id(by)
     if (department_id is not None
             and referral.from_department_id in subtree_ids(department_id)):
-        return
+        return True
 
-    if _desk_of(referral, by):
-        return
-
-    raise PermissionDenied('التنبيهُ لمن ينتظر الجواب — لا لمن عليه.')
+    return _desk_of(referral, by)
 
 
 def _notify(referrals, book, by, *, urgent=False, lead='كتابٌ فُرِّق إليكم'):

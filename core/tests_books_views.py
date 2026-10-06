@@ -1010,11 +1010,11 @@ class BookDetailTests(BookViewsBase):
         self.assertEqual(resp.status_code, 200)
         self.assertTemplateUsed(resp, 'core/book_detail.html')
 
-    def test_unauthorized_gets_403(self):
+    def test_unauthorized_gets_404(self):
+        """«غير موجود» لا «ممنوع» — الفرقُ بين الرمزين يُثبت وجودَ الكتاب."""
         self._login(self.other)
-        from django.core.exceptions import PermissionDenied
         resp = self.client.get(self._url(self.book.pk))
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 404)
 
     def test_superuser_can_view_any(self):
         self._login(self.superuser)
@@ -1032,6 +1032,53 @@ class BookDetailTests(BookViewsBase):
         self._login()
         resp = self.client.get(self._url(self.book.pk))
         self.assertEqual(resp.context['book'].pk, self.book.pk)
+
+
+@override_settings(MEDIA_ROOT=_MEDIA_TMP)
+class BookDetailAttachmentSeriesTests(BookViewsBase):
+    """«معاينة» تفتح الملفَّ الصحيح — تقريرُ فيبل لتفاصيل الكتاب، P0 البند 9.
+
+    السلسلةُ كانت JSON يدويّاً في القالب: مرفقٌ **أخيرٌ** بلا ملفٍّ يترك فاصلةً
+    معلّقة فيسقط التحليلُ صامتاً (items = [])، وزرُّ المعاينة يحمل موضعَه في
+    **كلّ** المرفقات فيُزاح عن السلسلة بعد أوّل مرفقٍ بلا ملفّ.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # الأقدمُ أوّلاً في الإنشاء = الأخيرُ في العرض (-uploaded_at): مرفقٌ بلا
+        # ملفٍّ في ذيل الحلقة هو ما كان يترك الفاصلةَ معلّقة.
+        self.empty = Attachment.objects.create(book=self.book, file='')
+        self.first = Attachment.objects.create(
+            book=self.book, file=SimpleUploadedFile('a.pdf', b'%PDF-1.4 a'))
+        self.second = Attachment.objects.create(
+            book=self.book, file=SimpleUploadedFile('b.pdf', b'%PDF-1.4 b'))
+        self._login()
+
+    def _page(self):
+        resp = self.client.get(reverse('book_detail', args=[self.book.pk]))
+        self.assertEqual(resp.status_code, 200)
+        return resp.content.decode('utf-8')
+
+    def _series(self, body):
+        import re
+        m = re.search(r'<script id="bookAttachmentsSeries" type="application/json">(.*?)</script>',
+                      body, re.S)
+        self.assertIsNotNone(m, 'السلسلةُ غائبة')
+        return json.loads(m.group(1))
+
+    def test_the_series_parses_and_holds_only_files(self):
+        series = self._series(self._page())
+        self.assertEqual({item['id'] for item in series}, {self.first.pk, self.second.pk})
+
+    def test_each_preview_button_points_at_its_own_file(self):
+        import re
+        body = self._page()
+        by_id = {item['id']: item for item in self._series(body)}
+        buttons = re.findall(r'data-doc-series="(\d+)" data-file-url="[^"]*?(/media/[^"]+)"', body)
+        self.assertEqual(len(buttons), 2)
+        for key, url in buttons:
+            self.assertIn(int(key), by_id, 'زرٌّ خارجَ السلسلة')
+            self.assertEqual(by_id[int(key)]['url'], url)
 
 
 # ===========================================================================
@@ -1059,10 +1106,10 @@ class BookEditTests(BookViewsBase):
         self.assertIn('smart-desktop', location)
         self.assertIn(f'edit_pk={self.book.pk}', location)
 
-    def test_unauthorized_gets_403(self):
+    def test_unauthorized_gets_404(self):
         self._login(self.other)
         resp = self.client.get(self._url(self.book.pk))
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 404)
 
     def _entity_payload(self):
         """إنشاء جهة مستقبلة للاستخدام في اختبارات update_book_api."""

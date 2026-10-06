@@ -265,7 +265,10 @@
     var note = '';
     if (act === 'done' || act === 'returned') {
       note = window.prompt(act === 'done' ? 'ملاحظةُ الإنجاز (اختياريّة):'
-                                          : 'سببُ الإعادة (اختياريّ):') || '';
+                                          : 'سببُ الإعادة (اختياريّ):');
+      // «إلغاء» يُعيد null — وهو تراجعٌ لا «ملاحظةٌ فارغة»: كان يصير '' فيُرسَل
+      // الفعلُ ويُقفَل الالتزام. (حواريّةٌ بدل prompt في الدفعة 4.)
+      if (note === null) return;
     }
 
     busy(button, true);
@@ -309,15 +312,21 @@
   // (أُزيلت معالجاتُ «تمام الأرشفة» و«فتح المؤرشَف» — قراراتُ الدورة §6)
 
   // ── «قيِّده عندنا» ────────────────────────────────────────────────────
-  var registerBtn = document.getElementById('registerHereBtn');
-  if (registerBtn) {
-    registerBtn.addEventListener('click', function (event) {
-      var button = event.currentTarget;
-      busy(button, true);
-      post('/books/api/book/' + bookId + '/register-here/', {})
-        .then(function (data) { notify(data.message, true); })
-        .catch(function (err) { notify(err.message, false); })
-        .finally(function () { busy(button, false); });
-    });
-  }
+  // **تفويضٌ على المنطقة لا ربطٌ بالزرّ**: الزرُّ يسكن داخل `lifecycleRegion`
+  // التي يستبدلها `refreshInPlace` بعد كلّ فعل — فالربطُ المباشر كان يموت بعد
+  // أوّل تفريقٍ أو عهدة. والضغطةُ تستهلك رقماً حقيقيّاً من عدّاد القسم لا
+  // يُستردّ، فلا تمضي بلا تأكيدٍ يسمّي الدفتر.
+  region.addEventListener('click', function (event) {
+    var button = event.target.closest('#registerHereBtn');
+    if (!button) return;
+    event.preventDefault();
+    var ledger = button.dataset.ledger || 'قسمي';
+    if (!window.confirm('سيُمنح الكتابُ رقمَ واردٍ جديداً من دفتر «' + ledger +
+                        '» — والرقمُ لا يُستردّ. أتمضي؟')) return;
+    busy(button, true);
+    post('/books/api/book/' + bookId + '/register-here/', {})
+      .then(function (data) { notify(data.message, true); })
+      .catch(function (err) { notify(err.message, false); })
+      .finally(function () { busy(button, false); });
+  });
 })();
