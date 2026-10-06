@@ -4,6 +4,7 @@ Book detail/edit/status views.
 """
 
 import logging
+import re
 from urllib.parse import urlencode, urlparse
 
 from django.contrib import messages
@@ -11,7 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Prefetch
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -319,7 +320,9 @@ def book_report(request, pk):
             f"Unauthorized book report attempt: user_id={request.user.id} "
             f"username={request.user.username} book_id={pk}"
         )
-        raise PermissionDenied("ليس لديك صلاحية عرض تقرير هذا الكتاب")
+        # «غيرُ موجود» لا «ممنوع» — كأخواتها (``scope_books_for``): فرقُ الرمزين
+        # يُسرّب وجودَ كتابٍ لا يراه السائل.
+        raise Http404("لا يوجد كتاب بهذا الرقم")
 
     # ورقةٌ تُطبع وتخرج من الجهاز — واقعةٌ لا تُطوى
     from core.audit_service import record_event
@@ -347,7 +350,9 @@ def book_report(request, pk):
         _events.append((book.created_at, "open"))  # الدورة الأولى تبدأ بالإنشاء
     for h in history:
         act = h.action or ""
-        notes = h.notes or ""
+        # بلا تشكيل: الملاحظاتُ تُكتب «أُرشف…» و«أُرشفت (bulk)» (``books_api``)
+        # فلا تطابق «أرشف» المجرّدة — والجماعيُّ لا «إنهاء» فيه يُنقذه.
+        notes = re.sub("[\u064B-\u0652]", "", h.notes or "")
         if act == "status":
             if "فتح" in notes:
                 reopen_count += 1

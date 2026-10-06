@@ -16,7 +16,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import format_html
@@ -27,9 +27,11 @@ from ..backup_service import create_encrypted_pg_backup, default_backup_dir
 from ..extraction.kinds import get_kind_label
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       RestoreJob)
-from .filter_helpers import FOLLOWUP_LABELS, followup_q
+from .filter_helpers import _FOLLOWUP_STATES, FOLLOWUP_LABELS, followup_q
 from .helpers import staff_required
-from core.scoping import can_open_content, is_privileged, scope_books_for
+from core.scoping import (STUB_TITLE, can_open_content, can_view_reports, is_privileged,
+                          report_departments, restricted_flag_sql, scope_books_for,
+                          subtree_ids)
 
 logger = logging.getLogger(__name__)
 
@@ -103,60 +105,42 @@ def dashboard(request):
     return render(request, "core/dashboard.html", ctx)
 
 
-@login_required
-def followup_activity_report(request):
-    """
-    تقرير تطوّر حالة المتابعة — يعتمد على BookHistory لمعرفة:
-      - الكتب التي انتقلت إلى "متأخر" خلال الفترة
-      - الكتب التي أُرشفت يدوياً (إنهاء متابعة)
-      - الكتب التي أُعيد فتح متابعتها
-    """
-    from ..models import BookHistory
-
-    try:
-        days = int(request.GET.get('days', '7'))
-        days = max(1, min(days, 90))
-    except (ValueError, TypeError):
-        days = 7
-
-    cutoff = timezone.now() - timedelta(days=days)
-    base_history = BookHistory.objects.filter(created_at__gte=cutoff).select_related('book', 'by')
-
-    if not is_privileged(request.user):
-        base_history = base_history.filter(book__created_by=request.user)
-
-    became_overdue = list(
-        base_history.filter(action='overdue').order_by('-created_at')[:50]
-    )
-    manually_archived = list(
-        base_history.filter(action='status', notes__icontains='أُرشف').order_by('-created_at')[:50]
-    )
-    reopened = list(
-        base_history.filter(action='status', notes__icontains='أُعيد فتح').order_by('-created_at')[:50]
-    )
-
-    stats = {
-        'days': days,
-        'became_overdue': len(became_overdue),
-        'manually_archived': len(manually_archived),
-        'reopened': len(reopened),
-    }
-
-    return render(request, 'core/followup_activity_report.html', {
-        'stats': stats,
-        'became_overdue': became_overdue,
-        'manually_archived': manually_archived,
-        'reopened': reopened,
-        'days': days,
-        'window_start': cutoff,
-    })
+#: دلاءُ التقارير — **مفاتيحُ فلتر المتابعة في القائمة نفسُها** (``_FOLLOWUP_TABS``)
+#: و«الكلّ»، بترتيب العرض. كانت للصفحة مفرداتُها الخاصّة (today/upcoming/completed/
+#: today_overdue) فلا يطابق رقمُها رقمَ القائمة ولا اللوحة.
+REPORT_BUCKETS = ('all', 'active', *_FOLLOWUP_STATES)
+#: المفاتيحُ القديمة ⟵ الموحَّدة: روابطُ محفوظةٌ لا تنكسر. «المستحقّ الآن»
+#: (``today_overdue``) صار «متابعة جارية» = رقمُ اللوحة، وجزآه ظاهران في
+#: بطاقتي «متأخر» و«مستحق اليوم».
+_LEGACY_BUCKETS = {'today': 'due_today', 'upcoming': 'pending',
+                   'completed': 'archived', 'today_overdue': 'active'}
+REPORT_DEFAULT_BUCKET = 'active'
+#: التسمياتُ من ``FOLLOWUP_LABELS`` وحدَها — و«مؤرشف» كلمةُ الورق لا المتابعة (``models.py``).
+BUCKET_LABELS = {'all': 'كل الحالات', **FOLLOWUP_LABELS}
 
 
 def _reports_qs(request):
     """يبني queryset التقارير المفلتر والمرتّب حسب فلاتر الصفحة (kind/entity/date/bucket).
-    مصدر تصفية واحد مشترك بين عرض التقارير والتصدير (DRY). يُعيد (qs, meta)."""
-    qs = Book.objects.all() if request.user.is_superuser else Book.objects.filter(created_by=request.user)
-    qs = qs.select_related("created_by").prefetch_related("issuing_entities", "receiving_entities")
+    مصدر تصفية واحد مشترك بين عرض التقارير والتصدير (DRY). يُعيد (qs, meta).
+
+    **النطاقُ من المصدر الوحيد** (``scope_books_for``) كاللوحة تماماً: كانت هنا
+    نسخةٌ خاصّة («المشرف الكلّ، وغيرُه كتبَه فقط») فيرى موظّفُ القسم في لوحته
+    رقمَ قسمه وفي التقارير كتبَه هو. و``restricted`` علَمُ الحجب من SQL
+    (``restricted_flag_sql``) تقرؤه ``_shape`` للعرض والتصدير.
+
+    ``meta['base']`` هي المجموعةُ **قبل** دلو الحالة: عدّاداتُ الحالات تُحسب
+    عليها (كالقائمة) — وإلّا صار كلُّ ما خارج الدلو صفراً بنائيّاً.
+
+    **والحيُّ وحدَه افتراضاً** (``Book.objects.live()``، قاعدةُ §7.2 وقرارُ المالك
+    2026‑09‑29): المنقولُ من الورق بلا استحقاقٍ ولا متابعة، فيُضخّم «مُنجَز»
+    ودائرةَ النوع. ``?legacy=1`` يُدخله صراحةً — للصفحة والإحصاء والـCSV معاً.
+    """
+    user = request.user
+    legacy = request.GET.get("legacy") == "1"
+    qs = scope_books_for(user, Book.objects.all() if legacy else Book.objects.live())
+    qs = (qs.select_related("created_by", "department")
+            .prefetch_related("issuing_entities", "receiving_entities")
+            .annotate(restricted=restricted_flag_sql(user)))
     kind = request.GET.get("kind", "all")
     if kind == "incoming":
         qs = qs.filter(kind__startswith="incoming")
@@ -176,7 +160,21 @@ def _reports_qs(request):
 
     entity_id = request.GET.get("entity")
     if entity_id and entity_id.isdigit():
-        qs = qs.filter(Q(issuing_entities__id=entity_id) | Q(receiving_entities__id=entity_id)).distinct()
+        # السرّيُّ «لا يُطابَق بجهةٍ» لمن لا يملك محتواه (``guard_secret_text_search``):
+        # جهتاه محجوبتان في الصفّ، فإعادتُه بفلترها تكشفهما.
+        qs = (qs.filter(Q(issuing_entities__id=entity_id) | Q(receiving_entities__id=entity_id))
+                .filter(restricted=False).distinct())
+
+    # القسم: المسموحُ شجرةُ القارئ (``report_departments``)، وما خارجها «غيرُ موجود»
+    # لا «ممنوع». والفلترُ يسيل نزولاً كالنطاق: القسمُ يشمل شُعبَه.
+    departments = list(report_departments(user).order_by("code"))
+    dept = None
+    dept_id = request.GET.get("dept", "")
+    if dept_id.isdigit():
+        dept = next((d for d in departments if d.pk == int(dept_id)), None)
+        if dept is None:
+            raise Http404("لا قسم بهذا الرقم")
+        qs = qs.filter(department_id__in=subtree_ids(dept.pk))
 
     today = timezone.localdate()
     due_start = request.GET.get("due_start")
@@ -200,45 +198,48 @@ def _reports_qs(request):
     elif end_date:
         qs = qs.filter(due_date__lte=end_date)
 
-    bucket = request.GET.get("bucket", "") or "today_overdue"
-    active_qs = qs.filter(followup_q('active'))
-    archived_qs = qs.filter(followup_q('archived'))
-    if bucket == "today":
-        qs = active_qs.filter(due_date=today)
-    elif bucket == "overdue":
-        qs = active_qs.filter(due_date__lt=today)
-    elif bucket == "upcoming":
-        qs = active_qs.filter(due_date__gt=today)
-    elif bucket == "completed":
-        qs = archived_qs
-    elif bucket == "today_overdue":
-        qs = active_qs.filter(due_date__lte=today)
-    # else: bucket == "all" — لا فلتر إضافي
+    base = qs
+    bucket = request.GET.get("bucket", "")
+    bucket = _LEGACY_BUCKETS.get(bucket, bucket)
+    if bucket not in REPORT_BUCKETS:
+        bucket = REPORT_DEFAULT_BUCKET
+    if bucket != "all":
+        # المصدرُ الوحيد لقاعدة المتابعة — العدّادُ والقائمةُ واللوحةُ تقرأ من هنا.
+        qs = qs.filter(followup_q(bucket, today))
 
     qs = qs.order_by("due_date", "-date", "-id")
     return qs, {
         "kind": kind, "kind_label": kind_label,
         "entity_id": entity_id or "", "bucket": bucket,
         "due_start": due_start or "", "due_end": due_end or "", "today": today,
+        "base": base,
+        "legacy": legacy,
+        "departments": departments,
+        "dept": str(dept.pk) if dept else "",
+        "dept_label": dept.name if dept else "",
     }
 
 
-# ── هياكلُ واجهةٍ (2026-09-01، بقرار المالك: تُودَع موسومةً) ─────────────────
-# الثلاثُ أدناه **تخطيطاتٌ ببياناتٍ ثابتةٍ في الكود**، لا استعلامَ ولا نموذج.
-# أُودعت لأنّها عملُ تصميمٍ قائم، بشرطِ أن تُعلن عن نفسها: كلُّ قالبٍ يبدأ
-# ببطاقة «هيكلُ واجهةٍ لا ميزة» ويحرسها اختبارٌ — فلا تُقرأ أرقامُها يوماً
-# على أنّها حقيقة. ولا رابطَ لها في التنقّل: تُفتح بعنوانها مباشرةً وحدَه.
-# متى تصير ميزةً حقيقيّة: `Book` + `BookHistory` + `UserActivityLog` تحمل
-# فعلاً ما تدّعيه هذه الصفحات (القيدُ اليوميّ · التسليم · أثرُ التدقيق).
+def _shape(b):
+    """يُلبس الصفَّ محتواه **كما يحقّ لقارئه** — للجدول والتصدير معاً.
+
+    القرارُ علَمُ ``restricted`` من ``_reports_qs`` (``restricted_flag_sql``)؛
+    والمحجوبُ ما يُفرَّغ في ``stub_book_payload``: العنوانُ ⟵ ``STUB_TITLE``،
+    والجهاتُ وعددُ الجهة وتاريخُها والهامشُ فارغة. والرقمُ والتاريخُ والنوعُ
+    والمتابعةُ تبقى — الدفترُ يكشفها. القالبُ والـCSV يقرآن ``shown_*`` وحدَها.
+    """
+    r = b.restricted
+    b.shown_title = STUB_TITLE if r else b.title
+    b.shown_issuing = [] if r else list(b.issuing_entities.all())
+    b.shown_receiving = [] if r else list(b.receiving_entities.all())
+    b.shown_sender_number = "" if r else b.sender_number
+    b.shown_sender_date = None if r else b.sender_date
+    b.shown_margin = "" if r else b.margin
+    b.followup_text = FOLLOWUP_LABELS[b.followup_state]
+    return b
+
+
 @login_required
-# ملاحظةُ دمج (2026-08-31): كانت هنا ثلاثةُ عروضٍ هيكليّةٍ من فرع `main`
-# (`desk_ledger` · `desk_handover` · `book_audit`) موسومةٍ بنصّها «بياناتٌ ثابتةٌ
-# لا من القاعدة». أُزيلت في الدمج لأنّ لها **تنفيذاً عاملاً** بالأسماء نفسِها:
-# `core/views/desk.py` و`core/views/audit.py`. وكانت مساراتُها تُسجَّل قبل
-# مساراتي في `urls.py` فتحجبها — وجانغو يأخذ أوّلَ مطابقة، فكان الدمجُ الصامت
-# سيُعيد الهياكلَ إلى الواجهة بلا أن يُخفق اختبارٌ واحد.
-
-
 def reports(request):
     """
     تقارير الكتب المستحقة مع فلاتر وتصدير/طباعة
@@ -247,7 +248,7 @@ def reports(request):
     - النوع (وارد/صادر)
     - الجهة
     - نطاق تاريخ الاستحقاق
-    - التصنيف الزمني (اليوم، متأخر، قادم، مكتمل)
+    - حالة المتابعة (``REPORT_BUCKETS`` — مفاتيحُ القائمة وتسمياتُ ``FOLLOWUP_LABELS``)
     
     Args:
         request: HTTP request with filter parameters
@@ -255,6 +256,8 @@ def reports(request):
     Returns:
         Rendered reports template with filtered books and statistics
     """
+    if not can_view_reports(request.user):
+        raise Http404("لا صفحة بهذا العنوان")
     qs, _m = _reports_qs(request)
     kind = _m["kind"]
     selected_kind_label = _m["kind_label"]
@@ -265,19 +268,33 @@ def reports(request):
     today = _m["today"]
 
     # ── إحصاءات عبر تجميع DB (بلا تحميل كل الصفوف في الذاكرة) ──
-    agg = qs.aggregate(
-        total=Count("id"),
+    # على المجموعة **قبل** الدلو (كعدّادات القائمة)؛ و``total`` وحده عدُّ الدلو.
+    agg = _m["base"].aggregate(
         incoming=Count("id", filter=Q(kind__startswith="incoming")),
         outgoing=Count("id", filter=Q(kind__startswith="outgoing")),
-        **{k: Count("id", filter=followup_q(k, today))
-           for k in ("overdue", "due_today", "pending", "archived")},
+        **{k: Count("id", filter=followup_q(k, today)) for k in _FOLLOWUP_STATES},
     )
     stats = {k: (v or 0) for k, v in agg.items()}
-    time_stats = {key: stats.get(key, 0) for key in ("overdue", "due_today", "pending", "archived")}
+
+    # ── بحسب القسم: حين تجتمع في شجرة القارئ أقسامٌ عدّة (شرطُ عددٍ لا دور) ──
+    # على المجموعة قبل الدلو كالعدّادات؛ و``distinct`` لأنّ فلتر الجهة يضاعف الصفوف.
+    show_department = len(_m["departments"]) > 1
+    dept_rows = []
+    if show_department:
+        dept_rows = list(
+            _m["base"].prefetch_related(None).order_by()
+            .values("department__code", "department__name")
+            .annotate(total=Count("id", distinct=True),
+                      **{k: Count("id", distinct=True, filter=followup_q(k, today))
+                         for k in _FOLLOWUP_STATES})
+            .order_by("department__code"))
+        for row in dept_rows:
+            row["label"] = row["department__name"] or "بلا قسم"
 
     # ── ترقيم العرض: يمنع تحميل آلاف الكتب دفعةً (مهمّ على ذاكرة محدودة) ──
     page_obj = Paginator(qs, 200).get_page(request.GET.get("page"))
-    books = list(page_obj.object_list)
+    stats["total"] = page_obj.paginator.count
+    books = [_shape(b) for b in page_obj.object_list]
     for b in books:
         if b.due_date:
             diff = (b.due_date - today).days
@@ -289,25 +306,21 @@ def reports(request):
     page_params = request.GET.copy()
     page_params.pop("page", None)
 
-    # هوية المؤسسة + ملخّص الفلاتر لترويسة الطباعة الاحترافية
+    # هوية المؤسسة + ملخّص الفلاتر لترويسة الطباعة الاحترافية — الاسمُ من
+    # ``core.branding.org_name`` (مصدرٌ واحدٌ باحتياطيٍّ واحد)، والقسمُ والوحدةُ من الإعدادات
     from ..models import EmailSettings
+    from core.branding import org_name
     org = EmailSettings.get()
     selected_entity_name = ""
     if entity_id and entity_id.isdigit():
         _e = Entity.objects.filter(pk=entity_id).only("name").first()
         selected_entity_name = _e.name if _e else ""
-    bucket_labels = {
-        "all": "كل الحالات", "today_overdue": "المتأخرة والمستحقة اليوم",
-        "overdue": "المتأخرة فقط", "today": "مستحقة اليوم",
-        "upcoming": "مستحقة للفترة القادمة", "completed": "المؤرشفة (انتهت المتابعة)",
-    }
 
     return render(
         request,
         "core/reports.html",
         {
             "stats": stats,
-            "time_stats": time_stats,
             "books": books,
             "page_obj": page_obj,
             "total": stats["total"],
@@ -318,10 +331,19 @@ def reports(request):
             "selected_entity": entity_id or "",
             "selected_entity_name": selected_entity_name,
             "bucket": bucket,
-            "bucket_label": bucket_labels.get(bucket, bucket),
+            "bucket_label": BUCKET_LABELS[bucket],
+            "bucket_options": [(k, BUCKET_LABELS[k]) for k in REPORT_BUCKETS],
+            "followup_labels": FOLLOWUP_LABELS,
             "due_start": due_start or "",
             "due_end": due_end or "",
             "org": org,
+            "org_name": org_name(),
+            "departments": _m["departments"],
+            "selected_dept": _m["dept"],
+            "dept_label": _m["dept_label"],
+            "show_department": show_department,
+            "dept_rows": dept_rows,
+            "legacy": _m["legacy"],
         },
     )
 
@@ -334,9 +356,13 @@ def reports_export(request):
     import io
     from django.http import StreamingHttpResponse
 
+    if not can_view_reports(request.user):
+        raise Http404("لا صفحة بهذا العنوان")
     qs, meta = _reports_qs(request)
-    status_labels = {"pending": "قيد المتابعة", "due_today": "مستحق اليوم",
-                     "overdue": "متأخر", "archived": "مُنجَز / بلا متابعة"}
+    # ملفٌّ يخرج من الجهاز بصفوفٍ كثيرة — واقعةُ إخراجٍ لا تُطوى (كتصدير القائمة)
+    from core.audit_service import record_event
+    record_event(request, 'EXPORT_DATA', metadata={
+        'report': 'followup', 'kind': meta['kind'], 'bucket': meta['bucket']})
     # أعمدة تطابق جدول الصفحة الرسمي: تاريخا الكتاب (قيدنا + كتاب الجهة رقماً
     # وتاريخاً) حاضران، ولا معرّفات قاعدة بيانات داخلية في مخرجات رسمية.
     HEADERS = ["رقم القيد", "تاريخ القيد", "العنوان", "النوع",
@@ -350,22 +376,24 @@ def reports_export(request):
         csv.writer(buf).writerow(HEADERS)
         yield buf.getvalue()
         for b in qs.iterator(chunk_size=500):
+            _shape(b)
             buf = io.StringIO()
-            issuing = "، ".join(e.name for e in b.issuing_entities.all())
-            receiving = "، ".join(e.name for e in b.receiving_entities.all())
             csv.writer(buf).writerow([
-                b.our_number or "",
+                # الرقمُ كما يُعرض ويُطبع («825/2025») — ``core/numbering.py`` لا المخزَّنُ الخام
+                b.our_number_display,
                 b.date.isoformat() if b.date else "",
-                b.title or "",
+                b.shown_title or "",
                 b.kind_label,
-                issuing,
-                receiving,
-                b.sender_number or "",
-                b.sender_date.isoformat() if b.sender_date else "",
-                b.created_at.date().isoformat() if b.created_at else "",
+                "، ".join(e.name for e in b.shown_issuing),
+                "، ".join(e.name for e in b.shown_receiving),
+                b.shown_sender_number or "",
+                b.shown_sender_date.isoformat() if b.shown_sender_date else "",
+                # يومُ الإدخال **ببغداد** لا بـUTC: كتابٌ أُدخل بعد منتصف الليل
+                # محلّيّاً كان يُكتب بتاريخ الأمس.
+                timezone.localdate(b.created_at).isoformat() if b.created_at else "",
                 b.due_date.isoformat() if b.due_date else "",
-                status_labels.get(b.followup_state, b.followup_state or ""),
-                b.margin or "",
+                b.followup_text,
+                b.shown_margin or "",
             ])
             yield buf.getvalue()
 

@@ -16,8 +16,8 @@
     </div>
     <div class="app-context-item">
       <div>
-        <div class="app-context-meta">الحالة الزمنية</div>
-        <strong>{{ bucket|default:'all' }}</strong>
+        <div class="app-context-meta">حالة المتابعة</div>
+        <strong>{{ bucket_label }}</strong>
       </div>
       <span class="app-context-chip is-info"><i class="bi bi-calendar-range"></i> فترة</span>
     </div>
@@ -140,16 +140,26 @@
   table.table td, table.table th { white-space: normal !important; min-width: 0 !important; overflow-wrap: break-word; }
   /* الرؤوس تلتفّ عند الفراغات فقط — لا انشطار لكلمة («الملاحظات») في منتصفها */
   table.table th { overflow-wrap: normal; word-break: keep-all; }
-  table.table td:nth-child(3) { white-space: nowrap !important; }  /* التاريخ لا يُشطر */
-  table.table th:nth-child(1) { width: 3.5%; }   /* # */
-  table.table th:nth-child(2) { width: 11%; }    /* رقم القيد */
-  table.table th:nth-child(3) { width: 11.5%; }  /* تاريخ القيد */
-  table.table th:nth-child(4) { width: 18.5%; }  /* العنوان */
-  table.table th:nth-child(5) { width: 8%; }     /* النوع */
-  table.table th:nth-child(6) { width: 18%; }    /* الجهات */
-  table.table th:nth-child(7) { width: 10.5%; }  /* كتاب الجهة */
-  table.table th:nth-child(8) { width: 10%; }    /* المتابعة */
-  table.table th:nth-child(9) { width: 9%; }     /* الملاحظات */
+  table.report-main td:nth-child(3) { white-space: nowrap !important; }  /* التاريخ لا يُشطر */
+  table.report-main th:nth-child(1) { width: 3.5%; }   /* # */
+  table.report-main th:nth-child(2) { width: 11%; }    /* رقم القيد */
+  table.report-main th:nth-child(3) { width: 11.5%; }  /* تاريخ القيد */
+  table.report-main th:nth-child(4) { width: 18.5%; }  /* العنوان */
+  table.report-main th:nth-child(5) { width: 8%; }     /* النوع */
+  table.report-main th:nth-child(6) { width: 18%; }    /* الجهات */
+  table.report-main th:nth-child(7) { width: 10.5%; }  /* كتاب الجهة */
+  table.report-main th:nth-child(8) { width: 10%; }    /* المتابعة */
+  table.report-main th:nth-child(9) { width: 9%; }     /* الملاحظات */
+  /* عمودُ القسم (حين تجتمع أقسامٌ عدّة) ثالثاً — يُقتطع من العنوان والجهات */
+  table.report-has-dept td:nth-child(4) { white-space: nowrap !important; }
+  table.report-has-dept th:nth-child(3) { width: 5%; }     /* القسم */
+  table.report-has-dept th:nth-child(4) { width: 11.5%; }  /* تاريخ القيد */
+  table.report-has-dept th:nth-child(5) { width: 16%; }    /* العنوان */
+  table.report-has-dept th:nth-child(6) { width: 8%; }     /* النوع */
+  table.report-has-dept th:nth-child(7) { width: 15.5%; }  /* الجهات */
+  table.report-has-dept th:nth-child(8) { width: 10.5%; }  /* كتاب الجهة */
+  table.report-has-dept th:nth-child(9) { width: 10%; }    /* المتابعة */
+  table.report-has-dept th:nth-child(10) { width: 9%; }    /* الملاحظات */
   /* غلاف المحتوى يفرض ارتفاع شاشة كاملة فيدفع صفحة أخيرة بيضاء — أبطِله ورقياً */
   html, body, .content-shell, main { min-height: 0 !important; height: auto !important; }
   table.table th { background: #f1f5f9 !important; border: 1px solid #94a3b8 !important; padding: 5px 6px !important; text-align: right; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -166,7 +176,7 @@
     <div class="rdh-org">
       <img src="{% static 'img/md-o-c-logo.png' %}" alt="" class="rdh-logo">
       <div class="rdh-org-txt">
-        <strong>{{ org.org_name|default:'نظام إدارة الكتب والمراسلات' }}</strong>
+        <strong>{{ org_name }}</strong>
         {% if org.org_section %}<span>{{ org.org_section }}</span>{% endif %}
         {% if org.org_unit %}<span>{{ org.org_unit }}</span>{% endif %}
       </div>
@@ -179,8 +189,10 @@
   <!-- ملخّص الفلاتر المطبَّقة -->
   <div class="report-filter-summary">
     <span><b>النوع:</b> {{ selected_kind_label }}</span>
+    {% if dept_label %}<span><b>القسم:</b> {{ dept_label }}</span>{% endif %}
     {% if selected_entity_name %}<span><b>الجهة:</b> {{ selected_entity_name }}</span>{% endif %}
     <span><b>الحالة:</b> {{ bucket_label }}</span>
+    {% if legacy %}<span><b>يشمل:</b> الورق القديم</span>{% endif %}
     {% if due_start or due_end %}<span><b>الاستحقاق:</b> {{ due_start|default:'…' }} — {{ due_end|default:'…' }}</span>{% endif %}
     <span><b>عدد النتائج:</b> {{ total }}</span>
   </div>
@@ -202,6 +214,19 @@
         <option value="outgoing_external" {% if selected_kind == 'outgoing_external' %}selected{% endif %}>صادر خارجي</option>
       </select>
     </div>
+    {% if departments|length > 1 %}
+    <div class="col-sm-3 col-6">
+      <label class="form-label fw-semibold mb-1" for="reportDept">
+        <i class="bi bi-diagram-3 me-1"></i>القسم
+      </label>
+      <select class="form-select" name="dept" id="reportDept">
+        <option value="">كل الأقسام</option>
+        {% for d in departments %}
+        <option value="{{ d.pk }}"{% if selected_dept == d.pk|stringformat:'s' %} selected{% endif %}>{{ d.code }} — {{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
     <div class="col-sm-3 col-6">
       <label class="form-label fw-semibold mb-1" for="entitySearch">
         <i class="bi bi-building me-1"></i>الجهة
@@ -227,15 +252,12 @@
     </div>
     <div class="col-sm-3 col-6">
       <label class="form-label fw-semibold mb-1">
-        <i class="bi bi-calendar-event me-1"></i>التصفية الزمنية
+        <i class="bi bi-calendar-event me-1"></i>حالة المتابعة
       </label>
       <select class="form-select" name="bucket">
-        <option value="all" {% if bucket == 'all' %}selected{% endif %}>كل الحالات</option>
-        <option value="today_overdue" {% if bucket == 'today_overdue' %}selected{% endif %}>المتأخرة والمستحقة اليوم</option>
-        <option value="overdue" {% if bucket == 'overdue' %}selected{% endif %}>المتأخرة فقط</option>
-        <option value="today" {% if bucket == 'today' %}selected{% endif %}>مستحقة اليوم</option>
-        <option value="upcoming" {% if bucket == 'upcoming' %}selected{% endif %}>مستحقة للفترة القادمة</option>
-        <option value="completed" {% if bucket == 'completed' %}selected{% endif %}>المؤرشفة (انتهت المتابعة)</option>
+        {% for key, label in bucket_options %}
+        <option value="{{ key }}"{% if bucket == key %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
       </select>
     </div>
     <div class="col-sm-3 col-6">
@@ -249,6 +271,12 @@
         <i class="bi bi-calendar-range me-1"></i>نهاية تاريخ الاستحقاق
       </label>
       <input class="form-control" type="date" name="due_end" value="{{ due_end }}">
+    </div>
+    <div class="col-sm-3 col-6">
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" name="legacy" value="1" id="reportLegacy"{% if legacy %} checked{% endif %}>
+        <label class="form-check-label" for="reportLegacy">يشمل الورق القديم</label>
+      </div>
     </div>
     <div class="col-12 d-flex gap-2 flex-wrap mt-2">
       <button class="btn btn-primary hover-lift" type="submit">
@@ -267,27 +295,27 @@
   </div>
 </form>
 
-<!-- Quick Stats Summary — حالات المتابعة الأربع الموحَّدة -->
+<!-- Quick Stats Summary — حالات المتابعة الأربع الموحَّدة (تسمياتُها من FOLLOWUP_LABELS) -->
 <div class="stats-summary no-print mb-4">
   <div class="stat-item animate-fade-in" style="animation-delay: 0.1s;">
-    <div class="stat-value" id="totalBooks">{{ total }}</div>
+    <div class="stat-value">{{ total }}</div>
     <div class="text-muted small fw-semibold">إجمالي النتائج</div>
   </div>
   <div class="stat-item animate-fade-in" style="animation-delay: 0.2s;">
-    <div class="stat-value" style="color: #2563eb;" id="pendingCount">{{ stats.pending|default:0 }}</div>
-    <div class="text-muted small fw-semibold">قيد المتابعة</div>
+    <div class="stat-value" style="color: #2563eb;">{{ stats.pending|default:0 }}</div>
+    <div class="text-muted small fw-semibold">{{ followup_labels.pending }}</div>
   </div>
   <div class="stat-item animate-fade-in" style="animation-delay: 0.3s;">
-    <div class="stat-value" style="color: #d97706;" id="dueTodayCount">{{ stats.due_today|default:0 }}</div>
-    <div class="text-muted small fw-semibold">مستحق اليوم</div>
+    <div class="stat-value" style="color: #d97706;">{{ stats.due_today|default:0 }}</div>
+    <div class="text-muted small fw-semibold">{{ followup_labels.due_today }}</div>
   </div>
   <div class="stat-item animate-fade-in" style="animation-delay: 0.4s;">
-    <div class="stat-value" style="color: #dc2626;" id="overdueCount">{{ stats.overdue|default:0 }}</div>
-    <div class="text-muted small fw-semibold">متأخر</div>
+    <div class="stat-value" style="color: #dc2626;">{{ stats.overdue|default:0 }}</div>
+    <div class="text-muted small fw-semibold">{{ followup_labels.overdue }}</div>
   </div>
   <div class="stat-item animate-fade-in" style="animation-delay: 0.5s;">
-    <div class="stat-value" style="color: #64748b;" id="archivedCount">{{ stats.archived|default:0 }}</div>
-    <div class="text-muted small fw-semibold">مؤرشف</div>
+    <div class="stat-value" style="color: #64748b;">{{ stats.archived|default:0 }}</div>
+    <div class="text-muted small fw-semibold">{{ followup_labels.archived }}</div>
   </div>
 </div>
 
@@ -320,13 +348,49 @@
   </div>
 </div>
 
+{% if dept_rows %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white">
+    <h6 class="mb-0 fw-bold">بحسب القسم</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0" id="reportDeptTable">
+        <thead>
+          <tr>
+            <th>القسم</th>
+            <th>الإجمالي</th>
+            <th>{{ followup_labels.pending }}</th>
+            <th>{{ followup_labels.due_today }}</th>
+            <th>{{ followup_labels.overdue }}</th>
+            <th>{{ followup_labels.archived }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in dept_rows %}
+          <tr>
+            <td>{% if r.department__code %}<span class="text-muted small">{{ r.department__code }}</span> {% endif %}{{ r.label }}</td>
+            <td class="fw-bold">{{ r.total }}</td>
+            <td>{{ r.pending }}</td>
+            <td>{{ r.due_today }}</td>
+            <td>{{ r.overdue }}</td>
+            <td>{{ r.archived }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div class="card shadow-sm">
   <div class="card-header bg-white d-flex justify-content-between align-items-center">
     <h6 class="mb-0 fw-bold">نتائج التصفية</h6>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0 report-main{% if show_department %} report-has-dept{% endif %}" id="reportTable">
         {# أعمدة التقرير الرسمي: تسلسل للطباعة، رقم القيد (رابط)، تاريخا الكتاب #}
         {# الرسميان (تاريخنا + كتاب الجهة رقماً وتاريخاً)، الأطراف باتجاهيها، #}
         {# والمتابعة موحَّدة (حالة + مُهلة) — لا معرّفات داخلية ولا أعمدة مكررة. #}
@@ -334,6 +398,7 @@
           <tr>
             <th class="text-muted">#</th>
             <th>رقم القيد</th>
+            {% if show_department %}<th title="الرقمُ فريدٌ داخل القسم">القسم</th>{% endif %}
             <th>تاريخ القيد</th>
             <th>العنوان</th>
             <th>النوع</th>
@@ -351,30 +416,31 @@
               <a href="{% url 'book_detail' b.pk %}" class="fw-bold text-decoration-none report-book-link"
                  title="فتح الكتاب">{{ b.our_number_display|default:b.pk }}</a>
             </td>
+            {% if show_department %}<td class="text-nowrap small">{{ b.department.code|default:"—" }}</td>{% endif %}
             <td class="text-nowrap">{{ b.date|date:"d/m/Y"|default:"—" }}</td>
-            <td style="word-wrap: break-word; white-space: normal; min-width: 100px;">{{ b.title }}</td>
+            <td style="word-wrap: break-word; white-space: normal; min-width: 100px;">{{ b.shown_title }}</td>
             <td>{% if b.is_outgoing %}<span class="kind-badge kind-outgoing">{{ b.kind_label }}</span>{% else %}<span class="kind-badge kind-incoming">{{ b.kind_label }}</span>{% endif %}</td>
             <td style="min-width: 140px;">
-              <div class="small"><span class="text-muted">من:</span> {{ b.first_issuing_entity|default:"—" }}</div>
-              <div class="small"><span class="text-muted">إلى:</span> {{ b.first_receiving_entity|default:"—" }}</div>
+              <div class="small"><span class="text-muted">من:</span> {{ b.shown_issuing.0|default:"—" }}</div>
+              <div class="small"><span class="text-muted">إلى:</span> {{ b.shown_receiving.0|default:"—" }}</div>
             </td>
             <td class="text-nowrap">
-              <div>{{ b.sender_number|default:"—" }}</div>
-              {% if b.sender_date %}<small class="text-muted">{{ b.sender_date|date:"d/m/Y" }}</small>{% endif %}
+              <div>{{ b.shown_sender_number|default:"—" }}</div>
+              {% if b.shown_sender_date %}<small class="text-muted">{{ b.shown_sender_date|date:"d/m/Y" }}</small>{% endif %}
             </td>
             <td style="min-width: 130px;">
               <span class="status-badge badge-status-{{ b.followup_state }}">
-                {% if b.followup_state == 'pending' %}<i class="bi bi-clock-history me-1"></i>قيد المتابعة
-                {% elif b.followup_state == 'due_today' %}<i class="bi bi-calendar-event-fill me-1"></i>مستحق اليوم
-                {% elif b.followup_state == 'overdue' %}<i class="bi bi-exclamation-triangle-fill me-1"></i>متأخر
-                {% else %}<i class="bi bi-archive-fill me-1"></i>مؤرشف{% endif %}
+                {% if b.followup_state == 'pending' %}<i class="bi bi-clock-history me-1"></i>
+                {% elif b.followup_state == 'due_today' %}<i class="bi bi-calendar-event-fill me-1"></i>
+                {% elif b.followup_state == 'overdue' %}<i class="bi bi-exclamation-triangle-fill me-1"></i>
+                {% else %}<i class="bi bi-archive-fill me-1"></i>{% endif %}{{ b.followup_text }}
               </span>
               {% if b.due_phrase != '-' %}<div><small class="text-muted">{{ b.due_phrase }}</small></div>{% endif %}
             </td>
-            <td style="word-wrap: break-word; white-space: normal; min-width: 80px;">{{ b.margin|default:"—" }}</td>
+            <td style="word-wrap: break-word; white-space: normal; min-width: 80px;">{{ b.shown_margin|default:"—" }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="9" class="text-center text-muted py-3">لا توجد سجلات</td></tr>
+          <tr><td colspan="{% if show_department %}10{% else %}9{% endif %}" class="text-center text-muted py-3">لا توجد سجلات</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -398,18 +464,20 @@
     </div>
   </div>
 </div>
-</div>
 
+{{ followup_labels|json_script:"followupLabels" }}
 <script src="{% static 'vendor/chartjs/chart.umd.min.js' %}?v=20260705a"></script>
 <script>
 (function() {
   // إحصائيات من الـ view مباشرة (server-rendered) — مصدر حقيقة واحد
   const incomingCount = {{ stats.incoming|default:0 }};
   const outgoingCount = {{ stats.outgoing|default:0 }};
-  const pendingCount  = {{ stats.pending|default:0 }};   // قيد المتابعة
-  const dueTodayCount = {{ stats.due_today|default:0 }}; // مستحق اليوم
-  const overdueCount  = {{ stats.overdue|default:0 }};   // متأخر
-  const archivedCount = {{ stats.archived|default:0 }};  // مؤرشف
+  const pendingCount  = {{ stats.pending|default:0 }};
+  const dueTodayCount = {{ stats.due_today|default:0 }};
+  const overdueCount  = {{ stats.overdue|default:0 }};
+  const archivedCount = {{ stats.archived|default:0 }};
+  // تسمياتُ الحالات من FOLLOWUP_LABELS (الخادم) — لا نسخةَ مكتوبةً هنا
+  const FL = JSON.parse(document.getElementById('followupLabels').textContent);
 
   if (typeof Chart === 'undefined') return;   // حارس: لو تعذّر تحميل chart.js لا نُعطّل الصفحة
 
@@ -463,7 +531,7 @@
     new Chart(statusCtx, {
       type: 'bar',
       data: {
-        labels: ['قيد المتابعة', 'مستحق اليوم', 'متأخر', 'مؤرشف'],
+        labels: [FL.pending, FL.due_today, FL.overdue, FL.archived],
         datasets: [{
           label: 'عدد الكتب',
           data: [pendingCount, dueTodayCount, overdueCount, archivedCount],
@@ -471,7 +539,7 @@
             'rgba(37, 99, 235, 0.7)',    /* أزرق — قيد المتابعة */
             'rgba(217, 119, 6, 0.7)',    /* برتقالي — مستحق اليوم */
             'rgba(220, 38, 38, 0.7)',    /* أحمر — متأخر */
-            'rgba(100, 116, 139, 0.7)'   /* رمادي — مؤرشف */
+            'rgba(100, 116, 139, 0.7)'   /* رمادي — مُنجَز / بلا متابعة */
           ],
           borderColor: [
             'rgba(37, 99, 235, 1)',

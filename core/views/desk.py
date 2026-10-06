@@ -18,22 +18,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import render
 
+from core.branding import org_name
 from core.custody_service import undelivered
 from core.models import Book, BookReferral, CustodyEvent, Department
 from core.scoping import (ACCESS_STUB, STUB_TITLE, can_use_desk, is_privileged,
                           scope_books_for, secret_access, subtree_ids,
                           user_department_id)
 
-
-
-def _org_name():
-    """اسمُ الشركة على الورقتين الموقَّعتين — من الإعدادات لا من القالب (قرارُ المالك
-    ق‑7، 2026‑09‑10: «شركة نفط الوسط»؛ كان القالبان يطبعان «نفط ميسان»)."""
-    from core.models import EmailSettings
-    try:
-        return (EmailSettings.get().org_name or '').strip() or 'شركة نفط الوسط'
-    except Exception:
-        return 'شركة نفط الوسط'
 
 @login_required
 def desk_handover(request):
@@ -56,7 +47,7 @@ def desk_handover(request):
         rows = [_handover_row(r, request.user) for r in pending]
 
     return render(request, 'core/desk_handover.html', {
-        'org_name': _org_name(),
+        'org_name': org_name(),
         'department': department,
         'targets': targets,
         'chosen': chosen,
@@ -94,7 +85,7 @@ def desk_ledger(request):
     rows = [_ledger_row(b, department, request.user) for b in books.order_by('date', 'id')]
 
     return render(request, 'core/desk_ledger.html', {
-        'org_name': _org_name(),
+        'org_name': org_name(),
         'department': department,
         'rows': rows,
         'date_from': request.GET.get('date_from', ''),

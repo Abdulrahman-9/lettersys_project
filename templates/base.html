@@ -156,10 +156,12 @@
               <span>البريد</span>
               {% if mail_inbox_unread %}<span class="app-sidebar-link-badge" style="background:#dc3545">{{ mail_inbox_unread }}</span>{% endif %}
             </a>
+            {% if nav.reports %}
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'reports' %} active{% endif %}" href="{% url 'reports' %}" title="التقارير">
               <i class="bi bi-graph-up-arrow"></i>
               <span>التقارير</span>
             </a>
+            {% endif %}
             {% if nav.trash %}
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'trash_list' %} active{% endif %}" href="{% url 'trash_list' %}" title="سلة المهملات">
               <i class="bi bi-trash3"></i>
