@@ -40,20 +40,20 @@
   // ─────────────────────────────────────────────────────────────
   // الملاحظات (notesModal)
   // ─────────────────────────────────────────────────────────────
+  // يطابق وسمَ القالب («ملفّ الكتاب»): اقتباسٌ للهامش أو سطرٌ فارغٌ صادق
   function renderNotes(margin) {
     const el = document.getElementById('bookNotesDisplay');
     if (!el) return;
     el.innerHTML = '';
     if (margin) {
-      const div = document.createElement('div');
-      div.className = 'p-3 bg-light rounded-3 border-start border-3 border-primary';
-      div.style.whiteSpace = 'pre-wrap';
-      div.textContent = margin;
-      el.appendChild(div);
+      const quote = document.createElement('blockquote');
+      quote.className = 'bx-margin';
+      quote.textContent = margin;
+      el.appendChild(quote);
     } else {
-      const empty = document.createElement('div');
-      empty.className = 'text-muted text-center py-4';
-      empty.innerHTML = '<i class="bi bi-chat-dots fs-3 opacity-50 d-block mb-2"></i>لا توجد ملاحظات';
+      const empty = document.createElement('p');
+      empty.className = 'bx-empty';
+      empty.textContent = 'لا هامش على هذا الكتاب.';
       el.appendChild(empty);
     }
   }
@@ -105,24 +105,23 @@
     item.dataset.author = author;
 
     const header = document.createElement('div');
-    header.className = 'comment-header d-flex justify-content-between align-items-start mb-2';
+    header.className = 'comment-header';
 
     const left = document.createElement('div');
-    left.className = 'd-flex align-items-center gap-2';
-    left.innerHTML = '<div class="comment-avatar"><i class="bi bi-person-circle fs-4 text-primary"></i></div>';
+    left.className = 'comment-who';
+    left.innerHTML = '<span class="comment-avatar" aria-hidden="true"><i class="bi bi-person"></i></span>';
 
     const meta = document.createElement('div');
     const authorLine = document.createElement('div');
-    authorLine.className = 'comment-author fw-semibold text-dark';
+    authorLine.className = 'comment-author';
     authorLine.textContent = author + ' ';
     const youBadge = document.createElement('span');
-    youBadge.className = 'badge bg-success text-white ms-1';
-    youBadge.style.fontSize = '0.65rem';
+    youBadge.className = 'comment-you';
     youBadge.textContent = 'أنت';
     authorLine.appendChild(youBadge);
 
     const dateLine = document.createElement('small');
-    dateLine.className = 'comment-date text-muted';
+    dateLine.className = 'comment-date num';
     dateLine.textContent = comment.created_at || '';
 
     meta.appendChild(authorLine);
@@ -134,7 +133,7 @@
       const actions = document.createElement('div');
       actions.className = 'comment-actions dropdown';
       actions.innerHTML =
-        '<button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown" aria-label="إجراءات التعليق"><i class="bi bi-three-dots-vertical"></i></button>' +
+        '<button class="bx-icon-btn" type="button" data-bs-toggle="dropdown" aria-label="إجراءات التعليق"><i class="bi bi-three-dots-vertical"></i></button>' +
         '<ul class="dropdown-menu dropdown-menu-end">' +
         `<li><button class="dropdown-item edit-comment-btn" data-comment-id="${comment.id}"><i class="bi bi-pencil me-1"></i>تعديل</button></li>` +
         '<li><hr class="dropdown-divider"></li>' +
@@ -146,8 +145,6 @@
     const content = document.createElement('div');
     content.className = 'comment-content';
     const p = document.createElement('p');
-    p.className = 'mb-0 text-dark';
-    p.style.whiteSpace = 'pre-wrap';
     p.textContent = comment.content;
     content.appendChild(p);
 
@@ -423,10 +420,11 @@
   // ─────────────────────────────────────────────────────────────
   // طباعة المستند المرفق عبر عارض PDF (العارض المضمّن إن أمكن، وإلا تبويب جديد)
   // ─────────────────────────────────────────────────────────────
+  // **تفويضٌ على المستند**: الزرُّ في قائمة «طباعة» داخل منطقةٍ يُعيد
+  // `refreshInPlace` رسمَها بعد كلّ فعل — والربطُ المباشر كان يموت معها.
   function initPrint() {
-    const btn = document.getElementById('printDocBtn');
-    if (!btn) return;
-    btn.addEventListener('click', function () {
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('[data-print-doc]')) return;
       const frame = document.querySelector('#bookDocViewer iframe');
       if (frame && frame.src) {
         try { frame.contentWindow.focus(); frame.contentWindow.print(); return; }
@@ -471,8 +469,10 @@
       const source = document.getElementById(btn.dataset.copyTarget);
       const text = source ? source.textContent.trim() : '';
       if (!text) return;
+      // «نُسخ الرقم 9» · «نُسخ الاستشهاد» — التسميةُ من الزرّ نفسِه (data-copy-label)
+      const label = btn.dataset.copyLabel || 'الرقم';
       copyText(text)
-        .then(function () { toast('success', 'نُسخ الرقم ' + text); })
+        .then(function () { toast('success', 'نُسخ ' + label + (label === 'الرقم' ? ' ' + text : '')); })
         .catch(function () { toast('danger', 'تعذّر النسخ — انسخه يدويّاً'); });
     });
   }

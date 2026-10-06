@@ -1,746 +1,429 @@
 {% extends 'base.html' %}
 {% load static %}
+{% comment %}
+  «ملفّ الكتاب» — المقترحُ المعتمَد (2026‑10‑06) وقراراتُ المالك Q1–Q5:
+  الرقمُ مرّةً في الدائرة الداكنة · سطرُ استشهادٍ يُنسخ · شريطُ الطريق · **فعلٌ
+  أساسيٌّ واحد** للخطوة التالية · حبّةُ الموعد فعلٌ · المستندُ لاصقٌ بجانب التسيير.
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/book_detail_design.css' %}?v=20260831c">
+  الترويسةُ من دالّاتٍ خالصة (`core/views/book_state.py`) والحقوقُ من الخادم
+  (`can_edit` · `can_distribute` · `can_register_here`) — القالبُ يعرض ولا يقرّر.
+  ومناطقُ `data-lifecycle-refresh` (بمعرّفٍ ولا تتداخل) يُعيد `book_lifecycle.js`
+  رسمَها في المكان بعد كلّ فعل.
+{% endcomment %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/book_detail_v2.css' %}?v=20261006">
 <link rel="stylesheet" href="{% static 'css/lifecycle_design.css' %}?v=20260831b">{% endblock %}
 
 {% block title %}{{ book.title }} - كتاب {{ book.our_number_display }}{% endblock %}
 
-{% block page_sidebar %}
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">ملف الكتاب</div>
-  <div class="app-context-list">
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">رقمنا</div>
-        <strong>{{ book.our_number_display }}</strong>
-      </div>
-      <span class="app-context-chip is-info"><i class="bi bi-hash"></i> قيد</span>
-    </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">النوع</div>
-        <strong>{{ book.kind_label }}</strong>
-      </div>
-      <span class="app-context-chip"><i class="bi bi-diagram-3"></i> تصنيف</span>
-    </div>
-    <div class="app-context-item">
-      <div id="followupStateText" data-lifecycle-refresh>
-        <div class="app-context-meta">حالة المتابعة</div>
-        <strong>{{ book.followup_label }}</strong>
-      </div>
-      <span class="app-context-chip
-            {% if book.followup_state == 'overdue' %}is-danger
-            {% elif book.followup_state == 'due_today' %}is-warning
-            {% elif book.followup_state == 'pending' %}is-info
-            {% else %}is-muted{% endif %}">
-        <i class="bi bi-activity"></i> متابعة
-      </span>
-    </div>
-  </div>
-</div>
-
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">إجراءات الكتاب</div>
-  <div class="app-context-list">
-    <a class="app-context-link" data-back-nav href="{{ back_url|default:'#' }}">
-      <span>{{ back_label|default:'عودة' }}</span>
-      <i class="bi bi-arrow-right"></i>
-    </a>
-    {% if can_edit %}
-    <a class="app-context-link" href="{% url 'book_edit' book.id %}?next={% url 'book_detail' book.id %}">
-      <span>تعديل الكتاب</span>
-      <i class="bi bi-pencil-square"></i>
-    </a>
-    {% endif %}
-    <a class="app-context-link" href="{% url 'extraction-smart-desktop' %}?kind={{ book.kind }}">
-      <span>إدخال كتاب مماثل</span>
-      <i class="bi bi-plus-circle"></i>
-    </a>
-  </div>
-</div>
-{% endblock %}
-
 {% block content %}
-{% comment %}
-  ترويسةُ الكتاب على لوح التصميم (design/Main.dc.html): الرقمُ أوّلاً لأنّه
-  هويّةُ الكتاب، ثمّ الشارات، ثمّ العنوان، ثمّ شريطُ القيود — و**بطاقةُ العهدة
-  إلى جانبها** لأنّها الميزةُ الحاكمة بشهادة الكاتب: «لا يضيع مستندٌ أبداً».
+<div class="bx" data-book-id="{{ book.pk }}">
 
-  العهدةُ والقيودُ **نُقلتا** من لوحة دورة الحياة ولم تُنسخا: نسختان لحقيقةٍ
-  واحدةٍ على شاشةٍ واحدة أسوأُ من غيابها.
-{% endcomment %}
-<div class="py-0 page-shell bd-page" data-book-id="{{ book.pk }}">
- <div class="container-fluid px-3 px-lg-4">
+  <nav class="bx-crumbs" aria-label="مسار التصفّح">
+    <a id="backBtn" data-back-nav href="{{ back_url|default:'#' }}">{{ back_label|default:'عودة' }}</a>
+    <i class="bi bi-chevron-left" aria-hidden="true"></i><span>{{ book.kind_label }}</span>
+    <i class="bi bi-chevron-left" aria-hidden="true"></i><span class="num">{{ book.our_number_display|default:"بلا رقم" }}</span>
+  </nav>
 
-  <div class="bd-card bd-reveal mb-3">
-    <div class="bd-bd d-flex flex-column flex-lg-row justify-content-between align-items-start gap-3">
+  <header class="bx-head">
+    <div class="bx-head-top">
+      {# Q2: الرقمُ مرّةً واحدة — والدائرةُ نفسُها تنسخه #}
+      <button type="button" class="bx-circle" data-copy-target="bookNumberText" data-copy-label="الرقم"
+              title="انقر لنسخ الرقم" aria-label="رقم القيد {{ book.our_number_display|default:'— بلا رقم' }} — انقر لنسخه">
+        <span id="bookNumberText">{{ book.our_number_display|default:"—" }}</span>
+        {% if book.department %}<small>{{ book.department.code }}</small>{% endif %}
+      </button>
 
-      <div class="d-flex flex-column gap-2 flex-grow-1" style="min-width:0">
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-          <span class="bd-num">{{ book.our_number_display }}</span>
-          <span class="bd-pill bd-pill-kind" role="status"
-                aria-label="نوع المراسلة: {{ book.kind_label }}">
-            <i class="bi {% if book.is_incoming %}bi-arrow-down-left{% else %}bi-arrow-up-right{% endif %}"
-               aria-hidden="true"></i>{{ book.kind_label }}
-          </span>
-          {% if book.secret_level and book.secret_level != 'normal' %}
-            <span class="bd-pill bd-pill-secret">
-              <i class="bi bi-shield-lock-fill" aria-hidden="true"></i>{{ book.get_secret_level_display }}
-            </span>
-          {% endif %}
-          {% if book.followup_state == 'overdue' %}
-            <span class="bd-pill bd-pill-late" role="alert">
-              <i class="bi bi-exclamation-circle" aria-hidden="true"></i>متأخر {{ book.delay_days }} يوم
-            </span>
-          {% elif book.followup_state == 'due_today' %}
-            <span class="bd-pill bd-pill-due" role="status">
-              <i class="bi bi-clock" aria-hidden="true"></i>مستحق اليوم
-            </span>
-          {% elif book.followup_state == 'pending' %}
-            <span class="bd-pill bd-pill-calm" role="status">
-              <i class="bi bi-calendar-check" aria-hidden="true"></i>مستحق بعد {{ book.delay_days }} يوم
-            </span>
+      <div class="bx-head-main">
+        <div class="bx-kind">
+          <span class="dot {% if book.is_incoming %}in{% else %}out{% endif %}" aria-hidden="true"></span>{{ book.kind_label }}
+          {% if book.document_type %}<span aria-hidden="true">·</span>{{ book.document_type }}{% endif %}
+          {% if secret_openers is not None %}<span class="bx-lock"><i class="bi bi-lock-fill" aria-hidden="true"></i>{{ book.get_secret_level_display }}</span>{% endif %}
+        </div>
+        <h1 class="bx-title">{{ book.title|default:"بلا عنوان" }}</h1>
+        <div class="bx-cite">
+          <span id="bookCitationText">{% for text, value in citation %}{% if value %}<b class="num">{{ text }}</b>{% else %}{{ text }}{% endif %}{% endfor %}</span>
+          <button class="bx-copy" type="button" data-copy-target="bookCitationText" data-copy-label="الاستشهاد"
+                  aria-label="انسخ سطر الاستشهاد"><i class="bi bi-clipboard" aria-hidden="true"></i>نسخ</button>
+        </div>
+      </div>
+
+      <div class="bx-head-side">
+        {# Q4: حبّةُ الموعد فعلٌ — إنهاءُ المتابعة وإعادةُ فتحها لمن يكتب على الكتاب #}
+        <div id="followupStateText" data-lifecycle-refresh>
+          {% if due %}
+            {% if can_edit %}
+            <div class="dropdown">
+              <button type="button" class="bx-pill bx-pill--{{ due.state }}" data-bs-toggle="dropdown" aria-expanded="false"
+                      title="{{ due.label }}">
+                <i class="bi {% if due.state == 'overdue' %}bi-exclamation-circle{% elif due.state == 'archived' %}bi-check2-circle{% else %}bi-hourglass-split{% endif %}" aria-hidden="true"></i>
+                {{ due.text }}{% if due.state != 'archived' %} · <span class="num">{{ due.date|date:"d/m" }}</span>{% endif %}
+                <i class="bi bi-chevron-down" aria-hidden="true"></i>
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                  <form method="post" action="{% url 'book_change_status' book.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="{% if due.reopen %}reopen{% else %}archived{% endif %}">
+                    <button type="submit" class="dropdown-item">{% if due.reopen %}أعِد فتح المتابعة{% else %}أنهِ المتابعة{% endif %}</button>
+                  </form>
+                </li>
+                <li><a class="dropdown-item" href="{% url 'book_edit' book.id %}?next={% url 'book_detail' book.id %}">غيّر الموعد…</a></li>
+              </ul>
+            </div>
+            {% else %}
+            <span class="bx-pill bx-pill--{{ due.state }}" title="{{ due.label }}">{{ due.text }}{% if due.state != 'archived' %} · <span class="num">{{ due.date|date:"d/m" }}</span>{% endif %}</span>
+            {% endif %}
           {% else %}
-            <span class="bd-pill bd-pill-calm" role="status">
-              <i class="bi bi-archive-fill" aria-hidden="true"></i>مؤرشف
-            </span>
+            <span class="bx-pill bx-pill--none">بلا موعد متابعة</span>
           {% endif %}
         </div>
-
-        <h1 class="bd-title">{{ book.title|default:"بلا عنوان" }}</h1>
-
-        <div class="bd-meta">
-          <span>من: {{ book.first_issuing_entity|default:"—" }}</span>
-          {% if book.date %}<span>التاريخ: <span class="num">{{ book.date|date:"Y/m/d" }}</span></span>{% endif %}
-          {% if book.sender_number %}<span>رقم الجهة: <span class="num">{{ book.sender_number }}</span></span>{% endif %}
-          {% if book.department %}<span>القسم: {{ book.department.code }} — {{ book.department.name }}</span>{% endif %}
-        </div>
-
-        {% comment %}شريطُ القيود — «المستندُ واحدٌ والقيدُ متعدّد»{% endcomment %}
-        {# الغلافُ حاضرٌ دائماً ليُنعَش في المكان بعد «قيِّده عندنا» (refreshInPlace) — ولو كان فارغاً #}
-        <div id="bookRegsBar" data-lifecycle-refresh>
-        {% if registrations %}
-        <div class="bd-regs">
-          <span class="bd-regs-lbl">قُيِّد في</span>
-          {% for reg in registrations %}
-            <span class="bd-reg{% if reg.is_ours %} bd-reg-mine{% endif %}">
-              <span class="bd-reg-num">{{ reg.number|default:"بلا رقم" }}</span>
-              <span class="bd-reg-dept">{{ reg.department.name }}</span>
-              {% if reg.is_ours %}<span class="bd-reg-ours">دفترُنا</span>{% endif %}
-            </span>
-          {% endfor %}
-        </div>
-        {% endif %}
-        </div>
-      </div>
-
-      {% comment %}بطاقةُ العهدة — أوّلُ ما تسأل عنه الشعبةُ حين يُطلب كتاب{% endcomment %}
-      {# موسومةٌ للإنعاش في المكان: «عهدة» تُغيّر حاملَها فيلزم أن تتحدّث الترويسة #}
-      <div class="bd-custody" id="bookCustodyCard" data-lifecycle-refresh>
-        <div class="bd-custody-lbl">العهدة الآن</div>
-        {% if book.current_custody %}
-          <div class="bd-custody-who">
-            <span class="bd-custody-badge" aria-hidden="true"><i class="bi bi-person-fill"></i></span>
-            <div style="min-width:0">
-              <div class="bd-custody-name">{{ book.current_custody.holder_name }}</div>
-              <div class="bd-custody-sub">{{ book.current_custody.get_event_display }}</div>
-            </div>
-          </div>
-          <div class="bd-custody-sig">
-            <span>{{ book.current_custody.note|default:"سُجّلت" }}</span>
-            <span class="num">{{ book.current_custody.signed_at|date:"Y/m/d — H:i" }}</span>
-          </div>
-        {% else %}
-          <div class="bd-custody-who">
-            <span class="bd-custody-badge" style="background:rgba(111,70,40,.18);box-shadow:none"
-                  aria-hidden="true"><i class="bi bi-dash-lg"></i></span>
-            <div class="bd-custody-empty">لم تُسجَّل عهدة</div>
-          </div>
-          <div class="bd-custody-sig">
-            <span>الكتبُ المنقولة من الورق لا عهدةَ لها — ولا تُختلق لها واحدة.</span>
-          </div>
-        {% endif %}
+        {# «بعهدة مَن» — أوّلُ ما تسأل عنه الشعبةُ حين يُطلب كتاب #}
+        <div class="bx-holder" id="bookCustodyCard" data-lifecycle-refresh>{% if book.current_custody %}بعهدة <b>{{ book.current_custody.holder_name }}</b><br>منذ <span class="num">{{ book.current_custody.signed_at|date:"d/m/Y H:i" }}</span>{% elif paper %}ورقٌ منقول من الدفتر — لا تسيير{% else %}لم تُسجَّل عهدة{% endif %}</div>
       </div>
     </div>
 
-    <div class="bd-hd bd-actions" style="border-top:1px solid var(--rule);border-bottom:0">
-      <a id="backBtn" data-back-nav class="bd-btn bd-btn-ghost" href="{{ back_url|default:'#' }}">
-        <i class="bi bi-arrow-right"></i>{{ back_label|default:'عودة' }}
-      </a>
-      <div class="d-flex gap-2 flex-wrap">
-        {% if book.attachments.all %}
-        <button type="button" id="printDocBtn" class="bd-btn bd-btn-ghost"
-                title="طباعة المستند المرفق عبر عارض PDF">
-          <i class="bi bi-printer"></i>طباعة المستند
+    <ol class="bx-steps" id="bookSteps" data-lifecycle-refresh aria-label="طريق الكتاب">{% for step in journey %}
+      <li class="bx-step {{ step.state }}"{% if step.state == 'now' %} aria-current="step"{% endif %}>
+        <i class="n" aria-hidden="true">{% if step.state == 'done' %}<i class="bi bi-check"></i>{% else %}{{ forloop.counter }}{% endif %}</i>
+        <span><b>{{ step.label }}</b><span class="num">{{ step.sub }}</span></span>
+      </li>{% endfor %}
+    </ol>
+
+    {# Q3: فعلٌ أساسيٌّ واحد للخطوة التالية — والبقيّةُ ثانويّة أو خلف «⋯» #}
+    <div class="bx-actions" id="bookActions" data-lifecycle-refresh>
+      {% if primary %}
+        {% if primary.modal %}
+        <button type="button" class="bx-btn bx-btn--primary" data-bs-toggle="modal" data-bs-target="{{ primary.modal }}">
+          <i class="bi {{ primary.icon }}" aria-hidden="true"></i>{{ primary.label }}
         </button>
+        {% else %}
+        <form method="post" action="{% url 'book_change_status' book.pk %}" class="bx-inline-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="{{ primary.status }}">
+          <button type="submit" class="bx-btn bx-btn--primary"><i class="bi {{ primary.icon }}" aria-hidden="true"></i>{{ primary.label }}</button>
+        </form>
         {% endif %}
-        <a class="bd-btn bd-btn-ghost" href="{% url 'book_report' book.id %}?print=1"
-           target="_blank" rel="noopener" title="تقرير دورة حياة الكتاب">
-          <i class="bi bi-file-earmark-text"></i>طباعة التقرير
-        </a>
-        {% if can_edit %}
-        <a class="bd-btn bd-btn-ink" href="{% url 'book_edit' book.id %}?next={% url 'book_detail' book.id %}">
-          <i class="bi bi-pencil-square"></i>تعديل
-        </a>
-        {% endif %}
+      {% endif %}
+      {% if can_edit %}
+      <a class="bx-btn" href="{% url 'book_edit' book.id %}?next={% url 'book_detail' book.id %}"><i class="bi bi-pencil" aria-hidden="true"></i>تعديل</a>
+      {% endif %}
+      <div class="dropdown">
+        <button type="button" class="bx-btn" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-printer" aria-hidden="true"></i>طباعة<i class="bi bi-chevron-down bx-caret" aria-hidden="true"></i>
+        </button>
+        <ul class="dropdown-menu">
+          {% if attachment_series %}<li><button type="button" class="dropdown-item" id="printDocBtn" data-print-doc>المستند المرفق</button></li>{% endif %}
+          <li><a class="dropdown-item" href="{% url 'book_report' book.id %}?print=1" target="_blank" rel="noopener">تقرير الكتاب ودورة حياته</a></li>
+        </ul>
+      </div>
+      <a class="bx-btn" href="{% url 'mail_compose_book' book.pk %}"><i class="bi bi-envelope" aria-hidden="true"></i>إرسال…</a>
+      <button type="button" class="bx-btn" data-bs-toggle="modal" data-bs-target="#linkPickerModal"><i class="bi bi-link-45deg" aria-hidden="true"></i>اربط…</button>
+      <span class="spacer"></span>
+      <div class="dropdown">
+        <button type="button" class="bx-btn bx-btn--ghost" data-bs-toggle="dropdown" aria-expanded="false" aria-label="أفعالٌ أخرى">
+          <i class="bi bi-three-dots" aria-hidden="true"></i>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          {% if can_distribute and not paper %}
+            {% if primary.key != 'distribute' %}<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#distributeModal"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> فرِّق…</button></li>{% endif %}
+            {% if primary.key != 'custody' %}<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#custodyModal"><i class="bi bi-person-badge" aria-hidden="true"></i> سجّل عهدة…</button></li>{% endif %}
+          {% endif %}
+          {% if can_register_here %}
+          {# لمن يقبله الخادمُ وحدَه (register_here_ledger)؛ والتأكيدُ في book_lifecycle.js يسمّي data-ledger #}
+          <li><button type="button" class="dropdown-item" id="registerHereBtn" data-ledger="{{ register_ledger.name }}"
+                      title="امنحه رقمَ واردٍ من عدّاد «{{ register_ledger.name }}»"><i class="bi bi-journal-plus" aria-hidden="true"></i> قيّده عندنا…</button></li>
+          {% endif %}
+          <li><a class="dropdown-item" href="{% url 'extraction-smart-desktop' %}?kind={{ book.kind }}"><i class="bi bi-plus-circle" aria-hidden="true"></i> إدخال كتابٍ مماثل</a></li>
+        </ul>
       </div>
     </div>
-  </div>
+  </header>
 
-  <div class="row g-3">
-    <!-- العمود الرئيسي -->
-    <div class="col-lg-8">
-      <!-- بطاقة المستند المضمّن (يُملأ من book_detail.js؛ يُخفى إن لا مرفقات) -->
-      <div class="card border-0 shadow-sm mb-3 details-card d-none" id="bookDocCard">
-        <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center gap-2">
-          <h6 class="mb-0 fw-bold"><i class="bi bi-file-earmark-text text-primary me-2"></i>المستند</h6>
-          <div class="d-flex align-items-center gap-2 flex-wrap">
-            <div id="bookDocChips" class="bp-doc-chips d-none"></div>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="bookOcrToggle" title="إظهار النص المستخرج (OCR) — قابل للتحديد والنسخ">
-              <i class="bi bi-textarea-t me-1"></i>النص المستخرج
-            </button>
-          </div>
-        </div>
-        <div class="card-body p-2">
-          <div class="bp-doc-viewer" id="bookDocViewer"></div>
-          <div class="bp-ocr-panel d-none" id="bookOcrPanel"></div>
-        </div>
-      </div>
+  <div class="bx-body">
+    <div class="bx-col">
 
-      <!-- بطاقة البيانات الأساسية -->
-      <div class="card border-0 shadow-sm mb-3 details-card">
-        <div class="card-header bg-white border-bottom p-3">
-          <h6 class="mb-0 fw-bold"><i class="bi bi-info-circle-fill text-primary me-2"></i>البيانات الأساسية</h6>
-        </div>
-        <div class="card-body p-3">
-          <div class="row g-3">
-            <!-- صف 1 -->
-            <div class="col-md-6">
-              <div class="detail-field">
-                <label class="detail-label">رقم القيد الفريد</label>
-                <div class="detail-value d-flex align-items-center gap-2">
-                  <span class="badge bg-info" id="bookNumberText">{{ book.our_number_display|default:book.id }}</span>
-                  <button type="button" class="btn btn-sm btn-link p-0" data-copy-target="bookNumberText" title="نسخ الرقم" aria-label="نسخ رقم الكتاب إلى الحافظة"><i class="bi bi-clipboard" aria-hidden="true"></i></button>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="detail-field">
-                <label class="detail-label">رقم الجهة المقابل</label>
-                <div class="detail-value">{{ book.sender_number|default:"غير محدد" }}</div>
-              </div>
-            </div>
+      <section class="bx-card" aria-labelledby="h-facts">
+        <div class="bx-card-hd"><h2 id="h-facts">بيانات الكتاب</h2></div>
+        <dl class="bx-facts">
+          {% if book.is_incoming %}
+          <div><dt>الجهة المُرسِلة</dt><dd class="bx-tags">{% include "core/_bx_entities.html" with entities=book.issuing_entities.all archived=book.archived_issuing_names %}</dd></div>
+          <div><dt>رقم الجهة وتاريخه</dt><dd class="num">{{ book.sender_number|default:"—" }}{% if book.sender_date %} <small>· {{ book.sender_date|date:"d/m/Y" }}</small>{% endif %}</dd></div>
+          <div><dt>رقمنا وتاريخ القيد</dt><dd class="num">{{ book.our_number_display|default:"بلا رقم" }}{% if book.date %} <small>· {{ book.date|date:"d/m/Y" }}</small>{% endif %}</dd></div>
+          <div><dt>الجهة المستلمة</dt><dd class="bx-tags">{% include "core/_bx_entities.html" with entities=book.receiving_entities.all archived=book.archived_receiving_names %}</dd></div>
+          {% else %}
+          <div><dt>الجهة المستلمة</dt><dd class="bx-tags">{% include "core/_bx_entities.html" with entities=book.receiving_entities.all archived=book.archived_receiving_names %}</dd></div>
+          <div><dt>رقمنا وتاريخه</dt><dd class="num">{{ book.our_number_display|default:"بلا رقم" }}{% if book.date %} <small>· {{ book.date|date:"d/m/Y" }}</small>{% endif %}</dd></div>
+          <div><dt>الجهة المُصدِرة</dt><dd class="bx-tags">{% include "core/_bx_entities.html" with entities=book.issuing_entities.all archived=book.archived_issuing_names %}</dd></div>
+          {% endif %}
+          <div><dt>نوع المستند</dt><dd>{{ book.document_type|default:"—" }}</dd></div>
+          <div><dt>السرّيّة</dt><dd>{{ book.get_secret_level_display }}
+            {% if secret_openers is not None %}{# Q5: «مَن يفتحه» — من توأم secret_access #}
+            <small class="bx-openers">يفتحه: مديرُ النظام{% for u in secret_openers %} · {{ u.get_full_name|default:u.username }}{% endfor %}</small>{% endif %}</dd></div>
+          <div><dt>القسم</dt><dd>{% if book.department %}<span class="bx-code">{{ book.department.code }}</span> {{ book.department.name }}{% else %}—{% endif %}</dd></div>
+          <div><dt>الاستحقاق</dt><dd class="num">{% if book.due_date %}{{ book.due_date|date:"d/m/Y" }}{% if due %} <small>· {{ due.text }}</small>{% endif %}{% else %}<span class="bx-muted">بلا متابعة</span>{% endif %}</dd></div>
+          {# «المستندُ واحدٌ والقيدُ متعدّد» — موسومٌ للإنعاش بعد «قيِّده عندنا» ولو كان فارغاً #}
+          <div><dt>القيد في الدفاتر</dt><dd id="bookRegsBar" data-lifecycle-refresh>{% for reg in registrations %}<span class="bx-reg">{{ reg.department.name }} <span class="num">{{ reg.number|default:"بلا رقم" }}</span>{% if reg.registered_at %} <small class="num">· {{ reg.registered_at|date:"d/m" }}</small>{% endif %}</span>{% empty %}<span class="bx-muted">في دفتر قسمه وحده</span>{% endfor %}</dd></div>
+          <div><dt>أدخله</dt><dd>{{ book.created_by.get_full_name|default:book.created_by.username|default:"—" }} <small class="num">· {{ book.created_at|date:"d/m/Y" }}</small></dd></div>
+        </dl>
+      </section>
 
-            <!-- صف 2 -->
-            <div class="col-md-6">
-              <div class="detail-field">
-                <label class="detail-label">الجهة المصدرة</label>
-                <div class="detail-value d-flex flex-wrap gap-1">
-                  {% for e in book.issuing_entities.all %}
-                    <span class="badge bg-light text-dark" title="{{ e.name }}">
-                      {% if e.code %}<small class="text-muted">[{{ e.code }}]</small>{% endif %}
-                      {{ e.name }}
-                    </span>
-                  {% endfor %}
-                  {% for name in book.archived_issuing_names %}
-                    <span class="badge bg-light text-muted fst-italic" title="جهة محذوفة (أرشيف نصي)">
-                      <i class="bi bi-archive me-1"></i>{{ name }}
-                    </span>
-                  {% endfor %}
-                  {% if not book.issuing_entities.all and not book.archived_issuing_names %}
-                    <span class="text-muted">—</span>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="detail-field">
-                <label class="detail-label">الجهة المستلمة</label>
-                <div class="detail-value d-flex flex-wrap gap-1">
-                  {% for e in book.receiving_entities.all %}
-                    <span class="badge bg-light text-dark" title="{{ e.name }}">
-                      {% if e.code %}<small class="text-muted">[{{ e.code }}]</small>{% endif %}
-                      {{ e.name }}
-                    </span>
-                  {% endfor %}
-                  {% for name in book.archived_receiving_names %}
-                    <span class="badge bg-light text-muted fst-italic" title="جهة محذوفة (أرشيف نصي)">
-                      <i class="bi bi-archive me-1"></i>{{ name }}
-                    </span>
-                  {% endfor %}
-                  {% if not book.receiving_entities.all and not book.archived_receiving_names %}
-                    <span class="text-muted">—</span>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-
-            <!-- صف 3 -->
-            <div class="col-md-4">
-              <div class="detail-field">
-                <label class="detail-label">تاريخ الكتاب</label>
-                <div class="detail-value"><i class="bi bi-calendar me-1"></i>{{ book.date|date:"d/m/Y" }}</div>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="detail-field">
-                <label class="detail-label">تاريخ الاستحقاق</label>
-                <div class="detail-value">
-                  {% if book.due_date %}
-                    <i class="bi bi-calendar2-check me-1"></i>{{ book.due_date|date:"d/m/Y" }}
-                  {% else %}
-                    <span class="text-muted">—</span>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="detail-field">
-                <label class="detail-label">مستوى السرية</label>
-                <div class="detail-value">
-                  {% if book.get_secret_level_display == 'سري' %}
-                    <span class="badge bg-danger">{{ book.get_secret_level_display }}</span>
-                  {% elif book.get_secret_level_display == 'موثق' %}
-                    <span class="badge bg-warning">{{ book.get_secret_level_display }}</span>
-                  {% else %}
-                    <span class="badge bg-success">{{ book.get_secret_level_display }}</span>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {% comment %}دورةُ الحياة تسبق الهوامشَ عمداً: «بعهدة مَن» ومَن ردّ
-      هما ما يبحث عنه الكاتبُ أوّلاً حين يفتح كتاباً — والهوامشُ أرشيفُ ما
-      مضى.{% endcomment %}
+      {% comment %}التسييرُ يسبق الهامشَ عمداً: «بعهدة مَن» ومَن ردّ هما ما يبحث عنه
+      الكاتبُ أوّلاً — والهامشُ توجيهٌ مضى.{% endcomment %}
       {% include "core/_book_lifecycle.html" %}
 
-      <!-- بطاقة الملاحظات -->
-      <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-          <h6 class="mb-0 fw-bold"><i class="bi bi-chat-left-dots text-primary me-2"></i>هامشُ المدير العام على الكتاب</h6>
+      <section class="bx-card" aria-labelledby="h-margin">
+        <div class="bx-card-hd">
+          <h2 id="h-margin">هامشُ المدير العام</h2><span class="spacer"></span>
           {% if can_edit %}
-          <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#notesModal" title="تعديل الملاحظات">
-            <i class="bi bi-pencil-square me-1"></i>تعديل
-          </button>
+          <button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#notesModal"><i class="bi bi-pencil" aria-hidden="true"></i>تعديل</button>
           {% endif %}
         </div>
-        <div class="card-body p-3" id="bookNotesDisplay">
-          {% if book.margin %}
-            <div class="p-3 bg-light rounded-3 border-start border-3 border-primary" style="white-space: pre-wrap;">
-              {{ book.margin }}
-            </div>
-          {% else %}
-            <div class="text-muted text-center py-4">
-              <i class="bi bi-chat-dots fs-3 opacity-50 d-block mb-2"></i>
-              لا توجد ملاحظات
-            </div>
-          {% endif %}
+        <div id="bookNotesDisplay">
+          {% if book.margin %}<blockquote class="bx-margin">{{ book.margin }}</blockquote>
+          {% else %}<p class="bx-empty">لا هامش على هذا الكتاب.</p>{% endif %}
         </div>
-      </div>
+      </section>
 
-      <!-- بطاقة التعليقات (منقولة أسفل بطاقة الملاحظات) -->
-      <div class="card border-0 shadow-sm comment-card mb-3">
-        <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-          <h6 class="mb-0 fw-bold"><i class="bi bi-chat-left-quote text-primary me-2"></i>التعليقات</h6>
-          <span class="badge bg-primary" data-comments-count="{{ comments|length }}">{{ comments|length }}</span>
+      <section class="bx-card" aria-labelledby="h-links">
+        <div class="bx-card-hd">
+          <h2 id="h-links">كتبٌ مرتبطة</h2><span class="spacer"></span>
+          <button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#linkPickerModal"><i class="bi bi-plus" aria-hidden="true"></i>اربط كتاباً</button>
         </div>
-        <div class="card-body p-3">
-          <!-- نموذج إضافة تعليق -->
-          <div class="add-comment-form mb-3">
-            <textarea 
-              class="form-control" 
-              id="newCommentContent" 
-              rows="3" 
-              maxlength="5000"
-              placeholder="أضف تعليقاً... (الحد الأقصى 5000 حرف)"
-              aria-label="محتوى التعليق الجديد"
-            ></textarea>
-            <div class="d-flex justify-content-between align-items-center mt-2">
-              <small class="text-muted" id="commentCharCount">0 / 5000</small>
-              <button type="button" class="btn btn-primary btn-sm" id="addCommentBtn" data-book-id="{{ book.id }}" data-current-user="{{ request.user.username }}" data-is-superuser="{{ request.user.is_superuser|yesno:"true,false" }}">
-                <i class="bi bi-send me-1"></i>إضافة تعليق
-              </button>
-            </div>
-          </div>
-
-          <!-- قائمة التعليقات -->
-          <div id="commentsList" class="comments-list">
-              {% for comment in comments %}
-              <div class="comment-item" data-comment-id="{{ comment.id }}" data-can-edit="{% if comment.can_edit %}true{% else %}false{% endif %}" data-author="{{ comment.created_by.username }}">
-                <div class="comment-header d-flex justify-content-between align-items-start mb-2">
-                  <div class="d-flex align-items-center gap-2">
-                    <div class="comment-avatar">
-                      <i class="bi bi-person-circle fs-4 text-primary"></i>
-                    </div>
-                    <div>
-                      <div class="comment-author fw-semibold text-dark">
-                        {{ comment.created_by.username }}
-                        {% if comment.created_by == request.user %}
-                          <span class="badge bg-success text-white ms-1" style="font-size: 0.65rem;">أنت</span>
-                        {% endif %}
-                      </div>
-                      <small class="comment-date text-muted">
-                        {{ comment.created_at|date:"d/m/Y H:i" }}
-                        {% if comment.is_edited %}
-                          <span class="text-primary comment-edited-flag">(معدّل)</span>
-                        {% endif %}
-                      </small>
-                    </div>
-                  </div>
-                  {% if comment.can_edit %}
-                  <div class="comment-actions dropdown">
-                    <button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown" aria-label="إجراءات التعليق">
-                      <i class="bi bi-three-dots-vertical"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                      <li>
-                        <button class="dropdown-item edit-comment-btn" data-comment-id="{{ comment.id }}">
-                          <i class="bi bi-pencil me-1"></i>تعديل
-                        </button>
-                      </li>
-                      <li><hr class="dropdown-divider"></li>
-                      <li>
-                        <button class="dropdown-item text-danger delete-comment-btn" data-comment-id="{{ comment.id }}">
-                          <i class="bi bi-trash me-1"></i>حذف
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-                  {% endif %}
-                </div>
-                <div class="comment-content">
-                  <p class="mb-0 text-dark" style="white-space: pre-wrap;">{{ comment.content }}</p>
-                </div>
-              </div>
-              {% endfor %}
-              <div class="text-center text-muted py-4 {% if comments %}d-none{% endif %}" id="noCommentsMessage">
-                <i class="bi bi-chat-dots fs-3 opacity-50 d-block mb-2"></i>
-                <p class="mb-0">لا توجد تعليقات بعد. كن أول من يعلق!</p>
-              </div>
-          </div>
-        </div>
-      </div>
+        {% if links %}
+        <ul class="bx-links">
+          {% for link in links %}
+          <li>
+            <span class="rel">{{ link.relation_label }}</span>
+            {% if link.book_id %}
+              <a class="t" href="{% url 'book_detail' link.book_id %}">{{ link.title }}</a>
+            {% else %}
+              <span class="t bx-muted">{{ link.title }}</span>
+            {% endif %}
+            <span class="n num">{{ link.number }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="bx-empty">لا كتبَ مرتبطة — اربط الجوابَ أو الإشارةَ بكتابها.</p>
+        {% endif %}
+      </section>
 
       {% comment %}
-        التواقيع — الطورُ الأوّل: مصادقةٌ داخليّةٌ ببصمةٍ ورمزِ تحقّق. والصفحةُ
-        لا تسأل عن دور: `can_sign_book` تأتي من الخدمة نفسِها التي تحرس الفعل.
+        التواقيع — مصادقةٌ داخليّةٌ ببصمةٍ ورمزِ تحقّق. والصفحةُ لا تسأل عن دور:
+        `can_sign_book` و`sg.can_revoke` من الخدمة نفسِها التي تحرس الفعل.
       {% endcomment %}
       {% if signatures or can_sign_book %}
-      <div class="card border-0 shadow-sm mb-3 lc-scope">
-        <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-          <h6 class="mb-0 fw-bold">
-            <i class="bi bi-patch-check text-success me-2"></i>التواقيع
-          </h6>
-          {% if can_sign_book and book.attachments.all %}
-            <form method="post" action="{% url 'sign_attachment' book.attachments.first.pk %}"
-                  onsubmit="return confirm('توقيعُ المستند يُنشئ نسخةً مختومة — أتمضي؟');">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-sm btn-outline-primary" style="font-size:.78rem">
-                <i class="bi bi-pen"></i> وقّع المستند
-              </button>
-            </form>
+      <section class="bx-card lc-scope" aria-labelledby="h-signs">
+        <div class="bx-card-hd">
+          <h2 id="h-signs">التواقيع</h2><span class="spacer"></span>
+          {% if can_sign_book and attachment_series %}
+          <form method="post" action="{% url 'sign_attachment' book.attachments.first.pk %}"
+                onsubmit="return confirm('توقيعُ المستند يُنشئ نسخةً مختومة — أتمضي؟');">
+            {% csrf_token %}
+            <button type="submit" class="bx-tag"><i class="bi bi-pen" aria-hidden="true"></i>وقّع المستند</button>
+          </form>
           {% endif %}
         </div>
-        <div class="card-body p-3">
-          {% for sg in signatures %}
-            <div class="d-flex align-items-start justify-content-between gap-2 py-2{% if not forloop.last %} border-bottom{% endif %}">
-              <div style="min-width:0">
-                <div class="fw-semibold" style="font-size:.88rem">
-                  {% if sg.is_valid %}
-                    <span class="lc-state lc-state-done"><i class="bi bi-patch-check-fill"></i>سارٍ</span>
-                  {% else %}
-                    <span class="lc-state lc-state-late"><i class="bi bi-x-circle"></i>مُبطَل</span>
-                  {% endif %}
-                  {{ sg.signer.get_full_name|default:sg.signer.username }}
-                  <span class="text-muted">— {{ sg.get_capacity_display }}</span>
-                </div>
-                <div class="text-muted" style="font-size:.76rem">
-                  {{ sg.signed_at|date:"Y/m/d H:i" }} ·
-                  <a href="{% url 'verify_signature' sg.verify_token %}" target="_blank" rel="noopener">
-                    رمز التحقّق {{ sg.verify_token }}
-                  </a>
-                </div>
-              </div>
-              {% if sg.is_valid and sg.can_revoke %}
-              <form method="post" action="{% url 'revoke_signature' sg.pk %}"
-                    onsubmit="return confirm('إبطالُ التوقيع لا يحذفه — أتمضي؟');">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-outline-secondary"
-                        style="font-size:.72rem">إبطال</button>
-              </form>
-              {% endif %}
+        {% for sg in signatures %}
+        <div class="bx-sign">
+          <div style="min-width:0">
+            <div>
+              {% if sg.is_valid %}<span class="lc-state lc-state-done"><i class="bi bi-patch-check-fill"></i>سارٍ</span>
+              {% else %}<span class="lc-state lc-state-late"><i class="bi bi-x-circle"></i>مُبطَل</span>{% endif %}
+              <b>{{ sg.signer.get_full_name|default:sg.signer.username }}</b>
+              <span class="bx-muted">— {{ sg.get_capacity_display }}</span>
             </div>
-          {% empty %}
-            <p class="text-muted mb-0" style="font-size:.84rem">
-              لا توقيعَ بعد — التوقيعُ يُثبت مَن صادق ومتى، وأنّ الملفَّ لم يتغيّر بعدها.
-            </p>
-          {% endfor %}
+            <small class="bx-muted num">{{ sg.signed_at|date:"d/m/Y H:i" }} ·
+              <a href="{% url 'verify_signature' sg.verify_token %}" target="_blank" rel="noopener">رمز التحقّق {{ sg.verify_token }}</a></small>
+          </div>
+          {% if sg.is_valid and sg.can_revoke %}
+          <form method="post" action="{% url 'revoke_signature' sg.pk %}"
+                onsubmit="return confirm('إبطالُ التوقيع لا يحذفه — أتمضي؟');">
+            {% csrf_token %}
+            <button type="submit" class="bx-row-act">إبطال</button>
+          </form>
+          {% endif %}
         </div>
-      </div>
+        {% empty %}
+        <p class="bx-empty">لا توقيعَ بعد — التوقيعُ يُثبت مَن صادق ومتى، وأنّ الملفَّ لم يتغيّر بعدها.</p>
+        {% endfor %}
+      </section>
       {% endif %}
 
-      <!-- بطاقة السجل -->
-      <div class="card border-0 shadow-sm" id="followupHistoryCard" data-lifecycle-refresh>
-        <div class="card-header bg-white d-flex justify-content-between align-items-center p-3 border-bottom">
-          <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history text-info me-2"></i>سجل المتابعة</h6>
-          <span class="badge bg-light text-dark">{{ history_total }} مدخل</span>
+      <section class="bx-card" aria-labelledby="h-mail">
+        <div class="bx-card-hd">
+          <h2 id="h-mail">البريد الإلكترونيّ</h2>
+          <span class="meta" id="bookEmailCount">…</span><span class="spacer"></span>
+          <a class="bx-tag" href="{% url 'mail_compose_book' book.pk %}"><i class="bi bi-send" aria-hidden="true"></i>إرسال</a>
         </div>
-        <div class="card-body p-0">
-          {% if history %}
-          <div class="timeline">
-            {% comment %}
-              السجلُّ يُجهَّز في العرض محدوداً بـ`HISTORY_PAGE` مع
-              `select_related('by')` — لا استعلامَ في القالب ولا قطعاً بعد
-              الجلب. والصفُّ يقول ثلاثةَ أشياء: **ماذا** (تسميةٌ عربيّةٌ من
-              `ACTION_CHOICES` لا مفتاحاً خاماً) · **مَن** (لقطةُ الاسم وقتَ
-              الفعل) · ومتى.
-            {% endcomment %}
-            {% for h in history %}
-            <div class="timeline-item p-3 border-bottom">
-              <div class="d-flex gap-3">
-                <div class="timeline-marker">
-                  <i class="bi bi-arrow-left-right text-white"></i>
-                </div>
-                <div class="flex-grow-1">
-                  <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h6 class="mb-0 fw-semibold">
-                      {{ h.get_action_display }}
-                      <span class="text-muted fw-normal" style="font-size:.82rem">— {{ h.actor_name }}</span>
-                    </h6>
-                    <small class="text-muted">{{ h.created_at|date:"Y/m/d H:i" }}</small>
-                  </div>
-                  {% if h.notes %}
-                    <small class="text-muted d-block">{{ h.notes }}</small>
-                  {% endif %}
-                </div>
+        <div id="bookEmailList" class="bx-mail"><p class="bx-empty">جارٍ التحميل…</p></div>
+        {% if email_log_count %}
+        <a class="bx-fold" href="{% url 'mail_sent' %}?book={{ book.pk }}">عرض كلّ المراسلات<i class="bi bi-chevron-left" aria-hidden="true"></i></a>
+        {% endif %}
+      </section>
+    </div>
+
+    {# المستند — لاصقٌ بجانب التسيير؛ والعارضُ يملؤه book_detail.js (ويُخفي صندوقَه وحدَه إن لا مرفق) #}
+    <aside class="bx-card bx-doc" aria-labelledby="h-doc">
+      <div class="bx-card-hd">
+        <h2 id="h-doc">المستند</h2>
+        <span class="meta">{% if attachment_series %}{{ attachment_series|length }} ملف{% else %}بلا مرفق{% endif %}</span>
+      </div>
+      <div class="bx-preview d-none" id="bookDocCard">
+        <div class="bx-preview-tools">
+          <div id="bookDocChips" class="bp-doc-chips d-none"></div>
+          <button type="button" class="bx-tag" id="bookOcrToggle" title="النص المستخرج (OCR) — قابل للتحديد والنسخ">
+            <i class="bi bi-textarea-t" aria-hidden="true"></i>النصّ المستخرج
+          </button>
+        </div>
+        <div class="bp-doc-viewer" id="bookDocViewer"></div>
+        <div class="bp-ocr-panel d-none" id="bookOcrPanel"></div>
+      </div>
+      {% if attachments %}
+      <ul class="bx-files">
+        {% for att in attachments %}
+        <li>
+          <span class="ic" aria-hidden="true"><i class="bi bi-file-earmark-pdf"></i></span>
+          <span style="min-width:0">
+            {% if att.file %}<div class="fn" title="{{ att.filename }}">{{ att.filename|default:"مرفق" }}</div>
+            {% else %}<div class="fn bx-muted">مرفقٌ بلا ملف</div>{% endif %}
+            <div class="fm num">{% if att.page_count %}{{ att.page_count }} ورقة · {% endif %}{% if att.file %}{{ att.file.size|filesizeformat }} · {% endif %}{{ att.uploaded_at|date:"d/m/Y" }}</div>
+            {% if att.last_merge_by %}<div class="fm">آخرُ إلحاق: {{ att.last_merge_by }}{% if att.last_merge_added %} (+{{ att.last_merge_added }} ورقة){% endif %}</div>{% endif %}
+            {% if att.versions.all %}
+            <details class="bx-versions"><summary>نسخٌ سابقة ({{ att.versions.all|length }})</summary>
+              <ul>{% for v in att.versions.all %}<li>{% if v.file %}<a href="{{ v.file.url }}" target="_blank" rel="noopener">الإصدار {{ v.version_number }}</a>{% else %}الإصدار {{ v.version_number }} (بلا ملف){% endif %} <span class="num">· {{ v.created_at|date:"d/m/Y" }}</span></li>{% endfor %}</ul>
+            </details>
+            {% endif %}
+          </span>
+          {% if att.file %}
+          <span class="acts">
+            <button class="bx-icon-btn preview-btn" data-doc-series="{{ att.id }}" data-file-url="{{ request.scheme }}://{{ request.META.HTTP_HOST }}{{ att.file.url }}" data-file-name="{{ att.file.name }}" data-att-id="{{ att.id }}" type="button" title="معاينة" aria-label="معاينة {{ att.filename }}"><i class="bi bi-eye" aria-hidden="true"></i></button>
+            <a class="bx-icon-btn" href="{{ att.file.url }}" download title="تنزيل" aria-label="تنزيل {{ att.filename }}"><i class="bi bi-download" aria-hidden="true"></i></a>
+          </span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="bx-empty bx-doc-empty">لا مرفقَ لهذا الكتاب.</p>
+      {% endif %}
+      {% if can_edit %}
+      <div class="bx-doc-ft"><a href="{% url 'book_edit' book.id %}?next={% url 'book_detail' book.id %}">إدارة المرفقات والمسح…</a></div>
+      {% endif %}
+    </aside>
+  </div>
+
+  <div class="bx-activity">
+    {# ما جرى على الكتاب — آخرُ خمسة ظاهرة والبقيّةُ مطويّة (السجلُّ محدودٌ في الاستعلام) #}
+    <section class="bx-card" id="followupHistoryCard" data-lifecycle-refresh aria-labelledby="h-hist">
+      <div class="bx-card-hd"><h2 id="h-hist">ما جرى على الكتاب</h2><span class="meta num">{{ history_total }} قيداً</span></div>
+      {% if history %}
+      <ol class="bx-tl">
+        {% for h in history|slice:":5" %}
+        <li><span><b>{{ h.actor_name }}</b> — {{ h.get_action_display }}{% if h.notes %}<small class="bx-tl-note">{{ h.notes }}</small>{% endif %}</span><span class="w">{{ h.created_at|date:"d/m H:i" }}</span></li>
+        {% endfor %}
+      </ol>
+      {% if history|length > 5 %}
+      <details class="bx-more-hist">
+        <summary class="bx-fold"><i class="bi bi-chevron-down" aria-hidden="true"></i>عرض {% if history_total > history|length %}آخر {{ history|length }} من {{ history_total }}{% else %}السجلّ كاملاً ({{ history_total }}){% endif %}</summary>
+        <ol class="bx-tl">
+          {% for h in history|slice:"5:" %}
+          <li><span><b>{{ h.actor_name }}</b> — {{ h.get_action_display }}{% if h.notes %}<small class="bx-tl-note">{{ h.notes }}</small>{% endif %}</span><span class="w">{{ h.created_at|date:"d/m/Y H:i" }}</span></li>
+          {% endfor %}
+        </ol>
+      </details>
+      {% endif %}
+      {% else %}
+      <p class="bx-empty">لا سجلَّ بعد لهذا الكتاب.</p>
+      {% endif %}
+    </section>
+
+    <section class="bx-card" aria-labelledby="h-comments">
+      <div class="bx-card-hd"><h2 id="h-comments">التعليقات</h2><span class="meta num" data-comments-count="{{ comments|length }}">{{ comments|length }}</span></div>
+      <div id="commentsList" class="comments-list">
+        {% for comment in comments %}
+        <div class="comment-item" data-comment-id="{{ comment.id }}" data-can-edit="{% if comment.can_edit %}true{% else %}false{% endif %}" data-author="{{ comment.created_by.username }}">
+          <div class="comment-header">
+            <div class="comment-who">
+              <span class="comment-avatar" aria-hidden="true"><i class="bi bi-person"></i></span>
+              <div>
+                <div class="comment-author">{{ comment.created_by.get_full_name|default:comment.created_by.username }}{% if comment.created_by == request.user %} <span class="comment-you">أنت</span>{% endif %}</div>
+                <small class="comment-date num">{{ comment.created_at|date:"d/m/Y H:i" }}{% if comment.is_edited %} <span class="comment-edited-flag">(معدّل)</span>{% endif %}</small>
               </div>
             </div>
-            {% endfor %}
-            {% if history_total > history|length %}
-            <div class="p-3 text-center text-muted" style="font-size:.8rem">
-              يُعرض آخر {{ history|length }} من {{ history_total }} قيداً
+            {% if comment.can_edit %}
+            <div class="comment-actions dropdown">
+              <button class="bx-icon-btn" type="button" data-bs-toggle="dropdown" aria-label="إجراءات التعليق"><i class="bi bi-three-dots-vertical"></i></button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><button class="dropdown-item edit-comment-btn" data-comment-id="{{ comment.id }}"><i class="bi bi-pencil me-1"></i>تعديل</button></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><button class="dropdown-item text-danger delete-comment-btn" data-comment-id="{{ comment.id }}"><i class="bi bi-trash me-1"></i>حذف</button></li>
+              </ul>
             </div>
             {% endif %}
           </div>
-          {% else %}
-          <div class="text-muted text-center py-5">
-            <i class="bi bi-inbox fs-3 opacity-50 d-block mb-2"></i>
-            لا يوجد سجل سابق لهذا الكتاب
-          </div>
-          {% endif %}
+          <div class="comment-content"><p>{{ comment.content }}</p></div>
+        </div>
+        {% endfor %}
+        <p class="bx-empty {% if comments %}d-none{% endif %}" id="noCommentsMessage">لا تعليقات بعد.</p>
+      </div>
+      <div class="add-comment-form">
+        <textarea class="bx-textarea" id="newCommentContent" rows="2" maxlength="5000"
+                  placeholder="اكتب تعليقاً…" aria-label="محتوى التعليق الجديد"></textarea>
+        <div class="bx-comment-ft">
+          <small class="bx-muted num" id="commentCharCount">0 / 5000</small>
+          <button type="button" class="bx-btn bx-btn--small" id="addCommentBtn" data-book-id="{{ book.id }}"
+                  data-current-user="{{ request.user.get_full_name|default:request.user.username }}">
+            <i class="bi bi-send" aria-hidden="true"></i>إضافة تعليق
+          </button>
         </div>
       </div>
-    </div>
-
-    <!-- العمود الجانبي -->
-    <div class="col-lg-4">
-
-      <!-- ── بطاقة البريد الإلكتروني ── -->
-      <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-          <h6 class="mb-0 fw-bold" style="font-size:.92rem">
-            <i class="bi bi-envelope-fill me-2" style="color:var(--warm-clay)"></i>البريد الإلكتروني
-            <span id="bookEmailCount" class="badge bg-secondary ms-1" style="font-size:.72rem">…</span>
-          </h6>
-          <a href="{% url 'mail_compose_book' book.pk %}" class="btn btn-sm"
-             style="background:var(--warm-clay);color:#fff;border-radius:7px;font-size:.75rem;font-weight:700;padding:.28rem .7rem">
-            <i class="bi bi-send me-1"></i>إرسال
-          </a>
-        </div>
-        <div class="card-body p-0">
-          <div id="bookEmailList" style="max-height:260px;overflow-y:auto">
-            <div class="text-center py-3" style="color:var(--muted-brown);font-size:.82rem">
-              <span class="spinner-border spinner-border-sm me-1"></span>جارٍ التحميل...
-            </div>
-          </div>
-          {% if email_log_count %}
-          <div class="p-2 border-top text-center">
-            <a href="{% url 'mail_sent' %}?book={{ book.pk }}"
-               style="font-size:.76rem;color:var(--accent);font-weight:600">
-              عرض كل المراسلات ←
-            </a>
-          </div>
-          {% endif %}
-        </div>
-      </div>
-
-      {% if book.attachments.all %}
-      <!-- بطاقة المرفقات (منقولة للأعلى) -->
-      <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-          <div>
-            <h6 class="mb-0 fw-bold"><i class="bi bi-file-earmark-check text-success me-2"></i>المرفقات</h6>
-            <small class="text-muted d-block mt-1">{{ attachments|length }} ملف</small>
-          </div>
-        </div>
-        <div class="card-body p-0">
-          <div class="attachments-list">
-            {% for att in attachments %}
-            <div class="attachment-item p-3 border-bottom">
-              <div class="d-flex align-items-center gap-3">
-                <div class="attachment-icon">
-                  <i class="bi bi-file-earmark fs-5"></i>
-                </div>
-                <div class="flex-grow-1 min-w-0">
-                  {% if att.file %}
-                    <a href="{{ att.file.url }}" target="_blank" rel="noopener" class="fw-semibold text-dark text-truncate d-block" title="{{ att.filename }}">{{ att.filename|default:"مرفق" }}</a>
-                  {% else %}
-                    <span class="fw-semibold text-muted d-block">مرفق بدون ملف</span>
-                  {% endif %}
-                  <small class="text-muted d-block">{{ att.uploaded_at|date:"d/m/Y H:i" }}{% if att.file %} · {{ att.file.size|filesizeformat }}{% endif %}{% if att.page_count %} · {{ att.page_count }} ورقة{% endif %}</small>
-                  {% if att.last_merge_by %}<small class="text-muted d-block"><i class="bi bi-paperclip me-1"></i>آخرُ إلحاق: {{ att.last_merge_by }}{% if att.last_merge_added %} (+{{ att.last_merge_added }} ورقة){% endif %}</small>{% endif %}
-                </div>
-                <div class="ms-auto">
-                  {% if att.file %}
-                    <div class="btn-group btn-group-sm" role="group" aria-label="معاينة وتحميل">
-                      <button class="btn btn-gradient-primary preview-btn" data-doc-series="{{ att.id }}" data-file-url="{{ request.scheme }}://{{ request.META.HTTP_HOST }}{{ att.file.url }}" data-file-name="{{ att.file.name }}" data-att-id="{{ att.id }}" type="button" title="معاينة الملف">
-                        <i class="bi bi-eye-fill me-1"></i><span class="btn-text">معاينة</span>
-                      </button>
-                      <a href="{{ att.file.url }}" download class="btn btn-download" title="تحميل الملف">
-                        <i class="bi bi-download"></i>
-                      </a>
-                    </div>
-                  {% endif %}
-                </div>
-              </div>
-
-              {% if att.versions.all %}
-              <div class="mt-2">
-                <span class="text-muted small">نسخ سابقة:</span>
-                <ul class="small mb-0 mt-1">
-                  {% for v in att.versions.all %}
-                    <li>
-                      {% if v.file %}
-                        <a href="{{ v.file.url }}" target="_blank">إصدار {{ v.version_number }}</a>
-                      {% else %}
-                        <span class="text-muted">إصدار {{ v.version_number }} (بدون ملف)</span>
-                      {% endif %}
-                      <span class="text-muted">({{ v.created_at|date:"d/m/Y H:i" }})</span>
-                    </li>
-                  {% endfor %}
-                </ul>
-              </div>
-              {% endif %}
-
-              {# إدارة المرفق (استبدال/دمج/حذف صفحات/حذف) موحّدة الآن في لوحة «مستندات الكتاب» بصفحة التعديل #}
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-      </div>
-      {% endif %}
-
-      <!-- بطاقة الملخص السريع (أصبحت بالأسفل وبقيت sticky) -->
-      <div class="card border-0 shadow-sm mb-3 sticky-top" style="top: 100px;">
-        <div class="card-header bg-white border-bottom p-3">
-          <h6 class="mb-0 fw-bold"><i class="bi bi-card-checklist text-success me-2"></i>ملخص سريع</h6>
-        </div>
-        <div class="card-body p-3">
-          <div class="quick-summary">
-            <div class="summary-item mb-3">
-              <small class="text-muted d-block mb-1">أنشئ بواسطة</small>
-              <div class="fw-semibold text-dark">{{ book.created_by|default:"—" }}</div>
-            </div>
-            <div class="summary-item mb-3">
-              <small class="text-muted d-block mb-1">تاريخ الإنشاء</small>
-              <div class="fw-semibold text-dark"><i class="bi bi-calendar me-1"></i>{{ book.created_at|date:"d/m/Y H:i" }}</div>
-            </div>
-            <div class="summary-item">
-              <small class="text-muted d-block mb-1">آخر تحديث</small>
-              <div class="fw-semibold text-dark"><i class="bi bi-pencil-square me-1"></i>{{ book.updated_at|date:"d/m/Y H:i" }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- إدارة وتحديث المستند — كل العمليات (مسح/استبدال/دمج/حذف صفحات/إرفاق/حذف) في مكان واحد: صفحة التعديل -->
-      {% if can_edit %}
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-gradient p-3 border-0">
-          <h6 class="mb-0 fw-bold text-white"><i class="bi bi-folder2-open me-2"></i>إدارة وتحديث المستند</h6>
-        </div>
-        <div class="card-body p-3">
-          <p class="text-muted small mb-3">
-            <i class="bi bi-info-circle me-1"></i>المسح والاستبدال والدمج وحذف الصفحات والإرفاق — جميعها من مكان واحد.
-          </p>
-          <a href="{% url 'book_edit' book.id %}?next={% url 'book_detail' book.id %}" class="btn btn-scanner-main w-100" id="scanBtn">
-            <div class="d-flex align-items-center justify-content-center gap-2">
-              <i class="bi bi-upc-scan fs-4"></i>
-              <div class="text-start">
-                <div class="fw-bold">مسح / إدارة المستندات</div>
-                <small class="d-block opacity-75">يفتح مساحة المستندات الموحّدة — يعود هنا بعد الحفظ</small>
-              </div>
-            </div>
-          </a>
-        </div>
-      </div>
-      {% endif %}
-
-    </div>
+    </section>
   </div>
+
 </div>
 
-<!-- Modal تعديل الملاحظات -->
+{% if can_edit %}
+<!-- حواريّةُ هامش المدير — لمن يكتب على الكتاب وحدَه (Q1‑ج) -->
 <div class="modal fade" id="notesModal" tabindex="-1" aria-labelledby="notesModalLabel" aria-describedby="notesModalDesc">
   <div class="modal-dialog modal-lg">
     <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header bg-light border-bottom p-3">
+      <div class="modal-header">
         <div>
-          <h5 class="modal-title fw-bold" id="notesModalLabel"><i class="bi bi-pencil-square text-primary me-2"></i>تعديل الملاحظات والهوامش</h5>
-          <small class="text-muted d-block mt-1" id="notesModalDesc">الكتاب: {{ book.our_number_display }} - {{ book.title }}</small>
+          <h5 class="modal-title fw-bold" id="notesModalLabel">هامشُ المدير العام</h5>
+          <small class="text-muted d-block mt-1" id="notesModalDesc">الكتاب: {{ book.our_number_display }} - {{ book.title }} · يحفظ السجلُّ النصَّ السابق</small>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
       </div>
-      <div class="modal-body p-3">
+      <div class="modal-body">
         <form id="notesForm">
           {% csrf_token %}
-          <div class="mb-3">
-            <label for="notesTextarea" class="form-label fw-semibold">الملاحظات والهوامش</label>
-            <textarea 
-              class="form-control" 
-              id="notesTextarea" 
-              name="margin"
-              rows="8"
-              maxlength="10000"
-              placeholder="هامشُ المدير العام كما كتبه على الكتاب — مثل: قسم المتابعة، إجراء اللازم"
-              aria-describedby="notesHelp notesCharCounter"
-            >{{ book.margin }}</textarea>
-            <small class="text-muted d-block mt-2" id="notesHelp">
-              <i class="bi bi-info-circle me-1"></i>
-              يمكنك كتابة أي ملاحظات أو هوامش متعلقة بهذا الكتاب (الحد الأقصى 10000 حرف).
-            </small>
-          </div>
+          <label for="notesTextarea" class="form-label fw-semibold">الهامش كما كتبه المدير</label>
+          <textarea class="form-control" id="notesTextarea" name="margin" rows="8" maxlength="10000"
+                    placeholder="مثل: قسم المتابعة، إجراء اللازم" aria-describedby="notesHelp">{{ book.margin }}</textarea>
+          <small class="text-muted d-block mt-2" id="notesHelp">الحدّ الأقصى 10000 حرف.</small>
         </form>
       </div>
-      <div class="modal-footer bg-light border-top p-3">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-          <i class="bi bi-x-lg me-1"></i>إلغاء
-        </button>
-        <button type="button" class="btn btn-primary" id="saveNotesBtn" data-book-id="{{ book.id }}">
-          <i class="bi bi-check-circle me-1"></i>حفظ الملاحظات
-        </button>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-primary" id="saveNotesBtn" data-book-id="{{ book.id }}">حفظ الهامش</button>
       </div>
     </div>
   </div>
 </div>
-
- </div>{# container-fluid #}
-</div>{# bd-page #}
+{% endif %}
 {% endblock %}
 
 
 {% block extra_js %}
-<script src="{% static 'book_detail.js' %}?v=20260929-bdp0"></script>
+<script src="{% static 'book_detail.js' %}?v=20261006"></script>
 {# قصاصةُ الهامش تُحمَّل قبل مُرسِل التفريق: الأخيرُ يقرأ حقلَها #}
 <script src="{% static 'js/margin_crop.js' %}?v=20260831"></script>
 <script src="{% static 'js/link_picker.js' %}?v=20260831"></script>
-<script src="{% static 'js/book_lifecycle.js' %}?v=20260929-bdp0"></script>
+<script src="{% static 'js/book_lifecycle.js' %}?v=20261006"></script>
 <script>
-// ── تحميل إيميلات الكتاب في البطاقة الجانبية ──
+// ── بريدُ الكتاب: آخرُ ثمانية إرسالات (النصُّ يمرّ من esc قبل innerHTML) ──
 (function() {
   const BOOK_ID = {{ book.pk }};
   const listEl  = document.getElementById('bookEmailList');
@@ -750,36 +433,24 @@
     .then(r => r.json())
     .then(data => {
       const logs = data.logs || [];
-      countEl.textContent = logs.length;
-      countEl.className   = `badge ms-1 ${logs.length ? 'bg-warning text-dark' : 'bg-secondary'}`;
-
+      countEl.textContent = logs.length ? logs.length + ' رسالة' : '';
       if (!logs.length) {
-        listEl.innerHTML = '<div class="text-center py-3" style="color:var(--muted-brown);font-size:.8rem"><i class="bi bi-envelope" style="opacity:.4;font-size:1.4rem;display:block;margin-bottom:.4rem"></i>لم يُرسَل بريد لهذا الكتاب بعد</div>';
+        listEl.innerHTML = '<p class="bx-empty">لم يُرسَل بريدٌ لهذا الكتاب بعد.</p>';
         return;
       }
-
-      const statusClass = { sent: 'success', failed: 'danger', pending: 'warning' };
-      const statusLabel = { sent: 'أُرسِل', failed: 'فشل', pending: 'انتظار' };
-      // حقولُ السجلّ نصٌّ لا وسم — كلُّها تمرّ من esc() قبل innerHTML.
       const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
-      listEl.innerHTML = logs.slice(0, 8).map(l => `
-        <div class="d-flex align-items-start gap-2 px-3 py-2 border-bottom" style="font-size:.78rem">
-          <i class="bi bi-${l.status === 'sent' ? 'check-circle-fill text-success' : l.status === 'failed' ? 'x-circle-fill text-danger' : 'hourglass-split text-warning'}" style="margin-top:.15rem"></i>
-          <div class="flex-grow-1 overflow-hidden">
-            <div class="text-truncate fw-semibold" style="color:var(--deep-brown)">${esc(l.subject)}</div>
-            <div class="text-truncate" style="color:var(--muted-brown);direction:ltr;text-align:right">${esc(l.to_address)}</div>
-          </div>
-          <div style="white-space:nowrap;color:var(--muted-brown)">${esc(l.sent_at ? l.sent_at.substring(0,10) : '')}</div>
-        </div>`).join('');
+      const icon = { sent: 'bi-check-circle-fill ok', failed: 'bi-x-circle-fill bad', pending: 'bi-hourglass-split wait' };
+      listEl.innerHTML = '<ul class="bx-mail-list">' + logs.slice(0, 8).map(l => `
+        <li><i class="bi ${icon[l.status] || 'bi-envelope'}" aria-hidden="true"></i>
+          <span class="s">${esc(l.subject)}<small dir="ltr">${esc(l.to_address)}</small></span>
+          <span class="w num">${esc(l.sent_at ? l.sent_at.substring(0, 10) : '')}</span></li>`).join('') + '</ul>';
     })
     .catch(() => {
-      countEl.textContent = '0';
-      countEl.className = 'badge bg-secondary ms-1';
-      listEl.innerHTML = '<div class="text-center py-2 text-muted" style="font-size:.78rem">تعذّر التحميل</div>';
+      countEl.textContent = '';
+      listEl.innerHTML = '<p class="bx-empty">تعذّر تحميل البريد.</p>';
     });
 })();
 </script>
-
 
 {# سلسلةُ مرفقات الكتاب: التنقّل «2 من 5» داخل الحوار — تُبنى في العرض (_attachment_series) وتُفهرَس بـatt.id #}
 {{ attachment_series|json_script:"bookAttachmentsSeries" }}
@@ -802,4 +473,4 @@
   }, true);
 })();
 </script>
-{% endblock %}  
+{% endblock %}

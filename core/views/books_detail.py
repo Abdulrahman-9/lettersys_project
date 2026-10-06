@@ -22,8 +22,9 @@ from ..models import Attachment, Book, BookEmailLog, BookHistory
 from .comments import can_edit_comment
 from core.scoping import (
     ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_edit_book, can_open_content, can_view_book,
-    is_privileged, secret_access,
+    is_privileged, secret_access, secret_openers,
 )
+from .book_state import citation, due_pill, is_paper, journey, primary_action
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,10 @@ HISTORY_PAGE = 50
 def book_detail(request, pk):
     """عرض تفاصيل كتاب واحد مع المرفقات والسجل."""
     book = get_object_or_404(
-        Book.objects.select_related('created_by').prefetch_related(
+        Book.objects.select_related(
+            'created_by', 'department', 'current_custody__to_holder_user',
+            'current_custody__to_holder_department',
+        ).prefetch_related(
             'issuing_entities',
             'receiving_entities',
             Prefetch(
@@ -159,6 +163,9 @@ def book_detail(request, pk):
                    .order_by('-created_at')[:HISTORY_PAGE])
     history_total = history_rows.count()
 
+    lifecycle = _lifecycle_context(book, request.user)
+    can_edit = can_edit_book(book, request.user)
+
     return render(
         request,
         "core/book_detail.html",
@@ -176,8 +183,19 @@ def book_detail(request, pk):
             # الرابطُ عن كتابٍ له بريدٌ بلا خيطٍ ويظهر لخيطٍ بلا صادر.
             "email_log_count": BookEmailLog.objects.filter(book=book).count(),
             # التعديلُ والهامشُ والمرفقاتُ وإنهاءُ المتابعة لمن يقبلها الخادم (Q1‑ج)
-            "can_edit": can_edit_book(book, request.user),
-            **_lifecycle_context(book, request.user),
+            "can_edit": can_edit,
+            # الترويسةُ من دالّاتٍ خالصة (``book_state``) — القالبُ يعرض ولا يقرّر
+            "journey": journey(book, referrals=lifecycle["referrals"]),
+            "primary": primary_action(book, referrals=lifecycle["referrals"],
+                                      can_distribute=lifecycle["can_distribute"],
+                                      can_edit=can_edit),
+            "due": due_pill(book),
+            "citation": citation(book),
+            "paper": is_paper(book),
+            # «مَن يفتحه» (Q5) — للسرّيّ وحدَه، من توأم ``secret_access``
+            "secret_openers": (secret_openers(book)
+                               if book.secret_level in RESTRICTED_SECRET_LEVELS else None),
+            **lifecycle,
         },
     )
 
