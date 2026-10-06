@@ -62,6 +62,41 @@ def followup_q(state, today=None):
     }[state]
 
 
+def day_unit_ar(n):
+    """تمييزُ العدد «يوم» بقاعدة العربيّة: 1 يوم · 2 يومان · 3–10 أيّام · 11–99 يوماً · 100+ يوم."""
+    if n == 1:
+        return "يوم"
+    if n == 2:
+        return "يومان"
+    if 3 <= n % 100 <= 10:
+        return "أيّام"
+    if 11 <= n % 100 <= 99:
+        return "يوماً"
+    return "يوم"
+
+
+def days_ar(n, *, after_preposition=False):
+    """«N أيّام» عبارةً تامّة: «يوم واحد»/«يومان» بلا رقم، وما بعدهما بالرقم.
+    بعد حرف الجرّ («بعد»/«منذ») يصير المثنّى «يومين» والمفردُ «يوم»."""
+    if n == 1:
+        return "يوم" if after_preposition else "يوم واحد"
+    if n == 2:
+        return "يومين" if after_preposition else "يومان"
+    return f"{n} {day_unit_ar(n)}"
+
+
+def followup_phrase(book, today=None):
+    """نصُّ رقاقة المتابعة في سطر الكتاب — من ``followup_state`` و``FOLLOWUP_LABELS``
+    وحدهما: «متأخر · 9 أيّام» · «مستحق اليوم» · «بعد 3 أيّام» · «مُنجَز / بلا متابعة»."""
+    state = book.followup_state
+    if state in ("archived", "due_today"):
+        return FOLLOWUP_LABELS[state]
+    gap = (book.due_date - (today or timezone.localdate())).days
+    if state == "overdue":
+        return f"{FOLLOWUP_LABELS['overdue']} · {days_ar(-gap)}"
+    return f"بعد {days_ar(gap, after_preposition=True)}"
+
+
 class BookFilterEngine:
     """محرّك فلترة الكتب الموحَّد."""
 

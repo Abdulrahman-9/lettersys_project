@@ -15,7 +15,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, Min, Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -27,7 +27,8 @@ from ..backup_service import create_encrypted_pg_backup, default_backup_dir
 from ..extraction.kinds import get_kind_label
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       RestoreJob)
-from .filter_helpers import _FOLLOWUP_STATES, FOLLOWUP_LABELS, followup_q
+from .filter_helpers import (_FOLLOWUP_STATES, FOLLOWUP_LABELS, days_ar, followup_phrase,
+                             followup_q)
 from .helpers import staff_required
 from core.scoping import (STUB_TITLE, can_open_content, can_view_reports, is_privileged,
                           report_departments, restricted_flag_sql, scope_books_for,
@@ -138,7 +139,8 @@ def _reports_qs(request):
     user = request.user
     legacy = request.GET.get("legacy") == "1"
     qs = scope_books_for(user, Book.objects.all() if legacy else Book.objects.live())
-    qs = (qs.select_related("created_by", "department")
+    qs = (qs.select_related("created_by", "department", "current_custody__to_holder_user",
+                            "current_custody__to_holder_department")
             .prefetch_related("issuing_entities", "receiving_entities")
             .annotate(restricted=restricted_flag_sql(user)))
     kind = request.GET.get("kind", "all")
@@ -212,11 +214,13 @@ def _reports_qs(request):
         "kind": kind, "kind_label": kind_label,
         "entity_id": entity_id or "", "bucket": bucket,
         "due_start": due_start or "", "due_end": due_end or "", "today": today,
+        "due_range": (start_date, end_date),
         "base": base,
         "legacy": legacy,
         "departments": departments,
         "dept": str(dept.pk) if dept else "",
         "dept_label": dept.name if dept else "",
+        "dept_obj": dept,
     }
 
 
@@ -227,6 +231,10 @@ def _shape(b):
     والمحجوبُ ما يُفرَّغ في ``stub_book_payload``: العنوانُ ⟵ ``STUB_TITLE``،
     والجهاتُ وعددُ الجهة وتاريخُها والهامشُ فارغة. والرقمُ والتاريخُ والنوعُ
     والمتابعةُ تبقى — الدفترُ يكشفها. القالبُ والـCSV يقرآن ``shown_*`` وحدَها.
+
+    و«بعهدة» (``current_custody``) محجوبٌ كالجهات — ``None`` للمحجوب و``""``
+    لما لم تُسجَّل له عهدة، فلا يُقال عن سرّيٍّ له حاملٌ إنّه بلا عهدة. وفراغُه
+    «لم تُسجَّل عهدة» لا «لم يُفرَّق»: العهدةُ تُسجَّل يدويّاً، والتفريقُ شيءٌ آخر.
     """
     r = b.restricted
     b.shown_title = STUB_TITLE if r else b.title
@@ -235,8 +243,24 @@ def _shape(b):
     b.shown_sender_number = "" if r else b.sender_number
     b.shown_sender_date = None if r else b.sender_date
     b.shown_margin = "" if r else b.margin
+    b.shown_holder = None if r else (b.current_custody.holder_name if b.current_custody_id else "")
     b.followup_text = FOLLOWUP_LABELS[b.followup_state]
     return b
+
+
+def _pct(part, whole):
+    return round(100 * part / whole) if whole else 0
+
+
+def _scope_label(departments, dept):
+    """سطرُ النطاق فوق العنوان: القسمُ المختار، أو جذرُ شجرة القارئ، أو «كلّ الأقسام»."""
+    def tree(d):
+        return d.name + (" وشُعَبُه" if any(x.parent_id == d.pk for x in departments) else "")
+    if dept is not None:
+        return tree(dept)
+    ids = {d.pk for d in departments}
+    roots = [d for d in departments if d.parent_id not in ids]
+    return tree(roots[0]) if len(roots) == 1 else "كلّ الأقسام"
 
 
 @login_required
@@ -272,9 +296,43 @@ def reports(request):
     agg = _m["base"].aggregate(
         incoming=Count("id", filter=Q(kind__startswith="incoming")),
         outgoing=Count("id", filter=Q(kind__startswith="outgoing")),
-        **{k: Count("id", filter=followup_q(k, today)) for k in _FOLLOWUP_STATES},
+        **{k: Count("id", filter=followup_q(k, today)) for k in ("active", *_FOLLOWUP_STATES)},
+        all=Count("id"),
+        oldest_overdue=Min("due_date", filter=followup_q("overdue", today)),
+        nearest_pending=Min("due_date", filter=followup_q("pending", today)),
     )
+    oldest_overdue = agg.pop("oldest_overdue")
+    nearest_pending = agg.pop("nearest_pending")
     stats = {k: (v or 0) for k, v in agg.items()}
+
+    # الحفاظ على فلاتر الاستعلام عند تنقّل الصفحات
+    page_params = request.GET.copy()
+    page_params.pop("page", None)
+
+    def _with(**params):
+        """رابطُ الصفحة نفسِها بفلاترها كلّها إلّا ما يُستبدَل — والترقيمُ يعود إلى أوّله."""
+        q = page_params.copy()
+        for k, v in params.items():
+            q[k] = v
+        return "?" + q.urlencode()
+
+    # ── شريطُ الحالات: البلاطاتُ هي فلترُ الحالة (رابطٌ يحفظ بقيّة الفلاتر) ──
+    # الحصّةُ: «جارية» و«مُنجَز» من الكلّ، والثلاثُ الجارية من «جارية».
+    active, every = stats["active"], stats["all"]
+    subs = {
+        "active": f"من أصل {every}",
+        "overdue": (f"أقدمُها منذ {days_ar((today - oldest_overdue).days, after_preposition=True)}"
+                    if oldest_overdue else "لا متأخّر"),
+        "due_today": "قبل نهاية الدوام" if stats["due_today"] else "لا شيء اليوم",
+        "pending": (f"أقربُها بعد {days_ar((nearest_pending - today).days, after_preposition=True)}"
+                    if nearest_pending else "لا مواعيد قادمة"),
+        "archived": f"{_pct(stats['archived'], every)}% من الكتب",
+    }
+    tiles = [{
+        "key": k, "label": FOLLOWUP_LABELS[k], "num": stats[k], "sub": subs[k],
+        "share": _pct(stats[k], every if k in ("active", "archived") else active),
+        "url": _with(bucket=k), "on": bucket == k,
+    } for k in ("active", "overdue", "due_today", "pending", "archived")]
 
     # ── بحسب القسم: حين تجتمع في شجرة القارئ أقسامٌ عدّة (شرطُ عددٍ لا دور) ──
     # على المجموعة قبل الدلو كالعدّادات؛ و``distinct`` لأنّ فلتر الجهة يضاعف الصفوف.
@@ -283,28 +341,32 @@ def reports(request):
     if show_department:
         dept_rows = list(
             _m["base"].prefetch_related(None).order_by()
-            .values("department__code", "department__name")
+            .values("department_id", "department__code", "department__name")
             .annotate(total=Count("id", distinct=True),
                       **{k: Count("id", distinct=True, filter=followup_q(k, today))
-                         for k in _FOLLOWUP_STATES})
+                         for k in ("active", *_FOLLOWUP_STATES)})
             .order_by("department__code"))
+        # الشريطُ: عرضُه جاريةُ القسم نسبةً إلى أكبرها، وقِطَعُه بحالاتها الثلاث.
+        # والاسمُ رابطُ فلترٍ لما في شجرة القارئ وحدَه («بلا قسم» لا فلترَ له).
+        allowed = {d.pk for d in _m["departments"]}
+        widest = max((r["active"] for r in dept_rows), default=0)
         for row in dept_rows:
             row["label"] = row["department__name"] or "بلا قسم"
+            row["bar"] = _pct(row["active"], widest)
+            row["url"] = _with(dept=str(row["department_id"])) if row["department_id"] in allowed else ""
+
+    # ── أقدمُ المتأخّرات: أربعٌ بأبعد استحقاق، محجوبةُ المحتوى كالجدول (``_shape``) ──
+    late = [_shape(b) for b in _m["base"].filter(followup_q("overdue", today))
+                                          .order_by("due_date", "id")[:4]]
+    for b in late:
+        b.late_days = (today - b.due_date).days
 
     # ── ترقيم العرض: يمنع تحميل آلاف الكتب دفعةً (مهمّ على ذاكرة محدودة) ──
     page_obj = Paginator(qs, 200).get_page(request.GET.get("page"))
     stats["total"] = page_obj.paginator.count
     books = [_shape(b) for b in page_obj.object_list]
     for b in books:
-        if b.due_date:
-            diff = (b.due_date - today).days
-            b.due_phrase = "مستحق اليوم" if diff == 0 else (f"مستحق بعد {diff} يوم" if diff > 0 else f"متأخر منذ {abs(diff)} يوم")
-        else:
-            b.due_phrase = "-"
-
-    # الحفاظ على فلاتر الاستعلام عند تنقّل الصفحات
-    page_params = request.GET.copy()
-    page_params.pop("page", None)
+        b.followup_phrase = followup_phrase(b, today)
 
     # هوية المؤسسة + ملخّص الفلاتر لترويسة الطباعة الاحترافية — الاسمُ من
     # ``core.branding.org_name`` (مصدرٌ واحدٌ باحتياطيٍّ واحد)، والقسمُ والوحدةُ من الإعدادات
@@ -332,12 +394,18 @@ def reports(request):
             "selected_entity_name": selected_entity_name,
             "bucket": bucket,
             "bucket_label": BUCKET_LABELS[bucket],
-            "bucket_options": [(k, BUCKET_LABELS[k]) for k in REPORT_BUCKETS],
+            "all_buckets_url": _with(bucket="all"),
+            "tiles": tiles,
+            "late": late,
             "followup_labels": FOLLOWUP_LABELS,
             "due_start": due_start or "",
             "due_end": due_end or "",
+            "due_from": _m["due_range"][0],
+            "due_to": _m["due_range"][1],
+            "today": today,
             "org": org,
             "org_name": org_name(),
+            "scope_label": _scope_label(_m["departments"], _m["dept_obj"]),
             "departments": _m["departments"],
             "selected_dept": _m["dept"],
             "dept_label": _m["dept_label"],
@@ -368,7 +436,9 @@ def reports_export(request):
     HEADERS = ["رقم القيد", "تاريخ القيد", "العنوان", "النوع",
                "الجهة المُصدِرة", "الجهة المستقبِلة",
                "رقم كتاب الجهة", "تاريخ كتاب الجهة", "تاريخ الإدخال",
-               "تاريخ الاستحقاق", "الحالة", "الملاحظات"]
+               "تاريخ الاستحقاق", "الحالة", "الملاحظات",
+               # الجديدُ في الذيل: فهارسُ الأعمدة السابقة يعتمدها مَن يستورد الملفّ
+               "القسم", "بعهدة"]
 
     def _rows():
         buf = io.StringIO()
@@ -394,6 +464,8 @@ def reports_export(request):
                 b.due_date.isoformat() if b.due_date else "",
                 b.followup_text,
                 b.shown_margin or "",
+                b.department.name if b.department_id else "",
+                b.shown_holder or "",
             ])
             yield buf.getvalue()
 
