@@ -4,7 +4,6 @@
    ============================================ */
 
 body.app-shell-body {
-    background: #f5f7fa;
     min-width: 0;
     overflow-x: hidden;
 }
@@ -1503,11 +1502,15 @@ textarea.title-autogrow {
 /* ════════════════════════════════════════════════════════════════════
    ★ DESKTOP-APP SINGLE-VIEWPORT REDESIGN
    ╚══════════════════════════════════════════════════════════════════ */
+/* سطحُ الشاشة الواحدة للمكتب وحده: تحت 1200 الشريطُ العلويّ يحمل زرَّ «القائمة» والقائمةُ درج
+   (offcanvas-xl) — وهذه المحدِّداتُ أعلى تخصيصاً منه فلو عمّت لكسرته. */
+@media (min-width: 1200px) {
 body.app-shell-body .app-topbar { display: none !important; }
 html, body.app-shell-body { height: 100%; overflow: hidden; }
 body.app-shell-body .app-shell { height: 100vh; max-height: 100vh; margin: 0 !important; padding: 0 !important; gap: 0 !important; }
 body.app-shell-body .app-sidebar { height: 100vh; position: sticky; top: 0; align-self: stretch; overflow-y: auto; }
 body.app-shell-body .app-main { height: 100vh; max-height: 100vh; padding: 0 !important; margin: 0 !important; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+}
 
 /* شريط رأس خفيف «تلميحة تركوازية» — خلفية فاتحة جداً + نصّ تركوازي غامق (أريح بصرياً من الشريط الداكن) */
 .app-page-header { flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 8px 18px; background: #eef7f5; color: #0e5f58; border-bottom: 1px solid #cfe6e1; box-shadow: 0 1px 3px rgba(16,24,40,0.04); z-index: 5; }
@@ -1564,10 +1567,19 @@ body.app-shell-body .app-main .extraction-container { flex: 1 1 auto; min-height
 .desktop-workbench::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
 .desktop-workbench::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-@media (max-width: 1366px) {
+@media (min-width: 1200px) and (max-width: 1366px) {
     body.app-shell-body .app-sidebar { width: 200px !important; }
+}
+@media (max-width: 1366px) {
     body.app-shell-body .app-main .extraction-container { grid-template-columns: minmax(0, 1.4fr) minmax(380px, 1fr) !important; padding: 10px 12px !important; }
     .extraction-form-panel .form-section { padding: 10px 12px !important; }
+}
+/* تحت 1200 الشريطُ العلويّ ظاهرٌ بشعاره واسمه وجرسه — فلا تكرارَ في رأس الصفحة؛ العنوانُ يبقى */
+@media (max-width: 1199.98px) {
+    .app-page-header .brand,
+    .app-page-header .header-divider,
+    .app-page-header .header-action,
+    .app-page-header .header-user { display: none; }
 }
 @media (max-width: 1100px) {
     html, body.app-shell-body { overflow: auto; }

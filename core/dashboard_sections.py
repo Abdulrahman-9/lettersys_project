@@ -267,6 +267,8 @@ def sections_for(user):
 
     و``quiet`` = كلُّ عدّاداته صفر: يُطوى سطراً واحداً (عنوانُه رابطٌ إلى ``home``
     ورسالتُه ``quiet_msg``) بدل صفٍّ من البلاطات الصفريّة — والحكمُ هنا لا في القالب.
+    و``quiet_links`` = روابطُه بلا رابطِ ``home``: العنوانُ نفسُه رابطٌ إليه، فتكرارُه
+    أوّلَ السطر («طاولة الوارد» مرّتين) ضجيجٌ لقارئ الشاشة وللعين.
     """
     built = []
     for key, title, hint, gate, builder in SECTIONS:
@@ -276,5 +278,6 @@ def sections_for(user):
         if data is None:
             continue
         built.append({'key': key, 'title': title, 'hint': hint, 'quiet_msg': 'لا شيء بانتظارك',
-                      **data, 'quiet': not any(c['value'] for c in data['counters'])})
+                      **data, 'quiet': not any(c['value'] for c in data['counters']),
+                      'quiet_links': [l for l in data.get('links', []) if l['href'] != data['home']]})
     return built

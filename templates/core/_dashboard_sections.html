@@ -35,9 +35,9 @@
       <li>
         <h2 class="db-quiet-t" id="db-h-{{ s.key }}"><a href="{{ s.home }}">{{ s.title }}</a></h2>
         <span class="db-msg"><i class="bi bi-check2-circle" aria-hidden="true"></i> {{ s.quiet_msg }}</span>
-        {% if s.links %}
+        {% if s.quiet_links %}
         <div class="db-links">
-          {% for l in s.links %}
+          {% for l in s.quiet_links %}
             <a class="db-link" href="{{ l.href }}"><i class="bi {{ l.icon }}" aria-hidden="true"></i>{{ l.label }}</a>
           {% endfor %}
         </div>
