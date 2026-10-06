@@ -107,14 +107,14 @@ class ReportsVocabularyTests(TestCase):
 
     def test_no_archive_word_and_the_followup_label_instead(self):
         """«مؤرشف» كلمةُ الورق لا المتابعة: لا يحملها قالبُ التقارير، وما يرسمه
-        في الجدول والبطاقات هو ``FOLLOWUP_LABELS``. (نافذةُ المعاينة العامّة في
+        في الجدول وبلاطات الحالة هو ``FOLLOWUP_LABELS``. (نافذةُ المعاينة العامّة في
         ``base.html`` تحمل مفرداتِ القائمة — دفعةُ القائمة لا هذه.)"""
         from .views.filter_helpers import FOLLOWUP_LABELS
         src = (Path(settings.BASE_DIR) / 'templates' / 'core' / 'reports.html').read_text(encoding='utf-8')
         self.assertNotIn('مؤرشف', src)
         html = self.client.get(reverse('reports'), {'bucket': 'all'}).content.decode('utf-8')
         tbody = re.search(r'id="reportTable".*?<tbody>(.*?)</tbody>', html, re.S).group(1)
-        cards = re.search(r'<div class="stats-summary(.*?)<div class="row', html, re.S).group(1)
+        cards = re.search(r'<nav class="rx-states"(.*?)</nav>', html, re.S).group(1)
         for part in (tbody, cards):
             self.assertIn(FOLLOWUP_LABELS['archived'], part)
             self.assertNotIn('مؤرشف', part)
@@ -132,13 +132,19 @@ class ReportsVocabularyTests(TestCase):
             self.assertEqual(ctx['bucket_label'], FOLLOWUP_LABELS['active'])
 
     def test_bucket_keys_are_the_lists_followup_keys(self):
+        """البلاطاتُ هي فلترُ الحالة (حلّت محلّ القائمة المنسدلة): مفاتيحُها مفاتيحُ
+        القائمة، و«كل الحالات» رابطٌ في رأس الجدول."""
         from .views.dashboard import REPORT_BUCKETS
         from .views.filter_helpers import _FOLLOWUP_TABS
         self.assertEqual(set(REPORT_BUCKETS), {'all'} | _FOLLOWUP_TABS)
-        self.assertEqual([k for k, _ in self._ctx()['bucket_options']], list(REPORT_BUCKETS))
+        ctx = self._ctx()
+        self.assertEqual({t['key'] for t in ctx['tiles']} | {'all'}, set(REPORT_BUCKETS))
+        self.assertIn('bucket=all', ctx['all_buckets_url'])
 
     def test_dead_context_is_gone(self):
-        self.assertNotIn('time_stats', self._ctx())
+        ctx = self._ctx()
+        self.assertNotIn('time_stats', ctx)
+        self.assertNotIn('bucket_options', ctx)   # القائمةُ المنسدلة حلّت محلَّها البلاطات
 
 
 class ReportsExportTests(TestCase):
