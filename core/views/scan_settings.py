@@ -11,7 +11,6 @@ core.views.scan_settings
 import logging
 import os
 import subprocess
-from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -394,26 +393,15 @@ _AGENT_TOKEN_FILE = os.path.join(
     os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'LetterSys', 'agent_token.txt'
 )
 _AGENT_PORT = int(os.environ.get('LETTERSYS_AGENT_PORT', '17865'))  # نفس متغيّر بيئة الوكيل
-_AGENT_PUBLIC_URL = (
-    os.environ.get('LETTERSYS_AGENT_URL')
-    or os.environ.get('LETTERSYS_SCAN_AGENT_URL')
-    or os.environ.get('LETTERSYS_AGENT_PUBLIC_URL')
-    or f'http://127.0.0.1:{_AGENT_PORT}'
-)
 
 
-def _agent_base_url():
-    return _AGENT_PUBLIC_URL.rstrip('/')
-
-
-def _agent_is_alive(port=None, timeout=0.35):
-    """اختبار حياة الوكيل فعلياً عبر عنوانه المكوّن (محلي أو على LAN)."""
+def _agent_is_alive(port, timeout=0.35):
+    """اختبار حياة الوكيل فعلياً: اتصال socket خاطف بالمنفذ المحلي (رفض الاتصال فوريّ على
+    localhost فلا تأخير عند التوقّف). يمنع «available=true» الكاذب من ملف token قديم بقي
+    بعد إغلاق الوكيل — فتصير رسالة الواجهة صادقة (شغّل الوكيل) بدل «تعذّر الاتصال رغم تشغيله»."""
     import socket
-    parsed = urlparse(_agent_base_url())
-    host = parsed.hostname or '127.0.0.1'
-    port = port or parsed.port or _AGENT_PORT
     try:
-        with socket.create_connection((host, port), timeout=timeout):
+        with socket.create_connection(('127.0.0.1', port), timeout=timeout):
             return True
     except OSError:
         return False
@@ -432,11 +420,11 @@ def scan_agent_token(request):
             token = f.read().strip()
     except OSError:
         token = ''
-    alive = bool(token) and _agent_is_alive()
+    alive = bool(token) and _agent_is_alive(_AGENT_PORT)
     return JsonResponse({
         'available': alive,
         'token': token if alive else '',
-        'agent_url': _agent_base_url(),
+        'agent_url': f'http://127.0.0.1:{_AGENT_PORT}',
     })
 
 
