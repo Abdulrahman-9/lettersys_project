@@ -6,12 +6,13 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
 from .models import Attachment, AttachmentVersion, MergeLog
 from .merge_service import SmartMergeService
-from .scoping import can_open_content
+from .scoping import can_edit_book, can_open_content
 
 
 class AttachmentMergeViewSet(viewsets.GenericViewSet):
@@ -28,7 +29,7 @@ class AttachmentMergeViewSet(viewsets.GenericViewSet):
     queryset = Attachment.objects.all()
     permission_classes = [IsAuthenticated]
     
-    def get_attachment(self, attachment_id):
+    def get_attachment(self, attachment_id, *, write=False):
         """الملفُّ المرفق ببوّابة المحتوى الموحّدة — على كلّ الأفعال (history/versions ضمناً).
 
         كانت هنا وفي ثلاثة أفعالٍ نسخٌ يدويّة `created_by or is_staff` تمنح حاملَ
@@ -38,6 +39,10 @@ class AttachmentMergeViewSet(viewsets.GenericViewSet):
         attachment = get_object_or_404(Attachment.objects.select_related('book'), id=attachment_id)
         if not can_open_content(attachment.book, self.request.user):
             raise Http404
+        # الكتابةُ على ملفّ الكتاب (دمجٌ · حذفٌ · استعادة) للقسم المالك وطاولته
+        # والمدير (Q1‑ج، ``can_edit_book``)؛ والقراءةُ (السجلّ والنسخ) لمن يفتح المحتوى.
+        if write and not can_edit_book(attachment.book, self.request.user):
+            raise PermissionDenied
         return attachment
     
     @action(detail=True, methods=['post'])
@@ -53,7 +58,7 @@ class AttachmentMergeViewSet(viewsets.GenericViewSet):
         - new_version: تفاصيل النسخة الجديدة
         - merge_log: سجل الدمج
         """
-        attachment = self.get_attachment(pk)
+        attachment = self.get_attachment(pk, write=True)
         
         # التحقق من وجود الملف الجديد
         if 'file' not in request.FILES:
@@ -102,7 +107,7 @@ class AttachmentMergeViewSet(viewsets.GenericViewSet):
         Parameters:
         - reason: سبب الحذف (optional)
         """
-        attachment = self.get_attachment(pk)
+        attachment = self.get_attachment(pk, write=True)
         
         try:
             reason = request.data.get('reason', '')
@@ -133,7 +138,7 @@ class AttachmentMergeViewSet(viewsets.GenericViewSet):
         Parameters:
         - version_number: رقم النسخة المراد استعادتها
         """
-        attachment = self.get_attachment(pk)
+        attachment = self.get_attachment(pk, write=True)
         
         version_number = request.data.get('version_number')
         

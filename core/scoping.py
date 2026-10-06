@@ -279,6 +279,29 @@ def can_open_content(book, user) -> bool:
     return can_view_book(book, user) and secret_access(user, book) == ACCESS_FULL
 
 
+def can_edit_book(book, user) -> bool:
+    """أيحقّ له **الكتابةُ على الكتاب نفسِه**: حقولِه وهامشِه ومرفقاته وحالةِ
+    متابعته — أو حذفُه واستعادتُه؟
+
+    قرارُ المالك 2026‑09‑29 (Q1‑ج): لشجرة **القسم المالك** وطاولته ومدير النظام.
+    والوحدةُ التي فُرِّق إليها الكتابُ أو ذُكرت فيه تراه وتفتح محتواه
+    (``can_open_content``) وتُبقي أفعالَ صفّها وعهدتها وتعليقها — لكنّها لا تكتب
+    فوق ورقة غيرها. كان حقُّ الكتابة هو حقَّ الفتح، فتعدّل الوحدةُ المُحالُ إليها
+    عنوانَ القسم وتحذف كتابَه وتكتب فوق هامش مديره.
+
+    مَن بلا قسمٍ (تنصيبٌ لم تُبذَر أقسامُه) وكتابٌ بلا قسم: يكتب عليه مُنشئُه —
+    كما يراه وحدَه في ``scope_books_for``.
+    """
+    if not can_open_content(book, user):
+        return False
+    if is_privileged(user):
+        return True
+    dept_id = user_department_id(user)
+    if dept_id is None or book.department_id is None:
+        return book.created_by_id == user.id
+    return book.department_id in subtree_ids(dept_id)
+
+
 def scope_books_for(user, qs=None):
     """الكتب المرئيّة للمستخدم — صيغة الـqueryset.
 

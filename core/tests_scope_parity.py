@@ -11,7 +11,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from core.models import Book, BookReferral, Department, Entity, UserProfile
-from core.scoping import can_view_book, scope_books_for
+from core.scoping import can_edit_book, can_open_content, can_view_book, scope_books_for
 
 
 class ScopeParityTests(TestCase):
@@ -84,6 +84,24 @@ class ScopeParityTests(TestCase):
                 self.assertEqual(
                     can_view_book(book, user), book.pk in visible,
                     msg='انفرجَ النصفان: %s ⟵ %s' % (who, label))
+
+    def test_writing_implies_opening_implies_seeing(self):
+        """الحقوقُ الثلاثةُ متداخلة على المصفوفة كلِّها: مَن يكتب يفتح، ومَن يفتح يرى
+        (Q1‑ج). وحقُّ الكتابة أضيق: الوحدةُ المُفرَّقُ إليها أو المذكورةُ تفتح ولا تكتب."""
+        actors = {'رئيسُ القسم': self.head, 'موظّفُ الوحدة': self.worker,
+                  'غريبٌ بقسم': self.stranger, 'بلا قسم': self.outsider,
+                  'مديرُ النظام': self.boss}
+        for who, user in actors.items():
+            for label, book in self.books.items():
+                edit, opened, seen = (can_edit_book(book, user), can_open_content(book, user),
+                                      can_view_book(book, user))
+                msg = '%s ⟵ %s' % (who, label)
+                self.assertTrue(not edit or opened, msg='يكتب ولا يفتح: ' + msg)
+                self.assertTrue(not opened or seen, msg='يفتح ولا يرى: ' + msg)
+        for label in ('مُفرَّقٌ إلى الوحدة', 'ذُكرت فيه الوحدة'):
+            with self.subTest(book=label):
+                self.assertTrue(can_open_content(self.books[label], self.worker))
+                self.assertFalse(can_edit_book(self.books[label], self.worker))
 
     def test_the_dossier_clause_is_actually_exercised(self):
         """الحارسُ لا يقيس شيئاً إن لم تُفعِّل الحالاتُ الشقَّ الرابع.

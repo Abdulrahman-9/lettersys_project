@@ -32,7 +32,7 @@ from ..models import (
     BookHistory,
     BookSequence,
 )
-from core.scoping import can_open_content, is_privileged
+from core.scoping import can_edit_book, can_open_content, is_privileged
 from .books_helpers import (
     _normalize_secret_level_value,
     _resolve_entities,
@@ -481,7 +481,8 @@ def api_delete_book(request, book_id):
 
     book = get_object_or_404(Book, id=book_id)
 
-    if not can_open_content(book, request.user):
+    # الحذفُ للقسم المالك وطاولته والمدير (Q1‑ج) — والوحدةُ المُحالُ إليها لا تحذف كتابَ غيرها
+    if not can_edit_book(book, request.user):
         return JsonResponse({"error": "Unauthorized"}, status=403)
 
     try:
@@ -637,7 +638,8 @@ def api_undo_delete_book(request, book_id):
     try:
         book = get_object_or_404(Book.all_objects, id=book_id, is_deleted=True)
 
-        if not can_open_content(book, request.user):
+        # الاستعادةُ عكسُ الحذف — بالبوّابة نفسِها (Q1‑ج)
+        if not can_edit_book(book, request.user):
             return JsonResponse({"error": "Unauthorized"}, status=403)
 
         book.is_deleted = False
@@ -769,13 +771,13 @@ def api_book_inline_status(request, pk):
     if request.method != "POST":
         return JsonResponse({"error": "Only POST allowed"}, status=405)
 
-    from core.scoping import can_open_content
-
     book = get_object_or_404(Book, pk=pk)
-    # تغييرُ الحالة عمليّةُ **محتوى** — البوّابةُ من المصدر الوحيد لا نسخةٌ
-    # يدويّةٌ تمنح `is_staff` كلَّ كتب الشركة. و404 لا 403.
-    if not can_open_content(book, request.user):
-        return JsonResponse({"error": "غير موجود"}, status=404)
+    # تغييرُ الحالة كتابةٌ على الكتاب — لشجرة القسم المالك وطاولته والمدير
+    # (Q1‑ج، ``can_edit_book``) لا لكلّ مَن يفتح المحتوى. و404 لا 403.
+    if not can_edit_book(book, request.user):
+        if not can_open_content(book, request.user):
+            return JsonResponse({"error": "غير موجود"}, status=404)
+        return JsonResponse({"error": "تغييرُ الحالة للقسم المالك."}, status=403)
 
     try:
         payload = json.loads(request.body)
@@ -825,10 +827,9 @@ def update_book_api(request):
             return JsonResponse({'success': False, 'message': 'edit_pk مطلوب', 'error_code': 'MISSING_EDIT_PK'}, status=400)
 
         book = get_object_or_404(Book, pk=edit_pk)
-        # قاعدةُ الرؤية من المصدر الوحيد — وهذه عمليّةُ **محتوى**
-        # (تعديلٌ أو تعليقٌ أو تغييرُ حالة) لا مجرّدُ رؤيةِ صفّ:
-        # فالسرّيُّ لا يُعدَّل بمن يرى سطرَه في الدفتر.
-        has_permission = can_open_content(book, request.user)
+        # التعديلُ لشجرة القسم المالك وطاولته والمدير (Q1‑ج، ``can_edit_book``):
+        # الوحدةُ المُحالُ إليها تفتح المحتوى ولا تعدّله.
+        has_permission = can_edit_book(book, request.user)
         if not has_permission:
             return JsonResponse({'success': False, 'message': 'ليس لديك صلاحية تعديل هذا الكتاب', 'error_code': 'PERMISSION_DENIED'}, status=403)
 

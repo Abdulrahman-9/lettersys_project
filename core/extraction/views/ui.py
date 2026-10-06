@@ -69,10 +69,11 @@ def extraction_wizard(request):
 @login_required
 def extraction_smart_desktop(request):
     """نظام الاستخراج الذكي المحسّن للـ Desktop — يدعم وضع التعديل عبر edit_pk"""
+    from django.core.exceptions import PermissionDenied
     from django.http import Http404
 
     from core.models import Book
-    from core.scoping import (ACCESS_STUB, STUB_TITLE, can_open_content,
+    from core.scoping import (ACCESS_STUB, STUB_TITLE, can_edit_book, can_open_content,
                               scope_books_for, secret_access)
 
     edit_pk = request.GET.get('edit_pk', '').strip()
@@ -94,8 +95,13 @@ def extraction_smart_desktop(request):
         # و**404 لا 403**: الرمزان كانا يفترقان (غيرُ موجودٍ ⟵ وضعُ الإدخال،
         # وممنوعٌ ⟵ 403) فيصير الفرقُ بينهما عرّافاً يُثبت وجودَ كتابٍ لا يملكه
         # السائل. صارا واحداً.
+        #
+        # والتعديلُ **كتابةٌ على الكتاب** — لشجرة القسم المالك وطاولته والمدير
+        # (Q1‑ج، ``can_edit_book``): الوحدةُ المُحالُ إليها تفتح ولا تعدّل.
         if book is None or not can_open_content(book, request.user):
             raise Http404('لا كتابَ بهذا المعرّف.')
+        if not can_edit_book(book, request.user):
+            raise PermissionDenied('التعديلُ للقسم المالك.')
 
         # قاعدة موحّدة لاختيار الأساسي (تطابق لوحة الإدارة وشارة «أساسي»)
         from core.attachment_service import pick_primary_attachment
