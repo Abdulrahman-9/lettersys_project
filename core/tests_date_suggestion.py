@@ -54,6 +54,41 @@ class DrawnDateParseTests(SimpleTestCase):
             self.assertEqual(parse_drawn_date(raw)[1], 'invalid', raw)
 
 
+class DrawnDateCandidatesTests(SimpleTestCase):
+    """بندُ نيلسن 7 (مذكّرة فيبل 10): الغامضُ يعرض مرشّحَيه زرَّين يختار الكاتبُ أحدهما —
+    **لا حسمَ آليّ**؛ وكلُّ حالةٍ غيرِ غامضةٍ بلا مرشّحين (لا يفتح بابَ تخمين)."""
+    TODAY = datetime.date(2026, 9, 29)
+
+    def test_ambiguous_gives_both_readings_sorted(self):
+        from core.extraction.handwriting.date_parse import drawn_date_candidates
+        self.assertEqual(drawn_date_candidates('26/9/15', today=self.TODAY), ['2015-09-26', '2026-09-15'])
+
+    def test_resolved_or_invalid_gives_none(self):
+        from core.extraction.handwriting.date_parse import drawn_date_candidates
+        for raw in ('2026/9/15', '25/3/6', '31/2/2025', 'ab/3/6', ''):
+            self.assertEqual(drawn_date_candidates(raw, today=self.TODAY), [], raw)
+
+    def test_window_that_resolves_leaves_no_candidates(self):
+        from core.extraction.handwriting.date_parse import drawn_date_candidates
+        self.assertEqual(drawn_date_candidates('24/8/26', entry_date=datetime.date(2026, 8, 26),
+                                               today=self.TODAY), [])
+
+    def test_no_candidate_after_the_entry_date(self):
+        """«26/12/15» ⟵ 2015‑12‑26 و2026‑12‑15؛ الثاني بعد اليوم/القيد فلا يُعرض زرّاً (نقرةٌ عليه
+        كانت تكتبه `confirmed`). الباقي وحدَه يبقى **مرشّحاً** يُنقر لا حسماً (الامتناعُ قائم)."""
+        from core.extraction.handwriting.date_parse import drawn_date_candidates
+        self.assertEqual(drawn_date_candidates('26/12/15', today=self.TODAY), ['2015-12-26'])
+        self.assertEqual(drawn_date_candidates('26/12/15', entry_date=datetime.date(2026, 9, 20),
+                                               today=self.TODAY), ['2015-12-26'])
+        self.assertEqual(parse_drawn_date('26/12/15', today=self.TODAY), (None, 'ambiguous'))
+
+    def test_parse_behaviour_unchanged_by_the_refactor(self):
+        """استخراجُ المرشّحين دالّةً مشتركة لا يغيّر حكمَ التحليل (مصدرٌ واحد)."""
+        self.assertEqual(parse_drawn_date('26/9/15', today=self.TODAY), (None, 'ambiguous'))
+        self.assertEqual(parse_drawn_date('26/9/15', entry_date=datetime.date(2026, 9, 20),
+                                          today=self.TODAY), ('2026-09-15', 'ok'))
+
+
 class SuggestionPayloadTests(SimpleTestCase):
     def test_suggestion_never_lands_in_sender_date(self):
         """المفتاحان منفصلان — الواجهةُ تكتب `sender_date` في الحقل صامتاً."""
@@ -102,16 +137,34 @@ class ZeroAutofillSourceGuardTests(SimpleTestCase):
         return body[:body.index(chr(10) + '}')]
 
     def test_only_two_named_functions_write_the_field(self):
+        """كاتبا الحقل اثنان: **نقرةُ الكاتب** (`_writeSenderDate` — يمرّ بها «تأكيد» وزرّا مرشّحَي
+        الغامض، نيلسن 7) و**الملءُ الأخضر** (`_autofillSenderDate`)."""
         src = self._src()
-        confirm = self._body(src, 'function _confirmSenderDateSuggestion')
+        writer = self._body(src, 'function _writeSenderDate')
         autofill = self._body(src, 'function _autofillSenderDate')
-        self.assertIn("el.value = card.dataset.iso", confirm)
+        confirm = self._body(src, 'function _confirmSenderDateSuggestion')
+        self.assertIn("el.value = iso", writer)
+        self.assertIn('PROV_CONFIRMED', writer)
         self.assertIn("el.value = iso", autofill)
+        self.assertIn('_writeSenderDate(card.dataset.iso)', confirm)
         # خارجهما: لا كتابةَ قيمةٍ في العنصر من الاقتراح
-        rest = src.replace(confirm, '').replace(autofill, '')
-        for forbidden in ("senderDate').value =", 'senderDate").value =',
+        rest = src.replace(writer, '').replace(autofill, '')
+        for forbidden in ("senderDate').value =", 'senderDate").value =', 'el.value = iso',
                           "setVal('senderDate', data.sender_date_suggestion"):
             self.assertNotIn(forbidden, rest)
+
+    def test_enter_never_overwrites_a_different_typed_date(self):
+        """نيلسن 2: Enter للانتقال لا لاستبدال تاريخٍ كتبه الكاتب."""
+        confirm = self._body(self._src(), 'function _confirmSenderDateSuggestion')
+        self.assertIn('if (cur && cur !== card.dataset.iso) return false;', confirm)
+
+    def test_ambiguous_shows_choices_never_autofills(self):
+        """الغامضُ: مرشّحان زرّان — ولا يبلغ الملءَ التلقائيّ (لا iso)."""
+        renderer = self._body(self._src(), 'function applySenderDateSuggestion')
+        self.assertIn("sug.parse === 'ambiguous'", renderer)
+        self.assertIn('date-suggest__choice', renderer)
+        eligible = self._body(self._src(), 'function _sdAutofillEligible')
+        self.assertIn('sug.iso', eligible)
 
     def test_autofill_requires_green_and_parse_and_gap_guard(self):
         """الشروطُ الثلاثة في موضعٍ واحد — ارتخاءُ أيّها يفشل هنا لا في الإنتاج."""

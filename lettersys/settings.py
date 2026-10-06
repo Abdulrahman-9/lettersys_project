@@ -322,6 +322,9 @@ TESSERACT_PSM = os.environ.get('TESSERACT_PSM', '3')
 # تصعيد تكيّفي: عند ثقة OCR < العتبة، يُجرَّب تحويل ثنائي (adaptive) ويُحتفَظ بالأعلى
 # ثقةً. 0 = تعطيل. القيمة مُثبَتة على عيّنة قاعدة البيانات الحقيقية.
 TESSERACT_ADAPTIVE_THRESHOLD = float(os.environ.get('TESSERACT_ADAPTIVE_THRESHOLD', '0.75'))
+# اقتراحُ الموضوع من قصاصة det2 حين يصمت المُنتقي (مذكّرة فيبل 10، 2026‑09‑29). اقتراحٌ يؤكّده
+# الكاتب لا ملء. False = مفتاحُ إطفاء: يبقى صندوقُ det2 في «أين الموضوع؟» بلا قراءةٍ تلقائيّة.
+SUBJECT_DET2_SUGGESTION = os.environ.get('SUBJECT_DET2_SUGGESTION', 'True').lower() in ('true', '1')
 
 # ─── إعدادات OCR والاستخراج ──────────────────────────────────────────────────
 # تحميل نموذج EasyOCR مسبقاً عند بدء Django (يمنع التأخير في أول طلب)

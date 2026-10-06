@@ -101,6 +101,24 @@ function fieldProvenance(id) {
     return el.dataset.provenance || (String(el.value || '').trim() ? PROV_TYPED : '');
 }
 
+/** الحقلُ «ملكُ الكاتب» = كتبه بيده أو أكّد اقتراحاً فيه — لا تكتب قراءةٌ آليّة فوقه (نيلسن 3). */
+function _clerkOwnsField(el) {
+    const p = el && el.dataset ? el.dataset.provenance : '';
+    return p === PROV_TYPED || p === PROV_CONFIRMED;
+}
+
+/** الملفُّ تغيّر (حُذف، أو أُسقط غيرُه فوقه، أو وصل مسحٌ جديد) ⟵ `confirmed` ينزل إلى
+ *  `autofilled`: القيمةُ مشتقّةٌ من قراءة آلةٍ لملفٍّ ذهب، فلا تبقى «ملكَ الكاتب» تحجب قيمَ
+ *  الملف الجديد بصمت (خلطُ مستندين — بلاغ المالك 09‑15). **لا حذفُ الوسم**: فراغُه يُقرأ
+ *  `typed`، أقوى ذهبٍ لقيمةٍ لم يكتبها أحد. `typed` يبقى ملكاً. الثمنُ الموثَّق: تصحيحٌ ثمّ
+ *  إعادةُ رفعِ **الملفّ نفسه** يُكتب فوقه. */
+function _releaseDocBoundOwnership() {
+    PROVENANCE_FIELD_IDS.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el && el.dataset && el.dataset.provenance === PROV_CONFIRMED) el.dataset.provenance = PROV_AUTOFILLED;
+    });
+}
+
 function _onHumanTouch(ev) {
     if (_codeFillDepth) return;
     const el = ev.target;
@@ -173,7 +191,7 @@ function applySenderDateSuggestion(data) {
         img.removeAttribute('src');
         fig.hidden = !sug;                 // اقتراحٌ بلا قصاصة يبقى مرئيّاً
     }
-    if (!sug || !sug.raw) { card.hidden = true; return; }
+    if (!sug || !sug.raw) { _hideSenderDateSuggestion(); return; }
 
     card.hidden = false;
     // هنا — وهنا فقط — رأى الكاتبُ اقتراحَ التاريخ فعلاً.
@@ -189,6 +207,8 @@ function applySenderDateSuggestion(data) {
     const btn = _sdEl('senderDateApply');
     const btnText = _sdEl('senderDateApplyText');
     const kbd = _sdEl('senderDateKbd');
+    const will = _sdEl('senderDateWill');
+    const choices = _sdEl('senderDateChoices');
     const guard = _senderDateGuard(sug.iso);
     // الملءُ هنا — بعد الحارس وقبل الرسالة: الرسالةُ تصف ما حدث فعلاً.
     let autofilled = false;
@@ -197,54 +217,123 @@ function applySenderDateSuggestion(data) {
         autofilled = _autofillSenderDate(sug.iso) || (el && el.value === sug.iso);
     }
     let msg = '', blocked = false, enterOk = true;
+    // لا مرشّحَ بعد تاريخ القيد الذي في الحقل الآن (الكاتبُ قد يغيّره عن نافذة الخادم) —
+    // النقرةُ تكتب `confirmed` فلا تُعرض قراءةٌ مستحيلة. الأقدمُ من النافذة يبقى زرّاً بسطر.
+    const cands = (sug.parse === 'ambiguous' && Array.isArray(sug.candidates))
+        ? sug.candidates.filter((iso) => { if (!iso) return false; const g = _senderDateGap(iso); return g === null || g >= 0; })
+        : [];
+    const candsOld = cands.some((iso) => { const g = _senderDateGap(iso); return g !== null && g > SENDER_DATE_GAP_MAX; });
+
+    // **نيلسن 7** (مذكّرة فيبل 10): البطاقةُ تقول ما سيُكتب بالكلمات — كانت تعرض الخامَّ
+    // بترتيب البكسل («26/9/15») فلا يُعرف أكان «26» سنةً أم يوماً — وتُسمّي البوّابةَ التي
+    // منعت الملء، والغامضُ يعرض مرشّحَيه زرَّين (لا حسمَ آليّ: حكمُ فيبل قائم).
+    if (will) {
+        will.textContent = sug.iso ? ('سيُكتب: ' + _arDateWords(sug.iso))
+            : (cands.length ? 'أيُّ الرقمين هو السنة؟' : 'لم تُقرأ قراءةٌ صالحة');
+    }
+    if (choices) {
+        choices.innerHTML = '';
+        cands.forEach((iso) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'date-suggest__choice';
+            b.dataset.iso = iso;
+            b.textContent = _arDateWords(iso);
+            choices.appendChild(b);
+        });
+        choices.hidden = !cands.length;
+    }
 
     if (!sug.iso) {
-        msg = sug.parse === 'ambiguous'
-            ? 'سنةٌ غامضة — الطرفان محتملان. اكتب التاريخ بنفسك من القصاصة.'
-            : 'تعذّرت قراءةُ تاريخٍ صالح — اكتبه بنفسك من القصاصة.';
+        msg = cands.length
+            ? ('لم نعرف أيّ الرقمين هو السنة — اختر التاريخ الصحيح كما في القصاصة.'
+               + (candsOld ? ' (أقدمُ من ' + SENDER_DATE_GAP_MAX + ' يوماً من تاريخ القيد — تأكّد.)' : ''))
+            : 'تعذّرت قراءةُ تاريخٍ صالح — اكتبه من القصاصة.';
         blocked = true; enterOk = false;
     } else if (conf < green) {
-        msg = 'قراءةٌ ضعيفة — طابِقها بالقصاصة قبل التأكيد.';
+        msg = 'لم يُملأ تلقائيّاً: ثقةُ القراءة ' + Math.round(conf * 100) + '% دون حدّ الملء '
+            + Math.round(green * 100) + '% — طابِقه بالقصاصة ثمّ أكّد.';
         enterOk = false;
     } else if (guard.state === 'same_day') {
-        msg = 'يساوي تاريخ القيد — تأكّد أنّه حبرُ الجهة لا ختمُنا.';
+        msg = 'لم يُملأ تلقائيّاً: يساوي تاريخَ القيد — تأكّد أنّه تاريخُ الجهة لا ختمُنا.';
         enterOk = false;
     } else if (guard.state === 'out_of_range') {
         msg = guard.gap < 0
-            ? 'التاريخ بعد تاريخ القيد — راجعه.'
-            : 'أقدمُ من ' + SENDER_DATE_GAP_MAX + ' يوماً من تاريخ القيد — راجعه.';
+            ? 'لم يُملأ تلقائيّاً: التاريخُ بعد تاريخ القيد — راجعه.'
+            : 'لم يُملأ تلقائيّاً: أقدمُ من ' + SENDER_DATE_GAP_MAX + ' يوماً من تاريخ القيد — راجعه.';
         enterOk = false;
     } else if (guard.state === 'unknown') {
-        msg = 'تاريخُ القيد فارغ — لم يُملأ تلقائيّاً؛ طابِق القصاصة ثمّ أكّد.';
+        msg = 'لم يُملأ تلقائيّاً: تاريخُ القيد فارغ — طابِقه بالقصاصة ثمّ أكّد.';
     } else if (autofilled) {
-        msg = 'مُلئ تلقائيّاً من القصاصة — طابِقه بنظرة ثمّ أكّد.';
+        msg = 'مُلئ تلقائيّاً من القصاصة — طابِقه بنظرة.';
     }
     warn.textContent = msg;
     warn.hidden = !msg;
-    warn.classList.toggle('is-blocked', blocked);
+    warn.classList.toggle('is-blocked', blocked && !cands.length);
     btn.disabled = blocked;
-    btnText.textContent = blocked ? 'تعذّر الاقتراح' : (autofilled ? 'مطابِق' : 'تأكيد');
+    btn.hidden = !!cands.length;                  // الغامضُ: زرّا المرشّحَين بدل «تأكيد»
+    btnText.textContent = blocked ? 'تعذّر الاقتراح' : 'تأكيد';
     kbd.hidden = !enterOk;
     card.dataset.iso = sug.iso || '';
     card.dataset.enter = enterOk ? '1' : '';
+}
+
+const _AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب',
+                    'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
+/** «2026-09-15» ⟵ «15 أيلول 2026» — ما سيُكتب في الحقل، بلا لبسٍ في موضع السنة. */
+function _arDateWords(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    return m ? (Number(m[3]) + ' ' + _AR_MONTHS[Number(m[2]) - 1] + ' ' + m[1]) : String(iso || '');
+}
+
+/** يُخفي بطاقةَ الاقتراح وينسى قيمتها — لا يبقى Enter قادراً على كتابة تاريخٍ قديم (نيلسن 2). */
+function _hideSenderDateSuggestion() {
+    const card = _sdEl('senderDateSuggest');
+    if (!card) return;
+    card.hidden = true;
+    delete card.dataset.iso;
+    delete card.dataset.enter;
+    const choices = _sdEl('senderDateChoices');
+    if (choices) { choices.innerHTML = ''; choices.hidden = true; }
+}
+
+function _writeSenderDate(iso) {
+    const el = _sdEl('senderDate');
+    if (!el || !iso) return false;
+    el.value = iso;
+    codeFill(() => el.dispatchEvent(new Event('change', { bubbles: true })));
+    el.dataset.provenance = PROV_CONFIRMED;    // نقرةُ الكاتب على اقتراح — للالتقاط لاحقاً
+    _hideSenderDateSuggestion();
+    return true;
 }
 
 function _confirmSenderDateSuggestion() {
     const card = _sdEl('senderDateSuggest');
     const el = _sdEl('senderDate');
     if (!card || card.hidden || !el || !card.dataset.iso) return false;
-    el.value = card.dataset.iso;
-    codeFill(() => el.dispatchEvent(new Event('change', { bubbles: true })));
-    el.dataset.provenance = PROV_CONFIRMED;    // مصدرُ القيمة — للالتقاط لاحقاً
-    card.hidden = true;
-    return true;
+    // نيلسن 2: لا يكتب فوق تاريخٍ مختلفٍ في الحقل — Enter للانتقال لا لاستبدال ما كتبه الكاتب
+    const cur = String(el.value || '').trim();
+    if (cur && cur !== card.dataset.iso) return false;
+    return _writeSenderDate(card.dataset.iso);
 }
 
 document.addEventListener('click', (e) => {
-    if (e.target && e.target.closest && e.target.closest('#senderDateApply')) {
+    if (!e.target || !e.target.closest) return;
+    if (e.target.closest('#senderDateApply')) {
         e.preventDefault();
         _confirmSenderDateSuggestion();
+        return;
     }
+    const choice = e.target.closest('.date-suggest__choice');
+    if (choice && choice.dataset.iso) {
+        e.preventDefault();
+        _writeSenderDate(choice.dataset.iso);
+    }
+});
+// الكاتبُ يكتب التاريخ بيده ⟵ البطاقةُ تُخلي مكانها (القصاصةُ تبقى للمقارنة) — نيلسن 2
+document.addEventListener('input', (e) => {
+    if (_codeFillDepth || !e.target || e.target.id !== 'senderDate') return;
+    _hideSenderDateSuggestion();
 });
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
@@ -296,13 +385,20 @@ function applyTitleSuggestion(data) {
     const warn = _tsEl('titleSuggestWarn');
     if (val) val.textContent = sug.value;
     if (badge) {
-        badge.textContent = Math.round(Number(sug.confidence || 0) * 100) + '%';
+        // det2_crop: الرقمُ ثقةُ صندوق الكاشف (تموضُّعٌ لا قراءة — «96% للكاشف تموضعٌ لا قراءة»)
+        // فلا يُعرض نسبةَ قراءة. الحمولةُ تحمله للسجلّ فقط.
+        const boxOnly = sug.source === 'det2_crop';
+        badge.hidden = boxOnly;
+        badge.textContent = boxOnly ? '' : Math.round(Number(sug.confidence || 0) * 100) + '%';
         badge.className = 'confidence-badge low';
     }
     if (warn) {
-        warn.textContent = (sug.source === 'fallback')
-            ? 'أوّلُ سطرٍ فوق التحيّة — أصاب 7 مرّاتٍ من 100 على مجموعةٍ مختومة.'
-            : 'سطرٌ بين المُرسَل إليه والتحيّة — لم يصب مرّةً على المجموعة المختومة.';
+        // خريطةُ مصدرٍ صريحة بافتراضٍ محايد — كان كلُّ مصدرٍ غيرِ «fallback» يُوصف «لم يصب مرّةً»
+        // فكان سيُلصق بقصاصة det2 وهي الأدقّ (40/75، مذكّرة فيبل 10).
+        warn.textContent = ({
+            det2_crop: 'قُرئ من موضع الموضوع في المستند — طابِقه بنظرةٍ ثمّ استعمِله.',
+            fallback: 'أوّلُ سطرٍ فوق التحيّة — أصاب 7 مرّاتٍ من 100 على مجموعةٍ مختومة.',
+        })[sug.source] || 'سطرٌ بين المُرسَل إليه والتحيّة — لم يصب مرّةً على المجموعة المختومة.';
     }
     card.dataset.value = sug.value;
 }
@@ -1132,9 +1228,12 @@ class ExtractionSmartSystem {
 
     _fillExtractionFields(data) {
         this.beginTextUndoBatch?.();   // لقطة قبل التعبئة → يصير الاستخراج خطوة تراجع واحدة
+        // نيلسن 3 على مسار الماسح أيضاً (قرارُ المالك 2026‑09‑29): ما كتبته الكاتبةُ أثناء المسح
+        // يبقى — كان هذا المسارُ وحدَه يكتب فوقه. (`confirmed` من مستندٍ سابق نزل إلى `autofilled`
+        // قبل الوصول هنا عبر `_releaseDocBoundOwnership`، فلا يحجب المسحَ الجديد.)
         const setVal = (id, val) => {
             const el = document.getElementById(id);
-            if (el && val != null && val !== '') {
+            if (el && val != null && val !== '' && !_clerkOwnsField(el)) {
                 el.value = val;
                 noteSuggestionFilled(id, val);   // مُلئ تلقائيّاً وعُرض — عقدُ الالتقاط
             }
@@ -1164,11 +1263,11 @@ class ExtractionSmartSystem {
         }
         if (data.issuing_entity) {
             const issuingInput = document.querySelector('[data-field="issuingEntity"] input, #issuingEntity');
-            if (issuingInput) { issuingInput.value = data.issuing_entity; noteSuggestionFilled('issuingEntity', data.issuing_entity); }
+            if (issuingInput && !_clerkOwnsField(issuingInput)) { issuingInput.value = data.issuing_entity; noteSuggestionFilled('issuingEntity', data.issuing_entity); }
         }
         if (data.receiving_entity) {
             const receivingInput = document.querySelector('[data-field="receivingEntity"] input, #receivingEntity');
-            if (receivingInput) { receivingInput.value = data.receiving_entity; noteSuggestionFilled('receivingEntity', data.receiving_entity); }
+            if (receivingInput && !_clerkOwnsField(receivingInput)) { receivingInput.value = data.receiving_entity; noteSuggestionFilled('receivingEntity', data.receiving_entity); }
         }
         // حافّة الثقة + بطاقتا P1 في مسار المسح أيضاً — البيانات مُصدَّرة في result_to_scan_data
         const confMap = {
@@ -1183,7 +1282,8 @@ class ExtractionSmartSystem {
         };
         Object.keys(confMap).forEach(fid => {
             const c = data[confMap[fid]];
-            if (typeof c === 'number') this.setFieldConfidence(fid, c);
+            // حافّةُ ثقة الآلة لا تُرسم على قيمةٍ كتبتها الكاتبة (لم تُكتب القراءةُ فوقها أصلاً)
+            if (typeof c === 'number' && !_clerkOwnsField(document.getElementById(fid))) this.setFieldConfidence(fid, c);
         });
         if (window.__autoGrowTitle) window.__autoGrowTitle();   // وسّع الموضوع لطول النصّ المملوء
         this.updateQualitySummary(data);
@@ -1884,7 +1984,10 @@ class ExtractionSmartSystem {
                 this.clearFile();
             } else if (btnId === 'clearFormButton') {
                 e.preventDefault();
-                console.log('[ExtractionSmart] Calling clearForm()');
+                if (window.__isExtractionDirty && window.__isExtractionDirty()
+                    && !window.confirm('ستُمسح الحقولُ التي أدخلتَها لهذا الكتاب (الرقمُ المحجوز يبقى لك). متابعة؟')) {
+                    return;
+                }
                 this.clearForm();
             } else if (btnId === 'extractButton') {
                 e.preventDefault();
@@ -1984,10 +2087,9 @@ class ExtractionSmartSystem {
                     this.performTextUndo();
                 }
             }
-            // Escape: Clear
-            if (e.key === 'Escape') {
-                this.clearForm();
-            }
+            // (أُزيل «Escape = تفريغ النموذج» — نيلسن 1، مذكّرة فيبل 10: Escape مفتاحُ إغلاق
+            //  القوائم والنوافذ، فكان إغلاقُ قائمة الجهة أو نافذة التكرار يمسح الكتابَ كلّه ويُلغي
+            //  الرقمَ المحجوز الذي كُتب على الورق. التفريغُ فعلٌ صريح بزرّه وحده.)
         });
 
         document.addEventListener('keydown', (e) => {
@@ -2650,6 +2752,7 @@ class ExtractionSmartSystem {
                 await this.appendFromSourceToken(ud.token);   // مسح وإلحاق: يُدرج بنهاية المستند القائم
                 this._hideExtractionOverlay();
             } else {
+                _releaseDocBoundOwnership();   // مسحٌ جديد (لا إلحاقٌ ولا إعادةُ تجهيز) = مستندٌ جديد
                 this._loadScanToken(ud.token, { notice: ud.warning || null });
             }
         } catch (err) {
@@ -3548,6 +3651,7 @@ class ExtractionSmartSystem {
         }
 
         this.displayFileName(file.name);
+        _releaseDocBoundOwnership();         // ملفٌّ جديد فوق القديم: تأكيداتُ قراءات القديم لا تحجبه
         // المسار الموحّد: نُجهّز الملف على الخادم (صورة→PDF) ونحصل على token كي تعمل
         // معاينة الصفحات وأدوات التحرير (تدوير/حذف/إعادة ترتيب) على الرفع كما المسح.
         this.stageAndPreview(file).catch(err => {
@@ -3723,6 +3827,8 @@ class ExtractionSmartSystem {
         // حذفُ الصورة يُنهي استخراجَها: كان البثُّ يواصل ملءَ الحقول بعد الحذف
         // (بلاغُ المالك 2026‑09‑15) فتختلط قيمُ مستندين.
         this._cancelRunningExtraction();
+        this.resetSuggestionSurfaces();      // نيلسن 2: قصاصةُ الصورة المحذوفة واقتراحاتُها تذهب معها
+        _releaseDocBoundOwnership();         // وتأكيداتُ قراءاتها لا تحجب الملفَّ التالي
         this.currentFile = null;
         this.scannedFiles = [];
         // أخفِ بانر التحذير عند تفريغ الملف
@@ -3807,13 +3913,22 @@ class ExtractionSmartSystem {
 
     _focusFirstReviewField(data) {
         // بعد الاستخراج، ضع التركيز على أول حقل مهم يحتاج مراجعة (ثقة منخفضة أو فارغ)
+        // — **إلّا إن كان الكاتبُ يكتب في حقلٍ الآن** (نيلسن 3): كان المؤشّرُ يُخطف منه بعد 200 مث.
+        const active = document.activeElement;
+        if (active && active !== document.body && active.closest
+            && active.closest('input, textarea, select, [contenteditable="true"]')) {
+            return;
+        }
         const priority = ['title', 'senderNumber', 'issuingEntity', 'receivingEntity', 'secretLevel'];
-        const lowConf = ['title', 'senderNumber'];
+        // مفتاحُ الثقة بتسمية الخادم — كان يُبنى `senderNumber_confidence` (غيرُ موجود) فتُقرأ 0 دائماً
+        const confKey = { title: 'title_confidence', senderNumber: 'sender_number_confidence',
+                          issuingEntity: 'issuing_entity_confidence', receivingEntity: 'receiving_entity_confidence',
+                          secretLevel: 'secret_level_confidence' };
         for (const fieldId of priority) {
             const el = document.getElementById(fieldId);
             if (!el) continue;
             const val = el.value ? el.value.trim() : '';
-            const conf = data ? (data[`${fieldId === 'title' ? 'title' : fieldId}_confidence`] || 0) : 0;
+            const conf = data ? (data[confKey[fieldId]] || 0) : 0;
             if (!val || conf < 0.65) {
                 try { el.focus(); } catch (e) {}
                 return;
@@ -4026,6 +4141,7 @@ class ExtractionSmartSystem {
             if (value === undefined || value === null || value === '' || filled.has(id)) return;
             const el = document.getElementById(id);
             if (!el) return;
+            if (_clerkOwnsField(el)) { filled.add(id); return; }   // نيلسن 3: ما كتبه الكاتبُ أثناء البثّ يبقى
             if (id === 'bookNumber' && !this._reconcileManualNumber(el, value, fields[confKey])) {
                 filled.add(id);          // حُسم أمره — لا نُعيد سؤاله في اللقطة التالية
                 return;
@@ -4143,7 +4259,9 @@ class ExtractionSmartSystem {
             // البثّ. المساران الآخران يتخطّيان الفارغ أصلاً — يُوحَّد هنا.
             if (typeof value !== 'undefined' && value !== null && value !== '') {
                 const input = document.getElementById(field);
-                if (input) {
+                // نيلسن 3 (مذكّرة فيبل 10): حمولةُ done كانت تكتب فوق ما كتبه الكاتبُ أو أكّده
+                // أثناء الاستخراج وتُعيده `autofilled` — يدُ الكاتب أعلى من كلّ قراءة.
+                if (input && !_clerkOwnsField(input)) {
                     // رقم السجلّ اليدويّ (الصادر الخارجي): لا يُكتب فوق ما كتبه الموظّف
                     // بصمت. إن تطابقا فتأكيدٌ صامت، وإن اختلفا فقرارٌ صريح منه.
                     if (field === 'bookNumber' && !this._reconcileManualNumber(input, value, data[conf])) {
@@ -4827,24 +4945,24 @@ class ExtractionSmartSystem {
             this.showToast('أُوقف الاستخراجُ الجاري مع التفريغ.', 'info', 4000);
         }
 
-        // Manual clear: void the active reservation for the current kind on the server.
+        // **الرقمُ المحجوز يبقى والتبويبُ يبقى** (نيلسن 1، مذكّرة فيبل 10): كان التفريغُ يُلغي
+        // الحجزَ ويحجز غيرَه ويعيد التبويبَ الابتدائيّ — والكاتبُ كتب الرقمَ على الورق («محجوز لك
+        // — اكتبه على المستند»). للإلغاء زرُّه الصريح (#releaseReservationBtn). والرقمُ اليدويّ
+        // (الصادرُ الخارجيّ، بلا معرّف حجز) يُمسح كسائر الحقول.
         const kindSelect = document.getElementById('bookKind');
         const currentKind = (kindSelect && kindSelect.value) || 'incoming_internal';
-        const voidPromise = this.voidReservation(currentKind, 'manual_clear');
 
         const fields = document.querySelectorAll('.form-control-smart');
-        console.log('[ExtractionSmart] Found', fields.length, 'form fields');
 
-        this.beginTextUndoBatch?.();   // كي يستطيع Ctrl+Z استرجاع الحقول النصية بعد التفريغ (يشمل مسح Escape)
+        this.beginTextUndoBatch?.();   // كي يستطيع Ctrl+Z استرجاع الحقول النصية بعد التفريغ
         fields.forEach(field => {
+            if (field.id === 'bookKind') return;
+            if (field.id === 'bookNumber' && field.dataset.reservationId) return;   // حجزُنا يبقى
             if (field.id !== 'date' && field.id !== 'senderDate') {
                 field.value = '';
             }
             field.classList.remove('has-error', 'is-valid');
             resetCaptureProvenance(field);      // نموذجٌ فارغ = لا مصدرَ قيمةٍ بعد
-            if (field.id === 'bookNumber') {
-                delete field.dataset.reservationId;
-            }
         });
         _displayedSuggestions.clear();          // ولا اقتراحَ معروضاً بعد
         this.endTextUndoBatch?.();
@@ -4852,6 +4970,7 @@ class ExtractionSmartSystem {
         // امسح وسوم الجهات: مكوّن EntityTagInput مخصّص (ليست .form-control-smart) فلا تطالها الحلقة أعلاه.
         window.entityTagManagers?.issuing?.clear();
         window.entityTagManagers?.receiving?.clear();
+        this._resetEntityProvenance();
 
         // صفّر «بلا رقم» كي لا يعلق مؤشَّراً بعد التفريغ (عبر معالج القالب الواحد).
         const _nlCbClear = document.getElementById('numberlessCheckbox');
@@ -4871,13 +4990,45 @@ class ExtractionSmartSystem {
             followupCheckbox.dispatchEvent(new Event('change'));
         }
 
-        // After void completes, reset context and reserve fresh numbers.
-        Promise.resolve(voidPromise).finally(() => {
-            this.applyInitialContext();
-        });
+        const secretLevelSelect = document.getElementById('secretLevel');
+        if (secretLevelSelect) secretLevelSelect.value = secretLevelSelect.dataset.default || 'normal';
 
-        this.showToast('تم مسح النموذج', 'success');
-        console.log('[ExtractionSmart] ✓ Form cleared');
+        // اقتراحاتُ هذا الكتاب لا تعيش بعده (نيلسن 2)، ولا ملخّصُ جودته
+        this.resetSuggestionSurfaces();
+        const qualityHero = document.getElementById('qualityHero');
+        if (qualityHero) qualityHero.style.display = 'none';
+        const needsReviewCard = document.getElementById('needsReviewCard');
+        if (needsReviewCard) needsReviewCard.style.display = 'none';
+
+        this.syncKindUI(currentKind);       // التبويبُ الحاليّ لا الابتدائيّ
+        this.resetDateFields();
+        if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+        if (window.__setExtractionBaseline) window.__setExtractionBaseline();
+
+        this.showToast('تم مسح النموذج — الرقمُ المحجوز باقٍ لك', 'success');
+    }
+
+    /** وسمُ الجهتين يسقط مع وسومهما: حقلا الجهة `tag-text-input` لا `.form-control-smart`، فكان
+     *  وسمُ `typed` من الكتاب السابق يبقى فتتخطّى بوّابةُ نيلسن 3 وسمَ `autofilled` في الكتاب
+     *  التالي بينما يضيف غلافُ القالب جهةَ الآلة — فتُحفظ `typed` وتتعلّم ذاكرةُ الترويسة من
+     *  مخرجها هي (التسميمُ الذاتيّ). البوّابةُ سليمة؛ العطبُ الحالةُ الراكدة. */
+    _resetEntityProvenance() {
+        ['issuingEntity', 'receivingEntity'].forEach((id) => resetCaptureProvenance(document.getElementById(id)));
+    }
+
+    /** **نيلسن 2** (مذكّرة فيبل 10): اقتراحاتُ الكتاب السابق لا تعيش بعد حذف صورته أو تفريغ
+     *  حقوله أو حفظه — كانت قصاصةُ التاريخ وزرُّها باقيَين، فـEnter في تاريخٍ فارغ يكتب تاريخَ
+     *  الكتاب الماضي، ورقائقُ مرشّحي الجهة باقيةٌ فوق الكتاب التالي. موضعٌ واحدٌ لكلّ المسارات. */
+    resetSuggestionSurfaces() {
+        const fig = document.getElementById('senderDateCrop');
+        if (fig) fig.hidden = true;
+        const img = document.getElementById('senderDateCropImg');
+        if (img) img.removeAttribute('src');
+        _hideSenderDateSuggestion();
+        document.querySelectorAll('.entity-candidates').forEach(el => el.remove());
+        const ts = document.getElementById('titleSuggest');
+        if (ts) { ts.hidden = true; ts.dataset.value = ''; }
+        if (window.SubjectLocate) window.SubjectLocate.hide();
     }
 
     smartClearAndStay(kind) {
@@ -4898,10 +5049,12 @@ class ExtractionSmartSystem {
         // (تسريبُ حالةٍ يُفسد رايةَ الالتقاط صامتاً). ووسمُ تاريخ الجهة يسقط في
         // `resetDateFields` مع قيمته أدناه.
         _displayedSuggestions.clear();
+        this.resetSuggestionSurfaces();      // نيلسن 2: ولا سطحَ اقتراحٍ موروثاً
 
         // امسح وسوم الجهات (مكوّن مخصّص خارج .form-control-smart) — «تفريغ» يشمل الجهات.
         window.entityTagManagers?.issuing?.clear();
         window.entityTagManagers?.receiving?.clear();
+        this._resetEntityProvenance();
 
         // صفّر «بلا رقم» كي لا يعلق مؤشَّراً للكتاب التالي (عبر معالج القالب الواحد → يُعيد الحجز).
         const _nlCb = document.getElementById('numberlessCheckbox');

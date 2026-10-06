@@ -1239,6 +1239,30 @@ textarea.title-autogrow {
     align-items: center;
     gap: 6px 8px;
 }
+/* نيلسن 7 (مذكّرة فيبل 10): ما سيُكتب بالكلمات عنوانُ البطاقة، والخامُّ ثانويٌّ تحته */
+.date-suggest__will {
+    flex: 1 0 100%;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #0f172a;
+}
+.date-suggest__will:empty { display: none; }
+.date-suggest__choices { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+.date-suggest__choices[hidden] { display: none; }
+.date-suggest__choice {
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #065f46;
+    background: #ecfdf5;
+    border: 1px solid #6ee7b7;
+    border-radius: 8px;
+    padding: 4px 12px;
+    cursor: pointer;
+}
+.date-suggest__choice:hover { background: #d1fae5; border-color: #34d399; }
+.date-suggest__choice:focus-visible { outline: 2px solid #0d9488; outline-offset: 2px; }
+.date-suggest__btn[hidden] { display: none; }
 .date-suggest__head { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
 .date-suggest__label { font-size: 0.72rem; color: #0f766e; flex: none; }
 .date-suggest__raw {
