@@ -260,6 +260,7 @@
         dateTo: '',
         entityId: '',
         status: '',
+        legacy: '',
         page: 1,
         sort: '-date'
       };
@@ -481,6 +482,28 @@
           });
         }
       }
+      // «يشمل الورق القديم» صندوقُ تأشير: الحالةُ من ``checked`` لا من ``value``
+      // (قيمتُه «1» دائماً) — قرارُ المالك 2026‑10‑06، الحيُّ وحدَه افتراضاً.
+      const legacy = document.querySelector('[name="legacy"]');
+      if (legacy) {
+        legacy.addEventListener('change', e => {
+          self.currentState.legacy = e.target.checked ? '1' : '';
+          self.currentState.page = 1;
+          self.updateUrlAndLoadData();
+        });
+      }
+    }
+
+    // المفتاحُ والتلميحُ يتبعان الحالةَ بعد الرجوع/التقدّم والمسح وكلِّ جلب
+    syncLegacyControls(widened) {
+      const legacy = document.querySelector('[name="legacy"]');
+      if (legacy) legacy.checked = this.currentState.legacy === '1';
+      const hint = document.getElementById('searchWidenedHint');
+      if (hint) {
+        hint.hidden = typeof widened === 'boolean'
+          ? !widened
+          : !(this.currentState.search && this.currentState.legacy !== '1');
+      }
     }
 
     // ─── 5. Sort handlers ──────────────────────────────────────────────────────
@@ -509,6 +532,7 @@
       if (this.currentState.dateTo)    params.date_to    = this.currentState.dateTo;
       if (this.currentState.entityId)  params.entity_id  = this.currentState.entityId;
       if (this.currentState.status)    params.followup   = this.currentState.status;
+      if (this.currentState.legacy)    params.legacy     = this.currentState.legacy;
       if (this.currentState.page > 1)  params.page       = this.currentState.page;
       if (this.currentState.sort && this.currentState.sort !== '-date') params.sort = this.currentState.sort;
 
@@ -545,6 +569,7 @@
         renderPagination(data.pagination, params);
         renderFilterBadges(data.active_filters);
         renderBadgeCounts(data.badges);
+        this.syncLegacyControls(data.search_widened);
         this.updateSearchResultsDisplay();
 
         // Empty state visibility
@@ -587,8 +612,10 @@
       this.currentState.dateTo     = p.get('date_to')    || '';
       this.currentState.entityId   = p.get('entity_id')  || '';
       this.currentState.status     = p.get('followup') || p.get('status') || p.get('due_status') || '';
+      this.currentState.legacy     = p.get('legacy') === '1' ? '1' : '';
       this.currentState.page       = parseInt(p.get('page')) || 1;
       this.currentState.sort       = p.get('sort')       || '-date';
+      this.syncLegacyControls();
       this.applyTheme();
     }
 
@@ -607,7 +634,8 @@
 
     clearAllFilters() {
       this.currentState = { tab: 'incoming', search: '', dateFrom: '', dateTo: '',
-                            entityId: '', status: '', page: 1, sort: '-date' };
+                            entityId: '', status: '', legacy: '', page: 1, sort: '-date' };
+      this.syncLegacyControls(false);
       history.pushState({}, '', window.location.pathname);
       this.updateUrlAndLoadData();
     }

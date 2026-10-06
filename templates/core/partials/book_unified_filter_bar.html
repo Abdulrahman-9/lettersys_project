@@ -141,8 +141,22 @@
             <option value="title" {% if sort_by == 'title' %}selected{% endif %}>العنوان (أ-ي)</option>
           </select>
         </div>
+        {# الحيُّ وحدَه افتراضاً كاللوحة والتقارير (قرارُ المالك 2026‑10‑06) — والمفتاحُ يُدخل الورقَ القديم #}
+        <div class="fb-advanced-item fb-advanced-switch">
+          <label class="fb-switch" for="filterLegacy">
+            <input type="checkbox" id="filterLegacy" name="legacy" value="1"{% if legacy %} checked{% endif %}>
+            <span>يشمل الورق القديم</span>
+          </label>
+          <small>المنقولُ من الدفتر الورقيّ (ما قبل 2026)</small>
+        </div>
       </div>
     </form>
   </div>
+
+  {# البحثُ يجد الكلّ — أرقامُ الدفتر القديم أوّلُ ما يُبحث عنه — والعدّاداتُ تبقى للحيّ #}
+  <p class="fb-hint" id="searchWidenedHint" role="status"{% if not search_widened %} hidden{% endif %}>
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
+    البحثُ يشمل الكتبَ المنقولة من الدفتر الورقيّ — والأعدادُ في الشارات للحيّ وحدَه.
+  </p>
 
 </div>

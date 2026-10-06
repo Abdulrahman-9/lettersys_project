@@ -270,6 +270,8 @@ class BookFilterEngine:
         state_label = FOLLOWUP_LABELS.get(filters.get("followup"))
         if state_label:
             labels.append(state_label)
+        if filters.get("legacy"):
+            labels.append("يشمل الورق القديم")
         return {"count": len(labels), "labels": labels}
 
 
