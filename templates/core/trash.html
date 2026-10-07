@@ -75,7 +75,7 @@
               {% if can_purge %}
               <form method="post" action="{% url 'purge_book' book.id %}" class="d-inline">
                 {% csrf_token %}
-                <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('حذف نهائي للكتاب؟');">حذف نهائي</button>
+                <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('حذفٌ نهائيّ للكتاب {{ book.our_number_display|default:'بلا رقم'|escapejs }} ومرفقاته — لا يمكن التراجع عنه. أتمضي؟');">حذف نهائي</button>
               </form>
               {% endif %}
               {% if not book.can_restore and not can_purge %}<span class="text-muted small">للقسم المالك</span>{% endif %}
@@ -122,7 +122,7 @@
               {% if can_purge %}
               <form method="post" action="{% url 'purge_attachment' att.id %}" class="d-inline">
                 {% csrf_token %}
-                <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('حذف نهائي للمرفق؟');">حذف نهائي</button>
+                <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('حذفٌ نهائيّ لهذا المرفق — لا يمكن التراجع عنه. أتمضي؟');">حذف نهائي</button>
               </form>
               {% endif %}
             </td>

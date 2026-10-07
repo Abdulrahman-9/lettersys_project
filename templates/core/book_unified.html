@@ -116,10 +116,11 @@
       </div>
       <div class="modal-body">
         <select class="form-select" id="bulkStatusSelect" required>
-          <option value="">اختر الحالة...</option>
-          <option value="pending">قيد المتابعة/الإرسال</option>
-          <option value="hold">معلق/بالحفظ</option>
-          <option value="done">منجز/مجاب</option>
+          {# القيمتان اللتان يقبلهما الخادم وحدَهما (api_bulk_update_status): كانت الخياراتُ
+             pending/hold/done فيُرفض كلُّ تحديثٍ جماعيّ (تدقيقُ نيلسن 2026‑10‑07، A#1) #}
+          <option value="">اختر الإجراء…</option>
+          <option value="archived">إنهاء المتابعة (مُنجَز / بلا متابعة)</option>
+          <option value="reopen">إعادة فتح المتابعة (لما له موعد)</option>
         </select>
         <div class="alert alert-info mt-3">
           <i class="bi bi-info-circle me-2"></i>
@@ -138,7 +139,7 @@
 
 {% block extra_js %}
 <script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20261006"></script>
-<script src="{% static 'js/book_unified_actions.js' %}?v=20260629-b2"></script>
+<script src="{% static 'js/book_unified_actions.js' %}?v=20261007"></script>
 <script src="{% static 'js/book_unified_api.js' %}?v=20260910"></script>
 <script src="{% static 'js/book_column_resize.js' %}?v=20260707c"></script>
 <script src="{% static 'js/number_hint.js' %}?v=20260810"></script>

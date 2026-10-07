@@ -161,8 +161,13 @@
       applyTo(card, "book-card-");
     }
 
-    function announceMessage(message) {
+    // النتيجةُ تُرى وتُسمَع: كانت تُكتب في منطقةٍ مخفيّة لقارئ الشاشة وحدَه، فلا يرى
+    // المبصرُ تأكيداً ولا خطأً (تدقيقُ نيلسن 2026‑10‑07، A#7).
+    function announceMessage(message, level) {
       if (liveRegion) liveRegion.textContent = message;
+      if (window.ToastCenter && typeof window.ToastCenter.show === "function") {
+        window.ToastCenter.show(level || "info", message);
+      }
     }
 
     function refreshSelection() {
@@ -240,11 +245,11 @@
           updateCountersAfterBulkDelete(selectedIds);
           removeBooksFromDom(selectedIds);
           refreshSelection();
-          announceMessage(payload.message || "تم تنفيذ الحذف المتعدد بنجاح");
+          announceMessage(payload.message || "تم تنفيذ الحذف المتعدد بنجاح", "success");
           handlePaginationEdgeAfterBulkDelete();
           bulkDeleteBtn.disabled = false;
         } catch (error) {
-          announceMessage(error.message || "حدث خطأ أثناء الحذف المتعدد");
+          announceMessage(error.message || "حدث خطأ أثناء الحذف المتعدد", "error");
           bulkDeleteBtn.disabled = false;
         }
       });
@@ -277,7 +282,7 @@
 
         if (selectedIds.length === 0) return;
         if (!status) {
-          announceMessage("يرجى اختيار حالة جديدة قبل التأكيد");
+          announceMessage("يرجى اختيار حالة جديدة قبل التأكيد", "warning");
           return;
         }
 
@@ -305,7 +310,7 @@
             applyStatusToBookInDom(id, status);
           });
           refreshSelection();
-          announceMessage(payload.message || "تم تحديث الحالة المتعدد بنجاح");
+          announceMessage(payload.message || "تم تحديث الحالة المتعدد بنجاح", "success");
 
           if (bulkUpdateModalEl && window.bootstrap && window.bootstrap.Modal) {
             const modal = window.bootstrap.Modal.getOrCreateInstance(bulkUpdateModalEl);
@@ -314,7 +319,7 @@
 
           confirmBulkUpdateBtn.disabled = false;
         } catch (error) {
-          announceMessage(error.message || "حدث خطأ أثناء التحديث المتعدد");
+          announceMessage(error.message || "حدث خطأ أثناء التحديث المتعدد", "error");
           confirmBulkUpdateBtn.disabled = false;
         }
       });

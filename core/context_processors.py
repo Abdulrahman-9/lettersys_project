@@ -2,7 +2,10 @@ from django.core.cache import cache
 
 
 def notifications(request):
-    if request.user.is_authenticated and request.user.is_superuser:
+    """عددُ التنبيهات غير المقروءة لشارة الجرس — **لكلّ مستخدم**: كانت للمدير وحدَه،
+    والكاتباتُ يتلقّين إشعاراتِ الإحالة والتأخّر بلا عددٍ يدلّهنّ عليها (تدقيقُ نيلسن
+    2026‑10‑07، A#3). عدٌّ مفهرَسٌ يُخبّأ ثلاثين ثانية."""
+    if request.user.is_authenticated:
         cache_key = f'unread_notif_{request.user.pk}'
         unread = cache.get(cache_key)
         if unread is None:

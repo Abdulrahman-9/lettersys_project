@@ -519,13 +519,16 @@ def purge_book(request, pk):
     Returns:
         Redirect to trash list with success message
     """
-    book = get_object_or_404(Book, pk=pk)
+    # من السلّة وحدَها: المديرُ الافتراضيُّ يُسقط المحذوف، فكان «حذف نهائي» يلقى 404
+    # دائماً (تدقيقُ نيلسن 2026‑10‑07، D#1). ومرفقاتُه كلُّها — والمحذوفةُ منها
+    # ناعماً — كي لا تبقى ملفّاتُها يتيمةً على القرص.
+    book = get_object_or_404(Book.all_objects, pk=pk, is_deleted=True)
     if not is_privileged(request.user):
         messages.error(request, "غير مصرح بالحذف النهائي.")
         return redirect("trash_list")
     if request.method != "POST":
         return redirect("trash_list")
-    for att in book.attachments.all():
+    for att in Attachment.all_objects.filter(book=book):
         for v in att.versions.all():
             try:
                 v.file.delete(save=False)
@@ -583,7 +586,8 @@ def purge_attachment(request, attachment_id):
     Returns:
         Redirect to trash list with success message
     """
-    att = get_object_or_404(Attachment, id=attachment_id)
+    # من السلّة وحدَها (المديرُ الافتراضيُّ يُسقط المحذوف — كان 404 دائماً)
+    att = get_object_or_404(Attachment.all_objects, id=attachment_id, is_deleted=True)
     if not is_privileged(request.user):
         messages.error(request, "غير مصرح بالحذف النهائي.")
         return redirect("trash_list")
