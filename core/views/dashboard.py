@@ -4,11 +4,9 @@ Dashboard & Reports Views - لوحة التحكم والتقارير
 إحصائيات النظام، التقارير، النسخ الاحتياطي، سلة المهملات
 """
 
-import json
 import logging
 import os
 from datetime import timedelta
-from pathlib import Path
 from subprocess import CalledProcessError
 
 from django.conf import settings
@@ -23,7 +21,7 @@ from django.utils.html import format_html
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from ..backup_service import create_encrypted_pg_backup, default_backup_dir
+from ..backup_service import create_encrypted_pg_backup, default_backup_dir, list_db_backups
 from ..extraction.kinds import get_kind_label
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       RestoreJob)
@@ -645,11 +643,7 @@ def backup_database(request):
             messages.error(request, "تعذر كتابة أو تشفير النسخة الاحتياطية في المسار المحدد.")
         return redirect("backup_database")
 
-    backups = []
-    if default_dir.exists():
-        for f in default_dir.glob("*.dump.enc"):
-            backups.append({"name": f.name, "size_mb": round(f.stat().st_size / (1024 * 1024), 2), "modified": timezone.datetime.fromtimestamp(f.stat().st_mtime)})
-        backups = sorted(backups, key=lambda x: x["modified"], reverse=True)
+    backups = list_db_backups(default_dir)
 
     return render(
         request,
@@ -1051,121 +1045,3 @@ def _reseed_book_sequences():
         if target != obj.next_number:
             obj.next_number = target
             obj.save(update_fields=['next_number', 'updated_at'])
-
-
-# ══════════════════════════════════════════════════════════════════
-#  استيراد البيانات القديمة — Legacy Import
-# ══════════════════════════════════════════════════════════════════
-
-@login_required
-@staff_required
-def legacy_import_page(request):
-    """صفحة استيراد البيانات القديمة — عرض الحالة وبدء الاستيراد."""
-    export_dir = settings.BASE_DIR / "scripts" / "legacy_import" / "export"
-    log_file   = export_dir / "restore.log"
-    schema_file   = export_dir / "schema.json"
-    counts_file   = export_dir / "row_counts.json"
-    tables_file   = export_dir / "tables_list.json"
-    sample_file   = export_dir / "sample_data.json"
-    config_file   = export_dir / "import_config.json"
-
-    # حالة الاستعادة
-    restore_log   = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
-    restore_done  = schema_file.exists() and counts_file.exists()
-
-    # بيانات الاستعداد للاستيراد
-    schema  = json.loads(schema_file.read_text(encoding="utf-8"))   if schema_file.exists()  else []
-    counts  = json.loads(counts_file.read_text(encoding="utf-8"))   if counts_file.exists()  else {}
-    tables  = json.loads(tables_file.read_text(encoding="utf-8"))   if tables_file.exists()  else []
-    config  = json.loads(config_file.read_text(encoding="utf-8"))   if config_file.exists()  else {}
-
-    # مجموعة الأعمدة مرتبة حسب الجدول
-    schema_by_table = {}
-    for col in schema:
-        schema_by_table.setdefault(col["table"], []).append(col)
-
-    return render(request, "core/legacy_import.html", {
-        "restore_done":    restore_done,
-        "restore_log":     restore_log,
-        "tables":          tables,
-        "counts":          counts,
-        "schema_by_table": schema_by_table,
-        "config":          config,
-        "total_records":   sum(v for v in counts.values() if isinstance(v, int)),
-    })
-
-
-@login_required
-@staff_required
-@require_POST
-def legacy_import_run(request):
-    """
-    تشغيل الاستيراد الفعلي — يقبل POST مع:
-      field_map  : JSON خريطة الحقول (old_name → lettersys_field)
-      dry_run    : '1' للمعاينة، '0' للتطبيق
-      table_name : اسم الجدول المراد استيراده
-    """
-    from ..import_engine import LegacyImportEngine
-
-    export_dir   = settings.BASE_DIR / "scripts" / "legacy_import" / "export"
-    sample_file  = export_dir / "sample_data.json"
-
-    if not sample_file.exists():
-        return JsonResponse({"ok": False, "error": "بيانات النظام القديم غير متوفرة — شغّل الاستعادة أولاً"}, status=400)
-
-    try:
-        field_map  = json.loads(request.POST.get("field_map", "{}"))
-        dry_run    = request.POST.get("dry_run", "1") == "1"
-        table_name = request.POST.get("table_name", "")
-        prefix     = request.POST.get("prefix", "")
-
-        all_data = json.loads(sample_file.read_text(encoding="utf-8"))
-        records  = all_data.get(table_name, []) if table_name else []
-        if not records:
-            # محاولة بأول جدول متاح
-            records = next(iter(all_data.values()), [])
-
-        # حفظ بيانات العينة في ملف مؤقت
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json",
-                                         delete=False, encoding="utf-8") as tf:
-            json.dump(records, tf, ensure_ascii=False)
-            tmp_path = Path(tf.name)
-
-        engine  = LegacyImportEngine(
-            field_map=field_map,
-            import_user=request.user,
-            dry_run=dry_run,
-            number_prefix=prefix,
-        )
-        summary = engine.import_from_file(tmp_path)
-        tmp_path.unlink(missing_ok=True)
-
-        return JsonResponse({
-            "ok":      True,
-            "dry_run": dry_run,
-            "total":   summary.total,
-            "created": summary.created,
-            "skipped": summary.skipped,
-            "failed":  summary.failed,
-            "entities_created": summary.entities_created,
-            "errors":  summary.errors[:10],
-        })
-
-    except Exception as e:
-        logger.exception("legacy_import_run error")
-        return JsonResponse({"ok": False, "error": str(e)}, status=500)
-
-
-@login_required
-@staff_required
-def legacy_import_status(request):
-    """API: حالة الاستعادة (يُستدعى بـ AJAX كل 5 ثوانٍ)."""
-    export_dir = settings.BASE_DIR / "scripts" / "legacy_import" / "export"
-    log_file   = export_dir / "restore.log"
-    done       = (export_dir / "sample_data.json").exists()
-    log_text   = ""
-    if log_file.exists():
-        lines    = log_file.read_text(encoding="utf-8").splitlines()
-        log_text = "\n".join(lines[-20:])   # آخر 20 سطر فقط
-    return JsonResponse({"done": done, "log": log_text})

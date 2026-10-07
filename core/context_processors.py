@@ -82,7 +82,7 @@ def nav_gates(request):
         return {'nav': {}}
 
     from core.scoping import (can_archive, can_manage_system, can_use_desk, can_view_audit,
-                              can_view_reports, is_privileged)
+                              can_view_reports, can_restore_system, is_privileged)
 
     return {'nav': {
         'desk': can_use_desk(user),
@@ -96,6 +96,8 @@ def nav_gates(request):
         # الجهاتُ والحسابات والنسخُ وقوالبُ البريد — كانت `is_staff` مكتوبةً في
         # القالب مباشرةً (خرقُ §7.6)؛ الآن بوّابةٌ مسمّاةٌ يحرسها tests_wiring.
         'admin': can_manage_system(user),
+        # استعادةُ نسخة النظام إلى قاعدةٍ جديدة — حارسُ صفحتها نفسُه (قرارُ المالك 2026‑10‑07، البند 3)
+        'restore_system': can_restore_system(user),
         # إسنادُ الأقسام والأدوار (`admin_panel`) لمدير النظام وحدَه — حارسُها نفسُه؛ فلا
         # يُدلّ عليه مَن يلقى 403 (تدقيقُ نيلسن F#4، والتوحيدُ قرارُ المالك S1).
         'roles': is_privileged(user),
