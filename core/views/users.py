@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""حساباتُ المستخدمين — الإنشاءُ والحذفُ وكلمةُ المرور المؤقّتة والخروج.
+"""حساباتُ المستخدمين — الإنشاءُ والحذفُ وإعادةُ تعيين كلمة المرور والخروج.
+
+**والصفحةُ لمدير النظام وحدَه** (``can_manage_accounts`` — قرارُ المالك 2026‑10‑07):
+بوّابةُ لوحة الإدارة نفسُها، فمَن يُنشئ الحسابَ هو مَن يُسند قسمَه ودورَه.
 
 **ولا دورَ يُسنَد من هنا.** كان في هذا الملفّ نظامُ أدوارٍ **موازٍ** بأسماءِ
 مجموعاتٍ إنكليزيّة (``admin`` · ``controller`` · ``data_entry`` · ``viewer``)
@@ -20,20 +23,27 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.db.models import ProtectedError
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
+from core.logging_models import UserActivityLog
 from core.roles import ROLE_DEFINITIONS, get_user_role
 
 from ..models import SecuritySettings, UserPassword
-from .helpers import staff_required
+from .helpers import privileged_required
 
 logger = logging.getLogger(__name__)
 
 #: وجهةُ إسناد الأدوار — تُعرض للمدير بدل حقلِ دورٍ لا أثرَ له.
 ROLE_ADMIN_URL = '/books/admin/?tab=users'
+
+#: فعلُ «إعادة تعيين كلمة المرور» في سجلّ الحركات. رمزٌ بلا تسميةٍ في
+#: ``UserActivityLog.ACTION_CHOICES`` بعد — كأخيه ``DELETE_GROUP``: التسميةُ
+#: تغييرُ اختياراتٍ يستتبع هجرةً، وهذه الدفعةُ بلا هجرة.
+PASSWORD_RESET_ACTION = 'PASSWORD_RESET'
 
 
 # ==============================================================================
@@ -41,14 +51,14 @@ ROLE_ADMIN_URL = '/books/admin/?tab=users'
 # ==============================================================================
 
 @login_required
-@staff_required
+@privileged_required
 def user_roles(request):
-    """حساباتُ المستخدمين: إنشاءٌ وحذفٌ وكلمةُ مرورٍ مؤقّتة — **بلا إسنادِ دور**.
+    """حساباتُ المستخدمين: إنشاءٌ وحذفٌ وإعادةُ تعيين كلمة المرور — **بلا إسنادِ دور**.
 
-    الأفعالُ اثنان: ``create`` و``delete``. وكان ثالثٌ (``update``) يُبدّل
-    «الدور» في مجموعاتٍ إنكليزيّةٍ لا تقرؤها بوّابة، فأُزيل مع نظامه كلِّه؛
-    والدورُ الظاهرُ في الجدول يُقرأ الآن من ``core.roles.get_user_role`` —
-    المصدرِ الذي تسأله البوّابات — عرضاً لا تحريراً.
+    الأفعالُ ثلاثة: ``create`` و``delete`` و``reset_password``. وكان فعلٌ اسمُه
+    ``update`` يُبدّل «الدور» في مجموعاتٍ إنكليزيّةٍ لا تقرؤها بوّابة، فأُزيل مع
+    نظامه كلِّه؛ والدورُ الظاهرُ في الجدول يُقرأ الآن من ``core.roles.get_user_role``
+    — المصدرِ الذي تسأله البوّابات — عرضاً لا تحريراً.
     """
     if request.method == "POST":
         action = request.POST.get("action")
@@ -64,13 +74,9 @@ def user_roles(request):
                 messages.error(request, "❌ يرجى إدخال اسم المستخدم وكلمة المرور.")
                 return redirect("user_roles")
 
-            if password != password2:
-                messages.error(request, "❌ كلمتا المرور غير متطابقتين.")
-                return redirect("user_roles")
-
-            min_len = SecuritySettings.get().password_min_length
-            if len(password) < min_len:
-                messages.error(request, f"❌ كلمة المرور يجب أن تكون {min_len} أحرف على الأقل.")
+            problem = _password_problem(password, password2)
+            if problem:
+                messages.error(request, problem)
                 return redirect("user_roles")
 
             if User.objects.filter(username=username).exists():
@@ -87,15 +93,7 @@ def user_roles(request):
             ensure_profile(user)
             user.set_password(password)
             user.save()
-
-            # حفظ كلمة المرور المؤقتة بشكل آمن (مشفرة)
-            UserPassword.objects.filter(user=user).delete()
-            temp_pwd = UserPassword(
-                user=user,
-                expires_at=timezone.now() + timedelta(hours=24)
-            )
-            temp_pwd.set_password(password)
-            temp_pwd.save()
+            _store_temp_password(user, password)
 
             # الحسابُ يُولد بلا قسمٍ ولا دور — والرسالةُ تقول أين يُسندان، وإلّا
             # ظنَّ المديرُ أنّ الحساب جاهزٌ فسقط صاحبُه إلى «قارئ فقط» صامتاً.
@@ -133,6 +131,9 @@ def user_roles(request):
                     messages.success(request, f"✅ تم حذف المستخدم '{username}' بنجاح.")
             return redirect("user_roles")
 
+        elif action == "reset_password":
+            return _reset_password(request)
+
         else:
             messages.error(request, "❌ إجراء غير صالح.")
             return redirect("user_roles")
@@ -148,6 +149,8 @@ def user_roles(request):
             "role": role,
             "role_label": ROLE_DEFINITIONS.get(role, {}).get("label", "قارئ فقط"),
             "is_superuser": user.is_superuser,
+            # حسابُك أنت يُغيَّر من صفحتك بكلمتك الحاليّة — فصفُّه يدلّ عليها لا على نموذج الإعادة
+            "is_self": user.pk == request.user.pk,
         })
 
     return render(
@@ -161,6 +164,77 @@ def user_roles(request):
             "min_len": SecuritySettings.get().password_min_length,
         },
     )
+
+
+def _password_problem(password, password2):
+    """سببُ رفض كلمة المرور بلغة الكاتب، أو ``None`` — **قاعدةٌ واحدةٌ للإنشاء
+    وإعادة التعيين**: الحدُّ الأدنى من ``SecuritySettings`` (وقد يُضبط صفراً، فالفراغُ
+    يُرفض صراحةً لا بالطول)."""
+    if not password:
+        return "❌ يرجى إدخال كلمة المرور."
+    if password != password2:
+        return "❌ كلمتا المرور غير متطابقتين."
+    min_len = SecuritySettings.get().password_min_length
+    if len(password) < min_len:
+        return f"❌ كلمة المرور يجب أن تكون {min_len} أحرف على الأقل."
+    return None
+
+
+def _store_temp_password(user, password):
+    """كلمةُ المرور المؤقّتة: **مُجزَّأةً** وصالحةً 24 ساعة، وصفٌّ واحدٌ لكلّ حسابٍ
+    يُستبدَل ولا يُراكَم — الإنشاءُ وإعادةُ التعيين يمرّان من هنا معاً."""
+    UserPassword.objects.filter(user=user).delete()
+    temp_pwd = UserPassword(user=user, expires_at=timezone.now() + timedelta(hours=24))
+    temp_pwd.set_password(password)
+    temp_pwd.save()
+
+
+def _reset_password(request):
+    """كلمةُ مرورٍ جديدةٌ لحسابٍ **غيرِ حسابك** (قرارُ المالك 2026‑10‑07، البند 4).
+
+    * المديرُ كتبها بيده، فلا تُعرض بعد الحفظ في رسالةٍ ولا صفحة — الرسائلُ تُحفظ
+      في الـcookie عند المتصفّح، ولا تحمل كلمةَ مرور.
+    * ``set_password`` يُبدّل بصمةَ الجلسة (``get_session_auth_hash``) فتسقط جلساتُ
+      صاحب الحساب المفتوحة عند طلبها التالي — والمقصودُ ذلك: حسابٌ يُعاد تعيينُه
+      يُغلق على كلّ جهاز.
+    * **حسابُك أنت** يُغيَّر من صفحة «تغيير كلمة المرور» بكلمتك الحاليّة: إعادتُه من
+      هنا تُسقط جلستَك نفسَها، ولا تسأل عمّا يُثبت أنّك صاحبُه.
+    * والواقعةُ صفٌّ في سجلّ الحركات **باسم الحساب وحدَه** — والكتابتان في معاملةٍ
+      واحدة: لا إعادةَ تعيينٍ بلا أثرها.
+    """
+    try:
+        target = User.objects.get(pk=request.POST.get("user_id"))
+    except (User.DoesNotExist, ValueError):
+        messages.error(request, "❌ المستخدم غير موجود.")
+        return redirect("user_roles")
+
+    if target.pk == request.user.pk:
+        messages.info(request, "كلمةُ مرورك أنت تُغيَّر من هنا — بكلمتك الحاليّة.")
+        return redirect("password_change")
+
+    password = request.POST.get("password") or ""
+    problem = _password_problem(password, request.POST.get("password2") or "")
+    if problem:
+        messages.error(request, problem)
+        return redirect("user_roles")
+
+    actor = request.user
+    with transaction.atomic():
+        target.set_password(password)
+        target.save(update_fields=["password"])
+        _store_temp_password(target, password)
+        UserActivityLog.objects.create(
+            user=actor, action=PASSWORD_RESET_ACTION,
+            username_snapshot=actor.get_username()[:150],
+            department=getattr(getattr(actor, "profile", None), "department", None),
+            metadata={"user": target.get_username()},
+        )
+
+    messages.success(
+        request,
+        f"✅ تغيّرت كلمةُ مرور «{target.get_username()}». أبلِغه بها بنفسك — "
+        f"وسيُطلب منه الدخولُ بها من جديد على كلّ جهازٍ كان داخلاً منه.")
+    return redirect("user_roles")
 
 
 # ==============================================================================

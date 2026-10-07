@@ -16,6 +16,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 
 from .. import numbering
+from ..scoping import can_manage_accounts
 
 
 def apply_search_filters(queryset, search_text):
@@ -223,6 +224,19 @@ def is_ajax(request):
     return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
 
+def _guarded(view_func, allowed, denial):
+    """جسمُ الحارسَين الواحد — السلوكُ لا يفترق بينهما، المسندُ وحدَه يفترق."""
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        user = getattr(request, 'user', None)
+        if user is None or not user.is_authenticated:
+            return redirect_to_login(request.get_full_path(), settings.LOGIN_URL)
+        if not allowed(user):
+            raise PermissionDenied(denial)
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
+
 def staff_required(view_func):
     """الحارسُ **الواحد** لصفحات الإدارة: الموظّفون والمدراء (مراجعةُ 2026‑09‑13).
 
@@ -232,12 +246,12 @@ def staff_required(view_func):
       بزرّ عودة (كانت تحويلاً إلى صفحة الدخول — وهو يُربك مَن هو داخلٌ فعلاً).
     - **غيرُ داخلٍ** ⟵ تحويلٌ إلى الدخول مع ``next`` كما يفعل ``login_required``.
     """
-    @wraps(view_func)
-    def _wrapped(request, *args, **kwargs):
-        user = getattr(request, 'user', None)
-        if user is None or not user.is_authenticated:
-            return redirect_to_login(request.get_full_path(), settings.LOGIN_URL)
-        if not (user.is_staff or user.is_superuser):
-            raise PermissionDenied('هذه الصفحةُ لإدارة النظام.')
-        return view_func(request, *args, **kwargs)
-    return _wrapped
+    return _guarded(view_func, lambda user: user.is_staff or user.is_superuser,
+                    'هذه الصفحةُ لإدارة النظام.')
+
+
+def privileged_required(view_func):
+    """توأمُ ``staff_required`` لصفحات **الهويّة والسلطة** (الحسابات): السلوكُ نفسُه
+    (403 داخل القشرة للداخل، وتحويلٌ إلى الدخول لغيره)، والمسندُ
+    ``scoping.can_manage_accounts`` — مديرُ النظام وحدَه، كلوحة الإدارة."""
+    return _guarded(view_func, can_manage_accounts, 'هذه الصفحةُ لمدير النظام.')

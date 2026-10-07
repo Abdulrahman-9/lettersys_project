@@ -20,7 +20,7 @@ from ..forms import EntityForm
 from core.entity_kinds import KIND_HINTS, KIND_LABELS, KINDS
 from ..models import Book, Entity, EntityGroup
 from .helpers import staff_required
-from core.scoping import STUB_TITLE, restricted_flag_sql, scope_books_for
+from core.scoping import STUB_TITLE, can_manage_accounts, restricted_flag_sql, scope_books_for
 
 logger = logging.getLogger(__name__)
 
@@ -190,8 +190,13 @@ def entity_list(request):
     # يُنقّي الدليلَ هو مَن يشكّل المجموعات، وأداةُ اختيار الأعضاء تحتاج بحثَ
     # هذه الصفحة أصلاً. و**مسارُ الكتابة لم يُنسخ**: النموذجُ يُرسل إلى
     # `admin_panel` نفسِها التي تحرسها `_guard_admin` وتُسجّلها في سجلّ الحركات.
-    view_mode = 'groups' if request.GET.get('view') == 'groups' else 'entities'
-    editing_group = _editing_group(request)
+    #
+    # **والورشةُ لمن يملك الحفظ** (`can_manage_accounts`): كانت تُفتح للموظّف
+    # الإداريّ وكلُّ حفظٍ فيها يُرفض 403. ومَن لا يملكها يرى الدليلَ لا رفضاً —
+    # `?view=groups` رابطٌ محفوظٌ لا اعتداء.
+    wants_groups = request.GET.get('view') == 'groups'
+    view_mode = 'groups' if wants_groups and can_manage_accounts(request.user) else 'entities'
+    editing_group = _editing_group(request) if view_mode == 'groups' else None
 
     return render(
         request,

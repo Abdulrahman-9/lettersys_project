@@ -22,15 +22,18 @@ from core.admin_service import (assign_user, create_department, delete_group,
 from core.models import Department, Entity, EntityGroup
 from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
                         CONTROLLER_GROUP_NAME)
-from core.scoping import is_privileged
+from core.scoping import can_manage_accounts
 
 TABS = ('departments', 'users', 'groups')
 
 
 @login_required
 def admin_panel(request):
-    """التبويبات الثلاثة — قراءةً وكتابة."""
-    if not is_privileged(request.user):
+    """التبويبات الثلاثة — قراءةً وكتابة.
+
+    بوّابتُها ``can_manage_accounts`` — **بوّابةُ صفحة الحسابات نفسُها**: مَن يُنشئ
+    الحسابَ هو مَن يُسند قسمَه ودورَه (قرارُ المالك 2026‑10‑07)."""
+    if not can_manage_accounts(request.user):
         raise PermissionDenied('لوحةُ الإدارة لمدير النظام.')
 
     tab = request.GET.get('tab')

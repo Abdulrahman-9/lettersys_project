@@ -34,9 +34,17 @@ class SidebarAdminGateTests(TestCase):
         self.assertNotContains(resp, reverse('user_roles'))
 
     def test_staff_sees_admin_links(self):
+        # الحساباتُ لمدير النظام وحدَه منذ قرار المالك 2026‑10‑07 (can_manage_accounts):
+        # الموظّفُ الإداريّ يرى روابطَ إدارة البيانات (النسخ) ولا يرى «المستخدمون»
         self.client.force_login(self.staff)
         resp = self.client.get(reverse('book_unified'))
-        self.assertContains(resp, reverse('user_roles'))
+        self.assertContains(resp, reverse('backup_database'))
+        self.assertNotContains(resp, reverse('user_roles'))
+
+    def test_the_superuser_sees_the_accounts_link(self):
+        boss = User.objects.create_superuser('tboss', 't@x.invalid', 'pw-tboss-1111111')
+        self.client.force_login(boss)
+        self.assertContains(self.client.get(reverse('book_unified')), reverse('user_roles'))
 
 
 class MailSyncButtonGateTests(TestCase):
