@@ -1,3 +1,7 @@
 var/models/*.onnx filter=lfs diff=lfs merge=lfs -text
 # سجلّاتُ التنفيذ اليوميّة: إلحاقٌ من فروعٍ عدّة بلا تعارض
 docs/log/*.md merge=union text eol=lf
+# ملفّاتُ cmd بنهايات CRLF دائماً: ‏goto وcall :label تنحرف في ملفٍّ بنهايات LF
+# (تنزيلُ ZIP من GitHub أو استنساخٌ بـautocrlf=false).
+*.bat text eol=crlf
+*.cmd text eol=crlf

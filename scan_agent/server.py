@@ -1,98 +1,209 @@
-"""خادم HTTP لوكيل المسح.
+"""خادم HTTP محلي لوكيل المسح (127.0.0.1 فقط).
 
 ثلاث نقاط فقط: /agent/health و/agent/devices و/agent/scan.
-الأمن: ربط حسب HOST + فحص Origin + token مشترك + قوائم بيضاء للمعاملات.
+
+الأمن — بوّابتان مستقلّتان تمرّان قبل أيّ توجيه، ولا توكِن بعد اليوم:
+  1. **Host**: يجب أن يكون الحلقةَ المحلّيّة حرفيّاً بمنفذنا — حارسُ DNS-rebinding
+     (صفحةُ المهاجم على evil.example:PORT تحوّل اسمَها إلى 127.0.0.1 فتصير طلباتُها
+     «نفسَ الأصل»: لا CORS ولا Origin، والاستجابةُ تُقرأ. الشيءُ الوحيدُ الباقي أنّ
+     ترويسةَ Host تحمل اسمَ المهاجم، فهي الحارس).
+  2. **Origin**: أصلُ الصفحة الطالبة يجب أن يكون في قائمة محطّة العمل
+     (‎%LOCALAPPDATA%\\LetterSys\\agent.json‎) — المتصفّح يُلحق Origin بكلّ طلبٍ عابرِ
+     أصلٍ ولا تستطيع شيفرةُ الصفحة تزويرَه. ومطلوبٌ **وجودُه** على /devices و/scan كي
+     تُسدَّ مساراتُ «بلا أصل» (‎<img src>‎ · تنقّلٌ علويّ · no-cors GET) التي كان
+     التوكِنُ يسدّها.
+
+التوكِنُ المشترك أُزيل: كان يُسلَّم تلقائيّاً لأيّ صفحةٍ على أصلٍ مسموح، فهو مكافئٌ
+منطقيّاً لفحص الأصل الذي يحرسه، ويضيف أصلاً قابلاً للتسريب — وكان خادمُ Django يقرأه
+من قرصه ويسلّمه لمتصفّحٍ بعيد، وذاك الجهازُ الخطأ لكلّ كاتبة (وكيلُها يولّد توكِنَه هو).
 النجاح في /agent/scan يُعاد كـ PDF ثنائي؛ الفشل يُعاد كـ JSON.
 """
 import json
 import os
-import secrets
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from . import config, naps2, __version__ as VERSION
 
+# أصولٌ رُفضت وسُجّلت — مرّةً واحدةً لكلّ أصلٍ في العمليّة (لا يُملأ السجلُّ بالتكرار)
+_LOGGED_ORIGINS = set()
 
-def _load_token():
-    """يقرأ token المشترك من القرص، أو يولّده ويحفظه عند أول تشغيل."""
+
+def _split_host_port(value):
+    """‎(host, port)‎ من ترويسة Host: المنفذُ ``None`` إن غاب و``False`` إن لم يكن رقميّاً."""
+    s = (value or "").strip().lower()
+    if ":" not in s:
+        return s, None
+    host, _, port = s.rpartition(":")
+    if not port.isdigit():
+        return s, False
+    return host, int(port)
+
+
+def _log_rejected_origin(origin):
+    """يكتب الأصلَ المرفوض إلى الشاشة وإلى agent.log — فيُشخَّص العطبُ بلا devtools."""
+    key = origin or "(بلا أصل)"
+    if key in _LOGGED_ORIGINS:
+        return
+    _LOGGED_ORIGINS.add(key)
+    line = "رُفض الأصل %s — أضفه إلى %s ثمّ أعد تشغيل الوكيل" % (key, config.config_file())
+    sys.stderr.write(line + "\n")
     try:
-        with open(config.TOKEN_FILE, "r", encoding="utf-8") as f:
-            tok = f.read().strip()
-        if tok:
-            return tok
+        os.makedirs(config.data_dir(), exist_ok=True)
+        with open(config.log_file(), "a", encoding="utf-8") as f:
+            f.write("%s %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), line))
     except OSError:
-        pass
-    tok = secrets.token_urlsafe(24)
-    try:
-        os.makedirs(config.TOKEN_DIR, exist_ok=True)
-        with open(config.TOKEN_FILE, "w", encoding="utf-8") as f:
-            f.write(tok)
-    except OSError:
-        pass
-    return tok
-
-
-AGENT_TOKEN = _load_token()
+        pass                      # السجلُّ رفاهيّةُ تشخيص؛ السطرُ ذهب إلى stderr أصلاً
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "LetterSysScanAgent/" + VERSION
+    # ترويسةُ ``Server`` تُبعَث على كلّ استجابةٍ **قبل** أيّ حارس (حتّى 403 الارتباط
+    # المُعاد)، فتبقى ثابتةً بلا إصدارِ وكيلٍ وبلا «Python/3.x»: الإصدارُ يُقرأ من
+    # ‎/agent/health‎ وحدَه، وهو خلف البوّابتين. (``sys_version=""`` يمنع لصقَ إصدار
+    # المفسّر الذي تضيفه المكتبةُ القياسيّة تلقائيّاً.)
+    server_version = "LetterSysScanAgent"
+    sys_version = ""
 
-    # ───────── أدوات مساعدة ─────────
-    def _origin_ok(self):
-        # المتصفح يرسل Origin دائماً؛ طلبات بلا Origin (curl/الكشف) مقبولة.
-        origin = self.headers.get("Origin")
-        return origin is None or origin.rstrip("/") in {o.rstrip("/") for o in config.ALLOWED_ORIGINS}
+    def version_string(self):
+        """نصُّ ``Server`` حرفيّاً: المكتبةُ تلصق ``sys_version`` وفراغاً بينهما."""
+        return self.server_version
 
-    def _token_ok(self):
-        return secrets.compare_digest(self.headers.get("X-LetterSys-Token") or "", AGENT_TOKEN)
+    # كلُّ فعلٍ يمرّ ببوّابة Host — حتّى فعلٌ لا مسارَ له. المكتبةُ القياسيّة تبحث عن
+    # ``do_<METHOD>``، فإن غاب ردّت ``501`` من عندها **قبل** حرّاسنا (بصفحة HTML
+    # وبترويسة Server). فنُعلن وجودَ كلّ ``do_*`` ونوجّهها إلى حارسنا.
+    def __getattr__(self, name):
+        if name.startswith('do_'):
+            return self._unrouted
+        raise AttributeError(name)
 
+    def _unrouted(self):
+        """‎PUT · DELETE · PATCH · HEAD · TRACE‎ وأيُّ اسمٍ آخر: بوّابةُ Host ثمّ 405."""
+        if not self._host_ok():
+            return self._bad_host()
+        return self._json(405, {"ok": False, "code": "method_not_allowed",
+                                "error": "فعل غير مسموح (الوكيل يقبل GET وPOST وOPTIONS)"},
+                          headers=(("Allow", "GET, POST, OPTIONS"),))
+
+    # ───────── الحرّاس ─────────
+    def _expected_port(self):
+        """المنفذُ الذي رُبِط فعلاً (= config.PORT في الإنتاج؛ منفذٌ عابر في الاختبار)."""
+        return getattr(self.server, "server_port", None) or config.PORT
+
+    def _host_ok(self):
+        """ترويسةُ Host: مضيفٌ من الحلقة المحلّيّة حرفيّاً + منفذُنا. حارسُ الارتباط المُعاد.
+
+        ``127.0.0.1.evil.example`` يفشل لأنّ المقارنة مساواةٌ تامّة، والمنفذُ المخالف
+        يفشل، وغيابُ Host يفشل. يُطبَّق على OPTIONS و/agent/health أيضاً — فلا يُقرأ
+        إصدارُ الوكيل ولا مسارُ NAPS2 (وفيه اسمُ مستخدم ويندوز عند النسخة المحمولة)
+        عبر ارتباطٍ مُعاد.
+        """
+        raw = self.headers.get("Host")
+        if not raw:
+            return False
+        host, port = _split_host_port(raw)
+        if host not in config.LOOPBACK_HOSTS:
+            return False
+        if port is False:
+            return False
+        if port is None:
+            return self._expected_port() == 80     # منفذٌ ضمنيٌّ = 80 وحدَه
+        return port == self._expected_port()
+
+    def _allowed_origin(self):
+        """‎(scheme, host, port)‎ للأصل المسموح، أو ``None``. مساواةُ tuple مُقنَّنة —
+        لا بادئةَ ولا احتواء."""
+        norm = config.normalize_origin(self.headers.get("Origin"))
+        return norm if (norm is not None and norm in config.ALLOWED_ORIGINS) else None
+
+    def _origin_allowed(self):
+        return self._allowed_origin() is not None
+
+    # ───────── الاستجابات ─────────
     def _send_cors(self):
-        origin = self.headers.get("Origin")
-        if origin in config.ALLOWED_ORIGINS:
-            self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Vary", "Origin")
-        self.send_header("Access-Control-Allow-Headers", "X-LetterSys-Token, Content-Type")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        """ترويساتُ CORS — تُبعَث للأصل المسموح وحدَه، وعلى كلّ استجابةٍ حتّى الخطأ
+        (كي تقرأ الصفحةُ نصَّ خطأ الوكيل العربيّ بدل «فشلٌ مجهول»)."""
+        norm = self._allowed_origin()
+        if norm is None:
+            return
+        # يُعاد **مدخلُ القائمة المُقنَّن** لا نصُّ الترويسة الخامّ: القيمةُ المُعادة هي
+        # ما وثقنا به حرفيّاً، فلا يمرّ إلى ترويسةِ استجابةٍ شيءٌ جاء من العميل ولو
+        # تساوى معه بعد التقنين (اختلافُ حالةِ الأحرف أو منفذٌ ضمنيّ).
+        self.send_header("Access-Control-Allow-Origin", _describe_origin(norm))
+        self.send_header("Vary", "Origin")
         # كي يقرأ المتصفح عدد الصفحات من استجابة المسح عبر الأصل المختلف
         self.send_header("Access-Control-Expose-Headers", "X-Scan-Pages")
 
-    def _json(self, status, payload):
+    def _json(self, status, payload, cors=True, headers=()):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self._send_cors()
+        for name, value in headers:
+            self.send_header(name, value)
+        if cors:
+            self._send_cors()
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":          # استجابةُ HEAD بلا جسم (الترويساتُ كما هي)
+            self.wfile.write(body)
+
+    def _bad_host(self):
+        """403 بلا أيّ ترويسةِ CORS — حتّى لأصلٍ مسموح: الارتباطُ المُعاد يموت قبل التوجيه،
+        فلا تقرأ صفحةُ المهاجم شيئاً ولو زوّرت أصلاً (وهي لا تستطيع)."""
+        return self._json(403, {"ok": False, "code": "bad_host",
+                                "error": "مضيف غير مسموح (الوكيل محليٌّ فقط)"}, cors=False)
+
+    def _reject_origin(self):
+        """403 بلا ACAO: يقرأه curl للتشخيص، ويبقى معتماً على المتصفّح."""
+        origin = self.headers.get("Origin")
+        _log_rejected_origin(origin)
+        return self._json(403, {"ok": False, "code": "origin_not_allowed",
+                                "origin": origin or "",
+                                "error": "أصل غير مسموح — أضفه إلى agent.json"})
 
     def log_message(self, *args):
         pass  # صامت — لا ضجيج console
 
     # ───────── التوجيه ─────────
     def do_OPTIONS(self):
+        if not self._host_ok():
+            return self._bad_host()
+        if not self._origin_allowed():
+            return self._reject_origin()
         self.send_response(204)
         self._send_cors()
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # الشبكةُ الخاصّة/المحلّيّة: مقيسٌ أنّ كروم اليوم لا يحجب صفحةَ http ⟶ الحلقةَ
+        # المحلّيّة، والرأسُ يُبقيها عاملةً لو أنفذ إصدارٌ قادمٌ الفحصَ فعلاً.
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.send_header("Access-Control-Max-Age", "600")
         self.end_headers()
 
     def do_GET(self):
-        if not self._origin_ok():
-            return self._json(403, {"ok": False, "error": "أصل غير مسموح"})
-        if self.path == "/agent/health":
+        if not self._host_ok():
+            return self._bad_host()
+        path = self.path.split("?")[0]
+        if path == "/agent/health":
+            # بلا Origin (curl/تشخيص/مسبارُ no-cors) مقبولٌ، ومع أصلٍ غير مسموح يُرفض.
+            if self.headers.get("Origin") is not None and not self._origin_allowed():
+                return self._reject_origin()
             return self._health()
-        if self.path.split("?")[0] == "/agent/devices":
-            if not self._token_ok():
-                return self._json(401, {"ok": False, "error": "token غير صالح"})
+        if path == "/agent/devices":
+            # الأصلُ **مطلوب**: يسدّ مساراتِ «بلا أصل»، ويرفض قبل أيّ نداءِ NAPS2 فلا
+            # يحجز مهاجمٌ خيطاً ستّين ثانيةً في سردِ الأجهزة (LIST_TIMEOUT).
+            if not self._origin_allowed():
+                return self._reject_origin()
             return self._devices()
         return self._json(404, {"ok": False, "error": "غير موجود"})
 
     def do_POST(self):
-        if not self._origin_ok():
-            return self._json(403, {"ok": False, "error": "أصل غير مسموح"})
+        if not self._host_ok():
+            return self._bad_host()
         if self.path == "/agent/scan":
-            if not self._token_ok():
-                return self._json(401, {"ok": False, "error": "token غير صالح"})
+            if not self._origin_allowed():
+                return self._reject_origin()
             return self._scan()
         return self._json(404, {"ok": False, "error": "غير موجود"})
 
@@ -182,6 +293,14 @@ def _count_pages(pdf_path):
         return None
 
 
+def _describe_origin(norm):
+    """صياغةُ ‎(scheme, host, port)‎ للعرض: يُخفى المنفذُ الافتراضيّ كما يفعل المتصفّح."""
+    scheme, host, port = norm
+    if (scheme, port) in (("http", 80), ("https", 443)):
+        return "%s://%s" % (scheme, host)
+    return "%s://%s:%d" % (scheme, host, port)
+
+
 def serve():
     try:
         httpd = ThreadingHTTPServer((config.HOST, config.PORT), Handler)
@@ -195,7 +314,11 @@ def serve():
         )
         sys.exit(1)
     print("LetterSys Scan Agent يعمل على http://%s:%d" % (config.HOST, config.PORT))
-    print("ملف الـtoken: %s" % config.TOKEN_FILE)
+    print("ملف الإعداد: %s" % config.config_file())
+    print("الأصول المسموح لها بالمسح: %s"
+          % "، ".join(sorted(_describe_origin(o) for o in config.ALLOWED_ORIGINS)))
+    for w in config.ORIGIN_WARNINGS:
+        sys.stderr.write("[تنبيه] %s\n" % w)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -869,22 +869,74 @@ class ExtractionSmartSystem {
         this.setScanStatus('ready', 'جاهز: ' + name);
     }
 
+    /** منفذُ الوكيل على حاسبة المتصفّح (من `agent-info`، وإلّا الافتراضُ المشحون). */
+    _agentPort() {
+        const p = parseInt(this._agentInfo && this._agentInfo.port, 10);
+        return (p > 0 && p < 65536) ? p : 17865;
+    }
+
+    /** المضيفان المسموحان في CSP: 127.0.0.1 ثمّ localhost (بروكسي المتصفّح قد يحجب أحدهما). */
+    _agentBases() {
+        const port = this._agentPort();
+        return [`http://127.0.0.1:${port}`, `http://localhost:${port}`];
+    }
+
     /**
-     * يحدّد عنوان الوكيل العامل: يجرّب 127.0.0.1 ثم localhost (كلاهما مسموح في CSP
-     * وCORS). يحلّ حالة حجب توجيه/بروكسي المتصفح لأحد المضيفين دون الآخر (مثلاً
-     * التطبيق على localhost والبروكسي يحجب 127.0.0.1). يُخزَّن أوّل ناجح + استجابة health.
+     * عنوانُ الوكيل من الخادم — مرّةً واحدةً لكلّ صفحة: `{agent_url, port, server_can_start}`.
+     * الخادمُ لا يقول «يعمل» ولا يسلّم توكِناً: وكيلُ الكاتبة على **حاسبتها** ولا يراه إلّا
+     * متصفّحُها، و`server_can_start` هو الفرقُ بين كونسول الخادم وكاتبةٍ على الشبكة.
      */
-    async _resolveAgentBase(td) {
-        if (this._agentBase) return this._agentBase;
-        let port = '17865';
-        try { port = new URL(td.agent_url).port || '17865'; } catch (_) {}
-        for (const base of [`http://127.0.0.1:${port}`, `http://localhost:${port}`]) {
+    async _fetchAgentInfo() {
+        if (this._agentInfo) return this._agentInfo;
+        const r = await this._fetchWithTimeout('/books/api/scan/agent-info/',
+                                               { credentials: 'same-origin' }, 8000);
+        const info = await r.json();
+        this._agentInfo = info;
+        this._agentServerCanStart = info.server_can_start === true;
+        return info;
+    }
+
+    /**
+     * يسأل وكيلَ **هذا الجهاز** مباشرةً: `/agent/health` على 127.0.0.1 ثمّ localhost
+     * (بروكسي المتصفّح قد يحجب أحدهما)، بمهلةٍ قصيرة — منفذٌ ميّتٌ يُرفَض فوراً فلا
+     * تنتظر الكاتبة. **بلا أيّ ترويسةِ توكِن**: الوكيلُ يحرس نفسه بـ`Host` و`Origin`،
+     * وترويسةٌ زائدةٌ تُفشل الطلبَ الاستباقيّ لأنّه لا يعلن إلّا `Content-Type`.
+     */
+    async _agentHealthNow() {
+        for (const base of (this._agentBase ? [this._agentBase] : this._agentBases())) {
             try {
-                const r = await this._fetchWithTimeout(base + '/agent/health', {}, 5000);
-                if (r.ok) { this._agentBase = base; this._agentHealth = await r.json(); return base; }
+                const r = await this._fetchWithTimeout(base + '/agent/health', {}, 2500);
+                if (r.ok) {
+                    this._agentBase = base;
+                    this._agentHealth = await r.json();
+                    return this._agentHealth;
+                }
             } catch (_) { /* جرّب المضيف التالي */ }
         }
+        this._agentBase = null; this._agentHealth = null;
         return null;
+    }
+
+    /** أوّلُ مضيفٍ ردّ عليه الوكيل (مع كاش استجابة health)، أو `null`. */
+    async _resolveAgentBase() {
+        if (this._agentBase && this._agentHealth) return this._agentBase;
+        return (await this._agentHealthNow()) ? this._agentBase : null;
+    }
+
+    /**
+     * أيستجيب شيءٌ على منفذ الوكيل ولو رفض أصلَنا؟ مسبارُ `no-cors`: الاستجابةُ معتمة
+     * لكنّ الوعدَ ينجح إن ردّ الطرفُ الآخر فعلاً. وبه نفرّق بين «الوكيل غير مشغّل»
+     * و«يعمل لكنه لا يثق بعنوان هذا الخادم» — فرفضُ الأصل (403 بلا `ACAO`) يبدو
+     * للطلب العاديّ انقطاعَ شبكةٍ لا أكثر.
+     */
+    async _agentRespondsButRejects() {
+        for (const base of this._agentBases()) {
+            try {
+                await this._fetchWithTimeout(base + '/agent/health', { mode: 'no-cors' }, 2500);
+                return true;
+            } catch (_) { /* جرّب المضيف التالي */ }
+        }
+        return false;
     }
 
     // فحص جاهزية وكيل المسح المحلي وملء قائمة الأجهزة + المؤشّر (بلا مستمع نقر منافس).
@@ -895,13 +947,22 @@ class ExtractionSmartSystem {
         const hideSelect = () => { if (select) select.style.display = 'none'; };
         this._scanDevices = [];
         try {
-            const td = await (await this._fetchWithTimeout('/books/api/scan/agent-token/', { credentials: 'same-origin' }, 8000)).json();
-            if (!td.available) { this._agentHealthy = false; setPill('unavailable', 'وكيل المسح غير مشغّل'); hideSelect(); return; }
-            const agentBase = await this._resolveAgentBase(td);
-            if (!agentBase) { this._agentHealthy = false; setPill('unavailable', 'تعذّر الاتصال بالوكيل'); hideSelect(); return; }
+            // 1) الخادمُ يقول المنفذَ وأيُجدي زرُّ التشغيل — لا أكثر. تعذّرُه لا يوقف شيئاً:
+            //    الوكيلُ على حلقة هذا الجهاز، فالمنفذُ الافتراضيُّ يكفي.
+            try { await this._fetchAgentInfo(); } catch (_) { /* المنفذُ الافتراضيّ */ }
+            // 2) السؤالُ الحقيقيُّ يسأله المتصفّح: أيردُّ وكيلُ **هذا الجهاز**؟
+            const agentBase = await this._resolveAgentBase();
+            if (!agentBase) {
+                this._agentHealthy = false;
+                const rejected = await this._agentRespondsButRejects();
+                setPill(rejected ? 'untrusted' : 'unavailable',
+                        rejected ? 'الوكيل لا يثق بعنوان هذا الخادم'
+                                 : 'وكيل المسح غير مشغّل على هذا الجهاز');
+                hideSelect(); return;
+            }
             const hd = this._agentHealth || {};
             if (!hd.naps2_available) { this._agentHealthy = false; setPill('no_naps2', 'NAPS2 غير مثبّت'); hideSelect(); return; }
-            const dd = await (await this._fetchWithTimeout(agentBase + '/agent/devices', { headers: { 'X-LetterSys-Token': td.token } }, 20000)).json();
+            const dd = await (await this._fetchWithTimeout(agentBase + '/agent/devices', {}, 20000)).json();
             this._scanDevices = dd.devices || [];
             if (!this._scanDevices.length) { this._agentHealthy = true; setPill('no_device', 'لا يوجد ماسح متصل'); hideSelect(); return; }
             if (select) {
@@ -940,21 +1001,20 @@ class ExtractionSmartSystem {
         if (pill && pill.dataset.state === 'scanning') return;
 
         let state = 'ready', title = '', msg = '';
-        try {
-            const td = await (await this._fetchWithTimeout('/books/api/scan/agent-token/', { credentials: 'same-origin' }, 5000)).json();
-            if (!td.available) {
-                state = 'unavailable'; title = 'توقّف وكيل المسح';
-                msg = 'توقّف وكيل المسح المحلي أو أُغلق. شغّله لاستئناف المسح.';
+        // المراقبةُ تسأل وكيلَ **هذا الجهاز**؛ الخادمُ لا يراه فلا يُسأل عنه.
+        const hd = await this._agentHealthNow();
+        if (!hd) {
+            if (await this._agentRespondsButRejects()) {
+                state = 'untrusted'; title = 'الوكيل لا يثق بعنوان هذا الخادم';
+                msg = 'وكيل المسح يعمل على هذا الجهاز لكنه يرفض الصفحات القادمة من '
+                    + window.location.origin + ' — أضف هذا العنوان إلى agent.json ثمّ أعد تشغيل الوكيل.';
             } else {
-                const hd = await (await this._fetchWithTimeout(td.agent_url + '/agent/health', {}, 4000)).json();
-                if (!hd.naps2_available) {
-                    state = 'no_naps2'; title = 'NAPS2 غير مثبّت';
-                    msg = 'برنامج المسح NAPS2 لم يعد متوفّراً على هذا الجهاز.';
-                }
+                state = 'unavailable'; title = 'وكيل المسح لا يستجيب';
+                msg = 'توقّف وكيل المسح على هذا الجهاز أو لا يستجيب. شغّله لاستئناف المسح.';
             }
-        } catch (_) {
-            state = 'unavailable'; title = 'وكيل المسح لا يستجيب';
-            msg = 'توقّف وكيل المسح أو لا يستجيب. أعد تشغيله لاستئناف المسح.';
+        } else if (!hd.naps2_available) {
+            state = 'no_naps2'; title = 'NAPS2 غير مثبّت';
+            msg = 'برنامج المسح NAPS2 لم يعد متوفّراً على هذا الجهاز.';
         }
 
         const wasHealthy = this._agentHealthy !== false;   // غير معروف ⇒ نعدّه سليماً
@@ -1043,6 +1103,10 @@ class ExtractionSmartSystem {
             const chosen = (sel && sel.value) || devs[0].id;
             dev = (devs.find(d => d.id === chosen) || devs[0]).name;
         }
+        // زرُّ «شغّل الوكيل الآن» لا يُجدي إلّا على كونسول الخادم: كاتبةٌ على الشبكة لو
+        // ضغطته لولّدت عمليّةً على **الخادم** (والخادمُ يرفضها بـ403 أصلاً) ولا ماسحَ لها هناك.
+        const canStart = this._agentServerCanStart === true;
+        const origin = window.location.origin;
         const C = {
             checking:   { tone: 'info', title: 'جارٍ فحص وكيل المسح…',
                 desc: 'نتحقّق من اتصال وكيل المسح والماسح الضوئي على هذا الجهاز.', steps: [], actions: [] },
@@ -1051,12 +1115,28 @@ class ExtractionSmartSystem {
                           : 'وكيل المسح متصل وجاهز للمسح.', steps: [], actions: ['recheck'] },
             scanning:   { tone: 'busy', title: 'جارٍ المسح…',
                 desc: 'يجري مسح المستند الآن — لا تُغلق النافذة حتى ينتهي.', steps: [], actions: [] },
-            unavailable:{ tone: 'err', title: 'وكيل المسح غير مشغّل',
-                desc: 'برنامج وكيل المسح المحلي متوقّف — وهو الوسيط الذي يشغّل الماسح الضوئي.', steps: [
+            unavailable:{ tone: 'err', title: 'وكيل المسح غير مشغّل على هذا الجهاز',
+                desc: 'الماسح موصولٌ بجهازك، ووكيلُ المسح هو البرنامجُ الذي يشغّله — فيجب أن يعمل '
+                    + 'على <b>هذا الجهاز الذي أمامك</b>، لا على الخادم.',
+                steps: canStart ? [
                     'اضغط «شغّل الوكيل الآن» أدناه ليبدأ تلقائياً.',
                     'أو يدوياً: نفّذ <code>scan_agent\\run_agent.bat</code> من مجلد المشروع.',
                     'لتشغيله تلقائياً مع ويندوز: ضع اختصاره في <code>shell:startup</code> (Win+R).',
-                ], actions: ['start', 'recheck'] },
+                ] : [
+                    'شغّل <b>LetterSys Scan Agent</b> من قائمة ابدأ على هذا الجهاز (أو أعد إقلاعه — يبدأ تلقائياً).',
+                    'إن لم يكن مثبَّتاً هنا فاطلب من مسؤول النظام تشغيل <code>install_agent.bat</code> على هذا الجهاز مرّةً واحدة.',
+                    'الخادمُ لا يستطيع تشغيلَه لك: الوكيلُ يشغّل ماسحَ الجهاز الذي يعمل هو عليه.',
+                    'ثمّ اضغط «إعادة الفحص».',
+                ],
+                actions: canStart ? ['start', 'recheck'] : ['recheck'] },
+            untrusted:  { tone: 'err', title: 'الوكيل يعمل لكنه لا يثق بعنوان هذا الخادم',
+                desc: `وكيل المسح يستجيب على هذا الجهاز لكنه يرفض الصفحات القادمة من <code>${origin}</code> — `
+                    + 'قائمةُ الأصول على هذا الجهاز لا تذكر هذا العنوان.',
+                steps: [
+                    `أضف <code>${origin}</code> إلى <code>allowed_origins</code> في <code>%LOCALAPPDATA%\\LetterSys\\agent.json</code>.`,
+                    'أو اطلب من مسؤول النظام إعادةَ تشغيل <code>install_agent.bat</code> بهذا العنوان.',
+                    'أعد تشغيل الوكيل بعد التعديل ثمّ اضغط «إعادة الفحص» — والسطرُ نفسه مكتوبٌ في <code>agent.log</code>.',
+                ], actions: ['recheck'] },
             no_naps2:   { tone: 'err', title: 'برنامج NAPS2 غير مثبّت',
                 desc: 'الوكيل يعمل، لكنه لا يجد NAPS2 — وهو محرّك المسح الفعلي.', steps: [
                     'نزّل NAPS2 من <code>naps2.com</code> وثبّته (الإعداد الافتراضي كافٍ).',
@@ -1091,6 +1171,7 @@ class ExtractionSmartSystem {
         this.setScanStatus('checking', 'جارٍ فحص وكيل المسح…');
         this._renderAgentHelp('checking');
         this._agentBase = null; this._agentHealth = null;   // أعِد حلّ العنوان من الصفر
+        this._agentInfo = null;                            // وأعِد سؤالَ الخادم عن المنفذ والزرّ
         await this._initScanAgent();
         const btn = document.getElementById('scanAgentStatus');
         this._renderAgentHelp(btn?.dataset.state || 'unavailable');
@@ -1115,13 +1196,11 @@ class ExtractionSmartSystem {
             this.showToast('تعذّر الاتصال بالخادم لتشغيل الوكيل.', 'error', 6000, 'وكيل المسح');
             await this._recheckAgent(); return;
         }
-        // انتظر حتى يصير المنفذ حيّاً (الوكيل يستغرق لحظات للإقلاع)
+        // انتظر حتى يردّ الوكيلُ على حلقة هذا الجهاز (يستغرق لحظات للإقلاع). المتصفّحُ هو
+        // مَن يرى ذلك لا الخادم — والزرُّ لا يظهر إلّا على كونسول الخادم أصلاً.
         for (let i = 0; i < 8; i++) {
             await new Promise(res => setTimeout(res, 1000));
-            try {
-                const td = await (await this._fetchWithTimeout('/books/api/scan/agent-token/', { credentials: 'same-origin' }, 3000)).json();
-                if (td.available) break;
-            } catch (_) { /* استمر بالانتظار */ }
+            if (await this._agentHealthNow()) break;
         }
         await this._recheckAgent();
         const st = document.getElementById('scanAgentStatus')?.dataset.state;
@@ -2642,28 +2721,26 @@ class ExtractionSmartSystem {
             this._endScan(btn, origHTML, scanProgress);   // يحرّر الحارس + المؤشّر + الأوفرلاي + زر الإلغاء
         };
         try {
-            // 1) توكِن وعنوان الوكيل المحلي من Django (يقرأ ملف التوكِن على نفس الجهاز)
+            // 1) منفذُ الوكيل من الخادم (لا «يعمل» ولا توكِن — الخادمُ لا يرى وكيلَ هذا الجهاز)
             setMsg('التحقق من وكيل المسح...');
-            let td;
-            try {
-                td = await (await this._fetchWithTimeout('/books/api/scan/agent-token/', { credentials: 'same-origin' }, 8000)).json();
-            } catch (_) {
-                return fail('تعذّر الوصول إلى الخادم للتحقق من وكيل المسح. حدّث الصفحة وأعد المحاولة.', 'تعذّر الاتصال');
-            }
-            if (!td.available) {
-                return fail('لم يُعثر على وكيل المسح المحلي. شغّل تطبيق «LetterSys Scan Agent» على هذا الجهاز ثم أعد المحاولة.', 'وكيل المسح غير مشغّل');
-            }
-            const token = td.token;
+            try { await this._fetchAgentInfo(); } catch (_) { /* المنفذُ الافتراضيّ يكفي */ }
             if (this._scanCancelled) return;
 
-            // 2) حدّد عنوان الوكيل العامل (يجرّب 127.0.0.1 ثم localhost) + فحص NAPS2
-            const agentUrl = await this._resolveAgentBase(td);
+            // 2) اسأل وكيلَ **هذا الجهاز** مباشرةً (127.0.0.1 ثمّ localhost) + فحص NAPS2
+            const agentUrl = await this._resolveAgentBase();
             if (!agentUrl) {
+                if (await this._agentRespondsButRejects()) {
+                    return fail(
+                        'وكيل المسح يعمل على هذا الجهاز لكنه يرفض الصفحات القادمة من ' + window.location.origin
+                        + ' — أضف هذا العنوان إلى allowed_origins في %LOCALAPPDATA%\\LetterSys\\agent.json '
+                        + '(أو اطلب من مسؤول النظام إعادة تشغيل install_agent.bat به)، ثمّ أعد تشغيل الوكيل.',
+                        'الوكيل لا يثق بعنوان هذا الخادم');
+                }
                 return fail(
-                    'تعذّر الاتصال بوكيل المسح المحلي رغم تشغيله. قد يحجب توجيه/بروكسي المتصفح المضيف المحلي '
-                    + '(127.0.0.1 وlocalhost) — استثنِ المضيف المحلي من البروكسي، أو افتح التطبيق عبر '
-                    + 'http://127.0.0.1:8000، ثم أعد المحاولة.',
-                    'تعذّر الاتصال بالوكيل');
+                    'لم يُعثر على وكيل المسح على هذا الجهاز. شغّل «LetterSys Scan Agent» على '
+                    + 'الجهاز الذي أمامك (لا على الخادم — الماسح موصولٌ بجهازك)، وإن لم يكن مثبَّتاً '
+                    + 'فاطلب من مسؤول النظام تثبيتَه عليه، ثمّ أعد المحاولة.',
+                    'وكيل المسح غير مشغّل على هذا الجهاز');
             }
             const hd = this._agentHealth || {};
             if (!hd.naps2_available) {
@@ -2673,7 +2750,7 @@ class ExtractionSmartSystem {
             // 3) اختيار الجهاز: من القائمة المنسدلة إن وُجدت، وإلا أول جهاز متاح
             let dd;
             try {
-                dd = await (await this._fetchWithTimeout(agentUrl + '/agent/devices', { headers: { 'X-LetterSys-Token': token } }, 20000)).json();
+                dd = await (await this._fetchWithTimeout(agentUrl + '/agent/devices', {}, 20000)).json();
             } catch (err) {
                 const noResp = err && err.name === 'AbortError';
                 return fail(
@@ -2701,7 +2778,7 @@ class ExtractionSmartSystem {
             try {
                 sr = await fetch(agentUrl + '/agent/scan', {
                     method: 'POST',
-                    headers: { 'X-LetterSys-Token': token, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ device_id: device.id, driver: device.driver, mode: 'auto' }),
                     signal: this._scanAbort.signal,
                 });
@@ -2758,7 +2835,8 @@ class ExtractionSmartSystem {
             }
         } catch (err) {
             console.warn('[scan] NAPS2 agent flow failed:', err);
-            fail('تعذّر الاتصال بوكيل المسح المحلي (تأكّد أنه يعمل على 127.0.0.1:17865)');
+            fail('تعذّر الاتصال بوكيل المسح على هذا الجهاز (تأكّد أنه يعمل على 127.0.0.1:'
+                 + this._agentPort() + ' — على جهازك أنت، لا على الخادم).');
         }
     }
 
