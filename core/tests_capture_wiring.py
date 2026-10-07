@@ -68,14 +68,22 @@ class SenderNumberBoxCaptureTests(TestCase):
             'sender_number_bbox': [0.7, 0.1, 0.8, 0.13],
             'sender_number_bbox_source': 'detector',
             'sender_number_bbox_dims': [2480, 3508],
+            'sender_number_detector_arm': 'det1',
         })
         self.assertIsNotNone(res)
         ad = res.additional_data
+        self.assertEqual(ad['sender_number_detector_arm'], 'det1',
+                         'صناديقُ det1 وdet2 هندستان مختلفتان — بلا الوسم يخلطهما الحصاد')
         self.assertEqual(ad['sender_number_bbox'], [0.7, 0.1, 0.8, 0.13])
         self.assertEqual(ad['sender_number_bbox_source'], 'detector',
                          'المصدر يميّز صندوقَ قراءةٍ واثقة عن صندوقِ كاشفٍ امتنع عنده القارئ')
         self.assertEqual(ad['sender_number_bbox_dims'], [2480, 3508],
                          'بلا المقاس المرجعيّ لا تُعاد البكسلات — وذاك فخّ 1600/2600/3500')
+
+    def test_missing_arm_is_present_and_empty(self):
+        """صفوفُ ما قبل الوسم وصفوفٌ بلا صندوق: المفتاحُ حاضرٌ فارغ — لا قيمةَ مُختلَقة."""
+        res = self._capture({'raw_text': 'نصّ', 'sender_number': ''})
+        self.assertEqual(res.additional_data['sender_number_detector_arm'], '')
 
     def test_outgoing_still_skips_the_whole_number_block(self):
         """الصادر لا عددَ لنا فيه ⟵ لا صندوق ولا قيمة (وإلّا فُبركت عيّنةٌ سالبة)."""
@@ -187,6 +195,7 @@ _FULL_SUGGESTED = {
     'sender_number_bbox': [0.7, 0.1, 0.8, 0.13],
     'sender_number_bbox_source': 'detector',
     'sender_number_bbox_dims': [2480, 3508],
+    'sender_number_detector_arm': 'det2',
     'sender_date_suggestion': {'raw': '2025/3/6', 'iso': '2025-03-06', 'parse': 'ok',
                                'confidence': 0.99, 'bbox': [0.6, 0.12, 0.9, 0.16],
                                'source': 'crnn_d2', 'geometry': 'x1'},

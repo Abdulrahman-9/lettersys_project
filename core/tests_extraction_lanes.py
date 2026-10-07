@@ -198,18 +198,14 @@ class LaneDatabaseGuardTests(TestCase):
 
 
 class DetectorFallbackConsumptionTests(SimpleTestCase):
-    """قيمةُ det1 من الممرّ تُستهلك بشرط اليوم حرفاً: فقط حين يصمت det2 عن العدد."""
-
-    def setUp(self):
-        self.addCleanup(setattr, P.AIExtractionService, '_last_detector_arm',
-                        P.AIExtractionService._last_detector_arm)
+    """قيمةُ det1 من الممرّ تُستهلك بشرط اليوم حرفاً: فقط حين يصمت det2 عن العدد.
+    والذراعُ يعود **مع** الصندوق — لا صفةَ صنفٍ يتبادلها استخراجان متزامنان."""
 
     def test_det2_found_ignores_the_lane_fallback(self):
         boxes = {'number': ([0.1, 0.1, 0.2, 0.15], 0.9), 'subject': None}
         got = P.AIExtractionService._detector_box_from_file('x.pdf', boxes=boxes,
                                                             fallback=([0.5, 0.1, 0.6, 0.2], 0.8))
-        self.assertEqual(got, [0.1, 0.1, 0.2, 0.15])
-        self.assertEqual(P.AIExtractionService._last_detector_arm, 'det2')
+        self.assertEqual(got, ([0.1, 0.1, 0.2, 0.15], 'det2'))
 
     def test_det2_silent_consumes_the_lane_fallback_without_rendering(self):
         boxes = {'number': None, 'subject': None}
@@ -217,27 +213,52 @@ class DetectorFallbackConsumptionTests(SimpleTestCase):
             got = P.AIExtractionService._detector_box_from_file('x.pdf', boxes=boxes,
                                                                 fallback=([0.5, 0.1, 0.6, 0.2], 0.8))
         render.assert_not_called()
-        self.assertEqual(got, [0.5, 0.1, 0.6, 0.2])
-        self.assertEqual(P.AIExtractionService._last_detector_arm, 'det1')
+        self.assertEqual(got, ([0.5, 0.1, 0.6, 0.2], 'det1'))
 
     def test_not_run_keeps_today_inline_det1(self):
         boxes = {'number': None, 'subject': None}
-        P.AIExtractionService._last_detector_arm = 'previous'
-        with mock.patch.object(P.AIExtractionService, '_render_for_detector', return_value='IM') as render, \
-                mock.patch('core.extraction.handwriting.detector.detect_number_box_fallback',
-                           return_value=None) as det1:
+        with mock.patch.object(P.AIExtractionService, '_render_for_detector', return_value='IM') as render,                 mock.patch('core.extraction.handwriting.detector.detect_number_box_fallback',
+                           return_value=([0.4, 0.1, 0.5, 0.2], 0.7)) as det1:
             got = P.AIExtractionService._detector_box_from_file('x.pdf', boxes=boxes)
         render.assert_called_once_with('x.pdf')
         det1.assert_called_once_with('IM')
-        self.assertIsNone(got)
-        # كاليوم: لا صندوقَ ⟵ يعود قبل كتابة الذراع
-        self.assertEqual(P.AIExtractionService._last_detector_arm, 'previous')
+        self.assertEqual(got, ([0.4, 0.1, 0.5, 0.2], 'det1'))
+
+    def test_no_box_anywhere_has_no_arm(self):
+        boxes = {'number': None, 'subject': None}
+        got = P.AIExtractionService._detector_box_from_file('x.pdf', boxes=boxes, fallback=None)
+        self.assertEqual(got, (None, ''))
 
     def test_lane_fallback_low_box_is_still_guarded(self):
         boxes = {'number': None, 'subject': None}
         got = P.AIExtractionService._detector_box_from_file('x.pdf', boxes=boxes,
                                                             fallback=([0.5, 0.6, 0.6, 0.7], 0.8))
-        self.assertIsNone(got, 'حارسُ الارتفاع 0.45 تُخُطّي لقيمة الممرّ')
+        self.assertEqual(got, (None, ''), 'حارسُ الارتفاع 0.45 تُخُطّي لقيمة الممرّ')
+
+    def test_a_failure_has_no_box_and_no_arm(self):
+        with mock.patch.object(P.AIExtractionService, '_detector_boxes_from_file',
+                               side_effect=RuntimeError):
+            self.assertEqual(P.AIExtractionService._detector_box_from_file('x.pdf'), (None, ''))
+
+    def test_the_arm_is_never_parked_in_shared_state(self):
+        """الجذر: صفةُ صنفٍ يكتبها كلُّ طلب ⟵ استخراجان متزامنان يتبادلان الذراع. والسباقُ لا
+        يُستنسخ حتميّاً تحت GIL (الكتابةُ والقراءةُ تكادان تكونان ذرّيّتين)، فالحرزُ بنيويّ:
+        الدالّةُ لا تُسند إلى أيّ صفةٍ ولا تنادي setattr — الذراعُ يعيش في قيمتها المُعادة وحدها."""
+        import ast
+        import inspect
+        import textwrap
+        src = textwrap.dedent(inspect.getsource(P.AIExtractionService._detector_box_from_file))
+        fn = ast.parse(src).body[0]
+        targets = []
+        for n in ast.walk(fn):
+            if isinstance(n, ast.Assign):
+                targets.extend(n.targets)
+            elif isinstance(n, (ast.AugAssign, ast.AnnAssign)):
+                targets.append(n.target)
+        shared = [ast.dump(t) for t in targets if isinstance(t, ast.Attribute)]
+        shared += [ast.dump(n) for n in ast.walk(fn) if isinstance(n, ast.Call)
+                   and isinstance(n.func, ast.Name) and n.func.id == 'setattr']
+        self.assertEqual(shared, [], 'كتابةٌ في حالةٍ مشتركة داخل مسار الذراع')
 
 
 class R4CertaintyTests(SimpleTestCase):
@@ -422,7 +443,8 @@ class LanesWiringTests(TestCase):
     def _fields(self, res):
         return {k: getattr(res, k, None) for k in (
             'status', 'raw_text', 'title', 'sender_number', 'sender_number_bbox',
-            'sender_number_bbox_source', 'sender_date_crop', 'ocr_engine', 'overall_confidence')}
+            'sender_number_bbox_source', 'sender_number_detector_arm', 'sender_date_crop',
+            'ocr_engine', 'overall_confidence')}
 
     def test_lanes_on_equals_off_and_each_read_runs_once(self):
         off = self._fields(self._run(False))
@@ -432,6 +454,8 @@ class LanesWiringTests(TestCase):
         self.assertEqual(on, off)
         self.assertEqual(self.calls, calls_off, 'قراءةٌ حُسبت مرّتين أو لم تُحسب')
         self.assertEqual(calls_off['extract'], 1)
+        self.assertEqual(off['sender_number_detector_arm'], 'det1',
+                         'det2 صامتٌ وdet1 وجد ⟵ الذراعُ يُنشر مع الصندوق')
         for lane in ('r1', 'r4', 'det'):
             self.assertEqual(L.stats.get('started_' + lane), 1, lane)
         self.assertEqual(L.active_extractions(), 0, 'العدّادُ لم يعد إلى الصفر')

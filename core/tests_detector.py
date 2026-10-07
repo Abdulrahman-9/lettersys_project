@@ -156,6 +156,7 @@ class NumberEmissionSuppressedTests(TestCase):
         r.sender_number_bbox = [0.7, 0.1, 0.8, 0.13]
         r.sender_number_bbox_source = 'detector'
         r.sender_number_bbox_dims = [2480, 3508]
+        r.sender_number_detector_arm = 'det1'
         return r
 
     def test_crnn_visual_read_passes_with_its_true_confidence(self):
@@ -199,6 +200,8 @@ class NumberEmissionSuppressedTests(TestCase):
         self.assertEqual(snap.get('sender_number_bbox'), [0.7, 0.1, 0.8, 0.13])
         self.assertEqual(snap.get('sender_number_bbox_source'), 'detector')
         self.assertEqual(snap.get('sender_number_bbox_dims'), [2480, 3508])
+        self.assertEqual(snap.get('sender_number_detector_arm'), 'det1',
+                         'ذراعُ الكاشف مادّةُ تدريبٍ كالصندوق — يبقى بعد الإسكات')
 
     def test_empty_suggestion_creates_no_feedback_row(self):
         """دلالةٌ نظيفة: «الكاتب صحّح ما عرضناه» — ولم نعرض شيئاً، فلا صفَّ تصحيح."""

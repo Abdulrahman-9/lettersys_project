@@ -240,6 +240,8 @@ def _do_capture(book, attachment, suggested, final, user, raw_text, cleaned_text
             # عيّنتا تدريبٍ مختلفتا القيمة تماماً.
             'sender_number_bbox_source': suggested.get('sender_number_bbox_source') or '',
             'sender_number_bbox_dims': suggested.get('sender_number_bbox_dims') or None,
+            # ذراعُ الكاشف: صناديقُ det1 وdet2 هندستان مختلفتان — بلا الوسم يخلطهما الحصاد.
+            'sender_number_detector_arm': str(suggested.get('sender_number_detector_arm') or '')[:8],
         })
         # ── تاريخ الجهة: الاقتراحُ البصريّ ونهائيُّ الكاتب ──────────────────
         # كان الحقل مستثنى بحجّة «فرق صيغة ISO/Date يعطي إيجابيّاتٍ كاذبة» —

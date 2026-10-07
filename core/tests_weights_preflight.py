@@ -43,11 +43,12 @@ class HandwritingPathContractTests(SimpleTestCase):
         got = svc._read_handwritten_sender_number('x.jpg', None, want_date_crop=True)
         self.assertEqual(len(got), 4)
         # نفسُ فكّ النداء — لو عادت ثنائيّةً لارتفع ValueError هنا كما في الإنتاج
-        num_res, date_crop, date_suggestion, (det_box, w, h) = got
+        num_res, date_crop, date_suggestion, (det_box, w, h, det_arm) = got
         self.assertIsNone(num_res)
         self.assertIsNone(date_crop)
         self.assertIsNone(date_suggestion)
         self.assertIsNone(det_box)
+        self.assertEqual(det_arm, '')
 
     def test_every_return_in_the_pass_yields_four_values(self):
         """حرزٌ بنيويّ: أيُّ مخرجٍ جديدٍ بعرضٍ مختلف يفشل هنا لا في مستندِ كاتب."""
@@ -64,6 +65,12 @@ class HandwritingPathContractTests(SimpleTestCase):
             self.assertEqual(len(r.value.elts), 4,
                              'مخرجٌ بعرضٍ %d عند السطر %d — النداءُ يفكّ أربعة'
                              % (len(r.value.elts), r.lineno))
+            # والرابعُ (هندسةُ الكاشف) يُفكّ أربعةً أيضاً: (صندوق، W، H، ذراع)
+            geom = r.value.elts[3]
+            self.assertIsInstance(geom, ast.Tuple, ast.dump(r))
+            self.assertEqual(len(geom.elts), 4,
+                             'هندسةٌ بعرضٍ %d عند السطر %d — النداءُ يفكّ (det_box, W, H, det_arm)'
+                             % (len(geom.elts), r.lineno))
 
     def test_missing_weight_is_announced_once(self):
         """الصمتُ كان العطب: سطرٌ واحدٌ لكلّ مفتاحٍ ثمّ صمتٌ (لا إغراقَ سجلّ)."""

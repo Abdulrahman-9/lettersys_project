@@ -82,6 +82,7 @@ INCOMING_KEYS = frozenset({
     'sender_number_bbox',           # موضعُ القصاصة (نسبيّ)
     'sender_number_bbox_source',    # كاشفٌ أم قراءةٌ واثقة — عيّنتان مختلفتا القيمة
     'sender_number_bbox_dims',      # المقاسُ المرجعيّ — بدونه لا تُعاد البكسلات
+    'sender_number_detector_arm',   # det2 | det1 | '' — هندستا الكاشفين لا تُخلَطان في الحصاد
     'sender_number_provenance',     # مكتوبٌ بيد / مؤكَّد / مُلئ تلقائيّاً
     displayed_key('sender_number'),
     displayed_key('sender_date'),

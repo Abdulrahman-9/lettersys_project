@@ -129,7 +129,7 @@ with open(MANIFEST, 'a', encoding='utf-8') as mf:
             _skip('no_file')
             continue
         try:
-            box = svc._detector_box_from_file(p)      # مسار الإنتاج حرفيّاً
+            box, arm = svc._detector_box_from_file(p)      # مسار الإنتاج حرفيّاً
             if not box:
                 no_box += 1
                 _skip('no_box')
@@ -163,6 +163,7 @@ with open(MANIFEST, 'a', encoding='utf-8') as mf:
             del crop
             mf.write(json.dumps({'book': bid, 'file': name, 'label': val,
                                  'box': [round(v, 4) for v in box], 'dims': [W, H],
+                                 'arm': arm,   # det2 | det1 — هندستان لا تُخلَطان
                                  'split': split_of(bid)}, ensure_ascii=False) + '\n')
             mf.flush()
             kept += 1
