@@ -57,8 +57,13 @@ def next_number_api(request):
 def sequence_settings(request):
     """Sequence settings page for all book kinds."""
     sequences = []
+    # عدّادُ القسم الذي يُصدر منه الترقيمُ فعلاً (``consume_next`` بلا قسم ⟵ ``resolve_department``).
+    # كان البحثُ بالنوع وحدَه، و«قيِّده عندنا» تُنشئ لكلّ قسمٍ صفّاً من النوع نفسِه — فأوّلُ
+    # قيدٍ في قسمٍ ثانٍ يجعل الصفحةَ MultipleObjectsReturned (500).
+    department = BookSequence.resolve_department()
     for kind_value, kind_label in BOOK_KIND_CHOICES:
-        obj, _ = BookSequence.objects.get_or_create(kind=kind_value, defaults={'next_number': 1})
+        obj, _ = BookSequence.objects.get_or_create(kind=kind_value, department=department,
+                                                    defaults={'next_number': 1})
         sequences.append({'obj': obj, 'label': kind_label, 'kind': kind_value})
 
     # مدّةُ الحجز بيانٌ في القاعدة لا سطرٌ في ``.env``. الشارةُ «مخصَّص» تُقاس
