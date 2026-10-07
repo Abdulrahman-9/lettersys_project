@@ -39,7 +39,7 @@
       <div>
         <label for="actor" class="form-label text-muted mb-1" style="font-size:.8rem">الموظّف</label>
         <input type="text" class="form-control form-control-sm" id="actor" name="actor"
-               value="{{ filters.actor }}" placeholder="اسم المستخدم" style="min-width:11rem">
+               value="{{ filters.actor }}" placeholder="الاسم أو اسم المستخدم" style="min-width:11rem">
       </div>
       <div>
         <label for="action" class="form-label text-muted mb-1" style="font-size:.8rem">الحركة</label>
@@ -81,7 +81,7 @@
                 <th>الكتاب</th>
                 {% if tab == 'users' %}
                   <th style="width:5rem">مرات</th>
-                  <th style="width:8rem">العنوان</th>
+                  <th style="width:8rem">عنوان IP</th>
                 {% else %}
                   <th style="width:16rem">التفصيل</th>
                 {% endif %}
@@ -139,11 +139,11 @@
         <div class="btn-group btn-group-sm">
           {% if page_obj.has_previous %}
             <a class="btn btn-outline-secondary"
-               href="?tab={{ tab }}&actor={{ filters.actor }}&action={{ filters.action }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}&page={{ page_obj.previous_page_number }}">السابق</a>
+               href="?tab={{ tab }}&actor={{ filters.actor|urlencode }}&action={{ filters.action|urlencode }}&date_from={{ filters.date_from|urlencode }}&date_to={{ filters.date_to|urlencode }}&page={{ page_obj.previous_page_number }}">السابق</a>
           {% endif %}
           {% if page_obj.has_next %}
             <a class="btn btn-outline-secondary"
-               href="?tab={{ tab }}&actor={{ filters.actor }}&action={{ filters.action }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}&page={{ page_obj.next_page_number }}">التالي</a>
+               href="?tab={{ tab }}&actor={{ filters.actor|urlencode }}&action={{ filters.action|urlencode }}&date_from={{ filters.date_from|urlencode }}&date_to={{ filters.date_to|urlencode }}&page={{ page_obj.next_page_number }}">التالي</a>
           {% endif %}
         </div>
       </div>

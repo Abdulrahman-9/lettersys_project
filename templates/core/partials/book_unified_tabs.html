@@ -1,8 +1,9 @@
 {% load static %}
 {% comment %}
 ============================================
-التبويبان الرئيسيان: وارد (أزرق ملكي) / صادر (أصفر ملكي)
-عرض كامل للصفحة، 50/50
+التبويبات الرئيسيّة: وارد / صادر / الكلّ — «الكلّ» حالةٌ صريحة بثيمٍ محايد
+(تدقيقُ نيلسن A#6): البحثُ السريع و«المتأخّرة» من اللوحة يفتحان tab=all، وكانت
+الصفحةُ تُفتح بلا تبويبٍ مُضاء وبثيم «وارد».
 ============================================
 {% endcomment %}
 
@@ -27,6 +28,17 @@
     <div class="tab-text">
       <span class="tab-label">صادر</span>
       <span class="tab-count" id="badge-outgoing">{{ outgoing_count|default:0 }}</span>
+    </div>
+  </button>
+
+  <button class="tab-main tab-all {% if current_tab|slice:':3' == 'all' %}active{% endif %}"
+          role="tab"
+          data-tab="all"
+          aria-selected="{% if current_tab|slice:':3' == 'all' %}true{% else %}false{% endif %}">
+    <i class="bi bi-collection tab-icon"></i>
+    <div class="tab-text">
+      <span class="tab-label">الكلّ</span>
+      <span class="tab-count" id="badge-all">{{ total_books|default:0 }}</span>
     </div>
   </button>
 

@@ -234,6 +234,9 @@ class HistoryQueryTests(TestCase):
         self.assertIn('by', ctx['history'][0]._state.fields_cache)
 
     def test_the_page_says_it_is_showing_only_part(self):
+        """«ملفّ الكتاب» يقولها «عرض آخر 50 من 60» — المعنى لا الصيغةُ القديمة «يُعرض آخر»."""
+        from core.views.books_detail import HISTORY_PAGE
+
         res = self.client.get('/books/%d/' % self.book.pk)
 
-        self.assertContains(res, 'يُعرض آخر')
+        self.assertContains(res, 'آخر %d من' % HISTORY_PAGE)

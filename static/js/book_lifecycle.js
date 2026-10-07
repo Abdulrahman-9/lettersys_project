@@ -30,6 +30,49 @@
     return input ? input.value : '';
   }
 
+  // ── حواريّةُ السؤال الواحدة (تدقيقُ نيلسن B#4/B#6) ─────────────────────────
+  // بدل prompt()/confirm() الأصليّتين: عنوانٌ يسمّي الوحدةَ أو الدفتر، وملاحظةٌ
+  // اختياريّةٌ حقلٌ فيها، وزرّان مسمّيان. تُعيد Promise بالملاحظة (نصّاً، وقد يكون
+  // فارغاً) أو null عند الإلغاء — فالإلغاءُ تراجعٌ لا «ملاحظةٌ فارغة».
+  function ask(opts) {
+    if (!(window.bootstrap && window.bootstrap.Modal)) {
+      // احتياطٌ بلا Bootstrap: السلوكُ القديم نفسُه
+      if (opts.noteLabel) return Promise.resolve(window.prompt(opts.title + ' — ' + opts.noteLabel));
+      return Promise.resolve(window.confirm(opts.title) ? '' : null);
+    }
+    var el = document.createElement('div');
+    el.className = 'modal fade';
+    el.tabIndex = -1;
+    el.setAttribute('aria-labelledby', 'lcAskTitle');
+    el.innerHTML =
+      '<div class="modal-dialog modal-dialog-centered"><div class="modal-content">' +
+      '<div class="modal-header"><h2 class="modal-title fs-6 fw-bold" id="lcAskTitle"></h2>' +
+      '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>' +
+      '<div class="modal-body"><p class="mb-2 lc-ask-body"></p>' +
+      '<label class="form-label small lc-ask-label" for="lcAskNote"></label>' +
+      '<textarea class="form-control form-control-sm" id="lcAskNote" rows="2" maxlength="500"></textarea></div>' +
+      '<div class="modal-footer"><button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">إلغاء</button>' +
+      '<button type="button" class="btn btn-sm lc-ask-ok"></button></div></div></div>';
+    el.querySelector('#lcAskTitle').textContent = opts.title;
+    var body = el.querySelector('.lc-ask-body');
+    if (opts.body) body.textContent = opts.body; else body.remove();
+    var label = el.querySelector('.lc-ask-label');
+    var note = el.querySelector('#lcAskNote');
+    if (opts.noteLabel) { label.textContent = opts.noteLabel; } else { label.remove(); note.remove(); }
+    var ok = el.querySelector('.lc-ask-ok');
+    ok.textContent = opts.okText || 'تأكيد';
+    ok.classList.add(opts.danger ? 'btn-danger' : 'btn-primary');
+    document.body.appendChild(el);
+    var modal = new window.bootstrap.Modal(el);
+    return new Promise(function (resolve) {
+      var answer = null;
+      ok.addEventListener('click', function () { answer = note.isConnected ? note.value.trim() : ''; modal.hide(); });
+      el.addEventListener('shown.bs.modal', function () { (note.isConnected ? note : ok).focus(); });
+      el.addEventListener('hidden.bs.modal', function () { el.remove(); resolve(answer); });
+      modal.show();
+    });
+  }
+
   function post(url, payload) {
     return fetch(url, {
       method: 'POST',
@@ -178,7 +221,7 @@
           list.appendChild(wrap);
         });
         fill(document.getElementById('distGroup'), data.groups, 'id', 'name',
-             '— لا عنقود —');
+             '— بلا قائمة —');
         fill(document.getElementById('distAssignee'), data.people, 'id', 'name',
              '— بلا مكلَّف —');
       });
@@ -254,7 +297,22 @@
              '— لا قسم —');
         fill(document.getElementById('custUser'), data.people, 'id', 'name',
              '— لا موظّف —');
+        syncHolder();
       });
+    });
+
+    // الحاملُ واحدٌ من ثلاثة («أو»): ملءُ أحدها يعطّل الآخرَين، كالعنقود مع الاختيار
+    // اليدويّ في التفريق (تدقيقُ نيلسن B#9).
+    var holderFields = ['custDepartment', 'custUser', 'custName'].map(function (id) {
+      return document.getElementById(id);
+    }).filter(Boolean);
+    function syncHolder() {
+      var filled = holderFields.filter(function (f) { return (f.value || '').trim(); })[0];
+      holderFields.forEach(function (f) { f.disabled = !!filled && f !== filled; });
+    }
+    holderFields.forEach(function (f) {
+      f.addEventListener('input', syncHolder);
+      f.addEventListener('change', syncHolder);
     });
 
     document.getElementById('custSubmit').addEventListener('click', function (event) {
@@ -283,21 +341,28 @@
 
     var act = button.dataset.referralAct;
     var referralId = button.dataset.referralId;
-    var note = '';
-    if (act === 'done' || act === 'returned') {
-      note = window.prompt(act === 'done' ? 'ملاحظةُ الإنجاز (اختياريّة):'
-                                          : 'سببُ الإعادة (اختياريّ):');
-      // «إلغاء» يُعيد null — وهو تراجعٌ لا «ملاحظةٌ فارغة»: كان يصير '' فيُرسَل
-      // الفعلُ ويُقفَل الالتزام. (حواريّةٌ بدل prompt في الدفعة 4.)
-      if (note === null) return;
+    var unit = button.dataset.referralTarget || 'الوحدة';
+    // «أُنجز/أُعيد» يُقفلان الالتزامَ ولا فعلَ يعيد فتحه — فلا يمضيان بنقرةٍ واحدة.
+    var asked = Promise.resolve('');
+    if (act === 'done') {
+      asked = ask({ title: 'أُنجز ما وُجّه إلى «' + unit + '»؟',
+                    body: 'يُقفَل التزامُ الوحدة ولا يُعاد فتحُه من هنا.',
+                    noteLabel: 'ملاحظةُ الإنجاز (اختياريّة)', okText: 'أُنجز' });
+    } else if (act === 'returned') {
+      asked = ask({ title: 'أُعيد إلى «' + unit + '» بلا إنجاز؟',
+                    body: 'يُقفَل التزامُ الوحدة ولا يُعاد فتحُه من هنا.',
+                    noteLabel: 'سببُ الإعادة (اختياريّ)', okText: 'أُعيد', danger: true });
     }
 
-    busy(button, true);
-    post('/books/api/book/' + bookId + '/referral/' + referralId + '/act/',
-         { act: act, note: note })
-      .then(function () { notify('تمّ.', true); })
-      .catch(function (err) { notify(err.message, false); })
-      .finally(function () { busy(button, false); });
+    asked.then(function (note) {
+      if (note === null) return;
+      busy(button, true);
+      post('/books/api/book/' + bookId + '/referral/' + referralId + '/act/',
+           { act: act, note: note })
+        .then(function () { notify('تمّ.', true); })
+        .catch(function (err) { notify(err.message, false); })
+        .finally(function () { busy(button, false); });
+    });
   });
 
   // ── فعِّل متابعة (§5.2): زرُّ الصفّ يفتح الحواريّةَ الصغيرة، وإرسالُها act=activate ──
@@ -342,12 +407,15 @@
     if (!button) return;
     event.preventDefault();
     var ledger = button.dataset.ledger || 'قسمي';
-    if (!window.confirm('سيُمنح الكتابُ رقمَ واردٍ جديداً من دفتر «' + ledger +
-                        '» — والرقمُ لا يُستردّ. أتمضي؟')) return;
-    busy(button, true);
-    post('/books/api/book/' + bookId + '/register-here/', {})
-      .then(function (data) { notify(data.message, true); })
-      .catch(function (err) { notify(err.message, false); })
-      .finally(function () { busy(button, false); });
+    ask({ title: 'قيّده في دفتر «' + ledger + '»؟',
+          body: 'سيُمنح الكتابُ رقمَ واردٍ جديداً من هذا الدفتر — والرقمُ لا يُستردّ.',
+          okText: 'قيّده' }).then(function (answer) {
+      if (answer === null) return;
+      busy(button, true);
+      post('/books/api/book/' + bookId + '/register-here/', {})
+        .then(function (data) { notify(data.message, true); })
+        .catch(function (err) { notify(err.message, false); })
+        .finally(function () { busy(button, false); });
+    });
   });
 })();

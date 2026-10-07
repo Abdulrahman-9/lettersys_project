@@ -88,13 +88,13 @@
               <button type="button" class="bx-row-act" data-referral-act="received" data-referral-id="{{ row.referral.pk }}" title="استلمته الوحدة">استلم</button>
               {% endif %}
               {% if row.can_act %}
-              <button type="button" class="bx-row-act bx-row-act--ok" data-referral-act="done" data-referral-id="{{ row.referral.pk }}" title="أُنجز ما وُجّه">أُنجز</button>
+              <button type="button" class="bx-row-act bx-row-act--ok" data-referral-act="done" data-referral-id="{{ row.referral.pk }}" data-referral-target="{{ row.target }}" title="أُنجز ما وُجّه">أُنجز</button>
               {% endif %}
               {% if row.can_chase %}
               <button type="button" class="bx-row-act" data-referral-act="remind" data-referral-id="{{ row.referral.pk }}" title="تنبيهٌ على الوحدة"><i class="bi bi-bell" aria-hidden="true"></i><span class="visually-hidden">تنبيه</span></button>
               {% endif %}
               {% if row.can_act %}
-              <button type="button" class="bx-row-act bx-row-act--bad" data-referral-act="returned" data-referral-id="{{ row.referral.pk }}" title="أُعيد بلا إنجاز">أُعيد</button>
+              <button type="button" class="bx-row-act bx-row-act--bad" data-referral-act="returned" data-referral-id="{{ row.referral.pk }}" data-referral-target="{{ row.target }}" title="أُعيد بلا إنجاز">أُعيد</button>
               {% endif %}
             {% else %}
               <span class="bx-muted">—</span>

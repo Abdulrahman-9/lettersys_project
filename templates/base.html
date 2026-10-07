@@ -151,7 +151,7 @@
               <span class="app-sidebar-link-badge">{{ navbar_unread_notifications }}</span>
               {% endif %}
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name in 'mail_hub,mail_sent,mail_inbox,mail_compose,mail_thread,mail_settings,mail_templates,mail_template_new,mail_template_edit' %} active{% endif %}" href="{% url 'mail_sent' %}" title="البريد">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name in 'mail_hub,mail_sent,mail_inbox,mail_compose,mail_thread,mail_settings,mail_templates,mail_template_new,mail_template_edit' %} active{% endif %}" href="{% if mail_inbox_unread %}{% url 'mail_inbox' %}{% else %}{% url 'mail_sent' %}{% endif %}" title="البريد">
               <i class="bi bi-envelope-fill"></i>
               <span>البريد</span>
               {% if mail_inbox_unread %}<span class="app-sidebar-link-badge" style="background:#dc3545">{{ mail_inbox_unread }}</span>{% endif %}

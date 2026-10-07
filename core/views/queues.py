@@ -146,6 +146,8 @@ def desk_board(request):
 
     return render(request, 'core/desk_board.html', {
         'queues': queues,
+        # فراغٌ واحدٌ بمخرج بدل خمس بطاقاتٍ تقول «لا شيء هنا» — كـ«ما يخصّني» (تدقيقُ نيلسن D#24)
+        'queues_empty': not any(q.get('total') for q in queues),
         'today': today,
         'department_id': dept_id,
     })

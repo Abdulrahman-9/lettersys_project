@@ -33,6 +33,16 @@
   --theme-text:    #92400e;
 }
 
+.book-unified-page[data-theme="all"] {
+  /* «الكلّ» — تيلٌ محايد بين الاتّجاهين */
+  --theme-primary: #0f766e;
+  --theme-accent:  #14b8a6;
+  --theme-light:   #ccfbf1;
+  --theme-tint:    #f0fdfa;
+  --theme-glow:    rgba(15, 118, 110, 0.18);
+  --theme-text:    #115e59;
+}
+
 /* ── حاوية الصفحة ── */
 .book-unified-page {
   padding: 0.6rem 0.75rem 1.2rem;

@@ -24,7 +24,7 @@
         </a>
         <span class="qb-meta">
           {% if r.meta_label %}<span class="qb-to">{{ r.meta_label }}</span>{% endif %}
-          {% if r.meta_date %}<time datetime="{{ r.meta_date|date:'Y-m-d' }}">{{ r.meta_date|date:"Y-m-d" }}</time>{% endif %}
+          {% if r.meta_date %}<time datetime="{{ r.meta_date|date:'Y-m-d' }}">{{ r.meta_date|date:"d/m/Y" }}</time>{% endif %}
           {% comment %}
             فعلُ الصفّ — يُعرَض حين يُصرّح الطابورُ به (`q.action`) لا حين
             يُخمّن القالبُ الدور. طاولةٌ تُري العملَ ولا تدع صاحبَها يعمل

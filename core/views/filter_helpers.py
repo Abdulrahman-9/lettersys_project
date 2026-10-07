@@ -21,7 +21,7 @@ from .. import numbering
 
 # تبويبات النوع (kind) — مستقلة عن حالة المتابعة
 _KIND_TABS = {
-    "all",
+    "all", "all_internal", "all_external",
     "incoming", "outgoing",
     "incoming_internal", "incoming_external",
     "outgoing_internal", "outgoing_external",
@@ -107,6 +107,12 @@ class BookFilterEngine:
             return queryset
         if tab in {"incoming_internal", "incoming_external", "outgoing_internal", "outgoing_external"}:
             return queryset.filter(kind=tab)
+        # «الكلّ» حالةٌ صريحة بنطاقها (تدقيقُ نيلسن A#6): داخليُّ الاتّجاهين أو خارجيُّهما —
+        # كانت أوّلُ نقرةِ نطاقٍ من tab=all تضيّق إلى الوارد صامتةً.
+        if tab == "all_internal":
+            return queryset.filter(kind__endswith="_internal")
+        if tab == "all_external":
+            return queryset.filter(kind__endswith="_external")
         if tab == "incoming":
             return queryset.filter(kind__startswith="incoming")
         if tab == "outgoing":
@@ -255,6 +261,7 @@ class BookFilterEngine:
             "incoming": "وارد", "outgoing": "صادر",
             "incoming_internal": "وارد داخلي", "incoming_external": "وارد خارجي",
             "outgoing_internal": "صادر داخلي", "outgoing_external": "صادر خارجي",
+            "all_internal": "داخلي", "all_external": "خارجي",
         }
         tab_label = TAB_LABELS.get(filters.get("tab"))
         if tab_label:

@@ -1,207 +1,81 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}التنبيهات{% endblock %}
-
-{% block page_sidebar %}
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">حالة الإشعارات</div>
-  <div class="app-context-list">
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">إجمالي الإشعارات</div>
-        <strong>{{ notifications|length }}</strong>
-      </div>
-      <span class="app-context-chip is-info"><i class="bi bi-bell"></i> مركز التنبيهات</span>
-    </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">غير مقروءة</div>
-        <strong>{{ navbar_unread_notifications|default:0 }}</strong>
-      </div>
-      <span class="app-context-chip is-danger"><i class="bi bi-dot"></i> جديد</span>
-    </div>
-  </div>
-</div>
-
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">إجراءات سريعة</div>
-  <div class="app-context-list">
-    <a class="app-context-link" href="{% url 'book_unified' %}?tab=all&followup=overdue">
-      <span>فتح الكتب المتأخرة</span>
-      <i class="bi bi-lightning-charge"></i>
-    </a>
-    <a class="app-context-link" href="{% url 'dashboard' %}">
-      <span>العودة للوحة التحكم</span>
-      <i class="bi bi-grid"></i>
-    </a>
-  </div>
-</div>
-{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/notifications.css' %}?v=20261007">{% endblock %}
 
 {% block content %}
-<style>
-.timeline-container {
-  position: relative;
-  padding: 2rem 0;
-}
-.timeline-item {
-  position: relative;
-  padding-right: 3rem;
-  padding-bottom: 2rem;
-  border-right: 3px solid #e2e8f0;
-}
-.timeline-item:last-child {
-  border-right: none;
-  padding-bottom: 0;
-}
-.timeline-icon {
-  position: absolute;
-  right: -1.25rem;
-  top: 0;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  color: white;
-  font-size: 1.2rem;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-  z-index: 1;
-}
-.timeline-icon.read {
-  background: linear-gradient(135deg, #94a3b8, #cbd5e1);
-}
-.notification-card {
-  background: white;
-  border: 2px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 1.5rem;
-  transition: all 0.3s;
-  position: relative;
-}
-.notification-card.unread {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(139, 92, 246, 0.05));
-  border-color: #3b82f6;
-}
-.notification-card:hover {
-  transform: translateX(-8px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-}
-.notification-badge {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  animation: pulse 2s infinite;
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-.mark-read-btn {
-  border: 0; background: transparent; font: inherit; cursor: pointer;
-  padding: 0.5rem 1rem;
-  border-radius: 10px;
-  border: 2px solid #e2e8f0;
-  background: white;
-  transition: all 0.3s;
-  font-size: 0.875rem;
-}
-.mark-read-btn:hover {
-  background: #22c55e;
-  border-color: #22c55e;
-  color: white;
-  transform: scale(1.05);
-}
-.empty-state {
-  text-align: center;
-  padding: 4rem 2rem;
-}
-.empty-state-icon {
-  font-size: 5rem;
-  color: #cbd5e1;
-  margin-bottom: 1rem;
-}
-</style>
-
-<div class="container-fluid animate-fade-in">
-  <div class="d-flex justify-content-between align-items-center mb-4">
+{% comment %}
+  «التنبيهات» — اسمٌ واحدٌ للصفحة (كانت «مركز الإشعارات/مركز التنبيهات/حالة الإشعارات»).
+  العنوانُ والرابطُ والأولويّةُ من حقول النموذج لا من تحسُّس نصّ الرسالة، وفتحُ الكتاب
+  من تنبيهٍ غيرِ مقروء يعلّمه مقروءاً في النقرة نفسها (تدقيقُ نيلسن 2026‑10‑07، A#11–13 · A#19).
+{% endcomment %}
+<div class="nt-page">
+  <header class="nt-head">
     <div>
-      <h4 class="fw-bold mb-1 gradient-text">مركز الإشعارات</h4>
-      <p class="text-muted mb-0">تابع جميع تحديثات وتنبيهات النظام</p>
+      <h1 class="nt-title">التنبيهات</h1>
+      <p class="nt-sub">{% if unread_count %}<strong>{{ unread_count }}</strong> غيرُ مقروء من {{ total_count }}{% elif total_count %}كلُّها مقروءة ({{ total_count }}){% else %}لا تنبيهات{% endif %}</p>
     </div>
-    <div class="d-flex gap-2">
-      <span class="badge bg-primary-subtle text-primary px-3 py-2">
-        <i class="bi bi-bell me-1"></i>
-        {{ notifications|length }} إشعار
-      </span>
-    </div>
-  </div>
+    {% if unread_count %}
+    <form method="post" action="{% url 'notification_mark_all_read' %}">
+      {% csrf_token %}
+      <button type="submit" class="nt-btn"><i class="bi bi-check2-all" aria-hidden="true"></i> تعليم الكلّ كمقروء</button>
+    </form>
+    {% endif %}
+  </header>
 
-  <div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-      {% if notifications %}
-      <div class="timeline-container">
-        {% for n in notifications %}
-        <div class="timeline-item animate-fade-in" style="animation-delay: {{ forloop.counter0|add:'0.1' }}s;">
-          <div class="timeline-icon {% if n.is_read %}read{% endif %}">
-            <i class="bi {% if n.is_read %}bi-check-circle{% else %}bi-bell-fill{% endif %}"></i>
-          </div>
-          
-          <div class="notification-card {% if not n.is_read %}unread{% endif %}">
-            {% if not n.is_read %}
-            <span class="notification-badge">
-              <i class="bi bi-star-fill me-1"></i>جديد
-            </span>
-            {% endif %}
-            
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <div class="flex-grow-1">
-                <h6 class="fw-bold mb-1">
-                  {% if 'overdue' in n.message|lower or 'متأخر' in n.message %}
-                    <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>
-                  {% elif 'new' in n.message|lower or 'جديد' in n.message %}
-                    <i class="bi bi-plus-circle-fill text-success me-1"></i>
-                  {% else %}
-                    <i class="bi bi-info-circle-fill text-info me-1"></i>
-                  {% endif %}
-                  {{ n.message }}
-                </h6>
-                <p class="text-muted small mb-0">
-                  <i class="bi bi-clock me-1"></i>
-                  {{ n.created_at|timesince }} مضت
-                </p>
-              </div>
-            </div>
-            
-            {% if not n.is_read %}
-            <div class="d-flex gap-2 mt-3">
-              <form method="post" action="{% url 'notification_mark_read' n.id %}" class="d-inline">
-                {% csrf_token %}
-                <button type="submit" class="mark-read-btn"><i class="bi bi-check2 me-1"></i>تعليم كمقروء</button>
-              </form>
-            </div>
-            {% endif %}
-          </div>
+  {% if notifications %}
+  <ul class="nt-list">
+    {% for n in notifications %}
+    <li class="nt-item{% if not n.is_read %} is-unread{% endif %} p-{{ n.priority }}">
+      <span class="nt-icon" aria-hidden="true">
+        <i class="bi {% if n.priority == 'urgent' %}bi-exclamation-octagon-fill{% elif n.priority == 'warning' %}bi-exclamation-triangle-fill{% else %}bi-bell{% endif %}"></i>
+      </span>
+      <div class="nt-body">
+        <div class="nt-line">
+          {% if not n.is_read %}<span class="nt-new">جديد</span>{% endif %}
+          {% if n.priority != 'info' %}<span class="nt-prio">{{ n.get_priority_display }}</span>{% endif %}
+          <strong class="nt-head-text">{{ n.title|default:n.message|truncatechars:120 }}</strong>
         </div>
-        {% endfor %}
+        {% if n.title %}<p class="nt-msg">{{ n.message }}</p>{% endif %}
+        <time class="nt-time" datetime="{{ n.created_at|date:'c' }}" title="{{ n.created_at|date:'Y/m/d H:i' }}">منذ {{ n.created_at|timesince }}</time>
       </div>
-      {% else %}
-      <div class="empty-state">
-        <div class="empty-state-icon">
-          <i class="bi bi-bell-slash"></i>
-        </div>
-        <h5 class="text-muted">لا توجد إشعارات حالياً</h5>
-        <p class="text-muted">سيتم عرض جميع التحديثات والتنبيهات هنا</p>
+      <div class="nt-acts">
+        {% if n.safe_link %}
+          {% if n.is_read %}
+          <a class="nt-btn" href="{{ n.safe_link }}">فتح</a>
+          {% else %}
+          <form method="post" action="{% url 'notification_mark_read' n.id %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ n.safe_link }}">
+            <button type="submit" class="nt-btn">فتح</button>
+          </form>
+          {% endif %}
+        {% endif %}
+        {% if not n.is_read %}
+        <form method="post" action="{% url 'notification_mark_read' n.id %}">
+          {% csrf_token %}
+          <button type="submit" class="nt-btn nt-btn-quiet" title="تعليم كمقروء" aria-label="تعليم «{{ n.title|default:n.message|truncatechars:40 }}» كمقروء"><i class="bi bi-check2" aria-hidden="true"></i></button>
+        </form>
+        {% endif %}
       </div>
-      {% endif %}
-    </div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% if page_obj.has_other_pages %}
+  <nav class="nt-pager" aria-label="صفحات التنبيهات">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">الأحدث</a>{% endif %}
+    <span>صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">الأقدم</a>{% endif %}
+  </nav>
+  {% endif %}
+
+  {% else %}
+  <div class="nt-empty">
+    <i class="bi bi-bell-slash" aria-hidden="true"></i>
+    <p>لا تنبيهات الآن. تصلك هنا الإحالاتُ إليك والكتبُ التي تأخّرت.</p>
+    <a class="nt-btn" href="{% url 'dashboard' %}">العودة إلى اللوحة</a>
   </div>
+  {% endif %}
 </div>
 {% endblock %}

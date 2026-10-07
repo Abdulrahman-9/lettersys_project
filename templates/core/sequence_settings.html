@@ -45,16 +45,14 @@
                             {% endif %}
                             <strong>{{ seq.label }}</strong>
                         </div>
-                        <div class="mb-2">
-                            <label class="form-label fw-semibold" style="font-size:0.85rem;">البادئة</label>
-                            <input type="text" name="prefix_{{ seq.kind }}" value="{{ seq.obj.prefix }}" class="form-control form-control-sm" placeholder="مثال: و/">
-                        </div>
+                        {% comment %}حقلُ «البادئة» أُزيل: البادئاتُ ملغاة (core/numbering.py) والحقلُ «مهمل» في النموذج،
+                           فمثالُ «و/» كان يَعِد بما لا يحدث (تدقيقُ نيلسن E#15){% endcomment %}
                         <div>
                             <label class="form-label fw-semibold" style="font-size:0.85rem;">الرقم التالي</label>
                             <input type="number" name="next_number_{{ seq.kind }}" value="{{ seq.obj.next_number }}" min="1" class="form-control form-control-sm">
                         </div>
                         <div class="text-muted mt-2" style="font-size:0.8rem;">
-                            المعاينة: <strong>{{ seq.obj.prefix }}{{ seq.obj.next_number }}</strong>
+                            الرقمُ التالي كما سيظهر: <strong>{{ seq.obj.next_number }}</strong>
                         </div>
                     </div>
                 </div>

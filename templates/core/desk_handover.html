@@ -10,6 +10,13 @@
 
 <div class="toolbar">
   <form method="get" action="">
+    {% if department_choices is not None %}
+    <label for="department" class="muted">القسم:</label>
+    <select name="department" id="department" onchange="this.form.to.value=''; this.form.submit()">
+      <option value="">— اختر قسماً —</option>
+      {% for d in department_choices %}<option value="{{ d.pk }}"{% if department and department.pk == d.pk %} selected{% endif %}>{{ d }}</option>{% endfor %}
+    </select>
+    {% endif %}
     <label for="to" class="muted">الوحدة:</label>
     <select name="to" id="to" onchange="this.form.submit()">
       <option value="">— اختر وحدةً —</option>
@@ -19,9 +26,9 @@
         </option>
       {% endfor %}
     </select>
-    <noscript><button type="submit" class="back">عرض</button></noscript>
+    <noscript><button type="submit" class="print">عرض</button></noscript>
   </form>
-  {% if rows %}<button class="print" onclick="window.print()">🖨️ طباعة</button>{% endif %}
+  {% if rows %}<button type="button" class="print" onclick="window.print()">طباعة</button>{% endif %}
   <a class="btn back" href="{% url 'desk_board' %}">رجوع</a>
 </div>
 
@@ -44,7 +51,9 @@
 
   {% if not chosen %}
     <div class="empty">
-      {% if targets %}
+      {% if not department %}
+        اختر قسماً من الأعلى ثمّ وحدةً لطباعة كشف تسليمها.
+      {% elif targets %}
         اختر وحدةً من الأعلى لطباعة كشف تسليمها.
       {% else %}
         لا توجد كتبٌ مُفرَّقةٌ بانتظار توقيع الاستلام — الطاولة نظيفة.

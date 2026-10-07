@@ -86,7 +86,8 @@ def sequence_settings(request):
             for seq in sequences:
                 prefix_key = f"prefix_{seq['kind']}"
                 number_key = f"next_number_{seq['kind']}"
-                new_prefix = request.POST.get(prefix_key, '').strip()
+                # البادئةُ مهملةٌ ولا حقلَ لها في الصفحة: غيابُ المفتاح لا يمسح المخزَّن
+                new_prefix = request.POST.get(prefix_key, seq['obj'].prefix).strip()
                 new_number = _parse_int(request.POST.get(number_key, '').strip())
                 update_fields = []
                 if new_prefix != seq['obj'].prefix:

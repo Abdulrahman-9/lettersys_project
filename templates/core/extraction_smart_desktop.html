@@ -118,7 +118,8 @@
     <!-- الجانب الأيسر: نماذج الإدخال -->
     <div class="extraction-form-panel">
         <!-- input file مخفي -->
-        <input type="file" id="fileInput" style="display: none;" accept="image/*,.pdf">
+        {# «image/*» كان يعرض في المنتقي صوراً (TIFF/GIF…) ترفضها processFile — المنتقي يعرض ما تقبله الصفحةُ وحدَه (تدقيقُ نيلسن C#5) #}
+        <input type="file" id="fileInput" style="display: none;" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
 
         <!-- شارة الملف القديمة منقولة لرأس المعاينة (modal-header) — يُبقى فقط fileName/fileSize/scanPagesCount مخفية للتوافق -->
         <div id="filePreview" style="display: none;">
@@ -502,7 +503,7 @@
 
                         <div class="form-group-smart">
                             <label class="field-label"><i class="bi bi-card-text"></i> ملاحظات</label>
-                            <textarea class="form-control-smart" id="margin" placeholder="ملاحظات إضافية أو تعليمات أرشيفية" rows="3"></textarea>
+                            <textarea class="form-control-smart" id="margin" placeholder="ملاحظات إضافية أو تعليمات أرشيفية" rows="3" maxlength="1000"></textarea>
                             <div class="input-hint"><span id="charCount">0</span> / 1000</div>
                         </div>
                     </div>
@@ -595,7 +596,7 @@
             <div class="empty-state" id="dropZone" title="اضغط أو اسحب الملف هنا">
                 <div class="empty-state-icon">📄</div>
                 <div class="empty-state-text">اسحب الملف هنا أو اضغط للرفع</div>
-                <div class="empty-state-hint">PDF أو الصور (حتى 10MB) — أو استخدم زر "مسح من السكانر"</div>
+                <div class="empty-state-hint">PDF أو صورة JPG/PNG (حتى 10MB) — أو استخدم زر "مسح من السكانر"</div>
             </div>
         </div>
 
@@ -639,8 +640,8 @@
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
 <script src="{% static 'js/subject_locate.js' %}?v=20260929exc"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20261007"></script>
-<script src="{% static 'js/document_manager.js' %}?v=20260630a"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20261007b"></script>
+<script src="{% static 'js/document_manager.js' %}?v=20261007"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
 
@@ -1246,22 +1247,29 @@
 
   // تتبّع «تغييرات غير محفوظة» بمقارنة قِيَمية (baseline) — لا يعتمد على الأحداث
   // كي لا يرفع العلم زوراً عند الملء البرمجي (applyExtractionResult / حقن EDIT_DATA).
+  // والملاحظاتُ ونوعُ المستند المكتوب ووسومُ الجهتين: كانت خارج القائمة — ووسمُ الجهة
+  // يُفرِغ حقلَه (`_reset`) فلا تراه المقارنةُ — فتضيع بمغادرةٍ صامتة (تدقيقُ نيلسن C#6).
   var FIELDS = ['title', 'date', 'senderNumber', 'senderDate', 'issuingEntity',
-                'receivingEntity', 'dueDate', 'secretLevel', 'bookKind'];
+                'receivingEntity', 'dueDate', 'secretLevel', 'bookKind',
+                'margin', 'documentTypeCustom'];
   var baseline = {};
   var allowLeave = false;
+  function tagsOf(key) {
+    var mgr = window.entityTagManagers && window.entityTagManagers[key];
+    return mgr && mgr.tags ? mgr.tags.map(function (t) { return t.id || t.name; }).join('|') : '';
+  }
   function snapshot() {
     var s = {};
     FIELDS.forEach(function (id) { var el = document.getElementById(id); s[id] = el ? (el.value || '') : ''; });
+    s.__issuingTags = tagsOf('issuing');
+    s.__receivingTags = tagsOf('receiving');
     return s;
   }
   function setBaseline() { baseline = snapshot(); }
   window.__setExtractionBaseline = setBaseline;   // تستدعيها extraction_smart.js بعد الحفظ/التفريغ + بلوك التعديل
   function isDirty() {
-    return FIELDS.some(function (id) {
-      var el = document.getElementById(id);
-      return el && (el.value || '') !== (baseline[id] || '');
-    });
+    var now = snapshot();
+    return Object.keys(now).some(function (k) { return now[k] !== (baseline[k] || ''); });
   }
   window.__isExtractionDirty = isDirty;   // تأكيدُ «تفريغ الحقول» حين يوجد إدخال (نيلسن 1، مذكّرة فيبل 10)
   // لقطة الأساس بعد استقرار النموذج (الافتراضات + الحجز + أي حقن أوّلي)

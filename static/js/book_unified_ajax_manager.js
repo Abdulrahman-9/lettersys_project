@@ -162,6 +162,15 @@
     });
   }
 
+  // ─── الاتّجاهُ من التبويب — قاعدةٌ واحدة للثيم ولنطاق «داخلي/خارجي» ─────────────
+  // (كانت مكتوبةً مرّتين تقولان «وارد» لكلّ ما ليس صادراً، فتضيّق «الكلّ» صامتةً)
+  function directionOf(tab) {
+    const t = tab || 'incoming';
+    if (t.startsWith('outgoing')) return 'outgoing';
+    if (t.startsWith('all')) return 'all';
+    return 'incoming';
+  }
+
   // ─── Render pagination ────────────────────────────────────────────────────────
   function renderPagination(p, currentParams) {
     const fromEl  = document.getElementById('paginationFrom');
@@ -189,7 +198,7 @@
       <li class="page-item ${!p.has_prev ? 'disabled' : ''}">
         ${p.has_prev ? buildLink(prevParams, 'السابق') : '<span class="page-link">السابق</span>'}
       </li>
-      <li class="page-item active"><span class="page-link">${p.current}</span></li>
+      <li class="page-item active"><span class="page-link">صفحة ${p.current} من ${p.total}</span></li>
       <li class="page-item ${!p.has_next ? 'disabled' : ''}">
         ${p.has_next ? buildLink(nextParams, 'التالي') : '<span class="page-link">التالي</span>'}
       </li>`;
@@ -230,6 +239,7 @@
     const MAP = {
       'badge-incoming':       badges.incoming,
       'badge-outgoing':       badges.outgoing,
+      'badge-all':            badges.all,
       'pill-count-pending':   badges.pending,
       'pill-count-due-today': badges.due_today,
       'pill-count-overdue':   badges.overdue,
@@ -287,12 +297,10 @@
       this._focusRequestedBook();
     }
 
-    // ─── Theme switching: incoming → blue, outgoing → yellow ───────────────────
+    // ─── Theme switching: incoming / outgoing / all (محايد) ─────────────────────
     applyTheme() {
-      const direction = (this.currentState.tab || 'incoming').startsWith('outgoing')
-        ? 'outgoing' : 'incoming';
       const page = document.getElementById('bookUnifiedPage');
-      if (page) page.dataset.theme = direction;
+      if (page) page.dataset.theme = directionOf(this.currentState.tab);
     }
 
     // ─── Advanced filter panel toggle ──────────────────────────────────────────
@@ -311,12 +319,6 @@
       const self = this;
       const mainTabs = document.querySelectorAll('.tab-main');
 
-      function getMainDirection(tabValue) {
-        if (!tabValue) return 'incoming';
-        if (tabValue.startsWith('outgoing')) return 'outgoing';
-        return 'incoming';
-      }
-
       mainTabs.forEach(btn => {
         btn.addEventListener('click', e => {
           e.preventDefault();
@@ -328,6 +330,9 @@
 
           self.currentState.tab = direction;
           self.currentState.page = 1;
+          // التبويبُ الرئيسيّ يعيد النطاقَ إلى «الكل» — فلتُضَأ رقاقتُه لا السابقة
+          document.querySelectorAll('.fb-scope-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.scope === 'all'));
           self.applyTheme();
           self.updateUrlAndLoadData();
         });
@@ -338,7 +343,7 @@
         btn.addEventListener('click', e => {
           e.preventDefault();
           const scope = btn.dataset.scope;
-          const dir   = getMainDirection(self.currentState.tab);
+          const dir   = directionOf(self.currentState.tab);
           const newTab = scope === 'all' ? dir : `${dir}_${scope}`;
           document.querySelectorAll('.fb-scope-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
@@ -638,7 +643,8 @@
     }
 
     clearAllFilters() {
-      this.currentState = { tab: 'incoming', search: '', dateFrom: '', dateTo: '',
+      // التبويبُ ليس فلتراً: المسحُ من «صادر» كان يقفز إلى «وارد» (تدقيقُ نيلسن A#15)
+      this.currentState = { tab: this.currentState.tab || 'incoming', search: '', dateFrom: '', dateTo: '',
                             entityId: '', status: '', legacy: '', page: 1, sort: '-date' };
       this.syncLegacyControls(false);
       history.pushState({}, '', window.location.pathname);

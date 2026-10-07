@@ -217,12 +217,14 @@
         `formaction` يُحوّل النموذجَ نفسَه إلى نقطةٍ أخرى، فالتحديدُ واحدٌ ولا
         نموذجَ ثانٍ ولا سطرَ JS: خانةُ الاختيار تُربط بنموذجٍ واحدٍ فقط في HTML.
       {% endcomment %}
-      <div class="btn-group btn-group-sm" id="kindMoveGroup" style="display: none;" role="group"
+      <div class="btn-group btn-group-sm ms-3" id="kindMoveGroup" style="display: none;" role="group"
            aria-label="نقل الجهات المحددة إلى تبويب">
         <span class="btn btn-sm btn-light disabled">نقل إلى:</span>
         {% for t in kind_tabs %}
+        {# تأكيدٌ يسمّي العددَ والتبويب: كان النقلُ يُرسَل فوراً بجوار «تعطيل» وبنمطه (تدقيقُ نيلسن D#13) #}
         <button type="submit" form="entitiesForm" formaction="{% url 'entity_set_kind' %}"
-                name="kind" value="{{ t.key }}" class="btn btn-sm btn-outline-secondary">
+                name="kind" value="{{ t.key }}" class="btn btn-sm btn-outline-secondary"
+                onclick="return confirm('نقل ' + document.getElementById('selectedCount').textContent + ' جهةً إلى تبويب «{{ t.label|escapejs }}»؟');">
           {{ t.label }}
         </button>
         {% endfor %}

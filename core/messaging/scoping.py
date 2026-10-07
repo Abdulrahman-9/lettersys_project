@@ -76,6 +76,20 @@ def mailable_book(user, book_id):
     return book
 
 
+def repliable_thread(user, thread_id):
+    """الخيطُ الذي يحقّ للمستخدم الردُّ فيه — أو ``None`` (تدقيقُ نيلسن E#2، مذكّرةُ فيبل).
+
+    كان ``api_compose`` يأخذ ``EmailThread`` بالرقم مطلقاً — فيعلّق أيُّ مستخدمٍ رسالتَه
+    على خيطِ غيره (IDOR). والجوابُ للخارج عن النطاق «غير موجود» كـ``mailable_book``.
+    """
+    from core.models import EmailThread
+
+    if not str(thread_id or '').isdigit():
+        return None
+    threads = scope_threads(EmailThread.objects.select_related('book', 'entity'), user)
+    return threads.filter(pk=int(thread_id)).first()
+
+
 def scope_threads(qs, user):
     """خيوط المراسلة التي يحقّ للمستخدم رؤيتها/تعديل حالتها."""
     if sees_all_mail(user):

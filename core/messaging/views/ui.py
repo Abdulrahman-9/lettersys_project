@@ -18,13 +18,15 @@ URL patterns:
 """
 
 import logging
+import re
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
 from core.views.helpers import staff_required
 from django.core.paginator import Paginator
-from django.http import Http404, HttpResponseForbidden
+from django.core.exceptions import PermissionDenied
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
@@ -216,10 +218,45 @@ def mail_inbox(request):
 #  Compose
 # ══════════════════════════════════════════════════════
 
+_REPLY_PREFIX = re.compile(r'^\s*(re|رد|ردّ)\s*:', re.IGNORECASE)
+
+
+def reply_subject(subject):
+    """«رد: …» مرّةً واحدة، وبطول عمود السجلّ — موضوعُ الخيط 300 وسجلُّ الإرسال 255،
+    فبادئةٌ على موضوعٍ طويلٍ كانت ستكسر الحفظ."""
+    from core.models import BookEmailLog
+
+    s = (subject or '').strip()
+    if not _REPLY_PREFIX.match(s):
+        s = 'رد: ' + s
+    return s[:BookEmailLog._meta.get_field('subject').max_length]
+
+
+def _reply_address(thread):
+    """إلى مَن يُردّ: عنوانُ ردّ آخر وارد، ثمّ مرسِلُه، ثمّ أوّلُ مستلمي آخر صادر، ثمّ بريدُ الجهة."""
+    last_in = thread.incoming_emails.order_by('-received_at').first()
+    if last_in and (last_in.reply_to or last_in.from_address):
+        return (last_in.reply_to or last_in.from_address).strip()
+    last_out = thread.sent_emails.order_by('-sent_at').first()
+    if last_out and last_out.to_address:
+        return last_out.to_address.split(',')[0].strip()
+    return (thread.entity.email if thread.entity_id else '') or ''
+
+
 @login_required
 def mail_compose(request, book_id=None):
     from core.models import Entity, EmailTemplate, EmailSettings
-    from core.messaging.scoping import mailable_book
+    from core.messaging.scoping import mailable_book, repliable_thread
+
+    # «رد» من صفحة الخيط: ``?thread=`` كان يُهمَل فيُفتح نموذجٌ فارغ ويبدأ الإرسالُ خيطاً
+    # جديداً (تدقيقُ نيلسن E#2). الردُّ يرث كتابَ خيطه؛ والخيطُ خارج النطاق «غير موجود».
+    thread = None
+    if request.GET.get('thread'):
+        thread = repliable_thread(request.user, request.GET.get('thread'))
+        if thread is None:
+            raise Http404('المراسلة غير موجودة')
+        if thread.book_id:
+            book_id = thread.book_id
 
     book = None
     if book_id:
@@ -243,9 +280,16 @@ def mail_compose(request, book_id=None):
             prefill['to']        = related_entities[0].email
             prefill['entity_id'] = related_entities[0].pk
         prefill['subject'] = f"بشأن كتاب رقم {book.our_number or ''} — {book.title}"
+    if thread:
+        reply_to = _reply_address(thread)
+        if reply_to:
+            prefill['to'] = reply_to
+        prefill['entity_id'] = thread.entity_id or prefill.get('entity_id')
+        prefill['subject'] = reply_subject(thread.subject)
 
     return render(request, 'core/mail/hub.html', {
         'active_tab': 'compose',
+        'thread':     thread,
         'book':       book,
         'entities':   entities,
         'templates':  templates,
@@ -272,7 +316,8 @@ def mail_thread(request, thread_id):
         # 403 لا 404 هنا عن قصد — على خلاف الكتب أعلاه: الخيط يُفتح من رابطٍ
         # قديم أو مشارَك، فرسالةٌ صريحة أنفع من «غير موجود»، ووجودُ رقم خيطٍ
         # ليس سرّاً. (صفحةُ الكتاب نفسُها صارت 404 — رقمُ الكتاب هويّةُ مستند.)
-        return HttpResponseForbidden("غير مصرح لك بالاطّلاع على هذه المراسلة")
+        # PermissionDenied لا نصٌّ عارٍ: صفحةُ 403 داخل القشرة بزرّ عودة (تدقيقُ نيلسن E#18)
+        raise PermissionDenied("غير مصرح لك بالاطّلاع على هذه المراسلة")
 
     sent_emails = thread.sent_emails.select_related('sent_by').order_by('sent_at')
     received    = thread.incoming_emails.order_by('received_at')
@@ -432,7 +477,7 @@ def mail_template_edit(request, template_id=None):
 @require_http_methods(['POST'])
 def mail_template_delete(request, template_id):
     if not request.user.is_staff:
-        return HttpResponseForbidden()
+        raise PermissionDenied("حذفُ القوالب لمديري النظام.")
     from core.models import EmailTemplate
     tpl  = get_object_or_404(EmailTemplate, pk=template_id)
     name = tpl.name

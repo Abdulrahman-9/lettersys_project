@@ -20,6 +20,16 @@
     return m ? m[1] : '';
   }
 
+  // رمزُ HTTP الخامّ («خطأ 413») سببٌ يُفهم وإجراء (تدقيقُ نيلسن C#13)
+  function httpReason(status) {
+    if (status === 403) return 'لا تملك صلاحيةَ هذا الإجراء على المستند.';
+    if (status === 404) return 'المستند غير موجود — ربّما حُذف. حدِّث الصفحة.';
+    if (status === 413) return 'الملفّ أكبر من الحدّ المسموح.';
+    if (status === 429) return 'محاولاتٌ كثيرة — انتظر قليلاً ثمّ أعد المحاولة.';
+    if (status >= 500) return 'تعذّر الحفظ على الخادم — أعد المحاولة بعد قليل.';
+    return 'تعذّرت العملية (رمز ' + status + ').';
+  }
+
   function fmtSize(bytes) {
     if (!bytes && bytes !== 0) return '';
     const u = ['B', 'KB', 'MB', 'GB'];
@@ -166,6 +176,10 @@
     async _replace(att) {
       const file = await this._pickFile('application/pdf,image/*', false);
       if (!file) return;
+      // الاستبدالُ كان يُنفَّذ فور اختيار الملفّ بلا سؤال (تدقيقُ نيلسن C#12)
+      const ok = await this._confirm('استبدال المستند',
+        `سيحلّ «${file.name}» محلّ «${att.name || 'المستند'}». متابعة؟`, 'استبدال');
+      if (!ok) return;
       const fd = new FormData(); fd.append('file', file);
       await this._run(`${this.base}/attachment/${att.id}/replace/`, fd, 'جارٍ الاستبدال…');
     }
@@ -228,7 +242,7 @@
         });
         let p = {};
         try { p = await r.json(); } catch (e) { /* قد لا تكون JSON */ }
-        if (!r.ok || p.success === false) throw new Error(p.message || `خطأ ${r.status}`);
+        if (!r.ok || p.success === false) throw new Error(p.message || httpReason(r.status));
         this._toast('success', p.message || 'تمّت العملية');
         await this.refresh();
         if (this.onAfterMutate) { try { this.onAfterMutate(); } catch (_e) { /* تجاهل */ } }
@@ -282,12 +296,18 @@
         foot.appendChild(cancel); foot.appendChild(confirm);
         box.appendChild(head); box.appendChild(body); box.appendChild(foot);
         back.appendChild(box);
-        const close = (val) => { back.classList.remove('show'); setTimeout(() => back.remove(), 200); resolve(val); };
+        // Escape يُغلق كإلغاء، والتركيزُ على زرّ التأكيد عند الفتح (تدقيقُ نيلسن C#17)
+        const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(null); } };
+        const close = (val) => {
+          document.removeEventListener('keydown', onKey);
+          back.classList.remove('show'); setTimeout(() => back.remove(), 200); resolve(val);
+        };
+        document.addEventListener('keydown', onKey);
         cancel.addEventListener('click', () => close(null));
         confirm.addEventListener('click', () => close(box._value !== undefined ? box._value : true));
         back.addEventListener('click', e => { if (e.target === back) close(null); });
         document.body.appendChild(back);
-        requestAnimationFrame(() => back.classList.add('show'));
+        requestAnimationFrame(() => { back.classList.add('show'); confirm.focus(); });
         box._confirmBtn = confirm;
         this._activeBox = box;
       });

@@ -41,10 +41,14 @@ def _confidence_percent(value):
 
 
 def _confidence_state(value):
+    # العتبتان من المصدر الوحيد (ConfidenceAnalyzer = 0.85/0.65، وCONFIDENCE_THRESHOLDS في
+    # extraction_smart.js تطابقه): كانت هنا 85/70 فاللونُ نفسُه بمعنيين بين الصفحتين (تدقيقُ نيلسن C#9).
+    from core.extraction.helpers import ConfidenceAnalyzer
+    limits = ConfidenceAnalyzer.CONFIDENCE_THRESHOLDS
     percent = _confidence_percent(value)
-    if percent >= 85:
+    if percent >= round(limits['high'] * 100):
         return "high"
-    if percent >= 70:
+    if percent >= round(limits['medium'] * 100):
         return "medium"
     return "low"
 

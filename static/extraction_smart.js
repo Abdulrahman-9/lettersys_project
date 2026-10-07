@@ -3641,7 +3641,7 @@ class ExtractionSmartSystem {
         // Validate file type
         const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
         if (!validTypes.includes(file.type)) {
-            this.showToast('نوع الملف غير مدعوم. استخدم صورة أو PDF', 'error');
+            this.showToast('نوع الملف غير مدعوم هنا — استخدم PDF أو صورة JPG/PNG.', 'error');
             return;
         }
 
