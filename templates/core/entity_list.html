@@ -156,6 +156,17 @@
              class="filter-chip {% if lang_filter == 'en' %}active{% endif %}">
             <i class="bi bi-fonts me-1"></i>إنجليزي ({{ totals.english|default:0 }})
           </a>
+          {# المعطّلةُ كانت محسوبةً بلا رابطٍ إليها — تعطيلٌ بلا بابِ استرجاع (تدقيقُ نيلسن D#2) #}
+          {% if inactive_count %}
+          <a href="?status=inactive" class="filter-chip ms-auto">
+            <i class="bi bi-slash-circle me-1"></i>المعطّلة ({{ inactive_count }})
+          </a>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="col-12 d-flex align-items-center gap-2 flex-wrap mt-2">
+          <span class="filter-chip active"><i class="bi bi-slash-circle me-1"></i>المعطّلة ({{ inactive_count }})</span>
+          <a href="?" class="filter-chip"><i class="bi bi-arrow-right me-1"></i>العودة إلى الجهات النشطة</a>
         </div>
         {% endif %}
         <div class="col-md-2 d-flex justify-content-md-end">

@@ -236,26 +236,32 @@
     <!-- Login Form -->
     <form method="post" class="login-form">
       {% csrf_token %}
+      {% if form.errors %}
+      {# كانت كلمةُ المرور الخاطئة تعيد الصفحةَ نفسَها بصمت (تدقيقُ نيلسن E#1) #}
+      <div class="alert alert-danger py-2 small" role="alert">
+        <i class="bi bi-exclamation-circle me-1"></i>اسمُ المستخدم أو كلمةُ المرور غيرُ صحيحة.
+      </div>
+      {% endif %}
       
       <div class="mb-3">
-        <label class="form-label fw-semibold">
+        <label class="form-label fw-semibold" for="id_username">
           <i class="bi bi-person-fill text-primary me-2"></i>اسم المستخدم
         </label>
-        <input type="text" name="username" class="form-control" placeholder="أدخل اسم المستخدم" required autofocus>
+        <input type="text" name="username" id="id_username" class="form-control" placeholder="أدخل اسم المستخدم" value="{{ form.username.value|default:'' }}" autocomplete="username" required autofocus>
       </div>
       
       <div class="mb-3">
-        <label class="form-label fw-semibold">
+        <label class="form-label fw-semibold" for="id_password">
           <i class="bi bi-key-fill text-primary me-2"></i>كلمة المرور
         </label>
-        <input type="password" name="password" class="form-control" placeholder="أدخل كلمة المرور" required>
+        <input type="password" name="password" id="id_password" class="form-control" placeholder="أدخل كلمة المرور" autocomplete="current-password" required>
       </div>
       
       <!-- ✅ Remember Me Checkbox (جديد) -->
       <div class="form-check mb-3 d-flex align-items-center">
         <input class="form-check-input cursor-pointer" type="checkbox" id="id_remember_me" name="remember_me" value="on">
         <label class="form-check-label ms-2 cursor-pointer fw-500" for="id_remember_me">
-          <i class="bi bi-bookmark-check text-primary me-1"></i>تذكرني لمدة 30 يوم
+          <i class="bi bi-bookmark-check text-primary me-1"></i>تذكّرني 7 أيّام
         </label>
       </div>
       

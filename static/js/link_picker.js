@@ -49,6 +49,12 @@
     });
 
     this.submit.addEventListener('click', function () { self.save(); });
+    if (this.relation) this.relation.addEventListener('change', function () { self.sync(); });
+  };
+
+  /* «اربط» يحتاج كتاباً وصفةً معاً — الصفةُ لا تُفترض. */
+  LinkPicker.prototype.sync = function () {
+    this.submit.disabled = !(this.picked && (!this.relation || this.relation.value));
   };
 
   LinkPicker.prototype.search = function () {
@@ -105,7 +111,7 @@
     this.picked = row.getAttribute('data-book');
     if (this.chosen) this.chosen.hidden = false;
     if (this.label) this.label.textContent = 'المختار: ' + row.getAttribute('data-label');
-    this.submit.disabled = false;
+    this.sync();
   };
 
   LinkPicker.prototype.save = function () {
@@ -135,7 +141,7 @@
   };
 
   LinkPicker.prototype.fail = function (message) {
-    this.submit.disabled = false;
+    this.sync();
     if (this.label) {
       this.label.textContent = message;
       this.label.classList.add('text-danger');

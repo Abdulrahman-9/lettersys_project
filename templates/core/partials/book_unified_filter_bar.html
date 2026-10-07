@@ -95,8 +95,9 @@
     <button type="button"
             class="fb-pill fb-pill-archived {% if current_filter == 'archived' %}active{% endif %}"
             aria-pressed="{% if current_filter == 'archived' %}true{% else %}false{% endif %}"
-            data-filter="archived" title="مؤرشف">
-      <i class="bi bi-archive"></i> مؤرشف
+            data-filter="archived" title="انتهت متابعتُه أو لا متابعةَ له">
+      {# كلمةُ FOLLOWUP_LABELS['archived'] — «مؤرشف» كلمةُ الورق لا المتابعة (تدقيقُ نيلسن A#4) #}
+      <i class="bi bi-check2-circle"></i> مُنجَز / بلا متابعة
       <span class="fb-pill-count" id="pill-count-archived">{{ archived_count|default:0 }}</span>
     </button>
   </div>

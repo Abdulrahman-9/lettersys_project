@@ -24,7 +24,7 @@ class CustomLoginView(LoginView):
     def form_valid(self, form):
         """
         معالجة النموذج بعد التحقق من صحته
-        إذا اختار "تذكرني" = session تدوم 30 يوم
+        إذا اختار "تذكرني" = session تدوم 7 أيّام (نصُّ الصفحة يقول المدّةَ نفسَها)
         """
         remember_me = self.request.POST.get('remember_me', False)
         

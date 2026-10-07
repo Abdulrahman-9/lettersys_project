@@ -44,7 +44,9 @@
         <div id="lpChosen" class="mb-3" hidden>
           <label for="lpRelation" class="form-label">صفةُ العلاقة</label>
           <div class="d-flex gap-2 flex-wrap align-items-center">
-            <select class="form-select form-select-sm" id="lpRelation" style="max-width:12rem">
+            {# بلا صفةٍ مفترضة: «جواب على» أوّلاً كان يُختار صامتاً ويُقفل الإحالة (تدقيقُ نيلسن B#2) #}
+            <select class="form-select form-select-sm" id="lpRelation" style="max-width:12rem" required>
+              <option value="" selected>— اختر الصفة —</option>
               {% for value, label in relation_choices %}
                 <option value="{{ value }}">{{ label }}</option>
               {% endfor %}

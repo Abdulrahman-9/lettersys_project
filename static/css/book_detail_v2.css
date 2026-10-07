@@ -248,3 +248,5 @@ details[open] > .bx-fold .bi-chevron-down { transform: rotate(180deg); }
   .bx-circle, .bx-step, .bx-pill { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   details > *:not(summary) { display: block !important; }
 }
+.bx-links .bx-unlink { border: 0; background: none; color: var(--bx-muted); padding: 2px 6px; border-radius: 6px; line-height: 1; }
+.bx-links .bx-unlink:hover, .bx-links .bx-unlink:focus-visible { color: #b91c1c; background: var(--bx-quiet); }

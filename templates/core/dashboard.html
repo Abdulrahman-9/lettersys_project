@@ -42,11 +42,11 @@
       </div>
       <div class="db-tile db-tile--lg db-tone-in">
         <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=incoming"><span class="db-l">الكتب الواردة</span><span class="db-n"{% if incoming_total %} data-has="1"{% endif %}>{{ incoming_total }}</span></a>
-        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=incoming&followup=active">{{ active_label }}: <strong>{{ incoming_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=incoming&followup=archived">منجزة: <strong>{{ incoming_done }}</strong></a></p>
+        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=incoming&followup=active">{{ active_label }}: <strong>{{ incoming_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=incoming&followup=archived">مُنجَز / بلا متابعة: <strong>{{ incoming_done }}</strong></a></p>
       </div>
       <div class="db-tile db-tile--lg db-tone-accent">
         <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=outgoing"><span class="db-l">الكتب الصادرة</span><span class="db-n"{% if outgoing_total %} data-has="1"{% endif %}>{{ outgoing_total }}</span></a>
-        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=outgoing&followup=active">{{ active_label }}: <strong>{{ outgoing_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=outgoing&followup=archived">منجزة: <strong>{{ outgoing_done }}</strong></a></p>
+        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=outgoing&followup=active">{{ active_label }}: <strong>{{ outgoing_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=outgoing&followup=archived">مُنجَز / بلا متابعة: <strong>{{ outgoing_done }}</strong></a></p>
       </div>
       <div class="db-tile db-tile--lg db-tone-accent">
         <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=all"><span class="db-l">إجمالي الكتب</span><span class="db-n"{% if total %} data-has="1"{% endif %}>{{ total }}</span></a>
