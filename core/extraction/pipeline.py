@@ -49,6 +49,9 @@ from core.extraction.matchers.entity import EntityMatcher
 from core.extraction.matchers.profile import SenderNumberProfiles
 from core.extraction.matchers.strict_ref import (APPROVED_PREFIXES, canonical_sender_number,
                                                  strict_ref_match)
+from core.extraction import degrade
+from core.extraction import lanes as _lanes
+from core.pdf_lock import MUPDF_LOCK
 from core.models import (
     OCRResult, DataExtractionResult, ExtractionFeedback,
     ExtractionStatistics, ExtractionCache, Attachment, Book, Entity
@@ -491,11 +494,12 @@ def pdf_first_page_text(path: str) -> str:
         return ''
     try:
         import fitz
-        doc = fitz.open(path)
-        try:
-            return doc[0].get_text() if doc.page_count else ''
-        finally:
-            doc.close()
+        with MUPDF_LOCK:
+            doc = fitz.open(path)
+            try:
+                return doc[0].get_text() if doc.page_count else ''
+            finally:
+                doc.close()
     except Exception as exc:          # noqa: BLE001 — الصارمُ يصمت، لا يُسقط الأنبوب
         logger.warning('[strict_ref] تعذّر نصُّ الصفحة الأولى: %s', type(exc).__name__)
         return ''
@@ -565,6 +569,30 @@ def _suppress_sender_number_emission(result) -> None:
                     result.sender_number_confidence or 0.0)
     result.sender_number = None
     result.sender_number_confidence = 0.0
+
+
+def _r4_certain(strict_text) -> bool:
+    """هل سيجري مسارُ خطّ اليد يقيناً؟ بوّابتُه: `_sender_number_survives_emission` كاذبةٌ
+    دائماً قبلها (`NUMBER_EMISSION_ENABLED` مطفأ، ووسمُ crnn يُكتب بعدها)، و`_strict_ref_skips_visual`
+    لا يصدق إلّا إن أنتج الصارمُ قيمة. فما لم يُطابق الصارمُ مرجعاً في نصّ الصفحة الأولى فالمسارُ
+    جارٍ. وإن طابق فالأمرُ معلّقٌ بتاريخ الجهة وبإصلاح البادئة ⟵ يُترك لكود اليوم متسلسلاً.
+    والبوّابةُ الحقيقيّة تبقى في موضعها: ممرٌّ بدأ ولم تُفتح بوّابتُه تُرمى قيمتُه."""
+    if not strict_text:
+        return True
+    raw = strict_ref_match(strict_text)
+    return not (canonical_sender_number(raw) if raw else '')
+
+
+def _detector_lane(im):
+    """ممرُّ الكاشف: det2 على رسم الكاشف، ثمّ det1 احتياطاً **إن** صمت det2 عن العدد وكانت
+    جلستُه محمَّلةً أصلاً — وإلّا `NOT_RUN` فيحسبه موضعُه بكود اليوم (ويحمّلها هناك كاليوم).
+    القيمتان دالّتان نقيّتان في الرسم نفسِه الذي كان `_detector_box_from_file` سيعيد رسمه."""
+    from core.extraction.handwriting import detector as _det
+    boxes = _det.detect_boxes(im)
+    fallback = _lanes.NOT_RUN
+    if not boxes.get('number') and _det._fb_session is not None:
+        fallback = _det.detect_number_box_fallback(im)
+    return {'boxes': boxes, 'fallback': fallback}
 
 
 class AIExtractionService:
@@ -637,18 +665,19 @@ class AIExtractionService:
             return None
         try:
             import fitz
-            doc = fitz.open(path)
-            try:
-                # sort=True: **ترتيبٌ بصريّ (أعلى→أسفل) لا بترتيب كتل الملفّ**.
-                # قِيس بالقراءة بالعين (2026-07-14): برامج المسح تكتب كتل النصّ
-                # بترتيبٍ عشوائي، فيقع سطر «Date» — وهو أعلى الصفحة بصرياً — عند
-                # السطر 21-23 في التيار، أي خارج «منطقة الرأس» فيضيع التاريخ رغم
-                # وضوحه التام في الصورة (كتب qurnain/EBS/NORTH). بالترتيب يعود
-                # إلى السطر 7-9 حيث ينتمي. يفيد كلَّ الحقول لا التاريخَ وحده.
-                text = '\n'.join(doc[i].get_text('text', sort=True)
-                                 for i in range(doc.page_count)).strip()
-            finally:
-                doc.close()
+            with MUPDF_LOCK:
+                doc = fitz.open(path)
+                try:
+                    # sort=True: **ترتيبٌ بصريّ (أعلى→أسفل) لا بترتيب كتل الملفّ**.
+                    # قِيس بالقراءة بالعين (2026-07-14): برامج المسح تكتب كتل النصّ
+                    # بترتيبٍ عشوائي، فيقع سطر «Date» — وهو أعلى الصفحة بصرياً — عند
+                    # السطر 21-23 في التيار، أي خارج «منطقة الرأس» فيضيع التاريخ رغم
+                    # وضوحه التام في الصورة (كتب qurnain/EBS/NORTH). بالترتيب يعود
+                    # إلى السطر 7-9 حيث ينتمي. يفيد كلَّ الحقول لا التاريخَ وحده.
+                    text = '\n'.join(doc[i].get_text('text', sort=True)
+                                     for i in range(doc.page_count)).strip()
+                finally:
+                    doc.close()
         except Exception as exc:
             logger.warning('[pipeline] فحص طبقة نصّ PDF فشل: %s', exc)
             return None
@@ -857,20 +886,107 @@ class AIExtractionService:
             from PIL import Image as PILImage
             if str(image_path).lower().endswith('.pdf'):
                 import fitz
-                doc = fitz.open(image_path)
-                page = doc[0]
-                zoom = 300 / 72.0
-                longer = max(page.rect.width, page.rect.height) * zoom
-                if longer > 3500:
-                    zoom *= 3500 / longer
-                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), colorspace=fitz.csGRAY, alpha=False)
-                return PILImage.frombytes('L', (pix.width, pix.height), pix.samples)
+                with MUPDF_LOCK:
+                    doc = fitz.open(image_path)
+                    try:
+                        page = doc[0]
+                        zoom = 300 / 72.0
+                        longer = max(page.rect.width, page.rect.height) * zoom
+                        if longer > 3500:
+                            zoom *= 3500 / longer
+                        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), colorspace=fitz.csGRAY,
+                                              alpha=False)
+                        return PILImage.frombytes('L', (pix.width, pix.height), pix.samples)
+                    finally:
+                        doc.close()          # يُغلَق تحت القفل لا حين يجمعه الكنّاس على خيطٍ آخر
             return PILImage.open(image_path).convert('L')
         except Exception as exc:
             logger.info('[subject_box] تعذّر فتح الصفحة (%s)', type(exc).__name__)
             return None
 
-    def _read_handwritten_sender_number(self, image_path, entity_id, want_date_crop=False, det_boxes=None):
+    def _render_r4(self, image_path):
+        """صورةُ مسار خطّ اليد: الصفحةُ الأولى رماديّةً 300dpi (سقفُ 3500px) أو الصورةُ رماديّة."""
+        from PIL import Image as PILImage
+        if image_path.lower().endswith('.pdf'):
+            import fitz
+            with MUPDF_LOCK:
+                doc = fitz.open(image_path)
+                try:
+                    page = doc[0]
+                    zoom = 300 / 72.0
+                    longer = max(page.rect.width, page.rect.height) * zoom
+                    if longer > 3500:
+                        zoom *= 3500 / longer
+                    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom),
+                                          colorspace=fitz.csGRAY, alpha=False)
+                    img = PILImage.frombytes('L', (pix.width, pix.height), pix.samples)
+                    del pix
+                finally:
+                    doc.close()      # تحت القفل حتّى عند العطب — لا حين يجمعه الكنّاس على خيطٍ آخر
+            return img
+        return PILImage.open(image_path).convert('L')
+
+    def _r4_tsv(self, img):
+        """جدولُ كلمات Tesseract لصورة مسار خطّ اليد (الصفحةُ كاملة، psm المحرّك)."""
+        self._ensure_ocr_stack()
+        prov = self._offline_provider
+        pt = prov._pytesseract
+        pt.pytesseract.tesseract_cmd = prov.cmd
+        if prov.tessdata_dir:
+            os.environ['TESSDATA_PREFIX'] = prov.tessdata_dir
+        # الصورةُ نفسُها والنداءُ نفسُه — بلا ضغط PNG البطيء الذي كان pytesseract يُجريه
+        # قبل كلّ نداء (انظر `tesseract_image_to_data`): البكسلاتُ لا تتغيّر.
+        from core.extraction.ocr.providers import tesseract_image_to_data
+        return tesseract_image_to_data(pt, img, lang=prov.lang, config=f'--psm {prov.psm}',
+                                       output_type=pt.Output.DICT)
+
+    def _render_r4_and_tsv(self, image_path):
+        img = self._render_r4(image_path)
+        return img, self._r4_tsv(img)
+
+    def _start_visual_lanes(self, lanes, image_path):
+        """يبدأ ممرَّي مسار خطّ اليد (TSV + الكاشف). الرسمُ هنا على خيط الاستخراج تحت القفل،
+        والممرُّ يقرأ صورةً جاهزة. رسمٌ يفشل ⟵ لا ممرّ، ويحسبه كودُ اليوم في موضعه بشرطه.
+        الكاشفُ لا يدخل ممرّاً إلّا وجلستُه محمَّلةٌ أصلاً: فشلُ تحميلٍ داخل ممرٍّ في ذروة الذاكرة
+        كان سيُطفئه حتّى إعادة التشغيل (مراجعةُ الخيوط 2026‑10‑06)."""
+        if lanes.started('r4') or lanes.started('det'):
+            return
+        # أيُّ عطبٍ هنا ⟵ لا ممرّ، ويحسبه موضعُه بكود اليوم داخل `try` اليوم نفسِه — لا يصير
+        # `status='failed'` ما كان اليوم تدهوراً رشيقاً (مراجعةُ فيبل للكود 2026‑10‑06).
+        try:
+            prov = self._offline_provider
+            try:
+                img = self._render_r4(image_path)
+            except Exception as exc:      # noqa: BLE001 — يُعاد في موضعه بكود اليوم
+                logger.info('[lanes] رسمُ r4 تعذّر مبكّراً (%s) — تسلسل', type(exc).__name__)
+                img = None
+            if img is not None:
+                from core.extraction.ocr.providers import tesseract_image_to_data
+                pt = prov._pytesseract
+                lang, config, dict_out = prov.lang, f'--psm {prov.psm}', pt.Output.DICT
+                lanes.start('r4', lambda: (img, tesseract_image_to_data(
+                    pt, img, lang=lang, config=config, output_type=dict_out)))
+            from core.extraction.handwriting import detector as _det
+            if _det._session is None:
+                return
+            try:
+                im = self._render_for_detector(image_path)
+            except Exception as exc:      # noqa: BLE001
+                logger.info('[lanes] رسمُ الكاشف تعذّر مبكّراً (%s) — تسلسل', type(exc).__name__)
+                return
+            lanes.start('det', lambda: _detector_lane(im))
+        except Exception as exc:          # noqa: BLE001
+            logger.info('[lanes] بدءُ ممرّات خطّ اليد تعذّر (%s) — تسلسل', type(exc).__name__)
+
+    def _det_from_lanes(self, lanes, image_path):
+        """قيمةُ ممرّ الكاشف `{'boxes', 'fallback'}`، أو None إن لم يبدأ ممرّ."""
+        if lanes is None or not lanes.started('det'):
+            return None
+        return lanes.take('det', lambda: {'boxes': self._detector_boxes_from_file(image_path),
+                                          'fallback': _lanes.NOT_RUN})
+
+    def _read_handwritten_sender_number(self, image_path, entity_id, want_date_crop=False, det_boxes=None,
+                                        lanes=None, det_fallback=_lanes.NOT_RUN):
         """مرحلة 3 — رقم الجهة المخربش بخط اليد حيث تعجز كل الطبقات المطبوعة:
         تموضعٌ بمرساة «العدد» وبصمة تخطيط الجهة ← قصّ الشريط ← قراءة CRNN (v5:
         94.5% على شرائط محجوزة) ← بوابة الثقة المُعايَرة.
@@ -909,34 +1025,10 @@ class AIExtractionService:
                 # `core/tests_weights_preflight.py`.
                 return None, None, None, (None, 0, 0)
 
-            from PIL import Image as PILImage
-            if image_path.lower().endswith('.pdf'):
-                import fitz
-                doc = fitz.open(image_path)
-                page = doc[0]
-                zoom = 300 / 72.0
-                longer = max(page.rect.width, page.rect.height) * zoom
-                if longer > 3500:
-                    zoom *= 3500 / longer
-                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom),
-                                      colorspace=fitz.csGRAY, alpha=False)
-                img = PILImage.frombytes('L', (pix.width, pix.height), pix.samples)
-                doc.close()
-                del pix
+            if lanes is not None and lanes.started('r4'):
+                img, tsv = lanes.take('r4', lambda: self._render_r4_and_tsv(image_path))
             else:
-                img = PILImage.open(image_path).convert('L')
-
-            self._ensure_ocr_stack()
-            prov = self._offline_provider
-            pt = prov._pytesseract
-            pt.pytesseract.tesseract_cmd = prov.cmd
-            if prov.tessdata_dir:
-                os.environ['TESSDATA_PREFIX'] = prov.tessdata_dir
-            # الصورةُ نفسُها والنداءُ نفسُه — بلا ضغط PNG البطيء الذي كان pytesseract يُجريه
-            # قبل كلّ نداء (انظر `tesseract_image_to_data`): البكسلاتُ لا تتغيّر.
-            from core.extraction.ocr.providers import tesseract_image_to_data
-            tsv = tesseract_image_to_data(pt, img, lang=prov.lang, config=f'--psm {prov.psm}',
-                                          output_type=pt.Output.DICT)
+                img, tsv = self._render_r4_and_tsv(image_path)
 
             # ── العدد اليدويّ (قراءة) ── لا early-return: نحسب التاريخ من نفس الرسم+TSV
             number_result = None
@@ -983,7 +1075,12 @@ class AIExtractionService:
             # قِيس: صفٌّ واحدٌ من 12 كان يحمل صندوقاً)، ويُغذّي مرساةَ قصاصة التاريخ.
             det_box = None
             if number_result is None or want_date_crop:
-                det_box = self._detector_box_from_file(image_path, boxes=det_boxes)
+                if det_boxes is None:
+                    _det = self._det_from_lanes(lanes, image_path)
+                    if _det is not None:
+                        det_boxes, det_fallback = _det['boxes'], _det['fallback']
+                det_box = self._detector_box_from_file(image_path, boxes=det_boxes,
+                                                       fallback=det_fallback)
 
             # ── قراءة CRNN على قصاصة الكاشف حين يُخفق المُموضِع القديم ─────────
             # تفكيك e2e‑A: في 35/100 وجد الكاشفُ الصندوقَ وبقي الحقل صامتاً لأن
@@ -1132,16 +1229,19 @@ class AIExtractionService:
         from PIL import Image as PILImage
         if image_path.lower().endswith('.pdf'):
             import fitz
-            doc = fitz.open(image_path)
-            page = doc[0]
-            zoom = 175 / 72.0
-            longer = max(page.rect.width, page.rect.height) * zoom
-            if longer > 3500:
-                zoom *= 3500 / longer
-            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-            im = PILImage.frombytes('RGB', (pix.width, pix.height), pix.samples)
-            doc.close()
-            del pix
+            with MUPDF_LOCK:
+                doc = fitz.open(image_path)
+                try:
+                    page = doc[0]
+                    zoom = 175 / 72.0
+                    longer = max(page.rect.width, page.rect.height) * zoom
+                    if longer > 3500:
+                        zoom *= 3500 / longer
+                    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+                    im = PILImage.frombytes('RGB', (pix.width, pix.height), pix.samples)
+                    del pix
+                finally:
+                    doc.close()      # تحت القفل حتّى عند العطب
             return im
         return PILImage.open(image_path).convert('RGB')
 
@@ -1160,12 +1260,14 @@ class AIExtractionService:
             return boxes
         except Exception as exc:
             logger.warning('[detector] الاستدلالُ من الملفّ تعذّر: %s', type(exc).__name__)
+            degrade.mark('detector-from-file')
             return {'number': None, 'subject': None}
 
     @staticmethod
-    def _detector_box_from_file(image_path, boxes=None):
+    def _detector_box_from_file(image_path, boxes=None, fallback=_lanes.NOT_RUN):
         """صندوق «العدد» من **الملفّ الأصليّ** بوصفة التدريب. `boxes` نتيجةُ
-        `_detector_boxes_from_file` إن حُسبت سلفاً في الاستخراج نفسه (لا استدلالَ ثانٍ)."""
+        `_detector_boxes_from_file` إن حُسبت سلفاً في الاستخراج نفسه (لا استدلالَ ثانٍ)،
+        و`fallback` نتيجةُ det1 إن حسبها ممرُّ الكاشف على الرسم نفسه (لا رسمَ ثانٍ)."""
         try:
             if boxes is None:
                 boxes = AIExtractionService._detector_boxes_from_file(image_path)
@@ -1175,10 +1277,13 @@ class AIExtractionService:
                 # **S1**: حين يصمت det2 يُجرَّب det1 احتياطيّاً. لا يعمل إلّا على
                 # صفحةٍ كانت ستبقى صامتة، فأسوأُ حالاته صندوقٌ زائفٌ ⟵ قراءةٌ دون
                 # بوّابة الثقة لا تمسّ حارس «واثقٌ‑ومخطئ».
-                from core.extraction.handwriting.detector import detect_number_box_fallback
-                im = AIExtractionService._render_for_detector(image_path)
-                got = detect_number_box_fallback(im)
-                del im
+                if fallback is not _lanes.NOT_RUN:
+                    got = fallback
+                else:
+                    from core.extraction.handwriting.detector import detect_number_box_fallback
+                    im = AIExtractionService._render_for_detector(image_path)
+                    got = detect_number_box_fallback(im)
+                    del im
                 arm = 'det1' if got else 'none'
             if not got:
                 return None
@@ -1467,6 +1572,8 @@ class AIExtractionService:
         result = AIExtractionResult()
         result.image_path = image_path
         enhanced_image_path: Optional[str] = None
+        lanes = None
+        _lanes.extraction_enter()
 
         try:
             # Step 1: فحص الكاش — يختصر الغالي فقط (OCR/طبقة النص) ولا يُرجِع
@@ -1506,6 +1613,16 @@ class AIExtractionService:
                 if not p_num and not p_date:
                     logger.info('[pipeline] طبقة النصّ بلا حقول رأس (رقم/تاريخ) — OCR بديلاً')
                     pdf_text = None
+            # ── ممرّاتُ القراءة المتوازية (`core/extraction/lanes.py`) ── قرارُ طبقة النصّ اتُّخذ؛
+            # من هنا تُعرف القراءاتُ الخامُ التي سيحتاجها هذا الاستخراج يقيناً.
+            if not skip_ocr:
+                lanes = self._admit_lanes()
+            r4_certain = _r4_certain(strict_text)
+            if lanes is not None and (pdf_text or result.cached):
+                # لا قراءةَ رئيسيّة هنا: ممرّا خطّ اليد يتوازيان، ثمّ يُنتظران قبل أيّ عملٍ آخر.
+                if r4_certain:
+                    self._start_visual_lanes(lanes, image_path)
+                lanes.finish()
             if pdf_text:
                 _progress('ocr')
                 result.progress_stage = 'قراءة النص'
@@ -1551,7 +1668,17 @@ class AIExtractionService:
                     result.progress_stage = 'قراءة النص'
                     self._ensure_ocr_stack()
 
-                    offline_res = self._offline_provider.extract(enhanced_image_path)
+                    if lanes is not None:
+                        # القراءةُ الرئيسيّة في ممرّ، ومعها يُرسَم مسارُ خطّ اليد ويبدأ ممرّاه.
+                        _prov, _enhanced = self._offline_provider, enhanced_image_path
+                        lanes.start('r1', lambda: _prov.extract(_enhanced))
+                        if r4_certain:
+                            self._start_visual_lanes(lanes, image_path)
+                        offline_res = lanes.take(
+                            'r1', lambda: self._offline_provider.extract(enhanced_image_path))
+                        lanes.finish()   # الممرّاتُ كلُّها تنتهي قبل أيّ عملٍ آخر لهذا الخيط
+                    else:
+                        offline_res = self._offline_provider.extract(enhanced_image_path)
                     result.raw_text = offline_res.get('raw_text', '')
                     result.cleaned_text = self.ocr_service.clean_text(result.raw_text)
                     result.ocr_confidence = float(offline_res.get('avg_confidence', 0.0))
@@ -1738,9 +1865,14 @@ class AIExtractionService:
             # بمرشّحيه للنقر. لا يمسّ مسارَ النصّ — إضافةٌ عند الفراغ فقط.
             # صندوقُ det2 يُحسَب مرّةً ويتقاسمه اقتراحُ الموضوع هنا ومسارُ العدد أدناه.
             _det_boxes = None
+            _det_fallback = _lanes.NOT_RUN
             if not (result.title or '').strip():
                 try:
-                    _det_boxes = self._detector_boxes_from_file(image_path)
+                    _det = self._det_from_lanes(lanes, image_path)
+                    if _det is not None:
+                        _det_boxes, _det_fallback = _det['boxes'], _det['fallback']
+                    else:
+                        _det_boxes = self._detector_boxes_from_file(image_path)
                     self._propose_subject_box(result, image_path, det_boxes=_det_boxes)
                 except Exception as exc:
                     logger.warning('[subject_box] تعذّر الاقتراح (%s) — تدهورٌ رشيق', type(exc).__name__)
@@ -1786,7 +1918,10 @@ class AIExtractionService:
                  (det_box, _pw, _ph)) = self._read_handwritten_sender_number(
                     result.image_path, getattr(result, 'issuing_entity_id', None),
                     want_date_crop=want_crop,
-                    det_boxes=_det_boxes if result.image_path == image_path else None)
+                    det_boxes=_det_boxes if result.image_path == image_path else None,
+                    lanes=lanes if result.image_path == image_path else None,
+                    det_fallback=(_det_fallback if result.image_path == image_path
+                                  else _lanes.NOT_RUN))
                 # المرجعُ المطبوعُ الصارم **لا يُزاح**: قِيس 32/32 على صفّه مقابل
                 # 11 إصابةً وخطأين للبصريّ على نفس المستندات. والنداءُ هنا لم
                 # يُتخطَّ إلّا لأنّ التاريخ صامتٌ ونحتاج قصاصتَه — فيُؤخذ التاريخُ
@@ -1872,11 +2007,34 @@ class AIExtractionService:
             result.processing_time = time.time() - start_time
             return result
         finally:
+            # الممرّاتُ تُنتظَر **قبل** حذف الملفّ المؤقّت الذي تقرؤه القراءةُ الرئيسيّة —
+            # وفي مسار الاستثناء أيضاً (ولا يُعيد `process_image` قبلها، كاليوم). والفتحةُ
+            # والعدّادُ يُحرَّران مهما حدث: عدّادٌ عالقٌ عند 1 يُطفئ التوازيَ حتّى إعادة الإقلاع.
             try:
-                if enhanced_image_path and os.path.exists(enhanced_image_path):
-                    os.remove(enhanced_image_path)
-            except OSError:
-                pass
+                if lanes is not None:
+                    lanes.finish()
+            finally:
+                _lanes.extraction_exit()
+                try:
+                    if enhanced_image_path and os.path.exists(enhanced_image_path):
+                        os.remove(enhanced_image_path)
+                except OSError:
+                    pass
+
+    def _admit_lanes(self):
+        """ممرّاتٌ لهذا الاستخراج، أو None ⟵ كودُ اليوم متسلسلاً. لا يرمي أبداً: تهيئةُ
+        المحرّك أو قراءةُ الذاكرة إن تعذّرت هنا فالتسلسلُ يلقاها في موضعها كاليوم."""
+        try:
+            if not _lanes.enabled():
+                return None
+            self._ensure_ocr_stack()
+            prov = self._offline_provider
+            if getattr(prov, 'name', '') != 'tesseract' or not hasattr(prov, '_pytesseract'):
+                return None                  # EasyOCR (torch) لا يدخل ممرّاً
+            return _lanes.admit()
+        except Exception as exc:              # noqa: BLE001
+            logger.info('[lanes] القبولُ تعذّر (%s) — تسلسل', type(exc).__name__)
+            return None
 
     def process_batch(self, image_paths: List[str]) -> List[AIExtractionResult]:
         """

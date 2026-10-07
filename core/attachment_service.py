@@ -17,6 +17,7 @@ import fitz  # PyMuPDF
 from django.core.files.base import ContentFile
 
 from .models import Attachment, AttachmentVersion
+from .pdf_lock import MUPDF_LOCK, mupdf_locked
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +150,7 @@ def ensure_pdf_bytes(data, name=""):
         open_kwargs["filetype"] = ext
 
     try:
-        with fitz.open(**open_kwargs) as imgdoc:
+        with MUPDF_LOCK, fitz.open(**open_kwargs) as imgdoc:
             pdf_bytes = imgdoc.convert_to_pdf()
     except Exception as exc:  # noqa: BLE001 — نريد التقاط أي فشل في فك الصورة
         raise ValueError(f"تعذّر تحويل الصورة إلى PDF: {exc}") from exc
@@ -185,6 +186,7 @@ def _page_is_blank(page, max_dark_px, sample_dpi):
     return dark < max_dark_px
 
 
+@mupdf_locked
 def remove_blank_pages(pdf_bytes, max_dark_px=10, sample_dpi=72):
     """يزيل الصفحات الفارغة فعلاً فقط من PDF (ظهور المسح المزدوج تلقائياً).
 

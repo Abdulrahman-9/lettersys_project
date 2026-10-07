@@ -17,6 +17,7 @@ import cv2
 import numpy as np
 import requests
 
+from core.extraction import degrade
 from core.extraction.ocr.service import OCRService
 
 logger = logging.getLogger('lettersys')
@@ -335,6 +336,7 @@ class TesseractOCRProvider(BaseOCRProvider):
                     logger.info('[tesseract] adaptive escalation improved conf → %.2f', b_conf)
             except Exception as exc:  # noqa: BLE001 — التصعيد تحسين اختياري لا يُفشل OCR
                 logger.warning('[tesseract] adaptive escalation failed: %s', exc)
+                degrade.mark('tesseract-escalation')   # بقيت التمريرةُ الأولى — الممرُّ يُعيدها
 
         return {
             'raw_text': raw_text,

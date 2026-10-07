@@ -64,6 +64,9 @@ LETTERHEAD_MEMORY_INDEX_TTL = 0
 SENDER_PROFILES_INDEX_TTL = 0
 EXTRACTION_BACKGROUND_INDEXING = False
 EXTRACTION_WARMUP = False
+# الممرّاتُ المتوازية مطفأةٌ في المجموعة (كودُ اليوم متسلسلاً)؛ تُختبر باختباراتٍ تشغّلها صراحةً
+# (core/tests_extraction_lanes.py)، والمطابقةُ على الكتب الحقيقيّة في أداة القبول.
+EXTRACTION_LANES = False
 
 # ─── تجاوز: كلمة مرور بسيطة مسموح بها للاختبارات ─────────────────────────
 AUTH_PASSWORD_VALIDATORS = []
