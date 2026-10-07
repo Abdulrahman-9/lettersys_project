@@ -80,6 +80,7 @@ def sequence_settings(request):
         # «الرقمُ التالي» تحت آخر رقمٍ صدر يعيد إصدارَ أرقامٍ مستعملة — كان يُحفظ
         # كما كُتب بلا كلمة (تدقيقُ نيلسن E#4). الصادرُ الخارجيّ يدويٌّ لا عدّادَ له.
         sequence_errors = []
+        saved = False   # «حُفظ» يُقال حين حُفظ شيءٌ فعلاً (تدقيقُ نيلسن F#9)
         # ذرّيّةٌ صريحة: لا ``ATOMIC_REQUESTS`` في هذا المشروع، وكان خطأُ تحليلٍ
         # في حقل المدّة يترك العدّاداتَ محفوظةً والصفحةَ على 500.
         with transaction.atomic():
@@ -104,6 +105,7 @@ def sequence_settings(request):
                         update_fields.append('next_number')
                 if update_fields:
                     seq['obj'].save(update_fields=update_fields + ['updated_at'])
+                    saved = True
 
             # المدى من ثوابت النموذج — لا رقمَ مكتوباً بيدٍ هنا ولا في القالب.
             raw_expire = request.POST.get('reservation_expire_minutes', '').strip()
@@ -128,6 +130,7 @@ def sequence_settings(request):
                 # دائماً حتّى حين تفشل الكتابةُ بصمت — «حُفظ» صار يعني حُفظ.
                 cfg.reservation_expire_minutes = minutes
                 cfg.save(update_fields=['reservation_expire_minutes', 'updated_at'])
+                saved = True
                 logger.info(
                     '[SequenceSettings] reservation_expire_minutes=%s by %s',
                     minutes, request.user.username,
@@ -135,10 +138,12 @@ def sequence_settings(request):
 
         for err in sequence_errors:
             messages.error(request, err)
+        if ttl_error:
+            messages.error(request, ttl_error)
         if ttl_error or sequence_errors:
-            if ttl_error:
-                messages.error(request, ttl_error)
-            messages.success(request, 'حُفظت إعداداتُ العدّادات.')
+            # الرفضُ يُقال وحدَه حين لم يُحفظ غيرُه — كانت «حُفظت» تُطلق معه دائماً
+            if saved:
+                messages.success(request, 'حُفظت بقيّةُ التغييرات.')
         else:
             messages.success(request, 'تم حفظ إعدادات العدّادات والحجز بنجاح.')
         return redirect('sequence_settings')

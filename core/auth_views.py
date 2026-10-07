@@ -42,3 +42,43 @@ class CustomLoginView(LoginView):
         response = super().form_valid(form)
         
         return response
+
+
+# ─── تغييرُ كلمة المرور (تدقيقُ نيلسن F#2) ─────────────────────────────────────
+# لم يكن في النظام كلِّه مسارٌ لتغيير كلمة المرور، والصفحةُ تَعِد به. الحدُّ الأدنى من
+# SecuritySettings — القاعدةُ نفسُها التي يفرضها إنشاءُ الحساب في users.py.
+from django.contrib import messages as _messages
+from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth.views import PasswordChangeView
+from django.core.exceptions import ValidationError
+from django.urls import reverse_lazy
+
+
+class LetterSysPasswordChangeForm(PasswordChangeForm):
+
+    def clean_new_password1(self):
+        from .models import SecuritySettings
+
+        password = self.cleaned_data.get('new_password1') or ''
+        min_len = SecuritySettings.get().password_min_length
+        if len(password) < min_len:
+            raise ValidationError(f'كلمة المرور يجب أن تكون {min_len} أحرف على الأقل.')
+        return password
+
+
+class LetterSysPasswordChangeView(PasswordChangeView):
+    template_name = 'core/password_change.html'
+    form_class = LetterSysPasswordChangeForm
+    success_url = reverse_lazy('dashboard')
+
+    def get_context_data(self, **kwargs):
+        from .models import SecuritySettings
+
+        ctx = super().get_context_data(**kwargs)
+        ctx['min_len'] = SecuritySettings.get().password_min_length
+        return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)   # يحدّث بصمةَ الجلسة فلا يُخرَج المستخدم
+        _messages.success(self.request, 'تمّ تغيير كلمة المرور.')
+        return response

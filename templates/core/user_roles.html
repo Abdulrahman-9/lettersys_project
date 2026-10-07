@@ -45,7 +45,7 @@
   <div class="row mb-3">
     <div class="col-12">
       {% for message in messages %}
-      <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm" role="alert">
+      <div class="alert alert-{% if 'error' in message.tags %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible fade show shadow-sm" role="alert">
         <i class="bi {% if 'success' in message.tags %}bi-check-circle-fill{% elif 'error' in message.tags or 'danger' in message.tags %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
         <strong>{{ message }}</strong>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -124,7 +124,7 @@
                 <label class="form-label fw-semibold">
                   <i class="bi bi-key me-1"></i>كلمة المرور <span class="text-danger">*</span>
                 </label>
-                <input class="form-control" name="password" id="password" type="password" required minlength="4" placeholder="4 أحرف على الأقل">
+                <input class="form-control" name="password" id="password" type="password" required minlength="{{ min_len }}" placeholder="{{ min_len }} أحرف على الأقل">
                 <div class="password-strength mt-2" id="passwordStrength"></div>
                 <small class="text-muted" id="passwordHint">قوة كلمة المرور</small>
               </div>
@@ -133,7 +133,7 @@
                 <label class="form-label fw-semibold">
                   <i class="bi bi-key-fill me-1"></i>تأكيد كلمة المرور <span class="text-danger">*</span>
                 </label>
-                <input class="form-control" name="password2" id="password2" type="password" required minlength="4" placeholder="أعد إدخال كلمة المرور">
+                <input class="form-control" name="password2" id="password2" type="password" required minlength="{{ min_len }}" placeholder="أعد إدخال كلمة المرور">
                 <small class="text-muted" id="matchStatus"></small>
               </div>
               
@@ -155,7 +155,6 @@
                   <th>المستخدم</th>
                   <th>البريد</th>
                   <th>الدور الحالي</th>
-                  <th>كلمة المرور</th>
                   <th class="text-end">الإجراءات</th>
                 </tr>
               </thead>
@@ -170,16 +169,13 @@
                   <td>
                     <span class="badge bg-light text-dark">{{ u.role_label }}</span>
                   </td>
-                  <td>
-                    <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="tooltip" title="عرض كلمة المرور" onclick="showPassword('{{ u.id }}', '{{ u.username }}')">
-                      <i class="bi bi-eye me-1"></i>عرض
-                    </button>
-                  </td>
                   <td class="text-end">
                     <div class="d-flex gap-2 justify-content-end flex-wrap">
-                      <a class="btn btn-sm btn-outline-primary" href="{{ role_admin_url }}" title="إسناد القسم والدور">
+                      {% if nav.roles %}
+                      <a class="btn btn-sm btn-outline-primary" href="{{ role_admin_url }}" target="_top" title="إسناد القسم والدور">
                         <i class="bi bi-shield-lock me-1"></i>الدور
                       </a>
+                      {% endif %}
                       <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUser('{{ u.id }}', '{{ u.username }}')" title="حذف المستخدم">
                         <i class="bi bi-trash me-1"></i>حذف
                       </button>
@@ -207,6 +203,7 @@
 <script>
 (function() {
   // Password strength checker
+  const MIN_LEN = {{ min_len|default:8 }};   // من SecuritySettings — كما يفرضها الخادم
   const passwordInput = document.getElementById('password');
   const password2Input = document.getElementById('password2');
   const strengthBar = document.getElementById('passwordStrength');
@@ -219,7 +216,7 @@
       const password = passwordInput.value;
       let strength = 0;
       
-      if (password.length >= 4) strength++;
+      if (password.length >= MIN_LEN) strength++;
       if (password.length >= 8) strength++;
       if (/[0-9]/.test(password)) strength++;
       if (/[a-zA-Z]/.test(password) && /[0-9]/.test(password)) strength++;
@@ -281,9 +278,9 @@
         return false;
       }
       
-      if (passwordInput.value.length < 4) {
+      if (passwordInput.value.length < MIN_LEN) {
         e.preventDefault();
-        notifyUserRoles('كلمة المرور يجب أن تكون 4 أحرف على الأقل.', 'warning', { title: 'كلمة المرور قصيرة' });
+        notifyUserRoles('كلمة المرور يجب أن تكون ' + MIN_LEN + ' أحرف على الأقل.', 'warning', { title: 'كلمة المرور قصيرة' });
         return false;
       }
       
@@ -292,13 +289,7 @@
     });
   }
   
-  // Auto-dismiss alerts after 5 seconds
-  setTimeout(() => {
-    document.querySelectorAll('.alert').forEach(alert => {
-      const bsAlert = new bootstrap.Alert(alert);
-      bsAlert.close();
-    });
-  }, 5000);
+  // (أُزيل الإغلاقُ الآليّ بعد 5 ث: كان يُخفي رسالةَ الخطأ والإرشادَ الثابت — تدقيقُ نيلسن F#6)
 })();
 
 // دالة حذف المستخدم
@@ -338,95 +329,5 @@ async function deleteUser(userId, username) {
   form.submit();
 }
 
-// دالة عرض كلمة المرور
-function showPassword(userId, username) {
-  const xhr = new XMLHttpRequest();
-  xhr.open('GET', `/books/api/user-password/${userId}/`, true);
-  xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-  
-  xhr.onload = function() {
-    if (xhr.status === 200) {
-      const data = JSON.parse(xhr.responseText);
-      if (data.success) {
-        const modal = document.createElement('div');
-        modal.className = 'modal fade';
-        modal.id = 'passwordModal';
-        modal.setAttribute('tabindex', '-1');
-        modal.innerHTML = `
-          <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow-lg">
-              <div class="modal-header bg-light border-0">
-                <h6 class="modal-title fw-bold">
-                  <i class="bi bi-shield-check text-primary me-2"></i>
-                  كلمة مرور المستخدم: <strong>${username}</strong>
-                </h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-              </div>
-              <div class="modal-body">
-                <div class="alert alert-warning border-0 mb-3">
-                  <i class="bi bi-exclamation-triangle me-2"></i>
-                  <strong>تحذير:</strong> احفظ كلمة المرور في مكان آمن وشارها مع المستخدم فقط.
-                </div>
-                <div class="input-group">
-                  <input type="text" class="form-control form-control-lg fw-monospace" id="passwordField" value="${data.password}" readonly style="letter-spacing: 2px;">
-                  <button class="btn btn-outline-primary" type="button" onclick="copyPassword('${data.password}', event)">
-                    <i class="bi bi-clipboard me-1"></i>نسخ
-                  </button>
-                </div>
-                <small class="text-muted d-block mt-2">
-                  <i class="bi bi-info-circle me-1"></i>
-                  يمكن للمستخدم تغيير كلمة المرور بعد تسجيل الدخول الأول.
-                </small>
-              </div>
-              <div class="modal-footer border-0">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
-              </div>
-            </div>
-          </div>
-        `;
-        
-        document.body.appendChild(modal);
-        const bsModal = new bootstrap.Modal(modal);
-        bsModal.show();
-        
-        // حذف النموذج بعد إغلاقه
-        modal.addEventListener('hidden.bs.modal', () => {
-          modal.remove();
-        });
-      } else {
-        notifyUserRoles(data.message || 'تعذر جلب كلمة المرور.', 'error', { title: 'خطأ في البيانات' });
-      }
-    } else {
-      notifyUserRoles('خطأ في جلب بيانات المستخدم.', 'error', { title: 'فشل الطلب' });
-    }
-  };
-  
-  xhr.onerror = function() {
-    notifyUserRoles('خطأ في الاتصال بالخادم.', 'error', { title: 'تعذر الوصول إلى الخادم' });
-  };
-  
-  xhr.send();
-}
-
-// دالة نسخ كلمة المرور
-function copyPassword(password, event) {
-  navigator.clipboard.writeText(password).then(() => {
-    const btn = event.target.closest('button');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="bi bi-check me-1"></i>تم النسخ!';
-    btn.classList.add('btn-success');
-    btn.classList.remove('btn-outline-primary');
-    
-    setTimeout(() => {
-      btn.innerHTML = originalText;
-      btn.classList.remove('btn-success');
-      btn.classList.add('btn-outline-primary');
-    }, 2000);
-
-    notifyUserRoles('تم نسخ كلمة المرور.', 'success', { title: 'تم النسخ', delay: 3000 });
-  }).catch(() => {
-    notifyUserRoles('فشل نسخ كلمة المرور.', 'error', { title: 'تعذر النسخ' });
-  });
-}
 </script>
 {% endblock %}

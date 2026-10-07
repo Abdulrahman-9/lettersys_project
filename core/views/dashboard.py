@@ -965,9 +965,11 @@ def bak_browse(request):
             if os.path.isdir(d):
                 roots.append(d)
         quick = []
-        for q in ('D:\\Abdulrhman Backup', 'D:\\trackbackup', 'D:\\backups',
-                  str(settings.BASE_DIR / 'backups'), os.path.expanduser('~\\Desktop'),
-                  os.path.expanduser('~\\Downloads')):
+        # المجلّداتُ السريعة من الإعداد ``BACKUP_BROWSE_QUICK`` (قائمة) — لا مساراتٌ شخصيّة
+        # مكتوبةٌ في مستودعٍ عامّ (تدقيقُ نيلسن F، S2)؛ والأقراصُ أعلاه تبلغ أيَّ مجلّدٍ آخر.
+        defaults = ('D:\\trackbackup', 'D:\\backups', str(settings.BASE_DIR / 'backups'),
+                    os.path.expanduser('~\\Desktop'), os.path.expanduser('~\\Downloads'))
+        for q in getattr(settings, 'BACKUP_BROWSE_QUICK', None) or defaults:
             if os.path.isdir(q):
                 quick.append(q)
         return JsonResponse({'is_root': True, 'path': '', 'parent': None, 'dirs': roots, 'quick': quick, 'files': []})

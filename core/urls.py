@@ -51,7 +51,6 @@ urlpatterns = [
     path("<int:pk>/edit/", views.book_edit, name="book_edit"),
     path("<int:pk>/status/", views.book_change_status, name="book_change_status"),
     path("users/", views.user_roles, name="user_roles"),
-    path("api/user-password/<int:user_id>/", views.get_user_password, name="get_user_password"),
     path("api/book-notes/<int:book_id>/", views.update_book_notes, name="update_book_notes"),
     path("api/attachment/<int:att_id>/ocr/", views.attachment_ocr_text, name="attachment_ocr_text"),
     path("api/book-comments/<int:book_id>/add/", views.add_book_comment, name="add_book_comment"),

@@ -19,7 +19,7 @@
 
     {% if messages %}
     {% for msg in messages %}
-    <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+    <div class="alert alert-{% if 'error' in msg.tags %}danger{% else %}{{ msg.tags }}{% endif %} alert-dismissible fade show" role="alert">
         {{ msg }}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
@@ -104,8 +104,8 @@
                                     <span class="badge" style="background:#64748b;">افتراضي ({{ reservation_settings.ttl_default }} دق)</span>
                                     {% endif %}
                                 </div>
-                                <div class="mb-1"><strong>📡 نمط العمل:</strong> شبكي ذري — كل مستخدم يحجز رقمه لوحده</div>
-                                <div><strong>🛡 الحماية:</strong> SELECT FOR UPDATE على قاعدة البيانات (آمن مع PostgreSQL)</div>
+                                <div class="mb-1"><strong>📡 نمط العمل:</strong> كلُّ مستخدمٍ يُحجز له رقمُه وحدَه</div>
+                                <div><strong>🛡 الحماية:</strong> لا يُعطى رقمٌ لاثنين ولو حفظا في اللحظة نفسها</div>
                             </div>
                         </div>
                     </div>
