@@ -206,7 +206,7 @@
           <div class="field"><div class="k">الحالة الحالية</div><div class="v">{{ book.followup_label }}</div></div>
           <div class="field"><div class="k">أُنشئ في النظام</div><div class="v">{{ book.created_at|date:"d/m/Y H:i" }}</div></div>
           <div class="field"><div class="k">آخر تحديث</div><div class="v">{{ book.updated_at|date:"d/m/Y H:i" }}</div></div>
-          <div class="field"><div class="k">أنشأه</div><div class="v">{{ book.created_by|default:"—" }}</div></div>
+          <div class="field"><div class="k">أنشأه</div><div class="v">{% if book.created_by %}{{ book.created_by.get_full_name|default:book.created_by.username }}{% else %}—{% endif %}</div></div>
         </div>
       </div>
     </div>
