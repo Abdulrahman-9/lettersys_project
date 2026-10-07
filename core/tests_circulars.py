@@ -19,8 +19,8 @@ from django.utils import timezone
 
 from core.models import (Book, BookHistory, BookReferral, Department, Entity,
                          EntityGroup, UserProfile)
-from core.referral_service import (mark_done, reply_matrix, send_circular,
-                                   send_reminder)
+from core.referral_service import (ACTION_NEEDS_DUE, mark_done, reply_matrix,
+                                   send_circular, send_reminder)
 from core.registration_service import register_reply
 
 
@@ -52,6 +52,9 @@ class CircularTestCase(TestCase):
             kind='outgoing_internal', title='تعميمٌ بشأن الدوام الرسميّ',
             created_by=cls.clerk, department=cls.dept, our_number='2433',
         )
+        #: «للتنفيذ» لا يُعمَّم بلا موعد (``ACTION_NEEDS_DUE``) — وموعدٌ بعد أسبوعٍ لا
+        #: يجعل الصفَّ متأخّراً ولا مستحقّاً اليوم، فلا يغيّر ما تسأل عنه الاختبارات.
+        cls.due = timezone.localdate() + timedelta(days=7)
 
 
 class GroupMembershipTests(CircularTestCase):
@@ -93,32 +96,32 @@ class SendCircularTests(CircularTestCase):
         self.group.members.add(self.contracts.entity, self.hr.entity)
 
     def test_one_press_creates_a_commitment_per_member(self):
-        rows = send_circular(self.book, self.group, by=self.clerk)
+        rows = send_circular(self.book, self.group, by=self.clerk, due_date=self.due)
         self.assertEqual(len(rows), 2)
         self.assertEqual(self.book.referrals.count(), 2)
 
     def test_a_member_with_a_twin_department_targets_the_department(self):
         """الجسرُ بين الطبقتين — وبلا هذا لا يصل التعميمُ طاولةَ وارد الوحدة."""
-        rows = send_circular(self.book, self.group, by=self.clerk)
+        rows = send_circular(self.book, self.group, by=self.clerk, due_date=self.due)
         self.assertTrue(all(r.to_department_id for r in rows))
         self.assertIsNone(rows[0].to_entity_id)
 
     def test_an_external_member_stays_an_entity(self):
         group = EntityGroup.objects.create(name='وزاراتٌ')
         group.members.add(self.ministry)
-        row = send_circular(self.book, group, by=self.clerk)[0]
+        row = send_circular(self.book, group, by=self.clerk, due_date=self.due)[0]
         self.assertEqual(row.to_entity, self.ministry)
         self.assertIsNone(row.to_department_id)
 
     def test_the_book_keeps_one_number_and_records_the_group(self):
         """رقمُ صادرٍ **واحد** — هذا هو الورقُ نفسه؛ ورقمٌ لكلّ عضوٍ يفجّر الدفتر."""
-        send_circular(self.book, self.group, by=self.clerk)
+        send_circular(self.book, self.group, by=self.clerk, due_date=self.due)
         self.book.refresh_from_db()
         self.assertEqual(self.book.our_number, '2433')
         self.assertEqual(self.book.sent_to_group, self.group)
 
     def test_it_leaves_one_trace_naming_the_group(self):
-        send_circular(self.book, self.group, by=self.clerk)
+        send_circular(self.book, self.group, by=self.clerk, due_date=self.due)
         event = BookHistory.objects.get(book=self.book, action='circular')
         self.assertIn('قسما العقود والموارد', event.notes)
         self.assertIn('2', event.notes)
@@ -126,6 +129,7 @@ class SendCircularTests(CircularTestCase):
     def test_a_member_may_carry_its_own_directive(self):
         """«أحياناً إلى قسمين أو ثلاثة» — بتوجيهاتٍ مختلفة."""
         rows = send_circular(self.book, self.group, by=self.clerk, margin='للتنفيذ',
+                             due_date=self.due,
                              member_overrides={self.hr.entity.pk: {
                                  'purpose': BookReferral.INFO, 'margin': 'للعلم'}})
         by_dept = {r.to_department_id: r for r in rows}
@@ -139,15 +143,53 @@ class SendCircularTests(CircularTestCase):
 
     def test_membership_changes_do_not_touch_a_past_circular(self):
         """**صفوفُ الإحالة هي لقطةُ العضويّة** — بلا جدولِ لقطاتٍ إضافيّ."""
-        send_circular(self.book, self.group, by=self.clerk)
+        send_circular(self.book, self.group, by=self.clerk, due_date=self.due)
         self.group.members.remove(self.hr.entity)
         self.assertEqual(self.book.referrals.count(), 2)
 
     def test_recirculating_is_allowed(self):
         """تعميمٌ ثانٍ على العنقود نفسِه واقعةٌ تحدث — تذكيرٌ رسميٌّ بكتابٍ سابق."""
-        send_circular(self.book, self.group, by=self.clerk)
-        send_circular(self.book, self.group, by=self.clerk)
+        send_circular(self.book, self.group, by=self.clerk, due_date=self.due)
+        send_circular(self.book, self.group, by=self.clerk, due_date=self.due)
         self.assertEqual(self.book.referrals.count(), 4)
+
+
+class CircularActionNeedsDueTests(CircularTestCase):
+    """«للتنفيذ» بلا موعدٍ لا يُطارَد — والتعميمُ يمرّ من ``distribute`` فيحرسه الحارسُ
+    نفسُه على قيم كلّ عضوٍ الفعليّة. والرفضُ لا يترك أثراً: لا صفوف، ولا «عُمِّم على»
+    في الكتاب، ولا حدثٌ في سجلّه."""
+
+    def setUp(self):
+        self.group = EntityGroup.objects.create(name='قسما العقود والموارد')
+        self.group.members.add(self.contracts.entity, self.hr.entity)
+
+    def assertNothingWritten(self):
+        self.assertEqual(self.book.referrals.count(), 0)
+        self.book.refresh_from_db()
+        self.assertIsNone(self.book.sent_to_group)
+        self.assertFalse(BookHistory.objects.filter(book=self.book).exists())
+
+    def test_an_action_circular_without_a_date_is_refused(self):
+        with self.assertRaisesMessage(ValidationError, ACTION_NEEDS_DUE):
+            send_circular(self.book, self.group, by=self.clerk)
+        self.assertNothingWritten()
+
+    def test_a_member_override_cannot_drop_the_date(self):
+        with self.assertRaisesMessage(ValidationError, ACTION_NEEDS_DUE):
+            send_circular(self.book, self.group, by=self.clerk, due_date=self.due,
+                          member_overrides={self.hr.entity.pk: {'due_date': None}})
+        self.assertNothingWritten()
+
+    def test_a_member_raised_to_action_needs_a_date(self):
+        with self.assertRaisesMessage(ValidationError, ACTION_NEEDS_DUE):
+            send_circular(self.book, self.group, by=self.clerk, purpose=BookReferral.INFO,
+                          member_overrides={self.hr.entity.pk: {
+                              'purpose': BookReferral.ACTION}})
+        self.assertNothingWritten()
+
+    def test_an_info_circular_needs_no_date(self):
+        rows = send_circular(self.book, self.group, by=self.clerk, purpose=BookReferral.INFO)
+        self.assertEqual([r.due_date for r in rows], [None, None])
 
 
 class ReplyMatrixTests(CircularTestCase):

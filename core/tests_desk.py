@@ -6,9 +6,12 @@
 (النطاق + السرّيّة) لا بأقلَّ منهما.
 """
 
+from datetime import timedelta
+
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from core.custody_service import record_custody
 from core.models import (Book, CustodyEvent, Department, Entity, UserProfile)
@@ -49,6 +52,8 @@ class DeskTestCase(TestCase):
             kind='incoming_internal', title='مناقصةٌ سرّيّة', created_by=cls.officer,
             department=cls.dept, our_number='2437', secret_level='secret',
         )
+        #: «للتنفيذ» لا يُفرَّق بلا موعد — وموعدٌ بعد أسبوعٍ لا يجعل الصفَّ متأخّراً.
+        cls.due = timezone.localdate() + timedelta(days=7)
 
 
 class LedgerLiveOnlyTests(DeskTestCase):
@@ -95,7 +100,8 @@ class HandoverSheetTests(DeskTestCase):
 
     def setUp(self):
         self.client.force_login(self.officer)
-        distribute(self.book, [self.unit], by=self.officer, margin='للمداولة')
+        distribute(self.book, [self.unit], by=self.officer, margin='للمداولة',
+                   due_date=self.due)
 
     def test_the_unit_appears_with_its_pending_count(self):
         body = self.client.get('/books/desk/handover/').content.decode()
@@ -125,7 +131,7 @@ class HandoverSheetTests(DeskTestCase):
 
     def test_a_secret_book_is_listed_without_its_subject(self):
         """الكشفُ يخرج من الجهاز — فالحجبُ فيه أوجبُ منه على الشاشة."""
-        distribute(self.secret, [self.unit], by=self.officer)
+        distribute(self.secret, [self.unit], by=self.officer, due_date=self.due)
         self.client.force_login(self.head)   # رئيسُ القسم يرى السرّيّ
         body = self.client.get('/books/desk/handover/', {'to': self.unit.pk}).content.decode()
         self.assertIn('مناقصةٌ سرّيّة', body)
@@ -152,7 +158,7 @@ class LedgerTests(DeskTestCase):
             kind='incoming_internal', title='كتابُ العقود', created_by=self.outsider,
             department=self.other, our_number='991',
         )
-        distribute(foreign, [self.dept], by=self.outsider)
+        distribute(foreign, [self.dept], by=self.outsider, due_date=self.due)
         row = register_book_here(foreign, self.dept, by=self.officer)
 
         body = self.client.get('/books/desk/ledger/').content.decode()
@@ -166,7 +172,7 @@ class LedgerTests(DeskTestCase):
                 self.assertIn(column, body)
 
     def test_distribution_and_receipt_show_in_their_columns(self):
-        distribute(self.book, [self.unit], by=self.officer)
+        distribute(self.book, [self.unit], by=self.officer, due_date=self.due)
         record_custody(self.book, CustodyEvent.UNIT_RECEIPT, to_department=self.unit,
                        by=self.officer)
         body = self.client.get('/books/desk/ledger/').content.decode()

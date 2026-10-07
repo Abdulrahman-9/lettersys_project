@@ -10,9 +10,12 @@
 طابور المطاردة بعد أن أُجيب — وطابورٌ فيه ما أُنجز يفقد ثقةَ قارئه فيهمله.
 """
 
+from datetime import timedelta
+
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
+from django.utils import timezone
 
 from core.models import (Book, BookHistory, BookLink, BookReferral, BookRegistration,
                          BookSequence, Department, Entity, UserProfile)
@@ -43,13 +46,15 @@ class RegistrationTestCase(TestCase):
             kind='incoming_external', title='كتابُ وزارة النفط', created_by=cls.gm_clerk,
             department=cls.gm, our_number='1180',
         )
+        #: «للتنفيذ» لا يُفرَّق بلا موعد — وموعدٌ بعد أسبوعٍ لا يجعل الصفَّ متأخّراً.
+        cls.due = timezone.localdate() + timedelta(days=7)
 
 
 class RegisterHereTests(RegistrationTestCase):
 
     def test_the_same_paper_carries_a_number_in_each_register(self):
         """جوهرُ التصحيح: رقمٌ لكلّ دفترٍ مرّ به الكتاب."""
-        distribute(self.book, [self.dept], by=self.gm_clerk)
+        distribute(self.book, [self.dept], by=self.gm_clerk, due_date=self.due)
         mine = register_book_here(self.book, self.dept, by=self.gm_clerk)
 
         self.assertEqual(self.book.our_number, '1180')       # رقمُ الدفتر الأوّل لم يُمَسّ
@@ -109,7 +114,7 @@ class RegisterHereTests(RegistrationTestCase):
             kind='incoming_internal', title='آخر', created_by=self.gm_clerk,
             department=self.gm, our_number='1181',
         )
-        alien = distribute(other, [self.dept], by=self.gm_clerk)[0]
+        alien = distribute(other, [self.dept], by=self.gm_clerk, due_date=self.due)[0]
         with self.assertRaises(ValidationError):
             register_book_here(self.book, self.dept, by=self.gm_clerk, via_referral=alien)
 
@@ -152,7 +157,8 @@ class RegisterReplyTests(RegistrationTestCase):
     """
 
     def setUp(self):
-        self.referral = distribute(self.book, [self.contracts], by=self.gm_clerk)[0]
+        self.referral = distribute(self.book, [self.contracts], by=self.gm_clerk,
+                                   due_date=self.due)[0]
         self.reply = Book.objects.create(
             kind='outgoing_internal', title='جوابُ العقود', created_by=self.contracts_clerk,
             department=self.contracts, our_number='356',
@@ -177,7 +183,7 @@ class RegisterReplyTests(RegistrationTestCase):
 
     def test_a_reply_closes_its_own_commitment_not_a_sibling_one(self):
         """كتابٌ مُفرَّقٌ إلى قسمين: جوابُ أحدهما لا يُبرّئ الآخر."""
-        sibling = distribute(self.book, [self.dept], by=self.gm_clerk)[0]
+        sibling = distribute(self.book, [self.dept], by=self.gm_clerk, due_date=self.due)[0]
         _, closed = register_reply(self.book, self.reply, by=self.contracts_clerk)
         self.assertEqual(closed, self.referral)
         sibling.refresh_from_db()
@@ -198,7 +204,7 @@ class RegisterReplyTests(RegistrationTestCase):
 
     def test_the_oldest_open_commitment_closes_first(self):
         second = distribute(self.book, [self.contracts], by=self.gm_clerk,
-                            allow_repeat=True)[0]
+                            due_date=self.due, allow_repeat=True)[0]
         _, closed = register_reply(self.book, self.reply, by=self.contracts_clerk)
         self.assertEqual(closed, self.referral)
         second.refresh_from_db()

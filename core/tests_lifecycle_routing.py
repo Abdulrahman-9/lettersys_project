@@ -145,9 +145,13 @@ class ReplyClosesReferralTests(RoutingTestCase):
     """§5.5 الجوابُ يُقفل الإحالة — من حواريّة الربط، وللجهة الخارجيّة بوارِدها."""
 
     def _distributed_to(self, target):
+        from datetime import timedelta
+        from django.utils import timezone
         from core.referral_service import distribute
         b = self._book()
-        rows = distribute(b, [target], by=self.clerk, purpose=BookReferral.ACTION)
+        # «للتنفيذ» لا يُفرَّق بلا موعد — وموعدٌ قادمٌ لا يجعل الصفَّ متأخّراً
+        rows = distribute(b, [target], by=self.clerk, purpose=BookReferral.ACTION,
+                          due_date=timezone.localdate() + timedelta(days=7))
         return b, rows[0]
 
     def test_linking_as_reply_from_the_picker_closes_the_unit_commitment(self):

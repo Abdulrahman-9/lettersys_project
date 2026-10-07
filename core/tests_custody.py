@@ -47,6 +47,8 @@ class CustodyTestCase(TestCase):
             kind='incoming_external', title='كتابُ الوزارة', created_by=cls.clerk,
             department=cls.dept, our_number='2433',
         )
+        #: «للتنفيذ» لا يُفرَّق بلا موعد — وموعدٌ بعد أسبوعٍ لا يجعل الصفَّ متأخّراً.
+        cls.due = timezone.localdate() + timedelta(days=7)
 
 
 class RecordCustodyTests(CustodyTestCase):
@@ -90,7 +92,7 @@ class RecordCustodyTests(CustodyTestCase):
             kind='incoming_internal', title='كتابٌ آخر', created_by=self.clerk,
             department=self.dept, our_number='2434',
         )
-        alien = distribute(other_book, [self.unit], by=self.clerk)[0]
+        alien = distribute(other_book, [self.unit], by=self.clerk, due_date=self.due)[0]
         with self.assertRaises(ValidationError):
             record_custody(self.book, CustodyEvent.UNIT_RECEIPT, referral=alien,
                            to_department=self.unit, by=self.clerk)
@@ -116,7 +118,7 @@ class ReceiptClosesTheLoopTests(CustodyTestCase):
     """استلامُ الوحدة **هو** إقرارُ الإحالة — وفصلُهما يُنتج وحدةً «استلمت» ولم «تستلم»."""
 
     def setUp(self):
-        self.referral = distribute(self.book, [self.unit], by=self.clerk)[0]
+        self.referral = distribute(self.book, [self.unit], by=self.clerk, due_date=self.due)[0]
 
     def test_unit_receipt_advances_the_referral(self):
         record_custody(self.book, CustodyEvent.UNIT_RECEIPT, referral=self.referral,
@@ -190,7 +192,7 @@ class DeskQueryTests(CustodyTestCase):
     """أعمدةُ الطاولة — و«لم يُستلم» أخطرُها: خرج من يدٍ ولم يدخل يداً."""
 
     def setUp(self):
-        self.referral = distribute(self.book, [self.unit], by=self.clerk)
+        self.referral = distribute(self.book, [self.unit], by=self.clerk, due_date=self.due)
 
     def test_held_by_lists_what_a_unit_holds_now(self):
         record_custody(self.book, CustodyEvent.UNIT_RECEIPT, to_department=self.unit,

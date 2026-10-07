@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from core.models import (Book, BookHistory, BookReferral, Department, Entity,
                          Notification, UserProfile)
-from core.referral_service import (distribute, mark_done, mark_received,
+from core.referral_service import (ACTION_NEEDS_DUE, distribute, mark_done, mark_received,
                                    mark_returned, open_referrals_for, send_reminder)
 from core.scoping import can_view_book, scope_books_for, scope_referrals_for
 
@@ -52,12 +52,16 @@ class ReferralTestCase(TestCase):
             kind='incoming_external', title='تخصيصاتُ الحفر الاستكشافي',
             created_by=cls.clerk, department=cls.dept, our_number='2433',
         )
+        #: «للتنفيذ» لا يُفرَّق بلا موعد (``ACTION_NEEDS_DUE``) — وموعدٌ بعد أسبوعٍ لا
+        #: يجعل الصفَّ متأخّراً ولا مستحقّاً اليوم، فلا يغيّر ما تسأل عنه الاختبارات.
+        cls.due = timezone.localdate() + timedelta(days=7)
 
 
 class DistributeTests(ReferralTestCase):
 
     def test_creates_a_row_per_target(self):
-        rows = distribute(self.book, [self.unit_budget, self.unit_reports], by=self.clerk)
+        rows = distribute(self.book, [self.unit_budget, self.unit_reports], by=self.clerk,
+                          due_date=self.due)
         self.assertEqual(len(rows), 2)
         self.assertEqual(self.book.referrals.count(), 2)
 
@@ -66,14 +70,15 @@ class DistributeTests(ReferralTestCase):
         rows = distribute(self.book, [
             {'target': self.unit_budget, 'margin': 'أعدّوا مذكّرةً بالتخصيصات'},
             {'target': self.unit_reports, 'purpose': BookReferral.INFO, 'margin': 'للعلم'},
-        ], by=self.clerk)
+        ], by=self.clerk, due_date=self.due)
         by_target = {r.to_department_id: r for r in rows}
         self.assertEqual(by_target[self.unit_budget.pk].margin, 'أعدّوا مذكّرةً بالتخصيصات')
         self.assertEqual(by_target[self.unit_reports.pk].purpose, BookReferral.INFO)
 
     def test_writes_one_history_event_naming_the_targets(self):
         """حدثٌ واحدٌ لا حدثٌ لكلّ هدف: تعميمٌ على 42 وحدةً يُغرق الخطَّ الزمنيّ."""
-        distribute(self.book, [self.unit_budget, self.unit_reports], by=self.clerk)
+        distribute(self.book, [self.unit_budget, self.unit_reports], by=self.clerk,
+                   due_date=self.due)
         events = BookHistory.objects.filter(book=self.book, action='referral')
         self.assertEqual(events.count(), 1)
         self.assertIn('شعبة متابعة تنفيذ الموازنة', events.first().notes)
@@ -81,7 +86,7 @@ class DistributeTests(ReferralTestCase):
 
     def test_projects_onto_the_existing_distribution_column(self):
         """دفترُ «إلى مَن وُزِّع» يقرأ M2M منذ سنوات — والصفوفُ وحدَها تتركه أعمى."""
-        distribute(self.book, [self.unit_budget], by=self.clerk)
+        distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)
         self.assertIn(self.unit_budget.entity,
                       list(self.book.receiving_entities.all()))
 
@@ -92,43 +97,89 @@ class DistributeTests(ReferralTestCase):
             department=self.dept, our_number='7/551',
         )
         outgoing.receiving_entities.add(self.ministry)
-        distribute(outgoing, [self.unit_budget], by=self.clerk)
+        distribute(outgoing, [self.unit_budget], by=self.clerk, due_date=self.due)
         self.assertEqual([e.name for e in outgoing.receiving_entities.all()],
                          ['وزارة النفط'])
 
     def test_may_target_an_external_entity(self):
         """«أتابع حالة بريدي عندهم» — المطاردةُ تتجاوز أسوار الشركة."""
-        row = distribute(self.book, [self.ministry], by=self.clerk)[0]
+        row = distribute(self.book, [self.ministry], by=self.clerk, due_date=self.due)[0]
         self.assertEqual(row.to_entity, self.ministry)
         self.assertIsNone(row.to_department_id)
         self.assertEqual(row.target_name, 'وزارة النفط')
 
     def test_refuses_a_repeat_over_an_open_commitment(self):
-        distribute(self.book, [self.unit_budget], by=self.clerk)
+        distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)
         with self.assertRaises(ValidationError):
-            distribute(self.book, [self.unit_budget], by=self.clerk)
+            distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)
 
     def test_allows_a_repeat_after_the_commitment_closed(self):
         """الكتابُ يعود ويُفرَّق ثانيةً — واقعةٌ يوميّة لا خطأ."""
-        row = distribute(self.book, [self.unit_budget], by=self.clerk)[0]
+        row = distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)[0]
         mark_done(row, by=self.budget_staff)
-        distribute(self.book, [self.unit_budget], by=self.clerk)
+        distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)
         self.assertEqual(self.book.referrals.count(), 2)
 
     def test_nothing_is_written_when_one_target_is_invalid(self):
         """تفريقٌ نصفُه ناجحٌ أسوأُ من تفريقٍ مرفوض."""
         with self.assertRaises(ValidationError):
-            distribute(self.book, [self.unit_budget, self.clerk], by=self.clerk)
+            distribute(self.book, [self.unit_budget, self.clerk], by=self.clerk,
+                       due_date=self.due)
         self.assertEqual(self.book.referrals.count(), 0)
         self.assertEqual(BookHistory.objects.filter(action='referral').count(), 0)
 
     def test_a_stranger_cannot_distribute(self):
         with self.assertRaises(PermissionDenied):
-            distribute(self.book, [self.unit_budget], by=self.outsider)
+            distribute(self.book, [self.unit_budget], by=self.outsider, due_date=self.due)
 
     def test_empty_targets_are_refused(self):
         with self.assertRaises(ValidationError):
             distribute(self.book, [], by=self.clerk)
+
+
+class ActionNeedsDueTests(ReferralTestCase):
+    """«للتنفيذ» بلا موعدٍ لا يتأخّر أبداً فلا يُطارَد — التزامٌ لا يطارده أحد.
+
+    الحواريّةُ تمنعه (تدقيقُ نيلسن B#5) والخادمُ يمنعه هنا **على قيم كلّ صفٍّ
+    الفعليّة**: ما يخصّ الهدفَ يغلب المشترك، فلا يتسلّل صفٌّ بلا موعدٍ من باب
+    التوجيه الخاصّ — ولا يُكتب شيءٌ حين يُرفض.
+    """
+
+    def test_action_without_a_date_is_refused_and_nothing_is_written(self):
+        with self.assertRaisesMessage(ValidationError, ACTION_NEEDS_DUE):
+            distribute(self.book, [self.unit_budget], by=self.clerk)
+        self.assertEqual(BookReferral.objects.count(), 0)
+        self.assertFalse(BookHistory.objects.filter(action='referral').exists())
+        self.assertEqual(Notification.objects.count(), 0)
+
+    def test_a_target_raised_to_action_needs_its_own_date(self):
+        """المشتركُ «للعلم» وهدفٌ واحدٌ «للتنفيذ» بلا موعد: يُرفض التفريقُ كلُّه."""
+        with self.assertRaisesMessage(ValidationError, ACTION_NEEDS_DUE):
+            distribute(self.book, [
+                self.unit_budget,
+                {'target': self.unit_reports, 'purpose': BookReferral.ACTION},
+            ], by=self.clerk, purpose=BookReferral.INFO)
+        self.assertEqual(BookReferral.objects.count(), 0)
+
+    def test_a_target_cannot_drop_the_shared_date(self):
+        with self.assertRaisesMessage(ValidationError, ACTION_NEEDS_DUE):
+            distribute(self.book, [
+                self.unit_budget,
+                {'target': self.unit_reports, 'due_date': None},
+            ], by=self.clerk, due_date=self.due)
+        self.assertEqual(BookReferral.objects.count(), 0)
+
+    def test_a_date_given_to_the_target_alone_is_enough(self):
+        row = distribute(self.book, [{'target': self.unit_budget, 'due_date': self.due}],
+                         by=self.clerk)[0]
+        self.assertEqual((row.purpose, row.due_date), (BookReferral.ACTION, self.due))
+
+    def test_info_needs_no_date(self):
+        """«للعلم» لا يُطارَد أصلاً — فلا موعدَ يُطلب له."""
+        row = distribute(self.book, [self.unit_budget], by=self.clerk,
+                         purpose=BookReferral.INFO)[0]
+        self.assertEqual(row.purpose, BookReferral.INFO)
+        self.assertIsNone(row.due_date)
 
 
 class NotificationTests(ReferralTestCase):
@@ -138,20 +189,20 @@ class NotificationTests(ReferralTestCase):
         colleague = User.objects.create_user('rbudget2', password='pw-b2-11111')
         UserProfile.objects.create(user=colleague, department=self.unit_budget)
 
-        distribute(self.book, [self.unit_budget], by=self.clerk)
+        distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)
         notified = set(Notification.objects.values_list('user_id', flat=True))
         self.assertEqual(notified, {self.budget_staff.pk, colleague.pk})
 
     def test_the_distributor_is_not_notified_of_their_own_act(self):
-        distribute(self.book, [self.unit_budget], by=self.clerk)
+        distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)
         self.assertFalse(Notification.objects.filter(user=self.clerk).exists())
 
     def test_an_external_target_notifies_no_one(self):
-        distribute(self.book, [self.ministry], by=self.clerk)
+        distribute(self.book, [self.ministry], by=self.clerk, due_date=self.due)
         self.assertEqual(Notification.objects.count(), 0)
 
     def test_the_notification_links_to_the_book(self):
-        distribute(self.book, [self.unit_budget], by=self.clerk)
+        distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)
         notice = Notification.objects.get(user=self.budget_staff)
         self.assertEqual(notice.link_url, '/books/%d/' % self.book.pk)
         self.assertIn('2433', notice.title)
@@ -160,7 +211,7 @@ class NotificationTests(ReferralTestCase):
 class LifecycleTests(ReferralTestCase):
 
     def setUp(self):
-        self.row = distribute(self.book, [self.unit_budget], by=self.clerk)[0]
+        self.row = distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)[0]
 
     def test_received_then_done(self):
         mark_received(self.row, by=self.budget_staff)
@@ -227,7 +278,7 @@ class OverdueTests(ReferralTestCase):
 class ReminderTests(ReferralTestCase):
 
     def setUp(self):
-        self.row = distribute(self.book, [self.unit_budget], by=self.clerk)[0]
+        self.row = distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)[0]
 
     def test_stamps_and_notifies_urgently(self):
         send_reminder(self.row, by=self.clerk)
@@ -257,7 +308,7 @@ class ReminderBrakeTests(ReferralTestCase):
 
         cache.clear()                       # الحدُّ في الكاش — لا يرث اختبارٌ حصّةَ غيره
         self.addCleanup(cache.clear)
-        self.row = distribute(self.book, [self.unit_budget], by=self.clerk)[0]
+        self.row = distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)[0]
         self.client.force_login(self.clerk)
 
     def _remind(self):
@@ -280,7 +331,7 @@ class ReferralScopeTests(ReferralTestCase):
     """الحضورُ والغيابُ معاً — **الاختبارُ السلبيّ وحده لا يحرس** (درسُ البند ①)."""
 
     def setUp(self):
-        self.row = distribute(self.book, [self.unit_budget], by=self.clerk)[0]
+        self.row = distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)[0]
 
     def test_the_receiving_unit_sees_the_referred_book(self):
         """الحضور: بلا هذا الشقّ تُكتب الصفوفُ ولا يراها أحد."""
@@ -302,7 +353,7 @@ class ReferralScopeTests(ReferralTestCase):
 
     def test_the_book_is_not_duplicated_by_many_referrals(self):
         """استعلامٌ فرعيّ لا وصلة — الوصلةُ تُكرّر الصفَّ بعدد إحالاته."""
-        distribute(self.book, [self.unit_reports], by=self.clerk)
+        distribute(self.book, [self.unit_reports], by=self.clerk, due_date=self.due)
         self.assertEqual(scope_books_for(self.clerk, Book.objects.all()).count(), 1)
 
     def test_referral_rows_are_scoped_to_their_three_parties(self):
@@ -334,12 +385,12 @@ class ReferralScopeTests(ReferralTestCase):
 class QueueTests(ReferralTestCase):
 
     def test_open_referrals_for_a_unit(self):
-        open_row = distribute(self.book, [self.unit_budget], by=self.clerk)[0]
+        open_row = distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)[0]
         second = Book.objects.create(
             kind='incoming_internal', title='كتابٌ ثانٍ', created_by=self.clerk,
             department=self.dept, our_number='2434',
         )
-        closed = distribute(second, [self.unit_budget], by=self.clerk)[0]
+        closed = distribute(second, [self.unit_budget], by=self.clerk, due_date=self.due)[0]
         mark_done(closed, by=self.budget_staff)
 
         queue = list(open_referrals_for(self.unit_budget))

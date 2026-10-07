@@ -2,10 +2,12 @@
 """حرّاسُ قصاصة الهامش — من التحقّق إلى التخزين إلى البوّابة."""
 
 import json
+from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from core.models import Attachment, Book, BookReferral, Department, Entity, UserProfile
 from core.page_render import normalise_crop
@@ -61,11 +63,13 @@ class DistributeWithCropTests(TestCase):
                                         created_by=self.admin)
 
     def _post(self, crop):
+        due = timezone.localdate() + timedelta(days=7)   # «للتنفيذ» لا يُفرَّق بلا موعد
         return self.client.post(
             reverse('api_distribute', args=[self.book.pk]),
             # الأهدافُ نصوصٌ بالصيغة `dep:<id>` — لا قواميس.
             data=json.dumps({'targets': ['dep:%d' % self.unit.pk],
-                             'margin': 'للتنفيذ', 'margin_crop': crop}),
+                             'margin': 'للتنفيذ', 'margin_crop': crop,
+                             'due_date': due.isoformat()}),
             content_type='application/json')
 
     def test_the_crop_reaches_the_row(self):
