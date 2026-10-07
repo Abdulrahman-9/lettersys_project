@@ -101,9 +101,10 @@ urlpatterns = [
     path("restore-data/api/start/", views.restore_start, name="restore_start"),
     path("restore-data/api/job/<int:job_id>/", views.restore_job_status, name="restore_job_status"),
     path("restore-data/api/job/<int:job_id>/cancel/", views.restore_job_cancel, name="restore_job_cancel"),
-    path("legacy-import/", views.legacy_import_page, name="legacy_import"),
-    path("legacy-import/run/", views.legacy_import_run, name="legacy_import_run"),
-    path("legacy-import/status/", views.legacy_import_status, name="legacy_import_status"),
+    # استعادةُ نسخةِ هذا النظام المشفّرة — إلى قاعدةٍ **جديدة** لا فوق الحيّة (فيبل، البند 3)
+    path("restore-system/", views.system_restore, name="system_restore"),
+    path("restore-system/api/verify/", views.system_restore_verify, name="system_restore_verify"),
+    path("restore-system/api/start/", views.system_restore_start, name="system_restore_start"),
     path("settings/", views.settings_hub, name="settings_hub"),
     path("settings/general/save/", views.settings_general_save, name="settings_general_save"),
     path("settings/notifications/save/", views.settings_notifications_save, name="settings_notifications_save"),

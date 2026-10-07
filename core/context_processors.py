@@ -81,8 +81,8 @@ def nav_gates(request):
     if user is None or not user.is_authenticated:
         return {'nav': {}}
 
-    from core.scoping import (can_archive, can_manage_accounts, can_manage_system, can_use_desk,
-                              can_view_audit, can_view_reports)
+    from core.scoping import (can_archive, can_manage_accounts, can_manage_system, can_restore_system,
+                              can_use_desk, can_view_audit, can_view_reports)
 
     return {'nav': {
         'desk': can_use_desk(user),
@@ -100,4 +100,6 @@ def nav_gates(request):
         # (`can_manage_accounts`)؛ فلا يُدلّ عليها مَن يلقى 403 (تدقيقُ نيلسن F#4،
         # والتوحيدُ قرارُ المالك 2026‑10‑07: كانت الحساباتُ للموظّفين واللوحةُ للمدير).
         'roles': can_manage_accounts(user),
+        # استعادةُ نسخة النظام إلى قاعدةٍ جديدة — حارسُ صفحتها نفسُه (قرارُ المالك 2026‑10‑07، البند 3)
+        'restore_system': can_restore_system(user),
     }}

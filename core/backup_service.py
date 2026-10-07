@@ -8,6 +8,7 @@ import logging
 import os
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from django.conf import settings
@@ -153,9 +154,34 @@ def create_encrypted_pg_backup(target_dir=None, file_name=None) -> Path:
     return Path(encrypt_file(target_path))
 
 
+#: نمطُ نسخةِ القاعدة المشفّرة — **مصدرٌ واحد** لصفحة النسخ وصفحة الاستعادة والتشذيب
+#: (ما تعرضه صفحةٌ هو ما تقبله الأخرى، فلا تنحرفان).
+DB_BACKUP_PATTERN = '*.dump.enc'
+
+
+def list_db_backups(directory=None) -> list:
+    """نسخُ القاعدة المشفّرة في مجلّد النسخ، الأحدثُ أوّلاً.
+
+    كلُّ عنصر: ``name`` (اسمُ الملفّ وحدَه — لا مسار) و``size_mb`` و``modified``.
+    """
+    directory = Path(directory) if directory else default_backup_dir()
+    backups = []
+    if directory.is_dir():
+        for f in directory.glob(DB_BACKUP_PATTERN):
+            if not f.is_file():
+                continue
+            st = f.stat()
+            backups.append({
+                'name': f.name,
+                'size_mb': round(st.st_size / (1024 * 1024), 2),
+                'modified': datetime.fromtimestamp(st.st_mtime),
+            })
+    return sorted(backups, key=lambda b: b['modified'], reverse=True)
+
+
 #: أنماطُ ما يُشذَّب. المرآةُ ليست منها: هي نسخةٌ حيّةٌ للحالة الراهنة لا
 #: لقطةٌ مؤرَّخة — تشذيبها بالعمر يحذف مرفقاتٍ ما زالت مستعملة.
-PRUNABLE_PATTERNS = ('*.dump.enc', '*.tar.enc')
+PRUNABLE_PATTERNS = (DB_BACKUP_PATTERN, '*.tar.enc')
 
 
 def prune_old_backups(directory, retention_days: int) -> int:

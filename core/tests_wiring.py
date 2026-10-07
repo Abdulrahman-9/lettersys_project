@@ -63,7 +63,6 @@ class NavGatesContractTests(TestCase):
 #: مراجَعةٌ بالعين 2026‑09‑10 — كلُّ سطرٍ بسببه. إضافةُ اسمٍ هنا قرارٌ لا تسكين.
 KNOWN_UNWIRED = {
     'dev_login':                'أداةُ تطويرٍ تُفتح بالمسار عمداً',
-    'legacy_import':            'صفحةُ الاستيراد من الورق بلا مدخل — تُفتح بالمسار بعد الترحيل',
     'entity_stats':             'API إحصاءٍ بلا مستهلك',
     'search_titles':            'API بحثٍ بلا مستهلك (title_autocomplete يستعمل مساراً آخر)',
     'ai_extraction_statistics': 'API إحصاءٍ للاستخراج بلا مستهلك',

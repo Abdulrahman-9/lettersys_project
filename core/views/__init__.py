@@ -91,9 +91,13 @@ from .dashboard import (
     restore_start,
     restore_job_status,
     restore_job_cancel,
-    legacy_import_page,
-    legacy_import_run,
-    legacy_import_status,
+)
+
+# استعادةُ نسخةِ هذا النظام المشفّرة إلى قاعدةٍ جديدة
+from .system_restore import (
+    system_restore,
+    system_restore_verify,
+    system_restore_start,
 )
 
 # استيراد معالجات المرفقات

@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block title %}استعادة نسخة النظام{% endblock %}
+
+{% block content %}
+{% comment %}
+  استعادةُ نسخةِ هذا النظام المشفّرة — إلى قاعدةٍ **جديدة**، والقاعدةُ الحيّة لا تُمسّ
+  (قرارُ المالك 2026‑10‑07، البند 3). الخطوات: تحقّق ⟵ استعِد بتأكيدٍ مكتوب ⟵ بدّل
+  بيدك بسطرٍ في .env ثمّ أعد تشغيل الخادم. كلُّ رسالةٍ هنا تقول ما حدث وما التالي.
+{% endcomment %}
+<div class="container py-4" style="max-width:980px" id="sysRestore"
+     data-verify-url="{% url 'system_restore_verify' %}" data-start-url="{% url 'system_restore_start' %}"
+     data-status-url="{% url 'restore_job_status' 0 %}">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h4 fw-bold mb-1"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>استعادة نسخة النظام</h1>
+      <p class="text-muted mb-0">تُستعاد النسخةُ في <strong>قاعدةٍ جديدة</strong> — القاعدةُ الحاليّة «{{ live_db }}» تبقى كما هي حتى تبدّل إليها بنفسك.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-secondary settings-embed-hide" href="{% url 'backup_database' %}"><i class="bi bi-arrow-right me-1" aria-hidden="true"></i>النسخ الاحتياطي</a>
+  </div>
+
+  <ol class="small text-muted mb-4">
+    <li><strong>تحقّق</strong> من النسخة: تُفكّ وتُعدّ جداولُها وتُقارن بالقاعدة الحاليّة.</li>
+    <li><strong>استعِد إلى قاعدةٍ جديدة</strong>: تكتب اسمَ الملفّ تأكيداً، وتجري الاستعادةُ في الخلفية.</li>
+    <li><strong>بدّل</strong> بيدك: سطرٌ واحد في ملفّ البيئة على الخادم ثمّ إعادةُ تشغيل الخادم — والرجوعُ بإعادة السطر.</li>
+  </ol>
+
+  {% if running %}
+  <div class="alert alert-warning py-2" role="status">توجد مهمّةٌ قيد التنفيذ (#{{ running.id }}) — {{ running.phase|default:"…" }}. انتظر انتهاءها قبل بدء أخرى.</div>
+  {% endif %}
+
+  {% if backups %}
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead><tr><th>النسخة</th><th>التاريخ</th><th>الحجم</th><th class="text-end">الإجراء</th></tr></thead>
+      <tbody>
+        {% for b in backups %}
+        <tr>
+          <td class="small" dir="ltr" style="text-align:right">{{ b.name }}</td>
+          <td class="small">{{ b.modified|date:"d/m/Y H:i" }}</td>
+          <td class="small">{{ b.size_mb }} م.ب</td>
+          <td class="text-end">
+            <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
+              <button type="button" class="btn btn-sm btn-outline-primary" data-verify="{{ b.name }}">
+                <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>تحقّق
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="collapse"
+                      data-bs-target="#rs{{ forloop.counter }}" aria-expanded="false" aria-controls="rs{{ forloop.counter }}">
+                <i class="bi bi-database-add me-1" aria-hidden="true"></i>استعِد إلى قاعدةٍ جديدة
+              </button>
+            </div>
+          </td>
+        </tr>
+        <tr class="sr-result-row"><td colspan="4" class="p-0 border-0"><div class="sr-result small px-2" data-result-for="{{ b.name }}" aria-live="polite"></div></td></tr>
+        <tr><td colspan="4" class="p-0 border-0">
+          <div class="collapse" id="rs{{ forloop.counter }}">
+            <form class="sr-start row g-2 align-items-end bg-body-tertiary border-bottom px-2 py-3 m-0" data-file="{{ b.name }}">
+              <p class="col-12 small mb-1">تُنشأ قاعدةٌ جديدة من هذه النسخة، والقاعدةُ الحاليّة لا تتغيّر. للتأكيد اكتب اسمَ الملفّ كما هو:</p>
+              <div class="col-sm-8">
+                <label class="form-label small fw-semibold mb-1" for="rsConfirm{{ forloop.counter }}">اسمُ الملفّ</label>
+                <input class="form-control form-control-sm" id="rsConfirm{{ forloop.counter }}" name="confirm" dir="ltr" autocomplete="off" placeholder="{{ b.name }}" required>
+              </div>
+              <div class="col-sm-4"><button type="submit" class="btn btn-sm btn-danger w-100">ابدأ الاستعادة</button></div>
+            </form>
+          </div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-light border">لا نسخَ مشفّرةَ للقاعدة في مجلّد النسخ ({{ backup_dir }}). خذ نسخةً من صفحة <a href="{% url 'backup_database' %}">النسخ الاحتياطي</a>.</div>
+  {% endif %}
+
+  <div id="srJob" class="card card-body mt-3" hidden aria-live="polite">
+    <div class="fw-semibold" id="srJobPhase"></div>
+    <div class="small mt-2" id="srJobResult"></div>
+  </div>
+
+  {% if jobs %}
+  <h2 class="h6 fw-bold mt-4">آخرُ الاستعادات</h2>
+  <ul class="list-unstyled small">
+    {% for j in jobs %}
+    <li class="mb-1">#{{ j.id }} · {{ j.created_at|date:"d/m/Y H:i" }} · {{ j.get_status_display }}
+      {% if j.summary.target %} · «{{ j.summary.target }}» ({{ j.summary.books }} كتاباً){% endif %}
+      {% if j.error_message %}<div class="text-danger">{{ j.error_message }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <p class="small text-muted mt-4 mb-0">إنشاءُ قاعدةٍ جديدة يحتاج أن يملك دورُ القاعدة حقَّ الإنشاء — إن نقص تقول لك الصفحةُ السطرَ الذي يُنفَّذ مرّةً واحدة.</p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var root = document.getElementById('sysRestore');
+  if (!root) return;
+  function csrf() {
+    var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function post(url, data) {
+    var body = new URLSearchParams(data);
+    return fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrf() }, body: body })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'استجابةٌ غيرُ مفهومة (' + r.status + ').' }; }); });
+  }
+  function text(el, msg, cls) { el.textContent = msg; el.className = 'sr-result small px-2 py-2 ' + (cls || ''); }
+
+  root.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-verify]');
+    if (!btn) return;
+    var name = btn.getAttribute('data-verify');
+    var out = root.querySelector('[data-result-for="' + CSS.escape(name) + '"]');
+    btn.disabled = true;
+    text(out, 'جارٍ التحقّق… قد يستغرق دقائق للنسخ الكبيرة.', 'text-muted');
+    post(root.dataset.verifyUrl, { file: name }).then(function (d) {
+      if (!d.ok) { text(out, d.error || 'تعذّر التحقّق.', 'text-danger'); return; }
+      var books = d.tables && d.tables.core_book !== undefined ? d.tables.core_book : '؟';
+      text(out, d.matches_live
+        ? 'النسخةُ سليمة وتطابق القاعدةَ الحاليّة (الكتب: ' + books + ').'
+        : 'النسخةُ سليمة لكنّها تختلف عن القاعدة الحاليّة في ' + (d.differences || []).length + ' عدّاد (الكتب فيها: ' + books + ') — طبيعيٌّ لنسخةٍ قديمة.',
+        d.matches_live ? 'text-success' : 'text-warning-emphasis');
+    }).catch(function () { text(out, 'تعذّر الاتّصال بالخادم.', 'text-danger'); })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  var box = document.getElementById('srJob'), phase = document.getElementById('srJobPhase'),
+      result = document.getElementById('srJobResult');
+  function poll(id) {
+    var url = root.dataset.statusUrl.replace(/0\/?$/, id + '/');
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function (r) { return r.json(); }).then(function (d) {
+      phase.textContent = 'الاستعادة #' + id + ': ' + (d.phase || d.status || '…');
+      if (d.is_live) { setTimeout(function () { poll(id); }, 2000); return; }
+      if (d.status === 'done' && d.summary) {
+        result.innerHTML = '';
+        var p = document.createElement('p');
+        p.textContent = 'اكتملت: ' + d.summary.books + ' كتاباً في القاعدة الجديدة «' + d.summary.target + '». للتبديل إليها اكتب في ملفّ البيئة على الخادم:';
+        var code = document.createElement('code');
+        code.textContent = d.summary.env_line;
+        code.dir = 'ltr';
+        var after = document.createElement('p');
+        after.className = 'mb-0 mt-2';
+        after.textContent = 'ثمّ أعد تشغيل الخادم. للرجوع أعد السطرَ كما كان وأعد التشغيل.';
+        result.append(p, code, after);
+      } else {
+        result.textContent = d.error || 'لم تكتمل الاستعادة.';
+        result.className = 'small mt-2 text-danger';
+      }
+    }).catch(function () { setTimeout(function () { poll(id); }, 4000); });
+  }
+  root.querySelectorAll('form.sr-start').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = form.getAttribute('data-file');
+      var typed = form.elements.confirm.value.trim();
+      if (typed !== name) { form.elements.confirm.classList.add('is-invalid'); form.elements.confirm.focus(); return; }
+      form.elements.confirm.classList.remove('is-invalid');
+      var submit = form.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      post(root.dataset.startUrl, { file: name, confirm: typed }).then(function (d) {
+        box.hidden = false;
+        if (!d.ok) { phase.textContent = d.error || 'تعذّر البدء.'; phase.className = 'fw-semibold text-danger'; submit.disabled = false; return; }
+        phase.className = 'fw-semibold';
+        phase.textContent = 'بدأت الاستعادةُ إلى «' + d.target + '»…';
+        poll(d.job_id);
+      }).catch(function () { box.hidden = false; phase.textContent = 'تعذّر الاتّصال بالخادم.'; submit.disabled = false; });
+    });
+  });
+})();
+</script>
+{% endblock %}

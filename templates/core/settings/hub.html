@@ -234,7 +234,7 @@
           <span class="settings-pane-icon" style="--accent:#7c3aed;"><i class="bi bi-arrow-counterclockwise"></i></span>
           <div>
             <h5 class="mb-1 fw-bold">استعادة البيانات الذكية</h5>
-            <p class="text-muted mb-0">استيرادٌ من قاعدة بيانات قديمة أو ملفّ .bak، مع تطبيع تلقائي وفكّ التكرار وإعادة ضبط العدّادات. أمّا نسخُ هذا النظام المشفّرة فيستعيدها مديرُ النظام على الخادم.</p>
+            <p class="text-muted mb-0">استيرادٌ من قاعدة بيانات قديمة أو ملفّ .bak، مع تطبيع تلقائي وفكّ التكرار وإعادة ضبط العدّادات.</p>
           </div>
         </div>
         <div class="settings-pane-body">
@@ -243,6 +243,23 @@
           </a>
         </div>
       </div>
+
+      {% if nav.restore_system %}
+      <div class="settings-pane-card">
+        <div class="settings-pane-head">
+          <span class="settings-pane-icon" style="--accent:#0f766e;"><i class="bi bi-database-add"></i></span>
+          <div>
+            <h5 class="mb-1 fw-bold">استعادة نسخة النظام</h5>
+            <p class="text-muted mb-0">نسخُ هذا النظام المشفّرة تُستعاد في قاعدةٍ جديدة بعد التحقّق منها — والقاعدةُ الحاليّة لا تتغيّر حتى تبدّل إليها بنفسك.</p>
+          </div>
+        </div>
+        <div class="settings-pane-body">
+          <a href="{% url 'system_restore' %}?embed=1" class="btn btn-outline-primary" data-embed-open="{% url 'system_restore' %}?embed=1">
+            <i class="bi bi-database-add ms-1"></i> فتح استعادة النسخة
+          </a>
+        </div>
+      </div>
+      {% endif %}
     </div>
 
     {# ── الذكاء الاصطناعيّ: داخل المركز بدل قذف المستخدم إلى لوحة جانغو (مراجعة 2026‑09‑13) ── #}

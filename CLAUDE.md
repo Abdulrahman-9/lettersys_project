@@ -34,6 +34,7 @@ python manage.py models_healthcheck --strict --load --hash   # بوّابةُ ن
 python manage.py seed_demo_books          # populate demo data
 python manage.py check_overdue_books      # flag overdue books
 python manage.py import_legacy            # import legacy data
+#   ⤷ أُزيل 2026-10-07 مع صفحة legacy-import ومحرّكها (الترحيلُ تمّ؛ «بادئةُ الأرقام» تناقض numbering.py) — المسارُ الوحيدُ للقديم restore-data ⟵ run_restore_job
 python manage.py collectstatic            # production static files
 ```
 
