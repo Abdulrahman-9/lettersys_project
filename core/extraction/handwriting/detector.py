@@ -29,6 +29,7 @@ import numpy as np
 # استيرادٌ في الرأس لا داخل الدالّة: استيرادٌ كسولٌ داخل `_model_path` يستدعي
 # `os.path.exists` عبر آلة الاستيراد عند أوّل نداء، فيكذب على أيّ اختبارٍ يعدّ
 # ضرباتِ القرص (سقط `test_missing_model_probed_once_only` بذلك حرفيّاً).
+from core.extraction import degrade
 from core.extraction.artifacts import detector_fallback_path, detector_path
 
 logger = logging.getLogger(__name__)
@@ -179,6 +180,7 @@ def _decode(sess, pil_img) -> dict:
         return res
     except Exception as exc:
         logger.warning('[detector] فشل الاستدلال (%s) — تدهور رشيق', type(exc).__name__)
+        degrade.mark('detector-decode')     # صناديقُ فارغةٌ «ناجحة» — الممرُّ يُعيدها بالتسلسل
         return empty
 
 

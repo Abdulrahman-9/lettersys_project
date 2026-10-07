@@ -17,7 +17,8 @@ def _pdf_pages(data) -> int:
     """عددُ صفحات PDF من بايتاته — صفرٌ إن تعذّر (لا يُفشل الدمجَ بحالٍ)."""
     try:
         import fitz
-        with fitz.open(stream=bytes(data), filetype='pdf') as doc:
+        from .pdf_lock import MUPDF_LOCK
+        with MUPDF_LOCK, fitz.open(stream=bytes(data), filetype='pdf') as doc:
             return doc.page_count
     except Exception:                       # noqa: BLE001
         return 0

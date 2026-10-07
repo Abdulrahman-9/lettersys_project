@@ -341,6 +341,16 @@ EXTRACTION_BACKGROUND_INDEXING = os.environ.get(
 # مُطفأٌ افتراضيّاً مع DEBUG: خادمُ التطوير يُعاد كثيراً، وكلُّ إعادةٍ تحمل sklearn وONNX فوراً.
 EXTRACTION_WARMUP = os.environ.get(
     'EXTRACTION_WARMUP', str(not DEBUG)).lower() in ('true', '1')
+# ممرّاتُ القراءة المتوازية داخل الاستخراج الواحد (core/extraction/lanes.py): قراءتا Tesseract
+# والكاشف معاً بدل التتابع، والمخرَجُ نفسُه حرفاً. لا تعمل إلّا والاستخراجُ وحده جارٍ وفي الجهاز
+# ذاكرةٌ حرّة ومتّسعُ التزامٍ كافيان؛ وإلّا فالتسلسلُ كاليوم. False = كودُ اليوم حرفاً.
+# مُطفأٌ افتراضيّاً حتّى تكتمل مصفوفةُ التحقّق (المطفأُ مطابقٌ 40/40؛ المُشغَّلُ 19/19 مختومةً فقط)
+# — التشغيلُ سطرٌ في .env: EXTRACTION_LANES=True ثمّ إعادةُ تشغيل الخادم.
+EXTRACTION_LANES = os.environ.get('EXTRACTION_LANES', 'False').lower() in ('true', '1')
+# التوازي يضيف ~100–200 MB لثانيةٍ أو اثنتين (Tesseract ثانٍ وصورتان محجوزتان). العتبتان تتركان
+# هامشاً فوق ذلك؛ والالتزامُ هو ما يُفشل malloc لا الحرّةُ وحدها.
+EXTRACTION_LANES_MIN_FREE_MB = int(os.environ.get('EXTRACTION_LANES_MIN_FREE_MB', '300'))
+EXTRACTION_LANES_MIN_COMMIT_MB = int(os.environ.get('EXTRACTION_LANES_MIN_COMMIT_MB', '500'))
 # الحد الزمني الأقصى لعملية الاستخراج الكاملة (ثوانٍ)
 AI_EXTRACTION_TIMEOUT = int(os.environ.get('AI_EXTRACTION_TIMEOUT', '120'))
 # تشغيل OCR تلقائياً عند رفع/مسح مستند. مؤجَّل افتراضياً: EasyOCR ثقيل وقد يتعطّل

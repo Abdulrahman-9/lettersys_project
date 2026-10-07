@@ -182,7 +182,8 @@ def _stamp(pdf_bytes, signer_name, token):
         stamped_at = timezone.localtime().strftime('%Y/%m/%d %H:%M')
         line = 'وُقّع إلكترونيّاً: %s — %s' % (signer_name, stamped_at)
 
-        with fitz.open(stream=pdf_bytes, filetype='pdf') as doc:
+        from core.pdf_lock import MUPDF_LOCK
+        with MUPDF_LOCK, fitz.open(stream=pdf_bytes, filetype='pdf') as doc:
             for page in doc:
                 rect = page.rect
                 band = fitz.Rect(rect.x0, rect.y1 - STAMP_HEIGHT, rect.x1, rect.y1)

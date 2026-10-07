@@ -13,6 +13,8 @@ from pathlib import Path
 import fitz  # PyMuPDF (imported as fitz)
 import logging
 
+from core.pdf_lock import MUPDF_LOCK
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,51 +82,54 @@ class ImageProcessor:
         """
         try:
             logger.info(f"[ImageProcessor] Converting PDF to image: {pdf_path}")
-            doc = fitz.open(pdf_path)
-
-            if doc.page_count == 0:
-                raise ValueError("PDF file is empty")
-
-            # الصفحة الأولى فقط — الوجه المعتمَد (الباقي مرفقات لا تُستخرَج)
-            page = doc[0]
-
-            # دقّة مستهدفة 300 DPI للنص العربي، لكن نحدّ البُعد الأطول بـ max_dim كي لا يُخصَّص
-            # pixmap ضخم يفشل (صفحة كبيرة/ماسح عالي الدقّة تطلب مئات الميغابايت → OOM على
-            # الأجهزة محدودة الذاكرة). التحديد عند العرض لا بعده = لا تخصيص كبير أصلاً.
-            zoom = 300 / 72  # 72 DPI هي الافتراضية
-            longer_px = max(page.rect.width, page.rect.height) * zoom
-            if max_dim and longer_px > max_dim:
-                zoom *= max_dim / longer_px
-
-            # رسم مع سقوط تلقائي عند نفاد الذاكرة: نبدأ بالدقّة المستهدفة ونتراجع
-            # تدريجياً إن فشل تخصيص الـpixmap على جهاز ضيّق الذاكرة (mupdf يرمي
-            # «malloc failed») — أفضل من فشل الاستخراج كليّاً. الأرضية ≈130 DPI
-            # تبقى مقروءةً للعربية المطبوعة. لا خسارة جودة متى توفّرت الذاكرة.
-            min_zoom = 130 / 72
-            while True:
+            with MUPDF_LOCK:   # سياقُ MuPDF وحيدُ الخيط — انظر core/pdf_lock.py
+                doc = fitz.open(pdf_path)
                 try:
-                    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
-                    break
-                except Exception as render_exc:
-                    msg = str(render_exc).lower()
-                    out_of_mem = isinstance(render_exc, MemoryError) or 'alloc' in msg or 'memory' in msg
-                    if not out_of_mem or zoom <= min_zoom:
-                        raise
-                    zoom *= 0.66
-                    logger.warning("[ImageProcessor] نقص ذاكرة عند الرسم — إعادة المحاولة بدقّة أدنى (~%d DPI)",
-                                   round(zoom * 72))
 
-            # تحويل لـ numpy array **من عيّنات الـpixmap مباشرةً** لا عبر ضغطِ PNG ثمّ فكِّه:
-            # PNG بلا فقد، فـ`imdecode(png(pix))` هو عيّناتُ pix نفسُها مرتّبةً BGR — بكسلاً
-            # ببكسل. الجولةُ كانت تكلّف ~0.6 ث لصفحة 3500px (قياس 2026-10-05). غيرُ RGB
-            # المرصوص (لا يقع مع alpha=False) يبقى على المسار القديم.
-            if pix.n == 3 and pix.stride == pix.width * 3:
-                rgb = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
-                img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-            else:
-                img = cv2.imdecode(np.frombuffer(pix.tobytes("png"), np.uint8), cv2.IMREAD_COLOR)
+                    if doc.page_count == 0:
+                        raise ValueError("PDF file is empty")
 
-            doc.close()
+                    # الصفحة الأولى فقط — الوجه المعتمَد (الباقي مرفقات لا تُستخرَج)
+                    page = doc[0]
+
+                    # دقّة مستهدفة 300 DPI للنص العربي، لكن نحدّ البُعد الأطول بـ max_dim كي لا يُخصَّص
+                    # pixmap ضخم يفشل (صفحة كبيرة/ماسح عالي الدقّة تطلب مئات الميغابايت → OOM على
+                    # الأجهزة محدودة الذاكرة). التحديد عند العرض لا بعده = لا تخصيص كبير أصلاً.
+                    zoom = 300 / 72  # 72 DPI هي الافتراضية
+                    longer_px = max(page.rect.width, page.rect.height) * zoom
+                    if max_dim and longer_px > max_dim:
+                        zoom *= max_dim / longer_px
+
+                    # رسم مع سقوط تلقائي عند نفاد الذاكرة: نبدأ بالدقّة المستهدفة ونتراجع
+                    # تدريجياً إن فشل تخصيص الـpixmap على جهاز ضيّق الذاكرة (mupdf يرمي
+                    # «malloc failed») — أفضل من فشل الاستخراج كليّاً. الأرضية ≈130 DPI
+                    # تبقى مقروءةً للعربية المطبوعة. لا خسارة جودة متى توفّرت الذاكرة.
+                    min_zoom = 130 / 72
+                    while True:
+                        try:
+                            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+                            break
+                        except Exception as render_exc:
+                            msg = str(render_exc).lower()
+                            out_of_mem = isinstance(render_exc, MemoryError) or 'alloc' in msg or 'memory' in msg
+                            if not out_of_mem or zoom <= min_zoom:
+                                raise
+                            zoom *= 0.66
+                            logger.warning("[ImageProcessor] نقص ذاكرة عند الرسم — إعادة المحاولة بدقّة أدنى (~%d DPI)",
+                                           round(zoom * 72))
+
+                    # تحويل لـ numpy array **من عيّنات الـpixmap مباشرةً** لا عبر ضغطِ PNG ثمّ فكِّه:
+                    # PNG بلا فقد، فـ`imdecode(png(pix))` هو عيّناتُ pix نفسُها مرتّبةً BGR — بكسلاً
+                    # ببكسل. الجولةُ كانت تكلّف ~0.6 ث لصفحة 3500px (قياس 2026-10-05). غيرُ RGB
+                    # المرصوص (لا يقع مع alpha=False) يبقى على المسار القديم.
+                    if pix.n == 3 and pix.stride == pix.width * 3:
+                        rgb = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
+                        img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                    else:
+                        img = cv2.imdecode(np.frombuffer(pix.tobytes("png"), np.uint8), cv2.IMREAD_COLOR)
+
+                finally:
+                    doc.close()      # تحت القفل حتّى عند العطب
             logger.info(f"[ImageProcessor] PDF converted (~{round(zoom * 72)} DPI), size: {img.shape}")
 
             # تحسين الصورة فوراً بعد التحويل — يُتخطّى لمحرّكات تطبّق تحسينها

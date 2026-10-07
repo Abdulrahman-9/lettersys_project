@@ -20,6 +20,7 @@ from .helpers import staff_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
+from core.pdf_lock import MUPDF_LOCK
 from core.scoping import can_edit_book, is_privileged
 
 logger = logging.getLogger('lettersys')
@@ -127,17 +128,18 @@ def scan_preview_page(request, token: str):
 
     try:
         import fitz
-        doc = fitz.open(file_path)
-        try:
-            count = doc.page_count
-            if page < 1 or page > count:
-                raise Http404('page out of range')
-            mat = fitz.Matrix(dpi / 72, dpi / 72)
-            pix = doc[page - 1].get_pixmap(matrix=mat, alpha=False)
-            body, ctype = _preview_bytes(pix, dpi)
-            del pix
-        finally:
-            doc.close()                        # تحرير الذاكرة فوراً
+        with MUPDF_LOCK:   # الرسمُ وحده تحت القفل — لا الكاش ولا الكتابة
+            doc = fitz.open(file_path)
+            try:
+                count = doc.page_count
+                if page < 1 or page > count:
+                    raise Http404('page out of range')
+                mat = fitz.Matrix(dpi / 72, dpi / 72)
+                pix = doc[page - 1].get_pixmap(matrix=mat, alpha=False)
+                body, ctype = _preview_bytes(pix, dpi)
+                del pix
+            finally:
+                doc.close()                        # تحرير الذاكرة فوراً
     except Http404:
         raise
     except Exception as exc:
@@ -172,14 +174,15 @@ def scan_manifest(request, token: str):
     if os.path.splitext(file_path)[1].lower() == '.pdf':
         try:
             import fitz
-            doc = fitz.open(file_path)
-            try:
-                for i in range(doc.page_count):
-                    p = doc[i]
-                    r = p.rect
-                    pages.append({'n': i + 1, 'w': round(r.width), 'h': round(r.height), 'rot': p.rotation})
-            finally:
-                doc.close()
+            with MUPDF_LOCK:   # الرسمُ وحده تحت القفل — لا الكاش ولا الكتابة
+                doc = fitz.open(file_path)
+                try:
+                    for i in range(doc.page_count):
+                        p = doc[i]
+                        r = p.rect
+                        pages.append({'n': i + 1, 'w': round(r.width), 'h': round(r.height), 'rot': p.rotation})
+                finally:
+                    doc.close()
         except Exception as exc:
             logger.warning('[ScanManifest] pdf geometry failed token=%s: %s', token[:8], exc)
             pages = []
@@ -229,92 +232,93 @@ def scan_edit_page(request, token: str):
 
     try:
         import fitz
-        doc = fitz.open(file_path)
-        try:
-            count = doc.page_count
-            inserted_at = None    # (op=insert) موضع أول صفحة مُلحقة (0-based)
-            inserted_count = 0
+        with MUPDF_LOCK:   # الرسمُ وحده تحت القفل — لا الكاش ولا الكتابة
+            doc = fitz.open(file_path)
+            try:
+                count = doc.page_count
+                inserted_at = None    # (op=insert) موضع أول صفحة مُلحقة (0-based)
+                inserted_count = 0
 
-            if op == 'rotate':
-                try:
-                    angle = int(body.get('angle', 90))
-                except (TypeError, ValueError):
-                    return JsonResponse({'ok': False, 'error': 'زاوية غير صالحة'}, status=400)
-                if angle % 90 != 0:
-                    return JsonResponse({'ok': False, 'error': 'الزاوية يجب أن تكون من مضاعفات 90'}, status=400)
-                page = body.get('page')
-                if page in (None, 'all'):
-                    targets = range(count)
-                else:
+                if op == 'rotate':
                     try:
-                        targets = [int(page) - 1]
+                        angle = int(body.get('angle', 90))
+                    except (TypeError, ValueError):
+                        return JsonResponse({'ok': False, 'error': 'زاوية غير صالحة'}, status=400)
+                    if angle % 90 != 0:
+                        return JsonResponse({'ok': False, 'error': 'الزاوية يجب أن تكون من مضاعفات 90'}, status=400)
+                    page = body.get('page')
+                    if page in (None, 'all'):
+                        targets = range(count)
+                    else:
+                        try:
+                            targets = [int(page) - 1]
+                        except (TypeError, ValueError):
+                            return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
+                    for i in targets:
+                        if i < 0 or i >= count:
+                            return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
+                        doc[i].set_rotation((doc[i].rotation + angle) % 360)
+
+                elif op == 'delete':
+                    if count <= 1:
+                        return JsonResponse({'ok': False, 'error': 'لا يمكن حذف الصفحة الوحيدة'}, status=400)
+                    try:
+                        i = int(body.get('page')) - 1
                     except (TypeError, ValueError):
                         return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
-                for i in targets:
                     if i < 0 or i >= count:
                         return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
-                    doc[i].set_rotation((doc[i].rotation + angle) % 360)
+                    doc.delete_page(i)
 
-            elif op == 'delete':
-                if count <= 1:
-                    return JsonResponse({'ok': False, 'error': 'لا يمكن حذف الصفحة الوحيدة'}, status=400)
-                try:
-                    i = int(body.get('page')) - 1
-                except (TypeError, ValueError):
-                    return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
-                if i < 0 or i >= count:
-                    return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
-                doc.delete_page(i)
-
-            elif op == 'reorder':
-                order = body.get('order') or []
-                try:
-                    idx = [int(p) - 1 for p in order]
-                except (TypeError, ValueError):
-                    return JsonResponse({'ok': False, 'error': 'ترتيب غير صالح'}, status=400)
-                if sorted(idx) != list(range(count)):
-                    return JsonResponse({'ok': False, 'error': 'الترتيب يجب أن يغطّي كل الصفحات دون حذف'}, status=400)
-                doc.select(idx)
-
-            elif op == 'insert':
-                # إلحاق/إدراج مستند مصدر (ممسوح أو مرفوع، مُهيَّأ عبر process-upload) في الملف المؤقّت.
-                # المصدر يُمرَّر كـ source_token (يعيد استخدام تجهيز process-upload: تحويل صورة→PDF + قصّ فراغات).
-                # at اختياري (0-based): None = النهاية (إلحاق مباشر) — وهو الحالة الأشيع.
-                src_token = body.get('source_token', '')
-                src = cache.get(f'scan_token:{src_token}') if src_token else None
-                if not src or not _token_owner_ok(src, request.user):
-                    return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير متاح أو انتهت صلاحيته'}, status=404)
-                src_path = src.get('processed_path', '')
-                if (not src_path or not os.path.isfile(src_path)
-                        or os.path.splitext(src_path)[1].lower() != '.pdf'):
-                    return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير صالح'}, status=404)
-                at = body.get('at')
-                if at is None:
-                    inserted_at = count
-                else:
+                elif op == 'reorder':
+                    order = body.get('order') or []
                     try:
-                        inserted_at = max(0, min(int(at), count))
+                        idx = [int(p) - 1 for p in order]
                     except (TypeError, ValueError):
-                        return JsonResponse({'ok': False, 'error': 'موضع إدراج غير صالح'}, status=400)
-                try:
-                    src_doc = fitz.open(src_path)
-                except Exception:
-                    return JsonResponse({'ok': False, 'error': 'تعذّر فتح مصدر الإلحاق'}, status=400)
-                try:
-                    inserted_count = src_doc.page_count
-                    if inserted_count == 0:
-                        return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق فارغ'}, status=400)
-                    doc.insert_pdf(src_doc, start_at=inserted_at)
-                finally:
-                    src_doc.close()
+                        return JsonResponse({'ok': False, 'error': 'ترتيب غير صالح'}, status=400)
+                    if sorted(idx) != list(range(count)):
+                        return JsonResponse({'ok': False, 'error': 'الترتيب يجب أن يغطّي كل الصفحات دون حذف'}, status=400)
+                    doc.select(idx)
 
-            else:
-                return JsonResponse({'ok': False, 'error': 'عملية غير معروفة'}, status=400)
+                elif op == 'insert':
+                    # إلحاق/إدراج مستند مصدر (ممسوح أو مرفوع، مُهيَّأ عبر process-upload) في الملف المؤقّت.
+                    # المصدر يُمرَّر كـ source_token (يعيد استخدام تجهيز process-upload: تحويل صورة→PDF + قصّ فراغات).
+                    # at اختياري (0-based): None = النهاية (إلحاق مباشر) — وهو الحالة الأشيع.
+                    src_token = body.get('source_token', '')
+                    src = cache.get(f'scan_token:{src_token}') if src_token else None
+                    if not src or not _token_owner_ok(src, request.user):
+                        return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير متاح أو انتهت صلاحيته'}, status=404)
+                    src_path = src.get('processed_path', '')
+                    if (not src_path or not os.path.isfile(src_path)
+                            or os.path.splitext(src_path)[1].lower() != '.pdf'):
+                        return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير صالح'}, status=404)
+                    at = body.get('at')
+                    if at is None:
+                        inserted_at = count
+                    else:
+                        try:
+                            inserted_at = max(0, min(int(at), count))
+                        except (TypeError, ValueError):
+                            return JsonResponse({'ok': False, 'error': 'موضع إدراج غير صالح'}, status=400)
+                    try:
+                        src_doc = fitz.open(src_path)
+                    except Exception:
+                        return JsonResponse({'ok': False, 'error': 'تعذّر فتح مصدر الإلحاق'}, status=400)
+                    try:
+                        inserted_count = src_doc.page_count
+                        if inserted_count == 0:
+                            return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق فارغ'}, status=400)
+                        doc.insert_pdf(src_doc, start_at=inserted_at)
+                    finally:
+                        src_doc.close()
 
-            out_bytes = doc.tobytes(garbage=3, deflate=True)
-            new_count = doc.page_count
-        finally:
-            doc.close()
+                else:
+                    return JsonResponse({'ok': False, 'error': 'عملية غير معروفة'}, status=400)
+
+                out_bytes = doc.tobytes(garbage=3, deflate=True)
+                new_count = doc.page_count
+            finally:
+                doc.close()
 
         with open(file_path, 'wb') as fh:
             fh.write(out_bytes)
@@ -371,7 +375,7 @@ def scan_stage_attachment(request, attachment_id: int):
     if ext == '.pdf':
         try:
             import fitz
-            with fitz.open(tmp_path) as _doc:
+            with MUPDF_LOCK, fitz.open(tmp_path) as _doc:
                 page_count = _doc.page_count
         except Exception:
             page_count = 1
@@ -603,7 +607,7 @@ def scan_process_upload(request):
         # عدد الصفحات (لمعاينة متعددة الصفحات في duplex) — best-effort
         try:
             import fitz
-            with fitz.open(tmp_path) as _doc:
+            with MUPDF_LOCK, fitz.open(tmp_path) as _doc:
                 data['page_count'] = _doc.page_count
                 # حارس المسح الفارغ (مبدأ المالك: صفر حقول ≠ نجاح): صفحاتٌ بيضاء
                 # ناصعة (تباين شبه معدوم) = وجه ورقة خاطئ/تغذية فارغة — نُصارح فوراً

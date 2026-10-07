@@ -17,6 +17,8 @@ import logging
 
 from django.core.cache import cache
 
+from core.pdf_lock import MUPDF_LOCK
+
 logger = logging.getLogger(__name__)
 
 #: عرضُ الصورة المُصيَّرة — يكفي لتحديد هامشٍ بالعين ولا يُثقل الشبكة.
@@ -55,7 +57,7 @@ def render_page(file_path, page_number, width=RENDER_WIDTH):
     try:
         import fitz  # PyMuPDF
 
-        with fitz.open(str(file_path)) as doc:
+        with MUPDF_LOCK, fitz.open(str(file_path)) as doc:
             if page_number > doc.page_count:
                 return None, None
             page = doc[page_number - 1]
@@ -88,7 +90,7 @@ def page_count(file_path):
     try:
         import fitz
 
-        with fitz.open(str(file_path)) as doc:
+        with MUPDF_LOCK, fitz.open(str(file_path)) as doc:
             return doc.page_count
     except Exception:                              # noqa: BLE001
         return 0
