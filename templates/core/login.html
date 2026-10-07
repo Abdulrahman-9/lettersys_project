@@ -1,15 +1,22 @@
 {% extends 'base.html' %}
-{% load static %}
 {% block title %}تسجيل الدخول{% endblock %}
 
 {% block extra_head %}
 <style>
+  /* هويّةُ الصفحة تركوازُ التطبيق لا أزرقُ Bootstrap (البند 6). كلُّ لونٍ أدناه يُشتقّ
+     من الرموز الأربعة على .login-wrapper — النطاقُ نفسُه في brand-components.css
+     (.extraction-container). والإحساسُ كما أحبّه المالك: ارتفاعٌ وموجةٌ وحلقةُ تركيز. */
   body {
-    background: linear-gradient(135deg, #e8f0ff 0%, #fdf6e3 50%, #fff4e4 100%);
+    /* أوّلُ التدرّج تركوازٌ فاتح (--dc-brand-soft) — الجسمُ خارج نطاق الرموز */
+    background: linear-gradient(135deg, #e6f4f2 0%, #fdf6e3 50%, #fff4e4 100%);
     min-height: 100vh;
   }
-  
+
   .login-wrapper {
+    --brand: #0f766e;
+    --brand-2: #0d9488;
+    --brand-strong: #0f766e;
+    --brand-strong-2: #115e59;
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -24,7 +31,7 @@
     position: absolute;
     width: 500px;
     height: 500px;
-    background: radial-gradient(circle, rgba(59, 130, 246, 0.1), transparent);
+    background: radial-gradient(circle, color-mix(in srgb, var(--brand) 10%, transparent), transparent);
     top: -250px;
     right: -250px;
     border-radius: 50%;
@@ -68,11 +75,11 @@
   }
   
   .login-hero {
-    background: linear-gradient(135deg, #0d6efd 0%, #1d4ed8 50%, #3b82f6 100%);
+    background: linear-gradient(135deg, var(--brand-strong) 0%, var(--brand-strong-2) 60%, var(--brand-2) 100%);
     color: #fff;
     border-radius: 20px 20px 0 0;
     padding: 2.5rem 2rem;
-    box-shadow: 0 8px 32px rgba(13, 110, 253, 0.3);
+    box-shadow: 0 8px 32px color-mix(in srgb, var(--brand-strong) 30%, transparent);
     position: relative;
     overflow: hidden;
     text-align: center;
@@ -89,18 +96,23 @@
     right: -50px;
   }
   
-  .login-hero i {
-    font-size: 3.5rem;
-    margin-bottom: 1rem;
-    display: block;
-    animation: float 3s ease-in-out infinite;
+  /* علامةٌ عامّة بدل شعار الشركة: رمزٌ أبيض في دائرةٍ على التركواز، ساكنةٌ كما كان الشعار */
+  .login-mark {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.16);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    font-size: 2rem;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
   }
-  
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
-  }
-  
+
   .login-hero h5 { 
     margin: 0.5rem 0 0.25rem;
     font-weight: 800;
@@ -130,8 +142,8 @@
   }
   
   .login-form .form-control:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 16%, transparent);
   }
   
   .login-form .form-label {
@@ -145,9 +157,9 @@
     padding: 0.85rem 1.5rem;
     font-weight: 700;
     font-size: 1.05rem;
-    background: linear-gradient(135deg, #0d6efd 0%, #1d4ed8 50%, #3b82f6 100%);
+    background: linear-gradient(135deg, var(--brand-strong) 0%, var(--brand-strong-2) 60%, var(--brand-2) 100%);
     border: none;
-    box-shadow: 0 8px 24px rgba(13, 110, 253, 0.3);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--brand-strong) 30%, transparent);
     position: relative;
     overflow: hidden;
     transition: all 0.3s ease;
@@ -171,9 +183,9 @@
     height: 300px;
   }
   
-  .login-form .btn-login:hover { 
+  .login-form .btn-login:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 32px rgba(13, 110, 253, 0.4);
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--brand-strong) 40%, transparent);
   }
   
   .login-note { 
@@ -185,7 +197,7 @@
   
   .login-info {
     background: #f3f4f6;
-    border-left: 4px solid #3b82f6;
+    border-left: 4px solid var(--brand);
     padding: 1rem;
     border-radius: 8px;
     margin-top: 1.5rem;
@@ -202,34 +214,37 @@
     margin: 0;
     font-size: 0.9rem;
   }
-  
+
+  /* أيقوناتُ الحقول وصندوقِ المعلومات: .text-primary أزرقُ Bootstrap بـ!important */
+  .login-card .text-primary {
+    color: var(--brand) !important;
+  }
+
   @media (max-width: 576px) {
     .login-hero {
       padding: 2rem;
     }
-    
+
     .login-form {
       padding: 1.5rem;
     }
-    
+
     .login-hero h5 {
       font-size: 1.5rem;
-    }
-    
-    .login-hero i {
-      font-size: 3rem;
     }
   }
 </style>
 {% endblock %}
 
 {% block content %}
+{# الاسمُ من «إعدادات النظام» لا اسمُ الشركة ولا شعارُها — المستودعُ عامّ وهذه أوّلُ صفحة (البند 6) #}
+{% with app_name=system_settings.app_name|default:"نظام الكتب" %}
 <div class="login-wrapper">
   <div class="login-card">
     <!-- Hero Section -->
     <div class="login-hero">
-      <img src="{% static 'img/md-o-c-logo.png' %}" alt="شركة نفط الوسط" class="logo-login mb-3" style="max-width: 120px; height: auto;">
-      <h5>نظام إدارة الكتب</h5>
+      <span class="login-mark" aria-hidden="true"><i class="bi bi-journal-bookmark-fill"></i></span>
+      <h5>{{ app_name }}</h5>
       <p>تسجيل الدخول للوصول إلى لوحة التحكم</p>
     </div>
     
@@ -282,9 +297,10 @@
       <h6 class="mb-1">
         <i class="bi bi-info-circle-fill text-primary me-2"></i>معلومات النظام
       </h6>
-      <p>شركة نفط الوسط - قسم المتابعة</p>
-      <p class="mb-0">نظام تتبع الكتب والمراسلات الإلكتروني</p>
+      <p>{{ app_name }}</p>
+      <p class="mb-0">{{ system_settings.brand_subtitle|default:"نظام تتبع الكتب والمراسلات" }}</p>
     </div>
   </div>
 </div>
+{% endwith %}
 {% endblock %}
