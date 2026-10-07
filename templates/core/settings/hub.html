@@ -85,6 +85,21 @@
           </form>
         </div>
       </div>
+      {% if nav.roles %}
+      {# إسنادُ القسم والدور كان بلا مدخلٍ في المركز ولا الشريط (تدقيقُ نيلسن F#4) — يُفتح خارج الإطار #}
+      <div class="settings-pane-card">
+        <div class="settings-pane-head">
+          <span class="settings-pane-icon" style="--accent:#0f766e;"><i class="bi bi-diagram-3"></i></span>
+          <div>
+            <h5 class="mb-1 fw-bold">الأقسام والأدوار</h5>
+            <p class="text-muted mb-0">إنشاءُ الأقسام وإسنادُ قسمِ كلّ موظّفٍ ودورِه وقوائمِ التعميم — في لوحة الإدارة.</p>
+          </div>
+        </div>
+        <div class="settings-pane-body">
+          <a class="btn btn-outline-primary" href="{% url 'admin_panel' %}" target="_top"><i class="bi bi-box-arrow-up-left ms-1"></i> فتح لوحة الإدارة</a>
+        </div>
+      </div>
+      {% endif %}
     </div>
 
     {# ── الإشعارات ── #}
@@ -94,7 +109,7 @@
           <span class="settings-pane-icon" style="--accent:#b45309;"><i class="bi bi-bell-fill"></i></span>
           <div>
             <h5 class="mb-1 fw-bold">سياسة إشعارات التأخّر</h5>
-            <p class="text-muted mb-0">تتحكّم بما يفعله فحص الكتب المتأخّرة اليومي (أمر notify_overdue_books).</p>
+            <p class="text-muted mb-0">تتحكّم بما يفعله فحصُ الكتب المتأخّرة الذي يجري كلَّ يوم.</p>
           </div>
         </div>
         <div class="settings-pane-body">
@@ -156,7 +171,7 @@
           <span class="settings-pane-icon" style="--accent:#0369a1;"><i class="bi bi-clock-history"></i></span>
           <div>
             <h5 class="mb-1 fw-bold">النسخ الاحتياطي المجدول</h5>
-            <p class="text-muted mb-0">نسخ تلقائي مشفّر عبر Celery beat. يتطلّب تشغيل الجدولة على الخادم.</p>
+            <p class="text-muted mb-0">نسخٌ تلقائيٌّ مشفّر في الساعة المحدّدة — يعمل حين تكون جدولةُ الخادم مشغّلة.</p>
           </div>
         </div>
         <div class="settings-pane-body">
@@ -217,7 +232,7 @@
           <span class="settings-pane-icon" style="--accent:#7c3aed;"><i class="bi bi-arrow-counterclockwise"></i></span>
           <div>
             <h5 class="mb-1 fw-bold">استعادة البيانات الذكية</h5>
-            <p class="text-muted mb-0">استعادة من نسخة احتياطية (.bak/.dump) أو من قاعدة بيانات قديمة، مع تطبيع تلقائي وفكّ التكرار وإعادة ضبط العدّادات.</p>
+            <p class="text-muted mb-0">استيرادٌ من قاعدة بيانات قديمة أو ملفّ .bak، مع تطبيع تلقائي وفكّ التكرار وإعادة ضبط العدّادات. أمّا نسخُ هذا النظام المشفّرة فيستعيدها مديرُ النظام على الخادم.</p>
           </div>
         </div>
         <div class="settings-pane-body">

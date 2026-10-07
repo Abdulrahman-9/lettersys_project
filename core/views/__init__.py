@@ -110,7 +110,6 @@ from .attachments import (
 # استيراد معالجات المستخدمين (Phase 9)
 from .users import (
     user_roles,
-    get_user_password,
     custom_logout,
 )
 

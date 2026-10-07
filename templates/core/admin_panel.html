@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{# الرسائلُ داخل الصفحة — فلا توستَ يكرّرها (تدقيقُ نيلسن F#14) #}
+{% block global_messages %}{% endblock %}
 {% load static %}
 
 {% block title %}لوحة الإدارة{% endblock %}
@@ -12,7 +14,7 @@
 
   {% if messages %}
     {% for message in messages %}
-      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}success{% endif %} py-2"
+      <div class="alert alert-{% if 'error' in message.tags %}danger{% elif 'warning' in message.tags %}warning{% elif 'info' in message.tags %}info{% else %}success{% endif %} py-2"
            role="alert" style="font-size:.9rem">{{ message }}</div>
     {% endfor %}
   {% endif %}
@@ -316,7 +318,7 @@
                             {% if g.is_active %}تعطيل{% else %}تفعيل{% endif %}
                           </button>
                         </form>
-                        <a href="?tab=groups&edit={{ g.pk }}"
+                        <a href="{% url 'entity_list' %}?view=groups&edit={{ g.pk }}"
                            class="btn btn-sm btn-outline-primary" style="font-size:.78rem">تعديل</a>
                         {% if not g.books.exists %}
                         <form method="post" class="d-inline"

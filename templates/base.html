@@ -80,10 +80,11 @@
           <span class="app-topbar-alert-badge">{{ navbar_unread_notifications }}</span>
           {% endif %}
         </a>
-        <div class="app-topbar-user">
+        <a class="app-topbar-user" href="{% url 'password_change' %}" title="تغيير كلمة المرور" style="text-decoration:none;color:inherit">
           <i class="bi bi-person-circle"></i>
           <span>{{ request.user.get_full_name|default:request.user.username }}</span>
-        </div>
+          <i class="bi bi-key small opacity-75" aria-hidden="true"></i>
+        </a>
         {% else %}
         <a class="btn btn-sm btn-primary rounded-pill" href="{% url 'login' %}"><i class="bi bi-box-arrow-in-left me-1"></i>تسجيل الدخول</a>
         {% endif %}
@@ -324,6 +325,7 @@
       var EMBED_SCOPE = [
         '/books/settings/', '/books/mail/settings/', '/books/mail/templates/',
         '/books/mail/api/', '/books/api/', '/books/users/', '/books/trash/',
+        '/books/backup/', '/books/restore-data/',   // كان إرسالُهما يغادر المركز (تدقيقُ نيلسن F#10)
         '/media/', '/static/'
       ];
       function inScope(u) {

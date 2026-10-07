@@ -21,11 +21,9 @@ from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db.models import ProtectedError
-from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
-from django_ratelimit.decorators import ratelimit
 
 from core.roles import ROLE_DEFINITIONS, get_user_role
 
@@ -129,8 +127,8 @@ def user_roles(request):
                 except ProtectedError:
                     messages.error(
                         request,
-                        f"❌ لا يُحذف «{username}» لأنّه أنشأ كتباً — عطِّل حسابه من لوحة الإدارة "
-                        f"({ROLE_ADMIN_URL}) بدل حذفه.")
+                        f"❌ لا يُحذف «{username}» لأنّه أنشأ كتباً — عطِّل حسابه بدل حذفه: "
+                        f"أزِل علامة «نشط» في /admin/auth/user/{user.pk}/change/")
                 else:
                     messages.success(request, f"✅ تم حذف المستخدم '{username}' بنجاح.")
             return redirect("user_roles")
@@ -159,101 +157,24 @@ def user_roles(request):
             "users": users_data,
             "role_definitions": ROLE_DEFINITIONS,
             "role_admin_url": ROLE_ADMIN_URL,
+            # الحدُّ الأدنى الذي يفرضه الخادم — كانت الواجهةُ تفرض 4 (تدقيقُ نيلسن F#7)
+            "min_len": SecuritySettings.get().password_min_length,
         },
     )
-
-
-# ==============================================================================
-# Password Management API
-# ==============================================================================
-
-@login_required
-@staff_required
-@ratelimit(key='user', rate='30/h', method='GET')
-def get_user_password(request, user_id):
-    """
-    جلب كلمة مرور المستخدم المؤقتة - مع حماية من الاستخدام المفرط
-    
-    المميزات:
-    - كلمات مرور مؤقتة تنتهي صلاحيتهاخلال 24 ساعة
-    - حماية من الاستخدام المفرط (30 طلب/ساعة)
-    - تسجيل كامل للوصول
-    - صلاحيات محدودة للموظفين فقط
-    
-    Args:
-        request: Django HttpRequest
-        user_id: معرف المستخدم المراد جلب كلمة مروره
-    
-    Returns:
-        JsonResponse: كلمة المرور أو رسالة خطأ
-    
-    Status Codes:
-        - 200: Success - كلمة المرور المؤقتة
-        - 404: Not found - المستخدم غير موجود
-        - 410: Gone - انتهت صلاحية كلمة المرور
-        - 500: Server error - خطأ في الخادم
-    
-    Examples:
-        >>> GET /api/users/5/password/
-        >>> {"success": true, "password": "temp123"}
-    """
-    try:
-        user = User.objects.get(id=user_id)
-        
-        # البحث عن كلمة المرور المؤقتة
-        try:
-            user_pwd = UserPassword.objects.get(user=user)
-            
-            if user_pwd.is_expired():
-                return JsonResponse({
-                    "success": False,
-                    "message": "انتهت صلاحية كلمة المرور (24 ساعة). يمكن تعيين كلمة جديدة."
-                }, status=410)
-            
-            # تحديث علم القراءة
-            user_pwd.is_viewed = True
-            user_pwd.save()
-
-            # إرجاع كلمة المرور مرة واحدة فقط — بعد المشاهدة الأولى لا تُعاد
-            plain_password = user_pwd.password
-            # مسح القيمة من النموذج بعد الإظهار مرة واحدة
-            user_pwd.password = '***'
-            user_pwd.save(update_fields=['password'])
-
-            return JsonResponse({
-                "success": True,
-                "password": plain_password,
-                "warning": "هذه الكلمة تُعرض مرة واحدة فقط وتم حذفها من النظام."
-            })
-        except UserPassword.DoesNotExist:
-            return JsonResponse({
-                "success": False,
-                "message": "لم يتم العثور على كلمة مرور مؤقتة. تم إنشاء هذا المستخدم قبل الميزة الجديدة."
-            })
-    except User.DoesNotExist:
-        return JsonResponse({
-            "success": False,
-            "message": "المستخدم غير موجود"
-        }, status=404)
-    except Exception as e:
-        logger.error(f"Unexpected error in get_user_password: {e}", exc_info=True)
-        return JsonResponse({
-            "success": False,
-            "message": "حدث خطأ في الخادم. يرجى المحاولة لاحقاً."
-        }, status=500)
 
 
 # ==============================================================================
 # Logout View
 # ==============================================================================
 
-@require_http_methods(["GET", "POST"])
+@require_http_methods(["POST"])
 def custom_logout(request):
     """
-    تسجيل خروج مخصص يدعم GET و POST
+    تسجيل خروج مخصص — POST وحدَه (تدقيقُ نيلسن F، S3): الخروجُ بـGET بلا CSRF كان
+    يتيح لرابطِ صورةٍ في أيّ صفحةٍ أن يُخرج المستخدم. زرُّ الشريط نموذجُ POST أصلاً.
     
     المميزات:
-    - دعم GET و POST
+    - POST فقط (GET ⟵ 405)
     - رسالة تأكيد للمستخدم
     - إعادة توجيه لصفحة تسجيل الدخول
     
@@ -264,7 +185,7 @@ def custom_logout(request):
         HttpResponseRedirect: إعادة توجيه لصفحة تسجيل الدخول
     
     Examples:
-        >>> GET /logout/
+        >>> POST /logout/
         >>> # User logged out and redirected to login
     """
     logout(request)

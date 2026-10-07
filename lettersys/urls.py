@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.urls import path, include, re_path
 from core import views as core_views
-from core.auth_views import CustomLoginView
+from django.views.generic import TemplateView
+from core.auth_views import CustomLoginView, LetterSysPasswordChangeView
 from core.views.dev_login import dev_login
 from core.views.attachments import serve_media, serve_shared_attachment
 
@@ -9,6 +10,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('login/', CustomLoginView.as_view(template_name='core/login.html'), name='login'),  # ✅ Custom Login with Remember Me
     path('logout/', core_views.custom_logout, name='logout'),
+    # تغييرُ كلمة المرور — لم يكن له مسار (تدقيقُ نيلسن F#2)
+    path('password/', LetterSysPasswordChangeView.as_view(), name='password_change'),
+    # صفحةُ «غير متّصل» التي يخبّئها service-worker — كانت بلا مسارٍ فيفشل cache.addAll كلُّه (F#11)
+    path('offline.html', TemplateView.as_view(template_name='offline.html'), name='offline'),
     path('', core_views.dashboard, name='dashboard'),
     path('dev-login/', dev_login, name='dev_login'),
     path('books/', include('core.urls')),

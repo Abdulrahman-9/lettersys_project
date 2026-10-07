@@ -6,9 +6,13 @@ import pyodbc, time, json, os, sys
 from pathlib import Path
 
 PIPE    = r"np:\\.\pipe\LOCALDB#571D9B40\tsql\query"
-BAK     = r"D:\Abdulrhman Backup\2026-05-03-14-09-01-قسم المتابعة.bak"
+# مسارُ الـ.bak وسيطٌ أو متغيّرُ بيئة — لا مسارٌ شخصيٌّ مكتوبٌ في مستودعٍ عامّ:
+#   python restore_bak.py "D:\...\file.bak"     أو     set LEGACY_BAK=D:\...\file.bak
+BAK     = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("LEGACY_BAK", "")).strip()
+if not BAK:
+    sys.exit("حدّد ملفّ .bak: python restore_bak.py <path-to.bak>  أو  LEGACY_BAK=<path>")
 DB      = "ARCHMDOC_IMPORT"
-OUT_DIR = Path(r"c:\Users\fwz\Downloads\lettersys_django_bootstrap_v4_scan\lettersys_django_bootstrap_v4_scan\lettersys_project\scripts\legacy_import\export")
+OUT_DIR = Path(__file__).resolve().parent / "export"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 LOG     = OUT_DIR / "restore.log"
 
