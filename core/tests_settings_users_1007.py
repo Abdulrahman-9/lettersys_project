@@ -105,3 +105,25 @@ class OfflinePageTests(TestCase):
 
     def test_the_service_workers_offline_page_is_served(self):
         self.assertEqual(self.client.get('/offline.html').status_code, 200)
+
+
+class SequencePerDepartmentTests(TestCase):
+    """«قيِّده عندنا» تُنشئ عدّاداً لكلّ قسم — والصفحةُ تعرض عدّادَ الترقيم الفعليّ ولا تنهار."""
+
+    def test_a_second_departments_ledger_does_not_break_the_page(self):
+        from core.models import Department
+        admin = User.objects.create_superuser('sqd', 'q@x.co', 'pw-sqd-111111111')
+        self.client.force_login(admin)
+        first = Department.objects.create(name='القسمُ الأوّل', code='ق.أ')
+        second = Department.objects.create(name='القسمُ الثاني', code='ق.ب')
+        numbering = BookSequence.resolve_department()       # قد يكون قسماً تبذره الهجرات
+        other = second if numbering != second else first
+        BookSequence.objects.update_or_create(kind='incoming_internal', department=numbering,
+                                              defaults={'next_number': 4100})
+        BookSequence.objects.update_or_create(kind='incoming_internal', department=other,
+                                              defaults={'next_number': 7})
+        resp = self.client.get(reverse('sequence_settings'))
+        self.assertEqual(resp.status_code, 200)
+        shown = {s['kind']: s['obj'] for s in resp.context['sequences']}
+        self.assertEqual(shown['incoming_internal'].department, BookSequence.resolve_department())
+        self.assertEqual(shown['incoming_internal'].next_number, 4100)
