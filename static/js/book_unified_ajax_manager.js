@@ -471,6 +471,8 @@
         '[name="date_to"]':   'dateTo',
         '[name="entity_id"]': 'entityId',
         '[name="status"]':    'status',
+        // «الترتيب» كان خارج الخريطة والنموذجُ بلا زرّ إرسال ⟵ قائمةٌ ميّتة (تدقيقُ نيلسن A#8)
+        '[name="sort"]':      'sort',
       };
       for (const [selector, key] of Object.entries(map)) {
         const el = document.querySelector(selector);
@@ -482,6 +484,9 @@
           });
         }
       }
+      // Enter في حقل تاريخٍ كان يُرسل النموذجَ أصليّاً فيُسقط التبويبَ والبحثَ والمتابعة
+      const advanced = document.getElementById('advancedFiltersForm');
+      if (advanced) advanced.addEventListener('submit', e => e.preventDefault());
       // «يشمل الورق القديم» صندوقُ تأشير: الحالةُ من ``checked`` لا من ``value``
       // (قيمتُه «1» دائماً) — قرارُ المالك 2026‑10‑06، الحيُّ وحدَه افتراضاً.
       const legacy = document.querySelector('[name="legacy"]');

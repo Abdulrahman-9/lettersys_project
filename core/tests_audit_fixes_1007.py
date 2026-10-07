@@ -7,6 +7,7 @@ A#1 حوارُ التحديث الجماعيّ يرسل قيماً يرفضها 
 from pathlib import Path
 
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
@@ -101,6 +102,8 @@ class BulkStatusDialogTests(SimpleTestCase):
 class NotificationBadgeTests(TestCase):
 
     def test_a_clerk_sees_the_unread_count(self):
+        # العدُّ مخبّأٌ ثلاثين ثانية بمفتاح الـpk، وSQLite يعيد الـpk بين الاختبارات
+        cache.clear()
         clerk = User.objects.create_user('nclerk', password='pw-nclerk-1111')
         Notification.objects.create(user=clerk, message='أُحيل إليك كتاب')
         self.client.force_login(clerk)

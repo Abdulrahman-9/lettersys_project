@@ -195,8 +195,29 @@
       });
     });
 
+    // «للتنفيذ» بلا موعدٍ لا يتأخّر أبداً فلا يُطارَد — الموعدُ مطلوبٌ معه، كما
+    // يرفضه «فعِّل متابعة» (تدقيقُ نيلسن B#5).
+    var purposeSelect = document.getElementById('distPurpose');
+    var dueInput = document.getElementById('distDue');
+    function syncDueRequired() {
+      var needed = purposeSelect.value === 'action';
+      dueInput.required = needed;
+      dueInput.setAttribute('aria-required', needed ? 'true' : 'false');
+      var mark = document.getElementById('distDueRequired');
+      if (mark) mark.hidden = !needed;
+    }
+    purposeSelect.addEventListener('change', syncDueRequired);
+    syncDueRequired();
+
     document.getElementById('distSubmit').addEventListener('click', function (event) {
       var button = event.currentTarget;
+      if (purposeSelect.value === 'action' && !dueInput.value) {
+        dueInput.classList.add('is-invalid');
+        dueInput.focus();
+        notify('«للتنفيذ» يحتاج موعدَ إنجاز — حدّده، أو اختر «للعلم».', false);
+        return;
+      }
+      dueInput.classList.remove('is-invalid');
       var checked = Array.prototype.map.call(
         document.querySelectorAll('#distTargets input:checked'),
         function (input) { return input.value; });

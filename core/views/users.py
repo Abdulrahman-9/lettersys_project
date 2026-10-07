@@ -20,6 +20,7 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.db.models import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -108,14 +109,30 @@ def user_roles(request):
 
         elif action == "delete":
             # حذف مستخدم
+            # لا حذفَ للذات ولا لآخر مدير (كان ممكناً بلا سؤال — تدقيقُ نيلسن E#3)،
+            # ولا لمن أنشأ كتباً: الكتابُ يحمي مُنشئَه (PROTECT) فكان الحذفُ 500.
             user_id = request.POST.get("user_id")
             try:
                 user = User.objects.get(id=user_id)
-                username = user.username
-                user.delete()
-                messages.success(request, f"✅ تم حذف المستخدم '{username}' بنجاح.")
-            except User.DoesNotExist:
+            except (User.DoesNotExist, ValueError):
                 messages.error(request, "❌ المستخدم غير موجود.")
+                return redirect("user_roles")
+            username = user.username
+            if user == request.user:
+                messages.error(request, "❌ لا يمكنك حذفُ حسابك الذي تعمل به.")
+            elif user.is_superuser and not User.objects.filter(
+                    is_superuser=True, is_active=True).exclude(pk=user.pk).exists():
+                messages.error(request, f"❌ «{username}» آخرُ مديرٍ نشط — أنشئ مديراً آخر قبل حذفه.")
+            else:
+                try:
+                    user.delete()
+                except ProtectedError:
+                    messages.error(
+                        request,
+                        f"❌ لا يُحذف «{username}» لأنّه أنشأ كتباً — عطِّل حسابه من لوحة الإدارة "
+                        f"({ROLE_ADMIN_URL}) بدل حذفه.")
+                else:
+                    messages.success(request, f"✅ تم حذف المستخدم '{username}' بنجاح.")
             return redirect("user_roles")
 
         else:

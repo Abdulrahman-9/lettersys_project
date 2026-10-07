@@ -11,7 +11,7 @@
   رسمَها في المكان بعد كلّ فعل.
 {% endcomment %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/book_detail_v2.css' %}?v=20261006">
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/book_detail_v2.css' %}?v=20261007">
 <link rel="stylesheet" href="{% static 'css/lifecycle_design.css' %}?v=20260831b">{% endblock %}
 
 {% block title %}{{ book.title }} - كتاب {{ book.our_number_display }}{% endblock %}
@@ -201,6 +201,12 @@
               <span class="t bx-muted">{{ link.title }}</span>
             {% endif %}
             <span class="n num">{{ link.number }}</span>
+            {% if link.direction == 'out' %}
+            {# الفكُّ من الكتاب الذي ربط — كان الربطُ بلا رجوعٍ رغم وجود الـAPI (تدقيقُ نيلسن B#2) #}
+            <button type="button" class="bx-unlink" data-unlink="{% url 'api_remove_link' book.pk link.id %}"
+                    data-unlink-label="{{ link.relation_label }} {{ link.number }}"
+                    title="فكّ الربط" aria-label="فكّ ربط {{ link.relation_label }} {{ link.number }}"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            {% endif %}
           </li>
           {% endfor %}
         </ul>
@@ -417,11 +423,11 @@
 
 
 {% block extra_js %}
-<script src="{% static 'book_detail.js' %}?v=20261006"></script>
+<script src="{% static 'book_detail.js' %}?v=20261007"></script>
 {# قصاصةُ الهامش تُحمَّل قبل مُرسِل التفريق: الأخيرُ يقرأ حقلَها #}
 <script src="{% static 'js/margin_crop.js' %}?v=20260831"></script>
-<script src="{% static 'js/link_picker.js' %}?v=20260831"></script>
-<script src="{% static 'js/book_lifecycle.js' %}?v=20261006"></script>
+<script src="{% static 'js/link_picker.js' %}?v=20261007"></script>
+<script src="{% static 'js/book_lifecycle.js' %}?v=20261007"></script>
 <script>
 // ── بريدُ الكتاب: آخرُ ثمانية إرسالات (النصُّ يمرّ من esc قبل innerHTML) ──
 (function() {

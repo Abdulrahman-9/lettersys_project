@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{# الرسائلُ تُعرض داخل الصفحة ثابتةً (والخطأُ لا يختفي) — فلا توستَ يكرّرها #}
+{% block global_messages %}{% endblock %}
 {% load static %}
 {% block title %}دمج البيانات من النظام القديم{% endblock %}
 

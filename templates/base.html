@@ -218,6 +218,8 @@
 
     <!-- Toast stack for global messages -->
     <div class="toast-container toast-center p-3 toast-stack">
+      {# صفحةٌ تعرض رسائلَها داخلها تُفرغ هذه الكتلة — وإلّا ظهرت الرسالةُ مرّتين (تدقيقُ نيلسن E#5) #}
+      {% block global_messages %}
       {% for m in messages %}
       {% with tag=m.tags %}
       <div class="toast fancy-toast" role="alert" aria-live="assertive" aria-atomic="true"
@@ -244,6 +246,7 @@
       </div>
       {% endwith %}
       {% endfor %}
+      {% endblock global_messages %}
     </div>
 
     <!-- Bootstrap Bundle with Popper -->

@@ -2059,13 +2059,14 @@ class ExtractionSmartSystem {
 
     setupKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
-            // Ctrl/Cmd + E: Extract
-            if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+            // Ctrl/Cmd + E: Extract — بـe.code لا e.key: بلوحة المفاتيح العربيّة
+            // يصير e.key «ث/س» فكان الاختصاران يسقطان (تدقيقُ نيلسن C#2).
+            if ((e.ctrlKey || e.metaKey) && e.code === 'KeyE') {
                 e.preventDefault();
                 this.extractData();
             }
             // Ctrl/Cmd + S: Save
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') {
                 e.preventDefault();
                 this.saveBook();
             }
@@ -5483,9 +5484,13 @@ class ExtractionSmartSystem {
                     if (savedDocumentType) {
                         this.addCustomDocumentType(savedKind, savedDocumentType);
                     }
+                    // الرقمُ في الرسالة: النموذجُ يُمسح فوراً ويُرسم رقمٌ جديد، فبلا هذا
+                    // لا يعرف الكاتبُ أيَّ رقمٍ أخذ ما حفظه (تدقيقُ نيلسن C#3).
+                    const savedNumber = String(data.book_number || '').trim();
+                    const savedAs = `${this._kindMeta(savedKind).label} ${savedNumber ? `برقم ${savedNumber}` : 'بلا رقم'}`;
                     const successMessage = retriedAfterReservationRefresh
-                        ? `تم تجديد رقم القيد تلقائياً ثم حفظ الكتاب بنجاح (${formData.get('book_number') || ''}).`
-                        : this.t('saveSuccess');
+                        ? `تم تجديد رقم القيد تلقائياً ثم حُفظ الكتاب: ${savedAs}.`
+                        : `${this.t('saveSuccess')} — ${savedAs}`;
                     this.showToast(successMessage, 'success', retriedAfterReservationRefresh ? 6500 : 4000);
                     if (window.SubjectLocate) window.SubjectLocate.confirmOnSave(formData.get('title'));
                     delete this.reservations[savedKind];

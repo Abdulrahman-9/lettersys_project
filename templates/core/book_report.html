@@ -135,8 +135,9 @@
         <div style="margin-bottom:10px">
           <span class="badge {% if book.is_incoming %}b-incoming{% else %}b-outgoing{% endif %}">{{ book.kind_label }}</span>
           <span class="badge b-{{ book.followup_state }}">{{ book.followup_label }}</span>
-          {% if book.get_secret_level_display == 'سري' %}<span class="badge b-secret">{{ book.get_secret_level_display }}</span>
-          {% elif book.get_secret_level_display == 'موثق' %}<span class="badge b-confidential">{{ book.get_secret_level_display }}</span>
+          {# بالقيمة لا بنصّ العرض: «سري للغاية» كان يُطبع بشارة الاعتياديّ (تدقيقُ نيلسن B#3) #}
+          {% if book.secret_level == 'topsecret' %}<span class="badge b-secret">{{ book.get_secret_level_display }}</span>
+          {% elif book.secret_level == 'secret' %}<span class="badge b-confidential">{{ book.get_secret_level_display }}</span>
           {% else %}<span class="badge b-normal">{{ book.get_secret_level_display }}</span>{% endif %}
         </div>
         <div class="field" style="margin-bottom:8px"><div class="k">العنوان</div><div class="v" style="font-size:15px">{{ book.title|default:"—" }}</div></div>

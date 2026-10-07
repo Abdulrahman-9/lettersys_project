@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{# الرسائلُ تُعرض داخل الصفحة ثابتةً (والخطأُ لا يختفي) — فلا توستَ يكرّرها #}
+{% block global_messages %}{% endblock %}
 {% block title %}المستخدمون والأدوار{% endblock %}
 
 {% block content %}

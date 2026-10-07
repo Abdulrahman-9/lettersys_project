@@ -477,9 +477,40 @@
     });
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // فكُّ الربط — بتأكيدٍ يسمّي الضلع، والرسالةُ من الخادم بنصّها.
+  // ─────────────────────────────────────────────────────────────
+  function initUnlink() {
+    document.addEventListener('click', async function (e) {
+      const btn = e.target.closest('[data-unlink]');
+      if (!btn) return;
+      const label = document.createElement('span');
+      label.textContent = btn.dataset.unlinkLabel || '';
+      const question = 'فكّ ربط «' + label.innerHTML + '»؟ يُكتب الفكُّ في تاريخ الكتابين.';
+      const ok = typeof window.confirmDelete === 'function'
+        ? await window.confirmDelete(question)
+        : window.confirm(label.textContent ? 'فكّ ربط «' + label.textContent + '»؟' : 'فكّ الربط؟');
+      if (!ok) return;
+      btn.disabled = true;
+      try {
+        const resp = await fetch(btn.dataset.unlink, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCsrf(), 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        let payload = {};
+        try { payload = await resp.json(); } catch (err) { /* تُترك فارغة */ }
+        if (!resp.ok || !payload.success) throw new Error(payload.message || 'تعذّر فكّ الربط');
+        window.location.reload();
+      } catch (err) {
+        btn.disabled = false;
+        toast('error', err.message || 'تعذّر فكّ الربط');
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     // عزل كل تهيئة: فشل واحدة (مثلاً العارض) لا يُجهض البقية (العودة/الطباعة)
-    [initNotes, initComments, initDocViewer, initBackNav, initPrint, initCopy].forEach(function (fn) {
+    [initNotes, initComments, initDocViewer, initBackNav, initPrint, initCopy, initUnlink].forEach(function (fn) {
       try { fn(); } catch (e) { if (window.console) console.error('book_detail init:', e); }
     });
   });

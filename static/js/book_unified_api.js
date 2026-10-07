@@ -216,7 +216,7 @@
     pending:   { label: "قيد المتابعة", icon: "bi-clock-history" },
     due_today: { label: "مستحق اليوم",  icon: "bi-calendar-event-fill" },
     overdue:   { label: "متأخر",         icon: "bi-exclamation-triangle-fill" },
-    archived:  { label: "مؤرشف",         icon: "bi-archive-fill" },
+    archived:  { label: "مُنجَز / بلا متابعة", icon: "bi-check2-circle" },
   };
 
   function closeStatusPopover() {
@@ -231,7 +231,7 @@
     // إجراءان فقط: أرشفة أو إعادة فتح (الحالات الزمنية الثلاث محسوبة من due_date)
     const actions = [];
     if (current !== "archived") {
-      actions.push({ value: "archived", label: "إنهاء المتابعة (أرشفة)", icon: "bi-archive-fill" });
+      actions.push({ value: "archived", label: "إنهاء المتابعة (مُنجَز / بلا متابعة)", icon: "bi-check2-circle" });
     } else if (hasDueDate) {
       actions.push({ value: "reopen", label: "إعادة فتح المتابعة", icon: "bi-arrow-counterclockwise" });
     } else {

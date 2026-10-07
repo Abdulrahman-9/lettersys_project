@@ -136,13 +136,14 @@
   {% endif %}
 
   {# تبويبا الاتجاه (JS) — مع تدهور رشيق: بلا JS تظهر اللوحتان مع عناوين #}
+  {# التبويبُ الافتراضيّ حيث الكتب: «صادر» الثابتُ كان يهبط على «لا كتب صادرة» (تدقيقُ نيلسن D#5) #}
   <div class="dd-tabs" role="tablist" aria-label="اتجاه الكتب">
-    <button type="button" class="dd-tab out active" id="tab-out" role="tab" aria-selected="true" aria-controls="pane-out" data-pane="pane-out"><i class="bi bi-arrow-up-right"></i> صادر <span class="cnt">{{ outgoing_count }}</span></button>
-    <button type="button" class="dd-tab in" id="tab-in" role="tab" aria-selected="false" aria-controls="pane-in" data-pane="pane-in"><i class="bi bi-arrow-down-left"></i> وارد <span class="cnt">{{ incoming_count }}</span></button>
+    <button type="button" class="dd-tab out{% if outgoing_count or not incoming_count %} active{% endif %}" id="tab-out" role="tab" aria-selected="{% if outgoing_count or not incoming_count %}true{% else %}false{% endif %}" aria-controls="pane-out" data-pane="pane-out"><i class="bi bi-arrow-up-right"></i> صادر <span class="cnt">{{ outgoing_count }}</span></button>
+    <button type="button" class="dd-tab in{% if not outgoing_count and incoming_count %} active{% endif %}" id="tab-in" role="tab" aria-selected="{% if not outgoing_count and incoming_count %}true{% else %}false{% endif %}" aria-controls="pane-in" data-pane="pane-in"><i class="bi bi-arrow-down-left"></i> وارد <span class="cnt">{{ incoming_count }}</span></button>
   </div>
 
   {# ── تبويب الصادر ── #}
-  <div class="dd-pane active" id="pane-out" role="tabpanel" aria-labelledby="tab-out" tabindex="0">
+  <div class="dd-pane{% if outgoing_count or not incoming_count %} active{% endif %}" id="pane-out" role="tabpanel" aria-labelledby="tab-out" tabindex="0">
     <div class="dd-pane-title"><i class="bi bi-arrow-up-right"></i> الكتب الصادرة ({{ outgoing_count }})</div>
     {% if outgoing_groups %}
       {% if not filters.document_type %}
@@ -190,7 +191,7 @@
   </div>
 
   {# ── تبويب الوارد ── #}
-  <div class="dd-pane" id="pane-in" role="tabpanel" aria-labelledby="tab-in" tabindex="0">
+  <div class="dd-pane{% if not outgoing_count and incoming_count %} active{% endif %}" id="pane-in" role="tabpanel" aria-labelledby="tab-in" tabindex="0">
     <div class="dd-pane-title"><i class="bi bi-arrow-down-left"></i> الكتب الواردة ({{ incoming_count }})</div>
     {% if incoming_groups %}
       {% if not filters.document_type %}

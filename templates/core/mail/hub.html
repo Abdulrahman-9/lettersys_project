@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{# الرسائلُ تُعرض داخل الصفحة ثابتةً (والخطأُ لا يختفي) — فلا توستَ يكرّرها #}
+{% block global_messages %}{% endblock %}
 {% load static %}
 {% load safe_html %}
 
@@ -709,7 +711,8 @@
         </div>
 
         <div class="d-flex gap-2 mt-1">
-          <button type="submit" class="btn" id="sendBtn"
+          {# البريدُ غيرُ مفعّل ⟵ الإرسالُ معطَّل: كان يملأ النموذجَ ثمّ يفشل (تدقيقُ نيلسن E#10) #}
+          <button type="submit" class="btn" id="sendBtn"{% if not smtp_ok %} disabled title="خدمة البريد غير مفعّلة"{% endif %}
                   style="background:var(--warm-clay);color:#fff;border-radius:8px;font-weight:700;font-size:.88rem;padding:.5rem 1.4rem">
             <i class="bi bi-send me-1"></i>إرسال
           </button>
@@ -1283,10 +1286,16 @@ async function testSMTP() {
   const el = document.getElementById('smtpTestResult');
   el.textContent = 'جارٍ الاختبار...';
   el.style.color = 'var(--muted-brown)';
-  const res  = await fetch('{% url "mail-api-test-smtp" %}', { method: 'POST', headers: { 'X-CSRFToken': CSRF } });
-  const data = await res.json();
-  el.textContent = data.message;
-  el.style.color = data.success ? '#28a745' : '#dc3545';
+  // انقطاعُ الشبكة كان يُبقي «جارٍ الاختبار…» إلى الأبد (تدقيقُ نيلسن E#11)
+  try {
+    const res  = await fetch('{% url "mail-api-test-smtp" %}', { method: 'POST', headers: { 'X-CSRFToken': CSRF } });
+    const data = await res.json();
+    el.textContent = data.message;
+    el.style.color = data.success ? '#28a745' : '#dc3545';
+  } catch (err) {
+    el.textContent = 'تعذّر الاتّصال بالخادم — تحقّق من الشبكة وأعد المحاولة.';
+    el.style.color = '#dc3545';
+  }
 }
 
 // ── اختبار IMAP ──
@@ -1294,10 +1303,16 @@ async function testIMAP() {
   const el = document.getElementById('imapTestResult');
   el.textContent = 'جارٍ الاختبار...';
   el.style.color = 'var(--muted-brown)';
-  const res  = await fetch('{% url "mail-api-test-imap" %}', { method: 'POST', headers: { 'X-CSRFToken': CSRF } });
-  const data = await res.json();
-  el.textContent = data.message;
-  el.style.color = data.success ? '#28a745' : '#dc3545';
+  // انقطاعُ الشبكة كان يُبقي «جارٍ الاختبار…» إلى الأبد (تدقيقُ نيلسن E#11)
+  try {
+    const res  = await fetch('{% url "mail-api-test-imap" %}', { method: 'POST', headers: { 'X-CSRFToken': CSRF } });
+    const data = await res.json();
+    el.textContent = data.message;
+    el.style.color = data.success ? '#28a745' : '#dc3545';
+  } catch (err) {
+    el.textContent = 'تعذّر الاتّصال بالخادم — تحقّق من الشبكة وأعد المحاولة.';
+    el.style.color = '#dc3545';
+  }
 }
 </script>
 {% endblock %}
