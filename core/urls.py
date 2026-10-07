@@ -154,6 +154,7 @@ urlpatterns = [
     path("dossiers/<int:pk>/report/", views.dossier_report, name="dossier_report"),
     path("notifications/", views.notifications_page, name="notifications"),
     path("notifications/<int:pk>/read/", views.notification_mark_read, name="notification_mark_read"),
+    path("notifications/read-all/", views.notification_mark_all_read, name="notification_mark_all_read"),
 
     # Smart Merge System APIs
     path('api/', include(router.urls)),

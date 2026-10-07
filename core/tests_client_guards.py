@@ -127,8 +127,21 @@ class LifecycleScriptGuardsTests(SimpleTestCase):
         src = self.src()
         handler = src[src.index("closest('#registerHereBtn')"):]
         handler = handler[:handler.index('register-here/')]
-        self.assertRegex(handler, r'if \(!window\.confirm\(')
+        # حواريّةُ ask() تسمّي الدفتر بدل confirm() الأصليّة (تدقيقُ نيلسن B#4)،
+        # والإلغاءُ (null) لا يُرسل شيئاً — الرقمُ لا يُستهلك بلا جواب.
+        self.assertRegex(handler, r"ask\(\{ title: 'قيّده في دفتر «' \+ ledger")
+        self.assertIn('if (answer === null) return;', handler)
         self.assertIn('button.dataset.ledger', handler)
+
+    def test_done_and_returned_ask_before_closing(self):
+        """«أُنجز/أُعيد» يُقفلان الالتزامَ بلا رجوع — فيمرّان بحواريّةٍ تسمّي الوحدة (B#6)."""
+        src = self.src()
+        handler = src[src.index("closest('[data-referral-act]')"):]
+        handler = handler[:handler.index("/act/'")]
+        self.assertIn("if (act === 'done') {", handler)
+        self.assertIn("} else if (act === 'returned') {", handler)
+        self.assertEqual(handler.count('asked = ask({'), 2)
+        self.assertIn('button.dataset.referralTarget', handler)
 
     def test_register_here_is_delegated_on_the_document(self):
         """«ملفّ الكتاب»: الزرُّ انتقل إلى قائمة «⋯» في الترويسة (``bookActions``) — خارجَ

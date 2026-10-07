@@ -58,8 +58,9 @@
       <h4 class="fw-bold mb-1">{% if is_edit %}تعديل جهة{% else %}إضافة جهة جديدة{% endif %}</h4>
       <p class="text-muted mb-0">أدخل اسم الجهة، رمزها (اختياري)، وحدد نوعها.</p>
     </div>
-    <a class="btn btn-outline-secondary" href="{% url 'entity_list' %}">
-      <i class="bi bi-arrow-left me-1"></i>رجوع إلى الجهات
+    {# وجهةٌ واحدة لـ«رجوع» و«إلغاء» (back_url ثمّ القائمة)، وسهمٌ يمينيٌّ في RTL (تدقيقُ نيلسن D#20) #}
+    <a class="btn btn-outline-secondary" href="{% if back_url %}{{ back_url }}{% else %}{% url 'entity_list' %}{% endif %}">
+      <i class="bi bi-arrow-right me-1"></i>رجوع
     </a>
   </div>
 

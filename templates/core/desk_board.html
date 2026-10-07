@@ -22,6 +22,18 @@
     </div>
   </div>
 
-  {% include "core/_queue_board.html" %}
+  {% if queues_empty %}
+    <div class="qb-blank">
+      <i class="bi bi-check2-circle qb-blank-icon" aria-hidden="true"></i>
+      <h2>الطاولةُ نظيفة</h2>
+      <p>لا متأخّرَ ولا غيرَ مُستلَمٍ ولا مستحقَّ اليوم في القسم الآن.</p>
+      <div class="qb-blank-acts">
+        <a class="btn btn-primary btn-sm" href="{% url 'desk_ledger' %}">دفتر الوارد</a>
+        <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">القائمةُ الموحّدة</a>
+      </div>
+    </div>
+  {% else %}
+    {% include "core/_queue_board.html" %}
+  {% endif %}
 </div>
 {% endblock %}

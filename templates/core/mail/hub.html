@@ -515,7 +515,8 @@
             <td>
               <span class="mail-status {{ log.status }}">{{ log.get_status_display }}</span>
               {% if log.error_msg %}
-              <span class="ms-1" title="{{ log.error_msg }}" style="cursor:help;color:#dc3545">⚠</span>
+              {# السببُ نصّاً لا خلف «⚠» بـtitle — كان لا يُرى إلّا بالتحويم (تدقيقُ نيلسن E#12) #}
+              <small class="d-block mt-1" style="color:#b91c1c;max-width:22rem;white-space:normal">{{ log.error_msg|truncatechars:160 }}</small>
               {% endif %}
             </td>
             <td style="font-size:.78rem;color:var(--muted-brown)">{{ log.sent_at|date:"Y/m/d H:i" }}</td>
@@ -537,11 +538,11 @@
     {% if page_obj.has_other_pages %}
     <div class="mail-pagination">
       {% if page_obj.has_previous %}
-      <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if book_filter %}&book={{ book_filter.pk }}{% endif %}"><i class="bi bi-chevron-right"></i></a>
+      <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}{% if status_filter %}&status={{ status_filter|urlencode }}{% endif %}{% if book_filter %}&book={{ book_filter.pk }}{% endif %}{% if entity_filter %}&entity={{ entity_filter|urlencode }}{% endif %}{% if trigger_filter %}&trigger={{ trigger_filter|urlencode }}{% endif %}"><i class="bi bi-chevron-right"></i></a>
       {% endif %}
       <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
       {% if page_obj.has_next %}
-      <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if book_filter %}&book={{ book_filter.pk }}{% endif %}"><i class="bi bi-chevron-left"></i></a>
+      <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}{% if status_filter %}&status={{ status_filter|urlencode }}{% endif %}{% if book_filter %}&book={{ book_filter.pk }}{% endif %}{% if entity_filter %}&entity={{ entity_filter|urlencode }}{% endif %}{% if trigger_filter %}&trigger={{ trigger_filter|urlencode }}{% endif %}"><i class="bi bi-chevron-left"></i></a>
       {% endif %}
     </div>
     {% endif %}
@@ -657,7 +658,7 @@
     <div class="compose-card">
       <h6 style="font-weight:800;color:var(--deep-brown);margin-bottom:1.25rem">
         <i class="bi bi-pencil-square me-2" style="color:var(--warm-clay)"></i>
-        {% if book %}رسالة جديدة — بشأن كتاب رقم {{ book.our_number_display }}{% else %}رسالة جديدة{% endif %}
+        {% if thread %}ردّ على: {{ thread.subject }}{% elif book %}رسالة جديدة — بشأن كتاب رقم {{ book.our_number_display }}{% else %}رسالة جديدة{% endif %}
       </h6>
 
       <!-- اختيار قالب -->
@@ -678,6 +679,8 @@
       <form id="composeForm" onsubmit="sendMail(event)">
         {% if book %}<input type="hidden" name="book_id" id="f_book_id" value="{{ book.pk }}">{% else %}<input type="hidden" name="book_id" id="f_book_id" value="">{% endif %}
         <input type="hidden" id="f_entity_id" value="{{ prefill.entity_id|default:'' }}">
+        {# الردُّ يبقى في خيطه: كان «رد» يفتح نموذجاً فارغاً ويبدأ خيطاً جديداً (تدقيقُ نيلسن E#2) #}
+        <input type="hidden" id="f_thread_id" value="{{ thread.pk|default:'' }}">
         <input type="hidden" id="f_template_id" value="">
 
         <div class="mb-3">
@@ -1148,6 +1151,7 @@ async function sendMail(e) {
     book_id:     document.getElementById('f_book_id')?.value || null,
     entity_id:   document.getElementById('f_entity_id')?.value || null,
     template_id: document.getElementById('f_template_id')?.value || null,
+    thread_id:   document.getElementById('f_thread_id')?.value || null,
   };
 
   try {

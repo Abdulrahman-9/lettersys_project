@@ -48,6 +48,7 @@ from .comments import (
 from .notifications import (
     notifications_page,
     notification_mark_read,
+    notification_mark_all_read,
 )
 
 # استيراد معالجات الجهات

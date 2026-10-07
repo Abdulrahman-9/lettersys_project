@@ -257,7 +257,10 @@
 
   async function deleteComment(item) {
     if (!item) return;
-    if (!window.confirm('حذف هذا التعليق؟')) return;
+    const ok = typeof window.confirmDelete === 'function'
+      ? await window.confirmDelete('حذف هذا التعليق؟ لا رجعةَ فيه.')
+      : window.confirm('حذف هذا التعليق؟');
+    if (!ok) return;
     const commentId = item.dataset.commentId;
     try {
       const payload = await postJSON(`/books/api/book-comments/${commentId}/delete/`, {});

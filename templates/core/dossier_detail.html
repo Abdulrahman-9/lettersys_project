@@ -181,7 +181,7 @@
           {% for b in g.books %}{% include "core/partials/dossier_book_row.html" with b=b side="out" %}{% endfor %}
           </tbody>
         </table>
-        {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذا القسم ←</a></div>{% endif %}
+        {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذه الجهة ←</a></div>{% endif %}
       </div>
       {% endfor %}
       {% endif %}
@@ -228,7 +228,7 @@
           {% for b in g.books %}{% include "core/partials/dossier_book_row.html" with b=b side="in" %}{% endfor %}
           </tbody>
         </table>
-        {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذا القسم ←</a></div>{% endif %}
+        {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذه الجهة ←</a></div>{% endif %}
       </div>
       {% endfor %}
       {% endif %}

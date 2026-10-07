@@ -17,6 +17,7 @@ from datetime import datetime
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+from django.db.models import Q
 from django.shortcuts import render
 
 from core.logging_models import UserActivityLog
@@ -72,6 +73,17 @@ def audit_log(request):
 
 # ───────────────────────────── المصدران ─────────────────────────────
 
+def _actor_q(actor, username_field, user_field):
+    """الموظّفُ بما يراه القارئ: الجدولُ يعرض الاسمَ الكامل والتصفيةُ كانت باسم الدخول
+    وحدَه — فنسخُ الاسم المعروض كان يُرجع «لا حركات مطابقة» (تدقيقُ نيلسن D#9).
+    كلُّ كلمةٍ تطابق اسمَ الدخول أو الاسمَ الأوّل أو الأخير."""
+    q = Q()
+    for word in actor.split():
+        q &= (Q(**{f'{username_field}__icontains': word})
+              | Q(**{f'{user_field}__first_name__icontains': word})
+              | Q(**{f'{user_field}__last_name__icontains': word}))
+    return q
+
 def _book_history(request, date_from, date_to, actor, action):
     """أفعالُ العمل: إنشاءٌ وتعديلٌ وحذفٌ وتفريقٌ وعهدةٌ وقيدٌ وربط."""
     from core.scoping import scope_books_for
@@ -83,7 +95,7 @@ def _book_history(request, date_from, date_to, actor, action):
             .select_related('by', 'book', 'book__department'))
 
     if actor:
-        rows = rows.filter(by__username__icontains=actor)
+        rows = rows.filter(_actor_q(actor, 'by__username', 'by'))
     if action:
         rows = rows.filter(action=action)
     if date_from:
@@ -100,7 +112,7 @@ def _user_activity(request, date_from, date_to, actor, action):
         'user', 'book', 'book__department', 'department')
 
     if actor:
-        rows = rows.filter(username_snapshot__icontains=actor)
+        rows = rows.filter(_actor_q(actor, 'username_snapshot', 'user'))
     if action:
         rows = rows.filter(action=action)
     if date_from:

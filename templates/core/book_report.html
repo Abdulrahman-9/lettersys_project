@@ -51,6 +51,7 @@
 
     /* أقسام */
     .section{margin-top:18px;page-break-inside:avoid;}
+    .section.flow{page-break-inside:auto;}
     .section > h2{font-size:13px;font-weight:800;color:#fff;background:var(--accent);
       padding:.35rem .7rem;border-radius:6px 6px 0 0;margin:0;display:flex;align-items:center;gap:.4rem;}
     .section > .body{border:1px solid var(--line);border-top:0;border-radius:0 0 6px 6px;padding:12px;}
@@ -92,6 +93,7 @@
     .tl-item .when{font-size:11px;color:var(--muted);font-weight:700;}
     .tl-item .what{font-weight:700;} .tl-item .by{font-size:11px;color:var(--ink-soft);}
     .tl-item .extra{font-size:12px;color:var(--ink-soft);}
+    td .extra{font-size:10.5px;color:var(--ink-soft);margin-top:2px;}
 
     .empty{color:var(--muted);font-size:12px;padding:4px 2px;}
 
@@ -118,7 +120,7 @@
     <!-- الترويسة -->
     <div class="rpt-head">
       <div>
-        <div class="org">نظام إدارة المراسلات — LetterSys</div>
+        <div class="org">{{ org_name }}</div>
         <h1>تقرير دورة حياة كتاب</h1>
         <div class="sub">وثيقة تتبّع رسمية لكامل مسار المستند</div>
       </div>
@@ -144,7 +146,8 @@
         <div class="grid">
           <div class="field"><div class="k">رقم الجهة المقابل</div><div class="v">{{ book.sender_number|default:"—" }}</div></div>
           <div class="field"><div class="k">نوع المستند</div><div class="v">{{ book.document_type|default:"—" }}</div></div>
-          <div class="field"><div class="k">المعرّف الداخلي</div><div class="v">#{{ book.id }}</div></div>
+          <div class="field"><div class="k">بعهدة الآن</div><div class="v">{% if book.current_custody %}{{ book.current_custody.holder_name }}{% else %}—{% endif %}</div></div>
+          <div class="field" style="grid-column:span 3"><div class="k">القيد في الدفاتر</div><div class="v">{% for reg in registrations %}{{ reg.department.name }} {{ reg.number|default:"بلا رقم" }}{% if reg.registered_at %} ({{ reg.registered_at|date:"d/m/Y" }}){% endif %}{% if not forloop.last %} · {% endif %}{% empty %}في دفتر قسمه وحده{% endfor %}</div></div>
           <div class="field" style="grid-column:span 3">
             <div class="k">الجهة المصدِرة</div>
             <div class="v">
@@ -209,8 +212,108 @@
     </div>
 
     <!-- الملاحظات -->
+{% if journey %}
+    <!-- التفريق والردود — من reply_matrix (نطاقُ القارئ) -->
+    <div class="section flow">
+      <h2>③ التفريق والردود ({{ referrals|length }}){% if overdue_referrals %} · {{ overdue_referrals|length }} متأخّر{% endif %}{% if open_referrals %} · {{ open_referrals|length }} قيد الإنجاز{% endif %}</h2>
+      <div class="body">
+        {% if referrals %}
+        <table>
+          <thead><tr><th>الوحدة</th><th>الصفة</th><th>الحال</th><th>الموعد</th><th>الجواب</th></tr></thead>
+          <tbody>
+            {% for row in referrals %}
+            <tr>
+              <td>{{ row.target }}{% if row.referral.created_by %}<div class="extra">فرّقه {{ row.referral.created_by.get_full_name|default:row.referral.created_by.username }}</div>{% endif %}{% if row.referral.margin %}<div class="extra">↩ {{ row.referral.margin }}</div>{% endif %}</td>
+              <td>{{ row.purpose }}</td>
+              <td>{% if row.is_overdue %}<span class="badge b-overdue">متأخّر</span>{% else %}{{ row.status }}{% endif %}</td>
+              <td style="white-space:nowrap">{{ row.due_date|date:"d/m/Y"|default:"—" }}{% if row.reminded_at %}<div class="extra">نُبِّه {{ row.reminded_at|date:"d/m/Y" }}</div>{% endif %}</td>
+              <td>{{ row.reply_number|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<div class="empty">لم يُفرَّق.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- سلسلة العهدة — بالترتيب الزمنيّ على الورق (الخدمةُ تعيدها الأحدثَ أوّلاً) -->
+    <div class="section flow">
+      <h2>④ سلسلة العهدة ({{ custody|length }})</h2>
+      <div class="body">
+        {% if custody %}
+        <table>
+          <thead><tr><th>التاريخ</th><th>الحدث</th><th>بعهدة</th><th>سجّله</th><th>التوقيع</th><th>ملاحظة</th></tr></thead>
+          <tbody>
+            {% for ev in custody reversed %}
+            <tr>
+              <td style="white-space:nowrap">{{ ev.signed_at|date:"d/m/Y H:i" }}</td>
+              <td>{{ ev.get_event_display }}</td>
+              <td>{{ ev.holder_name }}</td>
+              <td>{% if ev.recorded_by %}{{ ev.recorded_by.get_full_name|default:ev.recorded_by.username }}{% else %}—{% endif %}</td>
+              <td>{{ ev.get_signature_mode_display }}</td>
+              <td>{{ ev.note|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<div class="empty">لا أحداثَ عهدة.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- كتبٌ مرتبطة — links_of يُسقط ما لا يُرى ويحجب ما لا يُفتح -->
     <div class="section">
-      <h2>③ الملاحظات والهوامش</h2>
+      <h2>⑤ كتبٌ مرتبطة ({{ links|length }})</h2>
+      <div class="body">
+        {% if links %}
+        <table>
+          <thead><tr><th>العلاقة</th><th>الرقم</th><th>التاريخ</th><th>العنوان</th><th>ملاحظة</th></tr></thead>
+          <tbody>
+            {% for link in links %}
+            <tr>
+              <td>{{ link.relation_label }}</td>
+              <td>{{ link.number|default:"—" }}</td>
+              <td style="white-space:nowrap">{{ link.date|date:"d/m/Y"|default:"—" }}</td>
+              <td>{{ link.title }}{% if link.restricted %} <span class="badge b-secret">مقيَّد</span>{% endif %}</td>
+              <td>{{ link.note|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<div class="empty">لا كتبَ مرتبطة.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- التواقيع — البصمةُ هي الدليل -->
+    <div class="section">
+      <h2>⑥ التواقيع ({{ signatures|length }})</h2>
+      <div class="body">
+        {% if signatures %}
+        <table>
+          <thead><tr><th>الموقِّع</th><th>الصفة</th><th>الوقت</th><th>الحال</th><th>رمز التحقّق</th></tr></thead>
+          <tbody>
+            {% for sg in signatures %}
+            <tr>
+              <td>{{ sg.signer.get_full_name|default:sg.signer.username }}</td>
+              <td>{{ sg.get_capacity_display }}</td>
+              <td style="white-space:nowrap">{{ sg.signed_at|date:"d/m/Y H:i" }}</td>
+              <td>{% if sg.is_valid %}<span class="badge b-normal">سارٍ</span>{% else %}<span class="badge b-overdue">مُبطَل</span>{% if sg.revoke_reason %}<div class="extra">{{ sg.revoke_reason }}</div>{% endif %}{% endif %}</td>
+              <td style="direction:ltr;text-align:right">{{ sg.verify_token }}<div class="extra" style="font-family:monospace;font-size:9px">SHA-256 {{ sg.digest }}</div></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<div class="empty">لا تواقيع.</div>{% endif %}
+      </div>
+    </div>
+{% else %}
+    <div class="section">
+      <h2>③ مسار الكتاب</h2>
+      <div class="body"><div class="empty">لم يُفرَّق ولم تُسجَّل عليه عهدةٌ ولا روابطُ ولا تواقيع — مسارُه في دفتره وحده.</div></div>
+    </div>
+{% endif %}
+
+    <div class="section">
+      <h2>{% if journey %}⑦{% else %}④{% endif %} الملاحظات والهوامش</h2>
       <div class="body">
         {% if book.margin %}<div class="note-box">{{ book.margin }}</div>{% else %}<div class="empty">لا توجد ملاحظات.</div>{% endif %}
       </div>
@@ -218,11 +321,11 @@
 
     <!-- التعليقات -->
     <div class="section">
-      <h2>④ التعليقات الداخلية ({{ comments|length }})</h2>
+      <h2>{% if journey %}⑧{% else %}⑤{% endif %} التعليقات الداخلية ({{ comments|length }})</h2>
       <div class="body">
         {% for c in comments %}
           <div class="comment">
-            <div class="meta"><span class="who">{{ c.created_by.username }}</span> · {{ c.created_at|date:"d/m/Y H:i" }}{% if c.is_edited %} · (معدّل){% endif %}</div>
+            <div class="meta"><span class="who">{{ c.created_by.get_full_name|default:c.created_by.username }}</span> · {{ c.created_at|date:"d/m/Y H:i" }}{% if c.is_edited %} · (معدّل){% endif %}</div>
             <div class="txt">{{ c.content }}</div>
           </div>
         {% empty %}<div class="empty">لا توجد تعليقات.</div>{% endfor %}
@@ -231,7 +334,7 @@
 
     <!-- المراسلات والأجوبة -->
     <div class="section">
-      <h2>⑤ المراسلات والأجوبة الملحقة ({{ email_logs|length }})</h2>
+      <h2>{% if journey %}⑨{% else %}⑥{% endif %} المراسلات والأجوبة الملحقة ({{ email_logs|length }})</h2>
       <div class="body">
         {% if email_logs %}
         <table>
@@ -253,7 +356,7 @@
 
     <!-- المرفقات -->
     <div class="section">
-      <h2>⑥ المرفقات ({{ attachments|length }})</h2>
+      <h2>{% if journey %}⑩{% else %}⑦{% endif %} المرفقات ({{ attachments|length }})</h2>
       <div class="body">
         {% if attachments %}
         <table>
@@ -274,7 +377,7 @@
 
     <!-- سجل دورة الحياة -->
     <div class="section">
-      <h2>⑦ سجلّ دورة الحياة الكامل ({{ history|length }})</h2>
+      <h2>{% if journey %}⑪{% else %}⑧{% endif %} سجلّ دورة الحياة الكامل ({{ history|length }})</h2>
       <div class="body">
         {% if history %}
         <div class="tl">
@@ -292,7 +395,7 @@
 
     <!-- التذييل -->
     <div class="rpt-foot">
-      <span>أصدر التقرير: {{ generated_by }} · {{ generated_at|date:"d/m/Y H:i" }}</span>
+      <span>أصدر التقرير: {{ generated_by.get_full_name|default:generated_by.username }} · {{ generated_at|date:"d/m/Y H:i" }}</span>
       <span>LetterSys — تقرير دورة حياة الكتاب {{ book.our_number_display }}</span>
     </div>
   </div>

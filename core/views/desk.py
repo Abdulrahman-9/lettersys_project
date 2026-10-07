@@ -49,6 +49,7 @@ def desk_handover(request):
     return render(request, 'core/desk_handover.html', {
         'org_name': org_name(),
         'department': department,
+        'department_choices': _department_choices(request),
         'targets': targets,
         'chosen': chosen,
         'rows': rows,
@@ -87,6 +88,7 @@ def desk_ledger(request):
     return render(request, 'core/desk_ledger.html', {
         'org_name': org_name(),
         'department': department,
+        'department_choices': _department_choices(request),
         'rows': rows,
         'date_from': request.GET.get('date_from', ''),
         'date_to': request.GET.get('date_to', ''),
@@ -111,6 +113,14 @@ def _acting_department(request):
 
     dept_id = user_department_id(request.user)
     return Department.objects.filter(pk=dept_id).first() if dept_id else None
+
+
+def _department_choices(request):
+    """منتقي القسم لمدير النظام وحدَه — كان ``?department=`` مقروءاً بلا حقلٍ يضبطه، فيرى
+    المديرُ بلا قسمٍ ورقةً فارغةً تلوم «المدّة» (تدقيقُ نيلسن D#11). ``None`` لغيره."""
+    if not is_privileged(request.user):
+        return None
+    return list(Department.objects.filter(is_active=True).order_by('name'))
 
 
 def _units_with_pending(department, visible):

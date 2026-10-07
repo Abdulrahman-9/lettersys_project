@@ -221,27 +221,20 @@ def _attachment_series(attachments):
     ]
 
 
-def _lifecycle_context(book, user):
-    """دورةُ حياة الكتاب — أين مشى، وبعهدة مَن، ومَن ردّ، وفي أيّ دفترٍ قُيّد.
+def lifecycle_facts(book, user):
+    """ما **حدث** للكتاب — أين مشى، وبعهدة مَن، ومَن ردّ، وفي أيّ دفترٍ قُيّد، ومَن وقّع.
 
-    كلُّ قطعةٍ منها مبنيّةٌ على **مسار قراءةٍ واحد** يحمل بوّابتَه معه
-    (`links_of` · `reply_matrix` · `registrations_of`)، فلا تُرشّ الشروطُ
-    في قالبٍ من ستّمئة سطر — وهو الدرسُ الذي كلّفنا نسختين من قاعدة الرؤية.
+    قراءاتٌ خالصةٌ يحمل كلٌّ منها بوّابتَه (`links_of` · `reply_matrix` ·
+    `registrations_of`)، فلا تُرشّ الشروطُ في قالبٍ من ستّمئة سطر — وهو الدرسُ الذي
+    كلّفنا نسختين من قاعدة الرؤية. **مصدرٌ واحد لقارئين**: صفحةُ الكتاب تضيف فوقه حقوقَ
+    الأفعال، والتقريرُ المطبوع يقرؤه كما هو (مذكّرةُ فيبل لتدقيق نيلسن B#1).
     """
     from core.custody_service import custody_chain
     from core.linking_service import links_of
     from core.referral_service import reply_matrix
-    from core.models import BookLink
-    from core.signature_service import can_revoke, can_sign
-    from core.registration_service import register_here_ledger, registrations_of
-    from core.scoping import can_archive
+    from core.registration_service import registrations_of
 
     matrix = reply_matrix(book, user)
-    # «إبطال» لمن يقبله الخادم وحدَه — المسندُ نفسُه الذي يحرس `revoke`.
-    signatures = list(book.signatures.select_related('signer').all())
-    for sg in signatures:
-        sg.can_revoke = can_revoke(user, sg)
-    ledger = register_here_ledger(book, user)
     return {
         "links": links_of(book, user),
         "referrals": matrix,
@@ -249,14 +242,31 @@ def _lifecycle_context(book, user):
         "overdue_referrals": [row for row in matrix if row["is_overdue"]],
         "custody": list(custody_chain(book)),
         "registrations": registrations_of(book, user),
+        "signatures": list(book.signatures.select_related('signer', 'revoked_by').all()),
+    }
+
+
+def _lifecycle_context(book, user):
+    """دورةُ حياة الكتاب في صفحته: الوقائعُ (`lifecycle_facts`) + حقوقُ الأفعال عليها."""
+    from core.models import BookLink
+    from core.signature_service import can_revoke, can_sign
+    from core.registration_service import register_here_ledger
+    from core.scoping import can_archive
+
+    facts = lifecycle_facts(book, user)
+    # «إبطال» لمن يقبله الخادم وحدَه — المسندُ نفسُه الذي يحرس `revoke`.
+    for sg in facts["signatures"]:
+        sg.can_revoke = can_revoke(user, sg)
+    ledger = register_here_ledger(book, user)
+    return {
+        **facts,
         # مصدرُ قصاصة الهامش: أوّلُ مرفقٍ يُصيَّر. غيابُه يُخفي الأداةَ كلَّها
         # بدل أن يعرض صندوقاً فارغاً — 11,183 كتاباً منقولاً من الورق بلا مرفق.
         "crop_source": _crop_source(book),
         # صفاتُ الربط من النموذج لا من قائمةٍ في القالب — مصدرٌ واحد.
         "relation_choices": BookLink.RELATION_CHOICES,
-        # التواقيع: القائمةُ للعرض، والصلاحيّةُ من الخدمة لا من قائمةِ أدوارٍ
-        # ثانيةٍ في القالب.
-        "signatures": signatures,
+        # التواقيع: القائمةُ للعرض (في الوقائع)، والصلاحيّةُ من الخدمة لا من قائمةِ
+        # أدوارٍ ثانيةٍ في القالب.
         "can_sign_book": can_sign(user, book),
         # الأرشفة: الحالُ من الخدمة والحقُّ من البوّابة — والقالبُ يعرض ولا يقرّر.
         "can_archive_book": can_archive(user),
@@ -366,10 +376,14 @@ def book_report(request, pk):
     """
     from datetime import timedelta
     from django.utils import timezone
+    from core.branding import org_name
     from ..models import BookEmailLog
 
     book = get_object_or_404(
-        Book.objects.select_related("created_by").prefetch_related(
+        Book.objects.select_related(
+            "created_by",
+            "current_custody__to_holder_user", "current_custody__to_holder_department",
+        ).prefetch_related(
             "issuing_entities",
             "receiving_entities",
             Prefetch(
@@ -458,6 +472,7 @@ def book_report(request, pk):
         "current_overdue_days": book.delay_days if book.followup_state == "overdue" else 0,
     }
 
+    facts = lifecycle_facts(book, request.user)
     return render(
         request,
         "core/book_report.html",
@@ -474,6 +489,14 @@ def book_report(request, pk):
             "last_event": history[-1] if history else None,
             "generated_at": timezone.now(),
             "generated_by": request.user,
+            # اسمُ المؤسّسة من مصدره كـ«سجلّ المتابعة» — كان نصّاً مثبّتاً (تدقيقُ نيلسن B#7)
+            "org_name": org_name(),
+            # التفريقُ والعهدةُ والردودُ والقيودُ والروابطُ والتواقيع — من بانيها الواحد
+            # (كان «تقريرُ دورة الحياة» بلا دورة حياة، تدقيقُ نيلسن B#1).
+            **facts,
+            # كتابٌ لم يمشِ (المنقولُ من الورق) سطرٌ صادقٌ واحد بدل أربعة أقسامٍ فارغة.
+            "journey": bool(facts["referrals"] or facts["custody"]
+                            or facts["links"] or facts["signatures"]),
         },
     )
 

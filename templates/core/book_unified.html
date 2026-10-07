@@ -4,8 +4,8 @@
 {% block title %}قائمة الكتب{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/book_unified.css' %}">
-<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20261006">
+<link rel="stylesheet" href="{% static 'css/book_unified.css' %}?v=20261007">
+<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20261007">
 <link rel="stylesheet" href="{% static 'css/book_unified_table.css' %}?v=20260811a">
 <link rel="stylesheet" href="{% static 'css/book_unified_mobile.css' %}?v=20260629-preview">
 <link rel="stylesheet" href="{% static 'css/number_hint.css' %}?v=20260810">
@@ -15,7 +15,7 @@
 
 {% block content %}
 <div class="book-unified-page" id="bookUnifiedPage"
-     data-theme="{% if current_tab|slice:':8' == 'outgoing' %}outgoing{% else %}incoming{% endif %}"
+     data-theme="{% if current_tab|slice:':8' == 'outgoing' %}outgoing{% elif current_tab|slice:':3' == 'all' %}all{% else %}incoming{% endif %}"
      data-bulk-delete-url="{% url 'api_bulk_delete_books' %}"
      data-bulk-status-url="{% url 'api_bulk_update_status_books' %}"
      data-ajax-data-url="{% url 'api_unified_data' %}">
@@ -84,6 +84,15 @@
               title="إعادة عرض الأعمدة إلى الافتراضي (تُحفَظ تعديلاتك تلقائياً حتى تُعيد الضبط)">
         <i class="bi bi-arrow-counterclockwise"></i> إعادة ضبط الأعمدة
       </button>
+      {# التصديرُ والطباعة موجودان خادميّاً وفي JS بلا زرٍّ يصلهما (تدقيقُ نيلسن A#14) — يصدّران ما تعرضه الفلاترُ الآن #}
+      <button type="button" class="btn btn-link btn-sm p-0 ms-2 text-decoration-none" id="exportCsvBtn"
+              title="تنزيل الكتب المعروضة بالفلاتر الحاليّة ملفَّ CSV يفتح في Excel">
+        <i class="bi bi-filetype-csv"></i> تصدير CSV
+      </button>
+      <button type="button" class="btn btn-link btn-sm p-0 ms-2 text-decoration-none" id="printTableBtn"
+              title="طباعة الصفحة المعروضة">
+        <i class="bi bi-printer"></i> طباعة
+      </button>
     </div>
     {% if page_obj.has_other_pages %}
       <nav aria-label="ترقيم الصفحات">
@@ -93,7 +102,7 @@
           {% else %}
             <li class="page-item disabled"><span class="page-link">السابق</span></li>
           {% endif %}
-          <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+          <li class="page-item active"><span class="page-link">صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }}</span></li>
           {% if page_obj.has_next %}
             <li class="page-item"><a class="page-link" href="?{% if base_querystring %}{{ base_querystring }}&{% endif %}page={{ page_obj.next_page_number }}">التالي</a></li>
           {% else %}
@@ -116,8 +125,8 @@
       </div>
       <div class="modal-body">
         <select class="form-select" id="bulkStatusSelect" required>
-          {# القيمتان اللتان يقبلهما الخادم وحدَهما (api_bulk_update_status): كانت الخياراتُ
-             pending/hold/done فيُرفض كلُّ تحديثٍ جماعيّ (تدقيقُ نيلسن 2026‑10‑07، A#1) #}
+          {% comment %}القيمتان اللتان يقبلهما الخادم وحدَهما (api_bulk_update_status): كانت الخياراتُ
+             pending/hold/done فيُرفض كلُّ تحديثٍ جماعيّ (تدقيقُ نيلسن 2026‑10‑07، A#1){% endcomment %}
           <option value="">اختر الإجراء…</option>
           <option value="archived">إنهاء المتابعة (مُنجَز / بلا متابعة)</option>
           <option value="reopen">إعادة فتح المتابعة (لما له موعد)</option>
@@ -138,7 +147,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20261007"></script>
+<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20261007c"></script>
 <script src="{% static 'js/book_unified_actions.js' %}?v=20261007"></script>
 <script src="{% static 'js/book_unified_api.js' %}?v=20261007"></script>
 <script src="{% static 'js/book_column_resize.js' %}?v=20260707c"></script>

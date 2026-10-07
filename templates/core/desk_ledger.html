@@ -10,13 +10,20 @@
 
 <div class="toolbar">
   <form method="get" action="">
+    {% if department_choices is not None %}
+    <label for="department" class="muted">القسم:</label>
+    <select name="department" id="department">
+      <option value="">— اختر قسماً —</option>
+      {% for d in department_choices %}<option value="{{ d.pk }}"{% if department and department.pk == d.pk %} selected{% endif %}>{{ d }}</option>{% endfor %}
+    </select>
+    {% endif %}
     <label for="date_from" class="muted">من:</label>
     <input type="date" name="date_from" id="date_from" value="{{ date_from }}">
     <label for="date_to" class="muted">إلى:</label>
     <input type="date" name="date_to" id="date_to" value="{{ date_to }}">
-    <button type="submit" class="back">عرض</button>
+    <button type="submit" class="print">عرض</button>
   </form>
-  {% if rows %}<button class="print" onclick="window.print()">🖨️ طباعة</button>{% endif %}
+  {% if rows %}<button type="button" class="print" onclick="window.print()">طباعة</button>{% endif %}
   <a class="btn back" href="{% url 'desk_board' %}">رجوع</a>
 </div>
 
@@ -40,7 +47,7 @@
   <div class="rep-title">دفتر الوارد</div>
 
   {% if not rows %}
-    <div class="empty">لا قيود في هذه المدّة.</div>
+    <div class="empty">{% if department %}لا قيود في هذه المدّة.{% else %}اختر قسماً لعرض دفتره.{% endif %}</div>
   {% else %}
     {% comment %}
       أعمدةُ الكاتب الخمسة حرفيّاً كما أملاها: الرقم · التاريخ · الموضوع ·

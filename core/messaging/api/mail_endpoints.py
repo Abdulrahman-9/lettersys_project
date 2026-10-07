@@ -91,7 +91,18 @@ def api_compose(request):
     # Fetch optional entities — الكتاب ضمن نطاق المستخدم لا مطلقاً: وإلاّ عُلّقت
     # الرسالة على كتاب غيره وظهرت في سجلّه. والقالبُ أدناه يُصيَّر بعنوانه —
     # فالمحتوى شرطٌ لا الصفّ.
-    from core.messaging.scoping import mailable_book
+    from core.messaging.scoping import mailable_book, repliable_thread
+
+    # الخيطُ ضمن النطاق لا بالرقم مطلقاً: كان أيُّ مستخدمٍ يعلّق رسالتَه على خيطِ غيره
+    # (IDOR — مذكّرةُ فيبل لتدقيق نيلسن E#2). يُحلّ **قبل** ``try`` كي لا تبتلع الـ500
+    # رفضَ الـ404. والردُّ يرث كتابَ خيطه — لا يُوثَق بكتابٍ يرسله العميل بجانبه.
+    thread = None
+    if thread_id:
+        thread = repliable_thread(request.user, thread_id)
+        if thread is None:
+            return JsonResponse({'success': False, 'message': 'المراسلة غير موجودة'}, status=404)
+        if thread.book_id:
+            book_id = thread.book_id
 
     book   = mailable_book(request.user, book_id)             if book_id   else None
     entity = Entity.objects.filter(pk=entity_id).first() if entity_id else None
@@ -112,6 +123,13 @@ def api_compose(request):
     if not subject or not body:
         return JsonResponse({'success': False, 'message': 'الموضوع والنص مطلوبان'}, status=400)
 
+    # عمودُ السجلّ 255: الموضوعُ الأطول كان يكسر الحفظ في PostgreSQL فيصير 500 بعد الإرسال.
+    from core.models import BookEmailLog
+    subject_max = BookEmailLog._meta.get_field('subject').max_length
+    if len(subject) > subject_max:
+        return JsonResponse({'success': False,
+                             'message': f'الموضوع أطول من {subject_max} حرفاً — اختصره.'}, status=400)
+
     # لا سقوطَ إلى «أوّل كتابٍ في القاعدة»: ``BookEmailLog.book`` صار اختياريّاً
     # (هجرة 0061)، فالرسالة بلا كتابٍ تُسجَّل بلا كتاب بدل أن تُعلَّق على كتابٍ
     # لا صلة له بها.
@@ -130,9 +148,11 @@ def api_compose(request):
             entity=entity,
         )
 
-        # Link to existing thread or create new one
-        if thread_id:
-            thread = EmailThread.objects.filter(pk=thread_id).first()
+        # الردُّ في خيطه (المحلولِ ضمن النطاق أعلاه) يعيده «بانتظار رد» ويحرّك آخرَ نشاطه —
+        # بلا ``last_activity`` في الحقول لا يتحرّك ختمُ auto_now فتُفرز القائمةُ قديمة.
+        if thread is not None:
+            thread.status = EmailThread.STATUS_WAITING
+            thread.save(update_fields=['status', 'last_activity'])
         else:
             thread = EmailThread.objects.create(
                 book=book if book_id else None,

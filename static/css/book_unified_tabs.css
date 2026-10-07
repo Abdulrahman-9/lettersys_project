@@ -5,7 +5,8 @@
 /* ── التبويبان الرئيسيان: وارد / صادر — عرض الصفحة كاملاً ── */
 .tabs-split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* وارد · صادر · «الكلّ» أضيقُ منهما: حالةٌ صريحة لا اتّجاهٌ ثالث (تدقيقُ نيلسن A#6) */
+  grid-template-columns: 1fr 1fr 0.6fr;
   gap: 0;
   margin: 0 0 0.7rem;
   border-radius: 0.85rem;
@@ -102,6 +103,15 @@
 .tab-main.tab-outgoing.active .tab-icon { color: #78350f; }
 .tab-main.tab-outgoing.active .tab-count { color: #78350f; opacity: 0.85; }
 .tab-main.tab-outgoing.active::after { background: #1e40af; }
+
+/* — «الكلّ» نشط (تيلٌ محايد — لا لونَ اتّجاه) — */
+.tab-main.tab-all.active {
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  color: #fff;
+}
+.tab-main.tab-all.active .tab-icon,
+.tab-main.tab-all.active .tab-count { color: #ccfbf1; }
+.tab-main.tab-all.active::after { background: #f4f2ee; }
 
 /* — divider بين التبويبين — */
 .tab-main + .tab-main {
