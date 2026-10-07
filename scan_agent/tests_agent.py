@@ -569,8 +569,9 @@ class InstallerTests(unittest.TestCase):
         os.makedirs(os.path.join(tmp, 'local'))
         return tmp, startup
 
-    def _run(self, args, answer, tmp, bat=None, path_prefix=None):
+    def _run(self, args, answer, tmp, bat=None, path_prefix=None, extra_env=None):
         env = dict(os.environ)
+        env.update(extra_env or {})
         if path_prefix:                              # أدواتٌ مزيّفة (whoami) قبل System32
             env['PATH'] = path_prefix + os.pathsep + env.get('PATH', '')
         env['LOCALAPPDATA'] = os.path.join(tmp, 'local')
@@ -661,6 +662,51 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(p.returncode, 6, p.stdout)
         self.assertFalse(os.path.exists(self._json_path(tmp)), 'كُتب agent.json في تشغيلٍ مرفوع')
         self.assertEqual(os.listdir(startup), [])
+
+    def _fake_high_whoami(self, tmp):
+        fake = os.path.join(tmp, 'fakebin')
+        os.makedirs(fake, exist_ok=True)
+        with open(os.path.join(fake, 'whoami.bat'), 'w') as f:
+            f.write('@echo Mandatory Label\\High Mandatory Level  Label  S-1-16-12288\r\n')
+        return fake
+
+    def test_elevated_run_proceeds_with_explicit_override(self):
+        """حاسبةٌ بلا UAC أو بحساب Administrator المدمج: كلُّ عمليّاتها High، فبلا تجاوزٍ صريحٍ
+        لا تُثبَّت أبداً. ‏LETTERSYS_INSTALL_ALLOW_ELEVATED=1 يُكمل التثبيت."""
+        tmp, _ = self._sandbox()
+        p = self._run([self.ORIGIN], 'y\n', tmp, path_prefix=self._fake_high_whoami(tmp),
+                      extra_env={'LETTERSYS_INSTALL_ALLOW_ELEVATED': '1'})
+        self.assertEqual(p.returncode, 0, p.stdout)
+        self.assertTrue(os.path.exists(self._json_path(tmp)))
+
+    # ═══════ لا «تمّ» بلا agent.json مكتوب ═══════
+    def test_unwritable_agent_json_is_reported_not_claimed(self):
+        """‏agent.json للقراءة فقط: ‏move يفشل، وكان المُثبِّتُ يطبع «كُتب» والوكيلُ يبقى بقائمته القديمة."""
+        tmp, _ = self._sandbox()
+        path = self._json_path(tmp)
+        os.makedirs(os.path.dirname(path))
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write('{"allowed_origins": ["http://old.example:8000"]}')
+        os.chmod(path, 0o444)
+        self.addCleanup(os.chmod, path, 0o666)
+        p = self._run([self.ORIGIN], 'y\n', tmp)
+        self.assertEqual(p.returncode, 7, p.stdout)
+        with open(path, encoding='utf-8') as f:
+            self.assertIn('old.example', f.read())
+
+    # ═══════ اختصارٌ قديمٌ لا يُخفي فشلَ الحفظ ═══════
+    def test_stale_readonly_shortcut_is_replaced(self):
+        """اختصارٌ قديمٌ للقراءة فقط يُفشل الحفظ، وحارسُ الوجود يراه فيطبع «تمّ» ويشغّل الهدفَ القديم."""
+        tmp, startup = self._sandbox()
+        lnk = os.path.join(startup, 'LetterSys Scan Agent.lnk')
+        with open(lnk, 'wb') as f:
+            f.write(b'stale-garbage')
+        os.chmod(lnk, 0o444)
+        self.addCleanup(lambda: os.path.exists(lnk) and os.chmod(lnk, 0o666))
+        p = self._run([self.ORIGIN], 'y\n', tmp)
+        self.assertEqual(p.returncode, 0, p.stdout)
+        with open(lnk, 'rb') as f:
+            self.assertIn(b'run_agent.bat', f.read(), 'بقي الاختصارُ القديم')
 
     # ═══════ لا «تمّ» بلا اختصار ═══════
     def test_failed_shortcut_is_reported_not_claimed(self):

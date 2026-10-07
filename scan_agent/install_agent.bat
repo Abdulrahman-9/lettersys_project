@@ -31,9 +31,10 @@ setlocal
 REM ── 0) لا تشغيلَ مرفوعاً: كلُّ شيءٍ يُكتب في ملفّ المستخدم الذي يشغّل المُثبِّت ──
 REM «تشغيل كمسؤول» بحساب المسؤول على حاسبة كاتبةٍ عاديّة يكتب agent.json والوكيلَ والاختصارَ
 REM في ملفّ المسؤول، فلا يبدأ وكيلٌ في جلسة الكاتبة أبداً. والمُثبِّتُ لا يحتاج صلاحيّاتٍ أصلاً.
-REM (High = S-1-16-12288، System = S-1-16-16384.)
+REM (High = S-1-16-12288، System = S-1-16-16384.) حاسبةٌ أُطفئت فيها UAC، أو تدخلها الكاتبةُ بحساب
+REM Administrator المدمج، كلُّ عمليّاتها High — فيها يُضبط LETTERSYS_INSTALL_ALLOW_ELEVATED=1 قبل التشغيل.
 whoami /groups | findstr /c:"S-1-16-12288" /c:"S-1-16-16384" >nul
-if not errorlevel 1 goto elevated
+if not errorlevel 1 if not defined LETTERSYS_INSTALL_ALLOW_ELEVATED goto elevated
 
 if "%~1"=="" (
     echo.
@@ -107,6 +108,8 @@ if not errorlevel 1 goto cancel
 
 if not exist "%DATA_DIR%" mkdir "%DATA_DIR%"
 move /y "%LS_TMP%" "%JSON_FILE%" >nul
+REM مجلّدٌ غيرُ قابلٍ للكتابة أو agent.json مقفل ⟵ لا «تمّ»: الوكيلُ سيعمل بقائمةٍ قديمة.
+if errorlevel 1 goto jsonfail
 echo [تمّ] كُتب %JSON_FILE%
 
 REM ── 3) الوقتُ التشغيليّ: Python المضمَّن + الحزمة إلى مجلّد المستخدم ──
@@ -132,6 +135,8 @@ REM ── 4) اختصارُ بدء التشغيل، ثمّ شغّله الآن 
 REM المساراتُ تُمرَّر إلى PowerShell عبر البيئة لا بالاقتباس المفرد: مسارٌ فيه فاصلةٌ
 REM عليا (اسمُ مستخدمٍ مثل O'Brien) كان يكسر السطرَ أو يُحقن فيه شيفرة.
 set "LS_LINK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\LetterSys Scan Agent.lnk"
+REM اختصارٌ قديمٌ (من تثبيتٍ سابقٍ بنسخة المشروع) يُخفي فشلَ الحفظ عن حارس الوجود أدناه ويشغّل الهدفَ القديم.
+del /f /q "%LS_LINK%" 2>nul
 powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:LS_LINK); $s.TargetPath=$env:LS_TARGET; $s.Arguments=$env:LS_ARGS; $s.WorkingDirectory=$env:LS_WORKDIR; $s.Save()"
 REM لا «تمّ» بلا ملفّ: الحفظُ قد يفشل (مسارٌ فوق 260 حرفاً، مجلّدٌ غيرُ قابلٍ للكتابة) وPowerShell
 REM يطبع خطأه ويخرج — فكان المسؤولُ يرى «تمّ» والوكيلُ لن يبدأ مع ويندوز أبداً.
@@ -166,6 +171,12 @@ echo [خطأ] شُغّل المُثبِّتُ بصلاحيّات المسؤول.
 echo   (لا «تشغيل كمسؤول»): الوكيلُ واختصارُه يُكتبان في ملفّ المستخدم الذي يشغّله. لم يُكتب شيء.
 echo.
 exit /b 6
+
+:jsonfail
+echo.
+echo [خطأ] تعذّرت كتابةُ %JSON_FILE% — لم يتغيّر شيء. تحقّق من صلاحيّة الكتابة ثمّ أعد التشغيل.
+echo.
+exit /b 7
 
 :shortcutfail
 echo.
