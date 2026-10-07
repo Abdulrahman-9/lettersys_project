@@ -20,6 +20,7 @@ from ..forms import EntityForm
 from core.entity_kinds import KIND_HINTS, KIND_LABELS, KINDS
 from ..models import Book, Entity, EntityGroup
 from .helpers import staff_required
+from core.scoping import STUB_TITLE, restricted_flag_sql, scope_books_for
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +224,6 @@ def entity_list(request):
     )
 
 
-@login_required
 def _entity_back(request, entity):
     """إلى أين يعود مَن عدّل جهةً: `next` **مسارٌ داخليّ فقط** (لا مضيفَ — يسدّ
     التحويلَ المفتوح)، وإلّا تفاصيلُ الجهة نفسِها لا القائمة (تدقيقُ الانتقالات ب4)."""
@@ -233,22 +233,32 @@ def _entity_back(request, entity):
     return reverse("entity_detail", args=[entity.pk])
 
 
+@login_required
 def entity_detail(request, pk):
     """
     صفحة تفاصيل الجهة — الكتب المصدرة والمستلمة
+
+    **بحارس الدخول ونطاق الرؤية وحجب السرّيّ** (تدقيقُ نيلسن 2026‑10‑07، D#3):
+    كان ``@login_required`` على الدالّة المساعدة ``_entity_back`` لا هنا، والكتبُ
+    بلا ``scope_books_for`` — فمَن لا حسابَ له على الشبكة يرى أرقامَ كتب الجهة
+    وعناوينَها كلَّها، والسرّيَّ منها. الآن: ما يراه القارئُ وحدَه، وعنوانُ السرّيّ
+    وجهاتُه محجوبةٌ لمن لا يملك محتواه (``restricted_flag_sql``) كالقائمة والتقارير.
     """
     entity = get_object_or_404(Entity, pk=pk, is_active=True)
+    restricted = restricted_flag_sql(request.user)
 
     issued_books = (
-        entity.issued_books
+        scope_books_for(request.user, entity.issued_books.all())
         .select_related("created_by")
         .prefetch_related("receiving_entities")
+        .annotate(restricted=restricted)
         .order_by("-date")
     )
     received_books = (
-        entity.received_books
+        scope_books_for(request.user, entity.received_books.all())
         .select_related("created_by")
         .prefetch_related("issuing_entities")
+        .annotate(restricted=restricted)
         .order_by("-date")
     )
 
@@ -276,6 +286,7 @@ def entity_detail(request, pk):
         "received_books": received_page,
         "issued_count": pag_issued.count,
         "received_count": pag_received.count,
+        "stub_title": STUB_TITLE,
     })
 
 

@@ -140,15 +140,16 @@
                   <td class="fw-bold">
                     <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number_display }}</a>
                   </td>
-                  <td>{{ book.title|truncatechars:60 }}</td>
+                  <td>{% if book.restricted %}<span class="text-muted"><i class="bi bi-lock-fill" aria-hidden="true"></i> {{ stub_title }}</span>{% else %}{{ book.title|truncatechars:60 }}{% endif %}</td>
                   <td><span class="badge bg-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}-subtle text-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}">{{ book.kind_label }}</span></td>
                   <td class="text-muted">{{ book.date|date:"d/m/Y" }}</td>
                   <td>
+                    {% if book.restricted %}<span class="text-muted">—</span>{% else %}
                     {% for e in book.receiving_entities.all %}
                       <span class="badge bg-light text-dark">{{ e.name }}</span>
                     {% empty %}
                       <span class="text-muted">—</span>
-                    {% endfor %}
+                    {% endfor %}{% endif %}
                   </td>
                   <td>
                     {% if book.followup_state == 'pending' %}<span class="badge" style="background:rgba(37,99,235,0.15);color:#1e40af;">قيد المتابعة</span>
@@ -211,15 +212,16 @@
                   <td class="fw-bold">
                     <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number_display }}</a>
                   </td>
-                  <td>{{ book.title|truncatechars:60 }}</td>
+                  <td>{% if book.restricted %}<span class="text-muted"><i class="bi bi-lock-fill" aria-hidden="true"></i> {{ stub_title }}</span>{% else %}{{ book.title|truncatechars:60 }}{% endif %}</td>
                   <td><span class="badge bg-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}-subtle text-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}">{{ book.kind_label }}</span></td>
                   <td class="text-muted">{{ book.date|date:"d/m/Y" }}</td>
                   <td>
+                    {% if book.restricted %}<span class="text-muted">—</span>{% else %}
                     {% for e in book.issuing_entities.all %}
                       <span class="badge bg-light text-dark">{{ e.name }}</span>
                     {% empty %}
                       <span class="text-muted">—</span>
-                    {% endfor %}
+                    {% endfor %}{% endif %}
                   </td>
                   <td>
                     {% if book.followup_state == 'pending' %}<span class="badge" style="background:rgba(37,99,235,0.15);color:#1e40af;">قيد المتابعة</span>
