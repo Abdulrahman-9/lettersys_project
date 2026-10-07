@@ -57,7 +57,8 @@ class EditRightsTestCase(TestCase):
 
         cls.book = book('6101', cls.clerk, cls.q, margin='هامشُ المدير الأوّل')
         cls.book.receiving_entities.add(kh_twin)                       # «خ» مذكور
-        cls.referral = distribute(cls.book, [cls.sh], by=cls.clerk)[0]  # «ش» مُحالٌ إليها
+        cls.referral = distribute(cls.book, [cls.sh], by=cls.clerk,     # «ش» مُحالٌ إليها
+                                  due_date=today + timedelta(days=5))[0]
         cls.unit_book = book('6102', cls.unit, cls.sh)                  # كتابُ الشعبة نفسِها
         cls.secret = book('6103', cls.clerk, cls.q, secret_level='secret')
         cls.loner_book = book('6104', cls.loner, None)

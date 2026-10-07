@@ -24,6 +24,11 @@ from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
+#: «للتنفيذ» بلا موعدٍ لا يتأخّر أبداً فلا يُطارَد — التزامٌ لا يطارده أحد. الحواريّةُ
+#: تمنعه بالنصّ نفسِه (``book_lifecycle.js``، تدقيقُ نيلسن B#5)، وهذا حارسُه في
+#: الخادم: كلُّ تفريقٍ وتعميمٍ يمرّ من ``distribute``، فلا يتخطّاه طلبٌ لم يمرّ بالحواريّة.
+ACTION_NEEDS_DUE = '«للتنفيذ» يحتاج موعدَ إنجاز — حدّده، أو اختر «للعلم».'
+
 
 def distribute(book, targets, *, purpose=None, margin='', margin_crop=None,
                due_date=None, assignee=None, by, allow_repeat=False):
@@ -34,7 +39,8 @@ def distribute(book, targets, *, purpose=None, margin='', margin_crop=None,
     باختلاف اختصاص الوحدة، وتوحيدُه قسراً يُفقد الهامشَ معناه.
 
     يرفع ``PermissionDenied`` إن لم يملك ``by`` محتوى الكتاب، و``ValidationError``
-    على هدفٍ مجهولِ النوع أو تفريقٍ مكرَّرٍ فوق التزامٍ ما زال مفتوحاً.
+    على هدفٍ مجهولِ النوع، أو صفٍّ «للتنفيذ» بلا موعد (``ACTION_NEEDS_DUE``)، أو
+    تفريقٍ مكرَّرٍ فوق التزامٍ ما زال مفتوحاً.
     """
     from core.models import BookReferral, Department, Entity
     from core.scoping import can_open_content
@@ -60,25 +66,30 @@ def distribute(book, targets, *, purpose=None, margin='', margin_crop=None,
         else:
             raise ValidationError('هدفُ تفريقٍ غيرُ معروف: %r' % (target,))
 
+        # قيمُ الصفّ الفعليّة — ما يخصّ الهدفَ يغلب المشترك. تُحسم مرّةً هنا فيقرأ
+        # الحارسُ ما سيُكتب حرفاً، لا نسخةً ثانيةً من قاعدة الافتراض.
+        fields = {
+            'purpose': item.get('purpose', default_purpose),
+            'margin': item.get('margin', margin),
+            'margin_crop': item.get('margin_crop', margin_crop),
+            'due_date': item.get('due_date', due_date),
+            'assignee': item.get('assignee', assignee),
+            **keys,
+        }
+        if fields['purpose'] == BookReferral.ACTION and not fields['due_date']:
+            raise ValidationError(ACTION_NEEDS_DUE)
+
         if not allow_repeat and _has_open_referral(book, keys):
             raise ValidationError(
                 'الكتابُ مُفرَّقٌ إلى «%s» والتزامُه ما زال مفتوحاً.' % (target,)
             )
-        prepared.append((keys, item))
+        prepared.append(fields)
 
     created = []
     with transaction.atomic():
-        for keys, item in prepared:
+        for fields in prepared:
             created.append(BookReferral.objects.create(
-                book=book, from_department=from_department,
-                purpose=item.get('purpose', default_purpose),
-                margin=item.get('margin', margin),
-                margin_crop=item.get('margin_crop', margin_crop),
-                due_date=item.get('due_date', due_date),
-                assignee=item.get('assignee', assignee),
-                created_by=by,
-                **keys
-            ))
+                book=book, from_department=from_department, created_by=by, **fields))
 
         _project_onto_m2m(book, created)
         _record(book, 'referral', by,
@@ -176,7 +187,8 @@ def send_circular(book, group, *, by, purpose=None, margin='', margin_crop=None,
     وإلّا بقي جهةً خارجيّة. فالوحدةُ كلا الأمرين بإسقاطيها.
 
     ``member_overrides`` قاموسٌ ``{entity_id: {...}}`` لما يخصّ عضواً بعينه —
-    «أحياناً إلى قسمين أو ثلاثة» بتوجيهاتٍ مختلفة.
+    «أحياناً إلى قسمين أو ثلاثة» بتوجيهاتٍ مختلفة. وموعدُ «للتنفيذ» يحرسه
+    ``distribute`` على قيم كلّ عضوٍ الفعليّة، فالتوجيهُ الخاصّ لا يتخطّاه.
     """
     from core.models import Book
 

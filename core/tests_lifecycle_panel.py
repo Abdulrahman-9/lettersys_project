@@ -42,6 +42,8 @@ class LifecyclePanelTestCase(TestCase):
             kind='incoming_external', title='كتابٌ منقولٌ من الورق',
             created_by=cls.clerk, department=cls.dept, our_number='825',
         )
+        #: «للتنفيذ» لا يُفرَّق بلا موعد — وموعدٌ بعد أسبوعٍ لا يجعل الصفَّ متأخّراً.
+        cls.due = timezone.localdate() + timedelta(days=7)
 
     def setUp(self):
         self.client.force_login(self.clerk)
@@ -63,7 +65,8 @@ class PanelContentTests(LifecyclePanelTestCase):
         self.assertIn('بموجب كشف التسليم 14', body)
 
     def test_it_shows_the_referral_with_its_directive(self):
-        distribute(self.book, [self.unit], by=self.clerk, margin='أعدّوا مذكّرة')
+        distribute(self.book, [self.unit], by=self.clerk, margin='أعدّوا مذكّرة',
+                   due_date=self.due)
         body = self._page(self.book)
         self.assertIn('أعدّوا مذكّرة', body)
 
@@ -104,7 +107,7 @@ class EmptyStateTests(LifecyclePanelTestCase):
         self.assertIn('lifecycleCard', self._page(self.bare))
 
     def test_one_movement_opens_the_full_panel(self):
-        distribute(self.bare, [self.unit], by=self.clerk)
+        distribute(self.bare, [self.unit], by=self.clerk, due_date=self.due)
         body = self._page(self.bare)
         self.assertIn('التفريق والردود', body)
         self.assertNotIn('لا حركةَ تسييرٍ على هذا الكتاب', body)
@@ -142,7 +145,8 @@ class RowButtonsFollowTheGuardsTests(TestCase):
             kind='incoming_external', title='كتابٌ إلى العقود', created_by=cls.clerk,
             department=cls.dept, our_number='2450',
         )
-        cls.row = distribute(cls.book, [cls.contracts], by=cls.clerk)[0]
+        cls.row = distribute(cls.book, [cls.contracts], by=cls.clerk,
+                             due_date=timezone.localdate() + timedelta(days=7))[0]
 
     def _page(self, user):
         self.client.force_login(user)

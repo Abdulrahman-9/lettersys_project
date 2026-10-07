@@ -101,7 +101,7 @@ class StateTests(BookDetailPageTestCase):
         ``bookActions`` و«بالعهدة» منجزةٌ في ``bookSteps``."""
         from core.referral_service import distribute
         unit = Department.objects.create(name='شعبةُ الملفّ', code='م.ش', parent=self.dept)
-        distribute(self.book, [unit], by=self.clerk)
+        distribute(self.book, [unit], by=self.clerk, due_date=self.today + timedelta(days=7))
         record_custody(self.book, CustodyEvent.UNIT_RECEIPT, to_department=unit, by=self.clerk)
         body = self._page()
         for region in ('followupStateText', 'bookCustodyCard', 'bookSteps', 'bookActions',

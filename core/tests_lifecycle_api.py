@@ -9,7 +9,9 @@
 
 import json
 from datetime import timedelta
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.utils import timezone
@@ -17,7 +19,7 @@ from django.utils import timezone
 from core.custody_service import record_custody
 from core.models import (Book, BookReferral, BookSequence, CustodyEvent, Department,
                          Entity, EntityGroup, UserProfile)
-from core.referral_service import distribute
+from core.referral_service import ACTION_NEEDS_DUE, distribute
 from core.roles import CONTROLLER_GROUP_NAME
 
 
@@ -50,6 +52,9 @@ class LifecycleApiTestCase(TestCase):
         cls.foreign = Book.objects.create(
             kind='incoming_internal', title='كتابُ العقود', created_by=cls.outsider,
             department=cls.other, our_number='991')
+        #: «للتنفيذ» لا يُفرَّق بلا موعد (``ACTION_NEEDS_DUE``) — وموعدٌ بعد أسبوعٍ لا
+        #: يجعل الصفَّ متأخّراً ولا مستحقّاً اليوم، فلا يغيّر ما تسأل عنه الاختبارات.
+        cls.due = timezone.localdate() + timedelta(days=7)
 
     def setUp(self):
         self.client.force_login(self.clerk)
@@ -64,14 +69,15 @@ class DistributeApiTests(LifecycleApiTestCase):
     def test_distributes_to_chosen_departments(self):
         resp = self._post('/books/api/book/%d/distribute/' % self.book.pk,
                           {'targets': ['dep:%d' % self.unit.pk],
-                           'margin': 'أعدّوا مذكّرة'})
+                           'margin': 'أعدّوا مذكّرة', 'due_date': self.due.isoformat()})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()['count'], 1)
         self.assertEqual(self.book.referrals.first().margin, 'أعدّوا مذكّرة')
 
     def test_distributes_to_an_external_entity(self):
         self._post('/books/api/book/%d/distribute/' % self.book.pk,
-                   {'targets': ['ent:%d' % self.ministry.pk]})
+                   {'targets': ['ent:%d' % self.ministry.pk],
+                    'due_date': self.due.isoformat()})
         self.assertEqual(self.book.referrals.first().to_entity, self.ministry)
 
     def test_a_group_wins_over_manual_targets(self):
@@ -79,7 +85,8 @@ class DistributeApiTests(LifecycleApiTestCase):
         group = EntityGroup.objects.create(name='قسمٌ واحد')
         group.members.add(self.other.entity)
         self._post('/books/api/book/%d/distribute/' % self.book.pk,
-                   {'group': group.pk, 'targets': ['dep:%d' % self.unit.pk]})
+                   {'group': group.pk, 'targets': ['dep:%d' % self.unit.pk],
+                    'due_date': self.due.isoformat()})
         self.assertEqual([r.to_department for r in self.book.referrals.all()], [self.other])
 
     def test_no_target_is_refused_with_a_message(self):
@@ -94,9 +101,10 @@ class DistributeApiTests(LifecycleApiTestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_a_repeat_over_an_open_commitment_is_refused(self):
-        distribute(self.book, [self.unit], by=self.clerk)
+        distribute(self.book, [self.unit], by=self.clerk, due_date=self.due)
         resp = self._post('/books/api/book/%d/distribute/' % self.book.pk,
-                          {'targets': ['dep:%d' % self.unit.pk]})
+                          {'targets': ['dep:%d' % self.unit.pk],
+                           'due_date': self.due.isoformat()})
         self.assertEqual(resp.status_code, 400)
         self.assertIn('مُفرَّق', resp.json()['message'])
 
@@ -104,13 +112,14 @@ class DistributeApiTests(LifecycleApiTestCase):
         """إسنادُ عملٍ لموظّفٍ لا أراه لا معنى له — ويُهمَل بلا إسقاط العمليّة."""
         resp = self._post('/books/api/book/%d/distribute/' % self.book.pk,
                           {'targets': ['dep:%d' % self.unit.pk],
-                           'assignee': self.outsider.pk})
+                           'assignee': self.outsider.pk, 'due_date': self.due.isoformat()})
         self.assertEqual(resp.status_code, 200)
         self.assertIsNone(self.book.referrals.first().assignee_id)
 
     def test_an_assignee_inside_my_tree_is_kept(self):
         self._post('/books/api/book/%d/distribute/' % self.book.pk,
-                   {'targets': ['dep:%d' % self.unit.pk], 'assignee': self.staff.pk})
+                   {'targets': ['dep:%d' % self.unit.pk], 'assignee': self.staff.pk,
+                    'due_date': self.due.isoformat()})
         self.assertEqual(self.book.referrals.first().assignee, self.staff)
 
     def test_a_due_date_is_parsed(self):
@@ -120,14 +129,18 @@ class DistributeApiTests(LifecycleApiTestCase):
         self.assertEqual(self.book.referrals.first().due_date.isoformat(), due)
 
     def test_a_broken_date_is_ignored_not_fatal(self):
+        """«للعلم» لا موعدَ له يُطلب — فالتاريخُ التالفُ يُهمَل والتفريقُ يتمّ.
+        (وتحت «للتنفيذ» التالفُ لا تاريخ فيُرفض: ``ActionNeedsDueApiTests``.)"""
         resp = self._post('/books/api/book/%d/distribute/' % self.book.pk,
-                          {'targets': ['dep:%d' % self.unit.pk], 'due_date': 'أمس'})
+                          {'targets': ['dep:%d' % self.unit.pk], 'purpose': 'info',
+                           'due_date': 'أمس'})
         self.assertEqual(resp.status_code, 200)
         self.assertIsNone(self.book.referrals.first().due_date)
 
     def test_garbage_target_tokens_are_skipped(self):
         resp = self._post('/books/api/book/%d/distribute/' % self.book.pk,
-                          {'targets': ['dep:abc', 'nope', 'dep:99999']})
+                          {'targets': ['dep:abc', 'nope', 'dep:99999'],
+                           'due_date': self.due.isoformat()})
         self.assertEqual(resp.status_code, 400)
 
     def test_get_is_refused(self):
@@ -135,11 +148,62 @@ class DistributeApiTests(LifecycleApiTestCase):
             self.client.get('/books/api/book/%d/distribute/' % self.book.pk).status_code, 405)
 
 
+class ActionNeedsDueApiTests(LifecycleApiTestCase):
+    """«للتنفيذ» بلا موعدٍ يُرفض في الخادم لا في الحواريّة وحدها (تدقيقُ نيلسن B#5).
+
+    الغلافُ رقيق: الحارسُ في ``distribute`` والنقطةُ تُترجم رفضَه 400 برسالةٍ صادقة —
+    لا 500 ولا صفٌّ يُكتب. والغرضُ الافتراضيُّ «للتنفيذ»، فالطلبُ بلا غرضٍ يُحرَس كذلك.
+    """
+
+    def _distribute(self, **payload):
+        payload.setdefault('targets', ['dep:%d' % self.unit.pk])
+        return self._post('/books/api/book/%d/distribute/' % self.book.pk, payload)
+
+    def assertRefused(self, resp):
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json(), {'success': False, 'message': ACTION_NEEDS_DUE})
+        self.assertEqual(self.book.referrals.count(), 0)
+
+    def test_action_without_a_date_is_refused(self):
+        self.assertRefused(self._distribute(purpose='action'))
+
+    def test_the_default_purpose_is_action_so_it_needs_the_date_too(self):
+        self.assertRefused(self._distribute())
+
+    def test_an_unreadable_date_is_no_date(self):
+        """التاريخُ التالفُ يُقرأ «لا تاريخ» — فلا يمرّ «للتنفيذ» بلا موعدٍ متنكّراً."""
+        self.assertRefused(self._distribute(purpose='action', due_date='أمس'))
+
+    def test_a_group_without_a_date_is_refused(self):
+        group = EntityGroup.objects.create(name='قسمٌ واحد')
+        group.members.add(self.other.entity)
+        self.assertRefused(self._distribute(group=group.pk, targets=[]))
+        self.book.refresh_from_db()
+        self.assertIsNone(self.book.sent_to_group)
+
+    def test_action_with_a_date_passes(self):
+        resp = self._distribute(purpose='action', due_date=self.due.isoformat())
+        self.assertEqual(resp.status_code, 200)
+        row = self.book.referrals.get()
+        self.assertEqual((row.purpose, row.due_date), (BookReferral.ACTION, self.due))
+
+    def test_info_without_a_date_passes(self):
+        resp = self._distribute(purpose='info')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(self.book.referrals.get().due_date)
+
+    def test_the_dialog_says_the_same_sentence(self):
+        """جملةٌ واحدةٌ للقاعدة الواحدة: الحواريّةُ تسبق الخادمَ بالنصّ نفسِه."""
+        src = (Path(settings.BASE_DIR) / 'static' / 'js' / 'book_lifecycle.js').read_text(
+            encoding='utf-8')
+        self.assertIn(ACTION_NEEDS_DUE, src)
+
+
 class ReferralActionApiTests(LifecycleApiTestCase):
 
     def setUp(self):
         super().setUp()
-        self.row = distribute(self.book, [self.unit], by=self.clerk)[0]
+        self.row = distribute(self.book, [self.unit], by=self.clerk, due_date=self.due)[0]
 
     def _act(self, act, note=''):
         return self._post('/books/api/book/%d/referral/%d/act/' % (self.book.pk, self.row.pk),
@@ -230,7 +294,7 @@ class CustodyApiTests(LifecycleApiTestCase):
         self.assertLess(moment.signed_at, timezone.now() - timedelta(hours=12))
 
     def test_unit_receipt_through_the_api_advances_its_referral(self):
-        row = distribute(self.book, [self.unit], by=self.clerk)[0]
+        row = distribute(self.book, [self.unit], by=self.clerk, due_date=self.due)[0]
         self._post('/books/api/book/%d/custody/' % self.book.pk,
                    {'event': CustodyEvent.UNIT_RECEIPT, 'referral': row.pk,
                     'to_department': self.unit.pk})
@@ -356,13 +420,13 @@ class DialogsRenderTests(LifecycleApiTestCase):
         self.assertIn('registerHereBtn', body)
 
     def test_open_referrals_get_action_buttons(self):
-        distribute(self.book, [self.unit], by=self.clerk)
+        distribute(self.book, [self.unit], by=self.clerk, due_date=self.due)
         body = self.client.get('/books/%d/' % self.book.pk).content.decode()
         self.assertIn('data-referral-act="received"', body)
         self.assertIn('data-referral-act="remind"', body)
 
     def test_a_closed_referral_has_no_action_buttons(self):
-        row = distribute(self.book, [self.unit], by=self.clerk)[0]
+        row = distribute(self.book, [self.unit], by=self.clerk, due_date=self.due)[0]
         from core.referral_service import mark_done
         mark_done(row, by=self.clerk)
         body = self.client.get('/books/%d/' % self.book.pk).content.decode()
