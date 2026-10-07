@@ -118,6 +118,7 @@ class AIExtractionResult:
         self.sender_number_bbox: Optional[list] = None
         self.sender_number_bbox_source: str = ''      # 'crnn' (قراءةٌ واثقة) أو 'detector'
         self.sender_number_bbox_dims: Optional[list] = None   # [W, H] المقاس المرجعيّ
+        self.sender_number_detector_arm: str = ''     # 'det2' | 'det1' | '' — مَن وجد صندوقَ الكاشف
         # قصاصةُ شريط «التأريخ» اليدويّ (data URL) لعرضها بجوار حقل الإدخال (خيار F،
         # فيبل15/16): الكاتب — القارئ الموثوق — ينسخها بنظرة. لا تُقرأ آلياً ولا تُبثّ
         # في الكاش/الحفظ؛ تعيش في scan_data (استجابة HTTP عابرة) فقط. None حين لا شريط.
@@ -991,7 +992,8 @@ class AIExtractionService:
         تموضعٌ بمرساة «العدد» وبصمة تخطيط الجهة ← قصّ الشريط ← قراءة CRNN (v5:
         94.5% على شرائط محجوزة) ← بوابة الثقة المُعايَرة.
 
-        يعيد `(number_result, date_crop, date_suggestion, (det_box, W, H))`:
+        يعيد `(number_result, date_crop, date_suggestion, (det_box, W, H, det_arm))`:
+        `det_arm` ذراعُ الكاشف الذي وجد `det_box` (`'det2'`/`'det1'`، أو `''` بلا صندوق)؛
         `number_result` = (نص، ثقة، bbox) أو None؛
         و`date_crop` = data URL لشريط «التأريخ» اليدويّ (خيار F) أو None. القصاصةُ تركب
         نفس الرسم+TSV (بلا مسحٍ ثانٍ — فيبل16) وتُحسَب **باستقلالٍ عن ارتدادات العدد**.
@@ -1023,7 +1025,7 @@ class AIExtractionService:
                 # حاضرةٌ دائماً، والمسارُ **نسبيٌّ لمجلّد العمل** — فتكفي خدمةٌ
                 # تُقلَع من مجلّدٍ آخر ليسقط الاستخراجُ كلُّه. يحرسها اختبارٌ في
                 # `core/tests_weights_preflight.py`.
-                return None, None, None, (None, 0, 0)
+                return None, None, None, (None, 0, 0, '')
 
             if lanes is not None and lanes.started('r4'):
                 img, tsv = lanes.take('r4', lambda: self._render_r4_and_tsv(image_path))
@@ -1073,14 +1075,14 @@ class AIExtractionService:
             # ── صندوق الكاشف — من الملفّ الأصليّ بوصفة التدريب، مرّةً واحدة ──
             # يُحفَظ حتى حين يمتنع القارئ (عيّنات الحالات الصعبة هي ما يُعلّم؛
             # قِيس: صفٌّ واحدٌ من 12 كان يحمل صندوقاً)، ويُغذّي مرساةَ قصاصة التاريخ.
-            det_box = None
+            det_box, det_arm = None, ''
             if number_result is None or want_date_crop:
                 if det_boxes is None:
                     _det = self._det_from_lanes(lanes, image_path)
                     if _det is not None:
                         det_boxes, det_fallback = _det['boxes'], _det['fallback']
-                det_box = self._detector_box_from_file(image_path, boxes=det_boxes,
-                                                       fallback=det_fallback)
+                det_box, det_arm = self._detector_box_from_file(image_path, boxes=det_boxes,
+                                                                fallback=det_fallback)
 
             # ── قراءة CRNN على قصاصة الكاشف حين يُخفق المُموضِع القديم ─────────
             # تفكيك e2e‑A: في 35/100 وجد الكاشفُ الصندوقَ وبقي الحقل صامتاً لأن
@@ -1134,11 +1136,11 @@ class AIExtractionService:
 
             W, H = img.width, img.height
             del tsv, img
-            return number_result, date_crop, date_suggestion, (det_box, W, H)
+            return number_result, date_crop, date_suggestion, (det_box, W, H, det_arm)
         except Exception as exc:
             logger.warning('[handwriting] فشل مسار خط اليد: %s — تدهور رشيق',
                            type(exc).__name__)
-            return None, None, None, (None, 0, 0)
+            return None, None, None, (None, 0, 0, '')
 
     def _suggest_date(self, crop, det_box, geometry_tag):
         """اقتراحُ تاريخٍ من قصاصة `x` — **الخادمُ لا يكتبه في الحقل أبداً**.
@@ -1215,8 +1217,6 @@ class AIExtractionService:
         except Exception:
             return None
 
-    _last_detector_arm = 'det2'   # يُحدَّث في `_detector_box_from_file`
-
     @staticmethod
     def _render_for_detector(image_path):
         """الصفحةُ الأولى **بوصفة تدريب الكاشف حرفيّاً** (175dpi، RGB).
@@ -1265,9 +1265,14 @@ class AIExtractionService:
 
     @staticmethod
     def _detector_box_from_file(image_path, boxes=None, fallback=_lanes.NOT_RUN):
-        """صندوق «العدد» من **الملفّ الأصليّ** بوصفة التدريب. `boxes` نتيجةُ
+        """`(box, arm)`: صندوق «العدد» من **الملفّ الأصليّ** بوصفة التدريب، وذراعُ الكاشف
+        الذي وجده (`'det2'` أو `'det1'`) — أو `(None, '')`. `boxes` نتيجةُ
         `_detector_boxes_from_file` إن حُسبت سلفاً في الاستخراج نفسه (لا استدلالَ ثانٍ)،
-        و`fallback` نتيجةُ det1 إن حسبها ممرُّ الكاشف على الرسم نفسه (لا رسمَ ثانٍ)."""
+        و`fallback` نتيجةُ det1 إن حسبها ممرُّ الكاشف على الرسم نفسه (لا رسمَ ثانٍ).
+
+        الذراعُ يُعاد **مع** الصندوق لا في صفةٍ مشتركة: كان يُكتب في صفة صنفٍ يتقاسمها كلُّ
+        الخادم، فاستخراجان متزامنان يتبادلانه — ولم يكن يقرؤه أحدٌ أصلاً، فالحصادُ جمع
+        صناديقَ det1 وdet2 مختلطةً بلا وسم (هندستان مختلفتان؛ درسُ recrop المدفوعُ ثمنُه)."""
         try:
             if boxes is None:
                 boxes = AIExtractionService._detector_boxes_from_file(image_path)
@@ -1284,18 +1289,17 @@ class AIExtractionService:
                     im = AIExtractionService._render_for_detector(image_path)
                     got = detect_number_box_fallback(im)
                     del im
-                arm = 'det1' if got else 'none'
+                arm = 'det1'
             if not got:
-                return None
+                return None, ''
             box, _conf = got
-            # ذراعُ المصدر يُنشر مع الصندوق — بدونه يتسمّم الحصادُ القادم
-            # بهندساتٍ مختلطة (درسُ recrop المدفوعُ ثمنُه مرّةً).
-            AIExtractionService._last_detector_arm = arm
             # نفس حارس الارتفاع: صندوقٌ منخفض اقتباسُ متنٍ يخنق حقلَ التاريخ فوقه
-            return box if box[1] <= 0.45 else None
+            if box[1] > 0.45:
+                return None, ''
+            return box, arm
         except Exception as exc:
             logger.warning('[handwriting] كاشفٌ من الملفّ تعذّر: %s', type(exc).__name__)
-            return None
+            return None, ''
 
     @staticmethod
     def _detector_box(img):
@@ -1915,7 +1919,7 @@ class AIExtractionService:
                 _progress('handwritten_number')
                 want_crop = not result.sender_date
                 (num_res, date_crop, date_suggestion,
-                 (det_box, _pw, _ph)) = self._read_handwritten_sender_number(
+                 (det_box, _pw, _ph, det_arm)) = self._read_handwritten_sender_number(
                     result.image_path, getattr(result, 'issuing_entity_id', None),
                     want_date_crop=want_crop,
                     det_boxes=_det_boxes if result.image_path == image_path else None,
@@ -1950,6 +1954,9 @@ class AIExtractionService:
                     # مقاسٌ مرجعيٌّ صريح: الصندوق مُطبَّعٌ عليه. بدونه لا يستطيع
                     # مستهلكٌ لاحق إعادة بناء البكسلات — وذاك فخّ 1600/2600/3500.
                     result.sender_number_bbox_dims = [_pw, _ph]
+                # ذراعُ الكاشف الذي وجد صندوقَ هذه الصفحة: صناديقُ det1 وdet2 هندستان
+                # مختلفتان، وقصاصةُ «التأريخ» تُقصّ تحت الصندوق — فالحصادُ يفصل بهما.
+                result.sender_number_detector_arm = det_arm
                 if date_crop:
                     result.sender_date_crop = date_crop
                     logger.info('[handwriting] قصاصة تاريخ الجهة للواجهة (خيار F)')
@@ -2350,6 +2357,7 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         'sender_number_bbox': result.sender_number_bbox,   # موضع القصّ لالتقاط تدريب التوضيع
         'sender_number_bbox_source': getattr(result, 'sender_number_bbox_source', ''),
         'sender_number_bbox_dims': getattr(result, 'sender_number_bbox_dims', None),
+        'sender_number_detector_arm': getattr(result, 'sender_number_detector_arm', ''),
         'title': result.title,
         'title_confidence': result.title_confidence,
         # اقتراحُ الموضوع ضعيفِ المسار — منفصلاً عن `title` بالبناء: الواجهةُ

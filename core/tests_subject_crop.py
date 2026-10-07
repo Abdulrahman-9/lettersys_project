@@ -318,7 +318,8 @@ class PipelineHookTests(TestCase):
         boxes = {'number': ([0.70, 0.10, 0.80, 0.13], 0.9), 'subject': None}
         with mock.patch('core.extraction.handwriting.detector.detect_boxes',
                         side_effect=AssertionError('استدلالٌ ثانٍ')):
-            self.assertEqual(S._detector_box_from_file(self._tmp_page(), boxes=boxes), [0.70, 0.10, 0.80, 0.13])
+            self.assertEqual(S._detector_box_from_file(self._tmp_page(), boxes=boxes),
+                             ([0.70, 0.10, 0.80, 0.13], 'det2'))
 
     @override_settings(SUBJECT_BOXES_PATH='/tmp/lettersys_subject_boxes_hook2.json')
     def test_learned_entity_fills_the_title_green(self):
