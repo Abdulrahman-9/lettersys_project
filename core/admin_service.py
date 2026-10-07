@@ -200,10 +200,13 @@ def delete_group(*, by, group):
 # ───────────────────────────── الداخليّات ─────────────────────────────
 
 def _guard_admin(by):
-    """الإدارةُ لمديري النظام — ورئيسُ القسم يُدير قسمَه من شاشةٍ أضيق لاحقاً."""
-    from core.scoping import is_privileged
+    """الإدارةُ لمديري النظام — ورئيسُ القسم يُدير قسمَه من شاشةٍ أضيق لاحقاً.
 
-    if not is_privileged(by):
+    المسندُ ``can_manage_accounts`` نفسُه الذي يحرس لوحةَ الإدارة وصفحةَ الحسابات
+    وورشةَ العناقيد — فلا تفترق حراسةُ الكتابة عن حراسة الصفحة."""
+    from core.scoping import can_manage_accounts
+
+    if not can_manage_accounts(by):
         raise PermissionDenied('لوحةُ الإدارة لمدير النظام.')
 
 

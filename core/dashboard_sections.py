@@ -242,8 +242,9 @@ def _can_mail(user):
 
 
 def _can_admin(user):
-    from core.scoping import is_privileged
-    return is_privileged(user)
+    # روابطُ القسم كلُّها إلى لوحة الإدارة وورشة العناقيد — فبوّابتُه بوّابتُهما
+    from core.scoping import can_manage_accounts
+    return can_manage_accounts(user)
 
 
 #: (المفتاح · العنوان · الشرح · البوّابة · البانِي) — والترتيبُ ترتيبُ العرض:

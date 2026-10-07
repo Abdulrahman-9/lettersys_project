@@ -51,8 +51,13 @@
 
   <div class="en-head en-reveal">
     <div>
+      {% if nav.roles %}
       <h4>الجهات والعناقيد</h4>
       <p>دليلُ المراسلات — ومجموعاتُ التعميم التي تُبنى منه.</p>
+      {% else %}
+      <h4>الجهات</h4>
+      <p>دليلُ المراسلات.</p>
+      {% endif %}
     </div>
     <div class="d-flex gap-2 flex-wrap">
       <a class="btn btn-outline-primary" href="{% url 'entity_merge' %}">
@@ -68,7 +73,10 @@
     تبويبان رئيسيّان بترميز قائمة الكتب نفسِه (`tabs-split`/`tab-main`):
     الدليلُ ومجموعاتُه وجهان لعملٍ واحد، ومكانُ العناقيد هنا لا في لوحة
     الإدارة — العنقودُ **مجموعةُ جهات**، ومنتقي أعضائه يحتاج بحثَ هذه الصفحة.
+    والورشةُ لمن يملك حفظَها (`nav.roles` = can_manage_accounts)؛ ومَن لا يملكها
+    يرى الدليلَ وحدَه بلا شريط — تبويبٌ واحدٌ لا يُختار منه شيء.
   {% endcomment %}
+  {% if nav.roles %}
   <nav class="tabs-split tabs-split-2 en-reveal" role="tablist" aria-label="الجهات أو العناقيد">
     <a class="tab-main tab-en-entities{% if view_mode == 'entities' %} active{% endif %}"
        role="tab" aria-selected="{% if view_mode == 'entities' %}true{% else %}false{% endif %}"
@@ -89,6 +97,7 @@
       </div>
     </a>
   </nav>
+  {% endif %}
 
 {% if view_mode == 'groups' %}
   {% include "core/_entity_groups.html" %}

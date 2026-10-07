@@ -33,7 +33,9 @@
       <button class="settings-tab" role="tab" data-tab="sequences"     data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'sequence_settings' %}?embed=1"><i class="bi bi-123"></i><span>العدّادات التسلسلية</span></button>
       <button class="settings-tab" role="tab" data-tab="network"       data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'network_settings' %}?embed=1"><i class="bi bi-diagram-3-fill"></i><span>الربط الشبكي</span></button>
       <button class="settings-tab" role="tab" data-tab="scan"          data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'scan_settings' %}?embed=1"><i class="bi bi-printer-fill"></i><span>الماسح الضوئي</span></button>
+      {% if nav.roles %}{# الحساباتُ لمدير النظام وحدَه — بوّابةُ لوحة الإدارة نفسُها #}
       <button class="settings-tab" role="tab" data-tab="users"         data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'user_roles' %}?embed=1"><i class="bi bi-person-gear"></i><span>المستخدمون والأدوار</span></button>
+      {% endif %}
       <button class="settings-tab" role="tab" data-tab="trash"         data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'trash_list' %}?embed=1"><i class="bi bi-trash3-fill"></i><span>سلة المحذوفات</span></button>
       <button class="settings-tab" role="tab" data-tab="ai" data-kind="pane" aria-selected="false" type="button"><i class="bi bi-robot"></i><span>الذكاء الاصطناعي</span></button>
       <span class="settings-tab-indicator" id="settingsTabIndicator"></span>

@@ -176,12 +176,57 @@
                         <i class="bi bi-shield-lock me-1"></i>الدور
                       </a>
                       {% endif %}
+                      {% if u.is_self %}
+                      <a class="btn btn-sm btn-outline-secondary" href="{% url 'password_change' %}" target="_top" title="غيِّر كلمةَ مرورك بكلمتك الحاليّة">
+                        <i class="bi bi-key me-1"></i>كلمة مروري
+                      </a>
+                      {% else %}
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#pwReset{{ u.id }}" aria-expanded="false" aria-controls="pwReset{{ u.id }}" title="تعيين كلمة مرورٍ جديدة لهذا الحساب">
+                        <i class="bi bi-key me-1"></i>كلمة المرور
+                      </button>
+                      {% endif %}
                       <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUser('{{ u.id }}', '{{ u.username }}')" title="حذف المستخدم">
                         <i class="bi bi-trash me-1"></i>حذف
                       </button>
                     </div>
                   </td>
                 </tr>
+                {% if not u.is_self %}
+                {% comment %}
+                  إعادةُ تعيين كلمة المرور — تنبسط تحت صفّها لا في حواريّة: الصفحةُ تُضمَّن
+                  في مركز الإعدادات بإطارٍ بطول محتواه، والحواريّةُ فيه تنفتح بعيداً عن الزرّ.
+                  والكلمةُ يكتبها المدير فلا تُعرض بعد الحفظ في أيّ مكان.
+                {% endcomment %}
+                <tr class="pw-reset-row">
+                  <td colspan="4" class="p-0 border-0">
+                    <div class="collapse" id="pwReset{{ u.id }}">
+                      <form method="post" class="pw-reset-form row g-2 align-items-end bg-body-tertiary border-bottom px-2 py-3 m-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="reset_password">
+                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                        <p class="col-12 small text-muted mb-1">
+                          <i class="bi bi-key me-1"></i>كلمةُ مرورٍ جديدة لحساب «{{ u.username }}» — أبلِغه بها بنفسك،
+                          وسيُطلب منه الدخولُ بها من جديد على كلّ جهازٍ كان داخلاً منه.
+                        </p>
+                        <div class="col-sm-5">
+                          <label class="form-label small fw-semibold mb-1" for="pwNew{{ u.id }}">كلمة المرور الجديدة</label>
+                          <input class="form-control form-control-sm" type="password" name="password" id="pwNew{{ u.id }}" required minlength="{{ min_len }}" autocomplete="new-password" placeholder="{{ min_len }} أحرف على الأقل">
+                        </div>
+                        <div class="col-sm-4">
+                          <label class="form-label small fw-semibold mb-1" for="pwAgain{{ u.id }}">تأكيدها</label>
+                          <input class="form-control form-control-sm" type="password" name="password2" id="pwAgain{{ u.id }}" required minlength="{{ min_len }}" autocomplete="new-password" placeholder="أعد كتابتها">
+                        </div>
+                        <div class="col-sm-3 d-flex gap-2">
+                          <button type="submit" class="btn btn-sm btn-primary flex-grow-1">
+                            <i class="bi bi-check-lg me-1"></i>حفظ
+                          </button>
+                          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#pwReset{{ u.id }}" aria-controls="pwReset{{ u.id }}">إلغاء</button>
+                        </div>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% endif %}
                 {% empty %}
                 <tr><td colspan="5" class="text-center text-muted py-3">لا يوجد مستخدمون.</td></tr>
                 {% endfor %}
@@ -190,7 +235,7 @@
           </div>
           <div class="alert alert-info border-0 shadow-sm small mb-0 mt-3">
             <i class="bi bi-info-circle-fill me-2"></i>
-            <strong>ملاحظة:</strong> هذه الصفحةُ للحسابات وحدَها — إنشاءً وحذفاً وكلمةَ مرورٍ مؤقّتة.
+            <strong>ملاحظة:</strong> هذه الصفحةُ للحسابات وحدَها — إنشاءً وحذفاً وتعيينَ كلمة مرورٍ جديدة.
             القسمُ والدورُ (رئاسةُ القسم · طاولةُ البريد · طاولةُ الأرشفة) يُسنَدان من
             <a href="{{ role_admin_url }}" class="alert-link">لوحة الإدارة</a>.
           </div>
@@ -288,7 +333,37 @@
       submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>جاري الإضافة...';
     });
   }
-  
+
+  // إعادةُ تعيين كلمة المرور: التركيزُ على الحقل حين تنبسط، والمكتوبُ يُمحى حين تُطوى،
+  // والتطابقُ يُفحص قبل الإرسال كنموذج الإنشاء (والخادمُ يفرضهما على كلّ حال).
+  document.querySelectorAll('.pw-reset-row .collapse').forEach(function (panel) {
+    panel.addEventListener('shown.bs.collapse', function () {
+      var first = panel.querySelector('input[type="password"]');
+      if (first) first.focus();
+    });
+    panel.addEventListener('hidden.bs.collapse', function () {
+      var resetForm = panel.querySelector('form');
+      if (resetForm) resetForm.reset();
+    });
+  });
+  document.querySelectorAll('.pw-reset-form').forEach(function (resetForm) {
+    resetForm.addEventListener('submit', function (e) {
+      var pw = resetForm.elements['password'].value;
+      if (pw !== resetForm.elements['password2'].value) {
+        e.preventDefault();
+        notifyUserRoles('كلمتا المرور غير متطابقتين.', 'warning', { title: 'تحقق من كلمة المرور' });
+        return;
+      }
+      if (pw.length < MIN_LEN) {
+        e.preventDefault();
+        notifyUserRoles('كلمة المرور يجب أن تكون ' + MIN_LEN + ' أحرف على الأقل.', 'warning', { title: 'كلمة المرور قصيرة' });
+        return;
+      }
+      var saveBtn = resetForm.querySelector('button[type="submit"]');
+      if (saveBtn) saveBtn.disabled = true;
+    });
+  });
+
   // (أُزيل الإغلاقُ الآليّ بعد 5 ث: كان يُخفي رسالةَ الخطأ والإرشادَ الثابت — تدقيقُ نيلسن F#6)
 })();
 
