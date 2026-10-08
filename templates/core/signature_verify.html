@@ -62,7 +62,7 @@
         <div class="mark bad">✕</div>
         <h1>توقيعٌ مُبطَل</h1>
         <p class="lead">
-          هذا التوقيعُ أُبطل في {{ signature.revoked_at|date:"Y/m/d H:i" }}.
+          هذا التوقيعُ أُبطل في {{ signature.revoked_at|date:"d/m/Y H:i" }}.
           {% if signature.revoke_reason %}السبب: {{ signature.revoke_reason }}.{% endif %}
           والختمُ المطبوعُ لا يزال على الورقة — فالعبرةُ بهذه الصفحة.
         </p>
@@ -88,7 +88,7 @@
         <dd>{{ signature.get_capacity_display }}</dd>
 
         <dt>وقت التوقيع</dt>
-        <dd>{{ signature.signed_at|date:"Y/m/d — H:i" }}</dd>
+        <dd>{{ signature.signed_at|date:"d/m/Y — H:i" }}</dd>
 
         <dt>رمز التحقّق</dt>
         <dd class="digest">{{ signature.verify_token }}</dd>

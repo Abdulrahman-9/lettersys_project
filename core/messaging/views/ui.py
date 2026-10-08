@@ -279,7 +279,7 @@ def mail_compose(request, book_id=None):
         if related_entities:
             prefill['to']        = related_entities[0].email
             prefill['entity_id'] = related_entities[0].pk
-        prefill['subject'] = f"بشأن كتاب رقم {book.our_number or ''} — {book.title}"
+        prefill['subject'] = f"بشأن كتاب رقم {book.our_number_display} — {book.title}"
     if thread:
         reply_to = _reply_address(thread)
         if reply_to:

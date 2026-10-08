@@ -291,7 +291,7 @@ class IMAPEngine:
             sender = incoming.from_name or incoming.from_address
 
             if book is not None:
-                title = f'ردّ على الكتاب {book.our_number}'
+                title = f'ردّ على الكتاب {book.our_number_display}'
                 message = f'وصل ردّ من {sender} بشأن: {book.title[:80]}'
             else:
                 title = 'رسالة واردة جديدة'
@@ -449,7 +449,7 @@ class IMAPEngine:
                             entity=sent_log.entity if sent_log else None,
                         )
                         logger.info(f"IMAPEngine: New thread '{subject}' from {from_addr}"
-                                    f"{f' (كتاب {sent_log.book.our_number})' if sent_log else ''}")
+                                    f"{f' (كتاب {sent_log.book.our_number_display})' if sent_log else ''}")
                     else:
                         thread.status = EmailThread.STATUS_REPLIED
                         fields = ['status', 'last_activity']
