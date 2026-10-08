@@ -10,6 +10,7 @@ core.views.scan_settings
 """
 import logging
 import os
+import socket
 import subprocess
 
 from django.conf import settings
@@ -20,26 +21,15 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from core.netaddr import request_is_loopback
-from core.pdf_lock import MUPDF_LOCK
-from core.scoping import can_edit_book, is_privileged
+from core.scoping import can_edit_book, can_open_content, is_privileged
 
 logger = logging.getLogger('lettersys')
 
-
-#: المعاينةُ العاديّة (130dpi) والمصغّرات (46dpi) JPEG؛ التكبيرُ (220dpi) يبقى PNG بلا فقد.
 PREVIEW_JPEG_MAX_DPI = 150
 PREVIEW_JPEG_QUALITY = 90
 
 
 def _preview_bytes(pix, dpi):
-    """``(bytes, mimetype)`` لصورة معاينةٍ من pixmap.
-
-    **JPEG حتّى 150dpi**: الصفحةُ صورةُ ورقٍ ممسوح، وPNG كان يُرسل ~1.2 MB للصفحة
-    (وسيطُ 18 كتاباً، قياس 2026‑10‑05). وفرعُ WebP القديم كان ميّتاً: PyMuPDF هنا
-    بلا WebP فكان يرمي ويسقط إلى PNG دائماً. **والتكبيرُ (220dpi) PNG**: هناك يقرأ
-    الكاتبُ بعينه الأرقامَ اليدويّة الباهتة، فلا نُدخل عليها أثرَ ضغطٍ.
-    لا أثرَ للمعاينة على الاستخراج: الأنبوبُ يقرأ الملفَّ لا هذه الصورة.
-    """
     if dpi <= PREVIEW_JPEG_MAX_DPI:
         try:
             return pix.tobytes('jpg', jpg_quality=PREVIEW_JPEG_QUALITY), 'image/jpeg'
@@ -95,9 +85,9 @@ def scan_file_serve(request, token: str):
 @login_required
 @require_http_methods(['GET'])
 def scan_preview_page(request, token: str):
-    """يعرض صفحةً من PDF الممسوح كصورة (عبر PyMuPDF) — JPEG للعاديّة وPNG للتكبير.
+    """يعرض صفحةً من PDF الممسوح كصورة PNG (عبر PyMuPDF).
 
-    المستند الممسوح صورة بلا نص؛ تحويله إلى صورة يجعل المعاينة <img> تلائم اللوحة
+    المستند الممسوح صورة بلا نص؛ تحويله إلى PNG يجعل المعاينة <img> تلائم اللوحة
     دائماً (object-fit) بدل عارض PDF المدمج غير الموثوق. المسار من الكاش لا المستخدم.
     """
     from django.http import HttpResponse, FileResponse, Http404
@@ -128,18 +118,17 @@ def scan_preview_page(request, token: str):
 
     try:
         import fitz
-        with MUPDF_LOCK:   # الرسمُ وحده تحت القفل — لا الكاش ولا الكتابة
-            doc = fitz.open(file_path)
-            try:
-                count = doc.page_count
-                if page < 1 or page > count:
-                    raise Http404('page out of range')
-                mat = fitz.Matrix(dpi / 72, dpi / 72)
-                pix = doc[page - 1].get_pixmap(matrix=mat, alpha=False)
-                body, ctype = _preview_bytes(pix, dpi)
-                del pix
-            finally:
-                doc.close()                        # تحرير الذاكرة فوراً
+        doc = fitz.open(file_path)
+        try:
+            count = doc.page_count
+            if page < 1 or page > count:
+                raise Http404('page out of range')
+            mat = fitz.Matrix(dpi / 72, dpi / 72)
+            pix = doc[page - 1].get_pixmap(matrix=mat, alpha=False)
+            body, ctype = _preview_bytes(pix, dpi)
+            del pix
+        finally:
+            doc.close()                        # تحرير الذاكرة فوراً
     except Http404:
         raise
     except Exception as exc:
@@ -174,15 +163,14 @@ def scan_manifest(request, token: str):
     if os.path.splitext(file_path)[1].lower() == '.pdf':
         try:
             import fitz
-            with MUPDF_LOCK:   # الرسمُ وحده تحت القفل — لا الكاش ولا الكتابة
-                doc = fitz.open(file_path)
-                try:
-                    for i in range(doc.page_count):
-                        p = doc[i]
-                        r = p.rect
-                        pages.append({'n': i + 1, 'w': round(r.width), 'h': round(r.height), 'rot': p.rotation})
-                finally:
-                    doc.close()
+            doc = fitz.open(file_path)
+            try:
+                for i in range(doc.page_count):
+                    p = doc[i]
+                    r = p.rect
+                    pages.append({'n': i + 1, 'w': round(r.width), 'h': round(r.height), 'rot': p.rotation})
+            finally:
+                doc.close()
         except Exception as exc:
             logger.warning('[ScanManifest] pdf geometry failed token=%s: %s', token[:8], exc)
             pages = []
@@ -232,93 +220,92 @@ def scan_edit_page(request, token: str):
 
     try:
         import fitz
-        with MUPDF_LOCK:   # الرسمُ وحده تحت القفل — لا الكاش ولا الكتابة
-            doc = fitz.open(file_path)
-            try:
-                count = doc.page_count
-                inserted_at = None    # (op=insert) موضع أول صفحة مُلحقة (0-based)
-                inserted_count = 0
+        doc = fitz.open(file_path)
+        try:
+            count = doc.page_count
+            inserted_at = None    # (op=insert) موضع أول صفحة مُلحقة (0-based)
+            inserted_count = 0
 
-                if op == 'rotate':
+            if op == 'rotate':
+                try:
+                    angle = int(body.get('angle', 90))
+                except (TypeError, ValueError):
+                    return JsonResponse({'ok': False, 'error': 'زاوية غير صالحة'}, status=400)
+                if angle % 90 != 0:
+                    return JsonResponse({'ok': False, 'error': 'الزاوية يجب أن تكون من مضاعفات 90'}, status=400)
+                page = body.get('page')
+                if page in (None, 'all'):
+                    targets = range(count)
+                else:
                     try:
-                        angle = int(body.get('angle', 90))
-                    except (TypeError, ValueError):
-                        return JsonResponse({'ok': False, 'error': 'زاوية غير صالحة'}, status=400)
-                    if angle % 90 != 0:
-                        return JsonResponse({'ok': False, 'error': 'الزاوية يجب أن تكون من مضاعفات 90'}, status=400)
-                    page = body.get('page')
-                    if page in (None, 'all'):
-                        targets = range(count)
-                    else:
-                        try:
-                            targets = [int(page) - 1]
-                        except (TypeError, ValueError):
-                            return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
-                    for i in targets:
-                        if i < 0 or i >= count:
-                            return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
-                        doc[i].set_rotation((doc[i].rotation + angle) % 360)
-
-                elif op == 'delete':
-                    if count <= 1:
-                        return JsonResponse({'ok': False, 'error': 'لا يمكن حذف الصفحة الوحيدة'}, status=400)
-                    try:
-                        i = int(body.get('page')) - 1
+                        targets = [int(page) - 1]
                     except (TypeError, ValueError):
                         return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
+                for i in targets:
                     if i < 0 or i >= count:
                         return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
-                    doc.delete_page(i)
+                    doc[i].set_rotation((doc[i].rotation + angle) % 360)
 
-                elif op == 'reorder':
-                    order = body.get('order') or []
-                    try:
-                        idx = [int(p) - 1 for p in order]
-                    except (TypeError, ValueError):
-                        return JsonResponse({'ok': False, 'error': 'ترتيب غير صالح'}, status=400)
-                    if sorted(idx) != list(range(count)):
-                        return JsonResponse({'ok': False, 'error': 'الترتيب يجب أن يغطّي كل الصفحات دون حذف'}, status=400)
-                    doc.select(idx)
+            elif op == 'delete':
+                if count <= 1:
+                    return JsonResponse({'ok': False, 'error': 'لا يمكن حذف الصفحة الوحيدة'}, status=400)
+                try:
+                    i = int(body.get('page')) - 1
+                except (TypeError, ValueError):
+                    return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
+                if i < 0 or i >= count:
+                    return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
+                doc.delete_page(i)
 
-                elif op == 'insert':
-                    # إلحاق/إدراج مستند مصدر (ممسوح أو مرفوع، مُهيَّأ عبر process-upload) في الملف المؤقّت.
-                    # المصدر يُمرَّر كـ source_token (يعيد استخدام تجهيز process-upload: تحويل صورة→PDF + قصّ فراغات).
-                    # at اختياري (0-based): None = النهاية (إلحاق مباشر) — وهو الحالة الأشيع.
-                    src_token = body.get('source_token', '')
-                    src = cache.get(f'scan_token:{src_token}') if src_token else None
-                    if not src or not _token_owner_ok(src, request.user):
-                        return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير متاح أو انتهت صلاحيته'}, status=404)
-                    src_path = src.get('processed_path', '')
-                    if (not src_path or not os.path.isfile(src_path)
-                            or os.path.splitext(src_path)[1].lower() != '.pdf'):
-                        return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير صالح'}, status=404)
-                    at = body.get('at')
-                    if at is None:
-                        inserted_at = count
-                    else:
-                        try:
-                            inserted_at = max(0, min(int(at), count))
-                        except (TypeError, ValueError):
-                            return JsonResponse({'ok': False, 'error': 'موضع إدراج غير صالح'}, status=400)
-                    try:
-                        src_doc = fitz.open(src_path)
-                    except Exception:
-                        return JsonResponse({'ok': False, 'error': 'تعذّر فتح مصدر الإلحاق'}, status=400)
-                    try:
-                        inserted_count = src_doc.page_count
-                        if inserted_count == 0:
-                            return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق فارغ'}, status=400)
-                        doc.insert_pdf(src_doc, start_at=inserted_at)
-                    finally:
-                        src_doc.close()
+            elif op == 'reorder':
+                order = body.get('order') or []
+                try:
+                    idx = [int(p) - 1 for p in order]
+                except (TypeError, ValueError):
+                    return JsonResponse({'ok': False, 'error': 'ترتيب غير صالح'}, status=400)
+                if sorted(idx) != list(range(count)):
+                    return JsonResponse({'ok': False, 'error': 'الترتيب يجب أن يغطّي كل الصفحات دون حذف'}, status=400)
+                doc.select(idx)
 
+            elif op == 'insert':
+                # إلحاق/إدراج مستند مصدر (ممسوح أو مرفوع، مُهيَّأ عبر process-upload) في الملف المؤقّت.
+                # المصدر يُمرَّر كـ source_token (يعيد استخدام تجهيز process-upload: تحويل صورة→PDF + قصّ فراغات).
+                # at اختياري (0-based): None = النهاية (إلحاق مباشر) — وهو الحالة الأشيع.
+                src_token = body.get('source_token', '')
+                src = cache.get(f'scan_token:{src_token}') if src_token else None
+                if not src or not _token_owner_ok(src, request.user):
+                    return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير متاح أو انتهت صلاحيته'}, status=404)
+                src_path = src.get('processed_path', '')
+                if (not src_path or not os.path.isfile(src_path)
+                        or os.path.splitext(src_path)[1].lower() != '.pdf'):
+                    return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير صالح'}, status=404)
+                at = body.get('at')
+                if at is None:
+                    inserted_at = count
                 else:
-                    return JsonResponse({'ok': False, 'error': 'عملية غير معروفة'}, status=400)
+                    try:
+                        inserted_at = max(0, min(int(at), count))
+                    except (TypeError, ValueError):
+                        return JsonResponse({'ok': False, 'error': 'موضع إدراج غير صالح'}, status=400)
+                try:
+                    src_doc = fitz.open(src_path)
+                except Exception:
+                    return JsonResponse({'ok': False, 'error': 'تعذّر فتح مصدر الإلحاق'}, status=400)
+                try:
+                    inserted_count = src_doc.page_count
+                    if inserted_count == 0:
+                        return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق فارغ'}, status=400)
+                    doc.insert_pdf(src_doc, start_at=inserted_at)
+                finally:
+                    src_doc.close()
 
-                out_bytes = doc.tobytes(garbage=3, deflate=True)
-                new_count = doc.page_count
-            finally:
-                doc.close()
+            else:
+                return JsonResponse({'ok': False, 'error': 'عملية غير معروفة'}, status=400)
+
+            out_bytes = doc.tobytes(garbage=3, deflate=True)
+            new_count = doc.page_count
+        finally:
+            doc.close()
 
         with open(file_path, 'wb') as fh:
             fh.write(out_bytes)
@@ -354,7 +341,6 @@ def scan_stage_attachment(request, attachment_id: int):
 
     att = get_object_or_404(Attachment, id=attachment_id)
     book = att.book
-    # تجهيزُ المرفق للتحرير بدايةُ كتابةٍ عليه — للقسم المالك وطاولته والمدير (Q1‑ج)
     if not can_edit_book(book, request.user):
         return JsonResponse({'ok': False, 'error': 'غير مصرح'}, status=403)
     if not att.file:
@@ -375,7 +361,7 @@ def scan_stage_attachment(request, attachment_id: int):
     if ext == '.pdf':
         try:
             import fitz
-            with MUPDF_LOCK, fitz.open(tmp_path) as _doc:
+            with fitz.open(tmp_path) as _doc:
                 page_count = _doc.page_count
         except Exception:
             page_count = 1
@@ -394,18 +380,11 @@ def scan_stage_attachment(request, attachment_id: int):
 
 
 # ════════════ وكيل المسح المحلي (NAPS2) ════════════
-# الوكيلُ يعمل على **جهاز المستخدم** لأنّه يشغّل ماسحَ ذلك الجهاز عبر NAPS2، ويستمع على
-# حلقته المحلّيّة وحدَها. فالخادمُ لا يعرف عن وكيل الكاتبة شيئاً ولا يجوز أن يدّعي: المتصفّحُ
-# هو الطرفُ الوحيدُ الذي يرى 127.0.0.1 الخاصّ بها. ولا سرَّ مشترَك بين الطرفين بعد اليوم
-# (أُسقط ملفُّ التوكِن: كان الخادمُ يقرأ توكِنَ **قرصه** ويسلّمه لمتصفّحٍ بعيد).
 _AGENT_PORT = int(os.environ.get('LETTERSYS_AGENT_PORT', '17865'))  # نفس متغيّر بيئة الوكيل
 
 
-def _agent_is_alive(port, timeout=0.35):
-    """اختبار حياة الوكيل فعلياً: اتصال socket خاطف بالمنفذ المحلي (رفض الاتصال فوريّ على
-    localhost فلا تأخير عند التوقّف). يمنع «available=true» الكاذب من ملف token قديم بقي
-    بعد إغلاق الوكيل — فتصير رسالة الواجهة صادقة (شغّل الوكيل) بدل «تعذّر الاتصال رغم تشغيله»."""
-    import socket
+def _agent_is_alive(port=_AGENT_PORT, timeout=0.35):
+    """اختبار حياة وكيل هذا الجهاز؛ الوكيل مربوط بحلقة المتصفّح المحلّيّة."""
     try:
         with socket.create_connection(('127.0.0.1', port), timeout=timeout):
             return True
@@ -416,19 +395,7 @@ def _agent_is_alive(port, timeout=0.35):
 @login_required
 @require_http_methods(['GET'])
 def scan_agent_info(request):
-    """عنوانُ وكيل المسح على **جهاز المتصفّح** — بلا قراءةِ قرصٍ وبلا مسبارٍ وبلا توكِن.
-
-    يُعيد المنفذَ وحدَه (من ``LETTERSYS_AGENT_PORT``، وهو نفسُه الذي يُبنى منه
-    ``connect-src`` في CSP فلا تنحرف القيمُ الثلاث)، فيبنيه المتصفّحُ على حلقته هو.
-
-    **لا يفحص التوفّر ولا يعيد ``available``**: الخادمُ لا يرى إلّا وكيلَ نفسِه، وهو
-    الجهازُ الخطأ لكلّ صفحةٍ بعيدة — وهذا بالضبط ما كان يُنتج «لم يُعثر على وكيل المسح
-    المحلي» على حاسبة الكاتبة (الخادمُ فحص منفذَه هو)، و«جاهز» الكاذبة من ملفِّ توكِنٍ
-    بائد. مَن يستطيع الجوابَ هو المتصفّح، فهو الذي يمسبر ‎127.0.0.1‎ الخاصَّ به.
-    ولا توكِن: الوكيلُ يحرس نفسه بترويستَي ``Host`` و``Origin`` اللتين لا تُزوَّران.
-
-    ``server_can_start``: هل يُجدي زرُّ «شغّل الوكيل الآن»؟ لا يُجدي إلّا لكونسولِ الخادم.
-    """
+    """عنوان وكيل حاسبة المتصفّح دون قراءة ملف أو فحص منفذ أو كشف token."""
     return JsonResponse({
         'agent_url': f'http://127.0.0.1:{_AGENT_PORT}',
         'port': _AGENT_PORT,
@@ -439,14 +406,10 @@ def scan_agent_info(request):
 @login_required
 @require_http_methods(['POST'])
 def scan_agent_start(request):
-    """يشغّل وكيل المسح على **جهاز الخادم** (حزمة scan_agent في جذره) بصمت.
+    """يشغّل وكيل المسح المحلي (حزمة scan_agent في جذر المشروع، نفس جهاز الخادم) بصمت.
 
     الأمر ثابت (لا مُدخَل مستخدم → لا حقن)، ولا يُكرَّر إن كان الوكيل يعمل أصلاً.
-    كونسولُ الخادم يستدعيه من زرّ مؤشّر الحالة ثم يُعيد الفحص حتى يصير المنفذ حيّاً.
-
-    **حلقةٌ محلّيّةٌ فقط**: النداءُ من الشبكة يُرفض قبل أيّ عمل. كان ``login_required``
-    وحدَه، فكانت أيُّ كاتبةٍ مسجَّلةٍ على الشبكة تُولِّد عمليّةً على الخادم — وهو أمرٌ
-    لا يفيدها أصلاً لأنّ الوكيلَ يجب أن يعمل على **حاسبتها** ليشغّل ماسحَها.
+    الواجهة تستدعيه من زرّ مؤشّر الحالة ثم تُعيد الفحص حتى يصير المنفذ حيّاً.
     """
     if not request_is_loopback(request):
         return JsonResponse({
@@ -610,7 +573,7 @@ def scan_process_upload(request):
         # عدد الصفحات (لمعاينة متعددة الصفحات في duplex) — best-effort
         try:
             import fitz
-            with MUPDF_LOCK, fitz.open(tmp_path) as _doc:
+            with fitz.open(tmp_path) as _doc:
                 data['page_count'] = _doc.page_count
                 # حارس المسح الفارغ (مبدأ المالك: صفر حقول ≠ نجاح): صفحاتٌ بيضاء
                 # ناصعة (تباين شبه معدوم) = وجه ورقة خاطئ/تغذية فارغة — نُصارح فوراً

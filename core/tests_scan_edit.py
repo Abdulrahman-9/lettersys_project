@@ -287,6 +287,12 @@ class StageAttachmentTests(TestCase):
         self.assertEqual(zoom["Content-Type"], "image/png")
         self.assertEqual(zoom.content[:8], b"\x89PNG\r\n\x1a\n")
 
+    def test_stage_requires_write_permission(self):
+        with mock.patch("core.views.scan_settings.can_open_content", return_value=True), \
+             mock.patch("core.views.scan_settings.can_edit_book", return_value=False):
+            r = self.client.get(reverse("scan_stage_attachment", args=[self.att.id]))
+        self.assertEqual(r.status_code, 403)
+
     def test_stage_requires_ownership(self):
         other = User.objects.create_user("other", password="p")
         c2 = Client(); c2.login(username="other", password="p")
