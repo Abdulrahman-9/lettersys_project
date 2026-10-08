@@ -26,6 +26,7 @@ from rest_framework import status
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, StreamingHttpResponse
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
@@ -42,7 +43,7 @@ from core.models import (
     SuggestionItem,
     ExtractionStatistics,
 )
-from core.scoping import user_department_id
+from core.scoping import can_edit_book, can_open_content, can_review_extraction, user_department_id
 from core.extraction.kinds import BOOK_KIND_LABELS, DEFAULT_BOOK_KIND, get_kind_label, normalize_book_kind
 logger = logging.getLogger(__name__)
 
@@ -88,8 +89,11 @@ def start_extraction(request):
         return Response({'detail': 'attachment_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        attachment = Attachment.objects.get(id=attachment_id)
-    except Attachment.DoesNotExist:
+        attachment = Attachment.objects.select_related('book').get(id=attachment_id)
+    except (Attachment.DoesNotExist, ValueError, TypeError):
+        return Response({'detail': 'Attachment not found'}, status=status.HTTP_404_NOT_FOUND)
+    # إطلاقُه يكتب نتيجةً على مرفق كتاب ⟵ حقُّ الكتابة عليه؛ و404 لا 403 فلا يُكشف وجوده
+    if not can_edit_book(attachment.book, request.user):
         return Response({'detail': 'Attachment not found'}, status=status.HTTP_404_NOT_FOUND)
 
     try:
@@ -105,7 +109,10 @@ def start_extraction(request):
 @permission_classes([IsAuthenticated])
 def get_extraction_result(request, attachment_id: int):
     """Get the latest extraction result for an attachment."""
-    attachment = get_object_or_404(Attachment, id=attachment_id)
+    attachment = get_object_or_404(Attachment.objects.select_related('book'), id=attachment_id)
+    # النتيجةُ نصُّ المستند ومفرداتُه ⟵ حكمُ فتح محتوى كتابه (كانت لكلّ مَن سجّل الدخول)
+    if not can_open_content(attachment.book, request.user):
+        raise Http404
     extraction = getattr(attachment, 'data_extraction', None)
 
     if not extraction:
@@ -142,6 +149,8 @@ def get_extraction_result(request, attachment_id: int):
 def submit_feedback(request, extraction_id: int):
     """Store user feedback for learning/QA."""
     extraction = get_object_or_404(DataExtractionResult, id=extraction_id)
+    if not can_review_extraction(extraction, request.user):
+        raise Http404
     field_name = request.data.get('field_name')
     feedback_type = request.data.get('feedback_type')
     original_value = request.data.get('original_value', '')
@@ -169,6 +178,8 @@ def submit_feedback(request, extraction_id: int):
 def review_extraction(request, extraction_id: int):
     """Approve or reject an extraction and optionally apply corrected fields."""
     extraction = get_object_or_404(DataExtractionResult, id=extraction_id)
+    if not can_review_extraction(extraction, request.user):
+        raise Http404
     action = request.data.get('action')
     if action not in ['approve', 'reject']:
         return Response({'detail': 'action must be approve or reject'}, status=status.HTTP_400_BAD_REQUEST)

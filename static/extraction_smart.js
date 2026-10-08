@@ -467,7 +467,7 @@ class ExtractionSmartSystem {
             ar: {
                 uploadRequired: 'يرجى تحميل ملف أولاً',
                 extractFail: 'تعذر الاستخراج',
-                saveFail: 'تعذر الحفظ',
+                saveFail: 'تعذّر الحفظ — لم يُحفظ شيء. تحقّق من الاتصال ثمّ أعد الحفظ؛ ما أدخلتَه باقٍ في الصفحة',
                 saveSuccess: 'تم حفظ الكتاب بنجاح ✓',
                 extractSuccess: 'تم استخراج البيانات بنجاح ✓',
                 invalidFields: 'يرجى ملء جميع الحقول المطلوبة',
@@ -2063,11 +2063,13 @@ class ExtractionSmartSystem {
                 this.clearFile();
             } else if (btnId === 'clearFormButton') {
                 e.preventDefault();
-                if (window.__isExtractionDirty && window.__isExtractionDirty()
-                    && !window.confirm('ستُمسح الحقولُ التي أدخلتَها لهذا الكتاب (الرقمُ المحجوز يبقى لك). متابعة؟')) {
-                    return;
-                }
-                this.clearForm();
+                // بتأكيدٍ حين يوجد إدخال — بحواريّة التطبيق لا confirm() الأصليّة (H4)
+                const dirty = window.__isExtractionDirty && window.__isExtractionDirty();
+                (dirty ? window.confirmDelete({
+                    title: 'تفريغ الحقول',
+                    message: 'ستُمسح الحقولُ التي أدخلتَها لهذا الكتاب (الرقمُ المحجوز يبقى لك). متابعة؟',
+                    okText: 'فرّغ الحقول',
+                }) : Promise.resolve(true)).then((ok) => { if (ok) this.clearForm(); });
             } else if (btnId === 'extractButton') {
                 e.preventDefault();
                 console.log('[ExtractionSmart] Calling extractData()');
@@ -5504,7 +5506,11 @@ class ExtractionSmartSystem {
                 credentials: 'same-origin',
                 body: formData,
             });
-            const result = await resp.json();
+            if (this._sessionExpired(resp)) { saveBtn.innerHTML = originalText; saveBtn.disabled = false; return; }
+            const result = await resp.json().catch(() => ({
+                success: false,
+                message: `ردٌّ غير متوقَّع من الخادم (${resp.status}) — لم يُحفظ شيء؛ أعد المحاولة`,
+            }));
             if (result.success) {
                 this._pagesEditedInPreview = false;   // استُهلكت تعديلات الصفحات بالحفظ
                 if (window.__setExtractionBaseline) window.__setExtractionBaseline();  // لا يعترض beforeunload التوجيه
@@ -5524,7 +5530,7 @@ class ExtractionSmartSystem {
             }
             this.showToast(result.message || 'فشل الحفظ', 'error', 6000);
         } catch (e) {
-            this.showToast('خطأ في الاتصال — حاول مجدداً', 'error', 5000);
+            this.showToast('تعذّر الاتصال بالخادم — لم يُحفظ شيء. تحقّق من الشبكة ثمّ أعد الحفظ؛ ما أدخلتَه باقٍ في الصفحة.', 'error', 8000);
         }
         saveBtn.innerHTML = originalText;
         saveBtn.disabled = false;
@@ -5551,7 +5557,12 @@ class ExtractionSmartSystem {
                     body: formData
                 });
 
-                const data = await response.json();
+                if (this._sessionExpired(response)) break;
+                // ردٌّ ليس JSON (صفحةُ خطأٍ من الخادم أو الوسيط) يصير رسالةً تُقرأ لا «تعذّر الحفظ» صامتة
+                const data = await response.json().catch(() => ({
+                    success: false,
+                    message: `ردٌّ غير متوقَّع من الخادم (${response.status}) — لم يُحفظ شيء؛ أعد المحاولة`,
+                }));
                 const status = response.status;
 
                 if (status >= 200 && status < 300 && data.success !== false) {
@@ -5631,6 +5642,16 @@ class ExtractionSmartSystem {
     }
 
     // ===== Utilities =====
+    // انتهاءُ الجلسة أثناء الإدخال: fetch يتبع التحويلَ إلى صفحة الدخول فيصل HTML،
+    // وكانت الرسالةُ «تعذّر الحفظ» فيعيد الكاتبُ المحاولةَ بلا جدوى.
+    _sessionExpired(response) {
+        let path = '';
+        try { path = new URL(response.url, window.location.origin).pathname; } catch (e) { /* لا عنوان */ }
+        if (!(response.redirected && /\/login\/?$/.test(path))) return false;
+        this.showToast('انتهت جلستُك — سجّل الدخولَ في تبويبٍ آخر ثمّ أعد الحفظ هنا؛ ما أدخلتَه باقٍ في الصفحة.', 'error', 12000);
+        return true;
+    }
+
     showToast(message, type = 'info', duration = 4000, title = null) {
         // Delegate to global ToastCenter for consistent UX
         if (window.ToastCenter) {
