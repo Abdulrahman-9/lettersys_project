@@ -1022,7 +1022,7 @@
            style="border:1px solid var(--card-border);border-radius:7px;font-size:.78rem">
           <i class="bi bi-pencil"></i>
         </a>
-        <form method="post" action="{% url 'mail_template_delete' tpl.pk %}" onsubmit="return confirm('حذف القالب «{{ tpl.name }}»؟')">
+        <form method="post" action="{% url 'mail_template_delete' tpl.pk %}" data-confirm="حذف القالب «{{ tpl.name }}»؟" data-confirm-ok="احذف">
           {% csrf_token %}
           <button type="submit" class="btn btn-sm"
                   style="border:1px solid #dc3545;color:#dc3545;border-radius:7px;font-size:.78rem">

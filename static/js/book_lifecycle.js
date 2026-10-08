@@ -93,11 +93,19 @@
     });
   }
 
+  // الفشلُ يُرمى برسالةٍ تُقرأ ولا يُخزَّن — فإعادةُ فتح الحواريّة محاولةٌ جديدة.
+  // (كانت «جارٍ التحميل…» تبقى إلى الأبد إن سقط الطلب: لا catch ولا رسالة.)
+  var TARGETS_FAILED = 'تعذّر تحميل الأقسام والأشخاص — أغلق النافذةَ وأعد فتحها.';
   function targets() {
     if (targetsCache) return Promise.resolve(targetsCache);
     return fetch('/books/api/lifecycle/targets/', {
       headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    }).then(function (r) { return r.json(); }).then(function (data) {
+    }).then(function (r) {
+      return r.ok ? r.json() : null;
+    }).catch(function () {
+      return null;                          // سقوطُ الشبكة أو ردٌّ ليس JSON
+    }).then(function (data) {
+      if (!data || !data.departments) throw new Error(TARGETS_FAILED);
       targetsCache = data;
       return data;
     });
@@ -205,25 +213,44 @@
   var distributeModal = document.getElementById('distributeModal');
   if (distributeModal) {
     distributeModal.addEventListener('show.bs.modal', function () {
+      var list = document.getElementById('distTargets');
       targets().then(function (data) {
-        var list = document.getElementById('distTargets');
         list.innerHTML = '';
+        // اسمُ القسم نصٌّ يكتبه المدير — يُبنى بالعُقد لا بـinnerHTML
         data.departments.forEach(function (d) {
           var id = 'dist-dep-' + d.id;
           var wrap = document.createElement('div');
           wrap.className = 'form-check';
-          wrap.innerHTML =
-            '<input class="form-check-input" type="checkbox" value="dep:' + d.id +
-            '" id="' + id + '">' +
-            '<label class="form-check-label" for="' + id + '">' +
-            d.name + (d.is_mine ? ' <span class="badge text-bg-light border">قسمي</span>' : '') +
-            '</label>';
+          var input = document.createElement('input');
+          input.className = 'form-check-input';
+          input.type = 'checkbox';
+          input.value = 'dep:' + d.id;
+          input.id = id;
+          var label = document.createElement('label');
+          label.className = 'form-check-label';
+          label.htmlFor = id;
+          label.textContent = d.name;
+          if (d.is_mine) {
+            var mine = document.createElement('span');
+            mine.className = 'badge text-bg-light border ms-1';
+            mine.textContent = 'قسمي';
+            label.appendChild(mine);
+          }
+          wrap.appendChild(input);
+          wrap.appendChild(label);
           list.appendChild(wrap);
         });
         fill(document.getElementById('distGroup'), data.groups, 'id', 'name',
              '— بلا قائمة —');
         fill(document.getElementById('distAssignee'), data.people, 'id', 'name',
              '— بلا مكلَّف —');
+      }).catch(function (err) {
+        list.innerHTML = '';
+        var p = document.createElement('p');
+        p.className = 'text-danger small mb-0';
+        p.setAttribute('role', 'alert');
+        p.textContent = err.message;
+        list.appendChild(p);
       });
     });
 
@@ -298,7 +325,7 @@
         fill(document.getElementById('custUser'), data.people, 'id', 'name',
              '— لا موظّف —');
         syncHolder();
-      });
+      }).catch(function (err) { toast(err.message, false); });
     });
 
     // الحاملُ واحدٌ من ثلاثة («أو»): ملءُ أحدها يعطّل الآخرَين، كالعنقود مع الاختيار

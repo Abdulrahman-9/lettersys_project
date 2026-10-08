@@ -258,7 +258,7 @@
   async function deleteComment(item) {
     if (!item) return;
     const ok = typeof window.confirmDelete === 'function'
-      ? await window.confirmDelete('حذف هذا التعليق؟ لا رجعةَ فيه.')
+      ? await window.confirmDelete({ message: 'حذف هذا التعليق؟ لا رجعةَ فيه.', okText: 'احذف' })
       : window.confirm('حذف هذا التعليق؟');
     if (!ok) return;
     const commentId = item.dataset.commentId;
@@ -487,12 +487,12 @@
     document.addEventListener('click', async function (e) {
       const btn = e.target.closest('[data-unlink]');
       if (!btn) return;
-      const label = document.createElement('span');
-      label.textContent = btn.dataset.unlinkLabel || '';
-      const question = 'فكّ ربط «' + label.innerHTML + '»؟ يُكتب الفكُّ في تاريخ الكتابين.';
+      // الحواريّةُ تكتب نصّاً (textContent) — فالتسميةُ تمرّ كما هي بلا تهريب
+      const label = btn.dataset.unlinkLabel || '';
+      const question = (label ? 'فكّ ربط «' + label + '»؟' : 'فكّ الربط؟') + ' يُكتب الفكُّ في تاريخ الكتابين.';
       const ok = typeof window.confirmDelete === 'function'
-        ? await window.confirmDelete(question)
-        : window.confirm(label.textContent ? 'فكّ ربط «' + label.textContent + '»؟' : 'فكّ الربط؟');
+        ? await window.confirmDelete({ message: question, okText: 'فكّ الربط' })
+        : window.confirm(question);
       if (!ok) return;
       btn.disabled = true;
       try {

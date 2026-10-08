@@ -225,7 +225,7 @@
           <h2 id="h-signs">التواقيع</h2><span class="spacer"></span>
           {% if can_sign_book and attachment_series %}
           <form method="post" action="{% url 'sign_attachment' book.attachments.first.pk %}"
-                onsubmit="return confirm('توقيعُ المستند يُنشئ نسخةً مختومة — أتمضي؟');">
+                data-confirm="توقيعُ المستند يُنشئ نسخةً مختومة — أتمضي؟" data-confirm-ok="وقّع" data-confirm-tone="safe">
             {% csrf_token %}
             <button type="submit" class="bx-tag"><i class="bi bi-pen" aria-hidden="true"></i>وقّع المستند</button>
           </form>
@@ -245,7 +245,7 @@
           </div>
           {% if sg.is_valid and sg.can_revoke %}
           <form method="post" action="{% url 'revoke_signature' sg.pk %}"
-                onsubmit="return confirm('إبطالُ التوقيع لا يحذفه — أتمضي؟');">
+                data-confirm="إبطالُ التوقيع لا يحذفه — يبقى في القائمة موسوماً «مُبطَل». أتمضي؟" data-confirm-ok="أبطِل التوقيع">
             {% csrf_token %}
             <button type="submit" class="bx-row-act">إبطال</button>
           </form>
@@ -423,11 +423,11 @@
 
 
 {% block extra_js %}
-<script src="{% static 'book_detail.js' %}?v=20261007b"></script>
+<script src="{% static 'book_detail.js' %}?v=20261008"></script>
 {# قصاصةُ الهامش تُحمَّل قبل مُرسِل التفريق: الأخيرُ يقرأ حقلَها #}
 <script src="{% static 'js/margin_crop.js' %}?v=20260831"></script>
 <script src="{% static 'js/link_picker.js' %}?v=20261007"></script>
-<script src="{% static 'js/book_lifecycle.js' %}?v=20261007b"></script>
+<script src="{% static 'js/book_lifecycle.js' %}?v=20261008"></script>
 <script>
 // ── بريدُ الكتاب: آخرُ ثمانية إرسالات (النصُّ يمرّ من esc قبل innerHTML) ──
 (function() {
