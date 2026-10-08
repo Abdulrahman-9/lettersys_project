@@ -273,12 +273,26 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(pdf)))
             self.end_headers()
             self.wfile.write(pdf)
+        except naps2.ScanNoPagesError as exc:
+            self._json(409, {"ok": False, "code": "no_pages", "error": str(exc)})
+        except naps2.ScanTimeoutError as exc:
+            self._json(504, {"ok": False, "code": "scan_timeout", "error": str(exc)})
+        except naps2.ScanDeviceError as exc:
+            self._json(409, {"ok": False, "code": "device_not_ready", "error": str(exc)})
         except ValueError as exc:
             self._json(400, {"ok": False, "code": "bad_request", "error": str(exc)})
-        except RuntimeError as exc:
-            self._json(502, {"ok": False, "code": "scan_failed", "error": str(exc)})
-        except Exception as exc:
-            self._json(500, {"ok": False, "code": "error", "error": str(exc)})
+        except RuntimeError:
+            self._json(502, {
+                "ok": False,
+                "code": "scan_failed",
+                "error": "تعذّر تنفيذ المسح. تحقّق من اتصال الماسح وتعريفه ثم أعد المحاولة.",
+            })
+        except Exception:
+            self._json(500, {
+                "ok": False,
+                "code": "error",
+                "error": "حدث خطأ غير متوقع أثناء المسح. أعد تشغيل وكيل المسح ثم حاول مجدداً.",
+            })
         finally:
             naps2.safe_remove(out_path)
 

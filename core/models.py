@@ -1766,6 +1766,10 @@ class BookNumberReservation(models.Model):
     ]
 
     user         = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='المستخدم')
+    department   = models.ForeignKey(
+        'Department', null=True, on_delete=models.PROTECT,
+        related_name='number_reservations', verbose_name='القسم',
+    )
     kind         = models.CharField(max_length=20, choices=BOOK_KIND_CHOICES, verbose_name='نوع الكتاب')
     number       = models.PositiveIntegerField(verbose_name='رقم القيد')
     prefix       = models.CharField(max_length=20, blank=True, default='', verbose_name='البادئة')
@@ -1801,6 +1805,7 @@ class BookNumberReservation(models.Model):
         indexes = [
             models.Index(fields=['user', 'status']),
             models.Index(fields=['kind', 'year', 'number']),
+            models.Index(fields=['department', 'kind', 'status']),
         ]
 
     def __str__(self):
@@ -1879,14 +1884,15 @@ class BookNumberReservation(models.Model):
         return qs.order_by('-reserved_at').first()
 
     @classmethod
-    def reserve(cls, user, kind, expire_minutes=None):
+    def reserve(cls, user, kind, expire_minutes=None, department=None):
         """حجز رقم آمن من التضارب وبلا فجوات — يفوّض لخدمة الحجز الموحّدة
         (أولوية عودة cooldown → إعادة تدوير أصغر رقم متروك → رقم جديد).
 
         ``expire_minutes=None`` ⟵ الخدمةُ تحلّ القيمة من ``SystemSettings``.
         """
         from .reservation_service import reserve_number
-        reservation, _outcome = reserve_number(user, kind, expire_minutes)
+        reservation, _outcome = reserve_number(
+            user, kind, expire_minutes=expire_minutes, department=department)
         return reservation
 
 

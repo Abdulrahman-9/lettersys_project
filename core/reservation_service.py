@@ -19,11 +19,11 @@ COOLDOWN_MINUTES = 15          # فترة سماح عودة نفس المستخ�
 HEARTBEAT_DEAD_SECONDS = 120   # نبضة أقدم من هذا = انقطاع قسريّ (شبكة أمان للـWS)
 
 
-def _recyclable_qs(kind, now):
+def _recyclable_qs(kind, now, department):
     """حجوزات أرقامها متاحة لإعادة التدوير: ملغاة/منتهية، أو cooldown انقضى — وغير مرتبطة بكتاب."""
     from .models import BookNumberReservation as R
     return (
-        R.objects.filter(kind=kind, book__isnull=True)
+        R.objects.filter(kind=kind, department=department, book__isnull=True)
         .filter(
             Q(status__in=[R.STATUS_VOIDED, R.STATUS_EXPIRED])
             | Q(status=R.STATUS_COOLDOWN, cooldown_until__lte=now)
@@ -32,7 +32,7 @@ def _recyclable_qs(kind, now):
     )
 
 
-def reserve_number(user, kind, expire_minutes=None):
+def reserve_number(user, kind, expire_minutes=None, department=None):
     """يُعيد (reservation, outcome) حيث outcome ∈ {'existing','resumed','recycled','new'}.
 
     ``expire_minutes=None`` (الافتراض) ⟵ تُحَلُّ المدّةُ من
@@ -42,12 +42,16 @@ def reserve_number(user, kind, expire_minutes=None):
     from .models import BookNumberReservation as R, BookSequence, Book, SystemSettings
     if expire_minutes is None:
         expire_minutes = SystemSettings.reservation_ttl()
+    if department is None:
+        department = getattr(getattr(user, 'profile', None), 'department', None)
+    department = BookSequence.resolve_department(department)
     now = timezone.now()
     with transaction.atomic():
         # 0) حجز نشط قائم لنفس المستخدم/النوع → أعِده (لا نُنشئ جديداً)
         existing = (
             R.objects.select_for_update()
-            .filter(user=user, kind=kind, status__in=[R.STATUS_ACTIVE, R.STATUS_REACTIVATED])
+            .filter(user=user, kind=kind, department=department,
+                    status__in=[R.STATUS_ACTIVE, R.STATUS_REACTIVATED])
             .order_by('-reserved_at').first()
         )
         if existing:
@@ -58,7 +62,7 @@ def reserve_number(user, kind, expire_minutes=None):
         # 1) أولوية العودة: حجز cooldown لم ينتهِ لنفس المستخدم/النوع
         own_cd = (
             R.objects.select_for_update()
-            .filter(user=user, kind=kind, status=R.STATUS_COOLDOWN,
+            .filter(user=user, kind=kind, department=department, status=R.STATUS_COOLDOWN,
                     cooldown_until__gt=now, book__isnull=True)
             .order_by('number').first()
         )
@@ -73,9 +77,11 @@ def reserve_number(user, kind, expire_minutes=None):
             return own_cd, 'resumed'
 
         # 2) إعادة تدوير أصغر رقم متروك (يحقّق «بلا فجوات»)
-        for cand in _recyclable_qs(kind, now).select_for_update(skip_locked=True):
+        for cand in _recyclable_qs(kind, now, department).select_for_update(skip_locked=True):
             # لا نُدوّر رقماً استُهلك فعلاً بكتاب (قد يُحفظ بلا حجز عبر auto_number)
-            if Book.objects.filter(kind=kind, our_number=cand.formatted).exists():
+            if Book.objects.filter(
+                    Q(department=department) | Q(department__isnull=True),
+                    kind=kind, our_number=cand.formatted).exists():
                 continue
             cand.user = user
             cand.status = R.STATUS_ACTIVE
@@ -90,9 +96,10 @@ def reserve_number(user, kind, expire_minutes=None):
             return cand, 'recycled'
 
         # 3) رقم جديد من العدّاد
-        consumed = BookSequence.consume_next(kind)
+        consumed = BookSequence.consume_next(kind, department=department)
         res = R.objects.create(
-            user=user, kind=kind, number=consumed['number'], prefix='',
+            user=user, department=department, kind=kind,
+            number=consumed['number'], prefix='',
             year=consumed['year'], formatted=consumed['formatted'],
             status=R.STATUS_ACTIVE, expires_at=now + timedelta(minutes=expire_minutes),
             last_heartbeat=now, is_recycled=False,

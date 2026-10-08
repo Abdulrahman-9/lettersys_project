@@ -294,6 +294,49 @@ class StaleExtractionGuardTests(SimpleTestCase):
         self.assertIn('return null;', body)
 
 
+class ExtractionSaveReadinessSourceTests(SimpleTestCase):
+    """حواجز بلاغ التراخيص 2026-10-08: القيم الظاهرة قابلة للحفظ ولا يُغلق الزر."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with open('static/extraction_smart.js', encoding='utf-8') as fh:
+            cls.js = fh.read()
+        with open('templates/core/extraction_smart_desktop.html', encoding='utf-8') as fh:
+            cls.template = fh.read()
+        with open('static/extraction_smart.css', encoding='utf-8') as fh:
+            cls.css = fh.read()
+
+    def test_pending_entity_text_is_flushed_before_required_validation(self):
+        save_start = self.js.index('    async saveBook() {')
+        save_end = self.js.index('    /** يحلّ أي نصّ جهة', save_start)
+        save = self.js[save_start:save_end]
+        self.assertLess(
+            save.index('await this._flushPendingEntities();'),
+            save.index('const requiredFields ='),
+        )
+
+    def test_entity_validation_accepts_tags_after_the_input_is_cleared(self):
+        start = self.js.index('    validateFieldValue(fieldId, value) {')
+        body = self.js[start:self.js.index('\n    }\n', start)]
+        self.assertIn("entityCount('issuing') > 0", body)
+        self.assertIn("entityCount('receiving') > 0", body)
+
+    def test_incomplete_form_keeps_save_enabled_for_inline_validation(self):
+        self.assertNotIn('saveBtn.disabled = true', self.template)
+        self.assertIn('saveBtn.disabled = false', self.template)
+
+    def test_scan_messages_never_fall_back_to_native_alert(self):
+        self.assertNotIn('alert(', self.js)
+        self.assertIn('showExtractionNotice(', self.js)
+
+    def test_extraction_sidebar_mini_rule_overrides_compact_desktop_width(self):
+        self.assertIn(
+            'body.app-shell-body .app-shell.sidebar-mini .app-sidebar',
+            self.css,
+        )
+
+
 class ExtractionClosureSourceGuardTests(SimpleTestCase):
     """دفعةُ إغلاق صفحة الاستخراج (مذكّرة فيبل 10، موافقةُ المالك 2026‑09‑29) — حرّاسٌ على المصدر
     (لا مُشغّلَ اختباراتٍ لـJS في المشروع): نيلسن 1 و2 و3 و11."""

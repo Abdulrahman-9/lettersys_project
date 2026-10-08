@@ -69,6 +69,30 @@ const CAPTURE_FIELD_BY_ID = {
     title: 'title', secretLevel: 'secret_level',
 };
 
+function showExtractionNotice(message, type = 'error', duration = 7000, title = '') {
+    if (window.ToastCenter) {
+        const options = { delay: duration };
+        if (title) options.title = title;
+        window.ToastCenter.show(type, message, options);
+        return;
+    }
+    let host = document.getElementById('extractionNoticeFallback');
+    if (!host) {
+        host = document.createElement('div');
+        host.id = 'extractionNoticeFallback';
+        host.className = 'position-fixed top-0 start-50 translate-middle-x p-3';
+        host.style.zIndex = '11000';
+        host.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+        document.body.appendChild(host);
+    }
+    const notice = document.createElement('div');
+    notice.className = `alert ${type === 'error' ? 'alert-danger' : 'alert-info'} shadow`;
+    notice.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    notice.textContent = `${title ? title + ': ' : ''}${message}`;
+    host.replaceChildren(notice);
+    setTimeout(() => notice.remove(), duration);
+}
+
 let _codeFillDepth = 0;
 const _displayedSuggestions = new Set();
 
@@ -1917,6 +1941,14 @@ class ExtractionSmartSystem {
     loadAllReservationStatuses() {
         const kinds = ['incoming_internal', 'incoming_external', 'outgoing_internal', 'outgoing_external'];
         kinds.forEach((k) => {
+            if (this.getKindConfig(k).manualNumber) {
+                const badge = document.getElementById(`tabNum_${k}`);
+                if (badge) {
+                    badge.textContent = '—';
+                    badge.title = 'رقم يدوي من مكتب السيد المدير العام';
+                }
+                return;
+            }
             const url = `${this.apiEndpoints.reservationStatus}?kind=${encodeURIComponent(k)}`;
             fetch(url, { headers: { 'X-CSRFToken': this.getCookie('csrftoken') } })
                 .then(r => r.json())
@@ -2796,8 +2828,16 @@ class ExtractionSmartSystem {
             clearTimeout(scanTO);
             if (!sr.ok) {
                 let e = {}; try { e = await sr.json(); } catch (_) {}
-                // رسالة الوكيل عند صفر صفحات صارت إرشادية (ضع الورق…) — نعرضها كما هي
-                return fail(e.error || ('فشل المسح (رمز ' + sr.status + '). تأكّد من الورق والجهاز ثم أعد المحاولة.'), 'تعذّر المسح');
+                const knownErrors = {
+                    no_pages: ['لم يُلتقط أي مستند. ضع الورق في وحدة التغذية أو على الزجاج ثم أعد المحاولة.', 'لا توجد ورقة للمسح'],
+                    scan_timeout: ['لم يكتمل المسح ضمن المهلة. تحقّق من الماسح والورق ثم أعد المحاولة.', 'الماسح لا يستجيب'],
+                    device_not_ready: ['الماسح غير جاهز أو مستخدم من برنامج آخر. أغلق برامج المسح الأخرى، ثم أطفئ الماسح وشغّله وأعد المحاولة.', 'الماسح غير جاهز'],
+                    scan_failed: ['تعذّر تنفيذ المسح. تحقّق من اتصال الماسح وتعريفه ثم أعد المحاولة.', 'تعذّر المسح'],
+                };
+                const known = knownErrors[e.code];
+                return fail(
+                    known ? known[0] : (e.error || ('فشل المسح (رمز ' + sr.status + '). تأكّد من الورق والجهاز ثم أعد المحاولة.')),
+                    known ? known[1] : 'تعذّر المسح');
             }
             const blob = await sr.blob();
             if (this._scanCancelled) return;
@@ -4555,13 +4595,17 @@ class ExtractionSmartSystem {
     }
 
     validateFieldValue(fieldId, value) {
+        const entityCount = (side) => {
+            const mgr = window.entityTagManagers?.[side];
+            return (mgr && typeof mgr.count === 'function') ? mgr.count() : 0;
+        };
         const validations = {
             // bookNumber: قبول أي شيء مرن - أرقام، رموز، نص
             bookNumber: value !== '' && value.trim() !== '', // يجب ألا يكون فارغاً إذا كان مطلوباً
-            title: value.length >= 3 || value === '',
-            date: /^\d{4}-\d{2}-\d{2}$/.test(value) || value === '',
-            issuingEntity: value.length >= 2 || value === '',
-            receivingEntity: value.length >= 2 || value === '',
+            title: value.length >= 3,
+            date: /^\d{4}-\d{2}-\d{2}$/.test(value),
+            issuingEntity: entityCount('issuing') > 0 || value.length >= 2,
+            receivingEntity: entityCount('receiving') > 0 || value.length >= 2,
             documentTypeSelect: this.getResolvedDocumentTypeValue(this.getCurrentKind()).length > 0,
             documentTypeCustom: !this.isCustomDocumentTypeSelected() || value.length > 0
         };
@@ -5183,6 +5227,10 @@ class ExtractionSmartSystem {
         const isEdit = !!this._editData;
         const kindValue = this.getCurrentKind();
 
+        // حوّل أي اسم جهة ظاهر لم يُثبَّت بعد إلى وسم قبل التحقق. كان التحقق
+        // يقرأ مربّع النص بعد أن تفرغه الوسوم، أو يسبق طلب المطابقة غير المتزامن.
+        await this._flushPendingEntities();
+
         // ── 1) التحقّق من الحقول المطلوبة (حسب الوضع) ──
         // "بلا رقم": استثناء للكتب الداخلية فقط (وضع الإدخال فقط)
         const numberlessChecked = !isEdit
@@ -5226,10 +5274,7 @@ class ExtractionSmartSystem {
             if (!proceedWithoutFile) return;
         }
 
-        // ── 3) تفريغ نصّ الجهة المُدخَل إلى وسم إن لم يُحوَّل (كلا الوضعين) ──
-        await this._flushPendingEntities();
-
-        // ── 4) بناء الحمولة المشتركة ──
+        // ── 3) بناء الحمولة المشتركة ──
         const formData = new FormData();
         const senderNumber = document.getElementById('senderNumber')?.value || '';
         const senderDate = document.getElementById('senderDate')?.value || '';
@@ -5653,15 +5698,7 @@ class ExtractionSmartSystem {
     }
 
     showToast(message, type = 'info', duration = 4000, title = null) {
-        // Delegate to global ToastCenter for consistent UX
-        if (window.ToastCenter) {
-            const opts = { delay: duration };
-            if (title) opts.title = title;
-            window.ToastCenter.show(type, message, opts);
-        } else {
-            // Fallback to alert if ToastCenter not available
-            alert((title ? title + ': ' : '') + message);
-        }
+        showExtractionNotice(message, type, duration, title || '');
     }
 
     /** fetch مع مهلة (AbortController) لاكتشاف عدم استجابة الوكيل/الماسح. */
@@ -5700,14 +5737,11 @@ function initExtractionSystem() {
         return true;
     } catch (err) {
         console.error('[ExtractionSmart] ✗ Failed to initialize:', err);
-        if (window.ToastCenter) {
-            window.ToastCenter.show('error', 'فشل تهيئة نظام الاستخراج. يرجى تحديث الصفحة.', {
-                title: 'تعذر تشغيل الواجهة',
-                delay: 7000,
-            });
-        } else {
-            alert('فشل تهيئة نظام الاستخراج. يرجى تحديث الصفحة.');
-        }
+        showExtractionNotice(
+            'فشل تهيئة نظام الاستخراج. يرجى تحديث الصفحة.',
+            'error',
+            7000,
+            'تعذر تشغيل الواجهة');
         return false;
     }
 }

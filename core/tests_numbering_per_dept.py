@@ -9,8 +9,10 @@
 from django.contrib.auth.models import User
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.urls import reverse
 
-from core.models import Book, BookSequence, Department
+from core.models import Book, BookSequence, Department, UserProfile
+from core.reservation_service import reserve_number
 
 
 class SequencePerDepartmentTests(TestCase):
@@ -40,6 +42,81 @@ class SequencePerDepartmentTests(TestCase):
         before = BookSequence.get_next('incoming_internal', self.d1)['number']
         BookSequence.consume_next('incoming_internal', numberless=True, department=self.d1)
         self.assertEqual(BookSequence.get_next('incoming_internal', self.d1)['number'], before)
+
+
+class ReservationPerDepartmentTests(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.followup, _ = Department.objects.get_or_create(
+            code='ش13', defaults={'name': 'المتابعة'})
+        cls.licensing, _ = Department.objects.get_or_create(
+            code='ش4', defaults={'name': 'التراخيص'})
+        cls.followup_user = User.objects.create_user('followup-clerk', password='pw-test-111')
+        cls.licensing_user = User.objects.create_user('licensing-clerk', password='pw-test-222')
+        UserProfile.objects.update_or_create(
+            user=cls.followup_user, defaults={'department': cls.followup})
+        UserProfile.objects.update_or_create(
+            user=cls.licensing_user, defaults={'department': cls.licensing})
+
+    def test_reservations_consume_the_users_department_counter(self):
+        BookSequence.objects.update_or_create(
+            department=self.followup, kind='incoming_internal',
+            defaults={'next_number': 3917})
+        first, _ = reserve_number(self.followup_user, 'incoming_internal')
+        second, _ = reserve_number(self.licensing_user, 'incoming_internal')
+
+        self.assertEqual(first.department, self.followup)
+        self.assertEqual(first.number, 3917)
+        self.assertEqual(second.department, self.licensing)
+        self.assertEqual(second.number, 1)
+
+    def test_status_preview_uses_the_users_department_counter(self):
+        BookSequence.objects.update_or_create(
+            department=self.followup, kind='incoming_internal',
+            defaults={'next_number': 3917})
+        BookSequence.objects.update_or_create(
+            department=self.licensing, kind='incoming_internal',
+            defaults={'next_number': 4})
+        self.client.force_login(self.licensing_user)
+
+        response = self.client.get(
+            reverse('reservation-status'), {'kind': 'incoming_internal'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['preview_number'], '4')
+
+    def test_next_number_api_uses_the_users_department_counter(self):
+        BookSequence.objects.update_or_create(
+            department=self.followup, kind='incoming_internal',
+            defaults={'next_number': 3917})
+        BookSequence.objects.update_or_create(
+            department=self.licensing, kind='incoming_internal',
+            defaults={'next_number': 7})
+        self.client.force_login(self.licensing_user)
+
+        response = self.client.get(
+            reverse('next-number-api'), {'kind': 'incoming_internal'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['formatted'], '7')
+
+    def test_manual_register_has_no_preview_or_reservation(self):
+        self.client.force_login(self.licensing_user)
+
+        preview = self.client.get(
+            reverse('reservation-status'), {'kind': 'outgoing_external'})
+        reserve = self.client.post(
+            reverse('reservation-reserve'),
+            data='{"kind":"outgoing_external"}',
+            content_type='application/json',
+        )
+
+        self.assertEqual(preview.status_code, 200)
+        self.assertTrue(preview.json()['manual_number'])
+        self.assertEqual(preview.json()['preview_number'], '')
+        self.assertEqual(reserve.status_code, 400)
+        self.assertEqual(reserve.json()['error_code'], 'MANUAL_REGISTER')
 
 
 class UniquenessIsScopedToDepartmentTests(TestCase):

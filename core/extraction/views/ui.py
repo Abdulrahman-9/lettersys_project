@@ -146,10 +146,15 @@ def extraction_smart_desktop(request):
     kind_scope = get_kind_scope(kind)
 
     all_kinds = [k for k, _ in BOOK_KIND_CHOICES]
+    sequence_department = getattr(
+        getattr(request.user, 'profile', None), 'department', None)
     seq_map = {}
     for k in all_kinds:
-        data = BookSequence.get_next(k)
-        seq_map[k] = data.get('formatted') or str(data.get('number', ''))
+        if k in BookSequence.SERIES_KINDS:
+            data = BookSequence.get_next(k, department=sequence_department)
+            seq_map[k] = data.get('formatted') or str(data.get('number', ''))
+        else:
+            seq_map[k] = ''
 
     # وجهة العودة (زر الإلغاء + بعد حفظ التعديل) — يُتحقَّق منها لتفادي open-redirect
     from django.utils.http import url_has_allowed_host_and_scheme

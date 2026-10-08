@@ -1593,6 +1593,11 @@ body.app-shell-body .app-main .extraction-container { flex: 1 1 auto; min-height
 
 @media (min-width: 1200px) and (max-width: 1366px) {
     body.app-shell-body .app-sidebar { width: 200px !important; }
+    body.app-shell-body .app-shell.sidebar-mini .app-sidebar {
+        flex: 0 0 52px !important;
+        width: 52px !important;
+        min-width: 52px !important;
+    }
 }
 @media (max-width: 1366px) {
     body.app-shell-body .app-main .extraction-container { grid-template-columns: minmax(0, 1.4fr) minmax(380px, 1fr) !important; padding: 10px 12px !important; }

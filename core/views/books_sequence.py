@@ -48,7 +48,14 @@ def next_number_api(request):
     """API to return the next sequence number for a book kind."""
     kind = request.GET.get('kind', 'incoming_internal')
     kind = normalize_book_kind(kind, 'incoming_internal')
-    data = BookSequence.get_next(kind)
+    if kind not in BookSequence.SERIES_KINDS:
+        return JsonResponse({
+            'kind': kind, 'number': None, 'year': None,
+            'formatted': '', 'manual_number': True,
+        })
+    profile = getattr(request.user, 'profile', None)
+    department = getattr(profile, 'department', None)
+    data = BookSequence.get_next(kind, department=department)
     return JsonResponse(data)
 
 

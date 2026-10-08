@@ -25,6 +25,11 @@ logger = logging.getLogger('lettersys')
 # ``SystemSettings.reservation_ttl()`` وتُقرأ عند كلّ استعمال.
 
 
+def _request_department(user):
+    profile = getattr(user, 'profile', None)
+    return BookSequence.resolve_department(getattr(profile, 'department', None))
+
+
 def _reservation_dict(r):
     """تحويل سجل الحجز إلى dict للـ JSON."""
     return {
@@ -34,6 +39,7 @@ def _reservation_dict(r):
         'formatted':        r.formatted,
         'year':             r.year,
         'kind':             r.kind,
+        'department_id':    r.department_id,
         'status':           r.status,
         'status_label':     r.get_status_display(),
         'remaining_seconds': r.remaining_seconds,
@@ -60,11 +66,18 @@ def reserve_number(request):
         kind = (body.get('kind') or 'incoming_internal').strip()
     except (ValueError, TypeError):
         return JsonResponse({'success': False, 'message': 'بيانات غير صالحة'}, status=400)
+    if kind not in BookSequence.SERIES_KINDS:
+        return JsonResponse({
+            'success': False,
+            'message': 'هذا السجلّ يدوي ولا يملك سلسلة أرقام للحجز.',
+            'error_code': 'MANUAL_REGISTER',
+        }, status=400)
 
     # الخدمة الموحّدة تتكفّل بكل الحالات: قائم / استرجاع cooldown / إعادة تدوير / جديد
     try:
         from .reservation_service import reserve_number as _svc_reserve
-        reservation, outcome = _svc_reserve(request.user, kind)
+        reservation, outcome = _svc_reserve(
+            request.user, kind, department=_request_department(request.user))
     except Exception as e:
         logger.error(f'[Reservation] Error: {e}', exc_info=True)
         return JsonResponse({'success': False, 'message': 'خطأ في الحجز'}, status=500)
@@ -212,10 +225,18 @@ def reservation_status(request):
     يُرجع الحجز النشط للمستخدم إن وجد، أو last_expired ليسأله.
     """
     kind = (request.GET.get('kind') or 'incoming_internal').strip()
+    if kind not in BookSequence.SERIES_KINDS:
+        return JsonResponse({
+            'has_reservation': False,
+            'expired_reservation': None,
+            'preview_number': '',
+            'manual_number': True,
+        })
+    department = _request_department(request.user)
 
     # فحص وتحديث الحجوزات المنتهية
     active = BookNumberReservation.objects.filter(
-        user=request.user, kind=kind,
+        user=request.user, kind=kind, department=department,
         status__in=[BookNumberReservation.STATUS_ACTIVE, BookNumberReservation.STATUS_REACTIVATED]
     ).order_by('-reserved_at').first()
 
@@ -231,7 +252,7 @@ def reservation_status(request):
 
     # هل انتهت صلاحية حجز مؤخراً (آخر ساعة)؟
     recent_expired = BookNumberReservation.objects.filter(
-        user=request.user, kind=kind,
+        user=request.user, kind=kind, department=department,
         status=BookNumberReservation.STATUS_EXPIRED,
         voided_at__gte=timezone.now() - timezone.timedelta(hours=1)
     ).order_by('-voided_at').first()
@@ -244,7 +265,7 @@ def reservation_status(request):
         })
 
     # لا يوجد حجز
-    seq_info = BookSequence.get_next(kind)
+    seq_info = BookSequence.get_next(kind, department=department)
     return JsonResponse({
         'has_reservation': False,
         'expired_reservation': None,

@@ -226,6 +226,10 @@ def save_book_api(request):
         reservation = None
         reservation_id = (data.get('reservation_id') or '').strip()
         auto_number = (data.get('auto_number') or 'false').lower() in ('true', '1')
+        # قسمُ الكتاب = قسمُ مُنشئه، وإلّا القسم الافتراضيّ. الحجز والعدّاد
+        # والتحقق من التكرار يجب أن تقرأ كلّها هذا المصدر نفسه.
+        book_department = (getattr(getattr(request.user, 'profile', None), 'department', None)
+                           or BookSequence.resolve_department())
         # "بلا رقم": استثناء يُسمح به للكتب الداخلية فقط — يأخذ رقماً تقنياً ببادئة سجل 0
         numberless = (data.get('numberless') or 'false').lower() in ('true', '1')
         numberless_internal = numberless and kind_value in ('incoming_internal', 'outgoing_internal')
@@ -240,6 +244,7 @@ def save_book_api(request):
                 reservation = BookNumberReservation.objects.get(
                     pk=reservation_id,
                     user=request.user,
+                    department=book_department,
                 )
             except BookNumberReservation.DoesNotExist:
                 return JsonResponse({
@@ -302,7 +307,8 @@ def save_book_api(request):
         elif auto_number:
             pass  # استهلاك الرقم التلقائي يتم داخل المعاملة (B2)
         elif our_number:
-            if Book.objects.filter(our_number=our_number, kind=kind_value).exists():
+            if Book.objects.filter(
+                    department=book_department, our_number=our_number, kind=kind_value).exists():
                 return JsonResponse({
                     'success': False,
                     'message': f'الرقم {our_number} مستخدم بالفعل لكتاب آخر من نفس النوع.',
@@ -323,11 +329,6 @@ def save_book_api(request):
         # المنطق الموحّد: due_date موجود ⇒ نشط (is_archived=False)، غير ذلك ⇒ مؤرشف
         effective_due_date = due_date if needs_followup else None
         attachment = None  # يُلتقط من create_attachment لربط حلقة التدريب لاحقاً
-        # قسمُ الكتاب = قسمُ مُنشئه، وإلّا القسم الافتراضيّ. وهو ما يحدّد
-        # العدّاد الذي يُستهلَك منه الرقم — لكلّ قسمٍ دفترُه.
-        book_department = (getattr(getattr(request.user, 'profile', None), 'department', None)
-                           or BookSequence.resolve_department())
-
         try:
             with transaction.atomic():
                 # تعيين الرقم التلقائي داخل المعاملة (B2): لا يُستهلك رقم السجل الرسمي

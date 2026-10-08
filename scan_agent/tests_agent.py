@@ -45,8 +45,13 @@ class Naps2Tests(unittest.TestCase):
 
     def test_list_devices_parses_nonblank_lines(self):
         res = mock.Mock(returncode=0, stdout='Canon A\nCanon B\n\n', stderr='')
-        with mock.patch('subprocess.run', return_value=res):
+        with mock.patch('subprocess.run', return_value=res) as run:
             self.assertEqual(naps2.list_devices('twain'), ['Canon A', 'Canon B'])
+        kwargs = run.call_args.kwargs
+        if os.name == 'nt':
+            self.assertEqual(kwargs['creationflags'], subprocess.CREATE_NO_WINDOW)
+        else:
+            self.assertNotIn('creationflags', kwargs)
 
     def test_list_devices_empty_ok(self):
         res = mock.Mock(returncode=0, stdout='', stderr='')
@@ -151,10 +156,10 @@ class Naps2AutoScanTests(unittest.TestCase):
     def test_auto_raises_helpful_error_when_all_sources_empty(self):
         fake = _make_fake_run({})  # الكل nopages
         with mock.patch('subprocess.run', side_effect=fake):
-            with self.assertRaises(RuntimeError) as cm:
+            with self.assertRaises(naps2.ScanNoPagesError) as cm:
                 naps2.scan_to_pdf_auto('Dev', driver='twain')
-        self.assertNotIsInstance(cm.exception, naps2.ScanNoPagesError)
         self.assertIn('الماسح', str(cm.exception))
+        self.assertNotIn('No scanned pages', str(cm.exception))
 
     def test_auto_fails_fast_on_device_error_no_retry(self):
         """خطأ تعريف/عتاد صلب (-4400/-4539) يفشل فوراً بلا تجريب بقيّة المصادر — يمنع تكرار الحواريّات."""
@@ -388,6 +393,19 @@ class ServerGateTests(unittest.TestCase):
                                             'Content-Type': 'application/json'}, body='{}')
         self.assertEqual(st, 400)
         self.assertIn('no_device', body)
+        self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), self.ALLOWED)
+
+    def test_no_pages_is_arabic_structured_error(self):
+        with mock.patch.object(
+                naps2, 'scan_to_pdf_auto',
+                side_effect=naps2.ScanNoPagesError('لم يُلتقط أي مستند من الماسح.')):
+            st, body, hdrs = self._req(
+                '/agent/scan', method='POST',
+                headers={'Origin': self.ALLOWED, 'Content-Type': 'application/json'},
+                body='{"device_id":"scanner","driver":"twain","mode":"auto"}')
+        self.assertEqual(st, 409)
+        self.assertIn('no_pages', body)
+        self.assertIn('لم يُلتقط', body)
         self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), self.ALLOWED)
 
     # ═══════ الطلبُ الاستباقيّ (preflight) ═══════

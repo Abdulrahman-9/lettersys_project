@@ -4,4 +4,4 @@
 خدمة HTTP صغيرة تستمع على 127.0.0.1 فقط، تجسر بين المتصفح والماسح الضوئي
 عبر NAPS2.Console (TWAIN/WIA/ADF → PDF). تشغيل: ``python -m scan_agent``.
 """
-__version__ = "1.0.0"
+__version__ = "1.0.1"

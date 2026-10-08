@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261006">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261008b">
 <style>
 .scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
 .scan-agent-status:hover{filter:brightness(.97)}
@@ -641,7 +641,7 @@
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
 <script src="{% static 'js/subject_locate.js' %}?v=20260929exc"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20261008"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20261008b"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20261007"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
 
@@ -1028,23 +1028,25 @@
       // عن `_updateSenderDateCrop` المحلّيّ كي لا يتشعّب العرض في موضعين.
       if (window.applySenderDateSuggestion) window.applySenderDateSuggestion(data);
       else _updateSenderDateCrop(data && data.sender_date_crop);
-      setTimeout(() => {
+      setTimeout(async () => {
         const mgrI = window.entityTagManagers?.issuing;
         const mgrR = window.entityTagManagers?.receiving;
         const tryAdd = (mgr, val) => {
-          if (!mgr || !val) return;
+          if (!mgr || !val) return Promise.resolve();
           const items = Array.isArray(val) ? val : String(val).split(/[،,;]/);
-          items.forEach(v => {
+          const jobs = items.map(v => {
             const s = (v||'').trim();
             if (s && !mgr.tags.some(t => t.name.toLowerCase() === s.toLowerCase())) {
-              mgr._resolveOrCreate(s, true);
+              return mgr._resolveOrCreate(s, true);
             }
+            return Promise.resolve();
           });
           // تنظيف الـ input النصي بعد التحويل
-          if (mgr.input) mgr.input.value = '';
+          return Promise.all(jobs).finally(() => {
+            if (mgr.input) mgr.input.value = '';
+          });
         };
-        tryAdd(mgrI, aiIssuing);
-        tryAdd(mgrR, aiReceiving);
+        await Promise.all([tryAdd(mgrI, aiIssuing), tryAdd(mgrR, aiReceiving)]);
         if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
       }, 50);
     };
@@ -1079,11 +1081,17 @@
   function updateValidationIndicator() {
     const bookNumber = document.getElementById('bookNumber')?.value?.trim();
     const title = document.getElementById('title')?.value?.trim();
+    const titleOk = !!title && title.length >= 3;
     const date = document.getElementById('date')?.value;
     const mgrI = window.entityTagManagers?.issuing;
     const mgrR = window.entityTagManagers?.receiving;
-    const issuingOk   = !!(mgrI && mgrI.count() > 0);
-    const receivingOk = !!(mgrR && mgrR.count() > 0);
+    const entityReady = (mgr, wrapperId, inputId) => {
+      if (mgr && typeof mgr.count === 'function' && mgr.count() > 0) return true;
+      if (document.querySelector(`#${wrapperId} .entity-tag`)) return true;
+      return !!document.getElementById(inputId)?.value?.trim();
+    };
+    const issuingOk   = entityReady(mgrI, 'issuingTagWrapper', 'issuingEntity');
+    const receivingOk = entityReady(mgrR, 'receivingTagWrapper', 'receivingEntity');
 
     // نوع المستند مطلوب في وضع الإدخال (يطابق تحقّق saveBook) — وإلا يُعلن «جاهز» ثم يُرفض الحفظ.
     // تجاوز التعديل لا يشترط النوع (EDIT_DATA مُعرَّف في وضع التعديل فقط).
@@ -1099,7 +1107,7 @@
       } catch (_) {}
     }
 
-    const filled = [bookNumber, title, date].filter(f => f).length
+    const filled = [bookNumber, titleOk, date].filter(f => f).length
                  + (issuingOk ? 1 : 0) + (receivingOk ? 1 : 0)
                  + (requireDocType && docTypeOk ? 1 : 0);
     const totalRequired = requireDocType ? 6 : 5;
@@ -1119,12 +1127,13 @@
       indicator.classList.add('pending');
       // اسمُ الناقص لا عددُه: «4/6» وزرٌّ معطَّل لا يقولان أيَّ حقلٍ ينقص (تدقيقُ نيلسن C#4).
       const missing = [
-        [bookNumber, 'رقمنا'], [date, 'تاريخنا'], [title, 'العنوان'],
+        [bookNumber, 'رقمنا'], [date, 'تاريخنا'], [titleOk, 'العنوان'],
         [issuingOk, 'جهة الإصدار'], [receivingOk, 'جهة الاستقبال'],
         [!requireDocType || docTypeOk, 'نوع المستند'],
       ].filter(([ok]) => !ok).map(([, name]) => name);
       text.textContent = `ينقص: ${missing.join('، ')}`;
-      saveBtn.disabled = true;
+      // يبقى الحفظ متاحاً كي تعرض الضغطةُ الخطأ عند الحقل نفسه وتنقل التركيز إليه.
+      saveBtn.disabled = false;
     }
   }
   

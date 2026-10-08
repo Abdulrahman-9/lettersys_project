@@ -11,6 +11,14 @@ import tempfile
 from . import config
 
 
+def _subprocess_kwargs():
+    """تشغيل NAPS2 بلا نافذة Console سوداء على Windows."""
+    kwargs = {"capture_output": True, "text": True}
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return kwargs
+
+
 def locate_exe():
     """يُعيد مسار NAPS2.Console.exe أول ما يُوجَد، أو None."""
     for path in config.naps2_candidates():
@@ -27,7 +35,7 @@ def list_devices(driver="twain"):
     try:
         proc = subprocess.run(
             [exe, "--listdevices", "--driver", driver],
-            capture_output=True, text=True, timeout=config.LIST_TIMEOUT,
+            timeout=config.LIST_TIMEOUT, **_subprocess_kwargs(),
         )
     except subprocess.TimeoutExpired:
         raise RuntimeError("انتهت مهلة سرد الأجهزة")
@@ -99,7 +107,7 @@ def _run_scan(exe, device, source, dpi, color, driver, deskew=True, rotate=0):
         cmd += ["--rotate", str(rotate)]
     cmd += ["-o", out_path, "--force", "--verbose"]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=config.SCAN_TIMEOUT)
+        proc = subprocess.run(cmd, timeout=config.SCAN_TIMEOUT, **_subprocess_kwargs())
     except subprocess.TimeoutExpired:
         safe_remove(out_path)
         # ليست RuntimeError: تُفشِل المسح الأوتوماتيكي فوراً بدل تكرار المهلة على كل مصدر
@@ -161,20 +169,17 @@ def scan_to_pdf_auto(device, driver="twain", dpi=300, color="color"):
         raise ValueError("عمق لون غير مدعوم")
     dpi = _clamp_dpi(dpi)
 
-    last_detail = ""
     for source in config.AUTO_SOURCE_ORDER:
         try:
             return _run_scan(exe, device, source, dpi, color, driver, deskew=True)
-        except ScanNoPagesError as exc:
-            last_detail = str(exc)
+        except ScanNoPagesError:
             continue
         except RuntimeError as exc:
             # مصدر غير مدعوم/خطأ جهاز لهذا المصدر — جرّب التالي مع تذكّر السبب
-            last_detail = str(exc)
             continue
-    raise RuntimeError(
+    raise ScanNoPagesError(
         "لم يُلتقط أي مستند من الماسح. ضع الورق في وحدة التغذية (ADF) أو على الزجاج "
-        "ثم أعد المحاولة." + (f" (تفاصيل: {last_detail[:160]})" if last_detail else "")
+        "ثم أعد المحاولة."
     )
 
 
