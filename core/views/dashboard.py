@@ -67,7 +67,9 @@ def dashboard(request):
     stats = books.aggregate(
         total=Count('id'),
         today_count=Count('id', filter=Q(date=today)),
-        week_count=Count('id', filter=Q(date__gte=today - timedelta(days=7))),
+        # «الأسبوع» = الرابطُ الذي يفتحه (من قبل 7 أيّام إلى اليوم) — كان بلا حدٍّ أعلى فيعدّ
+        # الكتبَ المؤرَّخة في المستقبل (خطأ سنةٍ في الإدخال) ولا تُظهرها القائمة
+        week_count=Count('id', filter=Q(date__range=(today - timedelta(days=7), today))),
         incoming_total=Count('id', filter=Q(kind__startswith='incoming')),
         outgoing_total=Count('id', filter=Q(kind__startswith='outgoing')),
         incoming_active=Count('id', filter=Q(kind__startswith='incoming') & active_q),

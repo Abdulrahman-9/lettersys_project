@@ -23,12 +23,17 @@
       <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">
         <i class="bi bi-list-ul" aria-hidden="true"></i> القائمةُ الموحّدة
       </a>
+      {# الطاولةُ والسجلّ محروسان (can_use_desk · can_view_audit) — الرابطُ لمن يفتحهما وحده، لا 403 #}
+      {% if nav.desk %}
       <a class="btn btn-outline-secondary btn-sm" href="{% url 'desk_board' %}">
         <i class="bi bi-inboxes" aria-hidden="true"></i> طاولةُ الوارد
       </a>
+      {% endif %}
+      {% if nav.audit %}
       <a class="btn btn-outline-secondary btn-sm" href="{% url 'audit_log' %}">
         <i class="bi bi-clock-history" aria-hidden="true"></i> سجلّي
       </a>
+      {% endif %}
     </div>
   </div>
 
@@ -43,8 +48,8 @@
       <h2>يومُك نظيف</h2>
       <p>لا التزامَ مفتوحاً باسمك الآن. وإن كنتَ تتوقّع كتاباً فلعلّه ما زال في طاولة الوارد ولم يُحَل إليك بعد.</p>
       <div class="qb-blank-acts">
-        <a class="btn btn-primary btn-sm" href="{% url 'desk_board' %}">طاولةُ الوارد</a>
-        <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">القائمةُ الموحّدة</a>
+        {% if nav.desk %}<a class="btn btn-primary btn-sm" href="{% url 'desk_board' %}">طاولةُ الوارد</a>{% endif %}
+        <a class="btn {% if nav.desk %}btn-outline-secondary{% else %}btn-primary{% endif %} btn-sm" href="{% url 'book_unified' %}">القائمةُ الموحّدة</a>
       </div>
     </div>
   {% else %}
