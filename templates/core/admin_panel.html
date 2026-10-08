@@ -322,7 +322,7 @@
                            class="btn btn-sm btn-outline-primary" style="font-size:.78rem">تعديل</a>
                         {% if not g.books.exists %}
                         <form method="post" class="d-inline"
-                              onsubmit="return confirm('حذف العنقود «{{ g.name|escapejs }}» نهائياً؟');">
+                              data-confirm="حذف العنقود «{{ g.name }}» نهائياً؟" data-confirm-ok="احذف">
                           {% csrf_token %}
                           <input type="hidden" name="action" value="delete_group">
                           <input type="hidden" name="tab" value="groups">

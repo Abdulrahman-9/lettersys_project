@@ -148,58 +148,97 @@ function resolveToastCenter() {
 }
 
 /**
- * تأكيد حذف مع تصميم جميل
+ * حواريّةُ التأكيد الواحدة للتطبيق — بدل confirm() الأصليّة التي يعنونها المتصفّحُ
+ * بعنوان الخادم ويكسر بها اتّجاهَ الصفحة (تدقيقُ نيلسن H4).
+ *
+ *   confirmDelete('نصّ')  أو  confirmDelete({ title, message, okText, danger })
+ *
+ * النصُّ يُكتب textContent — لا HTML أبداً، فلا يحتاج المستدعي تهريباً. وأيُّ إغلاقٍ
+ * (× · Esc · الخلفيّة) إلغاءٌ: كان الوعدُ يبقى معلّقاً إلى الأبد إلّا بزرّ «إلغاء».
  */
-function confirmDelete(message = 'هل أنت متأكد من الحذف؟') {
+function confirmDelete(opts = 'هل أنت متأكد من الحذف؟') {
+  if (typeof opts === 'string') opts = { message: opts };
+  if (!(window.bootstrap && window.bootstrap.Modal)) {
+    return Promise.resolve(window.confirm(opts.message || ''));
+  }
   return new Promise((resolve) => {
-    const modal = createConfirmModal(message);
+    let answer = false;
+    const modal = createConfirmModal(opts);
     document.body.appendChild(modal);
-    
     const bsModal = new bootstrap.Modal(modal);
+    const ok = modal.querySelector('.btn-confirm');
+    ok.addEventListener('click', () => { answer = true; bsModal.hide(); });
+    // الهدّامُ يبدأ التركيزَ على «إلغاء» فلا يُمضيه Enter عابر (H5)
+    modal.addEventListener('shown.bs.modal', () => {
+      (opts.danger === false ? ok : modal.querySelector('.btn-cancel')).focus();
+    });
+    modal.addEventListener('hidden.bs.modal', () => { modal.remove(); resolve(answer); });
     bsModal.show();
-    
-    modal.querySelector('.btn-confirm').addEventListener('click', () => {
-      bsModal.hide();
-      resolve(true);
-    });
-    
-    modal.querySelector('.btn-cancel').addEventListener('click', () => {
-      bsModal.hide();
-      resolve(false);
-    });
-    
-    modal.addEventListener('hidden.bs.modal', () => {
-      modal.remove();
-    });
   });
 }
 
-/**
- * إنشاء modal تأكيد
- */
-function createConfirmModal(message) {
-  const modalHTML = `
-    <div class="modal fade" tabindex="-1">
+function createConfirmModal(opts) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = `
+    <div class="modal fade" tabindex="-1" aria-labelledby="appConfirmTitle">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
           <div class="modal-header border-0">
-            <h5 class="modal-title"><i class="bi bi-question-circle text-warning me-2"></i>تأكيد العملية</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <h2 class="modal-title fs-6 fw-bold" id="appConfirmTitle"><i class="bi bi-question-circle text-warning me-2" aria-hidden="true"></i><span></span></h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
           </div>
-          <div class="modal-body">${message}</div>
+          <div class="modal-body" style="white-space:pre-line"></div>
           <div class="modal-footer border-0">
-            <button type="button" class="btn btn-secondary btn-cancel" data-bs-dismiss="modal">إلغاء</button>
-            <button type="button" class="btn btn-danger btn-confirm">تأكيد</button>
+            <button type="button" class="btn btn-outline-secondary btn-cancel" data-bs-dismiss="modal">إلغاء</button>
+            <button type="button" class="btn btn-confirm"></button>
           </div>
         </div>
       </div>
-    </div>
-  `;
-  
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = modalHTML;
-  return tempDiv.firstElementChild;
+    </div>`;
+  const modal = tempDiv.firstElementChild;
+  modal.querySelector('.modal-title span').textContent = opts.title || 'تأكيد العملية';
+  modal.querySelector('.modal-body').textContent = opts.message || '';
+  const ok = modal.querySelector('.btn-confirm');
+  ok.textContent = opts.okText || 'تأكيد';
+  ok.classList.add(opts.danger === false ? 'btn-primary' : 'btn-danger');
+  return modal;
 }
+
+/**
+ * التأكيدُ التصريحيّ — بدل onsubmit="return confirm(…)" المضمَّنة في القوالب:
+ *
+ *   <form data-confirm="حذف القالب «{{ tpl.name }}»؟" data-confirm-ok="احذف">
+ *   <button type="submit" data-confirm="…" data-confirm-tone="safe">   (الزرُّ يغلب النموذج)
+ *
+ * النصُّ صفةُ HTML يهرّبها القالبُ تهريبَه العاديّ — والنصُّ داخل سلسلة JS في صفة
+ * حدثٍ لم يكن يحميه ذلك التهريب (المتصفّحُ يفكّ الكيانات قبل تحليل JS). يُلتقط في
+ * طور الالتقاط فلا يبلغ الإرسالُ معالجاتِ النموذج (ومنها مُعطِّلُ الأزرار) قبل الموافقة.
+ */
+document.addEventListener('submit', function (e) {
+  const form = e.target;
+  const submitter = e.submitter;
+  const src = submitter && submitter.dataset.confirm ? submitter : (form.dataset.confirm ? form : null);
+  if (!src || form.dataset.confirmed === '1') return;
+  e.preventDefault();
+  e.stopPropagation();
+  confirmDelete({
+    title: src.dataset.confirmTitle,
+    message: src.dataset.confirm,
+    okText: src.dataset.confirmOk,
+    danger: src.dataset.confirmTone !== 'safe',
+  }).then(function (ok) {
+    if (!ok) return;
+    form.dataset.confirmed = '1';
+    try {
+      // requestSubmit يُبقي الزرَّ المُرسِل (name/value وformaction) — submit() يُسقطه
+      if (typeof form.requestSubmit !== 'function') form.submit();
+      else if (submitter) form.requestSubmit(submitter);
+      else form.requestSubmit();
+    } finally {
+      delete form.dataset.confirmed;
+    }
+  });
+}, true);
 
 // ================================
 // 3. البحث المباشر (Live Search)

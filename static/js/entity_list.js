@@ -54,7 +54,13 @@
     if (mergeBtn) mergeBtn.style.display = checked >= 2 ? 'inline-block' : 'none';
     if (mergeCountSpan) mergeCountSpan.textContent = checked;
     // نقلُ التبويب — واحدةٌ تكفي، بخلاف الدمج الذي يلزمه اثنتان.
-    if (kindMoveGroup) kindMoveGroup.style.display = checked > 0 ? 'inline-flex' : 'none';
+    if (kindMoveGroup) {
+      kindMoveGroup.style.display = checked > 0 ? 'inline-flex' : 'none';
+      // التأكيدُ يسمّي العددَ والتبويب (تدقيقُ نيلسن D#13) — حواريّةُ data-confirm في app.js
+      kindMoveGroup.querySelectorAll('[data-kind-label]').forEach(btn => {
+        btn.dataset.confirm = 'نقل ' + checked + ' جهةً إلى تبويب «' + btn.dataset.kindLabel + '»؟';
+      });
+    }
   }
   document.addEventListener('change', e => {
     if (e.target && e.target.classList && e.target.classList.contains('row-check')) {
@@ -80,14 +86,5 @@
     const url = mergeBtn.dataset.mergeUrl || '';
     window.location.href = url + '?ids=' + ids.join(',');
   });
-
-  // ── تأكيد تعطيل الجهة (نموذج فردي) ──
-  document.querySelectorAll('form.entity-delete-form').forEach(form => {
-    form.addEventListener('submit', ev => {
-      const name = form.dataset.entityName || 'هذه الجهة';
-      if (!confirm(`تعطيل جهة ${name}؟ ستُخفى من القوائم مع الحفاظ على سجلّها.`)) {
-        ev.preventDefault();
-      }
-    });
-  });
+  // تأكيدُ تعطيل الجهة الفرديّ صار data-confirm على نموذجه (حواريّةُ app.js الواحدة)
 })();

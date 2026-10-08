@@ -210,7 +210,7 @@
     </div>
     <div class="d-flex gap-2">
       {% if showing_inactive %}
-      <button type="submit" form="entitiesForm" class="btn btn-sm btn-outline-success" id="deleteSelectedBtn" style="display: none;" onclick="return confirm('استرجاع الجهات المحددة؟');">
+      <button type="submit" form="entitiesForm" class="btn btn-sm btn-outline-success" id="deleteSelectedBtn" style="display: none;" data-confirm="استرجاع الجهات المحددة؟" data-confirm-ok="استرجع" data-confirm-tone="safe">
         <i class="bi bi-arrow-counterclockwise me-1"></i>استرجاع المحدد (<span id="selectedCount">0</span>)
       </button>
       {% else %}
@@ -218,7 +218,7 @@
               style="display: none;" data-merge-url="{% url 'entity_merge' %}">
         <i class="bi bi-union me-1"></i>دمج المحدد (<span id="mergeCount">0</span>)
       </button>
-      <button type="submit" form="entitiesForm" class="btn btn-sm btn-outline-danger" id="deleteSelectedBtn" style="display: none;" onclick="return confirm('تعطيل الجهات المحددة؟ ستُخفى من القوائم مع الحفاظ على سجلّاتها.');">
+      <button type="submit" form="entitiesForm" class="btn btn-sm btn-outline-danger" id="deleteSelectedBtn" style="display: none;" data-confirm="تعطيل الجهات المحددة؟ ستُخفى من القوائم مع الحفاظ على سجلّاتها." data-confirm-ok="عطّل">
         <i class="bi bi-archive me-1"></i>تعطيل المحدد (<span id="selectedCount">0</span>)
       </button>
       {% comment %}
@@ -233,7 +233,8 @@
         {# تأكيدٌ يسمّي العددَ والتبويب: كان النقلُ يُرسَل فوراً بجوار «تعطيل» وبنمطه (تدقيقُ نيلسن D#13) #}
         <button type="submit" form="entitiesForm" formaction="{% url 'entity_set_kind' %}"
                 name="kind" value="{{ t.key }}" class="btn btn-sm btn-outline-secondary"
-                onclick="return confirm('نقل ' + document.getElementById('selectedCount').textContent + ' جهةً إلى تبويب «{{ t.label|escapejs }}»؟');">
+                data-kind-label="{{ t.label }}" data-confirm="نقل الجهات المحددة إلى تبويب «{{ t.label }}»؟"
+                data-confirm-ok="انقل" data-confirm-tone="safe">
           {{ t.label }}
         </button>
         {% endfor %}
@@ -326,7 +327,7 @@
                     </button>
                   </form>
                   {% else %}
-                  <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline entity-delete-form" data-entity-name="{{ e.name|escapejs }}">
+                  <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline" data-confirm="تعطيل جهة {{ e.name }}؟ ستُخفى من القوائم مع الحفاظ على سجلّها." data-confirm-ok="عطّل">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="تعطيل الجهة">
                       <i class="bi bi-archive"></i>
@@ -412,7 +413,7 @@
               </button>
             </form>
             {% else %}
-            <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline entity-delete-form" data-entity-name="{{ e.name|escapejs }}">
+            <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline" data-confirm="تعطيل جهة {{ e.name }}؟ ستُخفى من القوائم مع الحفاظ على سجلّها." data-confirm-ok="عطّل">
               {% csrf_token %}
               <button type="submit" class="btn btn-sm btn-outline-danger" title="تعطيل الجهة">
                 <i class="bi bi-archive"></i>
@@ -453,6 +454,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/entity_list.js' %}?v=20260831"></script>
+<script src="{% static 'js/entity_list.js' %}?v=20261008"></script>
 <script src="{% static 'js/member_picker.js' %}?v=20260831"></script>
 {% endblock %}
