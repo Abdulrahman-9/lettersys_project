@@ -475,9 +475,10 @@ def mail_template_edit(request, template_id=None):
 
 @login_required
 @require_http_methods(['POST'])
+@staff_required
 def mail_template_delete(request, template_id):
-    if not request.user.is_staff:
-        raise PermissionDenied("حذفُ القوالب لمديري النظام.")
+    # الحارسُ الواحد كجاراتها (القوالب · التحرير · الإعدادات) — كان `is_staff` وحدَه فيُردّ
+    # مديرُ النظام الذي ليس «موظّفاً» عن حذفٍ يرى زرّه
     from core.models import EmailTemplate
     tpl  = get_object_or_404(EmailTemplate, pk=template_id)
     name = tpl.name

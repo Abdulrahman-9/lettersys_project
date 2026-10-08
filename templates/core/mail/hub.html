@@ -1160,7 +1160,8 @@ async function sendMail(e) {
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ success: false,
+      message: `ردٌّ غير متوقَّع من الخادم (${res.status}) — لم تُرسَل الرسالة` }));
     if (data.success) {
       showToast('تم الإرسال بنجاح ✓');
       document.getElementById('composeForm')?.reset();
@@ -1184,12 +1185,16 @@ async function loadTemplate(tplId, bookId, entityId) {
   const params = new URLSearchParams();
   if (bookId)   params.set('book_id',   bookId);
   if (entityId) params.set('entity_id', entityId);
-  const res  = await fetch(`/books/mail/api/template/${tplId}/preview/?${params}`);
-  const data = await res.json();
-  if (data.success) {
+  // كان يفشل صامتاً: يُختار القالبُ ولا يتغيّر شيءٌ ولا يُقال لماذا (H9)
+  try {
+    const res  = await fetch(`/books/mail/api/template/${tplId}/preview/?${params}`);
+    const data = await res.json().catch(() => ({}));
+    if (!data.success) throw new Error(data.message || 'تعذّر تحميل القالب');
     if (document.getElementById('f_subject')) document.getElementById('f_subject').value = data.subject;
     if (document.getElementById('f_body'))    document.getElementById('f_body').value    = data.body;
     showToast('تم تحميل القالب');
+  } catch (err) {
+    showToast((err && err.message) || 'تعذّر تحميل القالب', false);
   }
 }
 
@@ -1261,13 +1266,15 @@ async function triggerSync() {
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جارٍ المزامنة...';
   try {
     const res  = await fetch('{% url "mail-api-inbox-sync" %}', { method: 'POST', headers: { 'X-CSRFToken': CSRF } });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ success: false, message: `ردٌّ غير متوقَّع من الخادم (${res.status})` }));
     if (data.success) {
       showToast(`المزامنة اكتملت — ${data.new} رسالة جديدة`);
       if (data.new > 0) setTimeout(() => location.reload(), 1500);
     } else {
       showToast(data.message || 'فشل المزامنة', false);
     }
+  } catch (err) {
+    showToast('تعذّرت المزامنة — تحقّق من الاتصال ثمّ أعد المحاولة', false);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>مزامنة الآن';
@@ -1276,13 +1283,17 @@ async function triggerSync() {
 
 // ── تغيير حالة الخيط ──
 async function changeThreadStatus(threadId, status) {
-  const res  = await fetch(`/books/mail/api/thread/${threadId}/status/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-    body: JSON.stringify({ status }),
-  });
-  const data = await res.json();
-  showToast(data.success ? 'تم تحديث الحالة' : (data.message || 'خطأ'), data.success);
+  try {
+    const res  = await fetch(`/books/mail/api/thread/${threadId}/status/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json().catch(() => ({}));
+    showToast(data.success ? 'تم تحديث الحالة' : (data.message || 'تعذّر تحديث الحالة'), !!data.success);
+  } catch (err) {
+    showToast('تعذّر تحديث الحالة — تحقّق من الاتصال', false);
+  }
 }
 
 // ── اختبار SMTP ──
