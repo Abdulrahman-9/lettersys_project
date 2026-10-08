@@ -33,6 +33,7 @@ python manage.py models_healthcheck --strict --load --hash   # بوّابةُ ن
 # Management commands
 python manage.py seed_demo_books          # populate demo data
 python manage.py check_overdue_books      # flag overdue books
+#   ⤷ تصحيح 2026-10-08: الأمرُ اسمُه `notify_overdue_books` (لا `check_overdue_books`) — **وغيرُ مجدولٍ** في Celery beat ولا في سكربت؛ تبويبُ «الإشعارات» يقول ذلك ويُظهر آخرَ إشعار. جدولتُه قرارُ المالك (أوّلُ تشغيلٍ يُشعر بكلّ متأخّرٍ قائم).
 python manage.py import_legacy            # import legacy data
 #   ⤷ أُزيل 2026-10-07 مع صفحة legacy-import ومحرّكها (الترحيلُ تمّ؛ «بادئةُ الأرقام» تناقض numbering.py) — المسارُ الوحيدُ للقديم restore-data ⟵ run_restore_job
 python manage.py collectstatic            # production static files

@@ -74,13 +74,13 @@
           <form method="post" action="{% url 'settings_general_save' %}">
             {% csrf_token %}
             <div class="mb-3">
-              <label class="form-label fw-semibold">اسم النظام</label>
-              <input type="text" name="app_name" maxlength="100" required class="form-control"
+              <label class="form-label fw-semibold" for="gen_app_name">اسم النظام</label>
+              <input type="text" id="gen_app_name" name="app_name" maxlength="100" required class="form-control"
                      value="{{ system_settings.app_name|default:'نظام الكتب' }}" placeholder="نظام الكتب">
             </div>
             <div class="mb-3">
-              <label class="form-label fw-semibold">سطر الوصف في الترويسة</label>
-              <input type="text" name="brand_subtitle" maxlength="200" class="form-control"
+              <label class="form-label fw-semibold" for="gen_subtitle">سطر الوصف في الترويسة</label>
+              <input type="text" id="gen_subtitle" name="brand_subtitle" maxlength="200" class="form-control"
                      value="{{ system_settings.brand_subtitle|default:'' }}" placeholder="وصف مختصر يظهر أسفل الاسم">
             </div>
             <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
@@ -111,7 +111,7 @@
           <span class="settings-pane-icon" style="--accent:#b45309;"><i class="bi bi-bell-fill"></i></span>
           <div>
             <h5 class="mb-1 fw-bold">سياسة إشعارات التأخّر</h5>
-            <p class="text-muted mb-0">تتحكّم بما يفعله فحصُ الكتب المتأخّرة الذي يجري كلَّ يوم.</p>
+            <p class="text-muted mb-0">تتحكّم بما يفعله فحصُ الكتب المتأخّرة (<code dir="ltr">notify_overdue_books</code>) حين يُشغَّل.</p>
           </div>
         </div>
         <div class="settings-pane-body">
@@ -135,6 +135,15 @@
               <label class="form-check-label fw-semibold" for="ov_email">إرسال بريد ملخّص للمدراء</label>
               <div class="text-muted small">يتطلّب تفعيل إعدادات البريد.</div>
             </div>
+            {% if last_overdue_notice %}
+            <div class="text-muted small mb-3">آخرُ إشعار تأخّرٍ أُرسل: <span class="num">{{ last_overdue_notice|date:"d/m/Y H:i" }}</span></div>
+            {% else %}
+            <div class="alert alert-warning py-2 small mb-3">
+              <i class="bi bi-exclamation-triangle-fill ms-1"></i>
+              لم يُرسَل أيُّ إشعار تأخّرٍ قطّ — الفحصُ لا يجري وحدَه: يلزمه أن يُجدوَل الأمرُ يوميّاً على الخادم، وإلّا فلا أثرَ لهذه المفاتيح.
+              والمتأخّرُ ظاهرٌ في كلّ الأحوال في اللوحة و«ما يخصّني اليوم» والطاولات.
+            </div>
+            {% endif %}
             <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
           </form>
         </div>
@@ -155,10 +164,10 @@
           <form method="post" action="{% url 'settings_security_save' %}">
             {% csrf_token %}
             <div class="mb-3" style="max-width:280px;">
-              <label class="form-label fw-semibold">الحد الأدنى لطول كلمة المرور</label>
-              <input type="number" name="password_min_length" min="4" max="64" required class="form-control"
+              <label class="form-label fw-semibold" for="sec_min_len">الحد الأدنى لطول كلمة المرور</label>
+              <input type="number" id="sec_min_len" name="password_min_length" min="4" max="64" required class="form-control"
                      value="{{ sec_settings.password_min_length }}">
-              <div class="text-muted small mt-1">يُطبَّق عند إنشاء المستخدمين في شاشة «المستخدمون والأدوار».</div>
+              <div class="text-muted small mt-1">يُطبَّق عند إنشاء المستخدمين وإعادة تعيين كلماتهم، وعند تغيير المستخدم كلمتَه بنفسه.</div>
             </div>
             <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
           </form>
@@ -185,24 +194,24 @@
             </div>
             <div class="row g-3">
               <div class="col-md-4">
-                <label class="form-label fw-semibold">التكرار</label>
-                <select name="frequency" class="form-select">
+                <label class="form-label fw-semibold" for="bk_frequency">التكرار</label>
+                <select name="frequency" id="bk_frequency" class="form-select">
                   {% for val, label in backup_settings.FREQUENCY_CHOICES %}
                   <option value="{{ val }}" {% if backup_settings.frequency == val %}selected{% endif %}>{{ label }}</option>
                   {% endfor %}
                 </select>
               </div>
               <div class="col-md-4">
-                <label class="form-label fw-semibold">ساعة التشغيل (0–23)</label>
-                <input type="number" name="hour" min="0" max="23" class="form-control" value="{{ backup_settings.hour }}">
+                <label class="form-label fw-semibold" for="bk_hour">ساعة التشغيل (0–23)</label>
+                <input type="number" id="bk_hour" name="hour" min="0" max="23" class="form-control" value="{{ backup_settings.hour }}">
               </div>
               <div class="col-md-4">
-                <label class="form-label fw-semibold">مدة الاحتفاظ (يوم)</label>
-                <input type="number" name="retention_days" min="1" max="3650" class="form-control" value="{{ backup_settings.retention_days }}">
+                <label class="form-label fw-semibold" for="bk_retention">مدة الاحتفاظ (يوم)</label>
+                <input type="number" id="bk_retention" name="retention_days" min="1" max="3650" class="form-control" value="{{ backup_settings.retention_days }}">
               </div>
             </div>
             {% if backup_settings.last_run_at %}
-            <div class="text-muted small mt-3">آخر تشغيل ناجح: {{ backup_settings.last_run_at }}</div>
+            <div class="text-muted small mt-3">آخر تشغيل ناجح: <span class="num">{{ backup_settings.last_run_at|date:"d/m/Y H:i" }}</span></div>
             {% elif backup_settings.enabled %}
             <div class="alert alert-warning py-2 small mt-3 mb-0">
               <i class="bi bi-exclamation-triangle-fill ms-1"></i>

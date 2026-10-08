@@ -21,7 +21,7 @@
     {% for msg in messages %}
     <div class="alert alert-{% if 'error' in msg.tags %}danger{% else %}{{ msg.tags }}{% endif %} alert-dismissible fade show" role="alert">
         {{ msg }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
     </div>
     {% endfor %}
     {% endif %}
@@ -48,8 +48,8 @@
                         {% comment %}حقلُ «البادئة» أُزيل: البادئاتُ ملغاة (core/numbering.py) والحقلُ «مهمل» في النموذج،
                            فمثالُ «و/» كان يَعِد بما لا يحدث (تدقيقُ نيلسن E#15){% endcomment %}
                         <div>
-                            <label class="form-label fw-semibold" style="font-size:0.85rem;">الرقم التالي</label>
-                            <input type="number" name="next_number_{{ seq.kind }}" value="{{ seq.obj.next_number }}" min="1" class="form-control form-control-sm">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;" for="next_{{ seq.kind }}">الرقم التالي</label>
+                            <input type="number" id="next_{{ seq.kind }}" name="next_number_{{ seq.kind }}" value="{{ seq.obj.next_number }}" min="1" class="form-control form-control-sm">
                         </div>
                         <div class="text-muted mt-2" style="font-size:0.8rem;">
                             الرقمُ التالي كما سيظهر: <strong>{{ seq.obj.next_number }}</strong>
@@ -75,10 +75,10 @@
                     </div>
                     <div class="row g-3">
                         <div class="col-md-5">
-                            <label class="form-label fw-semibold" style="font-size:0.85rem;">
-                                ⏱ مدة صلاحية الحجز (دقيقة)
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;" for="resTtl">
+                                <i class="bi bi-stopwatch" aria-hidden="true"></i> مدة صلاحية الحجز (دقيقة)
                             </label>
-                            <input type="number" name="reservation_expire_minutes"
+                            <input type="number" id="resTtl" name="reservation_expire_minutes"
                                    value="{{ reservation_settings.expire_minutes }}"
                                    min="{{ reservation_settings.ttl_min }}"
                                    max="{{ reservation_settings.ttl_max }}"

@@ -34,7 +34,15 @@ logger = logging.getLogger(__name__)
 @staff_required
 def settings_hub(request):
     """يعرض مركز الإعدادات. التبويب النشط يختاره العميل من ``?tab=``."""
+    from django.db.models import Max
+
+    from ..models import BookHistory
+
+    # أثرُ فحص التأخّر الوحيد: صفُّ «overdue» الذي يكتبه notify_overdue_books لكلّ كتابٍ أبلغ عنه.
+    # الأمرُ غيرُ مجدولٍ (لا في Celery beat ولا في سكربت) — فالتبويبُ يقول ما جرى لا ما يُفترض.
+    last_overdue = BookHistory.objects.filter(action='overdue').aggregate(m=Max('created_at'))['m']
     return render(request, 'core/settings/hub.html', {
+        'last_overdue_notice': last_overdue,
         'notif_settings': NotificationSettings.get(),
         'sec_settings': SecuritySettings.get(),
         'backup_settings': BackupSettings.get(),
