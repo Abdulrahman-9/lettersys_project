@@ -76,6 +76,13 @@ def entity_list(request):
     Returns:
         Rendered template with entities list
     """
+    # `?view=groups` لمن لا يملك الورشة رابطٌ محفوظٌ لا اعتداء — يُعاد إلى الدليل بلا
+    # المفتاح، فلا تحمله روابطُ المرشِّحات (``{% qs %}``) ويبدو بابُ الورشة مفتوحاً.
+    if request.GET.get('view') == 'groups' and not can_manage_accounts(request.user):
+        params = request.GET.copy()
+        params.pop('view')
+        return redirect(reverse('entity_list') + ('?' + params.urlencode() if params else ''))
+
     # فلتر اللغة (ar/en/all) + بحث server-side + حالة (نشطة/معطّلة)
     lang_filter = (request.GET.get('lang') or 'all').strip()
     search_q = (request.GET.get('q') or '').strip()
@@ -382,7 +389,7 @@ def entity_delete(request, pk):
         request,
         f"تم تعطيل الجهة «{entity.name}» — أُخفيت من القوائم مع الحفاظ على سجلّها وروابطها بالكتب.",
     )
-    return redirect("entity_list")
+    return _back_to_list(request)
 
 
 @staff_required
@@ -401,7 +408,7 @@ def entity_bulk_delete(request):
         request,
         f"تم تعطيل {count} جهة — أُخفيت من القوائم مع الحفاظ على سجلّاتها وروابطها بالكتب.",
     )
-    return redirect("entity_list")
+    return _back_to_list(request)
 
 
 @staff_required
@@ -434,10 +441,16 @@ def entity_set_kind(request):
     # العودةً إلى المرشِّح الذي جاء منه المستخدم — وسلسلةُ استعلامٍ فقط:
     # قبولُ عنوانٍ كاملاً هنا يفتح تحويلاً مفتوحاً (open redirect)، وسطرٌ
     # ثانٍ فيه يفتح حقنَ ترويسة.
+    return _back_to_list(request)
+
+
+def _back_to_list(request, default="entity_list"):
+    """العودةُ إلى المرشِّح الذي جاء منه المستخدم — سلسلةُ استعلامٍ فقط: قبولُ عنوانٍ
+    كاملاً يفتح تحويلاً مفتوحاً (open redirect)، وسطرٌ ثانٍ فيه يفتح حقنَ ترويسة."""
     back = (request.POST.get("back") or "").strip()
     if back.startswith("?") and len(back.splitlines()) == 1:
         return redirect(reverse("entity_list") + back)
-    return redirect("entity_list")
+    return redirect(default)
 
 
 @staff_required

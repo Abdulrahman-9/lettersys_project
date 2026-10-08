@@ -25,17 +25,23 @@
 <div class="app-sidebar-panel app-sidebar-context-panel">
   <div class="app-sidebar-section-title">أقسام السجل</div>
   <div class="nav nav-pills flex-column gap-2" role="tablist" aria-orientation="vertical">
-    <button class="btn btn-light text-end active" id="issued-tab" data-bs-toggle="tab" data-bs-target="#issued-pane" type="button" role="tab" aria-selected="true">
+    {# التبويبُ يبقى حيث كان المستخدم: ترقيمُ «المستلمة» (?pr=) كان يُعيد الصفحةَ على «المُصدرة» (H3) #}
+    <button class="btn btn-light text-end{% if not request.GET.pr %} active{% endif %}" id="issued-tab" data-bs-toggle="tab" data-bs-target="#issued-pane" type="button" role="tab" aria-selected="{% if request.GET.pr %}false{% else %}true{% endif %}">
       <i class="bi bi-arrow-up-right text-primary me-1"></i>كتب مُصدرة
       <span class="badge bg-primary ms-1">{{ issued_count }}</span>
     </button>
-    <button class="btn btn-light text-end" id="received-tab" data-bs-toggle="tab" data-bs-target="#received-pane" type="button" role="tab" aria-selected="false">
+    <button class="btn btn-light text-end{% if request.GET.pr %} active{% endif %}" id="received-tab" data-bs-toggle="tab" data-bs-target="#received-pane" type="button" role="tab" aria-selected="{% if request.GET.pr %}true{% else %}false{% endif %}">
       <i class="bi bi-arrow-down-left text-success me-1"></i>كتب مُستلمة
       <span class="badge bg-success ms-1">{{ received_count }}</span>
     </button>
   </div>
 </div>
 
+{% comment %}
+  الصفحةُ لكلّ موظّف (من رقاقة جهةٍ في ملفّ الكتاب)، والدليلُ وتعديلُه لإدارة النظام
+  (`staff_required`) — فالرابطان لمن يفتحهما (`nav.admin`)، لا 403 (تدقيقُ 2026‑10‑08).
+{% endcomment %}
+{% if nav.admin %}
 <div class="app-sidebar-panel app-sidebar-context-panel">
   <div class="app-sidebar-section-title">إجراءات</div>
   <div class="app-context-list">
@@ -49,6 +55,7 @@
     </a>
   </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -76,10 +83,12 @@
             <p class="text-muted mb-0">{{ entity.notes }}</p>
           {% endif %}
         </div>
+        {% if nav.admin %}
         <div class="d-flex gap-2">
           <a href="{% url 'entity_list' %}" class="btn btn-sm btn-light"><i class="bi bi-arrow-right me-1"></i>القائمة</a>
           <a href="{% url 'entity_edit' entity.pk %}?next={% url 'entity_detail' entity.pk %}" class="btn btn-sm btn-dark"><i class="bi bi-pencil-square me-1"></i>تعديل</a>
         </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -116,7 +125,7 @@
 
   <div class="tab-content">
     <!-- كتب مُصدرة -->
-    <div class="tab-pane fade show active" id="issued-pane" role="tabpanel">
+    <div class="tab-pane fade{% if not request.GET.pr %} show active{% endif %}" id="issued-pane" role="tabpanel">
       <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
         <div class="card-body p-0">
           {% if issued_books %}
@@ -135,8 +144,8 @@
               </thead>
               <tbody>
                 {% for book in issued_books %}
-                <tr style="cursor:pointer" data-book-preview="{{ book.pk }}">
-                  <td class="text-muted">{{ forloop.counter }}</td>
+                <tr{% if not book.restricted %} style="cursor:pointer" data-book-preview="{{ book.pk }}"{% endif %}>
+                  <td class="text-muted">{{ issued_books.start_index|add:forloop.counter0 }}</td>
                   <td class="fw-bold">
                     <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number_display }}</a>
                   </td>
@@ -155,7 +164,7 @@
                     {% if book.followup_state == 'pending' %}<span class="badge" style="background:rgba(37,99,235,0.15);color:#1e40af;">قيد المتابعة</span>
                     {% elif book.followup_state == 'due_today' %}<span class="badge" style="background:rgba(217,119,6,0.18);color:#b45309;">مستحق اليوم</span>
                     {% elif book.followup_state == 'overdue' %}<span class="badge" style="background:rgba(220,38,38,0.18);color:#b91c1c;">متأخر</span>
-                    {% else %}<span class="badge" style="background:rgba(100,116,139,0.18);color:#475569;">مؤرشف</span>{% endif %}
+                    {% else %}<span class="badge" style="background:rgba(100,116,139,0.18);color:#475569;">مُنجَز / بلا متابعة</span>{% endif %}
                   </td>
                 </tr>
                 {% endfor %}
@@ -188,7 +197,7 @@
     </div>
 
     <!-- كتب مُستلمة -->
-    <div class="tab-pane fade" id="received-pane" role="tabpanel">
+    <div class="tab-pane fade{% if request.GET.pr %} show active{% endif %}" id="received-pane" role="tabpanel">
       <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
         <div class="card-body p-0">
           {% if received_books %}
@@ -207,8 +216,8 @@
               </thead>
               <tbody>
                 {% for book in received_books %}
-                <tr style="cursor:pointer" data-book-preview="{{ book.pk }}">
-                  <td class="text-muted">{{ forloop.counter }}</td>
+                <tr{% if not book.restricted %} style="cursor:pointer" data-book-preview="{{ book.pk }}"{% endif %}>
+                  <td class="text-muted">{{ received_books.start_index|add:forloop.counter0 }}</td>
                   <td class="fw-bold">
                     <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number_display }}</a>
                   </td>
@@ -227,7 +236,7 @@
                     {% if book.followup_state == 'pending' %}<span class="badge" style="background:rgba(37,99,235,0.15);color:#1e40af;">قيد المتابعة</span>
                     {% elif book.followup_state == 'due_today' %}<span class="badge" style="background:rgba(217,119,6,0.18);color:#b45309;">مستحق اليوم</span>
                     {% elif book.followup_state == 'overdue' %}<span class="badge" style="background:rgba(220,38,38,0.18);color:#b91c1c;">متأخر</span>
-                    {% else %}<span class="badge" style="background:rgba(100,116,139,0.18);color:#475569;">مؤرشف</span>{% endif %}
+                    {% else %}<span class="badge" style="background:rgba(100,116,139,0.18);color:#475569;">مُنجَز / بلا متابعة</span>{% endif %}
                   </td>
                 </tr>
                 {% endfor %}
