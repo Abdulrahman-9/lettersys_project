@@ -31,6 +31,8 @@ def scope_existing_reservations(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
+    atomic = False
+
     dependencies = [
         ('core', '0079_reservation_ttl'),
     ]
