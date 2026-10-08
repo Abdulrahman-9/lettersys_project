@@ -186,6 +186,8 @@
     if (totalEl) totalEl.textContent = p.count;
 
     if (!listEl) return;
+    const nav = document.getElementById('paginationNav');
+    if (nav) nav.hidden = !(p.total > 1);
     const prevParams = Object.assign({}, currentParams, { page: p.current - 1 });
     const nextParams = Object.assign({}, currentParams, { page: p.current + 1 });
 

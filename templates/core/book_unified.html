@@ -39,10 +39,10 @@
         <span id="bulkSelectedCount">0</span> محدد
       </span>
       <div class="bulk-actions-buttons">
-        <button class="btn btn-sm" id="bulkDeleteBtn"><i class="bi bi-trash"></i> حذف</button>
-        <button class="btn btn-sm" id="bulkUpdateStatusBtn"><i class="bi bi-arrow-repeat"></i> تحديث الحالة</button>
+        <button type="button" class="btn btn-sm" id="bulkDeleteBtn"><i class="bi bi-trash" aria-hidden="true"></i> نقل إلى السلّة</button>
+        <button type="button" class="btn btn-sm" id="bulkUpdateStatusBtn"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> تحديث الحالة</button>
       </div>
-      <button class="btn btn-sm" id="bulkClearBtn">إلغاء</button>
+      <button type="button" class="btn btn-sm" id="bulkClearBtn">إلغاء التحديد</button>
     </div>
   </div>
 
@@ -94,9 +94,13 @@
         <i class="bi bi-printer"></i> طباعة
       </button>
     </div>
-    {% if page_obj.has_other_pages %}
-      <nav aria-label="ترقيم الصفحات">
+    {% comment %}
+      الشريطُ يُرسم دائماً ويُخفى بلا صفحاتٍ أخرى: كان يُحذف من الصفحة فلا يجد
+      التحميلُ اللاحق (AJAX) أين يرسم «التالي» بعد مسح بحثٍ أعاد صفحاتٍ كثيرة.
+    {% endcomment %}
+      <nav aria-label="ترقيم الصفحات" id="paginationNav"{% if not page_obj.has_other_pages %} hidden{% endif %}>
         <ul class="pagination pagination-sm mb-0" id="paginationList">
+          {% if page_obj.has_other_pages %}
           {% if page_obj.has_previous %}
             <li class="page-item"><a class="page-link" href="?{% if base_querystring %}{{ base_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">السابق</a></li>
           {% else %}
@@ -108,23 +112,23 @@
           {% else %}
             <li class="page-item disabled"><span class="page-link">التالي</span></li>
           {% endif %}
+          {% endif %}
         </ul>
       </nav>
-    {% endif %}
   </div>
 
 </div>
 
 {# المودالات #}
-<div class="modal fade" id="bulkUpdateModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="bulkUpdateModal" tabindex="-1" aria-hidden="true" aria-labelledby="bulkUpdateTitle">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">تحديث حالة متعددة</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h5 class="modal-title" id="bulkUpdateTitle">تحديث حالة متعددة</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
       </div>
       <div class="modal-body">
-        <select class="form-select" id="bulkStatusSelect" required>
+        <select class="form-select" id="bulkStatusSelect" required aria-label="الإجراء على الكتب المحدّدة">
           {% comment %}القيمتان اللتان يقبلهما الخادم وحدَهما (api_bulk_update_status): كانت الخياراتُ
              pending/hold/done فيُرفض كلُّ تحديثٍ جماعيّ (تدقيقُ نيلسن 2026‑10‑07، A#1){% endcomment %}
           <option value="">اختر الإجراء…</option>
@@ -147,9 +151,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20261007c"></script>
-<script src="{% static 'js/book_unified_actions.js' %}?v=20261007"></script>
-<script src="{% static 'js/book_unified_api.js' %}?v=20261007"></script>
+<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20261008"></script>
+<script src="{% static 'js/book_unified_actions.js' %}?v=20261008"></script>
+<script src="{% static 'js/book_unified_api.js' %}?v=20261008"></script>
 <script src="{% static 'js/book_column_resize.js' %}?v=20260707c"></script>
 <script src="{% static 'js/number_hint.js' %}?v=20260810"></script>
 {% comment %}

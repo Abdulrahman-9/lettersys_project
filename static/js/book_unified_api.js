@@ -136,11 +136,15 @@
     const bookId = trigger.getAttribute("data-book-id") || (bookRow ? bookRow.getAttribute("data-book-id") : "");
     if (!deleteUrl || !bookRow) return true;
 
+    // حواريّةُ التطبيق لا confirm() الأصليّة (H4) — والنقرةُ «التُقطت» فوراً، والسؤالُ بعدها
     const bookNumber = trigger.getAttribute("data-book-number") || "";
-    const confirmed = window.confirm(`تأكيد حذف الكتاب ${bookNumber}؟ سيتم نقله إلى السلة.`);
-    if (!confirmed) return true;
-
-    performDelete(trigger, deleteUrl, bookRow, bookId);
+    window.confirmDelete({
+      title: "نقل إلى السلّة",
+      message: (bookNumber ? "نقل الكتاب " + bookNumber : "نقل هذا الكتاب") + " إلى السلّة؟ يُستعاد منها، أو بـ«تراجع» فور النقل.",
+      okText: "انقل إلى السلّة",
+    }).then(function (ok) {
+      if (ok) performDelete(trigger, deleteUrl, bookRow, bookId);
+    });
     return true;
   }
 
@@ -155,7 +159,7 @@
           "X-Requested-With": "XMLHttpRequest",
         },
       });
-      const payload = await response.json();
+      const payload = await response.json().catch(function () { return {}; });
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || "فشل الحذف");
       }
@@ -197,7 +201,7 @@
         method: "POST",
         headers: { "X-CSRFToken": getCsrfToken(), "X-Requested-With": "XMLHttpRequest" },
       });
-      const payload = await response.json();
+      const payload = await response.json().catch(function () { return {}; });
       if (!response.ok || payload.error) throw new Error(payload.error || "تعذّر التراجع");
       showToast(payload.message || "أُعيد الكتاب", "success");
       // الصفُّ أُزيل من DOM؛ أعِد تحميلَ القائمة في المكان بحالتها (تبويب/فلتر/صفحة)
@@ -219,8 +223,11 @@
     archived:  { label: "مُنجَز / بلا متابعة", icon: "bi-check2-circle" },
   };
 
-  function closeStatusPopover() {
-    document.querySelectorAll(".status-popover").forEach(function (p) { p.remove(); });
+  function closeStatusPopover(restoreFocus) {
+    document.querySelectorAll(".status-popover").forEach(function (p) {
+      if (restoreFocus && p._badge) p._badge.focus();
+      p.remove();
+    });
   }
 
   function openStatusPopover(badge) {
@@ -268,6 +275,10 @@
     const rect = badge.getBoundingClientRect();
     popover.style.top = (rect.bottom + window.scrollY + 4) + "px";
     popover.style.left = (rect.left + window.scrollX) + "px";
+    // لوحةُ المفاتيح: التركيزُ إلى الإجراء، وEsc يُغلق ويُعيده إلى الشارة
+    const first = popover.querySelector("button:not([disabled])");
+    if (first) first.focus();
+    popover._badge = badge;
   }
 
   async function applyStatusChange(badge, action) {
@@ -287,7 +298,7 @@
         },
         body: body.toString(),
       });
-      const payload = await response.json();
+      const payload = await response.json().catch(function () { return {}; });
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || "فشل تحديث الحالة");
       }
@@ -354,6 +365,6 @@
   });
 
   document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape") closeStatusPopover();
+    if (event.key === "Escape") closeStatusPopover(true);
   });
 })();

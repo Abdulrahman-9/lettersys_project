@@ -13,63 +13,6 @@
     const bulkUpdateModalEl = document.getElementById("bulkUpdateModal");
     const liveRegion = document.getElementById("bookUnifiedLiveRegion");
 
-    function parseCount(id) {
-      const el = document.getElementById(id);
-      if (!el) return 0;
-      const value = parseInt(el.textContent || "0", 10);
-      return Number.isNaN(value) ? 0 : value;
-    }
-
-    function setCount(id, value) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.textContent = String(Math.max(0, value));
-    }
-
-    function getCurrentPageNumber() {
-      const params = new URLSearchParams(window.location.search);
-      const page = parseInt(params.get("page") || "1", 10);
-      return Number.isNaN(page) || page < 1 ? 1 : page;
-    }
-
-    function navigateToPage(pageNumber) {
-      const params = new URLSearchParams(window.location.search);
-      if (pageNumber > 1) {
-        params.set("page", String(pageNumber));
-      } else {
-        params.delete("page");
-      }
-      const query = params.toString();
-      window.location.href = `${window.location.pathname}${query ? `?${query}` : ""}`;
-    }
-
-    function showEmptyStateInline() {
-      const emptyState = document.getElementById("emptyState");
-      const desktopContainer = document.getElementById("desktopTableContainer");
-      const mobileContainer = document.getElementById("mobileCardsContainer");
-      const paginationContainer = document.getElementById("paginationContainer");
-
-      if (desktopContainer) desktopContainer.style.display = "none";
-      if (mobileContainer) mobileContainer.style.display = "none";
-      if (paginationContainer) paginationContainer.style.display = "none";
-      if (emptyState) emptyState.style.display = "block";
-    }
-
-    function handlePaginationEdgeAfterBulkDelete() {
-      const remainingBooks = document.querySelectorAll("tr.book-row").length;
-      if (remainingBooks > 0) {
-        return;
-      }
-
-      const currentPage = getCurrentPageNumber();
-      if (currentPage > 1) {
-        navigateToPage(currentPage - 1);
-        return;
-      }
-
-      showEmptyStateInline();
-    }
-
     function getCsrfToken() {
       const value = `; ${document.cookie}`;
       const parts = value.split("; csrftoken=");
@@ -88,79 +31,6 @@
       return Array.from(new Set(rawIds));
     }
 
-    function removeBooksFromDom(bookIds) {
-      if (!bookIds || bookIds.length === 0) return;
-      bookIds.forEach(function (id) {
-        document
-          .querySelectorAll(`tr.book-row[data-book-id="${id}"], .book-card[data-book-id="${id}"]`)
-          .forEach(function (el) {
-            el.remove();
-          });
-      });
-    }
-
-    // الحالات الأربع الموحَّدة
-    const FOLLOWUP_STATES = ["pending", "due_today", "overdue", "archived"];
-
-    function readState(el) {
-      return el.getAttribute("data-followup-state") || el.getAttribute("data-status") || "";
-    }
-
-    function updateCountersAfterBulkDelete(bookIds) {
-      const statDelta = { pending: 0, due_today: 0, overdue: 0, archived: 0 };
-
-      bookIds.forEach(function (id) {
-        const row = document.querySelector(`tr.book-row[data-book-id="${id}"]`);
-        if (!row) return;
-        const state = readState(row);
-        if (statDelta.hasOwnProperty(state)) statDelta[state] += 1;
-      });
-
-      const deletedCount = bookIds.length;
-      // المعرّفات الحيّة: إجمالي الترقيم + شارات الحالة (pill-count-*)
-      setCount("paginationTotal", parseCount("paginationTotal") - deletedCount);
-      setCount("pill-count-pending",   parseCount("pill-count-pending")   - statDelta.pending);
-      setCount("pill-count-due-today", parseCount("pill-count-due-today") - statDelta.due_today);
-      setCount("pill-count-overdue",   parseCount("pill-count-overdue")   - statDelta.overdue);
-      setCount("pill-count-archived",  parseCount("pill-count-archived")  - statDelta.archived);
-
-      const newTo = Math.max(0, parseCount("paginationTo") - deletedCount);
-      setCount("paginationTo", newTo);
-      if (newTo === 0) {
-        setCount("paginationFrom", 0);
-      } else {
-        setCount("paginationFrom", Math.min(parseCount("paginationFrom"), newTo));
-      }
-    }
-
-    function applyStatusToBookInDom(bookId, action) {
-      // action ∈ {'archived', 'reopen'} — لا تعرف الحالة الزمنية الجديدة بدون استدعاء الخادم.
-      // نضع 'archived' أو نعتمد على re-render لاحقاً للحالات الزمنية.
-      const newState = action === "archived" ? "archived" : null;
-      const row = document.querySelector(`tr.book-row[data-book-id="${bookId}"]`);
-      const card = document.querySelector(`.book-card[data-book-id="${bookId}"]`);
-
-      function applyTo(el, prefix) {
-        if (!el) return;
-        const prevState = readState(el);
-        if (newState) {
-          el.setAttribute("data-status", newState);
-          el.setAttribute("data-followup-state", newState);
-          FOLLOWUP_STATES.forEach(function (s) { el.classList.remove(prefix + s); });
-          el.classList.add(prefix + newState);
-          // عدّادات: −previous, +archived
-          if (prevState && prevState !== newState && FOLLOWUP_STATES.includes(prevState)) {
-            const map = { pending: "pill-count-pending", due_today: "pill-count-due-today", overdue: "pill-count-overdue", archived: "pill-count-archived" };
-            setCount(map[prevState], parseCount(map[prevState]) - 1);
-            setCount(map[newState],  parseCount(map[newState])  + 1);
-          }
-        }
-      }
-
-      applyTo(row,  "book-row-");
-      applyTo(card, "book-card-");
-    }
-
     // النتيجةُ تُرى وتُسمَع: كانت تُكتب في منطقةٍ مخفيّة لقارئ الشاشة وحدَه، فلا يرى
     // المبصرُ تأكيداً ولا خطأً (تدقيقُ نيلسن 2026‑10‑07، A#7).
     function announceMessage(message, level) {
@@ -168,6 +38,40 @@
       if (window.ToastCenter && typeof window.ToastCenter.show === "function") {
         window.ToastCenter.show(level || "info", message);
       }
+    }
+
+    // الجماعيُّ يُرسل ويعرض ما يقوله الخادم — والقائمةُ تُعاد منه لا تُخمَّن.
+    // (كانت الواجهةُ تمحو كلَّ المحدَّد وتكتب حالتَه الجديدة ولو رفض الخادمُ بعضَه:
+    //  كتابٌ ليس لقسمك يختفي من الشاشة ويبقى في القاعدة — تدقيقُ 2026‑10‑08.)
+    async function postBulk(url, body) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCsrfToken(),
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: JSON.stringify(body),
+      });
+      // ردٌّ ليس JSON (صفحةُ خطأٍ أو انتهاءُ الجلسة) لا يصير «Unexpected token <»
+      const payload = await response.json().catch(function () { return {}; });
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || payload.message
+          || (response.status === 403 ? "لا تملك هذا الإجراء." : "تعذّر التنفيذ — أعد المحاولة."));
+      }
+      return payload;
+    }
+
+    async function reloadList(emptiedThePage) {
+      const mgr = window.bookAjaxManager;
+      if (!mgr || typeof mgr.updateUrlAndLoadData !== "function") {
+        window.location.reload();
+        return;
+      }
+      // أُفرغت الصفحةُ الأخيرة ⟵ السابقة، لا «صفحة 3 من 2»
+      if (emptiedThePage && mgr.currentState && mgr.currentState.page > 1) mgr.currentState.page -= 1;
+      await mgr.updateUrlAndLoadData();
+      refreshSelection();
     }
 
     function refreshSelection() {
@@ -180,10 +84,21 @@
         liveRegion.textContent = checked > 0 ? "تم تحديد " + checked + " كتاب" : "تم إلغاء جميع التحديدات";
       }
 
-      if (selectAll && rows.length > 0) {
-        selectAll.checked = checked === rows.length;
+      if (selectAll) {
+        selectAll.checked = rows.length > 0 && checked === rows.length;
         selectAll.indeterminate = checked > 0 && checked < rows.length;
       }
+    }
+
+    function clearSelection() {
+      document.querySelectorAll(".row-checkbox").forEach(function (cb) {
+        cb.checked = false;
+      });
+      if (selectAll) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      }
+      refreshSelection();
     }
 
     if (selectAll) {
@@ -201,55 +116,35 @@
       }
     });
 
-    if (clearBtn) {
-      clearBtn.addEventListener("click", function () {
-        document.querySelectorAll(".row-checkbox").forEach(function (cb) {
-          cb.checked = false;
-        });
-        if (selectAll) {
-          selectAll.checked = false;
-          selectAll.indeterminate = false;
-        }
-        refreshSelection();
-      });
-    }
+    if (clearBtn) clearBtn.addEventListener("click", clearSelection);
 
     if (bulkDeleteBtn) {
       bulkDeleteBtn.addEventListener("click", async function () {
         const selectedIds = getSelectedBookIds();
         if (selectedIds.length === 0) return;
 
-        const confirmed = window.confirm(`تأكيد حذف ${selectedIds.length} كتاب؟ سيتم نقلها إلى السلة.`);
-        if (!confirmed) return;
-
         const deleteUrl = pageRoot ? pageRoot.getAttribute("data-bulk-delete-url") : "";
         if (!deleteUrl) return;
 
+        const ok = await window.confirmDelete({
+          title: "نقل إلى السلّة",
+          message: "نقل الكتب المحدّدة (" + selectedIds.length + ") إلى السلّة؟ تُستعاد منها لاحقاً.",
+          okText: "انقل إلى السلّة",
+        });
+        if (!ok) return;
+
+        // الصفُّ وبطاقةُ الجوال يحملان المعرّفَ نفسَه — فالعدُّ على القيم لا الخانات
+        const onPage = new Set(Array.from(document.querySelectorAll(".row-checkbox")).map(function (cb) { return cb.value; }));
+        const emptied = selectedIds.length >= onPage.size;
         bulkDeleteBtn.disabled = true;
         try {
-          const response = await fetch(deleteUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-CSRFToken": getCsrfToken(),
-              "X-Requested-With": "XMLHttpRequest",
-            },
-            body: JSON.stringify({ book_ids: selectedIds }),
-          });
-
-          const payload = await response.json();
-          if (!response.ok || !payload.success) {
-            throw new Error(payload.error || "فشل الحذف المتعدد");
-          }
-
-          updateCountersAfterBulkDelete(selectedIds);
-          removeBooksFromDom(selectedIds);
-          refreshSelection();
-          announceMessage(payload.message || "تم تنفيذ الحذف المتعدد بنجاح", "success");
-          handlePaginationEdgeAfterBulkDelete();
-          bulkDeleteBtn.disabled = false;
+          const payload = await postBulk(deleteUrl, { book_ids: selectedIds });
+          const partial = payload.deleted_count < selectedIds.length;
+          announceMessage(payload.message, partial ? "warning" : "success");
+          await reloadList(emptied && !partial);
         } catch (error) {
-          announceMessage(error.message || "حدث خطأ أثناء الحذف المتعدد", "error");
+          announceMessage(error.message, "error");
+        } finally {
           bulkDeleteBtn.disabled = false;
         }
       });
@@ -282,7 +177,8 @@
 
         if (selectedIds.length === 0) return;
         if (!status) {
-          announceMessage("يرجى اختيار حالة جديدة قبل التأكيد", "warning");
+          announceMessage("اختر الإجراءَ أوّلاً: إنهاء المتابعة أو إعادة فتحها.", "warning");
+          if (bulkStatusSelect) bulkStatusSelect.focus();
           return;
         }
 
@@ -291,53 +187,30 @@
 
         confirmBulkUpdateBtn.disabled = true;
         try {
-          const response = await fetch(statusUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-CSRFToken": getCsrfToken(),
-              "X-Requested-With": "XMLHttpRequest",
-            },
-            body: JSON.stringify({ book_ids: selectedIds, status: status }),
-          });
-
-          const payload = await response.json();
-          if (!response.ok || !payload.success) {
-            throw new Error(payload.error || "فشل التحديث المتعدد");
-          }
-
-          selectedIds.forEach(function (id) {
-            applyStatusToBookInDom(id, status);
-          });
-          refreshSelection();
-          announceMessage(payload.message || "تم تحديث الحالة المتعدد بنجاح", "success");
-
+          const payload = await postBulk(statusUrl, { book_ids: selectedIds, status: status });
+          const partial = payload.updated_count < selectedIds.length;
+          announceMessage(payload.message, partial ? "warning" : "success");
           if (bulkUpdateModalEl && window.bootstrap && window.bootstrap.Modal) {
-            const modal = window.bootstrap.Modal.getOrCreateInstance(bulkUpdateModalEl);
-            modal.hide();
+            window.bootstrap.Modal.getOrCreateInstance(bulkUpdateModalEl).hide();
           }
-
-          confirmBulkUpdateBtn.disabled = false;
+          await reloadList(false);
         } catch (error) {
-          announceMessage(error.message || "حدث خطأ أثناء التحديث المتعدد", "error");
+          announceMessage(error.message, "error");
+        } finally {
           confirmBulkUpdateBtn.disabled = false;
         }
       });
     }
 
+    // Esc يُلغي التحديد — إلّا وهو يُغلق حواريّةً أو يمسح حقلاً: كان يُسقط التحديدَ
+    // مع إغلاق نافذة «تحديث الحالة» ومع «مسح (Esc)» في البحث.
     document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") {
-        const anyChecked = document.querySelectorAll(".row-checkbox:checked").length > 0;
-        if (!anyChecked) return;
-        document.querySelectorAll(".row-checkbox").forEach(function (cb) {
-          cb.checked = false;
-        });
-        if (selectAll) {
-          selectAll.checked = false;
-          selectAll.indeterminate = false;
-        }
-        refreshSelection();
-      }
+      if (event.key !== "Escape") return;
+      if (document.querySelector(".modal.show")) return;
+      const active = document.activeElement;
+      if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName) && !active.classList.contains("row-checkbox")) return;
+      if (document.querySelectorAll(".row-checkbox:checked").length === 0) return;
+      clearSelection();
     });
 
     refreshSelection();

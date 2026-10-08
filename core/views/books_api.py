@@ -32,7 +32,7 @@ from ..models import (
     BookHistory,
     BookSequence,
 )
-from core.scoping import can_edit_book, can_open_content, is_privileged
+from core.scoping import can_edit_book, can_open_content, is_privileged, scope_books_for
 from .books_helpers import (
     _normalize_secret_level_value,
     _resolve_entities,
@@ -508,60 +508,71 @@ def api_delete_book(request, book_id):
         return JsonResponse({"error": str(e)}, status=500)
 
 
+def _bulk_ids(request):
+    """جسمُ الطلب الجماعيّ ⟵ (المعرّفاتُ أعداداً بلا تكرار، الجسمُ) أو (None, ردُّ 400).
+
+    المتصفّحُ يرسل قيمَ خانات الاختيار نصوصاً («12»): كانت المقارنةُ بالأعداد
+    تعدّ كلَّ كتابٍ «فاشلاً» ولو حُذف.
+    """
+    try:
+        data = json.loads(request.body or b'{}')
+        ids = list(dict.fromkeys(int(bid) for bid in data.get("book_ids") or []))
+    except (TypeError, ValueError, AttributeError):
+        return None, JsonResponse({"error": "طلبٌ غير صالح — المعرّفاتُ أعدادٌ في book_ids."}, status=400)
+    if not ids:
+        return None, JsonResponse({"error": "لم يُحدَّد أيُّ كتاب."}, status=400)
+    return ids, data
+
+
+def _editable_ids(user, ids):
+    """ما يحقّ له الكتابةُ عليه منها — بقاعدة الحذف الفرديّ نفسِها (``can_edit_book``).
+
+    كان الجماعيُّ يقرّر بـ«مُنشئُه أو مديرُ النظام» والفرديُّ بشجرة القسم المالك
+    (Q1‑ج): فيحذف المُنشئُ جماعيّاً كتاباً صار لقسمٍ آخر، ويُترك كتابُ زميل
+    القسم صامتاً بينما تمحوه الواجهةُ من القائمة.
+    """
+    books = scope_books_for(user, Book.objects.filter(id__in=ids))
+    return [b.id for b in books if can_edit_book(b, user)]
+
+
+def _history_rows(user, ids, action, notes):
+    # `bulk_create` يتجاوز `save()` فلا تُملأ اللقطةُ تلقائيّاً —
+    # وبدونها يفقد الصفُّ اسمَ فاعله يومَ يُحذف الموظّف.
+    snapshot = user.get_full_name() or user.get_username()
+    BookHistory.objects.bulk_create([
+        BookHistory(book_id=bid, action=action, by=user, by_snapshot=snapshot, notes=notes)
+        for bid in ids
+    ], ignore_conflicts=True)
+
+
 @login_required
+@require_http_methods(["POST"])
 @rate_limit('bulk_delete_books', max_attempts=10, window_seconds=60, by='user')
 def api_bulk_delete_books(request):
-    """حذف عدة كتب دفعة واحدة."""
-    if request.method != "POST":
-        return JsonResponse({"error": "Only POST allowed"}, status=405)
-
-    try:
-        data = json.loads(request.body)
-        book_ids = data.get("book_ids", [])
-
-        if not book_ids:
-            return JsonResponse({"error": "No book IDs provided"}, status=400)
-
-        now = timezone.now()
-        books_qs = Book.objects.filter(id__in=book_ids)
-        if not is_privileged(request.user):
-            books_qs = books_qs.filter(created_by=request.user)
-
-        allowed_ids = list(books_qs.values_list('id', flat=True))
-        failed_ids = [bid for bid in book_ids if bid not in allowed_ids]
-
-        if allowed_ids:
-            books_qs.filter(id__in=allowed_ids).update(
-                is_deleted=True,
-                deleted_at=now,
-                deleted_by=request.user,
-            )
-            BookHistory.objects.bulk_create([
-                BookHistory(
-                    book_id=bid,
-                    action="delete",
-                    by=request.user,
-                    # `bulk_create` يتجاوز `save()` فلا تُملأ اللقطةُ تلقائيّاً —
-                    # وبدونها يفقد الصفُّ اسمَ فاعله يومَ يُحذف الموظّف.
-                    by_snapshot=(request.user.get_full_name()
-                                 or request.user.get_username()),
-                    notes="Book moved to trash via bulk delete",
-                )
-                for bid in allowed_ids
-            ], ignore_conflicts=True)
-
-        return JsonResponse({
-            "success": True,
-            "deleted_count": len(allowed_ids),
-            "failed_ids": failed_ids,
-            "message": f"تم حذف {len(allowed_ids)} كتاب"
-        })
-    except Exception as e:
-        logger.error(f"Error in bulk delete: {e}", exc_info=True)
-        return JsonResponse({"error": str(e)}, status=500)
+    """نقلُ عدّة كتبٍ إلى السلّة — ما يملكه المستخدمُ منها، والرسالةُ تسمّي الباقي."""
+    ids, data = _bulk_ids(request)
+    if ids is None:
+        return data
+    allowed = _editable_ids(request.user, ids)
+    if allowed:
+        with transaction.atomic():
+            Book.objects.filter(id__in=allowed).update(
+                is_deleted=True, deleted_at=timezone.now(), deleted_by=request.user)
+            _history_rows(request.user, allowed, "delete", "Book moved to trash via bulk delete")
+    skipped = len(ids) - len(allowed)
+    message = f"نُقل إلى السلّة {len(allowed)} من {len(ids)}"
+    if skipped:
+        message += " — الباقي ليس لقسمك فلا تملك حذفه."
+    return JsonResponse({
+        "success": True,
+        "deleted_count": len(allowed),
+        "failed_ids": [bid for bid in ids if bid not in set(allowed)],
+        "message": message,
+    })
 
 
 @login_required
+@require_http_methods(["POST"])
 @rate_limit('bulk_update_status', max_attempts=20, window_seconds=60, by='user')
 def api_bulk_update_status_books(request):
     """
@@ -569,64 +580,50 @@ def api_bulk_update_status_books(request):
     status ∈ {'archived', 'reopen'}
         - 'archived': إنهاء المتابعة (is_archived=True)
         - 'reopen':   إعادة فتح المتابعة (is_archived=False) — يتطلب وجود due_date
+
+    الرسالةُ تقول ما جرى لكلّ كتاب: حُدِّث، أو ليس لقسمك، أو لم يتغيّر — كانت
+    «تم تحديث N» والواجهةُ تكتب الحالةَ الجديدة على كلّ المحدَّد.
     """
-    if request.method != "POST":
-        return JsonResponse({"error": "Only POST allowed"}, status=405)
+    ids, data = _bulk_ids(request)
+    if ids is None:
+        return data
+    action = (data.get("status") or data.get("action") or "").strip()
+    if action not in ("archived", "reopen"):
+        return JsonResponse({"error": "إجراءٌ غير معروف — «إنهاء المتابعة» أو «إعادة فتحها»."}, status=400)
 
-    try:
-        data = json.loads(request.body)
-        book_ids = data.get("book_ids", [])
-        action = (data.get("status") or data.get("action") or "").strip()
+    editable = _editable_ids(request.user, ids)
+    books_qs = Book.objects.filter(id__in=editable)
+    if action == "archived":
+        target_value, action_label = True, "أُرشفت"
+        eligible_qs = books_qs.filter(is_archived=False)
+    else:  # reopen
+        target_value, action_label = False, "أُعيد فتحها"
+        eligible_qs = books_qs.filter(is_archived=True, due_date__isnull=False)
+    eligible_ids = list(eligible_qs.values_list('id', flat=True))
 
-        if not book_ids:
-            return JsonResponse({"error": "No book IDs provided"}, status=400)
-        if action not in ("archived", "reopen"):
-            return JsonResponse({"error": "Invalid action — use 'archived' or 'reopen'"}, status=400)
+    if eligible_ids:
+        with transaction.atomic():
+            Book.objects.filter(id__in=eligible_ids).update(
+                is_archived=target_value, updated_at=timezone.now())
+            _history_rows(request.user, eligible_ids, "status", f"{action_label} (bulk)")
 
-        try:
-            clean_ids = [int(bid) for bid in book_ids]
-        except (TypeError, ValueError):
-            return JsonResponse({"error": "book_ids must be integers"}, status=400)
-
-        books_qs = Book.objects.filter(id__in=clean_ids)
-        if not is_privileged(request.user):
-            books_qs = books_qs.filter(created_by=request.user)
-
-        if action == "archived":
-            target_value, action_label = True, "أُرشفت"
-            eligible_qs = books_qs.filter(is_archived=False)
-        else:  # reopen
-            target_value, action_label = False, "أُعيد فتحها"
-            eligible_qs = books_qs.filter(is_archived=True, due_date__isnull=False)
-
-        eligible_ids = list(eligible_qs.values_list('id', flat=True))
-        found_ids = set(books_qs.values_list('id', flat=True))
-        failed_ids = [bid for bid in clean_ids if bid not in found_ids]
-
-        if eligible_ids:
-            eligible_qs.update(is_archived=target_value, updated_at=timezone.now())
-            BookHistory.objects.bulk_create([
-                BookHistory(
-                    book_id=bid,
-                    action="status",
-                    by=request.user,
-                    by_snapshot=(request.user.get_full_name()
-                                 or request.user.get_username()),
-                    notes=f"{action_label} (bulk)",
-                )
-                for bid in eligible_ids
-            ], ignore_conflicts=True)
-
-        return JsonResponse({
-            "success": True,
-            "updated_count": len(eligible_ids),
-            "failed_ids": failed_ids,
-            "action": action,
-            "message": f"تم تحديث {len(eligible_ids)} كتاب",
-        })
-    except Exception as e:
-        logger.error(f"Error in bulk status update: {e}", exc_info=True)
-        return JsonResponse({"error": str(e)}, status=500)
+    parts = []
+    if len(ids) > len(editable):
+        parts.append(f"{len(ids) - len(editable)} ليس لقسمك")
+    unchanged = len(editable) - len(eligible_ids)
+    if unchanged:
+        parts.append(f"{unchanged} لم يتغيّر" + (" (بلا موعد متابعة أو مفتوحٌ أصلاً)"
+                                               if action == "reopen" else " (منتهٍ أصلاً)"))
+    message = f"حُدِّث {len(eligible_ids)} من {len(ids)}"
+    if parts:
+        message += " — " + "، و".join(parts) + "."
+    return JsonResponse({
+        "success": True,
+        "updated_count": len(eligible_ids),
+        "failed_ids": [bid for bid in ids if bid not in set(editable)],
+        "action": action,
+        "message": message,
+    })
 
 
 @login_required
