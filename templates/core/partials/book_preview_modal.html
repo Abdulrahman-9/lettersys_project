@@ -182,7 +182,8 @@
     pending:   { bg: 'rgba(37, 99, 235, 0.15)',  color: '#1e40af', label: 'قيد المتابعة' },
     due_today: { bg: 'rgba(217, 119, 6, 0.18)',  color: '#b45309', label: 'مستحق اليوم' },
     overdue:   { bg: 'rgba(220, 38, 38, 0.18)',  color: '#b91c1c', label: 'متأخر' },
-    archived:  { bg: 'rgba(100, 116, 139, 0.18)', color: '#475569', label: 'مؤرشف' },
+    // «مؤرشف» كلمةُ الورق لا المتابعة — كلمةُ FOLLOWUP_LABELS['archived'] (تدقيقُ نيلسن A#4)
+    archived:  { bg: 'rgba(100, 116, 139, 0.18)', color: '#475569', label: 'مُنجَز / بلا متابعة' },
   };
 
   function show(id) { document.getElementById(id)?.classList.remove('d-none'); }

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static qs %}
 {# قائمة الجهات: تفعيل/تعطيل مع بحث وإدارة #}
 {% block title %}جهات المراسلات{% endblock %}
 
@@ -19,13 +19,6 @@
         <strong>{{ totals.all }}</strong>
       </div>
       <span class="app-context-chip is-info"><i class="bi bi-buildings"></i> جهات</span>
-    </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">إدارة وتشغيل</div>
-        <strong>بحث، تصنيف، تعديل</strong>
-      </div>
-      <span class="app-context-chip"><i class="bi bi-sliders"></i> إدارة</span>
     </div>
   </div>
 </div>
@@ -113,6 +106,7 @@
             {% if showing_inactive %}<input type="hidden" name="status" value="inactive">{% endif %}
             {% if lang_filter and lang_filter != 'all' %}<input type="hidden" name="lang" value="{{ lang_filter }}">{% endif %}
             {% if kind_filter %}<input type="hidden" name="kind" value="{{ kind_filter }}">{% endif %}
+            {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
             <div class="position-relative" style="flex:1;">
               <i class="bi bi-search position-absolute" style="right: 1rem; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
               <input type="text" name="q" class="form-control search-box-modern" id="entitySearch"
@@ -120,7 +114,7 @@
                      value="{{ search_q|default:'' }}" style="padding-right: 3rem;">
             </div>
             <button type="submit" class="btn btn-primary">بحث</button>
-            {% if search_q %}<a href="?{% if showing_inactive %}status=inactive{% endif %}" class="btn btn-outline-secondary">مسح</a>{% endif %}
+            {% if search_q %}<a href="{% qs q='' %}" class="btn btn-outline-secondary">مسح</a>{% endif %}
           </form>
           {% if search_q %}<div class="small text-muted mt-1">نتائج البحث عن "<strong>{{ search_q }}</strong>": {{ entities.paginator.count }} جهة</div>{% endif %}
         </div>
@@ -133,35 +127,35 @@
           {% endcomment %}
           <span class="text-muted small">التبويب:</span>
           {% for t in kind_tabs %}
-          <a href="?kind={{ t.key }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}{% if lang_filter and lang_filter != 'all' %}&lang={{ lang_filter }}{% endif %}"
+          <a href="{% qs kind=t.key %}"
              class="filter-chip {% if kind_filter == t.key %}active{% endif %}"
              {% if kind_filter == t.key %}aria-current="page"{% endif %}>
             <i class="bi bi-diagram-3 me-1"></i>{{ t.label }} ({{ t.count }})
           </a>
           {% endfor %}
           {% if kind_filter %}
-          <a href="?{% if search_q %}q={{ search_q|urlencode }}{% endif %}" class="filter-chip">
+          <a href="{% qs kind='' %}" class="filter-chip">
             <i class="bi bi-x-lg me-1"></i>كل الأصناف
           </a>
           {% endif %}
           {# مراجعةُ البذر بالأثر: الأكثرُ تداولاً أوّلاً #}
           <a class="filter-chip {% if sort == 'books' %}active{% endif %}"
-             href="?{% if sort != 'books' %}sort=books&{% endif %}{% if kind_filter %}kind={{ kind_filter }}&{% endif %}{% if search_q %}q={{ search_q|urlencode }}{% endif %}"
+             href="{% if sort == 'books' %}{% qs sort='' %}{% else %}{% qs sort='books' %}{% endif %}"
              title="راجع التبويب بالأثر لا بالأبجدية">
             <i class="bi bi-sort-numeric-down me-1"></i>الأكثر كتباً
           </a>
         </div>
         <div class="col-12 d-flex align-items-center gap-2 flex-wrap mt-2">
           {# فلتر اللغة (server-side) — يحافظ على البحث #}
-          <a href="?{% if search_q %}q={{ search_q|urlencode }}{% endif %}"
+          <a href="{% qs lang='' %}"
              class="filter-chip {% if not lang_filter or lang_filter == 'all' %}active{% endif %}">
             <i class="bi bi-translate me-1"></i>الكل ({{ totals.all|default:0 }})
           </a>
-          <a href="?lang=ar{% if kind_filter %}&kind={{ kind_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}"
+          <a href="{% qs lang='ar' %}"
              class="filter-chip {% if lang_filter == 'ar' %}active{% endif %}">
             <i class="bi bi-fonts me-1"></i>عربي ({{ totals.arabic|default:0 }})
           </a>
-          <a href="?lang=en{% if kind_filter %}&kind={{ kind_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}"
+          <a href="{% qs lang='en' %}"
              class="filter-chip {% if lang_filter == 'en' %}active{% endif %}">
             <i class="bi bi-fonts me-1"></i>إنجليزي ({{ totals.english|default:0 }})
           </a>
@@ -329,6 +323,7 @@
                   {% else %}
                   <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline" data-confirm="تعطيل جهة {{ e.name }}؟ ستُخفى من القوائم مع الحفاظ على سجلّها." data-confirm-ok="عطّل">
                     {% csrf_token %}
+                    <input type="hidden" name="back" value="?{{ request.GET.urlencode }}">
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="تعطيل الجهة">
                       <i class="bi bi-archive"></i>
                     </button>
@@ -415,6 +410,7 @@
             {% else %}
             <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline" data-confirm="تعطيل جهة {{ e.name }}؟ ستُخفى من القوائم مع الحفاظ على سجلّها." data-confirm-ok="عطّل">
               {% csrf_token %}
+              <input type="hidden" name="back" value="?{{ request.GET.urlencode }}">
               <button type="submit" class="btn btn-sm btn-outline-danger" title="تعطيل الجهة">
                 <i class="bi bi-archive"></i>
               </button>
@@ -428,20 +424,20 @@
 
   {# Pagination #}
   {% if entities.has_other_pages %}
-  <nav aria-label="Page navigation" class="mt-3 d-flex justify-content-center">
+  <nav aria-label="ترقيم الصفحات" class="mt-3 d-flex justify-content-center">
     <ul class="pagination pagination-sm">
       {% if entities.has_previous %}
-      <li class="page-item"><a class="page-link" href="?page={{ entities.previous_page_number }}{% if showing_inactive %}&status=inactive{% endif %}{% if lang_filter and lang_filter != 'all' %}&lang={{ lang_filter }}{% endif %}{% if kind_filter %}&kind={{ kind_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}">السابق</a></li>
+      <li class="page-item"><a class="page-link" href="{% qs page=entities.previous_page_number %}">السابق</a></li>
       {% endif %}
       {% for num in entities.paginator.page_range %}
         {% if entities.number == num %}
         <li class="page-item active"><span class="page-link">{{ num }}</span></li>
         {% elif num > entities.number|add:'-3' and num < entities.number|add:'3' %}
-        <li class="page-item"><a class="page-link" href="?page={{ num }}{% if showing_inactive %}&status=inactive{% endif %}{% if lang_filter and lang_filter != 'all' %}&lang={{ lang_filter }}{% endif %}{% if kind_filter %}&kind={{ kind_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}">{{ num }}</a></li>
+        <li class="page-item"><a class="page-link" href="{% qs page=num %}">{{ num }}</a></li>
         {% endif %}
       {% endfor %}
       {% if entities.has_next %}
-      <li class="page-item"><a class="page-link" href="?page={{ entities.next_page_number }}{% if showing_inactive %}&status=inactive{% endif %}{% if lang_filter and lang_filter != 'all' %}&lang={{ lang_filter }}{% endif %}{% if kind_filter %}&kind={{ kind_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}">التالي</a></li>
+      <li class="page-item"><a class="page-link" href="{% qs page=entities.next_page_number %}">التالي</a></li>
       {% endif %}
     </ul>
   </nav>
