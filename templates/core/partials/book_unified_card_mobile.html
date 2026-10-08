@@ -173,7 +173,7 @@ BOOK UNIFIED CARD (Mobile View)
       <button 
         class="card-action-btn btn-delete-mobile" 
         data-book-id="{{ book.id }}"
-        data-book-number="{{ book.our_number }}"
+        data-book-number="{{ book.our_number_display }}"
         data-delete-url="{% url 'api_delete_book' book.id %}"
               data-undo-url="{% url 'api_undo_delete_book' book.id %}"
         aria-label="حذف"

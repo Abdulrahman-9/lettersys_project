@@ -3,7 +3,7 @@
 
 <tr class="book-row book-row-{{ state }}"
     data-book-id="{{ book.id }}"
-    data-book-number="{{ book.our_number }}"
+    data-book-number="{{ book.our_number_display }}"
     data-status="{{ state }}"
     data-followup-state="{{ state }}"
     data-kind="{{ book.kind }}">
@@ -170,7 +170,7 @@
       </a>
       <button class="act-btn act-delete btn-delete"
               data-book-id="{{ book.id }}"
-              data-book-number="{{ book.our_number }}"
+              data-book-number="{{ book.our_number_display }}"
               data-delete-url="{% url 'api_delete_book' book.id %}"
               data-undo-url="{% url 'api_undo_delete_book' book.id %}"
               title="نقل إلى السلة">

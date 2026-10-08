@@ -189,6 +189,11 @@
   function hide(id) { document.getElementById(id)?.classList.add('d-none'); }
   function text(id, val) { const el = document.getElementById(id); if (el) el.textContent = val || '—'; }
   function html(id, val) { const el = document.getElementById(id); if (el) el.innerHTML = val; }
+  // التاريخُ كما في بقيّة التطبيق: يوم/شهر/سنة — الخادمُ يرسل ISO للمطابقة
+  function dmy(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})(.*)$/.exec(iso || '');
+    return m ? m[3] + '/' + m[2] + '/' + m[1] + m[4] : (iso || '');
+  }
 
   function entityBadges(entities) {
     if (!entities?.length) return '<span class="text-muted small">—</span>';
@@ -261,7 +266,7 @@
     }
 
     const isActive = d.followup_state && d.followup_state !== 'archived';
-    if (isActive) { show('bpFollowupBadge'); show('bpDueDateGroup'); text('bpDueDate', d.due_date); }
+    if (isActive) { show('bpFollowupBadge'); show('bpDueDateGroup'); text('bpDueDate', dmy(d.due_date)); }
     else { hide('bpFollowupBadge'); hide('bpDueDateGroup'); }
     if (d.followup_state === 'overdue') { show('bpOverdueBadge'); } else { hide('bpOverdueBadge'); }
 
@@ -302,7 +307,7 @@
         },
         body: 'status=' + encodeURIComponent(action),
       });
-      const payload = await resp.json();
+      const payload = await resp.json().catch(() => ({}));
       if (!resp.ok || !payload.success) throw new Error(payload.error || 'فشل تحديث الحالة');
 
       currentBook.followup_state = payload.followup_state;
@@ -361,13 +366,16 @@
       const header = document.getElementById('bookPreviewHeader');
       if (header) header.style.background = `linear-gradient(135deg, ${kc.text}, ${kc.text}cc)`;
 
-      text('bpNumber', `#${d.our_number}`);
+      // الرقمُ المعروض من numbering.py («825/2025») لا المخزَّن («20250825») —
+      // كانت المعاينةُ تُظهر المخزَّنَ لكلّ كتابٍ موسومٍ بسنته (تدقيقُ 2026‑10‑08)
+      const shownNumber = d.our_number_display || d.our_number;
+      text('bpNumber', shownNumber ? '#' + shownNumber : 'بلا رقم');
       text('bpTitle', d.title);
-      text('bpOurNumber', d.our_number);
-      text('bpDate', d.date);
+      text('bpOurNumber', shownNumber || 'بلا رقم');
+      text('bpDate', dmy(d.date));
       text('bpSecret', d.secret_level);
       text('bpCreatedBy', d.created_by);
-      text('bpCreatedAt', d.created_at);
+      text('bpCreatedAt', dmy(d.created_at));
 
       // Kind badge
       const kindBadge = document.getElementById('bpKindBadge');
@@ -378,7 +386,7 @@
 
       // Conditional fields
       if (d.is_incoming && d.sender_number) { show('bpSenderNumGroup'); text('bpSenderNumber', d.sender_number); } else { hide('bpSenderNumGroup'); }
-      if (d.is_incoming && d.sender_date) { show('bpSenderDateGroup'); text('bpSenderDate', d.sender_date); } else { hide('bpSenderDateGroup'); }
+      if (d.is_incoming && d.sender_date) { show('bpSenderDateGroup'); text('bpSenderDate', dmy(d.sender_date)); } else { hide('bpSenderDateGroup'); }
 
       // الحالة + شرائح المتابعة + زر الإنهاء/إعادة الفتح
       paintStatus(d);
