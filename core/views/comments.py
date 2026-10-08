@@ -9,6 +9,7 @@ import logging
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core.scoping import can_open_content
@@ -88,7 +89,8 @@ def add_book_comment(request, book_id):
                 "id": comment.id,
                 "content": comment.content,
                 "created_by": comment.created_by.username,
-                "created_at": comment.created_at.strftime("%d/%m/%Y %H:%M"),
+                # محلّيٌّ كما يعرضه القالبُ بعد إعادة التحميل — كان التعليقُ الجديد يظهر بتوقيت UTC
+                "created_at": timezone.localtime(comment.created_at).strftime("%d/%m/%Y %H:%M"),
                 "is_edited": comment.is_edited
             }
         })
@@ -161,7 +163,7 @@ def edit_book_comment(request, comment_id):
                 "id": comment.id,
                 "content": comment.content,
                 "is_edited": comment.is_edited,
-                "updated_at": comment.updated_at.strftime("%d/%m/%Y %H:%M")
+                "updated_at": timezone.localtime(comment.updated_at).strftime("%d/%m/%Y %H:%M")
             }
         })
     

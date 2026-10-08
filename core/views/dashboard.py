@@ -626,7 +626,7 @@ def backup_database(request):
     """
     db_config = settings.DATABASES["default"]
     default_dir = default_backup_dir()
-    suggested_name = f"pg_backup_{timezone.now().strftime('%Y%m%d_%H%M')}.dump"
+    suggested_name = f"pg_backup_{timezone.localtime().strftime('%Y%m%d_%H%M')}.dump"
 
     if request.method == "POST":
         target_directory = request.POST.get("target_directory") or default_dir

@@ -14,6 +14,7 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from ..models import Attachment, Book, Entity
@@ -114,8 +115,8 @@ def _serialize_book(book):
         'secret_level': book.secret_level,
         'secret_label': book.get_secret_level_display(),
         'created_by_name': created_by_name,
-        'created_at': book.created_at.strftime('%d/%m/%Y %H:%M') if book.created_at else '',
-        'updated_at': book.updated_at.strftime('%d/%m/%Y %H:%M') if book.updated_at else '',
+        'created_at': timezone.localtime(book.created_at).strftime('%d/%m/%Y %H:%M') if book.created_at else '',
+        'updated_at': timezone.localtime(book.updated_at).strftime('%d/%m/%Y %H:%M') if book.updated_at else '',
         'urls': {
             'detail': reverse('book_detail', args=[book.id]),
             'edit':   reverse('book_edit',   args=[book.id]),
