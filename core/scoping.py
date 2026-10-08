@@ -360,6 +360,33 @@ def can_edit_book(book, user) -> bool:
     return book.department_id in subtree_ids(dept_id)
 
 
+def _extraction_book(extraction):
+    """كتابُ نتيجة الاستخراج: المربوطُ بها، وإلّا كتابُ مرفقها، وإلّا ``None``."""
+    if extraction.book_id:
+        return extraction.book
+    if extraction.attachment_id and extraction.attachment is not None:
+        return extraction.attachment.book
+    return None
+
+
+def can_open_extraction(extraction, user) -> bool:
+    """أيقرأ نتيجةَ استخراج؟ هي رقمُ المستند وعنوانُه وهامشُه منسوخةً — فحكمُها
+    حكمُ فتح محتوى كتابها (``can_open_content``)، وما لا كتابَ له لمدير النظام.
+
+    تدقيقُ 2026‑10‑08: صفحةُ النتيجة وواجهتُها البرمجيّة كانتا لكلّ مَن سجّل الدخول —
+    تعدادُ الأرقام يكشف عنوانَ كلّ كتابٍ وهامشَه، والسرّيُّ منها.
+    """
+    book = _extraction_book(extraction)
+    return can_open_content(book, user) if book is not None else is_privileged(user)
+
+
+def can_review_extraction(extraction, user) -> bool:
+    """أيعتمدها أو يرفضها أو يصحّح مفرداتها أو يعلّق عليها؟ كتابةٌ على مفردات
+    كتابٍ تُغذّي التعلّم ⟵ ``can_edit_book``، وما لا كتابَ له لمدير النظام."""
+    book = _extraction_book(extraction)
+    return can_edit_book(book, user) if book is not None else is_privileged(user)
+
+
 def scope_books_for(user, qs=None):
     """الكتب المرئيّة للمستخدم — صيغة الـqueryset.
 

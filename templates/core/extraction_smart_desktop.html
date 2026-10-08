@@ -641,7 +641,7 @@
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
 <script src="{% static 'js/subject_locate.js' %}?v=20260929exc"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20261007c"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20261008"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20261007"></script>
 <script src="{% static 'keyboard_nav.js' %}"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
@@ -1290,11 +1290,19 @@
     return '/';
   }
 
-  btn.addEventListener('click', function (e) {
-    e.preventDefault();
-    if (isDirty() && !confirm('لديك تغييرات غير محفوظة ستُفقد عند المغادرة. هل تريد المتابعة؟')) return;
+  function leave() {
     allowLeave = true;                                      // لئلا يتراكب beforeunload فوق تأكيدنا
     window.location.href = backTarget();
+  }
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (!isDirty()) { leave(); return; }
+    // حواريّةُ التطبيق لا confirm() الأصليّة (H4)
+    window.confirmDelete({
+      title: 'مغادرةٌ بلا حفظ',
+      message: 'لديك تغييراتٌ غير محفوظة ستُفقد عند المغادرة. أتغادر؟',
+      okText: 'غادِر بلا حفظ',
+    }).then(function (ok) { if (ok) leave(); });
   });
 
   // شبكة أمان لإغلاق التبويب/رجوع المتصفح/تنقّل خارجي (لا يلتقطها زر الإلغاء)

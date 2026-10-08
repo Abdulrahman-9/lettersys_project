@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -28,6 +29,7 @@ from core.extraction.kinds import (
 )
 from core.document_types import DEFAULT_DOCUMENT_TYPE_BY_KIND, DOCUMENT_TYPE_OPTIONS_BY_KIND
 from core.models import Book, BookSequence, DataExtractionResult
+from core.scoping import can_open_extraction
 
 
 def _confidence_percent(value):
@@ -202,6 +204,9 @@ def extraction_results(request, extraction_id):
         ),
         pk=extraction_id,
     )
+    # نصُّ المستند ومفرداتُه ⟵ حكمُ فتح محتوى كتابه؛ و404 لا 403 (تدقيقُ 2026‑10‑08)
+    if not can_open_extraction(extraction, request.user):
+        raise Http404
 
     normalized_kind = normalize_book_kind(extraction.book_kind, DEFAULT_BOOK_KIND)
     attachment_name = f"مرفق #{extraction.attachment_id}"
