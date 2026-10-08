@@ -154,11 +154,25 @@
   }
 
   // ── الخطوة ٢: المطابقة ───────────────────────────────────────────────
+  // حواريّةُ التطبيق لا نافذةُ المتصفّح الأصليّة (H4) — وعدٌ بنعم/لا
+  function ask(opts) {
+    return window.confirmDelete ? window.confirmDelete(opts)
+                                : Promise.resolve(window.confirm(opts.message));
+  }
+
   function reconcile(apply) {
+    if (!apply) { runReconcile(false); return; }
+    ask({
+      title: 'اعتماد الربط',
+      message: 'سيُكتب حقل «مرجع المصدر» فقط على الكتب المُطابَقة.\nلا يتغيّر أي رقم أو عنوان أو مرفق.',
+      okText: 'اعتمد الربط',
+      danger: false
+    }).then(function (ok) { if (ok) runReconcile(true); });
+  }
+
+  function runReconcile(apply) {
     var btn = apply ? $('rsReconcileApply') : $('rsReconcilePreview');
     var out = $('rsReconcileOut');
-    if (apply && !confirm('اعتماد الربط؟\n\nسيُكتب حقل «مرجع المصدر» فقط على الكتب المُطابَقة. ' +
-                          'لا يتغيّر أي رقم أو عنوان أو مرفق.')) return;
     busy(btn, true, apply ? 'جارٍ الربط…' : 'جارٍ المطابقة…');
     out.innerHTML = '';
 
@@ -395,10 +409,16 @@
     var mode = (document.querySelector('#rsMergeForm input[name="merge_mode"]:checked') || {}).value
                || 'skip_existing';
     var warn = mode === 'update_existing'
-      ? '\n\nوضع «تحديث الموجود» سيستبدل حقول كتب موجودة بما في المصدر.' : '';
-    if (!confirm('تأكيد بدء الدمج؟' + warn +
-                 '\n\nسيعمل خارج المتصفّح — يمكنك إغلاق الصفحة والعودة لمتابعته.')) return;
+      ? 'وضع «تحديث الموجود» سيستبدل حقول كتب موجودة بما في المصدر.\n\n' : '';
+    ask({
+      title: 'بدء الدمج',
+      message: warn + 'سيعمل خارج المتصفّح — يمكنك إغلاق الصفحة والعودة لمتابعته.',
+      okText: 'ابدأ الدمج',
+      danger: mode === 'update_existing'
+    }).then(function (ok) { if (ok) runMerge(btn, out, mode); });
+  }
 
+  function runMerge(btn, out, mode) {
     busy(btn, true, 'جارٍ البدء…');
     out.innerHTML = '';
     post(URLS.start, {
@@ -422,12 +442,25 @@
   function cancelJob() {
     var id = $('rsJobId').textContent;
     if (!id || id === '—') return;
-    if (!confirm('طلب إلغاء المهمّة؟\n\nما اكتمل يبقى محفوظاً، والإلغاء يقع بين الدفعات فلا يُترك مرفقٌ ناقص.')) return;
-    $('rsJobCancel').disabled = true;
-    fetch(jobUrl(URLS.jobCancel, id), {
-      method: 'POST',
-      headers: { 'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest' }
-    }).then(function () { $('rsJobPhase').textContent = 'طُلب الإلغاء — ينتهي عند حدّ الدفعة الحالية…'; });
+    ask({
+      title: 'إلغاء المهمّة',
+      message: 'ما اكتمل يبقى محفوظاً، والإلغاء يقع بين الدفعات فلا يُترك مرفقٌ ناقص.',
+      okText: 'اطلب الإلغاء'
+    }).then(function (ok) {
+      if (!ok) return;
+      $('rsJobCancel').disabled = true;
+      fetch(jobUrl(URLS.jobCancel, id), {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest' }
+      }).then(function (r) {
+        if (!r.ok) throw new Error(r.status);
+        $('rsJobPhase').textContent = 'طُلب الإلغاء — ينتهي عند حدّ الدفعة الحالية…';
+      }).catch(function () {
+        // كان يفشل صامتاً والزرُّ معطّلٌ إلى الأبد
+        $('rsJobCancel').disabled = false;
+        $('rsJobPhase').textContent = 'تعذّر إرسال طلب الإلغاء — أعد المحاولة.';
+      });
+    });
   }
 
   // ── متصفّح ملفات الباكاب ─────────────────────────────────────────────
