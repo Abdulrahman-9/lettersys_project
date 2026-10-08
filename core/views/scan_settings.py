@@ -21,6 +21,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from core.netaddr import request_is_loopback
+from core.pdf_lock import MUPDF_LOCK
 from core.scoping import can_edit_book, can_open_content, is_privileged
 
 logger = logging.getLogger('lettersys')
@@ -220,101 +221,103 @@ def scan_edit_page(request, token: str):
 
     try:
         import fitz
-        doc = fitz.open(file_path)
-        try:
-            count = doc.page_count
-            inserted_at = None    # (op=insert) موضع أول صفحة مُلحقة (0-based)
-            inserted_count = 0
+        with MUPDF_LOCK:
+            doc = fitz.open(file_path)
+            try:
+                count = doc.page_count
+                inserted_at = None    # (op=insert) موضع أول صفحة مُلحقة (0-based)
+                inserted_count = 0
 
-            if op == 'rotate':
-                try:
-                    angle = int(body.get('angle', 90))
-                except (TypeError, ValueError):
-                    return JsonResponse({'ok': False, 'error': 'زاوية غير صالحة'}, status=400)
-                if angle % 90 != 0:
-                    return JsonResponse({'ok': False, 'error': 'الزاوية يجب أن تكون من مضاعفات 90'}, status=400)
-                page = body.get('page')
-                if page in (None, 'all'):
-                    targets = range(count)
-                else:
+                if op == 'rotate':
                     try:
-                        targets = [int(page) - 1]
+                        angle = int(body.get('angle', 90))
+                    except (TypeError, ValueError):
+                        return JsonResponse({'ok': False, 'error': 'زاوية غير صالحة'}, status=400)
+                    if angle % 90 != 0:
+                        return JsonResponse({'ok': False, 'error': 'الزاوية يجب أن تكون من مضاعفات 90'}, status=400)
+                    page = body.get('page')
+                    if page in (None, 'all'):
+                        targets = range(count)
+                    else:
+                        try:
+                            targets = [int(page) - 1]
+                        except (TypeError, ValueError):
+                            return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
+                    for i in targets:
+                        if i < 0 or i >= count:
+                            return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
+                        doc[i].set_rotation((doc[i].rotation + angle) % 360)
+
+                elif op == 'delete':
+                    if count <= 1:
+                        return JsonResponse({'ok': False, 'error': 'لا يمكن حذف الصفحة الوحيدة'}, status=400)
+                    try:
+                        i = int(body.get('page')) - 1
                     except (TypeError, ValueError):
                         return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
-                for i in targets:
                     if i < 0 or i >= count:
                         return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
-                    doc[i].set_rotation((doc[i].rotation + angle) % 360)
+                    doc.delete_page(i)
 
-            elif op == 'delete':
-                if count <= 1:
-                    return JsonResponse({'ok': False, 'error': 'لا يمكن حذف الصفحة الوحيدة'}, status=400)
-                try:
-                    i = int(body.get('page')) - 1
-                except (TypeError, ValueError):
-                    return JsonResponse({'ok': False, 'error': 'رقم صفحة غير صالح'}, status=400)
-                if i < 0 or i >= count:
-                    return JsonResponse({'ok': False, 'error': 'رقم صفحة خارج النطاق'}, status=400)
-                doc.delete_page(i)
-
-            elif op == 'reorder':
-                order = body.get('order') or []
-                try:
-                    idx = [int(p) - 1 for p in order]
-                except (TypeError, ValueError):
-                    return JsonResponse({'ok': False, 'error': 'ترتيب غير صالح'}, status=400)
-                if sorted(idx) != list(range(count)):
-                    return JsonResponse({'ok': False, 'error': 'الترتيب يجب أن يغطّي كل الصفحات دون حذف'}, status=400)
-                doc.select(idx)
-
-            elif op == 'insert':
-                # إلحاق/إدراج مستند مصدر (ممسوح أو مرفوع، مُهيَّأ عبر process-upload) في الملف المؤقّت.
-                # المصدر يُمرَّر كـ source_token (يعيد استخدام تجهيز process-upload: تحويل صورة→PDF + قصّ فراغات).
-                # at اختياري (0-based): None = النهاية (إلحاق مباشر) — وهو الحالة الأشيع.
-                src_token = body.get('source_token', '')
-                src = cache.get(f'scan_token:{src_token}') if src_token else None
-                if not src or not _token_owner_ok(src, request.user):
-                    return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير متاح أو انتهت صلاحيته'}, status=404)
-                src_path = src.get('processed_path', '')
-                if (not src_path or not os.path.isfile(src_path)
-                        or os.path.splitext(src_path)[1].lower() != '.pdf'):
-                    return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير صالح'}, status=404)
-                at = body.get('at')
-                if at is None:
-                    inserted_at = count
-                else:
+                elif op == 'reorder':
+                    order = body.get('order') or []
                     try:
-                        inserted_at = max(0, min(int(at), count))
+                        idx = [int(p) - 1 for p in order]
                     except (TypeError, ValueError):
-                        return JsonResponse({'ok': False, 'error': 'موضع إدراج غير صالح'}, status=400)
-                try:
-                    src_doc = fitz.open(src_path)
-                except Exception:
-                    return JsonResponse({'ok': False, 'error': 'تعذّر فتح مصدر الإلحاق'}, status=400)
-                try:
-                    inserted_count = src_doc.page_count
-                    if inserted_count == 0:
-                        return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق فارغ'}, status=400)
-                    doc.insert_pdf(src_doc, start_at=inserted_at)
-                finally:
-                    src_doc.close()
+                        return JsonResponse({'ok': False, 'error': 'ترتيب غير صالح'}, status=400)
+                    if sorted(idx) != list(range(count)):
+                        return JsonResponse({'ok': False, 'error': 'الترتيب يجب أن يغطّي كل الصفحات دون حذف'}, status=400)
+                    doc.select(idx)
 
-            else:
-                return JsonResponse({'ok': False, 'error': 'عملية غير معروفة'}, status=400)
+                elif op == 'insert':
+                    # إلحاق/إدراج مستند مصدر (ممسوح أو مرفوع، مُهيَّأ عبر process-upload) في الملف المؤقّت.
+                    # المصدر يُمرَّر كـ source_token (يعيد استخدام تجهيز process-upload: تحويل صورة→PDF + قصّ فراغات).
+                    # at اختياري (0-based): None = النهاية (إلحاق مباشر) — وهو الحالة الأشيع.
+                    src_token = body.get('source_token', '')
+                    src = cache.get(f'scan_token:{src_token}') if src_token else None
+                    if not src or not _token_owner_ok(src, request.user):
+                        return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير متاح أو انتهت صلاحيته'}, status=404)
+                    src_path = src.get('processed_path', '')
+                    if (not src_path or not os.path.isfile(src_path)
+                            or os.path.splitext(src_path)[1].lower() != '.pdf'):
+                        return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق غير صالح'}, status=404)
+                    at = body.get('at')
+                    if at is None:
+                        inserted_at = count
+                    else:
+                        try:
+                            inserted_at = max(0, min(int(at), count))
+                        except (TypeError, ValueError):
+                            return JsonResponse({'ok': False, 'error': 'موضع إدراج غير صالح'}, status=400)
+                    try:
+                        src_doc = fitz.open(src_path)
+                    except Exception:
+                        return JsonResponse({'ok': False, 'error': 'تعذّر فتح مصدر الإلحاق'}, status=400)
+                    try:
+                        inserted_count = src_doc.page_count
+                        if inserted_count == 0:
+                            return JsonResponse({'ok': False, 'error': 'مصدر الإلحاق فارغ'}, status=400)
+                        doc.insert_pdf(src_doc, start_at=inserted_at)
+                    finally:
+                        src_doc.close()
 
-            out_bytes = doc.tobytes(garbage=3, deflate=True)
-            new_count = doc.page_count
-        finally:
-            doc.close()
+                else:
+                    return JsonResponse({'ok': False, 'error': 'عملية غير معروفة'}, status=400)
 
-        with open(file_path, 'wb') as fh:
-            fh.write(out_bytes)
+                out_bytes = doc.tobytes(garbage=3, deflate=True)
+                new_count = doc.page_count
+            finally:
+                doc.close()
+
+            with open(file_path, 'wb') as fh:
+                fh.write(out_bytes)
+
+            data['page_count'] = new_count
+            cache.set(f'scan_token:{token}', data, timeout=86400)
     except Exception as exc:
         logger.error('[ScanEdit] failed token=%s op=%s: %s', token[:8], op, exc)
         return JsonResponse({'ok': False, 'error': 'تعذّر تعديل المستند'}, status=500)
 
-    data['page_count'] = new_count
-    cache.set(f'scan_token:{token}', data, timeout=86400)
     logger.info('[ScanEdit] token=%s op=%s pages=%s', token[:8], op, new_count)
     resp = {'ok': True, 'page_count': new_count}
     if op == 'insert':

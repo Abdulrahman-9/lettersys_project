@@ -3,6 +3,7 @@
 اختبارات تعديل PDF المسح المؤقت قبل الحفظ (دفعة 2أ): تدوير/حذف/إعادة ترتيب.
 """
 
+import builtins
 import json
 import os
 import tempfile
@@ -69,6 +70,39 @@ class ScanEditPageTests(TestCase):
         self.assertEqual(doc[0].rotation, 90)
         self.assertEqual(doc[1].rotation, 0)
         doc.close()
+
+    def test_read_modify_write_is_serialized_by_mupdf_lock(self):
+        token, path = self._token_for(2)
+        real_fitz_open = fitz.open
+        real_open = builtins.open
+
+        class Guard:
+            held = False
+
+            def __enter__(self):
+                self.held = True
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                self.held = False
+
+        guard = Guard()
+
+        def checked_fitz_open(*args, **kwargs):
+            self.assertTrue(guard.held, "PDF read must happen under MUPDF_LOCK")
+            return real_fitz_open(*args, **kwargs)
+
+        def checked_open(name, mode="r", *args, **kwargs):
+            if os.fspath(name) == path and "w" in mode:
+                self.assertTrue(guard.held, "PDF write must happen under MUPDF_LOCK")
+            return real_open(name, mode, *args, **kwargs)
+
+        with mock.patch("core.views.scan_settings.MUPDF_LOCK", guard), \
+             mock.patch("fitz.open", side_effect=checked_fitz_open), \
+             mock.patch("builtins.open", side_effect=checked_open):
+            resp = self._post(token, {"op": "rotate", "page": 1, "angle": 90})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(guard.held)
 
     def test_rotate_all_pages(self):
         token, path = self._token_for(2)
