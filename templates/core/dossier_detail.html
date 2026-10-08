@@ -31,6 +31,7 @@
 
   {# ── شريط فلاتر بنمط «كل الكتب» (fb-*): بحث + رقائق حالة (أيقونة+عدّاد) + متقدّم ── #}
   <form class="dossier-filters" method="get">
+    <input type="hidden" name="side" id="dd-side" value="{{ active_side }}">
     <div class="dd-fbar">
       <div class="fb-search">
         <input type="text" name="q" value="{{ filters.q }}" placeholder="ابحث برقم القيد أو العنوان أو الملاحظة..." aria-label="بحث في الإضبارة" autocomplete="off">
@@ -119,12 +120,12 @@
   {# شريط الملف الثانوي المفتوح — يظهر فقط عند اختيار نوع (يخدم الاتجاهين معاً) #}
   {% if filters.document_type %}
   <div class="dd-subfile-bar">
-    <a class="sf-back" href="?{{ qs_no_type }}" title="عودة إلى خزانة الملفات">
+    <a class="sf-back" href="?{% if qs_no_type %}{{ qs_no_type }}&{% endif %}side={{ active_side }}" title="عودة إلى خزانة الملفات">
       <i class="bi bi-arrow-right"></i> كل الملفات
     </a>
     <span class="sf-open">
       {% if filters.year %}
-        <a href="?{{ qs_no_year }}" class="sf-crumb" title="كلّ سنوات هذا الملفّ"><i class="bi bi-folder2-open"></i> {{ filters.document_type }}</a>
+        <a href="?{% if qs_no_year %}{{ qs_no_year }}&{% endif %}side={{ active_side }}" class="sf-crumb" title="كلّ سنوات هذا الملفّ"><i class="bi bi-folder2-open"></i> {{ filters.document_type }}</a>
         <i class="bi bi-chevron-left sf-sep"></i>
         <i class="bi bi-calendar3"></i> {{ filters.year }}
       {% else %}
@@ -138,12 +139,12 @@
   {# تبويبا الاتجاه (JS) — مع تدهور رشيق: بلا JS تظهر اللوحتان مع عناوين #}
   {# التبويبُ الافتراضيّ حيث الكتب: «صادر» الثابتُ كان يهبط على «لا كتب صادرة» (تدقيقُ نيلسن D#5) #}
   <div class="dd-tabs" role="tablist" aria-label="اتجاه الكتب">
-    <button type="button" class="dd-tab out{% if outgoing_count or not incoming_count %} active{% endif %}" id="tab-out" role="tab" aria-selected="{% if outgoing_count or not incoming_count %}true{% else %}false{% endif %}" aria-controls="pane-out" data-pane="pane-out"><i class="bi bi-arrow-up-right"></i> صادر <span class="cnt">{{ outgoing_count }}</span></button>
-    <button type="button" class="dd-tab in{% if not outgoing_count and incoming_count %} active{% endif %}" id="tab-in" role="tab" aria-selected="{% if not outgoing_count and incoming_count %}true{% else %}false{% endif %}" aria-controls="pane-in" data-pane="pane-in"><i class="bi bi-arrow-down-left"></i> وارد <span class="cnt">{{ incoming_count }}</span></button>
+    <button type="button" class="dd-tab out{% if active_side == 'out' %} active{% endif %}" id="tab-out" role="tab" aria-selected="{% if active_side == 'out' %}true{% else %}false{% endif %}" aria-controls="pane-out" data-pane="pane-out" data-side="out"><i class="bi bi-arrow-up-right"></i> صادر <span class="cnt">{{ outgoing_count }}</span></button>
+    <button type="button" class="dd-tab in{% if active_side == 'in' %} active{% endif %}" id="tab-in" role="tab" aria-selected="{% if active_side == 'in' %}true{% else %}false{% endif %}" aria-controls="pane-in" data-pane="pane-in" data-side="in"><i class="bi bi-arrow-down-left"></i> وارد <span class="cnt">{{ incoming_count }}</span></button>
   </div>
 
   {# ── تبويب الصادر ── #}
-  <div class="dd-pane{% if outgoing_count or not incoming_count %} active{% endif %}" id="pane-out" role="tabpanel" aria-labelledby="tab-out" tabindex="0">
+  <div class="dd-pane{% if active_side == 'out' %} active{% endif %}" id="pane-out" role="tabpanel" aria-labelledby="tab-out" tabindex="0">
     <div class="dd-pane-title"><i class="bi bi-arrow-up-right"></i> الكتب الصادرة ({{ outgoing_count }})</div>
     {% if outgoing_groups %}
       {% if not filters.document_type %}
@@ -151,7 +152,7 @@
       <div class="folder-grid">
         {% for g in outgoing_groups %}
         <a class="folder-card out" style="--i:{{ forloop.counter0 }}"
-           href="?{% if qs_no_type %}{{ qs_no_type }}&{% endif %}document_type={{ g.type|urlencode }}"
+           href="?{% if qs_no_type %}{{ qs_no_type }}&{% endif %}document_type={{ g.type|urlencode }}&side=out"
            title="فتح ملف «{{ g.type }}» ({{ g.count }})">
           <i class="bi bi-folder-fill fc-icon"></i>
           <span class="fc-name">{{ g.type }}</span>
@@ -164,7 +165,7 @@
       <div class="folder-grid folder-grid-years">
         {% for y in outgoing_years %}
         <a class="folder-card out year" style="--i:{{ forloop.counter0 }}"
-           href="?{% if qs_no_year %}{{ qs_no_year }}&{% endif %}year={{ y.year|default:'' }}"
+           href="?{% if qs_no_year %}{{ qs_no_year }}&{% endif %}year={{ y.year|default:'' }}&side=out"
            title="فتح ملف «{{ filters.document_type }} / {{ y.label }}» ({{ y.count }})">
           <i class="bi bi-calendar3 fc-icon"></i>
           <span class="fc-name">{{ y.label }}</span>
@@ -191,14 +192,14 @@
   </div>
 
   {# ── تبويب الوارد ── #}
-  <div class="dd-pane{% if not outgoing_count and incoming_count %} active{% endif %}" id="pane-in" role="tabpanel" aria-labelledby="tab-in" tabindex="0">
+  <div class="dd-pane{% if active_side == 'in' %} active{% endif %}" id="pane-in" role="tabpanel" aria-labelledby="tab-in" tabindex="0">
     <div class="dd-pane-title"><i class="bi bi-arrow-down-left"></i> الكتب الواردة ({{ incoming_count }})</div>
     {% if incoming_groups %}
       {% if not filters.document_type %}
       <div class="folder-grid">
         {% for g in incoming_groups %}
         <a class="folder-card in" style="--i:{{ forloop.counter0 }}"
-           href="?{% if qs_no_type %}{{ qs_no_type }}&{% endif %}document_type={{ g.type|urlencode }}"
+           href="?{% if qs_no_type %}{{ qs_no_type }}&{% endif %}document_type={{ g.type|urlencode }}&side=in"
            title="فتح ملف «{{ g.type }}» ({{ g.count }})">
           <i class="bi bi-folder-fill fc-icon"></i>
           <span class="fc-name">{{ g.type }}</span>
@@ -211,7 +212,7 @@
       <div class="folder-grid folder-grid-years">
         {% for y in incoming_years %}
         <a class="folder-card in year" style="--i:{{ forloop.counter0 }}"
-           href="?{% if qs_no_year %}{{ qs_no_year }}&{% endif %}year={{ y.year|default:'' }}"
+           href="?{% if qs_no_year %}{{ qs_no_year }}&{% endif %}year={{ y.year|default:'' }}&side=in"
            title="فتح ملف «{{ filters.document_type }} / {{ y.label }}» ({{ y.count }})">
           <i class="bi bi-calendar3 fc-icon"></i>
           <span class="fc-name">{{ y.label }}</span>
@@ -243,6 +244,22 @@
 (function(){
   document.body.classList.add('dd-js');   // تفعيل وضع التبويبات (بدونه تظهر اللوحتان)
   var tabs = Array.prototype.slice.call(document.querySelectorAll('.dd-tab'));
+  // التبويبُ الظاهر يُحمل في النموذج وروابط المرشّحات والعنوان — فلا يُعيد «تطبيق»
+  // أو رقاقةٌ الصفحةَ على «صادر» وقد كان المستخدمُ في «وارد» (H3)
+  function setSide(side){
+    var field = document.getElementById('dd-side');
+    if (field) field.value = side;
+    document.querySelectorAll('.dossier-filters a[href^="?"], .dd-subfile-bar a[href^="?"]').forEach(function(a){
+      var p = new URLSearchParams(a.getAttribute('href').slice(1));
+      p.set('side', side);
+      a.setAttribute('href', '?' + p.toString());
+    });
+    try {
+      var u = new URL(window.location.href);
+      u.searchParams.set('side', side);
+      history.replaceState(null, '', u);
+    } catch (e) { /* عنوانٌ لا يُعدَّل — النموذجُ يكفي */ }
+  }
   function activate(tab){
     tabs.forEach(function(t){
       var on = t === tab;
@@ -251,6 +268,7 @@
       var pane = document.getElementById(t.dataset.pane);
       if (pane) pane.classList.toggle('active', on);
     });
+    if (tab.dataset.side) setSide(tab.dataset.side);
   }
   tabs.forEach(function(tab, i){
     tab.addEventListener('click', function(){ activate(tab); });

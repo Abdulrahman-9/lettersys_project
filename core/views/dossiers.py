@@ -417,9 +417,16 @@ def dossier_detail(request, pk):
     # querystring بلا document_type — لروابط بطاقات الملفات الثانوية وكسرة «كل الملفات»
     _qpt = params.copy()
     _qpt.pop("document_type", None)
+    _qpt.pop("side", None)               # بطاقةُ الملفّ تعيّن اتّجاهَها صراحةً
     qs_no_type = _qpt.urlencode()
-    _qpy = params.copy(); _qpy.pop("year", None); _qpy.pop("page", None)
+    _qpy = params.copy(); _qpy.pop("year", None); _qpy.pop("page", None); _qpy.pop("side", None)
     qs_no_year = _qpy.urlencode()
+
+    # الاتّجاهُ الظاهرُ يبقى عبر التنقّل (H3): ملفٌّ يُفتح من «وارد» كان يهبط على «صادر»
+    # إن وُجد صادرٌ من النوع نفسِه. بلا اختيارٍ: حيث الكتب (تدقيقُ نيلسن D#5).
+    active_side = request.GET.get("side")
+    if active_side not in ("in", "out"):
+        active_side = "out" if out_count or not in_count else "in"
 
     return render(request, "core/dossier_detail.html", {
         "entity": entity,
@@ -441,6 +448,7 @@ def dossier_detail(request, pk):
         "incoming_years": in_years,
         "period_presets": period_presets,
         "querystring": params.urlencode(),
+        "active_side": active_side,
         "secret_labels": _SECRET_LABELS,
         "followup_labels": FOLLOWUP_LABELS,
     })
