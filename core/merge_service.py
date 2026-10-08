@@ -124,7 +124,7 @@ class SmartMergeService:
             current_pdf_bytes, _, _ = ensure_pdf_bytes(_file_bytes(current_file), getattr(current_file, 'name', ''))
 
             merged_file = self.merge_pdfs(BytesIO(new_pdf_bytes), BytesIO(current_pdf_bytes))
-            filename = f"merged_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            filename = f"merged_{timezone.localtime().strftime('%Y%m%d_%H%M%S')}.pdf"
 
             # **كم ورقةً أُضيفت، ومَن أضافها** (قرارُ المالك 2026‑09‑13): الحقلُ
             # ``page_count`` كان موجوداً في النموذج ولا يُملأ أبداً، فلم يكن أحدٌ يعرف

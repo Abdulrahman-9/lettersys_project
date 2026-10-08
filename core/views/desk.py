@@ -17,6 +17,7 @@ from datetime import datetime
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import render
+from django.utils import timezone
 
 from core.branding import org_name
 from core.custody_service import undelivered
@@ -194,7 +195,7 @@ def _ledger_row(book, department, user):
 
     distributed = [r.target_name for r in book.referrals.all()]
     received = [
-        '%s (%s)' % (e.holder_name, e.signed_at.strftime('%Y/%m/%d'))
+        '%s (%s)' % (e.holder_name, timezone.localtime(e.signed_at).strftime('%d/%m/%Y'))
         for e in book.custody_events.all() if e.event == CustodyEvent.UNIT_RECEIPT
     ]
 

@@ -134,7 +134,8 @@ def create_encrypted_pg_backup(target_dir=None, file_name=None) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
 
     if not file_name:
-        file_name = f"pg_backup_{timezone.now().strftime('%Y%m%d_%H%M')}.dump"
+        # اسمُ الملفّ بالتوقيت المحلّيّ: المديرُ يختار النسخةَ بساعتها عند الاستعادة
+        file_name = f"pg_backup_{timezone.localtime().strftime('%Y%m%d_%H%M')}.dump"
     file_name = Path(file_name).name
     if not file_name.endswith(".dump"):
         file_name += ".dump"
@@ -285,7 +286,7 @@ def create_encrypted_config_backup(target_dir=None, file_name=None) -> Path | No
         return None
 
     if not file_name:
-        file_name = f"config_{timezone.now().strftime('%Y%m%d_%H%M')}.tar"
+        file_name = f"config_{timezone.localtime().strftime('%Y%m%d_%H%M')}.tar"
     file_name = Path(file_name).name
     if not file_name.endswith('.tar'):
         file_name += '.tar'

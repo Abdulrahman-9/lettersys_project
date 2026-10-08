@@ -60,7 +60,7 @@ def _attachment_pages_and_log(att):
         log.append({
             'version': v.version_number,
             'by': (v.created_by.get_full_name() or v.created_by.username) if v.created_by else '',
-            'at': v.created_at.strftime('%Y-%m-%d %H:%M') if v.created_at else '',
+            'at': timezone.localtime(v.created_at).strftime('%Y-%m-%d %H:%M') if v.created_at else '',
             'added_pages': meta.get('added_pages'),
             'total_pages': v.page_count,
             'note': v.note or '',
@@ -748,7 +748,8 @@ def api_book_detail_json(request, pk):
         'issuing_entities': [{'id': e.id, 'name': e.name} for e in book.issuing_entities.all()],
         'receiving_entities': [{'id': e.id, 'name': e.name} for e in book.receiving_entities.all()],
         'created_by': book.created_by.get_full_name() or book.created_by.username if book.created_by else '',
-        'created_at': book.created_at.strftime('%Y-%m-%d %H:%M') if book.created_at else '',
+        # بتوقيت الخادم المحلّيّ (Asia/Baghdad) — strftime على وقتٍ واعٍ يكتب UTC فيتأخّر ثلاثَ ساعات
+        'created_at': timezone.localtime(book.created_at).strftime('%Y-%m-%d %H:%M') if book.created_at else '',
         'attachments': attachments,
         'edit_url': reverse('book_edit', args=[book.pk]),
         'detail_url': reverse('book_detail', args=[book.pk]),
