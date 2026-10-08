@@ -99,7 +99,7 @@
                   <td>
                     {% if row.book_number %}
                       {% if row.book_id %}
-                        <a href="/books/{{ row.book_id }}/" class="text-decoration-none">
+                        <a href="{% url 'book_detail' row.book_id %}" class="text-decoration-none">
                           <span style="font-variant-numeric:tabular-nums">{{ row.book_number }}</span>
                           <span class="text-muted">— {{ row.book_title|truncatechars:45 }}</span>
                         </a>
