@@ -242,7 +242,7 @@ def _resolve_book_recipient(book):
 
 def _book_email_defaults(book, entity):
     direction = 'استلام' if book.is_incoming else 'إرسال'
-    subject = f'كتاب رقم {book.our_number} — {book.title[:80]}'
+    subject = f'كتاب رقم {book.our_number_display} — {book.title[:80]}'
     return subject, direction
 
 

@@ -1067,12 +1067,12 @@
           <div class="col-12">
             <label class="compose-label">موضوع الإيميل <span style="color:#dc3545">*</span></label>
             <input name="subject_template" class="compose-input" value="{{ instance.subject_template|default:'' }}" required>
-            <div class="compose-hint">متغيرات: &#123;&#123; book.our_number &#125;&#125; &#123;&#123; book.title &#125;&#125; &#123;&#123; entity.name &#125;&#125;</div>
+            <div class="compose-hint">متغيرات: &#123;&#123; book.our_number_display &#125;&#125; &#123;&#123; book.title &#125;&#125; &#123;&#123; entity.name &#125;&#125;</div>
           </div>
           <div class="col-12">
             <label class="compose-label">نص الرسالة (HTML) <span style="color:#dc3545">*</span></label>
             <textarea name="body_html" class="compose-input compose-body-editor" required>{{ instance.body_html|default:'' }}</textarea>
-            <div class="compose-hint">متغيرات: &#123;&#123; book.our_number &#125;&#125; &#123;&#123; entity.name &#125;&#125; &#123;&#123; user.get_full_name &#125;&#125;</div>
+            <div class="compose-hint">متغيرات: &#123;&#123; book.our_number_display &#125;&#125; &#123;&#123; entity.name &#125;&#125; &#123;&#123; user.get_full_name &#125;&#125;</div>
           </div>
           <div class="col-12 d-flex gap-3">
             <div class="form-check">

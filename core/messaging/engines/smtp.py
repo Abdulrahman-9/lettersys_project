@@ -27,6 +27,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.html import escape
 
 logger = logging.getLogger('lettersys')
 
@@ -130,14 +131,14 @@ class SMTPEngine:
             return f"""
             <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
               <div style="background:#7c5a3a;color:white;padding:16px;border-radius:8px 8px 0 0">
-                <h2 style="margin:0">{self.email_cfg.org_name or 'LetterSys' if self.email_cfg else 'LetterSys'} — {dir_label}</h2>
+                <h2 style="margin:0">{escape((self.email_cfg.org_name if self.email_cfg else '') or 'LetterSys')} — {dir_label}</h2>
               </div>
               <div style="border:1px solid #e2e8f0;border-top:0;padding:20px;border-radius:0 0 8px 8px">
                 <table style="width:100%;border-collapse:collapse">
-                  <tr><td style="padding:8px;color:#666;width:140px">رقم القيد</td><td style="padding:8px;font-weight:bold">{book.our_number}</td></tr>
-                  <tr style="background:#f9f6f0"><td style="padding:8px;color:#666">العنوان</td><td style="padding:8px">{book.title}</td></tr>
-                  <tr><td style="padding:8px;color:#666">التاريخ</td><td style="padding:8px">{book.date}</td></tr>
-                  <tr style="background:#f9f6f0"><td style="padding:8px;color:#666">النوع</td><td style="padding:8px">{getattr(book, 'kind_label', '')}</td></tr>
+                  <tr><td style="padding:8px;color:#666;width:140px">رقم القيد</td><td style="padding:8px;font-weight:bold">{escape(book.our_number_display)}</td></tr>
+                  <tr style="background:#f9f6f0"><td style="padding:8px;color:#666">العنوان</td><td style="padding:8px">{escape(book.title)}</td></tr>
+                  <tr><td style="padding:8px;color:#666">التاريخ</td><td style="padding:8px">{book.date.strftime('%d/%m/%Y') if book.date else '—'}</td></tr>
+                  <tr style="background:#f9f6f0"><td style="padding:8px;color:#666">النوع</td><td style="padding:8px">{escape(getattr(book, 'kind_label', ''))}</td></tr>
                 </table>
               </div>
               {sig_html}
@@ -273,7 +274,7 @@ class SMTPEngine:
                 is_active=True,
             ).exclude(email=''):
                 html = self._render_notification_html(book, entity, 'received')
-                subject = f'تم استلام كتابكم: {book.our_number}'
+                subject = f'تم استلام كتابكم: {book.our_number_display}'
                 cc = entity.get_cc_list() if hasattr(entity, 'get_cc_list') else []
                 log = self.send_book_notification(
                     book=book,
@@ -294,7 +295,7 @@ class SMTPEngine:
                 is_active=True,
             ).exclude(email=''):
                 html = self._render_notification_html(book, entity, 'sent')
-                subject = f'كتاب رسمي: {book.our_number} — {book.title[:60]}'
+                subject = f'كتاب رسمي: {book.our_number_display} — {book.title[:60]}'
                 cc = entity.get_cc_list() if hasattr(entity, 'get_cc_list') else []
                 log = self.send_book_notification(
                     book=book,

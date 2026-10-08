@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}لا يوجد اتصال بالإنترنت{% endblock %}
+{% block title %}تعذّر الوصول إلى الخادم{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -30,11 +30,11 @@
 <div class="offline-wrapper animate-fade-in">
   <div>
     <i class="bi bi-wifi-off offline-icon mb-4"></i>
-    <h1 class="gradient-text mb-3">لا يوجد اتصال بالإنترنت</h1>
-    <p class="text-muted mb-4 fs-5">يبدو أنك غير متصل بالإنترنت. يرجى التحقق من الاتصال والمحاولة مرة أخرى.</p>
+    <h1 class="gradient-text mb-3">تعذّر الوصول إلى الخادم</h1>
+    <p class="text-muted mb-4 fs-5">النظامُ يعمل على شبكة المكتب لا على الإنترنت — تحقّق من اتصال جهازك بشبكة المكتب، أو أنّ الخادمَ مشغَّل، ثمّ أعد المحاولة.</p>
     
     <div class="d-flex gap-3 justify-content-center flex-wrap">
-      <button class="btn btn-primary btn-lg hover-lift" onclick="window.location.reload()">
+      <button type="button" class="btn btn-primary btn-lg hover-lift" onclick="window.location.reload()">
         <i class="bi bi-arrow-clockwise me-2"></i>إعادة المحاولة
       </button>
       <a href="/" class="btn btn-outline-secondary btn-lg hover-lift">
@@ -47,9 +47,9 @@
         <div class="card-body">
           <h6 class="fw-bold mb-3"><i class="bi bi-info-circle me-2"></i>نصائح:</h6>
           <ul class="list-unstyled mb-0">
-            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>تحقق من اتصال الإنترنت</li>
-            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>جرّب إعادة تشغيل الجهاز</li>
-            <li><i class="bi bi-check-circle text-success me-2"></i>تأكد من إعدادات الشبكة</li>
+            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>تحقّق من كابل الشبكة أو اتصال Wi‑Fi المكتب</li>
+            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>اسأل زميلاً: إن تعذّر عليه أيضاً فالخادمُ متوقّف</li>
+            <li><i class="bi bi-check-circle text-success me-2"></i>أبلغ مديرَ النظام إن طال الانقطاع</li>
           </ul>
         </div>
       </div>
