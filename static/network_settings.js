@@ -330,11 +330,19 @@
     document.querySelectorAll('.ns-btn-delete').forEach(btn => {
       btn.addEventListener('click', async () => {
         const pk = btn.dataset.nodeId;
-        if (!confirm('هل تريد حذف هذا الجهاز من السجل؟')) return;
+        // حواريّةُ التطبيق لا نافذةُ المتصفّح الأصليّة (H4) — والخطأُ إشعارٌ لا alert
+        const ok = await window.confirmDelete({
+          title: 'حذف جهاز',
+          message: 'حذف هذا الجهاز من سجلّ الأجهزة؟ يعود إن اكتُشف في مسح الشبكة من جديد.',
+          okText: 'احذف',
+        });
+        if (!ok) return;
         const url  = urls.deleteDevice.replace('{pk}', pk);
         const data = await post(url, {});
         if (data.ok) {
           btn.closest('tr').remove();
+        } else if (window.ToastCenter && typeof window.ToastCenter.show === 'function') {
+          window.ToastCenter.show('error', data.error || 'تعذّر الحذف');
         } else {
           alert(data.error || 'تعذّر الحذف');
         }
