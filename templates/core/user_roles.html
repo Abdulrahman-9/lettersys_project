@@ -185,9 +185,20 @@
                         <i class="bi bi-key me-1"></i>كلمة المرور
                       </button>
                       {% endif %}
-                      <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteUser('{{ u.id }}', '{{ u.username }}')" title="حذف المستخدم">
-                        <i class="bi bi-trash me-1"></i>حذف
-                      </button>
+                      {% comment %}
+                        نموذجٌ بتأكيدٍ تصريحيّ (data-confirm) — كان زرُّ حدثٍ مضمَّنٌ يضع اسمَ المستخدم في سلسلة JS
+                        داخل صفة حدث (تهريبُ HTML لا يحميها)، ويُعرض لصاحب الحساب نفسِه حذفٌ يرفضه الخادم.
+                      {% endcomment %}
+                      {% if not u.is_self %}
+                      <form method="post" class="d-inline" data-confirm="سيُحذف المستخدم «{{ u.username }}» نهائياً ولا يمكن التراجع عن ذلك." data-confirm-title="حذف المستخدم" data-confirm-ok="احذف المستخدم">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف المستخدم">
+                          <i class="bi bi-trash me-1"></i>حذف
+                        </button>
+                      </form>
+                      {% endif %}
                     </div>
                   </td>
                 </tr>
@@ -228,7 +239,7 @@
                 </tr>
                 {% endif %}
                 {% empty %}
-                <tr><td colspan="5" class="text-center text-muted py-3">لا يوجد مستخدمون.</td></tr>
+                <tr><td colspan="4" class="text-center text-muted py-3">لا يوجد مستخدمون.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -367,41 +378,12 @@
   // (أُزيل الإغلاقُ الآليّ بعد 5 ث: كان يُخفي رسالةَ الخطأ والإرشادَ الثابت — تدقيقُ نيلسن F#6)
 })();
 
-// دالة حذف المستخدم
 function notifyUserRoles(message, type = 'info', opts = {}) {
   if (window.ToastCenter && typeof window.ToastCenter.show === 'function') {
     return window.ToastCenter.show(type, message, opts);
   }
   alert(message);
   return null;
-}
-
-async function deleteUser(userId, username) {
-  const confirmed = window.ToastCenter && typeof window.ToastCenter.confirm === 'function'
-    ? await window.ToastCenter.confirm({
-        type: 'warning',
-        title: 'تأكيد حذف المستخدم',
-        message: `سيتم حذف المستخدم "${username}" نهائياً ولا يمكن التراجع عن هذا الإجراء.`,
-        confirmLabel: 'حذف المستخدم',
-        cancelLabel: 'إلغاء',
-        confirmClassName: 'btn btn-sm btn-danger',
-      })
-    : confirm(`هل تريد بالتأكيد حذف المستخدم "${username}"?\n\nهذا الإجراء لا يمكن التراجع عنه!`);
-
-  if (!confirmed) {
-    return;
-  }
-  
-  // إنشاء نموذج مخفي للحذف
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.innerHTML = `
-    <input type="hidden" name="csrfmiddlewaretoken" value="${document.querySelector('[name=csrfmiddlewaretoken]').value}">
-    <input type="hidden" name="action" value="delete">
-    <input type="hidden" name="user_id" value="${userId}">
-  `;
-  document.body.appendChild(form);
-  form.submit();
 }
 
 </script>

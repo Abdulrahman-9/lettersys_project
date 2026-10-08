@@ -87,7 +87,7 @@
       <thead class="table-light">
         <tr>
           <th>اسم الملف</th>
-          <th>الحجم (MB)</th>
+          <th>الحجم</th>
           <th>تاريخ التعديل</th>
         </tr>
       </thead>
@@ -96,7 +96,7 @@
         <tr>
           <td>{{ backup.name }}</td>
           <td>{{ backup.size_mb }} م.ب</td>
-          <td>{{ backup.modified|date:"Y-m-d H:i" }}</td>
+          <td>{{ backup.modified|date:"d/m/Y H:i" }}</td>
         </tr>
         {% endfor %}
       </tbody>

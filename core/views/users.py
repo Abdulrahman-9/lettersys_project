@@ -79,6 +79,12 @@ def user_roles(request):
                 messages.error(request, problem)
                 return redirect("user_roles")
 
+            # مُدقِّقُ Django نفسُه (حروفٌ — والعربيّةُ منها — وأرقامٌ و@ . + - _): `create()` لا يستدعيه،
+            # فكان يمرّ اسمٌ بمسافةٍ أو علامةِ اقتباسٍ أو وسم — يكسر الدخولَ ويصير نصّاً في صفحاتٍ أخرى
+            if len(username) > 150 or not _username_ok(username):
+                messages.error(request, "❌ اسمُ المستخدم حروفٌ وأرقامٌ و@ . + - _ فقط، بلا مسافات (150 حرفاً على الأكثر).")
+                return redirect("user_roles")
+
             if User.objects.filter(username=username).exists():
                 messages.error(request, "❌ اسم المستخدم موجود بالفعل.")
                 return redirect("user_roles")
@@ -164,6 +170,17 @@ def user_roles(request):
             "min_len": SecuritySettings.get().password_min_length,
         },
     )
+
+
+def _username_ok(username):
+    """مُدقِّقُ اسم المستخدم في نموذج Django (``UnicodeUsernameValidator``)."""
+    from django.core.exceptions import ValidationError
+
+    try:
+        User.username_validator(username)
+    except ValidationError:
+        return False
+    return True
 
 
 def _password_problem(password, password2):
