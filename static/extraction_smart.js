@@ -68,6 +68,7 @@ const CAPTURE_FIELD_BY_ID = {
     senderNumber: 'sender_number', senderDate: 'sender_date',
     title: 'title', secretLevel: 'secret_level',
 };
+const MIN_SCAN_AGENT_VERSION = '1.0.1';
 
 function showExtractionNotice(message, type = 'error', duration = 7000, title = '') {
     if (window.ToastCenter) {
@@ -964,6 +965,21 @@ class ExtractionSmartSystem {
     }
 
     // فحص جاهزية وكيل المسح المحلي وملء قائمة الأجهزة + المؤشّر (بلا مستمع نقر منافس).
+    _agentVersionAtLeast(version, minimum = MIN_SCAN_AGENT_VERSION) {
+        const parts = (value) => String(value || '').split('.').map(
+            part => Number.parseInt(part, 10) || 0
+        );
+        const current = parts(version);
+        const required = parts(minimum);
+        const length = Math.max(current.length, required.length);
+        for (let i = 0; i < length; i += 1) {
+            if ((current[i] || 0) !== (required[i] || 0)) {
+                return (current[i] || 0) > (required[i] || 0);
+            }
+        }
+        return true;
+    }
+
     async _initScanAgent() {
         this._startAgentHealthMonitor();
         const select = document.getElementById('scanDeviceSelect');
@@ -985,6 +1001,12 @@ class ExtractionSmartSystem {
                 hideSelect(); return;
             }
             const hd = this._agentHealth || {};
+            if (!this._agentVersionAtLeast(hd.version)) {
+                this._agentHealthy = false;
+                setPill('outdated', 'وكيل المسح يحتاج إلى تحديث');
+                hideSelect();
+                return;
+            }
             if (!hd.naps2_available) { this._agentHealthy = false; setPill('no_naps2', 'NAPS2 غير مثبّت'); hideSelect(); return; }
             const dd = await (await this._fetchWithTimeout(agentBase + '/agent/devices', {}, 20000)).json();
             this._scanDevices = dd.devices || [];
@@ -1036,6 +1058,9 @@ class ExtractionSmartSystem {
                 state = 'unavailable'; title = 'وكيل المسح لا يستجيب';
                 msg = 'توقّف وكيل المسح على هذا الجهاز أو لا يستجيب. شغّله لاستئناف المسح.';
             }
+        } else if (!this._agentVersionAtLeast(hd.version)) {
+            state = 'outdated'; title = 'وكيل المسح يحتاج إلى تحديث';
+            msg = 'نسخة وكيل المسح على هذا الجهاز قديمة. أعد تشغيل INSTALL.bat من حزمة LetterSys ثم أعد الفحص.';
         } else if (!hd.naps2_available) {
             state = 'no_naps2'; title = 'NAPS2 غير مثبّت';
             msg = 'برنامج المسح NAPS2 لم يعد متوفّراً على هذا الجهاز.';
@@ -1160,6 +1185,12 @@ class ExtractionSmartSystem {
                     `أضف <code>${origin}</code> إلى <code>allowed_origins</code> في <code>%LOCALAPPDATA%\\LetterSys\\agent.json</code>.`,
                     'أو اطلب من مسؤول النظام إعادةَ تشغيل <code>install_agent.bat</code> بهذا العنوان.',
                     'أعد تشغيل الوكيل بعد التعديل ثمّ اضغط «إعادة الفحص» — والسطرُ نفسه مكتوبٌ في <code>agent.log</code>.',
+                ], actions: ['recheck'] },
+            outdated:   { tone: 'err', title: 'وكيل المسح يحتاج إلى تحديث',
+                desc: 'النسخة المثبّتة لا تحتوي إصلاح إخفاء نوافذ التشغيل ورسائل أخطاء الماسح العربية.', steps: [
+                    'أغلق صفحة الإدخال الحالية.',
+                    'من جلسة الموظف نفسها، شغّل <code>INSTALL.bat</code> داخل <code>3_Scan_Agent</code> بنقرة عادية، لا بصلاحية المسؤول.',
+                    'وافق على التحديث، ثم افتح الصفحة واضغط «إعادة الفحص».',
                 ], actions: ['recheck'] },
             no_naps2:   { tone: 'err', title: 'برنامج NAPS2 غير مثبّت',
                 desc: 'الوكيل يعمل، لكنه لا يجد NAPS2 — وهو محرّك المسح الفعلي.', steps: [

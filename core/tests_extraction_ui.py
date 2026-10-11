@@ -332,6 +332,12 @@ class ExtractionSaveReadinessSourceTests(SimpleTestCase):
         self.assertNotIn('alert(', self.js)
         self.assertIn('showExtractionNotice(', self.js)
 
+    def test_old_scan_agent_is_blocked_with_an_arabic_update_path(self):
+        self.assertIn("const MIN_SCAN_AGENT_VERSION = '1.0.1';", self.js)
+        self.assertIn("setPill('outdated', 'وكيل المسح يحتاج إلى تحديث');", self.js)
+        self.assertIn("outdated:   { tone: 'err', title: 'وكيل المسح يحتاج إلى تحديث'", self.js)
+        self.assertIn('INSTALL.bat', self.js)
+
     def test_extraction_sidebar_mini_rule_overrides_compact_desktop_width(self):
         self.assertIn(
             'body.app-shell-body .app-shell.sidebar-mini .app-sidebar',
