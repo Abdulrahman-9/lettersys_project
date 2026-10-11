@@ -12,7 +12,7 @@ from django.contrib.auth.models import User
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from .models import Book, BookSequence, Entity
+from .models import Book, BookSequence, Department, Entity, UserProfile
 from .views.filter_helpers import BookSortEngine
 from .views.helpers import apply_search_filters
 from .views.books_helpers import find_duplicate_candidates
@@ -280,14 +280,18 @@ class NumericSortTests(TestCase):
 class DuplicateDetectionTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user('u', password='p')
+        self.department = Department.objects.create(name='المتابعة', code='dup-followup')
+        self.other_department = Department.objects.create(
+            name='شؤون التراخيص', code='dup-licensing')
         self.ent = Entity.objects.create(name='وزارة الصحة', etype='issuer')
         self.book = Book.objects.create(
             our_number='1001', title='طلب إجازة', kind='incoming_external',
-            sender_number='ص-500', sender_date=date(2026, 5, 1), created_by=self.user)
+            sender_number='ص-500', sender_date=date(2026, 5, 1),
+            created_by=self.user, department=self.department)
         self.book.issuing_entities.add(self.ent)
 
     def _find(self, **over):
-        kw = dict(kind='incoming_external', title='طلب إجازة',
+        kw = dict(department=self.department, kind='incoming_external', title='طلب إجازة',
                   cmp_date=date(2026, 5, 1), party_number='ص-500',
                   party_entities=[self.ent])
         kw.update(over)
@@ -318,6 +322,9 @@ class DuplicateDetectionTests(TestCase):
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]['match_count'], 3)
 
+    def test_same_book_in_another_department_is_not_a_duplicate(self):
+        self.assertEqual(self._find(department=self.other_department), [])
+
 
 class DuplicateGuardApiTests(TestCase):
     """حارس التكرار في save_book_api: 4/4 منع (تجاوز للمشرف فقط)، 3/4 تنبيه يتجاوزه الجميع."""
@@ -326,11 +333,18 @@ class DuplicateGuardApiTests(TestCase):
         self.client = Client()
         self.user = User.objects.create_user('owner', password='pass1234')
         self.admin = User.objects.create_superuser('boss', password='pass1234', email='b@t.com')
+        self.department = Department.objects.create(name='المتابعة', code='api-followup')
+        self.other_department = Department.objects.create(
+            name='شؤون التراخيص', code='api-licensing')
+        UserProfile.objects.update_or_create(
+            user=self.user, defaults={'department': self.department})
+        UserProfile.objects.update_or_create(
+            user=self.admin, defaults={'department': self.department})
         self.moi = Entity.objects.create(name='وزارة الداخلية', etype='issuer', is_active=True)
         self.existing = Book.objects.create(
             our_number='2001', title='طلب تعيين', date=date(2026, 5, 1),
             sender_date=date(2026, 4, 20), sender_number='ص-77',
-            kind='incoming_external', created_by=self.user)
+            kind='incoming_external', created_by=self.user, department=self.department)
         self.existing.issuing_entities.add(self.moi)
 
     def _payload(self, **over):
@@ -378,6 +392,20 @@ class DuplicateGuardApiTests(TestCase):
         r2 = self.client.post(reverse('save-book-api'),
                               self._payload(sender_number='ص-999', confirm_duplicate='true'))
         self.assertEqual(r2.status_code, 201)
+
+    def test_full_match_in_another_department_is_allowed(self):
+        self.existing.department = self.other_department
+        self.existing.save(update_fields=['department'])
+        self.client.login(username='owner', password='pass1234')
+
+        response = self.client.post(reverse('save-book-api'), self._payload())
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(Book.objects.filter(
+            department=self.department,
+            title='طلب تعيين',
+            sender_number='ص-77',
+        ).exists())
 
 
 class SearchListOrderingApiTests(TestCase):

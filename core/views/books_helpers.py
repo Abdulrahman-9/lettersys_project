@@ -33,12 +33,13 @@ def _book_party_names(book, is_incoming):
     return {n for n in names if n}
 
 
-def find_duplicate_candidates(*, kind, title, cmp_date, party_number,
+def find_duplicate_candidates(*, department, kind, title, cmp_date, party_number,
                               party_entities, exclude_id=None, limit=5):
     """يبحث عن كتبٍ مطابقة/مشابهة وفق الصفات الأربع، ويُعيد قائمة dict مرتّبة تنازلياً
     بعدد المطابقات (match_count ∈ {3,4} فقط — ما دونها ليس تنبيهاً).
 
     Args:
+        department:      قسم الكتاب؛ كشف التكرار مستقل داخل كل قسم
         kind:            نوع الكتاب (نطاق البحث — نفس النوع فقط)
         title:           عنوان الكتاب المُدخَل
         cmp_date:        تاريخ المقارنة (sender_date للوارد، date للصادر) — أو None
@@ -58,7 +59,7 @@ def find_duplicate_candidates(*, kind, title, cmp_date, party_number,
 
     # مرشّحون أوّليّون على DB: نفس النوع + غير محذوف + أيّ إشارة قوية (تاريخ/رقم/عنوان/جهة).
     # OR-net واسع بما يكفي ليضمّ كل مطابقة حقيقية (3/4 قد لا تشمل العنوان)، ومحدود بسقف.
-    base = Book.objects.filter(kind=kind)
+    base = Book.objects.filter(department=department, kind=kind)
     if exclude_id:
         base = base.exclude(pk=exclude_id)
 
