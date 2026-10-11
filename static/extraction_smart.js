@@ -1953,6 +1953,13 @@ class ExtractionSmartSystem {
             fetch(url, { headers: { 'X-CSRFToken': this.getCookie('csrftoken') } })
                 .then(r => r.json())
                 .then(data => {
+                    // قد يكتمل طلب الحجز بعد إرسال طلب الحالة وقبل وصول جوابه.
+                    // عندها تكون معاينة ``next`` أقدم من الحجز الفعلي ولا يجوز أن
+                    // تكتب رقماً مختلفاً على الشارة بينما الحقل يحمل المحجوز.
+                    if (this.reservations[k]?.id) {
+                        this.applyReservationToUI(k, this.reservations[k]);
+                        return;
+                    }
                     if (data.has_reservation && data.reservation) {
                         this.reservations[k] = data.reservation;
                         this.applyReservationToUI(k, data.reservation);

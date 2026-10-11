@@ -95,7 +95,8 @@
       <aside class="app-sidebar offcanvas-xl offcanvas-start" id="appNav" tabindex="-1" aria-labelledby="appNavTitle">
         <div class="app-sidebar-panel">
           <div class="app-sidebar-section-title">
-            <button type="button" class="app-sidebar-toggle-btn d-none d-xl-inline-flex" id="sidebarToggleBtn" title="طي القائمة">
+            <button type="button" class="app-sidebar-toggle-btn d-none d-xl-inline-flex" id="sidebarToggleBtn"
+                    title="طي القائمة" aria-label="طي القائمة" aria-controls="appNav" aria-expanded="true">
               <i class="bi bi-layout-sidebar-reverse"></i>
             </button>
             <span class="sidebar-title-text" id="appNavTitle">التنقل الرئيسي</span>
@@ -292,7 +293,10 @@
 
       function setMini(mini) {
         shell.classList.toggle('sidebar-mini', mini);
-        btn.title = mini ? 'توسيع القائمة' : 'طي القائمة';
+        var label = mini ? 'توسيع القائمة' : 'طي القائمة';
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('aria-expanded', mini ? 'false' : 'true');
         if (icon) icon.className = mini ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-reverse';
         try { localStorage.setItem(PREF, mini ? '1' : '0'); } catch (e) {}
       }

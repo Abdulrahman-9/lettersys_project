@@ -306,6 +306,8 @@ class ExtractionSaveReadinessSourceTests(SimpleTestCase):
             cls.template = fh.read()
         with open('static/extraction_smart.css', encoding='utf-8') as fh:
             cls.css = fh.read()
+        with open('templates/base.html', encoding='utf-8') as fh:
+            cls.base = fh.read()
 
     def test_pending_entity_text_is_flushed_before_required_validation(self):
         save_start = self.js.index('    async saveBook() {')
@@ -334,6 +336,18 @@ class ExtractionSaveReadinessSourceTests(SimpleTestCase):
         self.assertIn(
             'body.app-shell-body .app-shell.sidebar-mini .app-sidebar',
             self.css,
+        )
+
+    def test_sidebar_toggle_exposes_its_state_to_assistive_technology(self):
+        self.assertIn('aria-controls="appNav" aria-expanded="true"', self.base)
+        self.assertIn("btn.setAttribute('aria-label', label);", self.base)
+        self.assertIn("btn.setAttribute('aria-expanded', mini ? 'false' : 'true');", self.base)
+
+    def test_stale_number_preview_cannot_overwrite_a_live_reservation(self):
+        self.assertIn(
+            'if (this.reservations[k]?.id) {\n'
+            '                        this.applyReservationToUI(k, this.reservations[k]);',
+            self.js,
         )
 
 
