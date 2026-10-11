@@ -478,6 +478,8 @@ class ExtractionSmartSystem {
         this.autoNumberEnabled = true;
         // Per-kind active reservation cache: { incoming_internal: {id, formatted, number,...}, ... }
         this.reservations = {};
+        // Prevent duplicate POSTs while the first reservation request is in flight.
+        this._reservationRequests = {};
         this.apiEndpoints = this.readApiEndpoints();
         this.documentTypeCatalog = this.readJsonScript('documentTypeCatalogData', {});
         this.documentTypeDefaults = this.readJsonScript('documentTypeDefaultsData', {});
@@ -1675,8 +1677,11 @@ class ExtractionSmartSystem {
             this.applyReservationToUI(kind, this.reservations[kind]);
             return Promise.resolve(this.reservations[kind]);
         }
+        if (this._reservationRequests[kind]) {
+            return this._reservationRequests[kind];
+        }
         // Otherwise reserve atomically on the server
-        return fetch(this.apiEndpoints.reservationReserve, {
+        const request = fetch(this.apiEndpoints.reservationReserve, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1700,6 +1705,13 @@ class ExtractionSmartSystem {
                 this.fetchNextNumber(kind);
                 return null;
             });
+        this._reservationRequests[kind] = request;
+        request.finally(() => {
+            if (this._reservationRequests[kind] === request) {
+                delete this._reservationRequests[kind];
+            }
+        });
+        return request;
     }
 
     applyReservationToUI(kind, reservation) {

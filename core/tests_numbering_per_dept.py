@@ -11,7 +11,9 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 
-from core.models import Book, BookSequence, Department, UserProfile
+from core.models import (
+    Book, BookNumberReservation, BookSequence, Department, UserProfile,
+)
 from core.reservation_service import reserve_number
 
 
@@ -70,6 +72,24 @@ class ReservationPerDepartmentTests(TestCase):
         self.assertEqual(first.number, 3917)
         self.assertEqual(second.department, self.licensing)
         self.assertEqual(second.number, 1)
+
+    def test_repeated_reservation_request_reuses_the_live_hold(self):
+        first, outcome = reserve_number(self.licensing_user, 'incoming_internal')
+        second, second_outcome = reserve_number(
+            self.licensing_user, 'incoming_internal')
+
+        self.assertEqual(outcome, 'new')
+        self.assertEqual(second_outcome, 'existing')
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(
+            BookNumberReservation.objects.filter(
+                user=self.licensing_user,
+                department=self.licensing,
+                kind='incoming_internal',
+                status__in=['active', 'reactivated'],
+            ).count(),
+            1,
+        )
 
     def test_status_preview_uses_the_users_department_counter(self):
         BookSequence.objects.update_or_create(

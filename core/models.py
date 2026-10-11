@@ -1807,6 +1807,13 @@ class BookNumberReservation(models.Model):
             models.Index(fields=['kind', 'year', 'number']),
             models.Index(fields=['department', 'kind', 'status']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'department', 'kind'],
+                condition=models.Q(status__in=('active', 'reactivated')),
+                name='uniq_live_reservation_user_department_kind',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.formatted} [{self.get_status_display()}] - {self.user.username}"

@@ -47,6 +47,11 @@ def reserve_number(user, kind, expire_minutes=None, department=None):
     department = BookSequence.resolve_department(department)
     now = timezone.now()
     with transaction.atomic():
+        # Serialize reservations for one user. Without a stable row to lock,
+        # two first-time requests can both observe no live reservation and
+        # race to create one before the partial unique constraint is checked.
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.select_for_update().get(pk=user.pk)
         # 0) حجز نشط قائم لنفس المستخدم/النوع → أعِده (لا نُنشئ جديداً)
         existing = (
             R.objects.select_for_update()
