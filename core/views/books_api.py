@@ -32,6 +32,9 @@ from ..models import (
     BookHistory,
     BookSequence,
 )
+from ..reservation_service import (
+    claim_reservation_for_client, reservation_client_key,
+)
 from core.scoping import can_edit_book, can_open_content, is_privileged, scope_books_for
 from .books_helpers import (
     _normalize_secret_level_value,
@@ -243,9 +246,9 @@ def save_book_api(request):
         if reservation_id:
             from ..models import BookNumberReservation
             try:
-                reservation = BookNumberReservation.objects.get(
-                    pk=reservation_id,
-                    user=request.user,
+                reservation = claim_reservation_for_client(
+                    reservation_id, request.user,
+                    reservation_client_key(request.session.session_key),
                     department=book_department,
                 )
             except BookNumberReservation.DoesNotExist:
@@ -333,6 +336,24 @@ def save_book_api(request):
         attachment = None  # يُلتقط من create_attachment لربط حلقة التدريب لاحقاً
         try:
             with transaction.atomic():
+                if reservation:
+                    reservation = BookNumberReservation.objects.select_for_update().get(
+                        pk=reservation.pk,
+                        user=request.user,
+                        department=book_department,
+                        client_key=reservation_client_key(request.session.session_key),
+                    )
+                    if (reservation.status not in [
+                            BookNumberReservation.STATUS_ACTIVE,
+                            BookNumberReservation.STATUS_REACTIVATED,
+                    ] or reservation.is_expired):
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'استُخدم هذا الحجز أو انتهت صلاحيته في جلسة أخرى؛ اطلب رقماً جديداً.',
+                            'error_code': 'INVALID_RESERVATION_STATUS',
+                            'refresh_reservation': True,
+                        }, status=409)
+
                 # تعيين الرقم التلقائي داخل المعاملة (B2): لا يُستهلك رقم السجل الرسمي
                 # إلا إذا اكتمل إنشاء الكتاب — يمنع فجوات الترقيم عند فشل الإنشاء.
                 if numberless_internal:

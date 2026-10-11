@@ -121,6 +121,19 @@ class HeartbeatSweepTests(TestCase):
         self.assertEqual(r1.status, BookNumberReservation.STATUS_COOLDOWN)
         self.assertIsNotNone(r1.cooldown_until)
 
+    def test_force_cooldown_is_limited_to_the_disconnected_browser(self):
+        from .reservation_service import force_cooldown_for_user
+        first, _ = reserve_number(self.a, KIND, client_key='browser-a')
+        second, _ = reserve_number(self.a, KIND, client_key='browser-b')
+
+        moved = force_cooldown_for_user(self.a, client_key='browser-a')
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(moved, 1)
+        self.assertEqual(first.status, BookNumberReservation.STATUS_COOLDOWN)
+        self.assertEqual(second.status, BookNumberReservation.STATUS_ACTIVE)
+
     def test_heartbeat_endpoint_keeps_alive(self):
         self.client.login(username='a', password='p')
         r1, _ = reserve_number(self.a, KIND)

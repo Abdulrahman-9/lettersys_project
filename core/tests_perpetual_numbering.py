@@ -407,6 +407,29 @@ class DuplicateGuardApiTests(TestCase):
             sender_number='ص-77',
         ).exists())
 
+    def test_shared_login_cannot_save_with_another_browser_reservation(self):
+        first_client = Client()
+        second_client = Client()
+        first_client.force_login(self.user)
+        second_client.force_login(self.user)
+        reservation_response = first_client.post(
+            reverse('reservation-reserve'),
+            data='{"kind":"incoming_external"}',
+            content_type='application/json',
+        )
+        reservation_id = reservation_response.json()['reservation']['id']
+        payload = self._payload(
+            title='عنوان مختلف تماماً',
+            sender_date='2026-04-21',
+            sender_number='رقم طرف مختلف',
+            reservation_id=str(reservation_id),
+        )
+
+        response = second_client.post(reverse('save-book-api'), payload)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['error_code'], 'INVALID_RESERVATION')
+
 
 class SearchListOrderingApiTests(TestCase):
     """تكامل: قائمة الكتب تحترم أولوية الصلة عند البحث (قيدنا قبل رقم الجهة)،

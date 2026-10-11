@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from .models import BookNumberReservation, BookSequence, SystemSettings
+from .reservation_service import claim_reservation_for_client
 from .decorators import rate_limit
 
 logger = logging.getLogger('lettersys')
@@ -28,6 +29,14 @@ logger = logging.getLogger('lettersys')
 def _request_department(user):
     profile = getattr(user, 'profile', None)
     return BookSequence.resolve_department(getattr(profile, 'department', None))
+
+
+def _request_client_key(request):
+    """Bind number holds to this authenticated browser session, not the shared login."""
+    if not request.session.session_key:
+        request.session.save()
+    from .reservation_service import reservation_client_key
+    return reservation_client_key(request.session.session_key)
 
 
 def _reservation_dict(r):
@@ -77,7 +86,8 @@ def reserve_number(request):
     try:
         from .reservation_service import reserve_number as _svc_reserve
         reservation, outcome = _svc_reserve(
-            request.user, kind, department=_request_department(request.user))
+            request.user, kind, department=_request_department(request.user),
+            client_key=_request_client_key(request))
     except Exception as e:
         logger.error(f'[Reservation] Error: {e}', exc_info=True)
         return JsonResponse({'success': False, 'message': 'خطأ في الحجز'}, status=500)
@@ -116,7 +126,8 @@ def reservation_heartbeat(request):
         return JsonResponse({'success': False, 'message': 'بيانات غير صالحة'}, status=400)
 
     try:
-        r = BookNumberReservation.objects.get(pk=res_id, user=request.user)
+        r = claim_reservation_for_client(
+            res_id, request.user, _request_client_key(request))
     except BookNumberReservation.DoesNotExist:
         return JsonResponse({'success': False, 'alive': False, 'message': 'الحجز غير موجود'}, status=404)
 
@@ -148,7 +159,8 @@ def void_reservation(request):
         return JsonResponse({'success': False, 'message': 'بيانات غير صالحة'}, status=400)
 
     try:
-        r = BookNumberReservation.objects.get(pk=res_id, user=request.user)
+        r = claim_reservation_for_client(
+            res_id, request.user, _request_client_key(request))
     except BookNumberReservation.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'الحجز غير موجود'}, status=404)
 
@@ -183,7 +195,8 @@ def reactivate_reservation(request):
         return JsonResponse({'success': False, 'message': 'بيانات غير صالحة'}, status=400)
 
     try:
-        r = BookNumberReservation.objects.get(pk=res_id, user=request.user)
+        r = claim_reservation_for_client(
+            res_id, request.user, _request_client_key(request))
     except BookNumberReservation.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'الحجز غير موجود'}, status=404)
 
@@ -197,6 +210,7 @@ def reactivate_reservation(request):
     if r.void_reason == BookNumberReservation.VOID_REASON_REACTIVATED or \
             BookNumberReservation.objects.filter(
                 user=request.user, kind=r.kind,
+                client_key=_request_client_key(request),
                 status=BookNumberReservation.STATUS_REACTIVATED,
                 reserved_at__gte=r.reserved_at
             ).exists():
@@ -237,6 +251,7 @@ def reservation_status(request):
     # فحص وتحديث الحجوزات المنتهية
     active = BookNumberReservation.objects.filter(
         user=request.user, kind=kind, department=department,
+        client_key=_request_client_key(request),
         status__in=[BookNumberReservation.STATUS_ACTIVE, BookNumberReservation.STATUS_REACTIVATED]
     ).order_by('-reserved_at').first()
 
@@ -253,6 +268,7 @@ def reservation_status(request):
     # هل انتهت صلاحية حجز مؤخراً (آخر ساعة)؟
     recent_expired = BookNumberReservation.objects.filter(
         user=request.user, kind=kind, department=department,
+        client_key=_request_client_key(request),
         status=BookNumberReservation.STATUS_EXPIRED,
         voided_at__gte=timezone.now() - timezone.timedelta(hours=1)
     ).order_by('-voided_at').first()

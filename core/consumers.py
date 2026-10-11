@@ -24,6 +24,10 @@ class ReservationPresenceConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
         self.user = user
+        session = self.scope.get('session')
+        from .reservation_service import reservation_client_key
+        self.reservation_client_key = reservation_client_key(
+            getattr(session, 'session_key', None))
         await self.accept()
         await self._touch()
 
@@ -41,8 +45,11 @@ class ReservationPresenceConsumer(AsyncWebsocketConsumer):
     def _touch(self):
         from django.utils import timezone
         from .models import BookNumberReservation as R
+        if not self.reservation_client_key:
+            return
         R.objects.filter(
             user=self.user,
+            client_key=self.reservation_client_key,
             status__in=[R.STATUS_ACTIVE, R.STATUS_REACTIVATED],
             book__isnull=True,
         ).update(last_heartbeat=timezone.now())
@@ -50,7 +57,10 @@ class ReservationPresenceConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _cooldown(self):
         from .reservation_service import force_cooldown_for_user
+        if not self.reservation_client_key:
+            return
         try:
-            force_cooldown_for_user(self.user)
+            force_cooldown_for_user(
+                self.user, client_key=self.reservation_client_key)
         except Exception:
             pass

@@ -1770,6 +1770,10 @@ class BookNumberReservation(models.Model):
         'Department', null=True, on_delete=models.PROTECT,
         related_name='number_reservations', verbose_name='القسم',
     )
+    client_key   = models.CharField(
+        max_length=64, blank=True, default='',
+        verbose_name='بصمة جلسة المتصفح',
+    )
     kind         = models.CharField(max_length=20, choices=BOOK_KIND_CHOICES, verbose_name='نوع الكتاب')
     number       = models.PositiveIntegerField(verbose_name='رقم القيد')
     prefix       = models.CharField(max_length=20, blank=True, default='', verbose_name='البادئة')
@@ -1809,9 +1813,9 @@ class BookNumberReservation(models.Model):
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=['user', 'department', 'kind'],
+                fields=['user', 'department', 'kind', 'client_key'],
                 condition=models.Q(status__in=('active', 'reactivated')),
-                name='uniq_live_reservation_user_department_kind',
+                name='uniq_live_reservation_client_scope',
             ),
         ]
 

@@ -6,10 +6,13 @@
   • **لا فجوات**: الأرقام المتروكة (ملغاة/منتهية/انتهت فترة سماحها) تُعاد تدويرها لأصغرها
     أولاً قبل استهلاك رقم جديد من العدّاد.
   • **لا تضارب**: كل شيء داخل transaction.atomic + select_for_update (ذرّي).
+  • **تعدّد الأجهزة**: الحجز الفعّال مفصول ببصمة جلسة المتصفح؛ الحساب المشترك لا
+    يجعل جهازاً يستعيد حجز جهاز آخر، واستهلاك الحجز عند الحفظ يُعاد التحقق منه بقفل صفّه.
   • **أولوية العودة**: بعد انقطاع قسريّ يبقى الرقم محجوزاً لصاحبه (cooldown 15د)؛ إن عاد
     خلالها استرجعه (غالباً كتبه ورقياً)، وإلّا دُوّر لغيره بعلَم is_recycled + تحذير.
 """
 from datetime import timedelta
+import hashlib
 
 from django.db import transaction
 from django.db.models import Q
@@ -17,6 +20,38 @@ from django.utils import timezone
 
 COOLDOWN_MINUTES = 15          # فترة سماح عودة نفس المستخدم بعد انقطاع قسريّ
 HEARTBEAT_DEAD_SECONDS = 120   # نبضة أقدم من هذا = انقطاع قسريّ (شبكة أمان للـWS)
+
+
+def reservation_client_key(session_key):
+    """Return a non-reversible browser-session identifier for reservation ownership."""
+    if not session_key:
+        return ''
+    return hashlib.sha256(session_key.encode('utf-8')).hexdigest()
+
+
+def claim_reservation_for_client(reservation_id, user, client_key, department=None):
+    """Load a reservation for this browser, claiming a legacy unscoped hold once."""
+    from django.db import IntegrityError
+    from .models import BookNumberReservation as R
+
+    filters = {'pk': reservation_id, 'user': user}
+    if department is not None:
+        filters['department'] = department
+    try:
+        return R.objects.get(**filters, client_key=client_key)
+    except R.DoesNotExist:
+        if not client_key:
+            raise
+
+    try:
+        with transaction.atomic():
+            claimed = R.objects.filter(**filters, client_key='').update(
+                client_key=client_key)
+    except IntegrityError as exc:
+        raise R.DoesNotExist from exc
+    if not claimed:
+        raise R.DoesNotExist
+    return R.objects.get(**filters, client_key=client_key)
 
 
 def _recyclable_qs(kind, now, department):
@@ -32,7 +67,7 @@ def _recyclable_qs(kind, now, department):
     )
 
 
-def reserve_number(user, kind, expire_minutes=None, department=None):
+def reserve_number(user, kind, expire_minutes=None, department=None, client_key=''):
     """يُعيد (reservation, outcome) حيث outcome ∈ {'existing','resumed','recycled','new'}.
 
     ``expire_minutes=None`` (الافتراض) ⟵ تُحَلُّ المدّةُ من
@@ -56,6 +91,7 @@ def reserve_number(user, kind, expire_minutes=None, department=None):
         existing = (
             R.objects.select_for_update()
             .filter(user=user, kind=kind, department=department,
+                    client_key=client_key,
                     status__in=[R.STATUS_ACTIVE, R.STATUS_REACTIVATED])
             .order_by('-reserved_at').first()
         )
@@ -64,10 +100,25 @@ def reserve_number(user, kind, expire_minutes=None, department=None):
                 return existing, 'existing'
             existing.mark_expired()   # منتهٍ فعلياً → يصبح متاحاً للتدوير أدناه
 
+        # Claim a pre-session reservation once, for the first browser that resumes it.
+        legacy = (
+            R.objects.select_for_update()
+            .filter(user=user, kind=kind, department=department, client_key='',
+                    status__in=[R.STATUS_ACTIVE, R.STATUS_REACTIVATED])
+            .order_by('-reserved_at').first()
+        )
+        if legacy:
+            if timezone.now() <= legacy.expires_at:
+                legacy.client_key = client_key
+                legacy.save(update_fields=['client_key'])
+                return legacy, 'existing'
+            legacy.mark_expired()
+
         # 1) أولوية العودة: حجز cooldown لم ينتهِ لنفس المستخدم/النوع
         own_cd = (
             R.objects.select_for_update()
             .filter(user=user, kind=kind, department=department, status=R.STATUS_COOLDOWN,
+                    client_key=client_key,
                     cooldown_until__gt=now, book__isnull=True)
             .order_by('number').first()
         )
@@ -89,6 +140,7 @@ def reserve_number(user, kind, expire_minutes=None, department=None):
                     kind=kind, our_number=cand.formatted).exists():
                 continue
             cand.user = user
+            cand.client_key = client_key
             cand.status = R.STATUS_ACTIVE
             cand.is_recycled = True
             cand.expires_at = now + timedelta(minutes=expire_minutes)
@@ -96,7 +148,7 @@ def reserve_number(user, kind, expire_minutes=None, department=None):
             cand.cooldown_until = None
             cand.void_reason = ''
             cand.note = ''
-            cand.save(update_fields=['user', 'status', 'is_recycled', 'expires_at',
+            cand.save(update_fields=['user', 'client_key', 'status', 'is_recycled', 'expires_at',
                                      'last_heartbeat', 'cooldown_until', 'void_reason', 'note'])
             return cand, 'recycled'
 
@@ -104,6 +156,7 @@ def reserve_number(user, kind, expire_minutes=None, department=None):
         consumed = BookSequence.consume_next(kind, department=department)
         res = R.objects.create(
             user=user, department=department, kind=kind,
+            client_key=client_key,
             number=consumed['number'], prefix='',
             year=consumed['year'], formatted=consumed['formatted'],
             status=R.STATUS_ACTIVE, expires_at=now + timedelta(minutes=expire_minutes),
@@ -112,7 +165,8 @@ def reserve_number(user, kind, expire_minutes=None, department=None):
         return res, 'new'
 
 
-def force_cooldown_for_user(user, kind=None, minutes=COOLDOWN_MINUTES):
+def force_cooldown_for_user(user, kind=None, minutes=COOLDOWN_MINUTES,
+                            client_key=None):
     """انقطاع قسريّ (WS disconnect): تحويل حجوزات المستخدم النشطة إلى cooldown.
     يُعيد عدد الحجوزات المُحوّلة."""
     from .models import BookNumberReservation as R
@@ -120,6 +174,8 @@ def force_cooldown_for_user(user, kind=None, minutes=COOLDOWN_MINUTES):
                           book__isnull=True)
     if kind:
         qs = qs.filter(kind=kind)
+    if client_key is not None:
+        qs = qs.filter(client_key=client_key)
     count = 0
     for r in qs:
         r.enter_cooldown(minutes)

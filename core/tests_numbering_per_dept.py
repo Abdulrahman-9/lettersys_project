@@ -8,13 +8,13 @@
 
 from django.contrib.auth.models import User
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 
 from core.models import (
     Book, BookNumberReservation, BookSequence, Department, UserProfile,
 )
-from core.reservation_service import reserve_number
+from core.reservation_service import reservation_client_key, reserve_number
 
 
 class SequencePerDepartmentTests(TestCase):
@@ -90,6 +90,65 @@ class ReservationPerDepartmentTests(TestCase):
             ).count(),
             1,
         )
+
+    def test_same_login_on_two_browsers_gets_distinct_live_holds(self):
+        first_client = Client()
+        second_client = Client()
+        first_client.force_login(self.followup_user)
+        second_client.force_login(self.followup_user)
+
+        first = first_client.post(
+            reverse('reservation-reserve'),
+            data='{"kind":"incoming_internal"}',
+            content_type='application/json',
+        ).json()['reservation']
+        first_again = first_client.post(
+            reverse('reservation-reserve'),
+            data='{"kind":"incoming_internal"}',
+            content_type='application/json',
+        ).json()['reservation']
+        second = second_client.post(
+            reverse('reservation-reserve'),
+            data='{"kind":"incoming_internal"}',
+            content_type='application/json',
+        ).json()['reservation']
+
+        self.assertEqual(first['id'], first_again['id'])
+        self.assertNotEqual(first['id'], second['id'])
+        self.assertNotEqual(first['number'], second['number'])
+        self.assertEqual(
+            BookNumberReservation.objects.filter(
+                user=self.followup_user,
+                department=self.followup,
+                kind='incoming_internal',
+                status__in=['active', 'reactivated'],
+            ).count(),
+            2,
+        )
+        reservations = BookNumberReservation.objects.filter(
+            user=self.followup_user, status='active').order_by('id')
+        self.assertTrue(all(len(r.client_key) == 64 for r in reservations))
+
+    def test_reservation_status_is_isolated_per_browser_session(self):
+        first_client = Client()
+        second_client = Client()
+        first_client.force_login(self.followup_user)
+        second_client.force_login(self.followup_user)
+        reserve_response = first_client.post(
+            reverse('reservation-reserve'),
+            data='{"kind":"incoming_internal"}',
+            content_type='application/json',
+        )
+        reserved = reserve_response.json()['reservation']
+
+        own_status = first_client.get(
+            reverse('reservation-status'), {'kind': 'incoming_internal'})
+        other_status = second_client.get(
+            reverse('reservation-status'), {'kind': 'incoming_internal'})
+
+        self.assertEqual(own_status.json()['reservation']['id'], reserved['id'])
+        self.assertFalse(other_status.json()['has_reservation'])
+        self.assertEqual(other_status.json()['preview_number'], '2')
 
     def test_status_preview_uses_the_users_department_counter(self):
         BookSequence.objects.update_or_create(
