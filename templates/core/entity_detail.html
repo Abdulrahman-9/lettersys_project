@@ -83,12 +83,13 @@
             <p class="text-muted mb-0">{{ entity.notes }}</p>
           {% endif %}
         </div>
-        {% if nav.admin %}
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+          {% if entity.is_active %}<a href="{% url 'dossier_detail' entity.pk %}" class="btn btn-sm btn-outline-info"><i class="bi bi-folder2-open me-1" aria-hidden="true"></i>          الإضبارة</a>{% endif %}
+          {% if nav.admin %}
           <a href="{% url 'entity_list' %}" class="btn btn-sm btn-light"><i class="bi bi-arrow-right me-1"></i>القائمة</a>
           <a href="{% url 'entity_edit' entity.pk %}?next={% url 'entity_detail' entity.pk %}" class="btn btn-sm btn-dark"><i class="bi bi-pencil-square me-1"></i>تعديل</a>
+          {% endif %}
         </div>
-        {% endif %}
       </div>
     </div>
   </div>
@@ -114,12 +115,14 @@
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center p-3">
-        <div class="fs-2 fw-bold text-info">
-          {% if issued_count and received_count %}كلاهما{% elif issued_count %}مُصدِرة{% elif received_count %}مستلِمة{% else %}—{% endif %}
-        </div>
-        <small class="text-muted">نوع الجهة</small>
-      </div>
+      {% comment %}
+        التبويبُ قرارُ المالك (Entity.kind) — كان مخفيّاً هنا وتظهر بطاقةٌ تكرّر شارةَ
+        «مُصدِرة/مستلِمة» التي في الرأس. والبطاقةُ نفسُها بابُ الإضبارة.
+      {% endcomment %}
+      <a class="card border-0 shadow-sm text-center p-3 text-decoration-none h-100"{% if entity.is_active %} href="{% url 'dossier_detail' entity.pk %}" title="افتح إضبارة الجهة"{% endif %}>
+        <div class="fs-5 fw-bold text-info">{{ entity.get_kind_display }}</div>
+        <small class="text-muted">التبويب في الأضابير{% if entity.is_active %} · <span class="text-info">افتح الإضبارة <i class="bi bi-folder2-open" aria-hidden="true"></i></span>{% endif %}</small>
+      </a>
     </div>
   </div>
 

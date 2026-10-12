@@ -270,6 +270,7 @@
               </td>
               <td class="entity-name-cell">
                 <a href="{% url 'entity_detail' e.id %}" title="عرض تفاصيل {{ e.name }}">{{ e.name }}</a>
+                {% if not kind_filter %}<div class="text-muted small mt-1"><i class="bi bi-folder2" aria-hidden="true"></i> {{ e.get_kind_display }}</div>{% endif %}
                 {% if e.contact_person %}
                   <div class="text-muted small mt-1"><i class="bi bi-person"></i> {{ e.contact_person }}</div>
                 {% endif %}
@@ -372,6 +373,7 @@
             </div>
             <div class="flex-grow-1">
               <h6 class="fw-bold mb-2" style="font-size: 1.1rem;"><a href="{% url 'entity_detail' e.id %}" class="text-decoration-none text-dark">{{ e.name }}</a></h6>
+              {% if not kind_filter %}<div class="text-muted small mb-2"><i class="bi bi-folder2" aria-hidden="true"></i> {{ e.get_kind_display }}</div>{% endif %}
               {% if e.code %}
               <div class="entity-code mb-2">
                 <i class="bi bi-tag me-1"></i>{{ e.code }}

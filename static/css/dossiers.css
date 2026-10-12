@@ -53,6 +53,10 @@
 .dd-stat.t { background:#f1f5f9; color:#334155; } .dd-stat.o { background:#fff7ed; color:#b45309; } .dd-stat.i { background:#eff6ff; color:#1e5a9e; }
 .btn-report { border:none; background:#0f766e; color:#fff; border-radius:9px; padding:.5rem 1rem; font-weight:700; font-size:.85rem; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; white-space:nowrap; }
 .btn-report:hover { background:#0d655e; color:#fff; }
+.dd-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.btn-entity-card { border:1px solid #99d5cf; background:#fff; color:#0f766e; border-radius:9px; padding:.45rem .9rem; font-weight:700; font-size:.85rem; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; white-space:nowrap; }
+.btn-entity-card:hover { background:#f0fdfa; color:#0d655e; }
+.btn-entity-card:focus-visible, .btn-report:focus-visible { outline:2px solid #0f766e; outline-offset:2px; }
 
 .filter-bar { background:#fff; border:1px solid #e5e7eb; border-radius:12px; margin-bottom:1rem; overflow:hidden; }
 .filter-bar > summary { list-style:none; cursor:pointer; padding:.7rem 1rem; font-weight:700; color:#1e293b; display:flex; align-items:center; gap:.5rem; background:#f8fafc; }

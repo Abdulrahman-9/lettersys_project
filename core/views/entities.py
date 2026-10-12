@@ -18,6 +18,7 @@ from django.views.decorators.http import require_http_methods
 
 from ..forms import EntityForm
 from core.entity_kinds import KIND_HINTS, KIND_LABELS, KINDS
+from core.signals import bump_entity_cache
 from ..models import Book, Entity, EntityGroup
 from .helpers import staff_required
 from core.scoping import STUB_TITLE, can_manage_accounts, restricted_flag_sql, scope_books_for
@@ -318,12 +319,29 @@ def entity_create(request):
         if form.is_valid():
             entity = form.save()
             messages.success(request, format_html(
-                'تم حفظ الجهة بنجاح. <a class="alert-link" href="{}">افتح «{}»</a>',
-                reverse("entity_detail", args=[entity.pk]), entity.name))
+                'تم حفظ الجهة بنجاح في تبويب «{}». <a class="alert-link" href="{}">افتح «{}»</a>'
+                ' · <a class="alert-link" href="{}">غيّر التبويب</a>',
+                KIND_LABELS.get(entity.kind, entity.kind),
+                reverse("entity_detail", args=[entity.pk]), entity.name,
+                reverse("entity_edit", args=[entity.pk])))
             return redirect("entity_create")
     else:
         form = EntityForm()
-    return render(request, "core/entity_form.html", {"form": form, "is_edit": False})
+    return render(request, "core/entity_form.html",
+                  {"form": form, "is_edit": False, **_form_sidebar_context()})
+
+
+def _form_sidebar_context():
+    return {
+        "total_entities": Entity.objects.count(),
+        "recent_entities": list(Entity.objects.order_by("-id").values_list("name", flat=True)[:5]),
+        "suggested_entities": [],
+        "type_counts": {
+            "issuer": Entity.objects.filter(etype="issuer").count(),
+            "receiver": Entity.objects.filter(etype="receiver").count(),
+            "both": Entity.objects.filter(etype="both").count(),
+        },
+    }
 
 
 @staff_required
@@ -355,14 +373,7 @@ def entity_edit(request, pk):
             "is_edit": True,
             "editing_entity": entity,
             "back_url": _entity_back(request, entity),
-            "total_entities": Entity.objects.count(),
-            "recent_entities": list(Entity.objects.order_by("-id").values_list("name", flat=True)[:5]),
-            "suggested_entities": [],
-            "type_counts": {
-                "issuer": Entity.objects.filter(etype="issuer").count(),
-                "receiver": Entity.objects.filter(etype="receiver").count(),
-                "both": Entity.objects.filter(etype="both").count(),
-            },
+            **_form_sidebar_context(),
         },
     )
 
@@ -404,6 +415,8 @@ def entity_bulk_delete(request):
         messages.info(request, "لم يتم تحديد أي جهة.")
         return redirect("entity_list")
     count = Entity.objects.filter(id__in=selected, is_active=True).update(is_active=False)
+    if count:
+        bump_entity_cache()
     messages.success(
         request,
         f"تم تعطيل {count} جهة — أُخفيت من القوائم مع الحفاظ على سجلّاتها وروابطها بالكتب.",
@@ -431,6 +444,8 @@ def entity_set_kind(request):
         return redirect("entity_list")
 
     count = Entity.objects.filter(id__in=selected).exclude(kind=kind).update(kind=kind)
+    if count:
+        bump_entity_cache()
     logger.info("entity_set_kind: kind=%s ids=%s changed=%s by=%s",
                 kind, selected, count, request.user)
     if count:
@@ -479,6 +494,8 @@ def entity_bulk_restore(request):
         messages.info(request, "لم يتم تحديد أي جهة.")
         return redirect(f"{reverse('entity_list')}?status=inactive")
     count = Entity.objects.filter(id__in=selected, is_active=False).update(is_active=True)
+    if count:
+        bump_entity_cache()
     messages.success(request, f"تم استرجاع {count} جهة — عادت للقوائم.")
     return redirect(f"{reverse('entity_list')}?status=inactive")
 

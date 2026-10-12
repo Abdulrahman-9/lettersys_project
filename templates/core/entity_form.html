@@ -98,12 +98,14 @@
               {% if form.kind.errors %}<div class="text-danger small mt-1">{{ form.kind.errors|striptags }}</div>{% endif %}
               <div class="form-text">{{ form.kind.help_text }}</div>
             </div>
+            {% if form.is_active %}
             <div class="col-md-6 col-sm-12 d-flex align-items-center gap-3 pt-4">
               <div class="form-check">
                 {{ form.is_active }}
                 <label class="form-check-label" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
               </div>
             </div>
+            {% endif %}
 
             <!-- ─── بيانات الاتصال ─── -->
             <div class="col-12 mt-3">

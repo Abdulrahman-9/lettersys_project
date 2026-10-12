@@ -3,7 +3,7 @@
 
 {% block title %}إضبارة: {{ entity.name }}{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20261012">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20261012b">{% endblock %}
 
 {% block content %}
 <div class="dossier-detail">
@@ -18,9 +18,14 @@
           {% if entity.code %}<span class="code">{{ entity.code }}</span>{% endif %}
         </div>
       </div>
-      <a class="btn-report" href="{% url 'dossier_report' entity.pk %}{% if querystring %}?{{ querystring }}{% endif %}" target="_blank" rel="noopener">
-        <i class="bi bi-printer-fill"></i> طباعة التقرير
-      </a>
+      <div class="dd-actions">
+        <a class="btn-entity-card" href="{% url 'entity_detail' entity.pk %}" title="بطاقة الجهة: الرمز والتبويب وبيانات الاتصال">
+          <i class="bi bi-person-vcard" aria-hidden="true"></i> بطاقة الجهة
+        </a>
+        <a class="btn-report" href="{% url 'dossier_report' entity.pk %}{% if querystring %}?{{ querystring }}{% endif %}" target="_blank" rel="noopener">
+          <i class="bi bi-printer-fill"></i> طباعة التقرير
+        </a>
+      </div>
     </div>
     <div class="dd-stats">
       <span class="dd-stat t"><b>{{ total_count }}</b> الإجمالي</span>
