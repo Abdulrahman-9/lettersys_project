@@ -172,6 +172,18 @@ class ExtractionNewEntityTests(TestCase):
         self.victim = Entity.objects.create(name='وزارة  النفط', is_active=False,
                                             merged_into=self.parent)
 
+    def test_entity_picker_exposes_combobox_and_live_status_semantics(self):
+        staff = User.objects.create_user('entity_picker_staff', password='pw-picker', is_staff=True)
+        self.client.force_login(staff)
+
+        response = self.client.get(reverse('extraction-smart-desktop'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'role="combobox"')
+        self.assertContains(response, 'aria-controls="issuingEntityDropdown"')
+        self.assertContains(response, 'id="issuingEntityStatus"')
+        self.assertContains(response, 'id="receivingEntityStatus"')
+
     def test_typed_name_of_a_merged_variant_resolves_to_the_parent(self):
         """كان `get_or_create` يجد الضحيّةَ المدموجة ويُحييها فينقض الدمجَ صامتاً."""
         from core.views.books_helpers import _resolve_entities
