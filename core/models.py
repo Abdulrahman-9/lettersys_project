@@ -746,6 +746,12 @@ class AttachmentVersion(models.Model):
 
     class Meta:
         ordering = ["-version_number", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["attachment", "version_number"],
+                name="uniq_attachment_version_number",
+            ),
+        ]
         indexes = [
             models.Index(fields=['attachment', '-version_number']),
             models.Index(fields=['is_merged', 'created_at']),
