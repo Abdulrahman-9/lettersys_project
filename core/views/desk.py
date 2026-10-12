@@ -54,6 +54,7 @@ def desk_handover(request):
         'targets': targets,
         'chosen': chosen,
         'rows': rows,
+        'any_restricted': any(row['restricted'] for row in rows),
     })
 
 
