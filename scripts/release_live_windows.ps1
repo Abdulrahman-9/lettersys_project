@@ -4,7 +4,7 @@ param(
     [string]$ConfirmProductionRelease
 )
 
-# RELEASE-SCRIPT-VERSION=20261012-2
+# RELEASE-SCRIPT-VERSION=20261012-3
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -28,13 +28,30 @@ function Write-ReleaseLog([string]$Message) {
     Write-Host $line
 }
 
+# Windows PowerShell 5.1 turns native stderr (git progress, Python warnings)
+# into terminating errors under 'Stop'; success is judged by exit code only.
+function Invoke-Native([string]$File, [string[]]$Arguments) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = @(& $File @Arguments 2>&1 | ForEach-Object { "$_" })
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    $global:LASTEXITCODE = $code
+    return ,$output
+}
+
 function Invoke-Checked([string]$File, [string[]]$Arguments, [string]$Step) {
     Write-ReleaseLog "START $Step"
-    & $File @Arguments 2>&1 | ForEach-Object {
-        $text = "$_"
+    $output = Invoke-Native $File $Arguments
+    $code = $LASTEXITCODE
+    foreach ($text in $output) {
         Add-Content -LiteralPath $LogPath -Value $text -Encoding UTF8
         Write-Host $text
     }
+    $global:LASTEXITCODE = $code
     if ($LASTEXITCODE -ne 0) {
         throw "$Step failed with exit code $LASTEXITCODE"
     }
@@ -43,9 +60,16 @@ function Invoke-Checked([string]$File, [string[]]$Arguments, [string]$Step) {
 
 function Get-DbFacts {
     $probe = "import os; os.chdir(r'D:\lettersys\app'); os.environ.setdefault('DJANGO_SETTINGS_MODULE','lettersys.settings'); import django; django.setup(); from django.db import connection; connection.ensure_connection(); c=connection.cursor(); c.execute('SELECT current_database(), current_user, inet_server_addr(), inet_server_port()'); print('|'.join(str(v) for v in c.fetchone()))"
-    $result = & $Vpy -c $probe
-    if ($LASTEXITCODE -ne 0) { throw 'Could not verify the production database connection.' }
-    return "$result".Trim()
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $result = & $Vpy -c $probe 2>$null
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    if ($code -ne 0) { throw 'Could not verify the production database connection.' }
+    return "$(@($result)[-1])".Trim()
 }
 
 function Test-ServiceHealth {
@@ -170,7 +194,7 @@ try {
     )
     $unexpected = @($changedFiles | Where-Object { $_ -notin $allowed })
     if ($unexpected.Count) { throw "Unexpected release files: $($unexpected -join ', ')" }
-    git cat-file -e "$target`:core/migrations/0083_alter_bookhistory_action_alter_bookreferral_status.py" 2>$null
+    Invoke-Native 'git.exe' @('cat-file', '-e', "$target`:core/migrations/0083_alter_bookhistory_action_alter_bookreferral_status.py") | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw 'Release migration 0083 is missing from the target.'
     }
@@ -219,7 +243,7 @@ raise SystemExit(subprocess.run(command, env=environment, check=False).returncod
 
     Invoke-Checked 'git.exe' @('-C', $App, 'merge', '--ff-only', $target) 'fast-forward production checkout'
     $script:CodeUpdated = $true
-    $plan = @(& $Vpy (Join-Path $App 'manage.py') 'migrate' '--plan' 2>&1)
+    $plan = Invoke-Native $Vpy @((Join-Path $App 'manage.py'), 'migrate', '--plan')
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect post-update migration plan.' }
     $pending = @($plan | Where-Object { "$_" -match '^\s*\[\s\]' })
     if ($pending.Count -ne 1 -or "$($pending[0])" -notmatch 'core\.0083_alter_bookhistory_action_alter_bookreferral_status') {
@@ -228,7 +252,7 @@ raise SystemExit(subprocess.run(command, env=environment, check=False).returncod
     Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'check') 'Django system check'
     Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'migrate', 'core', '0083_alter_bookhistory_action_alter_bookreferral_status', '--noinput') 'apply migration 0083 only'
     $script:MigrationApplied = $true
-    $remaining = @(& $Vpy (Join-Path $App 'manage.py') 'migrate' '--plan' 2>&1 | Where-Object { "$_" -match '^\s*\[\s\]' })
+    $remaining = @(Invoke-Native $Vpy @((Join-Path $App 'manage.py'), 'migrate', '--plan') | Where-Object { "$_" -match '^\s*\[\s\]' })
     if ($LASTEXITCODE -ne 0 -or $remaining.Count -ne 0) { throw 'Migrations remain pending after 0083.' }
     Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'collectstatic', '--noinput') 'collect production static files'
 
