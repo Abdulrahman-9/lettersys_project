@@ -1,0 +1,262 @@
+param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('LETTERSYS')]
+    [string]$ConfirmProductionRelease
+)
+
+# RELEASE-SCRIPT-VERSION=20261012-1
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+$App = 'D:\lettersys\app'
+$Root = 'D:\lettersys'
+$Vpy = Join-Path $Root 'venv\Scripts\python.exe'
+$ServiceName = 'LetterSys'
+$Port = 1312
+$ExpectedOldHead = 'affb89e472ffa9bac5fd7f3f4b8b17163c20fbd1'
+$RequiredReleaseBase = '1f69014e3eafc0a9094d7f195898d9bbf36c7e8b'
+$Backup = 'D:\migration\backups\lettersys_release_20261012_081534\lettersys_pre_release_20261012_081534.dump'
+$LogPath = Join-Path 'D:\migration\logs' ("release_live_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
+$script:CodeUpdated = $false
+$script:MigrationApplied = $false
+$script:ServiceStopped = $false
+$script:OldHead = $null
+
+function Write-ReleaseLog([string]$Message) {
+    $line = '{0} {1}' -f (Get-Date -Format s), $Message
+    Add-Content -LiteralPath $LogPath -Value $line -Encoding UTF8
+    Write-Host $line
+}
+
+function Invoke-Checked([string]$File, [string[]]$Arguments, [string]$Step) {
+    Write-ReleaseLog "START $Step"
+    & $File @Arguments 2>&1 | ForEach-Object {
+        $text = "$_"
+        Add-Content -LiteralPath $LogPath -Value $text -Encoding UTF8
+        Write-Host $text
+    }
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Step failed with exit code $LASTEXITCODE"
+    }
+    Write-ReleaseLog "OK $Step"
+}
+
+function Get-DbFacts {
+    $probe = "import os; os.chdir(r'D:\lettersys\app'); os.environ.setdefault('DJANGO_SETTINGS_MODULE','lettersys.settings'); import django; django.setup(); from django.db import connection; connection.ensure_connection(); c=connection.cursor(); c.execute('SELECT current_database(), current_user, inet_server_addr(), inet_server_port()'); print('|'.join(str(v) for v in c.fetchone()))"
+    $result = & $Vpy -c $probe
+    if ($LASTEXITCODE -ne 0) { throw 'Could not verify the production database connection.' }
+    return "$result".Trim()
+}
+
+function Test-ServiceHealth {
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if (-not $service -or $service.Status -ne 'Running') { return $false }
+    $login = (& curl.exe -s -o NUL --max-time 15 -w '%{http_code}' "http://127.0.0.1:$Port/login/").Trim()
+    $static = (& curl.exe -s -o NUL --max-time 15 -w '%{http_code}' "http://127.0.0.1:$Port/static/app.js").Trim()
+    $devLogin = (& curl.exe -s -o NUL --max-time 15 -w '%{http_code}' "http://127.0.0.1:$Port/dev-login/").Trim()
+    $evilHost = (& curl.exe -s -o NUL --max-time 15 -w '%{http_code}' -H 'Host: evil.example' "http://127.0.0.1:$Port/login/").Trim()
+    $media = (& curl.exe -s -o NUL --max-time 15 -w '%{http_code} %{redirect_url}' "http://127.0.0.1:$Port/media/books/x.pdf").Trim()
+    $sweeper = Select-String -Path "$Root\logs\waitress.err.log" -Pattern '\[sweeper\] started' -ErrorAction SilentlyContinue
+    return ($login -eq '200' -and $static -eq '200' -and $devLogin -eq '404' -and
+        $evilHost -eq '400' -and $media -like '302 *login*' -and [bool]$sweeper)
+}
+
+function Restore-OldRelease {
+    Write-ReleaseLog "ROLLBACK requested; code update=$script:CodeUpdated migration recorded=$script:MigrationApplied"
+    $service = Get-Service -Name $ServiceName
+    if ($service.Status -ne 'Stopped') {
+        Stop-Service -Name $ServiceName
+        $service = Get-Service -Name $ServiceName
+        $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(45))
+    }
+    $script:ServiceStopped = $true
+    if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) {
+        throw 'Production port 1312 remains bound during rollback.'
+    }
+    if ($script:CodeUpdated) {
+        Invoke-Checked 'git.exe' @('-C', $App, 'switch', '--detach', $script:OldHead) 'restore previous production revision'
+        Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'collectstatic', '--noinput') 'restore previous static manifest'
+    }
+    Start-Service -Name $ServiceName
+    (Get-Service -Name $ServiceName).WaitForStatus('Running', [TimeSpan]::FromSeconds(60))
+    $script:ServiceStopped = $false
+    $deadline = (Get-Date).AddSeconds(60)
+    do {
+        if (Test-ServiceHealth) {
+            Write-ReleaseLog 'ROLLBACK HEALTHY; previous application is serving'
+            return
+        }
+        Start-Sleep -Seconds 2
+    } while ((Get-Date) -lt $deadline)
+    throw "Rollback service health failed. Review $LogPath before any further action."
+}
+
+try {
+    if ($ConfirmProductionRelease -ne 'LETTERSYS') {
+        throw 'Confirmation must be LETTERSYS.'
+    }
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw 'Open PowerShell with Run as administrator.'
+    }
+    $freeMB = [int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024)
+    if ($freeMB -lt 2048) {
+        throw "Only $freeMB MB RAM is free; at least 2048 MB is required. Close applications and retry."
+    }
+    if ((Get-Location).Path -ne $App) { Set-Location $App }
+    if (-not (Test-Path $Vpy)) { throw 'Production virtual environment is missing.' }
+    if (-not (Test-Path $Backup)) { throw 'Verified production pre-release backup is missing.' }
+    $expectedHash = ((Get-Content "$Backup.sha256" -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+    $actualHash = (Get-FileHash $Backup -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($expectedHash -ne $actualHash) { throw 'Production backup checksum mismatch.' }
+    $backupAge = (Get-Date) - (Get-Item $Backup).LastWriteTime
+    if ($backupAge.TotalHours -gt 24) { throw 'Production backup is older than 24 hours; take a fresh one.' }
+    $toc = & 'C:\Program Files\PostgreSQL\16\bin\pg_restore.exe' --list $Backup
+    if ($LASTEXITCODE -ne 0 -or @($toc).Count -lt 100) { throw 'Production backup archive validation failed.' }
+
+    $registry = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\LetterSys\Parameters'
+    if ($registry.Application -ne (Join-Path $Root 'venv\Scripts\python.exe') -or
+        $registry.AppDirectory -ne $Root -or
+        $registry.AppParameters -notmatch 'waitress --listen=0\.0\.0\.0:1312 .*wsgi_prod:application') {
+        throw 'LetterSys service configuration differs from the verified Waitress deployment.'
+    }
+
+    $dbFacts = Get-DbFacts
+    if ($dbFacts -notmatch '^lettersys\|lettersys_user\|(::1|127\.0\.0\.1)\|5432$') {
+        throw "Unexpected production DB identity: $dbFacts"
+    }
+    $service = Get-Service -Name $ServiceName
+    if ($service.Status -ne 'Running') { throw 'Production LetterSys service is not running.' }
+    if (-not (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)) {
+        throw 'Production listener on port 1312 is missing.'
+    }
+    if (git status --porcelain=v1) { throw 'Production checkout is not clean.' }
+    $script:OldHead = (git rev-parse HEAD).Trim()
+    if ($script:OldHead -ne $ExpectedOldHead) { throw "Unexpected production revision $script:OldHead." }
+    Invoke-Checked 'git.exe' @('-C', $App, 'fetch', 'origin', 'main') 'fetch release target'
+    $target = (git rev-parse origin/main).Trim()
+    git merge-base --is-ancestor $RequiredReleaseBase $target
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Release target does not contain the reviewed code commit.'
+    }
+    git merge-base --is-ancestor $script:OldHead $target
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Release target is not a fast-forward from the installed revision.'
+    }
+    $changedFiles = @(git diff --name-only $script:OldHead $target)
+    $allowed = @(
+        '.env.example', 'COMPANY_ROLLOUT_PLAN_v2_2026-08-31.md', 'ROLLOUT_EXECUTION.md',
+        'core/context_processors.py', 'core/dashboard_sections.py',
+        'core/messaging/api/email_endpoints.py', 'core/messaging/api/mail_endpoints.py',
+        'core/messaging/scoping.py', 'core/messaging/views/ui.py',
+        'core/migrations/0083_alter_bookhistory_action_alter_bookreferral_status.py',
+        'core/models.py', 'core/network_views.py', 'core/referral_service.py', 'core/scoping.py',
+        'core/tests_archive_desk.py', 'core/tests_audit_mail_1008.py', 'core/tests_books_views.py',
+        'core/tests_mail_scope.py', 'core/tests_network_health.py', 'core/tests_queues.py',
+        'core/tests_referrals.py', 'core/tests_scope_parity.py', 'core/urls.py',
+        'core/views/helpers.py', 'core/views/lifecycle_api.py', 'core/views/queues.py',
+        'docs/WINDOWS_LAN_DEPLOYMENT.md', 'docs/log/2026-10-12.md',
+        'requirements.txt', 'scan_agent/README.md', 'scan_agent/install_agent.bat',
+        'scan_agent/tests_agent.py', 'scripts/tests_windows_service.py',
+        'scripts/windows_service.py', 'static/app.css', 'static/app.js',
+        'static/css/queues.css', 'static/css/reports.css', 'static/js/desk_board.js',
+        'static/network_settings.js', 'static/service-worker.js', 'templates/base.html',
+        'templates/core/_queue_board.html', 'templates/core/archive_desk.html',
+        'templates/core/desk_board.html', 'templates/core/mail/hub.html',
+        'templates/core/my_today.html', 'templates/core/network_settings.html',
+        'templates/core/reports.html',
+        'scripts/release_live_windows.ps1'
+    )
+    $unexpected = @($changedFiles | Where-Object { $_ -notin $allowed })
+    if ($unexpected.Count) { throw "Unexpected release files: $($unexpected -join ', ')" }
+    git cat-file -e "$target`:core/migrations/0083_alter_bookhistory_action_alter_bookreferral_status.py" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Release migration 0083 is missing from the target.'
+    }
+    Write-ReleaseLog "PRECHECK PASS user=$($identity.Name) freeMB=$freeMB db=$dbFacts old=$script:OldHead target=$target backupSHA=$actualHash"
+    Write-ReleaseLog "FILES $($changedFiles -join ',')"
+
+    $script:ServiceStopped = $true
+    Stop-Service -Name $ServiceName
+    $service = Get-Service -Name $ServiceName
+    $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(45))
+    if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) {
+        throw 'Production port 1312 remains bound after service stop.'
+    }
+    Write-ReleaseLog 'SERVICE STOPPED; production writes through web service are paused'
+
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $backupDirectory = "D:\migration\backups\lettersys_release_$timestamp"
+    New-Item -ItemType Directory -Path $backupDirectory | Out-Null
+    & icacls.exe $backupDirectory /inheritance:r /grant:r "$($env:USERDOMAIN)\$($env:USERNAME):(OI)(CI)F" 'SYSTEM:(OI)(CI)F' 'BUILTIN\Administrators:(OI)(CI)F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not restrict fresh backup directory permissions.' }
+    $freshBackup = Join-Path $backupDirectory "lettersys_pre_release_$timestamp.dump"
+    $backupProbe = @"
+import os, subprocess
+os.chdir(r'D:\lettersys\app')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lettersys.settings')
+import django
+django.setup()
+from django.conf import settings
+environment = os.environ.copy()
+environment['PGPASSWORD'] = settings.DATABASES['default']['PASSWORD']
+command = [r'C:\Program Files\PostgreSQL\16\bin\pg_dump.exe', '--no-password', '--host', 'localhost', '--port', '5432', '--username', 'lettersys_user', '--dbname', 'lettersys', '--format=custom', '--no-owner', '--no-acl', '--file', r'$freshBackup']
+raise SystemExit(subprocess.run(command, env=environment, check=False).returncode)
+"@
+    Invoke-Checked $Vpy @('-c', $backupProbe) 'create fresh production database backup'
+    if ((Get-Item $freshBackup).Length -lt 100000) { throw 'Fresh production backup is implausibly small.' }
+    $freshHash = (Get-FileHash $freshBackup -Algorithm SHA256).Hash.ToLowerInvariant()
+    Set-Content "$freshBackup.sha256" "$freshHash  $(Split-Path $freshBackup -Leaf)" -Encoding ascii
+    & icacls.exe $freshBackup /inheritance:r /grant:r "$($env:USERDOMAIN)\$($env:USERNAME):F" 'SYSTEM:F' 'BUILTIN\Administrators:F' | Out-Null
+    & icacls.exe "$freshBackup.sha256" /inheritance:r /grant:r "$($env:USERDOMAIN)\$($env:USERNAME):F" 'SYSTEM:F' 'BUILTIN\Administrators:F' | Out-Null
+    if ($LASTEXITCODE -ne 0 -or (Get-FileHash $freshBackup -Algorithm SHA256).Hash.ToLowerInvariant() -ne $freshHash) {
+        throw 'Fresh backup permissions or SHA-256 verification failed.'
+    }
+    $freshToc = & 'C:\Program Files\PostgreSQL\16\bin\pg_restore.exe' --list $freshBackup
+    if ($LASTEXITCODE -ne 0 -or @($freshToc).Count -lt 100) { throw 'Fresh backup archive validation failed.' }
+    Write-ReleaseLog "FRESH_BACKUP path=$freshBackup bytes=$((Get-Item $freshBackup).Length) sha256=$freshHash tocLines=$(@($freshToc).Count)"
+
+    Invoke-Checked 'git.exe' @('-C', $App, 'merge', '--ff-only', $target) 'fast-forward production checkout'
+    $script:CodeUpdated = $true
+    $plan = @(& $Vpy (Join-Path $App 'manage.py') 'migrate' '--plan' 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect post-update migration plan.' }
+    $pending = @($plan | Where-Object { "$_" -match '^\s*\[\s\]' })
+    if ($pending.Count -ne 1 -or "$($pending[0])" -notmatch 'core\.0083_alter_bookhistory_action_alter_bookreferral_status') {
+        throw "Expected only core.0083 pending; actual pending plan: $($pending -join ' | ')"
+    }
+    Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'check') 'Django system check'
+    Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'migrate', 'core', '0083_alter_bookhistory_action_alter_bookreferral_status', '--noinput') 'apply migration 0083 only'
+    $script:MigrationApplied = $true
+    $remaining = @(& $Vpy (Join-Path $App 'manage.py') 'migrate' '--plan' 2>&1 | Where-Object { "$_" -match '^\s*\[\s\]' })
+    if ($LASTEXITCODE -ne 0 -or $remaining.Count -ne 0) { throw 'Migrations remain pending after 0083.' }
+    Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'collectstatic', '--noinput') 'collect production static files'
+
+    Start-Service -Name $ServiceName
+    (Get-Service -Name $ServiceName).WaitForStatus('Running', [TimeSpan]::FromSeconds(60))
+    $script:ServiceStopped = $false
+    $deadline = (Get-Date).AddSeconds(90)
+    do {
+        if (Test-ServiceHealth) {
+            Write-ReleaseLog "RELEASE SUCCESS revision=$(git rev-parse --short HEAD) db=$dbFacts migration=0083 freshBackup=$freshBackup"
+            exit 0
+        }
+        Start-Sleep -Seconds 3
+    } while ((Get-Date) -lt $deadline)
+    throw 'Production HTTP health checks did not pass within 90 seconds.'
+}
+catch {
+    Write-ReleaseLog "RELEASE FAILED: $($_.Exception.Message)"
+    if ($script:ServiceStopped -or $script:CodeUpdated) {
+        try {
+            Restore-OldRelease
+            Write-ReleaseLog "ROLLBACK COMPLETE; production service restored to $script:OldHead; migration-recorded=$script:MigrationApplied"
+        } catch {
+            Write-ReleaseLog "ROLLBACK FAILED: $($_.Exception.Message)"
+            Write-Error "Service recovery needs administrator attention. Log: $LogPath"
+            exit 2
+        }
+    }
+    Write-Error "Release aborted. Review $LogPath."
+    exit 1
+}
