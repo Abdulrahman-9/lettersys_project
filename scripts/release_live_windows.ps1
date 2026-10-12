@@ -4,7 +4,7 @@ param(
     [string]$ConfirmProductionRelease
 )
 
-# RELEASE-SCRIPT-VERSION=20261012-1
+# RELEASE-SCRIPT-VERSION=20261012-2
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -101,8 +101,8 @@ try {
         throw 'Open PowerShell with Run as administrator.'
     }
     $freeMB = [int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024)
-    if ($freeMB -lt 2048) {
-        throw "Only $freeMB MB RAM is free; at least 2048 MB is required. Close applications and retry."
+    if ($freeMB -lt 600) {
+        throw "Only $freeMB MB RAM is free; at least 600 MB is required. Close applications and retry."
     }
     if ((Get-Location).Path -ne $App) { Set-Location $App }
     if (-not (Test-Path $Vpy)) { throw 'Production virtual environment is missing.' }
