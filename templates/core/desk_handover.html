@@ -8,16 +8,24 @@
 </head>
 <body>
 
-<div class="toolbar">
-  <form method="get" action="">
+<header class="toolbar prep-bar">
+  <div class="prep-title">
+    <h1>كشف التسليم <small class="muted">{{ org_name }}{% if department %} · {{ department }}{% endif %}</small></h1>
+    <p class="muted">
+      {% if chosen and rows %}«{{ chosen }}» — الكتب الجاهزة: <b class="num">{{ rows|length }}</b>. راجع الورقة ثمّ اطبعها.
+      {% elif chosen %}لا شيء بانتظار توقيع «{{ chosen }}».
+      {% else %}اختر الوحدة المستلِمة لتجهيز ورقتها.{% endif %}
+    </p>
+  </div>
+  <form method="get" action="" class="prep-form">
     {% if department_choices is not None %}
-    <label for="department" class="muted">القسم:</label>
+    <label for="department" class="muted">القسم</label>
     <select name="department" id="department" onchange="this.form.to.value=''; this.form.submit()">
       <option value="">— اختر قسماً —</option>
       {% for d in department_choices %}<option value="{{ d.pk }}"{% if department and department.pk == d.pk %} selected{% endif %}>{{ d }}</option>{% endfor %}
     </select>
     {% endif %}
-    <label for="to" class="muted">الوحدة:</label>
+    <label for="to" class="muted">الوحدة</label>
     <select name="to" id="to" onchange="this.form.submit()">
       <option value="">— اختر وحدةً —</option>
       {% for unit, count in targets %}
@@ -28,10 +36,37 @@
     </select>
     <noscript><button type="submit" class="print">عرض</button></noscript>
   </form>
-  {% if rows %}<button type="button" class="print" onclick="window.print()">طباعة</button>{% endif %}
-  <a class="btn back" href="{% url 'desk_board' %}">رجوع</a>
-</div>
+  <div class="prep-actions">
+    {% if rows %}<button type="button" class="print" onclick="window.print()">طباعة الكشف</button>{% endif %}
+    <a class="btn back" href="{% url 'desk_board' %}">رجوع إلى الطاولة</a>
+  </div>
+</header>
 
+{% if not chosen %}
+<main class="ho-prep">
+  <ol class="ho-steps" aria-label="خطوات التسليم">
+    <li class="is-current"><b>1</b> اختر الوحدة</li>
+    <li><b>2</b> راجع الكشف واطبعه</li>
+    <li><b>3</b> سلّم الكتب ووقّعا</li>
+    <li><b>4</b> أرجع الورقة وقيّد الاستلام</li>
+  </ol>
+  {% if not department %}
+    <div class="empty">اختر قسماً من الأعلى ثمّ وحدةً لطباعة كشف تسليمها.</div>
+  {% elif targets %}
+    <h2 class="ho-prep-h">وحداتٌ عليها كتبٌ بانتظار توقيع الاستلام</h2>
+    <ul class="ho-units">
+      {% for unit, count in targets %}
+        <li><a href="?{% if department_choices is not None %}department={{ department.pk }}&amp;{% endif %}to={{ unit.pk }}">
+          <span class="ho-unit-name">{{ unit }}</span>
+          <span class="ho-unit-count"><b class="num">{{ count }}</b> بانتظار التوقيع</span>
+        </a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="empty">لا توجد كتبٌ مُفرَّقةٌ بانتظار توقيع الاستلام — الطاولة نظيفة.</div>
+  {% endif %}
+</main>
+{% else %}
 <div class="sheet">
   <div class="rep-head">
     <div class="rep-org">
@@ -39,76 +74,91 @@
       <small>{{ department|default:"—" }}</small>
     </div>
     <div class="rep-meta">
-      كشف تسليم<br>
-      طُبع في {% now "Y/m/d — H:i" %}<br>
+      طُبع في <span class="num">{% now "Y/m/d — H:i" %}</span><br>
       بمعرفة {{ request.user.get_full_name|default:request.user.username }}
     </div>
   </div>
 
-  <div class="rep-title">
-    كشف تسليم كتب{% if chosen %} إلى «{{ chosen }}»{% endif %}
-  </div>
+  <h2 class="rep-title">كشف تسليم واستلام كتب</h2>
 
-  {% if not chosen %}
-    <div class="empty">
-      {% if not department %}
-        اختر قسماً من الأعلى ثمّ وحدةً لطباعة كشف تسليمها.
-      {% elif targets %}
-        اختر وحدةً من الأعلى لطباعة كشف تسليمها.
-      {% else %}
-        لا توجد كتبٌ مُفرَّقةٌ بانتظار توقيع الاستلام — الطاولة نظيفة.
-      {% endif %}
-    </div>
-  {% elif not rows %}
+  {% if not rows %}
     <div class="empty">لا شيء بانتظار توقيع «{{ chosen }}».</div>
   {% else %}
-    <table class="rep">
+    <dl class="ho-facts">
+      <div><dt>الجهة المُسلِّمة</dt><dd>{{ department|default:"—" }}</dd></div>
+      <div><dt>الجهة المستلِمة</dt><dd>{{ chosen }}</dd></div>
+      <div><dt>عدد الكتب</dt><dd class="num">{{ rows|length }}</dd></div>
+      <div><dt>تاريخ الكشف</dt><dd class="num">{% now "Y/m/d" %}</dd></div>
+    </dl>
+
+    <table class="rep ho">
+      <colgroup>
+        <col class="c-seq"><col class="c-book"><col><col class="c-purpose"><col class="c-sign">
+      </colgroup>
       <thead>
         <tr>
-          <th style="width:3rem">ت</th>
-          <th style="width:6.5rem">الرقم</th>
-          <th style="width:6.5rem">التاريخ</th>
-          <th>الموضوع</th>
-          <th style="width:5rem">الغرض</th>
-          <th style="width:6.5rem">موعد الإنجاز</th>
-          <th style="width:8rem">توقيع المستلم</th>
+          <th scope="col">ت</th>
+          <th scope="col">الرقم والتاريخ</th>
+          <th scope="col">الموضوع</th>
+          <th scope="col">الغرض والموعد</th>
+          <th scope="col">توقيع المستلم</th>
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
           <tr>
             <td class="num">{{ forloop.counter }}</td>
-            <td class="num">{{ row.number }}</td>
-            <td class="num">{{ row.date|date:"Y/m/d"|default:"—" }}</td>
             <td>
-              <span {% if row.restricted %}class="stub"{% endif %}>{{ row.title }}</span>
-              {% if row.margin %}<div class="muted" style="font-size:.78rem">↩ {{ row.margin }}</div>{% endif %}
+              <span class="num">{{ row.number }}</span>
+              <span class="ho-sub num">{{ row.date|date:"Y/m/d"|default:"—" }}</span>
             </td>
-            <td>{{ row.purpose }}</td>
-            <td class="num">{{ row.due_date|date:"Y/m/d"|default:"—" }}</td>
-            <td class="sign-cell"></td>
+            <td>
+              <span class="ho-title{% if row.restricted %} stub{% endif %}">{{ row.title }}{% if row.restricted %} *{% endif %}</span>
+              {% if row.margin %}<span class="ho-margin"><b>الهامش:</b> {{ row.margin }}</span>{% endif %}
+            </td>
+            <td>
+              {{ row.purpose }}
+              {% if row.due_date %}<span class="ho-sub">الإنجاز قبل <span class="num">{{ row.due_date|date:"Y/m/d" }}</span></span>{% endif %}
+              {% if row.assignee %}<span class="ho-sub">المكلَّف: {{ row.assignee.get_full_name|default:row.assignee.username }}</span>{% endif %}
+            </td>
+            <td class="sign-cell"><span class="ho-date-guide">التاريخ:&nbsp;&nbsp;&nbsp;&nbsp;/&nbsp;&nbsp;&nbsp;&nbsp;/</span></td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+    {% if any_restricted %}<p class="ho-legend">* موضوعٌ محجوبٌ لسرّيّته — يُطّلع عليه من النظام بصلاحيته.</p>{% endif %}
 
-    <div class="sig-block">
-      <div>
-        سلّم — {{ request.user.get_full_name|default:request.user.username }}
-        <div class="sig-line">التوقيع</div>
+    <div class="ho-close">
+      <div class="ho-attest">
+        <p>أُقرّ أنا الموقِّع أدناه باستلام الكتب المدرجة في هذا الكشف وعددها (<b class="num">{{ rows|length }}</b>) عن «{{ chosen }}».</p>
+        <div class="ho-checks">
+          <span><span class="ho-box" aria-hidden="true"></span>استُلمت كاملةً</span>
+          <span><span class="ho-box" aria-hidden="true"></span>استُلمت مع ملاحظات: <span class="ho-fill"></span></span>
+        </div>
       </div>
-      <div>
-        استلم عن «{{ chosen }}»
-        <div class="sig-line">الاسم والتوقيع والتاريخ</div>
-      </div>
-    </div>
 
-    <div class="rep-foot">
-      <span>عدد الكتب المسلَّمة: <b>{{ rows|length }}</b></span>
-      <span>تُرتجع هذه الورقة موقَّعةً وتُقيَّد بها العهدة في النظام.</span>
+      <div class="ho-sign">
+        <section>
+          <h2>المُسلِّم <small>— {{ department|default:"" }}</small></h2>
+          <div class="ho-field"><span>الاسم</span><i>{{ request.user.get_full_name|default:request.user.username }}</i></div>
+          <div class="ho-field"><span>التوقيع</span><i></i></div>
+          <div class="ho-field"><span>التاريخ والوقت</span><i></i></div>
+        </section>
+        <section>
+          <h2>المستلِم <small>— {{ chosen }}</small></h2>
+          <div class="ho-field"><span>الاسم</span><i></i></div>
+          <div class="ho-field"><span>التوقيع</span><i></i></div>
+          <div class="ho-field"><span>التاريخ والوقت</span><i></i></div>
+        </section>
+      </div>
+
+      <div class="rep-foot">
+        <span>عدد الكتب المسلَّمة: <b class="num">{{ rows|length }}</b></span>
+        <span>تُرتجع هذه الورقة موقَّعةً وتُقيَّد بها العهدة في النظام.</span>
+      </div>
     </div>
   {% endif %}
 </div>
-
+{% endif %}
 </body>
 </html>

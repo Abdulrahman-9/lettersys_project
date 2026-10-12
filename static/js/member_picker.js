@@ -15,6 +15,11 @@
     this.search  = root.querySelector('[data-picker-search]');
     this.options = Array.prototype.slice.call(root.querySelectorAll('[data-picker-option]'));
     this.counter = root.querySelector('[data-picker-count]');
+    var form = root.closest('form');
+    this.ruleSelect = form && root.dataset.ruleSelect
+      ? form.querySelector(root.dataset.ruleSelect)
+      : null;
+    this.ruleStatus = root.parentElement.querySelector('[data-picker-rule-status]');
     if (!this.options.length) return;
 
     var self = this;
@@ -22,8 +27,28 @@
       this.search.addEventListener('input', function () { self.filter(); });
     }
     root.addEventListener('change', function () { self.count(); });
+    if (this.ruleSelect) {
+      this.ruleSelect.addEventListener('change', function () { self.syncRule(); });
+      this.syncRule();
+    }
     this.count();
   }
+
+  MemberPicker.prototype.syncRule = function () {
+    var dynamic = !!(this.ruleSelect && this.ruleSelect.value);
+    this.root.classList.toggle('is-rule-based', dynamic);
+    if (this.search) this.search.disabled = dynamic;
+    this.options.forEach(function (opt) {
+      var box = opt.querySelector('input');
+      if (box) box.disabled = dynamic;
+      opt.setAttribute('aria-disabled', dynamic ? 'true' : 'false');
+    });
+    if (this.ruleStatus) {
+      this.ruleStatus.textContent = dynamic
+        ? 'تُدار العضويّة تلقائيّاً بقاعدة «' + this.ruleSelect.options[this.ruleSelect.selectedIndex].text.trim() + '».'
+        : 'اختَر الأعضاء يدوياً، أو حدّد قاعدةً ديناميكيّة لتُدار العضويّة تلقائيّاً.';
+    }
+  };
 
   MemberPicker.prototype.filter = function () {
     var q = (this.search.value || '').trim().toLowerCase();

@@ -48,6 +48,27 @@ class EntityForm(forms.ModelForm):
             "notes":          forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
 
+    #: خيارُ «اقترح من الاسم» في نموذج الإنشاء وحده — القرارُ يبقى للمالك:
+    #: يُختار صراحةً أو يُقبل الاقتراحُ ثمّ يُغيَّر، ولا يُعاد على جهةٍ قائمة.
+    SUGGEST_LABEL = "اقتراحٌ من الاسم (يُعرض بعد الحفظ ويمكن تغييره)"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk is None:
+            kind = self.fields["kind"]
+            kind.required = False
+            kind.choices = [("", self.SUGGEST_LABEL)] + [
+                c for c in kind.choices if c[0]]
+            self.initial.setdefault("kind", "")
+            self.fields.pop("is_active", None)
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.instance.pk is None and not cleaned.get("kind"):
+            from core.entity_kinds import suggest_kind
+            cleaned["kind"] = suggest_kind(cleaned.get("name") or "")
+        return cleaned
+
 
 class BookForm(forms.ModelForm):
     class Meta:

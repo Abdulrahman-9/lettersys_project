@@ -120,38 +120,6 @@ def _desk(user):
     }
 
 
-def _archive(user):
-    """الأرشفة — ما لم يكتمل قيدُه (بلا جهةٍ مستلِمة أو بلا مسح)، لمن يمسك الأرشيف.
-
-    الأعدادُ هنا **للحيّ وحده** (``source_ref=''`` و``is_training=False``):
-    القاعدةُ فيها 13 ألفَ كتابٍ دخلت بالجملة من الورق، وعدُّها عملاً ينتظر
-    يجعل العدّادَ رقماً مرعباً لا يُنقص أبداً — والعدّادُ الذي لا يُفرَغ يُهمَل.
-    """
-    from core.models import Attachment, Book
-    from core.scoping import scope_books_for
-
-    live = scope_books_for(user, Book.objects.live())
-    idle = live.filter(referrals__isnull=True).count()
-    # لا ``attachments__isnull``: الضمُّ لا يمرّ بمدير (المرفقُ المحذوفُ كان يُخفي الكتاب).
-    no_file = live.exclude(pk__in=Attachment.objects.values('book_id')).count()
-    # (قراراتُ الدورة §6) لا عدّادَ حفظٍ ولا موضعٍ: الأرشفةُ تلقائيّة.
-    return {
-        'counters': [
-            {'label': 'قُيِّد ولم يُوجَّه', 'value': idle, 'tone': 'warn',
-             'href': _to('archive_desk', anchor='idle')},
-            {'label': 'بلا مرفق', 'value': no_file, 'tone': 'accent',
-             'href': _to('archive_desk', anchor='nofile')},
-        ],
-        'links': [
-            {'label': 'طاولة الأرشفة', 'href': _to('archive_desk'),
-             'icon': 'bi-archive'},
-            {'label': 'الأضابير', 'href': _to('dossier_list'), 'icon': 'bi-folder2-open'},
-        ],
-        'home': _to('archive_desk'),
-        'quiet_msg': 'لا قيدَ ناقصاً',
-    }
-
-
 def _dossier(user):
     """أضبارتي — ما ذُكر فيه اسمُ وحدتي صادراً أو وارداً."""
     from core.models import Department, Entity
@@ -240,11 +208,6 @@ def _can_desk(user):
     return can_use_desk(user)
 
 
-def _can_archive(user):
-    from core.scoping import can_archive
-    return can_archive(user)
-
-
 def _can_mail(user):
     from core.scoping import is_mail_officer, is_privileged
     return is_privileged(user) or is_mail_officer(user)
@@ -261,7 +224,6 @@ def _can_admin(user):
 SECTIONS = (
     ('mine', 'ما يخصّني اليوم', 'التزاماتي المفتوحة باسمي', _always, _my_queue),
     ('desk', 'طاولة الوارد', 'عملُ القسم اليوم', _can_desk, _desk),
-    ('archive', 'الأرشفة', 'ما لم يكتمل قيدُه اليوم', _can_archive, _archive),
     ('mail', 'البريد الإلكتروني', 'ما وصل وما أخفق', _can_mail, _mail),
     ('dossier', 'أضبارة وحدتي', 'ما ذُكر فيه اسمُنا', _always, _dossier),
     ('admin', 'الإدارة', 'الشجرةُ والناسُ والعناقيد', _can_admin, _administration),

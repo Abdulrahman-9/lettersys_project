@@ -279,6 +279,13 @@ def _ordered_type_groups(scan_books, meta, row_limit=_GROUP_ROW_LIMIT):
     return ordered
 
 
+_LIST_SORTS = {
+    "count": {"label": "الأكثر كتباً", "order": ("-total_count", "name")},
+    "recent": {"label": "آخر نشاط", "order": (F("last_date").desc(nulls_last=True), "name")},
+    "name": {"label": "الاسم", "order": ("name",)},
+}
+
+
 # ════════════ العروض ════════════
 @login_required
 @require_http_methods(["GET"])
@@ -316,7 +323,18 @@ def dossier_list(request):
         qs = qs.filter(Q(name__icontains=search_q) | Q(code__icontains=search_q))
 
     # الفرز في DB (لا تجسيد كامل في الذاكرة) + Paginator يطبّق LIMIT/OFFSET
-    qs = qs.annotate(total_count=F("issued_count") + F("received_count")).order_by("-total_count", "name")
+    last_sq = (
+        visible.filter(Q(issuing_entities=OuterRef("pk")) | Q(receiving_entities=OuterRef("pk")))
+        .exclude(date__isnull=True).order_by("-date").values("date")[:1]
+    )
+    qs = qs.annotate(
+        total_count=F("issued_count") + F("received_count"),
+        last_date=Subquery(last_sq),
+    )
+    sort = request.GET.get("sort") or "count"
+    if sort not in _LIST_SORTS:
+        sort = "count"
+    qs = qs.order_by(*_LIST_SORTS[sort]["order"])
 
     paginator = Paginator(qs, 24)
     try:
@@ -335,8 +353,9 @@ def dossier_list(request):
 
     return render(request, "core/dossier_list.html", {
         "page_obj": page, "paginator": paginator, "search_q": search_q,
-        "kind": kind,
-        "tabs": [{"key": k, "label": KIND_LABELS[k], "hint": KIND_HINTS[k],
+        "kind": kind, "sort": sort,
+        "sorts": [{"key": k, "label": v["label"]} for k, v in _LIST_SORTS.items()],
+        "tabs":  [{"key": k, "label": KIND_LABELS[k], "hint": KIND_HINTS[k],
                   "count": counts[k]} for k in KINDS],
         "totals": {"departments": agg["departments"], "issued": agg["issued"], "received": agg["received"]},
     })

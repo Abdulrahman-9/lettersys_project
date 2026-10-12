@@ -29,6 +29,8 @@ class GroupsWorkshopTests(TestCase):
 
         self.assertContains(res, 'عنقودُ العرض')
         self.assertContains(res, 'عضوُ العنقود')
+        self.assertContains(res, 'data-rule-select="#grpRule"')
+        self.assertContains(res, 'data-picker-rule-status')
 
     def test_editing_prefills_from_the_link(self):
         """التعديلُ برابطٍ لا بـJS — يُنسخ ويُشارَك ويعمل بلا سكربت."""

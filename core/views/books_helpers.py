@@ -113,10 +113,23 @@ def _resolve_entities(ids_list, new_names_list, default_etype):
     """
     Convert lists of IDs and new names into Entity objects for M2M assignment.
     - Fetches existing entities via in_bulk (single query)
-    - Creates new entities via get_or_create
-    - Activates inactive entities
+    - Creates new entities via get_or_create, with ``suggest_kind`` as the
+      initial tab (new rows only — never rerun on an existing entity)
+    - A merged-away variant resolves to its active parent: reviving it would
+      silently undo the merge (search hides inactive rows, so the clerk sees
+      its name as «new»)
+    - Activates other inactive entities
     - Deduplicates while preserving order
     """
+    from core.entity_kinds import suggest_kind
+    from core.signals import bump_entity_cache
+
+    def _canonical(e):
+        hops = 0
+        while e is not None and e.merged_into_id and hops < 10:
+            e, hops = e.merged_into, hops + 1
+        return e
+
     clean_ids = []
     for eid in (ids_list or []):
         eid = str(eid).strip()
@@ -133,7 +146,7 @@ def _resolve_entities(ids_list, new_names_list, default_etype):
     if clean_ids:
         fetched = Entity.objects.in_bulk(clean_ids)
         for pk in clean_ids:
-            e = fetched.get(pk)
+            e = _canonical(fetched.get(pk))
             if not e:
                 continue
             if not e.is_active:
@@ -145,10 +158,12 @@ def _resolve_entities(ids_list, new_names_list, default_etype):
         name = str(name).strip()
         if not name:
             continue
-        e, _ = Entity.objects.get_or_create(
-            name__iexact=name,
-            defaults={'name': name, 'etype': default_etype, 'is_active': True}
-        )
+        e = (Entity.objects.filter(name__iexact=name)
+             .order_by('-is_active', 'pk').first())
+        if e is None:
+            e = Entity.objects.create(name=name, etype=default_etype,
+                                      is_active=True, kind=suggest_kind(name))
+        e = _canonical(e)
         if not e.is_active:
             inactive_to_activate.append(e.pk)
             e.is_active = True
@@ -156,6 +171,7 @@ def _resolve_entities(ids_list, new_names_list, default_etype):
 
     if inactive_to_activate:
         Entity.objects.filter(pk__in=inactive_to_activate).update(is_active=True)
+        bump_entity_cache()
 
     seen_ids = set()
     unique = []

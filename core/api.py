@@ -387,8 +387,12 @@ def add_new_entity(request):
         }, status=400)
     
     # التحقق من الازدواجية
-    if Entity.objects.filter(name__iexact=name).exists():
-        existing = Entity.objects.get(name__iexact=name)
+    existing = (Entity.objects.filter(name__iexact=name)
+                .order_by('-is_active', 'pk').first())
+    if existing is not None:
+        hops = 0
+        while existing.merged_into_id and hops < 10:
+            existing, hops = existing.merged_into, hops + 1
         return JsonResponse({
             'success': True,
             'id': existing.id,
@@ -404,11 +408,13 @@ def add_new_entity(request):
     
     # إنشاء الجهة الجديدة
     try:
+        from core.entity_kinds import suggest_kind
         entity = Entity.objects.create(
             name=name,
             code=code,
             etype=etype,
-            is_active=True
+            is_active=True,
+            kind=suggest_kind(name),
         )
         
         # إبطال cache البحث عبر زيادة الإصدار (متوافق مع LocMemCache وRedis)

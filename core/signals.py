@@ -25,6 +25,11 @@ def _bump(version_key):
         cache.set(version_key, 2, None)
 
 
+def bump_entity_cache():
+    """لمسارات ``queryset.update`` التي لا تُطلق post_save (الإجراءات الجماعيّة)."""
+    _bump(ENTITY_CACHE_VERSION_KEY)
+
+
 @receiver([post_save, post_delete], sender=Entity)
 def invalidate_entity_cache(sender, **kwargs):
     """أبطل كاش بحث الجهات عند أي تعديل/حذف."""

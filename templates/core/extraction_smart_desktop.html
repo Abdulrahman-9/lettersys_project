@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261008b">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261012c">
 <style>
 .scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
 .scan-agent-status:hover{filter:brightness(.97)}
@@ -440,18 +440,12 @@
                                 <span class="field-required">*</span>
                                 <small class="text-muted">(يمكن إضافة أكثر من جهة)</small>
                             </label>
-                            <div class="entity-input-container" style="position: relative;">
+                            <div class="entity-input-container" data-name-check-url="{% url 'entity_name_check' %}">
                                 <div class="multi-tag-wrapper" id="issuingTagWrapper">
                                     <input type="text" class="tag-text-input" id="issuingEntity"
                                            placeholder="اكتب اسم الجهة أو رمزها ثم Enter..." autocomplete="off">
                                 </div>
-                                <div class="entity-dropdown-container" id="issuingEntityDropdown" style="
-                                    position: absolute; top: 100%; left: 0; right: 0;
-                                    background: white; border: 1px solid #e2e8f0;
-                                    border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                                    max-height: 250px; overflow-y: auto; z-index: 1000;
-                                    display: none; margin-top: 8px;
-                                "></div>
+                                <div class="entity-dropdown-container entity-suggestions" id="issuingEntityDropdown"></div>
                             </div>
                         </div>
 
@@ -461,18 +455,12 @@
                                 <span class="field-required">*</span>
                                 <small class="text-muted">(يمكن إضافة أكثر من جهة)</small>
                             </label>
-                            <div class="entity-input-container" style="position: relative;">
+                            <div class="entity-input-container" data-name-check-url="{% url 'entity_name_check' %}">
                                 <div class="multi-tag-wrapper" id="receivingTagWrapper">
                                     <input type="text" class="tag-text-input" id="receivingEntity"
                                            placeholder="اكتب اسم الجهة أو رمزها ثم Enter..." autocomplete="off">
                                 </div>
-                                <div class="entity-dropdown-container" id="receivingEntityDropdown" style="
-                                    position: absolute; top: 100%; left: 0; right: 0;
-                                    background: white; border: 1px solid #e2e8f0;
-                                    border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                                    max-height: 250px; overflow-y: auto; z-index: 1000;
-                                    display: none; margin-top: 8px;
-                                "></div>
+                                <div class="entity-dropdown-container entity-suggestions" id="receivingEntityDropdown"></div>
                             </div>
                         </div>
                     </div>
@@ -838,15 +826,14 @@
         const item = document.createElement('div');
         item.className = 'entity-suggestion-item';
         item.dataset.idx = idx;
-        item.style.cssText = 'padding:10px 14px;border-bottom:1px solid #e2e8f0;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:white;';
+        item.classList.add('is-existing');
         const left = document.createElement('span');
         left.textContent = entity.name || '';
         const right = document.createElement('small');
-        right.style.cssText = 'color:#64748b;font-size:0.78rem;';
+        right.className = 'entity-suggestion-code';
         right.textContent = entity.code ? `[${entity.code}]` : '';
         item.appendChild(left); item.appendChild(right);
-        item.addEventListener('mouseenter', () => { this.highlightIdx = idx; this._updateHighlight(); item.style.background='#f0f9ff'; });
-        item.addEventListener('mouseleave', () => { item.style.background = 'white'; });
+        item.addEventListener('mouseenter', () => { this.highlightIdx = idx; this._updateHighlight(); });
         item.addEventListener('mousedown', e => { e.preventDefault(); this.addEntity(entity); });
         this.dropdown.appendChild(item);
       });
@@ -859,12 +846,13 @@
       if (!exactMatch && !existingNames.has(q)) {
         const newItem = document.createElement('div');
         newItem.className = 'entity-suggestion-item new-entity-option';
-        newItem.style.cssText = 'padding:10px 14px;cursor:pointer;background:#f0fdf4;color:#059669;font-weight:500;';
+        newItem.classList.add('is-new');
         newItem.textContent = `➕ إضافة "${query}" كجهة جديدة`;
         newItem.dataset.idx = matches.length;
         newItem.addEventListener('mouseenter', () => { this.highlightIdx = matches.length; this._updateHighlight(); });
         newItem.addEventListener('mousedown', e => { e.preventDefault(); this.addNewEntity(query); });
         this.dropdown.appendChild(newItem);
+        this._suggestKindForOption(query, newItem, reqId);
       }
 
       this.dropdown.style.display = this.dropdown.children.length ? 'block' : 'none';
@@ -877,12 +865,80 @@
       this._render(); this._reset();
     }
 
-    addNewEntity(name) {
+    async addNewEntity(name) {
       const clean = (name || '').replace(/<[^>]*>/g, '').replace(/javascript:/gi, '').trim();
       if (!clean) return;
       if (this.tags.some(t => t.name.toLowerCase() === clean.toLowerCase())) { this._reset(); return; }
-      this.tags.push({ id: null, name: clean, code: '', isNew: true });
+      const source = this.wrapper.closest('.entity-input-container');
+      const checkUrl = source && source.dataset.nameCheckUrl;
+      if (!checkUrl) {
+        this._showNameCheckMessage('تعذّر فحص اسم الجهة؛ أعد تحميل الصفحة وحاول ثانية.');
+        return;
+      }
+      try {
+        const url = new URL(checkUrl, window.location.origin);
+        url.searchParams.set('name', clean);
+        const response = await fetch(url.toString(), {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        if (!response.ok) throw new Error('name check failed: ' + response.status);
+        const data = await response.json();
+        const exact = data.exact;
+        if (exact && exact.status === 'active') {
+          this.addEntity({ id: exact.id, name: exact.name, code: exact.code || '' });
+          return;
+        }
+        if (exact && exact.status === 'merged') {
+          const target = exact.merged_into;
+          if (target) {
+            this._showNameCheckMessage('هذا الاسم مدموج في «' + target.name + '»؛ اختر الجهة الأصلية من النتائج.');
+          } else {
+            this._showNameCheckMessage('هذا الاسم لجهة مدموجة؛ راجع دليل الجهات قبل إضافته.');
+          }
+          return;
+        }
+        if (exact && exact.status === 'inactive') {
+          this._showNameCheckMessage('هذا الاسم لجهة معطّلة؛ استعدها من دليل الجهات بدلاً من إنشاء نسخة.');
+          return;
+        }
+        this.tags.push({
+          id: null, name: clean, code: '', isNew: true,
+          kindLabel: data.suggested_label || ''
+        });
+      } catch (error) {
+        console.error('Entity name check failed', error);
+        this._showNameCheckMessage('تعذّر التحقق من الاسم الآن؛ أعد المحاولة بعد استقرار الاتصال.');
+        return;
+      }
       this._render(); this._reset();
+    }
+
+    async _suggestKindForOption(name, option, reqId) {
+      const source = this.wrapper.closest('.entity-input-container');
+      const checkUrl = source && source.dataset.nameCheckUrl;
+      if (!checkUrl) return;
+      try {
+        const url = new URL(checkUrl, window.location.origin);
+        url.searchParams.set('name', name);
+        const response = await fetch(url.toString(), {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        if (!response.ok) throw new Error('name check failed: ' + response.status);
+        const data = await response.json();
+        if (reqId !== this._reqSeq || !option.isConnected || !data.suggested_label) return;
+        option.textContent += ' · التبويب المقترح: ' + data.suggested_label;
+      } catch (error) {
+        console.error('Entity kind suggestion failed', error);
+      }
+    }
+
+    _showNameCheckMessage(message) {
+      const item = document.createElement('div');
+      item.className = 'entity-suggestion-message';
+      item.textContent = message;
+      this.dropdown.replaceChildren(item);
+      this.dropdown.style.display = 'block';
+      this.input.focus();
     }
 
     removeTag(idx) {
@@ -916,7 +972,7 @@
         badge.className = `entity-tag${tag.isNew ? ' new-entity' : ''}`;
         const codeHtml = tag.code ? `<span class="tag-code">${tag.code.replace(/</g,'&lt;')}</span>` : '';
         const nameHtml = (tag.name || '').replace(/</g,'&lt;');
-        badge.innerHTML = `${codeHtml}${nameHtml}${tag.isNew ? ' <small>(جديدة)</small>' : ''}
+        badge.innerHTML = `${codeHtml}${nameHtml}${tag.isNew ? ` <small class="entity-tag-kind">(جديدة${tag.kindLabel ? ' · ' + tag.kindLabel : ''})</small>` : ''}
           <button type="button" class="tag-remove" aria-label="حذف">&times;</button>`;
         badge.querySelector('.tag-remove').addEventListener('click', e => {
           e.stopPropagation(); this.removeTag(idx);
@@ -935,10 +991,9 @@
     _updateHighlight() {
       this.dropdown.querySelectorAll('.entity-suggestion-item, .new-entity-option').forEach((el, i) => {
         if (i === this.highlightIdx) {
-          el.style.outline = '2px solid #3b82f6'; el.style.background = '#dbeafe';
+          el.classList.add('is-highlighted');
         } else {
-          el.style.outline = 'none';
-          if (!el.classList.contains('new-entity-option')) el.style.background = 'white';
+          el.classList.remove('is-highlighted');
         }
       });
     }

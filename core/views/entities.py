@@ -18,6 +18,7 @@ from django.views.decorators.http import require_http_methods
 
 from ..forms import EntityForm
 from core.entity_kinds import KIND_HINTS, KIND_LABELS, KINDS
+from core.signals import bump_entity_cache
 from ..models import Book, Entity, EntityGroup
 from .helpers import staff_required
 from core.scoping import STUB_TITLE, can_manage_accounts, restricted_flag_sql, scope_books_for
@@ -47,6 +48,62 @@ def entity_list_api(request):
             'success': False,
             'message': 'فشل تحميل قائمة الجهات'
         }, status=500)
+
+
+#: أقصى ما تُعيده ``entity_name_check`` من أسماءٍ مشابهة — قائمةٌ تُقرأ بنظرة.
+NAME_CHECK_LIMIT = 6
+
+
+@login_required
+@require_http_methods(["GET"])
+def entity_name_check(request):
+    """فحصُ اسمِ جهةٍ **قبل** تسجيلها: المشابهُ والتبويبُ المقترح.
+
+    يخدم حواريّةَ «جهة جديدة» في الدليل ووسمَ «(جديدة)» في صفحة الاستخراج.
+    يُعيد المعطّلةَ والمدموجةَ أيضاً — ``entity_list_api`` يُخفيهما، وهما بالضبط
+    ما يُكرَّر بلا علم: اسمٌ «جديد» قد يكون جهةً عُطّلت أو دُمجت في أخرى.
+    الاقتراحُ من ``suggest_kind`` نفسِها التي يملأ بها النموذجُ الحقلَ الفارغ.
+    """
+    from core.entity_kinds import suggest_kind
+
+    name = ' '.join((request.GET.get('name') or '').split())[:255]
+    if len(name) < 2:
+        return JsonResponse({'name': name, 'exact': None, 'matches': [],
+                             'suggested_kind': '', 'suggested_label': ''})
+
+    rows = list(
+        Entity.objects
+        .filter(Q(name__iexact=name) | Q(name__icontains=name) | Q(code__iexact=name))
+        .select_related('merged_into')
+        .annotate(_exact=Case(When(name__iexact=name, then=Value(0)),
+                              default=Value(1), output_field=IntegerField()))
+        .order_by('_exact', '-is_active', 'name')[:NAME_CHECK_LIMIT]
+    )
+
+    def _row(e):
+        if e.merged_into_id:
+            status, target = 'merged', e.merged_into
+        elif not e.is_active:
+            status, target = 'inactive', None
+        else:
+            status, target = 'active', None
+        return {
+            'id': e.pk, 'name': e.name, 'code': e.code or '',
+            'kind': e.kind, 'kind_label': KIND_LABELS.get(e.kind, ''),
+            'status': status,
+            'url': (reverse('entity_detail', args=[e.pk]) if status == 'active' else ''),
+            'merged_into': ({'id': target.pk, 'name': target.name,
+                             'url': reverse('entity_detail', args=[target.pk])}
+                            if target and target.is_active else None),
+        }
+
+    matches = [_row(e) for e in rows]
+    exact = next((m for m in matches if m['name'].casefold() == name.casefold()), None)
+    kind = suggest_kind(name)
+    return JsonResponse({
+        'name': name, 'exact': exact, 'matches': matches,
+        'suggested_kind': kind, 'suggested_label': KIND_LABELS.get(kind, ''),
+    })
 
 
 def _editing_group(request):
@@ -115,6 +172,15 @@ def entity_list(request):
         .annotate(
             issued_count=Coalesce(Subquery(_issued_sq, output_field=IntegerField()), 0),
             received_count=Coalesce(Subquery(_received_sq, output_field=IntegerField()), 0),
+            # «آخرُ كتاب» يفرّق الجهةَ الحيّةَ عن المتروكة — أهمُّ من الهاتف عند
+            # المراجعة. اتّجاهان منفصلان للسبب نفسِه أعلاه، والأحدثُ يُختار بعد
+            # الترقيم (100 صفّ) لأنّ Greatest تُرجع NULL في SQLite إن غاب أحدُهما.
+            _last_issued=Subquery(
+                Book.objects.filter(issuing_entities=OuterRef('pk'), is_deleted=False)
+                .order_by('-date').values('date')[:1]),
+            _last_received=Subquery(
+                Book.objects.filter(receiving_entities=OuterRef('pk'), is_deleted=False)
+                .order_by('-date').values('date')[:1]),
         )
     )
 
@@ -156,11 +222,18 @@ def entity_list(request):
 
     # **ترتيبُ المراجعة**: التبويبُ بُذر آليّاً مرّةً واحدة، ومراجعتُه بالأثر لا
     # بالأبجديّة — جهةٌ عليها 1090 كتاباً تستحقّ النظرَ قبل جهةٍ بلا كتاب.
-    # `?sort=books` يقلب الترتيب إلى الأكثر تداولاً أوّلاً.
-    if (request.GET.get('sort') or '').strip() == 'books':
+    # `?sort=books` يقلب الترتيب إلى الأكثر تداولاً أوّلاً، و`?sort=new` إلى الأحدث
+    # إضافةً — مراجعةُ ما سُجّل مؤخّراً (من الاستخراج غالباً) بلا حقلِ تاريخ: المعرّفُ
+    # تصاعديٌّ بالإنشاء.
+    sort = (request.GET.get('sort') or '').strip()
+    if sort not in ('books', 'new'):
+        sort = ''
+    if sort == 'books':
         entities_qs = entities_qs.annotate(
             _total=F('issued_count') + F('received_count')
         ).order_by('-_total', 'name')
+    elif sort == 'new':
+        entities_qs = entities_qs.order_by('-pk')
     else:
         entities_qs = entities_qs.order_by('-_has_code', '-_is_arabic', 'name')
     # Pagination — 100 لكل صفحة (كان 50 صغيراً وضيّعت العربية بعد الإنجليزية)
@@ -173,6 +246,12 @@ def entity_list(request):
         entities = paginator.page(1)
     except EmptyPage:
         entities = paginator.page(paginator.num_pages)
+    for e in entities:
+        dates = [d for d in (e._last_issued, e._last_received) if d]
+        e.last_book_date = max(dates) if dates else None
+        total = e.issued_count + e.received_count
+        e.books_total = total
+        e.issued_pct = round(e.issued_count * 100 / total) if total else 0
 
     # كل الإجماليات في استعلام تجميعي واحد (بدل 8 استعلامات count منفصلة)
     viewed = not showing_inactive
@@ -223,7 +302,10 @@ def entity_list(request):
             "totals": totals,
             "lang_filter": lang_filter,
             "kind_filter": kind_filter,
-            "sort": (request.GET.get('sort') or '').strip(),
+            "sort": sort,
+            "sort_options": [('', 'الترتيب المعتاد'), ('books', 'الأكثر كتباً'),
+                             ('new', 'الأحدث إضافةً')],
+            "create_form": EntityForm() if view_mode == 'entities' else None,
             "kind_tabs": [{"key": k, "label": KIND_LABELS[k],
                            "hint": KIND_HINTS[k], "count": kind_counts[k]}
                           for k in KINDS],
@@ -318,12 +400,34 @@ def entity_create(request):
         if form.is_valid():
             entity = form.save()
             messages.success(request, format_html(
-                'تم حفظ الجهة بنجاح. <a class="alert-link" href="{}">افتح «{}»</a>',
-                reverse("entity_detail", args=[entity.pk]), entity.name))
+                'تم حفظ الجهة بنجاح في تبويب «{}». <a class="alert-link" href="{}">افتح «{}»</a>'
+                ' · <a class="alert-link" href="{}">غيّر التبويب</a>',
+                KIND_LABELS.get(entity.kind, entity.kind),
+                reverse("entity_detail", args=[entity.pk]), entity.name,
+                reverse("entity_edit", args=[entity.pk])))
+            # حواريّةُ الدليل تُرسل `next` (القائمةُ بمرشِّحاتها) — العودةُ إليها لا
+            # إلى صفحة الإضافة. مسارٌ داخليٌّ فقط كـ`_entity_back`.
+            nxt = (request.POST.get("next") or "").strip()
+            if nxt.startswith("/") and not nxt.startswith("//") and len(nxt.splitlines()) == 1:
+                return redirect(nxt)
             return redirect("entity_create")
     else:
         form = EntityForm()
-    return render(request, "core/entity_form.html", {"form": form, "is_edit": False})
+    return render(request, "core/entity_form.html",
+                  {"form": form, "is_edit": False, **_form_sidebar_context()})
+
+
+def _form_sidebar_context():
+    return {
+        "total_entities": Entity.objects.count(),
+        "recent_entities": list(Entity.objects.order_by("-id").values_list("name", flat=True)[:5]),
+        "suggested_entities": [],
+        "type_counts": {
+            "issuer": Entity.objects.filter(etype="issuer").count(),
+            "receiver": Entity.objects.filter(etype="receiver").count(),
+            "both": Entity.objects.filter(etype="both").count(),
+        },
+    }
 
 
 @staff_required
@@ -355,14 +459,7 @@ def entity_edit(request, pk):
             "is_edit": True,
             "editing_entity": entity,
             "back_url": _entity_back(request, entity),
-            "total_entities": Entity.objects.count(),
-            "recent_entities": list(Entity.objects.order_by("-id").values_list("name", flat=True)[:5]),
-            "suggested_entities": [],
-            "type_counts": {
-                "issuer": Entity.objects.filter(etype="issuer").count(),
-                "receiver": Entity.objects.filter(etype="receiver").count(),
-                "both": Entity.objects.filter(etype="both").count(),
-            },
+            **_form_sidebar_context(),
         },
     )
 
@@ -404,6 +501,8 @@ def entity_bulk_delete(request):
         messages.info(request, "لم يتم تحديد أي جهة.")
         return redirect("entity_list")
     count = Entity.objects.filter(id__in=selected, is_active=True).update(is_active=False)
+    if count:
+        bump_entity_cache()
     messages.success(
         request,
         f"تم تعطيل {count} جهة — أُخفيت من القوائم مع الحفاظ على سجلّاتها وروابطها بالكتب.",
@@ -431,6 +530,8 @@ def entity_set_kind(request):
         return redirect("entity_list")
 
     count = Entity.objects.filter(id__in=selected).exclude(kind=kind).update(kind=kind)
+    if count:
+        bump_entity_cache()
     logger.info("entity_set_kind: kind=%s ids=%s changed=%s by=%s",
                 kind, selected, count, request.user)
     if count:
@@ -479,6 +580,8 @@ def entity_bulk_restore(request):
         messages.info(request, "لم يتم تحديد أي جهة.")
         return redirect(f"{reverse('entity_list')}?status=inactive")
     count = Entity.objects.filter(id__in=selected, is_active=False).update(is_active=True)
+    if count:
+        bump_entity_cache()
     messages.success(request, f"تم استرجاع {count} جهة — عادت للقوائم.")
     return redirect(f"{reverse('entity_list')}?status=inactive")
 

@@ -61,7 +61,71 @@
   .sig-block div { flex:1; text-align:center; }
   .sig-line { margin-top:2.6rem; border-top:1px solid var(--ink); padding-top:.35rem; }
 
+  /* ── كشفُ التسليم (ho-*) — أصنافٌ خاصّةٌ به كي لا يتغيّر الدفترُ المشترك ── */
+  .toolbar { max-width:21cm; }
+  .toolbar select { max-width:17rem; }
+  .ho-facts { display:grid; grid-template-columns:1.6fr 1.6fr .8fr 1fr; border:1px solid var(--line-hard); margin:0 0 1rem; }
+  .ho-facts > div { padding:.45rem .6rem; border-inline-start:1px solid var(--line-hard); min-width:0; }
+  .ho-facts > div:first-child { border-inline-start:0; }
+  .ho-facts dt { font-size:.68rem; color:var(--muted); font-weight:700; }
+  .ho-facts dd { margin:.1rem 0 0; font-weight:800; font-size:.86rem; overflow-wrap:anywhere; }
+  .ho-facts .num { font-size:1.15rem; }
+  table.rep.ho { table-layout:fixed; }
+  table.rep.ho col.c-seq { width:.95cm; }
+  table.rep.ho col.c-book { width:2.5cm; }
+  table.rep.ho col.c-purpose { width:3.1cm; }
+  table.rep.ho col.c-sign { width:4.4cm; }
+  table.rep.ho td { overflow-wrap:anywhere; }
+  .ho-sub { display:block; font-size:.72rem; font-weight:500; color:var(--muted); margin-top:.15rem; }
+  .ho-title { font-weight:700; line-height:1.55; }
+  .ho-margin { display:block; font-size:.74rem; color:var(--muted); margin-top:.2rem; }
+  .ho-margin b { color:var(--ink); }
+  table.rep.ho .sign-cell { min-width:0; position:relative; }
+  .ho-date-guide { position:absolute; inset-inline-start:.45rem; bottom:.25rem; font-size:.62rem; color:var(--muted); letter-spacing:.06em; }
+  .ho-legend { margin:.45rem 0 0; font-size:.72rem; color:var(--muted); }
+  .ho-attest { margin-top:1.3rem; border:1px solid var(--line-hard); padding:.7rem .9rem; font-size:.84rem; line-height:1.9; }
+  .ho-attest p { margin:0 0 .35rem; }
+  .ho-checks { display:flex; flex-wrap:wrap; gap:.4rem 1.6rem; }
+  .ho-box { display:inline-block; width:.85em; height:.85em; border:1.2px solid var(--ink); vertical-align:-.1em; margin-inline-end:.35rem; }
+  .ho-fill { display:inline-block; min-width:6cm; border-bottom:1px dotted var(--ink); }
+  .ho-sign { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1rem; font-size:.82rem; }
+  .ho-sign section { border:1px solid var(--line-hard); padding:.55rem .75rem .7rem; }
+  .ho-sign h2 { margin:0 0 .5rem; font-size:.86rem; font-weight:800; }
+  .ho-sign h2 small { font-weight:500; color:var(--muted); }
+  .ho-field { display:flex; align-items:flex-end; gap:.4rem; margin-top:.75rem; }
+  .ho-field span { white-space:nowrap; color:var(--muted); font-size:.74rem; }
+  .ho-field i { flex:1; border-bottom:1px solid var(--ink); min-height:1.1rem; font-style:normal; font-weight:700; }
+
+  /* ── شاشةُ التجهيز (شاشةٌ فقط) ── */
+  .prep-bar { display:grid; grid-template-columns:1fr auto; gap:.6rem 1rem; align-items:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:.8rem 1rem; box-shadow:0 4px 14px rgba(77,44,25,.08); }
+  .prep-title h1 { margin:0; font-size:1.2rem; font-weight:800; }
+  .prep-title h1 small { font-size:.78rem; font-weight:600; margin-inline-start:.4rem; }
+  .prep-title p { margin:.15rem 0 0; font-size:.86rem; }
+  .prep-actions { display:flex; gap:.5rem; justify-content:flex-end; flex-wrap:wrap; }
+  .prep-bar .prep-form { grid-column:1 / -1; flex-wrap:wrap; border-top:1px dashed var(--line); padding-top:.6rem; }
+  .prep-bar .prep-form label { font-weight:700; font-size:.82rem; }
+  .toolbar button:focus-visible, .toolbar a.btn:focus-visible, .toolbar select:focus-visible, .ho-units a:focus-visible { outline:3px solid var(--teal); outline-offset:2px; }
+  .ho-prep { max-width:21cm; margin:1rem auto; }
+  .ho-steps { list-style:none; display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; padding:0; margin:0 0 1rem; font-size:.8rem; }
+  .ho-steps li { background:#fff; border:1px solid var(--line); border-radius:10px; padding:.5rem .6rem; color:var(--muted); display:flex; gap:.45rem; align-items:center; }
+  .ho-steps b { display:inline-grid; place-items:center; width:1.5rem; height:1.5rem; border-radius:50%; background:var(--head); color:var(--ink); flex:none; }
+  .ho-steps .is-current { border-color:var(--amber); color:var(--ink); font-weight:700; }
+  .ho-steps .is-current b { background:var(--amber); color:#fff; }
+  .ho-prep-h { font-size:.95rem; font-weight:800; margin:0 0 .6rem; }
+  .ho-units { list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(15rem,1fr)); gap:.6rem; }
+  .ho-units a { display:flex; flex-direction:column; gap:.3rem; background:#fff; border:1px solid var(--line); border-inline-start:4px solid var(--amber); border-radius:10px; padding:.7rem .85rem; color:var(--ink); text-decoration:none; transition:border-color .15s, box-shadow .15s; }
+  .ho-units a:hover { border-color:var(--amber); box-shadow:0 6px 16px rgba(77,44,25,.12); }
+  .ho-unit-name { font-weight:800; font-size:.92rem; overflow-wrap:anywhere; }
+  .ho-unit-count { font-size:.8rem; color:var(--muted); }
+  .ho-unit-count b { color:var(--amber-deep); font-size:1rem; }
+  @media (max-width:640px) { .prep-bar { grid-template-columns:1fr; } .ho-steps { grid-template-columns:1fr 1fr; } }
+  @media (prefers-reduced-motion:reduce) { .ho-units a { transition:none; } }
+
   @media print {
+    .ho-attest, .ho-sign, .ho-facts { page-break-inside:avoid; break-inside:avoid; }
+    /* الكتلةُ الختاميّة لا تنفصل عن آخر صفوف الجدول: ورقةٌ ثانيةٌ فيها توقيعٌ وحدَه تُفقد. */
+    .ho-close { break-before:avoid; page-break-before:avoid; }
+    @page { @bottom-center { content:"صفحة " counter(page) " من " counter(pages); font-family:"Cairo","Segoe UI",Tahoma,sans-serif; font-size:8pt; color:#444; } }
     body { background:#fff; }
     .toolbar { display:none !important; }
     .sheet { box-shadow:none; margin:0; width:auto; max-width:none; padding:0; border:0; }

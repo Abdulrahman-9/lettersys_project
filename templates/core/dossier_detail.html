@@ -3,7 +3,7 @@
 
 {% block title %}إضبارة: {{ entity.name }}{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20260911">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20261012b">{% endblock %}
 
 {% block content %}
 <div class="dossier-detail">
@@ -18,14 +18,19 @@
           {% if entity.code %}<span class="code">{{ entity.code }}</span>{% endif %}
         </div>
       </div>
-      <a class="btn-report" href="{% url 'dossier_report' entity.pk %}{% if querystring %}?{{ querystring }}{% endif %}" target="_blank" rel="noopener">
-        <i class="bi bi-printer-fill"></i> طباعة التقرير
-      </a>
+      <div class="dd-actions">
+        <a class="btn-entity-card" href="{% url 'entity_detail' entity.pk %}" title="بطاقة الجهة: الرمز والتبويب وبيانات الاتصال">
+          <i class="bi bi-person-vcard" aria-hidden="true"></i> بطاقة الجهة
+        </a>
+        <a class="btn-report" href="{% url 'dossier_report' entity.pk %}{% if querystring %}?{{ querystring }}{% endif %}" target="_blank" rel="noopener">
+          <i class="bi bi-printer-fill"></i> طباعة التقرير
+        </a>
+      </div>
     </div>
     <div class="dd-stats">
-      <span class="dd-stat t">الإجمالي: {{ total_count }}</span>
-      <span class="dd-stat o"><i class="bi bi-arrow-up-right"></i> صادر: {{ outgoing_count }}</span>
-      <span class="dd-stat i"><i class="bi bi-arrow-down-left"></i> وارد: {{ incoming_count }}</span>
+      <span class="dd-stat t"><b>{{ total_count }}</b> الإجمالي</span>
+      <span class="dd-stat o"><i class="bi bi-arrow-up-right"></i> <b>{{ outgoing_count }}</b> صادر</span>
+      <span class="dd-stat i"><i class="bi bi-arrow-down-left"></i> <b>{{ incoming_count }}</b> وارد</span>
     </div>
   </div>
 
@@ -67,11 +72,11 @@
           </div>
           <div class="ff-group">
             <label for="f-from">من تاريخ</label>
-            <input id="f-from" type="date" name="date_from" value="{{ filters.date_from|date:'Y-m-d' }}">
+            <input id="f-from" type="date" name="date_from" value="{{ filters.date_from|date:'Y-m-d' }}"{% if filters.date_to %} max="{{ filters.date_to|date:'Y-m-d' }}"{% endif %}>
           </div>
           <div class="ff-group">
             <label for="f-to">إلى تاريخ</label>
-            <input id="f-to" type="date" name="date_to" value="{{ filters.date_to|date:'Y-m-d' }}">
+            <input id="f-to" type="date" name="date_to" value="{{ filters.date_to|date:'Y-m-d' }}"{% if filters.date_from %} min="{{ filters.date_from|date:'Y-m-d' }}"{% endif %}>
           </div>
           <div class="ff-group ff-periods">
             <span id="f-period-lbl" class="ff-periods-lbl">فترة سريعة <small>(مؤرَّخة خلال…)</small></span>
@@ -243,6 +248,12 @@
 <script>
 (function(){
   document.body.classList.add('dd-js');   // تفعيل وضع التبويبات (بدونه تظهر اللوحتان)
+  var fFrom = document.getElementById('f-from'), fTo = document.getElementById('f-to');
+  if (fFrom && fTo) {
+    // كلُّ حدٍّ يقيّد الآخر فلا يُختار «من» بعد «إلى» (منعُ الخطأ لا رسالتُه)
+    fFrom.addEventListener('change', function(){ fTo.min = fFrom.value; });
+    fTo.addEventListener('change', function(){ fFrom.max = fTo.value; });
+  }
   var tabs = Array.prototype.slice.call(document.querySelectorAll('.dd-tab'));
   // التبويبُ الظاهر يُحمل في النموذج وروابط المرشّحات والعنوان — فلا يُعيد «تطبيق»
   // أو رقاقةٌ الصفحةَ على «صادر» وقد كان المستخدمُ في «وارد» (H3)

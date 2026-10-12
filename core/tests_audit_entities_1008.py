@@ -56,7 +56,7 @@ class EntityListLinksTests(TestCase):
             with self.subTest(href=href):
                 self.assertIn('sort=books', href)
                 self.assertIn('lang=ar', href)
-        clear = re.search(r'href="([^"]*)" class="btn btn-outline-secondary">مسح<', html).group(1)
+        clear = re.search(r'href="([^"]*)" class="en-search-clear" aria-label="مسح البحث"', html).group(1)
         self.assertIn('sort=books', clear)
         self.assertIn('lang=ar', clear)
         self.assertNotIn('q=', clear)
@@ -103,6 +103,7 @@ class EntityDetailTests(TestCase):
         self.assertEqual(self.client.get(reverse('entity_list')).status_code, 403)
         admin_html = self.html(self.admin)
         self.assertIn('href="%s"' % reverse('entity_list'), admin_html)
+        self.assertNotIn('تعديل الجهة', admin_html)
 
     def test_a_restricted_row_opens_no_preview(self):
         html = self.html(self.clerk)
