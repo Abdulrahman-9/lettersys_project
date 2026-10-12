@@ -5,8 +5,8 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20260831">
-<link rel="stylesheet" href="{% static 'css/entity_list.css' %}">
-<link rel="stylesheet" href="{% static 'css/entities_design.css' %}?v=20260831">
+<link rel="stylesheet" href="{% static 'css/entity_list.css' %}?v=20261012c">
+<link rel="stylesheet" href="{% static 'css/entities_design.css' %}?v=20261012f">
 {% endblock %}
 
 {% block page_sidebar %}
@@ -26,9 +26,9 @@
 <div class="app-sidebar-panel app-sidebar-context-panel">
   <div class="app-sidebar-section-title">اختصارات</div>
   <div class="app-context-list">
-    <a class="app-context-link" href="{% url 'entity_create' %}">
-      <span>إضافة جهة جديدة</span>
-      <i class="bi bi-plus-circle"></i>
+    <a class="app-context-link" href="?sort=new">
+      <span>المضافةُ حديثاً</span>
+      <i class="bi bi-clock-history"></i>
     </a>
     <a class="app-context-link" href="{% url 'book_unified' %}">
       <span>الرجوع للكتب الموحدة</span>
@@ -52,13 +52,24 @@
       <p>دليلُ المراسلات.</p>
       {% endif %}
     </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-outline-primary" href="{% url 'entity_merge' %}">
-        <i class="bi bi-union me-1"></i>دمج المكرّرات
+    <div class="en-head-acts">
+      <a class="btn en-btn-ghost" href="{% url 'entity_merge' %}">
+        <i class="bi bi-union" aria-hidden="true"></i>دمج المكرّرات
       </a>
-      <a class="btn btn-orange" href="{% url 'entity_create' %}">
-        <i class="bi bi-plus-circle me-1"></i>جهة جديدة
+      {% comment %}
+        الحواريّةُ بـ`data-bs-toggle` على رابطٍ حقيقيّ: بلا سكربت يفتح صفحةَ
+        الإضافة الكاملة، وبه تُفتح الحواريّةُ فوق القائمة فلا يضيع المرشِّح.
+      {% endcomment %}
+      {% if view_mode == 'entities' %}
+      <a class="btn en-btn-primary" href="{% url 'entity_create' %}?next={{ request.get_full_path|urlencode }}"
+         data-bs-toggle="modal" data-bs-target="#entityCreateModal">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>جهة جديدة
       </a>
+      {% else %}
+      <a class="btn en-btn-primary" href="{% url 'entity_create' %}">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>جهة جديدة
+      </a>
+      {% endif %}
     </div>
   </div>
 
@@ -96,99 +107,90 @@
   {% include "core/_entity_groups.html" %}
 {% else %}
 
-  <!-- Search & Filters + View Toggle -->
-  <div class="card border-0 shadow-sm mb-4 animate-scale-in">
-    <div class="card-body p-4">
-      <div class="row g-3 align-items-center">
-        <div class="col-md-6">
-          {# بحث server-side في الاسم/الرمز — يبحث في كل الجهات (ليس الصفحة الحالية فقط) #}
-          <form method="get" class="position-relative" style="display:flex; gap:0.4rem;">
-            {% if showing_inactive %}<input type="hidden" name="status" value="inactive">{% endif %}
-            {% if lang_filter and lang_filter != 'all' %}<input type="hidden" name="lang" value="{{ lang_filter }}">{% endif %}
-            {% if kind_filter %}<input type="hidden" name="kind" value="{{ kind_filter }}">{% endif %}
-            {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
-            <div class="position-relative" style="flex:1;">
-              <i class="bi bi-search position-absolute" style="right: 1rem; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
-              <input type="text" name="q" class="form-control search-box-modern" id="entitySearch"
-                     placeholder="ابحث في كل الجهات بالاسم أو الرمز (مثل: ش4، شؤون التراخيص)..."
-                     value="{{ search_q|default:'' }}" style="padding-right: 3rem;">
-            </div>
-            <button type="submit" class="btn btn-primary">بحث</button>
-            {% if search_q %}<a href="{% qs q='' %}" class="btn btn-outline-secondary">مسح</a>{% endif %}
-          </form>
-          {% if search_q %}<div class="small text-muted mt-1">نتائج البحث عن "<strong>{{ search_q }}</strong>": {{ entities.paginator.count }} جهة</div>{% endif %}
-        </div>
-        {% if not showing_inactive %}
-        <div class="col-12 d-flex align-items-center gap-2 flex-wrap mt-2">
-          {% comment %}
-            تبويبُ الجهة — الحقلُ نفسُه الذي يُبوّب صفحةَ الأضابير، وهو قرارُ
-            المالك لا استنتاج. سطرٌ كاملٌ له: ثلاثةُ عناوينَ طويلةٍ تنكسر في
-            عمودٍ ضيّق (كشفته اللقطة). واللغةُ تحته مرشِّحٌ مستقلّ.
-          {% endcomment %}
-          <span class="text-muted small">التبويب:</span>
-          {% for t in kind_tabs %}
-          <a href="{% qs kind=t.key %}"
-             class="filter-chip {% if kind_filter == t.key %}active{% endif %}"
-             {% if kind_filter == t.key %}aria-current="page"{% endif %}>
-            <i class="bi bi-diagram-3 me-1"></i>{{ t.label }} ({{ t.count }})
-          </a>
-          {% endfor %}
-          {% if kind_filter %}
-          <a href="{% qs kind='' %}" class="filter-chip">
-            <i class="bi bi-x-lg me-1"></i>كل الأصناف
-          </a>
-          {% endif %}
-          {# مراجعةُ البذر بالأثر: الأكثرُ تداولاً أوّلاً #}
-          <a class="filter-chip {% if sort == 'books' %}active{% endif %}"
-             href="{% if sort == 'books' %}{% qs sort='' %}{% else %}{% qs sort='books' %}{% endif %}"
-             title="راجع التبويب بالأثر لا بالأبجدية">
-            <i class="bi bi-sort-numeric-down me-1"></i>الأكثر كتباً
-          </a>
-        </div>
-        <div class="col-12 d-flex align-items-center gap-2 flex-wrap mt-2">
-          {# فلتر اللغة (server-side) — يحافظ على البحث #}
-          <a href="{% qs lang='' %}"
-             class="filter-chip {% if not lang_filter or lang_filter == 'all' %}active{% endif %}">
-            <i class="bi bi-translate me-1"></i>الكل ({{ totals.all|default:0 }})
-          </a>
-          <a href="{% qs lang='ar' %}"
-             class="filter-chip {% if lang_filter == 'ar' %}active{% endif %}">
-            <i class="bi bi-fonts me-1"></i>عربي ({{ totals.arabic|default:0 }})
-          </a>
-          <a href="{% qs lang='en' %}"
-             class="filter-chip {% if lang_filter == 'en' %}active{% endif %}">
-            <i class="bi bi-fonts me-1"></i>إنجليزي ({{ totals.english|default:0 }})
-          </a>
-          {# المعطّلةُ كانت محسوبةً بلا رابطٍ إليها — تعطيلٌ بلا بابِ استرجاع (تدقيقُ نيلسن D#2) #}
-          {% if inactive_count %}
-          <a href="?status=inactive" class="filter-chip ms-auto">
-            <i class="bi bi-slash-circle me-1"></i>المعطّلة ({{ inactive_count }})
-          </a>
-          {% endif %}
-        </div>
-        {% else %}
-        <div class="col-12 d-flex align-items-center gap-2 flex-wrap mt-2">
-          <span class="filter-chip active"><i class="bi bi-slash-circle me-1"></i>المعطّلة ({{ inactive_count }})</span>
-          <a href="?" class="filter-chip"><i class="bi bi-arrow-right me-1"></i>العودة إلى الجهات النشطة</a>
-        </div>
-        {% endif %}
-        <div class="col-md-2 d-flex justify-content-md-end">
-          <div class="view-toggle" role="group" aria-label="تبديل العرض">
-            <button type="button" id="viewToggleTable" class="active" title="عرض جدولي">
-              <i class="bi bi-table"></i>
-            </button>
-            <button type="button" id="viewToggleCards" title="عرض بطاقات">
-              <i class="bi bi-grid"></i>
-            </button>
-          </div>
-        </div>
+  {% comment %}
+    **التبويبُ بلاطاتٌ لا رقاقات** (مراجعةُ 2026‑10‑12): كان صفّاً من رقاقاتٍ
+    متساوية بجوار «الأكثر كتباً» وهو ترتيبٌ لا تبويب — خلطُ محورَين في صفٍّ
+    واحد. البلاطةُ تحمل العددَ والتلميحَ معاً فيُعرف معنى التبويب قبل النقر
+    (تعرّفٌ لا تذكّر)، والترتيبُ هاجر إلى قائمته في شريط الأدوات.
+  {% endcomment %}
+  {% if not showing_inactive %}
+  <nav class="en-kinds en-reveal" aria-label="تبويب الجهات">
+    <a class="en-kind{% if not kind_filter %} is-active{% endif %}" href="{% qs kind='' page='' %}"
+       {% if not kind_filter %}aria-current="page"{% endif %}>
+      <span class="en-kind-top"><span class="en-kind-name">الكل</span><span class="en-kind-n">{{ active_count }}</span></span>
+      <span class="en-kind-hint">كلُّ الجهات النشطة</span>
+    </a>
+    {% for t in kind_tabs %}
+    <a class="en-kind en-kind--{{ t.key }}{% if kind_filter == t.key %} is-active{% endif %}"
+       href="{% qs kind=t.key page='' %}" {% if kind_filter == t.key %}aria-current="page"{% endif %}>
+      <span class="en-kind-top"><span class="en-kind-name">{{ t.label }}</span><span class="en-kind-n">{{ t.count }}</span></span>
+      <span class="en-kind-hint">{{ t.hint }}</span>
+    </a>
+    {% endfor %}
+  </nav>
+  {% else %}
+  <div class="en-banner en-reveal" role="status">
+    <i class="bi bi-slash-circle" aria-hidden="true"></i>
+    <span>تعرض <strong>الجهات المعطّلة</strong> ({{ inactive_count }}) — أخفيت من القوائم وسجلّاتُها محفوظة.</span>
+    <a href="?" class="en-banner-link"><i class="bi bi-arrow-right" aria-hidden="true"></i>العودة إلى النشطة</a>
+  </div>
+  {% endif %}
+
+  {% comment %}
+    شريطُ أدواتٍ واحد: البحثُ أوسعُه لأنّه أكثرُ ما يُستعمل، ثمّ الترتيبُ
+    واللغةُ — ثمّ ما يندر (المعطّلة، نمطُ العرض) في الطرف.
+    البحثُ في كلّ الجهات لا في الصفحة الحاليّة (server-side).
+  {% endcomment %}
+  <form method="get" class="en-toolbar en-reveal" role="search" id="entityFilterForm">
+    {% if showing_inactive %}<input type="hidden" name="status" value="inactive">{% endif %}
+    {% if lang_filter and lang_filter != 'all' %}<input type="hidden" name="lang" value="{{ lang_filter }}">{% endif %}
+    {% if kind_filter %}<input type="hidden" name="kind" value="{{ kind_filter }}">{% endif %}
+    <div class="en-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input type="search" name="q" id="entitySearch" class="form-control" autocomplete="off"
+             aria-label="ابحث في الجهات بالاسم أو الرمز"
+             placeholder="ابحث بالاسم أو الرمز — مثل: ش4، شؤون التراخيص…"
+             value="{{ search_q|default:'' }}">
+      {% if search_q %}<a href="{% qs q='' page='' %}" class="en-search-clear" aria-label="مسح البحث"><i class="bi bi-x-lg"></i></a>{% endif %}
+    </div>
+    <label class="en-sort">
+      <span class="visually-hidden">الترتيب</span>
+      <i class="bi bi-sort-down" aria-hidden="true"></i>
+      <select name="sort" class="form-select" data-autosubmit aria-label="الترتيب">
+        {% for val, lbl in sort_options %}
+        <option value="{{ val }}"{% if sort == val %} selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn en-btn-primary">بحث</button>
+
+    <div class="en-seg" role="group" aria-label="لغة الاسم">
+      <a href="{% qs lang='' page='' %}" class="{% if not lang_filter or lang_filter == 'all' %}is-active{% endif %}"
+         {% if not lang_filter or lang_filter == 'all' %}aria-current="true"{% endif %}>الكل <span>{{ totals.all|default:0 }}</span></a>
+      <a href="{% qs lang='ar' page='' %}" class="{% if lang_filter == 'ar' %}is-active{% endif %}"
+         {% if lang_filter == 'ar' %}aria-current="true"{% endif %}>عربي <span>{{ totals.arabic|default:0 }}</span></a>
+      <a href="{% qs lang='en' page='' %}" class="{% if lang_filter == 'en' %}is-active{% endif %}"
+         {% if lang_filter == 'en' %}aria-current="true"{% endif %}>إنجليزي <span>{{ totals.english|default:0 }}</span></a>
+    </div>
+
+    <div class="en-toolbar-end">
+      {# المعطّلةُ كانت محسوبةً بلا رابطٍ إليها — تعطيلٌ بلا بابِ استرجاع (تدقيقُ نيلسن D#2) #}
+      {% if inactive_count and not showing_inactive %}
+      <a href="?status=inactive" class="en-link-muted"><i class="bi bi-slash-circle" aria-hidden="true"></i>المعطّلة ({{ inactive_count }})</a>
+      {% endif %}
+      <div class="view-toggle" role="group" aria-label="تبديل العرض">
+        <button type="button" id="viewToggleTable" class="active" title="عرض جدولي" aria-label="عرض جدولي" aria-pressed="true">
+          <i class="bi bi-table"></i>
+        </button>
+        <button type="button" id="viewToggleCards" title="عرض بطاقات" aria-label="عرض بطاقات" aria-pressed="false">
+          <i class="bi bi-grid"></i>
+        </button>
       </div>
     </div>
-  </div>
+  </form>
 
-  <!-- Entities List (Table + Cards) -->
   {% comment %}
-    نموذج الحذف الجماعي وحده — فارغ من المحتوى المرئي.
+    نموذج الإجراء الجماعي وحده — فارغ من المحتوى المرئي.
     الـ checkboxes داخل الجدول/البطاقات مرتبطة به عبر السمة form="entitiesForm"
     فلا يحدث أي تداخل (nesting) بين النماذج (HTML5 forbids nested forms).
   {% endcomment %}
@@ -198,61 +200,65 @@
     <input type="hidden" name="back" value="?{{ request.GET.urlencode }}">
   </form>
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-      <span class="text-muted">عرض <strong>{{ entities|length }}</strong> من <strong>{{ entities.paginator.count }}</strong> جهة{% if entities.paginator.num_pages > 1 %} <span class="small">(صفحة {{ entities.number }}/{{ entities.paginator.num_pages }})</span>{% endif %}</span>
+  <div class="en-resultline" aria-live="polite">
+    {% if search_q %}
+    نتائجُ «<strong>{{ search_q }}</strong>»: <strong>{{ entities.paginator.count }}</strong> جهة
+    {% else %}
+    عرض <strong>{{ entities|length }}</strong> من <strong>{{ entities.paginator.count }}</strong> جهة
+    {% endif %}
+    {% if entities.paginator.num_pages > 1 %}<span class="en-faint">· صفحة {{ entities.number }}/{{ entities.paginator.num_pages }}</span>{% endif %}
+  </div>
+
+  {% comment %}
+    شريطُ التحديد يلتصق بأسفل الشاشة ويظهر بالتحديد وحدَه: كانت الأزرارُ تظهر
+    فوق الجدول فتغيب عن النظر بعد التمرير إلى الصفّ المئة.
+    نقلُ المحدَّد إلى تبويب بـ`formaction` على النموذج نفسِه — تحديدٌ واحد.
+  {% endcomment %}
+  <div class="en-bulkbar" id="entityBulkBar" hidden role="region" aria-label="إجراءات المحدد">
+    <span class="en-bulk-count"><strong id="selectedCount">0</strong> محدّدة</span>
+    {% if showing_inactive %}
+    <button type="submit" form="entitiesForm" class="btn btn-sm btn-success" id="deleteSelectedBtn"
+            data-confirm="استرجاع الجهات المحددة؟" data-confirm-ok="استرجع" data-confirm-tone="safe">
+      <i class="bi bi-arrow-counterclockwise me-1"></i>استرجاع
+    </button>
+    {% else %}
+    <div class="en-bulk-move" id="kindMoveGroup" role="group" aria-label="نقل الجهات المحددة إلى تبويب">
+      <span class="en-faint">نقل إلى:</span>
+      {% for t in kind_tabs %}
+      {# تأكيدٌ يسمّي العددَ والتبويب: كان النقلُ يُرسَل فوراً بجوار «تعطيل» وبنمطه (تدقيقُ نيلسن D#13) #}
+      <button type="submit" form="entitiesForm" formaction="{% url 'entity_set_kind' %}"
+              name="kind" value="{{ t.key }}" class="btn btn-sm en-btn-ghost"
+              data-kind-label="{{ t.label }}" data-confirm="نقل الجهات المحددة إلى تبويب «{{ t.label }}»؟"
+              data-confirm-ok="انقل" data-confirm-tone="safe">{{ t.label }}</button>
+      {% endfor %}
     </div>
-    <div class="d-flex gap-2">
-      {% if showing_inactive %}
-      <button type="submit" form="entitiesForm" class="btn btn-sm btn-outline-success" id="deleteSelectedBtn" style="display: none;" data-confirm="استرجاع الجهات المحددة؟" data-confirm-ok="استرجع" data-confirm-tone="safe">
-        <i class="bi bi-arrow-counterclockwise me-1"></i>استرجاع المحدد (<span id="selectedCount">0</span>)
-      </button>
-      {% else %}
-      <button type="button" class="btn btn-sm btn-outline-primary" id="mergeSelectedBtn"
-              style="display: none;" data-merge-url="{% url 'entity_merge' %}">
-        <i class="bi bi-union me-1"></i>دمج المحدد (<span id="mergeCount">0</span>)
-      </button>
-      <button type="submit" form="entitiesForm" class="btn btn-sm btn-outline-danger" id="deleteSelectedBtn" style="display: none;" data-confirm="تعطيل الجهات المحددة؟ ستُخفى من القوائم مع الحفاظ على سجلّاتها." data-confirm-ok="عطّل">
-        <i class="bi bi-archive me-1"></i>تعطيل المحدد (<span id="selectedCount">0</span>)
-      </button>
-      {% comment %}
-        نقلُ المحدَّد إلى تبويب — بها يشكّل المالكُ مجموعاته بالأسماء التي يريد.
-        `formaction` يُحوّل النموذجَ نفسَه إلى نقطةٍ أخرى، فالتحديدُ واحدٌ ولا
-        نموذجَ ثانٍ ولا سطرَ JS: خانةُ الاختيار تُربط بنموذجٍ واحدٍ فقط في HTML.
-      {% endcomment %}
-      <div class="btn-group btn-group-sm ms-3" id="kindMoveGroup" style="display: none;" role="group"
-           aria-label="نقل الجهات المحددة إلى تبويب">
-        <span class="btn btn-sm btn-light disabled">نقل إلى:</span>
-        {% for t in kind_tabs %}
-        {# تأكيدٌ يسمّي العددَ والتبويب: كان النقلُ يُرسَل فوراً بجوار «تعطيل» وبنمطه (تدقيقُ نيلسن D#13) #}
-        <button type="submit" form="entitiesForm" formaction="{% url 'entity_set_kind' %}"
-                name="kind" value="{{ t.key }}" class="btn btn-sm btn-outline-secondary"
-                data-kind-label="{{ t.label }}" data-confirm="نقل الجهات المحددة إلى تبويب «{{ t.label }}»؟"
-                data-confirm-ok="انقل" data-confirm-tone="safe">
-          {{ t.label }}
-        </button>
-        {% endfor %}
-      </div>
-      {% endif %}
-    </div>
+    <button type="button" class="btn btn-sm en-btn-ghost" id="mergeSelectedBtn" hidden
+            data-merge-url="{% url 'entity_merge' %}">
+      <i class="bi bi-union me-1"></i>دمج (<span id="mergeCount">0</span>)
+    </button>
+    <button type="submit" form="entitiesForm" class="btn btn-sm btn-outline-danger" id="deleteSelectedBtn"
+            data-confirm="تعطيل الجهات المحددة؟ ستُخفى من القوائم مع الحفاظ على سجلّاتها." data-confirm-ok="عطّل">
+      <i class="bi bi-archive me-1"></i>تعطيل
+    </button>
+    {% endif %}
+    <button type="button" class="btn btn-sm btn-link en-bulk-clear" id="clearSelectionBtn">إلغاء التحديد</button>
   </div>
 
     {# ── العرض الافتراضي: جدول احترافي ── #}
     <div id="entitiesTableView" class="entities-table-wrapper animate-fade-in">
       <div class="table-responsive">
         <table class="entities-table align-middle">
+          <caption class="visually-hidden">دليلُ الجهات — الاسم والتبويب والحركة وآخر كتاب والتواصل</caption>
           <thead>
             <tr>
-              <th style="width: 36px;">
+              <th scope="col" class="en-col-check">
                 <input type="checkbox" class="form-check-input" id="selectAllRows" aria-label="تحديد الكل">
               </th>
-              <th style="width: 110px;">الرمز</th>
-              <th>الاسم</th>
-              <th style="width: 110px;">النوع</th>
-              <th class="col-hide-md" style="min-width: 180px;">البريد</th>
-              <th class="col-hide-md" style="width: 130px;">الهاتف</th>
-              <th style="width: 150px;">الكتب المرتبطة</th>
-              <th style="width: 170px; text-align: end;">إجراءات</th>
+              <th scope="col">الجهة</th>
+              <th scope="col" class="en-col-books">الحركة</th>
+              <th scope="col" class="en-col-last">آخرُ كتاب</th>
+              <th scope="col" class="col-hide-md en-col-mail">التواصل</th>
+              <th scope="col" class="en-col-acts"><span class="visually-hidden">إجراءات</span></th>
             </tr>
           </thead>
           <tbody>
@@ -261,72 +267,72 @@
               <td>
                 <input type="checkbox" form="entitiesForm" class="form-check-input row-check" name="selected" value="{{ e.id }}" aria-label="تحديد {{ e.name }}">
               </td>
-              <td>
-                {% if e.code %}
-                  <span class="entity-code-chip"><i class="bi bi-tag"></i>{{ e.code }}</span>
-                {% else %}
-                  <span class="entity-code-empty">—</span>
-                {% endif %}
-              </td>
               <td class="entity-name-cell">
-                <a href="{% url 'entity_detail' e.id %}" title="عرض تفاصيل {{ e.name }}">{{ e.name }}</a>
-                {% if not kind_filter %}<div class="text-muted small mt-1"><i class="bi bi-folder2" aria-hidden="true"></i> {{ e.get_kind_display }}</div>{% endif %}
-                {% if e.contact_person %}
-                  <div class="text-muted small mt-1"><i class="bi bi-person"></i> {{ e.contact_person }}</div>
+                <a class="en-row-name" href="{% url 'entity_detail' e.id %}">{{ e.name }}</a>
+                <div class="en-row-meta">
+                  {% if not kind_filter %}<span class="en-row-kind en-kind--{{ e.kind }}">{{ e.get_kind_display }}</span>{% endif %}
+                  {% if e.code %}<span class="entity-code-chip" title="الرمز: {{ e.code }}" dir="auto">{{ e.code }}</span>{% endif %}
+                  {% if e.contact_person %}<span class="en-row-person"><i class="bi bi-person" aria-hidden="true"></i>{{ e.contact_person }}</span>{% endif %}
+                </div>
+              </td>
+              <td>
+                {% if e.books_total %}
+                <div class="en-flow" title="{{ e.issued_count }} صادرة منها · {{ e.received_count }} واردة إليها">
+                  <div class="en-flow-nums">
+                    <strong>{{ e.books_total }}</strong>
+                    <span class="en-flow-out"><i class="bi bi-arrow-up-right" aria-hidden="true"></i>{{ e.issued_count }}<span class="visually-hidden"> صادرة منها</span></span>
+                    <span class="en-flow-in"><i class="bi bi-arrow-down-left" aria-hidden="true"></i>{{ e.received_count }}<span class="visually-hidden"> واردة إليها</span></span>
+                  </div>
+                  <div class="en-flow-bar" aria-hidden="true"><span style="--p: {{ e.issued_pct }}%"></span></div>
+                </div>
+                {% else %}
+                <span class="en-flow-none">بلا كتب</span>
                 {% endif %}
               </td>
               <td>
-                {# النوع مُشتَقّ من روابط الكتب الفعلية #}
-                {% if e.issued_count and e.received_count %}
-                  <span class="etype-pill is-both">مُصدِرة ومستلِمة</span>
-                {% elif e.issued_count %}
-                  <span class="etype-pill is-issuer">مُصدِرة</span>
-                {% elif e.received_count %}
-                  <span class="etype-pill is-receiver">مستلِمة</span>
+                {% if e.last_book_date %}
+                <time class="en-last" datetime="{{ e.last_book_date|date:'Y-m-d' }}">
+                  <span class="en-last-date">{{ e.last_book_date|date:"Y/m/d" }}</span>
+                  <span class="en-last-ago">منذ {{ e.last_book_date|timesince }}</span>
+                </time>
                 {% else %}
-                  <span class="etype-pill" style="background:#f1f5f9;color:#94a3b8;">بلا كتب</span>
+                <span class="en-flow-none">—</span>
                 {% endif %}
               </td>
               <td class="col-hide-md">
-                {% if e.email %}
-                  <a href="mailto:{{ e.email }}" class="text-decoration-none small"><i class="bi bi-envelope me-1"></i>{{ e.email }}</a>
+                {% if e.email or e.phone %}
+                <div class="en-contact">
+                  {% if e.email %}<a href="mailto:{{ e.email }}" dir="ltr" title="{{ e.email }}"><i class="bi bi-envelope" aria-hidden="true"></i><span>{{ e.email }}</span></a>{% endif %}
+                  {% if e.phone %}<span dir="ltr"><i class="bi bi-telephone" aria-hidden="true"></i><span>{{ e.phone }}</span></span>{% endif %}
+                </div>
                 {% else %}
-                  <span class="text-muted small">—</span>
+                <a class="en-contact-add" href="{% url 'entity_edit' e.id %}">+ أضف وسيلة تواصل</a>
                 {% endif %}
-              </td>
-              <td class="col-hide-md">
-                {% if e.phone %}
-                  <span class="small">{{ e.phone }}</span>
-                {% else %}
-                  <span class="text-muted small">—</span>
-                {% endif %}
-              </td>
-              <td>
-                <span class="book-count-chip outgoing" title="كتب صادرة منها"><i class="bi bi-arrow-up-right"></i>{{ e.issued_count|default:0 }}</span>
-                <span class="book-count-chip incoming" title="كتب واردة إليها"><i class="bi bi-arrow-down-left"></i>{{ e.received_count|default:0 }}</span>
               </td>
               <td>
                 <div class="row-actions">
-                  <a class="btn btn-sm btn-outline-info" href="{% url 'entity_detail' e.id %}" title="تفاصيل">
-                    <i class="bi bi-eye"></i>
+                  {% if not showing_inactive %}
+                  <a class="en-icon-btn" href="{% url 'dossier_detail' e.id %}" title="الإضبارة" aria-label="إضبارة {{ e.name }}">
+                    <i class="bi bi-folder2-open" aria-hidden="true"></i>
                   </a>
-                  <a class="btn btn-sm btn-outline-primary" href="{% url 'entity_edit' e.id %}" title="تعديل">
-                    <i class="bi bi-pencil"></i>
+                  {% endif %}
+                  <a class="en-icon-btn" href="{% url 'entity_edit' e.id %}" title="تعديل" aria-label="تعديل {{ e.name }}">
+                    <i class="bi bi-pencil" aria-hidden="true"></i>
                   </a>
                   {# نموذج إجراء مستقل على مستوى الجذر (ليس متداخلاً) #}
                   {% if showing_inactive %}
                   <form method="post" action="{% url 'entity_restore' e.id %}" class="d-inline">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-outline-success" title="استرجاع الجهة">
-                      <i class="bi bi-arrow-counterclockwise"></i>
+                    <button type="submit" class="en-icon-btn is-ok" title="استرجاع الجهة" aria-label="استرجاع {{ e.name }}">
+                      <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
                     </button>
                   </form>
                   {% else %}
                   <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline" data-confirm="تعطيل جهة {{ e.name }}؟ ستُخفى من القوائم مع الحفاظ على سجلّها." data-confirm-ok="عطّل">
                     {% csrf_token %}
                     <input type="hidden" name="back" value="?{{ request.GET.urlencode }}">
-                    <button type="submit" class="btn btn-sm btn-outline-danger" title="تعطيل الجهة">
-                      <i class="bi bi-archive"></i>
+                    <button type="submit" class="en-icon-btn is-danger" title="تعطيل الجهة" aria-label="تعطيل {{ e.name }}">
+                      <i class="bi bi-archive" aria-hidden="true"></i>
                     </button>
                   </form>
                   {% endif %}
@@ -335,8 +341,8 @@
             </tr>
             {% empty %}
             <tr class="empty-state-row">
-              <td colspan="8" class="text-center text-muted">
-                <i class="bi bi-inbox" style="font-size: 3rem; color: #cbd5e1;"></i>
+              <td colspan="6" class="text-center text-muted">
+                <i class="bi bi-inbox en-empty-icon" aria-hidden="true"></i>
                 {% if search_q %}
                   <h6 class="mt-3 mb-1">لا جهات تطابق «{{ search_q }}»</h6>
                   <p class="small mb-0">جرّب كلمة بحث أخرى أو امسح البحث</p>
@@ -345,7 +351,7 @@
                   <p class="small mb-0">لم تُعطَّل أي جهة بعد</p>
                 {% else %}
                   <h6 class="mt-3 mb-1">لا توجد جهات مسجلة</h6>
-                  <p class="small mb-0">ابدأ بإضافة جهة جديدة من الزر أعلاه</p>
+                  <p class="small mb-0"><a href="{% url 'entity_create' %}" data-bs-toggle="modal" data-bs-target="#entityCreateModal">سجّل أوّل جهة</a></p>
                 {% endif %}
               </td>
             </tr>
@@ -361,7 +367,7 @@
       <div class="col-lg-4 col-md-6 entity-item animate-fade-in" data-entity-type="{{ e.etype }}" data-entity-name="{{ e.name|lower }}" data-entity-code="{{ e.code|default:''|lower }}" data-entity-email="{{ e.email|default:''|lower }}">
         <div class="entity-card p-3">
           <div class="d-flex align-items-start mb-3">
-            <input type="checkbox" form="entitiesForm" class="form-check-input row-check me-3 mt-1" name="selected" value="{{ e.id }}" style="width: 20px; height: 20px; cursor: pointer;">
+            <input type="checkbox" form="entitiesForm" class="form-check-input row-check me-3 mt-1" name="selected" value="{{ e.id }}" aria-label="تحديد {{ e.name }}">
             <div class="entity-icon me-3">
               {% if e.issued_count and not e.received_count %}
                 <i class="bi bi-send-fill text-warning"></i>
@@ -372,7 +378,7 @@
               {% endif %}
             </div>
             <div class="flex-grow-1">
-              <h6 class="fw-bold mb-2" style="font-size: 1.1rem;"><a href="{% url 'entity_detail' e.id %}" class="text-decoration-none text-dark">{{ e.name }}</a></h6>
+              <h6 class="en-card-name"><a href="{% url 'entity_detail' e.id %}" class="text-decoration-none text-dark">{{ e.name }}</a></h6>
               {% if not kind_filter %}<div class="text-muted small mb-2"><i class="bi bi-folder2" aria-hidden="true"></i> {{ e.get_kind_display }}</div>{% endif %}
               {% if e.code %}
               <div class="entity-code mb-2">
@@ -449,9 +455,106 @@
 
   </div>
 </div>
+
+{% if create_form %}
+{% comment %}
+  حواريّةُ «جهة جديدة» (مراجعةُ 2026‑10‑12): كانت الإضافةُ صفحةً منفصلةً بأحد
+  عشر حقلاً تُضيّع المرشِّح، ولا تقول إن كان الاسمُ مسجّلاً — والتكرارُ أكثرُ
+  أخطاء الدليل. الآن:
+  · **الاسمُ يُفحص وأنت تكتب** (`entity_name_check`) — المشابهُ يظهر بحالته
+    (نشطة/معطّلة/مدموجة) ورابطه، فتُفتح القائمةُ بدل تسجيل نسخةٍ ثانية.
+  · **التبويبُ بطاقاتٌ بتلميحها** والمقترحُ من الاسم موسومٌ «مقترح» — ولا بطاقةَ
+    مختارةً بلا سكربت: الحقلُ الفارغ يملؤه الخادمُ بالاقتراح نفسِه.
+  · **الضروريُّ أوّلاً**: الاسمُ والتبويبُ؛ التواصلُ مطويٌّ اختياريّ. والتفاصيلُ
+    الباقيةُ (العنوان، النسخة، الإشعارات) في صفحة التعديل بعد الحفظ.
+{% endcomment %}
+<div class="modal fade en-modal" id="entityCreateModal" tabindex="-1" aria-labelledby="entityCreateTitle" aria-hidden="true"
+     data-check-url="{% url 'entity_name_check' %}">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <form class="modal-content" method="post" action="{% url 'entity_create' %}?next={{ request.get_full_path|urlencode }}"
+          id="entityCreateForm" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <div class="modal-header">
+        <div class="en-modal-icon" aria-hidden="true"><i class="bi bi-building-add"></i></div>
+        <div>
+          <h5 class="modal-title" id="entityCreateTitle">جهة جديدة</h5>
+          <p class="en-modal-sub">سجّلها مرّةً واحدة — يتحقّق النظامُ من التكرار وأنت تكتب.</p>
+        </div>
+        <button type="button" class="btn-close ms-0 me-auto" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="en-field">
+          <label for="ecName" class="form-label">اسم الجهة <span class="en-req" aria-hidden="true">*</span></label>
+          <input type="text" class="form-control form-control-lg" id="ecName" name="name" required maxlength="255"
+                 autocomplete="off" spellcheck="false" placeholder="مثال: وزارة النفط / الدائرة القانونية…"
+                 aria-describedby="ecNameStatus">
+          <div class="en-namecheck" id="ecNameStatus" aria-live="polite"></div>
+          <ul class="en-similar" id="ecSimilar" hidden aria-label="جهات مشابهة"></ul>
+        </div>
+
+        <fieldset class="en-field">
+          <legend class="form-label">التبويب</legend>
+          <div class="en-kindpick" role="radiogroup">
+            {% for t in kind_tabs %}
+            <label class="en-kindopt en-kind--{{ t.key }}">
+              <input type="radio" name="kind" value="{{ t.key }}">
+              <span class="en-kindopt-body">
+                <span class="en-kindopt-name">{{ t.label }}<span class="en-suggested" hidden>مقترح</span></span>
+                <span class="en-kindopt-hint">{{ t.hint }}</span>
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="en-help">يُقترح التبويبُ من الاسم؛ اختر غيرَه إن لم يُصب. يمكن تغييرُه لاحقاً.</div>
+        </fieldset>
+
+        <div class="en-field">
+          <label for="ecCode" class="form-label">الرمز <span class="en-optional">اختياري</span></label>
+          <input type="text" class="form-control" id="ecCode" name="code" maxlength="50" autocomplete="off"
+                 placeholder="مثل: ش4">
+        </div>
+
+        <details class="en-more">
+          <summary><i class="bi bi-chevron-down" aria-hidden="true"></i>بيانات التواصل <span class="en-optional">اختياري</span></summary>
+          <div class="en-more-grid">
+            <div>
+              <label for="ecEmail" class="form-label">البريد الإلكتروني</label>
+              <input type="email" class="form-control" id="ecEmail" name="email" dir="ltr" autocomplete="off"
+                     spellcheck="false" placeholder="name@example.gov.iq">
+            </div>
+            <div>
+              <label for="ecPhone" class="form-label">الهاتف</label>
+              <input type="tel" class="form-control" id="ecPhone" name="phone" maxlength="50" dir="ltr" inputmode="tel" autocomplete="off">
+            </div>
+            <div class="en-more-wide">
+              <label for="ecContact" class="form-label">الشخص المسؤول</label>
+              <input type="text" class="form-control" id="ecContact" name="contact_person" maxlength="100" autocomplete="off">
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="modal-footer">
+        <a class="en-link-muted me-auto" href="{% url 'entity_create' %}?next={{ request.get_full_path|urlencode }}">
+          <i class="bi bi-box-arrow-up-left" aria-hidden="true"></i>النموذجُ الكامل
+        </a>
+        <button type="button" class="btn en-btn-ghost" data-bs-dismiss="modal">إلغاء</button>
+        <button type="submit" class="btn en-btn-primary" id="ecSubmit">
+          <span class="spinner-border spinner-border-sm en-submit-spinner" aria-hidden="true" hidden></span>
+          <i class="bi bi-check2 en-submit-icon" aria-hidden="true"></i>
+          <span>حفظ الجهة</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/entity_list.js' %}?v=20261008"></script>
-<script src="{% static 'js/member_picker.js' %}?v=20260831"></script>
+<script src="{% static 'js/entity_list.js' %}?v=20261012d"></script>
+<script src="{% static 'js/member_picker.js' %}?v=20261012a"></script>
 {% endblock %}

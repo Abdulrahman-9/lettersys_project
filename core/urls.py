@@ -142,6 +142,7 @@ urlpatterns = [
     path("entities/merge/", views.entity_merge, name="entity_merge"),
     path("entities/<int:pk>/", views.entity_detail, name="entity_detail"),
     path("entities/new/", views.entity_create, name="entity_create"),
+    path("entities/check/", views.entity_name_check, name="entity_name_check"),
     path("entities/<int:pk>/edit/", views.entity_edit, name="entity_edit"),
     path("entities/<int:pk>/delete/", views.entity_delete, name="entity_delete"),
     path("entities/bulk-delete/", views.entity_bulk_delete, name="entity_bulk_delete"),

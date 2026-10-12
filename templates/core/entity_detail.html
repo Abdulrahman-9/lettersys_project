@@ -41,21 +41,6 @@
   الصفحةُ لكلّ موظّف (من رقاقة جهةٍ في ملفّ الكتاب)، والدليلُ وتعديلُه لإدارة النظام
   (`staff_required`) — فالرابطان لمن يفتحهما (`nav.admin`)، لا 403 (تدقيقُ 2026‑10‑08).
 {% endcomment %}
-{% if nav.admin %}
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">إجراءات</div>
-  <div class="app-context-list">
-    <a class="app-context-link" href="{% url 'entity_list' %}">
-      <span>العودة للقائمة</span>
-      <i class="bi bi-arrow-right"></i>
-    </a>
-    <a class="app-context-link" href="{% url 'entity_edit' entity.pk %}?next={% url 'entity_detail' entity.pk %}">
-      <span>تعديل الجهة</span>
-      <i class="bi bi-pencil-square"></i>
-    </a>
-  </div>
-</div>
-{% endif %}
 {% endblock %}
 
 {% block content %}

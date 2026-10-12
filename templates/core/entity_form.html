@@ -79,7 +79,7 @@
           {% endif %}
 
           <form method="post" novalidate class="row g-3">
-            {% if request.GET.next %}<input type="hidden" name="next" value="{{ request.GET.next }}">{% endif %}
+            {% with nxt=request.POST.next|default:request.GET.next %}{% if nxt %}<input type="hidden" name="next" value="{{ nxt }}">{% endif %}{% endwith %}
             {% csrf_token %}
             <div class="col-md-6 col-sm-12">
               <label class="form-label fw-semibold" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>

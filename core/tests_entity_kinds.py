@@ -115,6 +115,55 @@ class EntityFormKindTests(TestCase):
         self.assertEqual(sorted(k for k, _ in Entity.KIND_CHOICES), sorted(KINDS))
 
 
+class EntityNameCheckTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            'entity_check_staff', password='pw-entity-check-111', is_staff=True
+        )
+        self.client.force_login(self.staff)
+        self.active = Entity.objects.create(name='وزارة النفط')
+        self.inactive = Entity.objects.create(name='هيئة قديمة', is_active=False)
+        self.merged = Entity.objects.create(
+            name='مؤسسة مدموجة', is_active=False, merged_into=self.active
+        )
+
+    def check(self, name):
+        return self.client.get(reverse('entity_name_check'), {'name': name})
+
+    def test_name_check_returns_exact_active_match(self):
+        response = self.check(self.active.name)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['exact']['status'], 'active')
+        self.assertEqual(response.json()['exact']['id'], self.active.pk)
+
+    def test_name_check_flags_inactive_and_merged_names(self):
+        inactive = self.check(self.inactive.name).json()['exact']
+        merged = self.check(self.merged.name).json()['exact']
+        self.assertEqual(inactive['status'], 'inactive')
+        self.assertEqual(merged['status'], 'merged')
+        self.assertEqual(merged['merged_into']['id'], self.active.pk)
+
+    def test_short_name_skips_search(self):
+        self.assertEqual(self.check('س').json()['matches'], [])
+
+    def test_create_modal_and_entities_table_show_review_fields(self):
+        response = self.client.get(reverse('entity_list'))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode('utf-8')
+        self.assertIn('id="entityCreateModal"', html)
+        self.assertIn('data-check-url=', html)
+        self.assertIn('آخرُ كتاب', html)
+        self.assertIn('الحركة', html)
+        self.assertIn('href="%s"' % reverse('dossier_detail', args=[self.active.pk]), html)
+
+    def test_sort_new_puts_recently_created_entities_first(self):
+        older = Entity.objects.create(name='جهة أقدم')
+        recent = Entity.objects.create(name='جهة أحدث')
+        response = self.client.get(reverse('entity_list'), {'sort': 'new'})
+        html = response.content.decode('utf-8')
+        self.assertLess(html.index(recent.name), html.index(older.name))
+
+
 class ExtractionNewEntityTests(TestCase):
     """جهةٌ تُكتب في صفحة الاستخراج — مراجعة 2026‑10‑12."""
 

@@ -155,7 +155,7 @@
 
       <div class="mb-3">
         <label class="form-label" style="font-size:.82rem;font-weight:700">الأعضاء</label>
-        <div class="en-picker" data-member-picker>
+        <div class="en-picker" data-member-picker data-rule-select="#grpRule">
           <input type="search" class="en-picker-search" data-picker-search
                  placeholder="ابحث بالاسم أو الرمز…" aria-label="تصفية الأعضاء">
           <div class="en-picker-list" data-picker-list>
@@ -171,8 +171,8 @@
           </div>
           <div class="en-picker-count" data-picker-count></div>
         </div>
-        <div class="form-text" style="font-size:.74rem">
-          تُهمَل إن اخترتَ قاعدةً ديناميكيّة.
+        <div class="form-text en-picker-rule-status" data-picker-rule-status role="status" aria-live="polite">
+          اختَر الأعضاء يدوياً، أو حدّد قاعدةً ديناميكيّة لتُدار العضويّة تلقائيّاً.
         </div>
       </div>
 

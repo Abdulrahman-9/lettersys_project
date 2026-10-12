@@ -54,6 +54,7 @@ from .notifications import (
 # استيراد معالجات الجهات
 from .entities import (
     entity_list_api,
+    entity_name_check,
     entity_list,
     entity_detail,
     entity_create,
