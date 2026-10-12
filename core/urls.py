@@ -86,7 +86,6 @@ urlpatterns = [
     path("desk/", queues.desk_board, name="desk_board"),
     path("desk/book/<int:book_id>/referral/<int:referral_id>/cancel/",
          queues.cancel_desk_referral, name="desk_cancel_referral"),
-    path("desk/archive/", queues.archive_desk, name="archive_desk"),
     path("my/today/", queues.my_today, name="my_today"),
     path("desk/handover/", desk.desk_handover, name="desk_handover"),
     path("desk/ledger/", desk.desk_ledger, name="desk_ledger"),

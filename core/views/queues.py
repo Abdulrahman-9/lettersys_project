@@ -29,8 +29,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from core.models import Attachment, Book, BookHistory, BookReferral, CustodyEvent
-from core.scoping import (ACCESS_STUB, STUB_TITLE, can_archive, can_use_desk,
+from core.models import Book, BookHistory, BookReferral, CustodyEvent
+from core.scoping import (ACCESS_STUB, STUB_TITLE, can_use_desk,
                           is_privileged, scope_books_for, scope_referrals_for,
                           secret_access, subtree_ids, user_department_id)
 
@@ -136,11 +136,6 @@ def _row(referral, user):
                   purpose_label=referral.get_purpose_display(),
                   overdue=bool(referral.due_date
                                and referral.due_date < timezone.localdate()))
-
-
-def _book_row(book, user):
-    """صفُّ كتابٍ — لا إحالةَ خلفه، فلا هدفَ ولا موعد."""
-    return _shape(book, user)
 
 
 def _custody_row(moment, user):
@@ -274,67 +269,6 @@ def cancel_desk_referral(request, book_id, referral_id):
     else:
         messages.success(request, 'أُلغي التفريق مع الاحتفاظ بسجله الزمني.')
     return redirect(reverse('desk_board') + '#recent-books')
-
-
-@login_required
-def archive_desk(request):
-    """طاولةُ الأرشفة — أسئلةُ الأرشيفيّ اليوميّة، **مبنيّةً على المقيس**.
-
-    الخطّةُ اقترحت خمسةَ طوابير، وقياسُ القاعدة الحيّة أسقط ثلاثةً منها:
-
-    - «مرفقٌ بلا نصّ» = 13,148 صفّاً — **تقريرُ إرثٍ لا طابورُ عمل**: 13,037
-      منها مرفقاتُ استيرادٍ جُمليّ، وتغطيةُ المسار الحيّ 19/19 = 100%.
-    - «مسحٌ حديثٌ بلا نصّ» = 2,060 — كاذب: ``uploaded_at`` على صفوف الإرث هو
-      **وقتُ تشغيل سكربت الاستيراد** لا وقتُ المسح (قمّتا مايو 11,007 وآب 2,060).
-    - «عهدةٌ خارجة» طابورُ مختصّ البريد بأسماءٍ أخرى (``undelivered``)، وطابورُ
-      الأرشيفيّ الحقيقيُّ يحتاج حدثَ خروجٍ لم يكن معرَّفاً حين كُتبت الخطّة.
-
-    فكلُّ استعلامٍ هنا يحمل ``source_ref=''`` و``is_training=False``: بدونهما
-    يولد الطابورُ بـ13 ألف صفٍّ لا يُغلقها عملُ إنسان — وطابورٌ لا يُفرَغ يُهجَر
-    في أسبوع، فيصير الدورُ بلا أداة.
-    """
-    if not can_archive(request.user):
-        raise PermissionDenied('طاولةُ الأرشفة لمسؤول الأرشفة ومدير النظام.')
-
-    user = request.user
-    mine = scope_books_for(user, Book.objects.all())
-    #: الحيُّ وحدَه: المنقولُ من الورق دخل بالجملة ولم يمرّ بيدِ أرشيفيّ.
-    live = mine.filter(source_ref='', is_training=False)
-    #: قُيِّد ولم يُوجَّه — لا صفَّ إحالةٍ له: نُسيت الجهاتُ المستلِمة أو لم يُهمَّش بعد.
-    never_moved = live.filter(referrals__isnull=True)
-    #: قيدٌ بلا مسح: لا مرفقَ يُحفظ. (لا ``attachments__isnull`` — الضمُّ لا يمرّ
-    #: بمدير، فكتابٌ مرفقُه الوحيدُ محذوفٌ ناعماً كان يختفي من الطابور بدل أن يظهر.)
-    no_file = live.exclude(pk__in=Attachment.objects.values('book_id'))
-    completed_followups = live.filter(
-        due_date__isnull=False, is_archived=True,
-    ).order_by('-updated_at', '-pk')
-    completed_referrals = BookReferral.objects.filter(
-        book__in=live, status=BookReferral.DONE,
-    ).order_by('-created_at', '-pk')
-    # (قراراتُ الدورة §6) الإنجازُ هنا حالةُ متابعة/إحالة لا علامةُ رفّ؛
-    # الأرشفةُ في الأضابير تلقائيّة ولا يُطلب تأكيدٌ ورقيّ.
-    queues = [
-        {'key': 'idle', 'label': 'قُيِّد ولم يُوجَّه', 'tone': 'warn',
-         'hint': 'دخل الدفترَ بلا جهةٍ مستلِمة — لم يذهب إلى أضبارة أحد',
-         **_queue(never_moved, user, limit=_limit_for(request, 'idle'), row=_book_row, select=())},
-        {'key': 'nofile', 'label': 'بلا مرفق', 'tone': 'accent',
-         'hint': 'قيدٌ بلا مسح — لا ورقةَ في الأضبارة',
-         **_queue(no_file, user, limit=_limit_for(request, 'nofile'), row=_book_row, select=())},
-        {'key': 'completed_followups', 'label': 'متابعات أُنجزت', 'tone': 'done',
-         'hint': 'متابعات أُغلقت فعلياً — لا تعني موضع حفظ ورقيّاً',
-         **_queue(completed_followups, user,
-                  limit=_limit_for(request, 'completed_followups'),
-                  row=_book_row, select=())},
-        {'key': 'completed_referrals', 'label': 'إحالات أُنجزت', 'tone': 'done',
-         'hint': 'مهام الوحدات التي أُشير إلى إنجازها',
-         **_queue(completed_referrals, user,
-                  limit=_limit_for(request, 'completed_referrals'))},
-    ]
-    return render(request, 'core/archive_desk.html', {
-        'queues': queues,
-        'today': timezone.localdate(),
-        'legacy_total': mine.exclude(source_ref='').count(),
-    })
 
 
 @login_required

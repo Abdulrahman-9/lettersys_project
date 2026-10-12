@@ -126,12 +126,6 @@
               <span>طاولة الوارد</span>
             </a>
             {% endif %}
-            {% if nav.archive %}
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'archive_desk' %} active{% endif %}" href="{% url 'archive_desk' %}" title="طاولة الأرشفة">
-              <i class="bi bi-archive"></i>
-              <span>طاولة الأرشفة</span>
-            </a>
-            {% endif %}
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' %} active{% endif %}" href="{% url 'book_unified' %}" title="قائمة الكتب">
               <i class="bi bi-list-ul"></i>
               <span>قائمة الكتب</span>
