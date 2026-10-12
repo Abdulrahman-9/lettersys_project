@@ -10,8 +10,11 @@
 يسقط لحظةَ يُنسى أحدُهما — قبل أن يفتح الأرشيفيُّ طاولةً بـ13 ألف صفّ.
 """
 
+from datetime import timedelta
+
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
+from django.utils import timezone
 
 from core.models import (Attachment, Book, BookReferral, CustodyEvent,
                          Department, UserProfile)
@@ -113,8 +116,35 @@ class ArchiveDeskQueueTests(TestCase):
 
         queues = self._queues()
 
-        for key in ('idle', 'nofile'):
+        for key in ('idle', 'nofile', 'completed_followups', 'completed_referrals'):
             self.assertEqual(queues[key]['total'], 0, key)
+
+    def test_completed_referrals_are_visible_as_completed_work(self):
+        book = self._book('9913')
+        referral = BookReferral.objects.create(
+            book=book, from_department=self.dept, to_department=self.dept,
+            status=BookReferral.DONE, created_by=self.archivist,
+        )
+
+        queue = self._queues()['completed_referrals']
+
+        self.assertEqual(queue['total'], 1)
+        self.assertEqual(queue['rows'][0]['referral'], referral)
+        self.assertEqual(queue['rows'][0]['status_label'], 'منجَز')
+
+    def test_completed_followups_are_not_confused_with_books_without_followup(self):
+        book = self._book('9914', due_date=timezone.localdate() - timedelta(days=1))
+        Book.objects.filter(pk=book.pk).update(is_archived=True)
+        no_followup = self._book('9915')
+
+        queues = self._queues()
+
+        self.assertEqual(queues['completed_followups']['total'], 1)
+        self.assertEqual(queues['completed_followups']['rows'][0]['book'], book)
+        self.assertNotIn(
+            no_followup,
+            [row['book'] for row in queues['completed_followups']['rows']],
+        )
 
     def test_the_legacy_backlog_is_stated_not_counted_as_work(self):
         """يُذكر سطراً — فلا الطاولةُ تكذب بالفراغ ولا تغرق بالإرث."""

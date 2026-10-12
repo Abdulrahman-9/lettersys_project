@@ -24,6 +24,8 @@
         </a>
         <span class="qb-meta">
           {% if r.meta_label %}<span class="qb-to">{{ r.meta_label }}</span>{% endif %}
+          {% if r.status_label %}<span class="qb-status qb-status--{{ r.referral.status }}">{{ r.status_label }}</span>{% endif %}
+          {% if r.purpose_label %}<span class="qb-purpose">{{ r.purpose_label }}</span>{% endif %}
           {% if r.meta_date %}<time datetime="{{ r.meta_date|date:'Y-m-d' }}">{{ r.meta_date|date:"d/m/Y" }}</time>{% endif %}
         </span>
       </li>

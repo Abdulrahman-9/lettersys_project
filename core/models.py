@@ -932,6 +932,7 @@ class BookHistory(models.Model):
         ('referral-received',  'استلام الإحالة'),
         ('referral-done',      'إنجاز الإحالة'),
         ('referral-returned',  'إعادة الإحالة'),
+        ('referral-cancelled', 'إلغاء التفريق'),
         ('reminder',           'تنبيه'),
         # ── العهدة (CustodyEvent) ──
         ('custody',            'انتقال عهدة'),
@@ -2010,11 +2011,13 @@ class BookReferral(models.Model):
     RECEIVED = 'received'
     DONE = 'done'
     RETURNED = 'returned'
+    CANCELLED = 'cancelled'
     STATUS_CHOICES = (
         (SENT,     'مُرسَل'),
         (RECEIVED, 'مستلَم'),
         (DONE,     'منجَز'),
         (RETURNED, 'مُعاد'),
+        (CANCELLED, 'ملغى'),
     )
     #: الحالاتُ التي ما زال الصفُّ فيها التزاماً مفتوحاً يُطارَد.
     OPEN_STATUSES = (SENT, RECEIVED)

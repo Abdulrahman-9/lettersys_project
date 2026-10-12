@@ -16,7 +16,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 
 from .. import numbering
-from ..scoping import can_manage_accounts
+from ..scoping import can_manage_accounts, can_manage_mail
 
 
 def apply_search_filters(queryset, search_text):
@@ -255,3 +255,8 @@ def privileged_required(view_func):
     (403 داخل القشرة للداخل، وتحويلٌ إلى الدخول لغيره)، والمسندُ
     ``scoping.can_manage_accounts`` — مديرُ النظام وحدَه، كلوحة الإدارة."""
     return _guarded(view_func, can_manage_accounts, 'هذه الصفحةُ لمدير النظام.')
+
+
+def mail_manager_required(view_func):
+    """حارسُ إدارة البريد: مسؤول البريد أو موظّف الإدارة أو مدير النظام."""
+    return _guarded(view_func, can_manage_mail, 'هذه الصفحةُ لمسؤول البريد.')

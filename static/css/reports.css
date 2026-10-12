@@ -22,7 +22,7 @@
   --rx-r-ctl: 10px;
   color: var(--rx-ink);
   padding: 28px 32px 56px;
-  max-width: 1200px;
+  max-width: 1520px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -276,7 +276,7 @@
   .rx-applied { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 9pt; color: #444; }
   .rx-head { padding-bottom: 10px; }
   .rx-title { font-size: 18pt; }
-  .rx-states { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  nav.rx-states { display: grid !important; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   .rx-state { min-height: 0; padding: 8px 10px; }
   .rx-state-num { font-size: 20pt; }
   .rx-state.is-on { box-shadow: none; border-width: 2px; }

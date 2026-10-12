@@ -186,7 +186,9 @@ def api_compose(request):
 @rate_limit('inbox_sync', max_attempts=5, window_seconds=60, by='user')
 def api_inbox_sync(request):
     """Trigger IMAP sync immediately and return stats."""
-    if not request.user.is_staff:
+    from core.scoping import can_manage_mail
+
+    if not can_manage_mail(request.user):
         return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
     try:
         from core.messaging.engines.imap import sync_inbox
@@ -397,7 +399,9 @@ def api_test_smtp(request):
     لا محدِّد معدّل هنا عمداً: النقطة الأصلية تحمله بنفس المفتاح، فكان وجوده في
     الطرفين يستهلك محاولتين لكل نقرة واحدة ويُنفِد الحصّة قبل أوانها.
     """
-    if not request.user.is_staff:
+    from core.scoping import can_manage_mail
+
+    if not can_manage_mail(request.user):
         return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
     from core.messaging.api.email_endpoints import test_smtp
     return test_smtp(request)
@@ -411,7 +415,9 @@ def api_test_smtp(request):
 @require_http_methods(['POST'])
 @rate_limit('test_imap', max_attempts=20, window_seconds=300, by='user')
 def api_test_imap(request):
-    if not request.user.is_staff:
+    from core.scoping import can_manage_mail
+
+    if not can_manage_mail(request.user):
         return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
     from core.models import EmailSettings
     from core.messaging.engines.imap import test_imap_connection

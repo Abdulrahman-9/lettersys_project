@@ -110,7 +110,18 @@ def api_referral_action(request, pk, referral_id):
     except PermissionDenied as exc:
         return _denied(exc)
 
-    return JsonResponse({'success': True, 'status': referral.get_status_display()})
+    messages = {
+        'activate': 'فُعِّلت المتابعة.',
+        'received': 'سُجِّل وصول الإحالة.',
+        'done': 'أُغلقت الإحالة على أنها منجزة.',
+        'returned': 'أُغلقت الإحالة على أنها معادة.',
+        'remind': 'أُرسل التنبيه إلى الوحدة.',
+    }
+    return JsonResponse({
+        'success': True,
+        'status': referral.get_status_display(),
+        'message': messages[data.get('act')],
+    })
 
 
 @login_required

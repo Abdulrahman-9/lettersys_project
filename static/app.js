@@ -641,6 +641,10 @@ window.LetterSystem = {
 // 10. PWA - Service Worker Registration
 // ================================
 
+let updateRegistration = null;
+let updatePromptShown = false;
+let updateInProgress = false;
+
 /**
  * تسجيل Service Worker لتفعيل PWA
  */
@@ -652,10 +656,16 @@ if ('serviceWorker' in navigator) {
       });
       
       console.log('✅ Service Worker registered successfully:', registration.scope);
+      updateRegistration = registration;
+
+      if (registration.waiting) {
+        showUpdateNotification();
+      }
       
       // التحقق من التحديثات
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
+        if (!newWorker) return;
         
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
@@ -1613,18 +1623,13 @@ document.addEventListener('DOMContentLoaded', function(){
 function initUpdateNotification() {
   if (!('serviceWorker' in navigator)) return;
 
-  // Listen for update messages from service worker
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data.type === 'UPDATE_AVAILABLE') {
-      showUpdatePrompt();
-    }
-  });
-
   // Check for updates periodically (every 10 minutes)
   setInterval(() => {
     navigator.serviceWorker.getRegistrations().then((registrations) => {
       registrations.forEach((registration) => {
-        registration.update();
+        registration.update().catch((error) => {
+          console.error('تعذّر التحقق من تحديث التطبيق:', error);
+        });
       });
     });
   }, 10 * 60 * 1000);
@@ -1632,9 +1637,14 @@ function initUpdateNotification() {
   // Check for updates when page becomes visible
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
+      if (updateRegistration?.waiting) {
+        showUpdatePrompt();
+      }
       navigator.serviceWorker.getRegistrations().then((registrations) => {
         registrations.forEach((registration) => {
-          registration.update();
+          registration.update().catch((error) => {
+            console.error('تعذّر التحقق من تحديث التطبيق:', error);
+          });
         });
       });
     }
@@ -1642,7 +1652,15 @@ function initUpdateNotification() {
 }
 
 function showUpdatePrompt() {
-  if (!window.ToastCenter) {
+  if (updatePromptShown || updateInProgress) return;
+  updatePromptShown = true;
+
+  if (!window.ToastCenter || typeof window.ToastCenter.action !== 'function') {
+    if (window.confirm('تحديث متوفر\n\nنسخة جديدة من التطبيق متاحة الآن. هل تريد التحديث الآن؟')) {
+      performUpdate();
+    } else {
+      updatePromptShown = false;
+    }
     return;
   }
 
@@ -1657,6 +1675,9 @@ function showUpdatePrompt() {
     {
       label: 'لاحقاً',
       className: 'btn btn-sm btn-outline-secondary',
+      onClick: function() {
+        updatePromptShown = false;
+      },
     }
   ], {
     title: 'تحديث متوفر',
@@ -1664,43 +1685,52 @@ function showUpdatePrompt() {
     iconToneClass: 'text-primary',
     delay: 0,
     autohide: false,
+    onHidden: function() {
+      updatePromptShown = false;
+    },
   });
 
-  if (!promptToast && window.confirm('تحديث متوفر\n\nنسخة جديدة من التطبيق متاحة الآن. هل تريد التحديث الآن؟')) {
-    performUpdate();
+  if (!promptToast) {
+    updatePromptShown = false;
+    if (window.confirm('تحديث متوفر\n\nنسخة جديدة من التطبيق متاحة الآن. هل تريد التحديث الآن؟')) {
+      performUpdate();
+    }
   }
 }
 
-function performUpdate() {
-  // Show loading toast
-  ToastCenter.show('info', 'جاري تحديث التطبيق... يرجى الانتظار');
-  
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    registrations.forEach((registration) => {
-      if (registration.waiting) {
-        // Send message to waiting service worker to activate immediately
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        
-        // Listen for the controlled event to reload
-        let refreshing = false;
-        navigator.serviceWorker.oncontrollerchange = () => {
-          if (!refreshing) {
-            refreshing = true;
-            // Small delay for visual feedback
-            setTimeout(() => {
-              window.location.reload();
-            }, 1000);
-          }
-        };
-      } else if (registration.installing) {
-        // If still installing, wait for it to become waiting
-        registration.installing.addEventListener('statechange', () => {
-          if (registration.waiting && !navigator.serviceWorker.controller) {
-            performUpdate();
-          }
-        });
-      }
-    });
-  });
-}
+async function performUpdate() {
+  if (updateInProgress) return;
+  updateInProgress = true;
+  updatePromptShown = false;
 
+  if (window.ToastCenter && typeof window.ToastCenter.show === 'function') {
+    window.ToastCenter.show('info', 'جاري تحديث التطبيق... يرجى الانتظار');
+  }
+
+  try {
+    const registration = updateRegistration || await navigator.serviceWorker.ready;
+    const waitingWorker = registration.waiting;
+    if (!waitingWorker) {
+      updateInProgress = false;
+      if (window.ToastCenter && typeof window.ToastCenter.show === 'function') {
+        window.ToastCenter.show('warning', 'التحديث لم يعد متاحاً. أعد تحميل الصفحة للتحقق من النسخة الحالية.');
+      }
+      return;
+    }
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    }, { once: true });
+
+    waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+  } catch (error) {
+    updateInProgress = false;
+    console.error('تعذّر تحديث التطبيق:', error);
+    if (window.ToastCenter && typeof window.ToastCenter.show === 'function') {
+      window.ToastCenter.show('error', 'تعذّر تحديث التطبيق. أعد تحميل الصفحة وحاول مرة أخرى.');
+    }
+  }
+}

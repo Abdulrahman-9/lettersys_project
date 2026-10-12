@@ -152,6 +152,23 @@ def mark_returned(referral, *, by, note=''):
                     detail + (' — ' + note if note else ''))
 
 
+def cancel_referral(referral, *, by, note=''):
+    """إلغاءُ تفريقٍ لم يُستلم بعد — إغلاقٌ محفوظٌ لا حذفٌ للسجلّ."""
+    from core.models import BookReferral
+
+    if referral.status != BookReferral.SENT:
+        raise ValidationError('لا يُلغى التفريق بعد الاستلام؛ أَعِد الإحالة من الوحدة المستقبِلة.')
+    _guard_chaser(referral, by)
+
+    with transaction.atomic():
+        referral.status = BookReferral.CANCELLED
+        referral.save(update_fields=['status'])
+        detail = 'أُلغي التفريق إلى «%s»' % referral.target_name
+        _record(referral.book, 'referral-cancelled',
+                by, detail + (' — ' + note if note else ''))
+    return referral
+
+
 def send_reminder(referral, *, by):
     """تنبيهٌ على وحدةٍ تأخّرت — «موظّفُ البريد يستطيع التنبيه على الوحدة».
 

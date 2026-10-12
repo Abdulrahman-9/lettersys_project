@@ -20,7 +20,7 @@
       </p>
     </div>
     <div class="ms-auto d-flex gap-2">
-      <span class="ns-status-chip" id="dbStatusChip">
+      <span class="ns-status-chip" id="dbStatusChip" role="status" aria-live="polite">
         <span class="ns-dot"></span> جارٍ الفحص…
       </span>
     </div>
@@ -32,7 +32,7 @@
       <div class="ns-stat-card">
         <div class="ns-stat-icon text-primary"><i class="bi bi-hdd-network"></i></div>
         <div>
-          <div class="ns-stat-label">قاعدة البيانات الحالية</div>
+          <div class="ns-stat-label">عنوان قاعدة البيانات المضبوط</div>
           <div class="ns-stat-value" id="currentDbHost">{{ current_db_host }}</div>
         </div>
       </div>
@@ -41,8 +41,8 @@
       <div class="ns-stat-card">
         <div class="ns-stat-icon text-success"><i class="bi bi-people"></i></div>
         <div>
-          <div class="ns-stat-label">المستخدمون النشطون</div>
-          <div class="ns-stat-value" id="activeUsersCount">{{ active_users }}</div>
+          <div class="ns-stat-label">جلسات لم تنتهِ صلاحيتها</div>
+          <div class="ns-stat-value" id="activeSessionsCount">{{ active_sessions }}</div>
         </div>
       </div>
     </div>
@@ -50,9 +50,9 @@
       <div class="ns-stat-card">
         <div class="ns-stat-icon text-warning"><i class="bi bi-shield-lock"></i></div>
         <div>
-          <div class="ns-stat-label">أمان العدادات</div>
-          <div class="ns-stat-value" style="font-size:.82rem;">لا يتكرّر رقم ✓</div>
-          <div class="text-muted" style="font-size:.75rem;">رقمان لا يُعطَيان لاثنين ولو حفظا في اللحظة نفسها</div>
+          <div class="ns-stat-label">نمط هذا الجهاز</div>
+          <div class="ns-stat-value" style="font-size:.82rem;">{{ cfg.get_role_display }}</div>
+          <div class="text-muted" style="font-size:.75rem;">الدور المحفوظ في إعدادات الشبكة</div>
         </div>
       </div>
     </div>
@@ -298,6 +298,7 @@
         </button>
       </div>
     </div>
+    <div id="pingAllResult" class="px-3 pt-2" role="status" aria-live="polite" hidden></div>
     <div class="ns-section-body p-0">
 
       {# نموذج الإضافة اليدوية #}
@@ -353,14 +354,14 @@
             {% for node in nodes %}
             <tr data-node-id="{{ node.pk }}">
               <td>
-                {% if node.is_current %}
+                {% if node.pk == current_node_id %}
                   <i class="bi bi-pc-display text-primary" title="هذا الجهاز"></i>
                 {% else %}
                   <i class="bi bi-display text-muted"></i>
                 {% endif %}
               </td>
               <td>{{ node.name }}
-                {% if node.is_current %}
+                {% if node.pk == current_node_id %}
                   <span class="badge bg-primary ms-1" style="font-size:.7rem;">أنا</span>
                 {% endif %}
               </td>
@@ -373,7 +374,11 @@
                 {% endif %}
               </td>
               <td>
-                {% if node.is_online %}
+                {% if node.pk == current_node_id %}
+                  <span class="ns-online-dot"></span> متصل
+                {% elif node.pk in stale_node_ids %}
+                  <span class="text-muted"><i class="bi bi-question-circle me-1"></i>غير محدّث</span>
+                {% elif node.is_online %}
                   <span class="ns-online-dot"></span> متصل
                 {% else %}
                   <span class="ns-offline-dot"></span> غير متصل
@@ -390,7 +395,7 @@
                 {% else %}—{% endif %}
               </td>
               <td>
-                {% if not node.is_current %}
+                {% if node.pk != current_node_id %}
                 <button class="btn btn-xs ns-btn-delete" data-node-id="{{ node.pk }}"
                         title="حذف من السجل">
                   <i class="bi bi-trash3"></i>
@@ -773,7 +778,7 @@ window.NS_CFG = {
   localIp:    "{{ local_ip }}",
 };
 </script>
-<script src="{% static 'network_settings.js' %}?v=20261008"></script>
+<script src="{% static 'network_settings.js' %}?v=20261011-network-safety"></script>
 <script>
 // ─── نسخ سطر pg_hba ─────────────────────────────────────────────────────────
 document.getElementById('copyEnvLines')?.addEventListener('click', function () {

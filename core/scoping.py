@@ -11,7 +11,8 @@
 * **الموظّف** يرى كتب **قسمه** — لا كتبه هو وحدها. الكتاب ملكُ القسم لا مُدخِله.
 * **السرّيّة حجبُ محتوىً لا حجبُ صفّ** — انظر ``secret_access`` أدناه.
 * **مستخدمٌ بلا ملفٍّ أو بلا قسم** يرى ما أنشأه هو — سلوكُ ما قبل الأقسام،
-  فلا ينكسر تنصيبٌ لم تُبذَر أقسامُه بعد.
+  فلا ينكسر تنصيبٌ لم تُبذَر أقسامُه بعد. ويُضاف كتابٌ سرّيّ واحد عند منحه
+  تفويضاً سارياً عليه صراحةً.
 
 **`is_staff` لا تُوسّع الرؤية.** كانت تمنح حاملها رؤيةَ كلّ الكتب ضمناً،
 وإبقاؤها مع نطاق القسم يقوّضه من يومه الأوّل. صارت صفةً إداريّةً لواجهات
@@ -166,13 +167,22 @@ def scope_activity_for(user, qs=None):
 
 
 def can_manage_system(user) -> bool:
-    """أيحقّ له **إدارةُ البيانات** (الجهات · النسخ · الإعدادات · قوالبُ البريد
-    وإعداداتُه ومزامنتُه)؟ — ``is_staff`` كما كان، لكن **باسمٍ واحدٍ في مكانٍ
-    واحد**: القوالبُ لا تحمل شرطَ دورٍ (§7.6)، وتغييرُ السياسة هنا يغيّرها كلَّها.
+    """أيحقّ له إدارةُ البيانات العامّة (الجهات والنسخ وإعدادات النظام)؟
+    — صفةُ موظّف Django أو المدير.
 
     **والحساباتُ خرجت منها** إلى ``can_manage_accounts``: مَن يُنشئ الحسابَ هو مَن
     يُسند قسمَه ودورَه، لا موظّفٌ يُنشئ حساباً ثمّ يلقى 403 عند إسناده."""
     return bool(user.is_staff)
+
+
+def can_manage_mail(user) -> bool:
+    """أيحقّ له إدارةُ تشغيل البريد وقوالبه؟
+
+    يشمل إعدادات SMTP/IMAP ومزامنة الوارد والقوالب واختبار الاتصال. لا يساوي
+    صلاحيةَ إدارة الحسابات أو بقية إعدادات النظام. ويدخل حاملُ ``is_staff``
+    حفاظاً على السلوك الإداريّ القائم.
+    """
+    return is_privileged(user) or bool(user.is_staff) or is_mail_officer(user)
 
 
 def can_manage_accounts(user) -> bool:
@@ -303,17 +313,24 @@ def can_view_book(book, user) -> bool:
     """أيحقّ للمستخدم أن يرى هذا الكتاب في قوائمه؟
 
     **صارت تُجيب عن الصفّ لا عن المحتوى:** السرّيُّ يظهر لأهل القسم بسجلّه
-    (رقمٌ وتاريخ)، ومحتواه يحكمه ``secret_access``. فمن أراد المحتوى فليسأل
-    عنه، ولا يُخلط السؤالان.
+    (رقمٌ وتاريخ)، ومحتواه يحكمه ``secret_access``. والتفويضُ الفرديُّ الساري
+    يُظهر كتابَه السرّيَّ المحدّد ويفتح محتواه. فمن أراد المحتوى فليسأل عنه،
+    ولا يُخلط السؤالان.
     """
     if is_privileged(user):
         return True
 
     is_owner = book.created_by_id == user.id
+    if is_owner:
+        return True
+
     dept_id = user_department_id(user)
     if dept_id is None:
-        return is_owner
-    if is_owner or book.department_id in subtree_ids(dept_id):
+        return (
+            book.secret_level in RESTRICTED_SECRET_LEVELS
+            and _live_grants_for(user).filter(book_id=book.pk).exists()
+        )
+    if book.department_id in subtree_ids(dept_id):
         return True
     # **توأمُ الشقّين الثالث والرابع في `scope_books_for`** — وانفراجُهما هو
     # صنفُ العيب الذي كلّفنا مرّتين: مسندٌ يتّسع وقرينُه لا، فيظهر الكتابُ في
@@ -323,8 +340,13 @@ def can_view_book(book, user) -> bool:
     # فكانت الوحدةُ ترى كتابَ أضبارتها في القائمة ولا تفتحه. الحارسُ الآن
     # بنيويّ: `tests_scope_parity` يقارن الدالّتين على مصفوفة حالات.
     mine = subtree_ids(dept_id)
-    return (_referred_to(dept_id).filter(book_id=book.pk).exists()
-            or _mentioned_in(mine).filter(pk=book.pk).exists())
+    if (_referred_to(dept_id).filter(book_id=book.pk).exists()
+            or _mentioned_in(mine).filter(pk=book.pk).exists()):
+        return True
+    return (
+        book.secret_level in RESTRICTED_SECRET_LEVELS
+        and _live_grants_for(user).filter(book_id=book.pk).exists()
+    )
 
 
 def can_open_content(book, user) -> bool:
@@ -402,7 +424,13 @@ def scope_books_for(user, qs=None):
 
     dept_id = user_department_id(user)
     if dept_id is None:
-        return qs.filter(created_by=user)
+        return qs.filter(
+            Q(created_by=user)
+            | Q(
+                secret_level__in=RESTRICTED_SECRET_LEVELS,
+                pk__in=_live_grants_for(user).values('book_id'),
+            )
+        )
 
     # كتبُ قسمك **وشُعبِه** — بما فيها السرّيّة — ومعها ما أنشأته أنت (ولو
     # انتقلتَ بين الأقسام)، **وما فُرِّق إليك**. والسرّيُّ يظهر صفّاً ويُحجب
@@ -418,12 +446,17 @@ def scope_books_for(user, qs=None):
     # الشعبة **فارغةً من كلّ ماضيها**: التفريقُ يسكن `BookReferral` وهو جدولٌ
     # جديدٌ لا صفَّ فيه للتاريخ، بينما الذكرُ يسكن الـM2M ومعه آلافُ الصفوف.
     # والشقّان يتكاملان: الإحالةُ التزامٌ يُطارَد، والذكرُ انتماءٌ يُؤرشَف.
+    # والشقُّ الخامس تفويضٌ فرديٌّ ساري على كتابٍ سرّيّ بعينه.
     mine = subtree_ids(dept_id)
     return qs.filter(
         Q(department_id__in=mine)
         | Q(created_by=user)
         | Q(pk__in=_referred_to(dept_id))
         | Q(pk__in=_mentioned_in(mine))
+        | Q(
+            secret_level__in=RESTRICTED_SECRET_LEVELS,
+            pk__in=_live_grants_for(user).values('book_id'),
+        )
     )
 
 

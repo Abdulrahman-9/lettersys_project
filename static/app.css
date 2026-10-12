@@ -67,7 +67,7 @@ body {
 }
 
 .app-shell-body {
-  min-width: 1380px;
+  min-width: 0;
 }
 
 .app-auth-main {
@@ -431,6 +431,11 @@ body {
   .app-shell {
     flex-direction: column;
     width: min(100%, calc(100vw - 16px));
+  }
+
+  .app-main {
+    align-self: stretch;
+    width: 100%;
   }
 
   /* الدرج: المحتوى أوّلاً والتنقّلُ نقرةً على زرّ «القائمة» — يفتح من اليمين (RTL) */

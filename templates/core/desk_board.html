@@ -3,14 +3,14 @@
 
 {% block title %}طاولة الوارد{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20260913">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20261011-desk-ledger">{% endblock %}
 
 {% block content %}
 <div class="queues-page">
   <div class="queues-head">
     <div>
       <h1 class="h4 mb-0"><i class="bi bi-inboxes" aria-hidden="true"></i> طاولة الوارد</h1>
-      <p class="queues-sub">عملُ القسم اليوم في خمسة طوابير — والنقرُ يفتح الكتاب.</p>
+      <p class="queues-sub">آخر القيود وتفريقها، مع الاستلام والمتابعة والإجراءات في مكانٍ واحد.</p>
     </div>
     <div class="queues-actions">
       <a class="btn btn-outline-secondary btn-sm" href="{% url 'desk_ledger' %}">
@@ -35,5 +35,147 @@
   {% else %}
     {% include "core/_queue_board.html" %}
   {% endif %}
+
+  <section class="qb-recent" id="recent-books" aria-labelledby="recent-books-heading">
+    <div class="qb-recent-head">
+      <div>
+        <h2 id="recent-books-heading">آخر الكتب المُدخلة والمُفرّقة</h2>
+        <p>آخر {{ recent_book_limit }} قيداً حيّاً في نطاق القسم؛ مع آخر حركةٍ زمنية وأزرار الوصول والتفريق والمتابعة.</p>
+      </div>
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'desk_board' %}#recent-books">
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> تحديث
+      </a>
+    </div>
+
+    <form id="deskCsrfForm" class="d-none" aria-hidden="true">{% csrf_token %}</form>
+    <div id="deskActionStatus" class="qb-action-status" role="alert" hidden></div>
+
+    {% if recent_books %}
+    <div class="qb-recent-scroll">
+      <table class="qb-recent-table">
+        <thead>
+          <tr>
+            <th scope="col">الكتاب وآخر حركة</th>
+            <th scope="col">التفريق والمتابعة الزمنية</th>
+            <th scope="col">الوصول والإجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for book in recent_books %}
+          <tr>
+            <th scope="row">
+              <a class="qb-recent-book" href="{% url 'book_detail' book.pk %}#lifecycleCard">
+                <span class="qb-recent-number">{{ book.our_number_display|default:"بلا رقم" }}</span>
+                <span>{{ book.desk_title }}</span>
+              </a>
+              <small class="qb-recent-meta">أُدخل {{ book.created_at|date:"d/m/Y H:i" }}</small>
+              {% if book.desk_activity_at %}
+              <small class="qb-recent-meta">
+                {{ book.desk_activity_label }}
+                {% if book.desk_activity_notes %} · {{ book.desk_activity_notes }}{% endif %}
+                <time datetime="{{ book.desk_activity_at|date:'c' }}">{{ book.desk_activity_at|date:"d/m/Y H:i" }}</time>
+              </small>
+              {% else %}
+              <small class="qb-recent-meta">لا حركةَ مسجّلة بعد</small>
+              {% endif %}
+            </th>
+            <td>
+              {% if book.desk_referrals %}
+              <ul class="qb-recent-referrals">
+                {% for referral in book.desk_referrals %}
+                <li>
+                  <div class="qb-recent-referral-head">
+                    <b>{{ referral.target_name }}</b>
+                    <span class="qb-status qb-status--{{ referral.status }}">{{ referral.get_status_display }}</span>
+                    <span class="qb-purpose">{{ referral.get_purpose_display }}</span>
+                  </div>
+                  <div class="qb-recent-meta">
+                    أُرسل {{ referral.created_at|date:"d/m/Y H:i" }}
+                    {% if referral.due_date %} · الموعد {{ referral.due_date|date:"d/m/Y" }}{% endif %}
+                    {% if referral.last_reminder_at %} · آخر تنبيه {{ referral.last_reminder_at|date:"d/m/Y H:i" }}{% endif %}
+                  </div>
+                  {% if referral.desk_can_update_followup %}
+                  <details class="qb-followup-edit">
+                    <summary>تحديث موعد المتابعة</summary>
+                    <form data-desk-followup-form data-url="{% url 'api_referral_action' book.pk referral.pk %}">
+                      {% csrf_token %}
+                      <label for="desk-due-{{ referral.pk }}">موعد الإنجاز</label>
+                      <input id="desk-due-{{ referral.pk }}" name="due_date" type="date"
+                             min="{{ today|date:'Y-m-d' }}" value="{{ referral.due_date|date:'Y-m-d' }}" required>
+                      <button class="qb-act" type="submit">حفظ الموعد</button>
+                    </form>
+                  </details>
+                  {% endif %}
+                </li>
+                {% endfor %}
+              </ul>
+              {% if book.desk_referrals_more %}
+              <a class="qb-more" href="{% url 'book_detail' book.pk %}#lifecycleCard">عرض {{ book.desk_referrals_more }} إحالاتٍ أقدم</a>
+              {% endif %}
+              {% else %}
+              <span class="qb-recent-undistributed">لم يُفرّق بعد</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="qb-recent-actions">
+                {% for referral in book.desk_referrals %}
+                  {% if referral.desk_can_receive %}
+                  <button class="qb-act" type="button" data-desk-referral-act="received"
+                          data-url="{% url 'api_referral_action' book.pk referral.pk %}">
+                    <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> استلام
+                  </button>
+                  {% endif %}
+                  {% if referral.desk_can_finish %}
+                  <a class="qb-act-link" href="{% url 'book_detail' book.pk %}#lifecycleCard"
+                     aria-label="فتح إجراءات إنجاز إحالة {{ referral.target_name }}">
+                    <i class="bi bi-check2-circle" aria-hidden="true"></i> إجراءات الإنجاز
+                  </a>
+                  {% endif %}
+                  {% if referral.desk_can_cancel %}
+                  <details class="qb-cancel-referral">
+                    <summary class="qb-act qb-act--danger">إزالة التفريق</summary>
+                    <form method="post" action="{% url 'desk_cancel_referral' book.pk referral.pk %}">
+                      {% csrf_token %}
+                      <label for="cancel-note-{{ referral.pk }}">سبب الإلغاء (اختياري)</label>
+                      <input id="cancel-note-{{ referral.pk }}" name="note" type="text" maxlength="500">
+                      <button class="qb-act qb-act--danger" type="submit"
+                              data-confirm="سيُلغى التفريق غير المستلَم فقط، وسيبقى محفوظاً في السجلّ الزمني. أتمضي؟"
+                              data-confirm-ok="إلغاء التفريق">
+                        تأكيد الإلغاء
+                      </button>
+                    </form>
+                  </details>
+                  {% endif %}
+                {% endfor %}
+                <a class="qb-act-link" href="{% url 'book_detail' book.pk %}#lifecycleCard">
+                  <i class="bi bi-sliders" aria-hidden="true"></i> إجراءات الكتاب والتفريق
+                </a>
+                <a class="qb-act-link" href="{% url 'book_detail' book.pk %}#followupHistoryCard">
+                  <i class="bi bi-clock-history" aria-hidden="true"></i> التسلسل الزمني
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="qb-recent-empty">
+      <i class="bi bi-inbox" aria-hidden="true"></i>
+      <p>لا توجد قيودٌ حديثةٌ في نطاق هذا القسم.</p>
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">فتح قائمة الكتب</a>
+    </div>
+    {% endif %}
+  </section>
+
+  <p class="qb-audit-note">
+    فتحُ الكتاب يُسجَّل في سجلّ الحركات؛ وهو لا يُعدّ إقراراً باستلام الإحالة.
+    إيصالُ القراءة لكلّ مستلم ليس مفعّلاً بعد.
+  </p>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/desk_board.js' %}?v=20261011-desk-ledger"></script>
 {% endblock %}

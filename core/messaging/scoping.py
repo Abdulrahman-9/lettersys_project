@@ -6,18 +6,26 @@
 مسجَّل، وعدّاد غير المقروء يُحسب على النظام كلّه. صندوقٌ واحد مشترك يقرأه
 الجميع (سجلّ العيوب ح1).
 
-القاعدة هنا مطابقة لقاعدة الكتب المعمول بها: الإداريّ (superuser أو staff) يرى
-كلّ شيء، وغيره يرى ما يخصّ كتبه هو. ورسالةٌ لا كتاب لها لا مالك لها ⟵ إداريّ
-فقط.
+القاعدة هنا مطابقة لقاعدة الكتب المعمول بها: مدير النظام يرى كلّ شيء، ومسؤول
+البريد يرى مراسلات الكتب التي يستطيع فتحها في نطاق قسمه. وبقيّة المستخدمين
+يرون مراسلات كتبهم هم. ورسالةٌ بلا كتاب لا يراها إلا مرسلها أو مدير النظام.
 
 **لماذا ملفٌّ مستقلّ:** هذه ترجمةُ قاعدةِ الكتب إلى لغة البريد (خيوط، رسائل
-واردة، سجلّات صادرة) — لا نسخةٌ منها. القاعدة نفسها تُستورَد من
-``core/scoping.py`` مصدراً وحيداً، فحين يصل بُعد القسم (المرحلة أ) تتغيّر هناك
-وحدها وتتبعها هذه الدوالّ.
+واردة، سجلّات صادرة). صلاحيةُ فتح المحتوى من ``core/scoping.py`` هي الحارس
+الأخير، فلا تكشف مراسلاتُ كتابٍ سرّيّ لمَن لا يفتح محتواه.
 """
 
 
-from core.scoping import is_privileged, scope_books_for
+from django.db.models import Q
+
+from core.scoping import (
+    RESTRICTED_SECRET_LEVELS,
+    _live_grants_for,
+    is_mail_officer,
+    is_privileged,
+    scope_books_for,
+    user_department_id,
+)
 
 
 def sees_all_mail(user) -> bool:
@@ -34,8 +42,10 @@ def scope_sent_logs(qs, user):
     """
     if sees_all_mail(user):
         return qs
-    from django.db.models import Q
-    return qs.filter(Q(book__created_by=user) | Q(book__isnull=True, sent_by=user))
+    from core.models import Book
+
+    books = scope_mail_books(Book.objects.all(), user)
+    return qs.filter(Q(book__in=books) | Q(book__isnull=True, sent_by=user))
 
 
 def scope_incoming(qs, user):
@@ -46,12 +56,38 @@ def scope_incoming(qs, user):
     """
     if sees_all_mail(user):
         return qs
-    return qs.filter(thread__book__created_by=user)
+    from core.models import EmailThread
+
+    threads = scope_threads(EmailThread.objects.all(), user)
+    return qs.filter(thread__in=threads)
 
 
 def scope_books(qs, user):
     """الكتب التي يحقّ للمستخدم مراسلتها/رؤية بريدها — تفويضٌ للمصدر الوحيد."""
     return scope_books_for(user, qs)
+
+
+def scope_mail_books(qs, user):
+    """الكتب التي يحقّ للمستخدم قراءة مراسلاتها دون كشف محتوى السرّيّ المحجوب."""
+    if sees_all_mail(user):
+        return qs
+    if not is_mail_officer(user):
+        return qs.filter(created_by=user)
+
+    department_id = user_department_id(user)
+    live_grants = _live_grants_for(user)
+    scoped = scope_books_for(user, qs)
+    restricted_content_access = (
+        Q(created_by=user)
+        | Q(department_id=department_id)
+        | Q(pk__in=live_grants.values('book_id'))
+    )
+    openable = scoped.filter(
+        Q(secret_level='normal')
+        | Q(secret_level__in=RESTRICTED_SECRET_LEVELS)
+        & restricted_content_access
+    )
+    return openable | qs.filter(pk__in=live_grants.values('book_id'))
 
 
 def mailable_book(user, book_id):
@@ -70,7 +106,7 @@ def mailable_book(user, book_id):
 
     if not str(book_id or '').isdigit():
         return None
-    book = scope_books(Book.objects.all(), user).filter(pk=int(book_id)).first()
+    book = scope_mail_books(Book.objects.all(), user).filter(pk=int(book_id)).first()
     if book is None or not can_open_content(book, user):
         return None
     return book
@@ -94,18 +130,26 @@ def scope_threads(qs, user):
     """خيوط المراسلة التي يحقّ للمستخدم رؤيتها/تعديل حالتها."""
     if sees_all_mail(user):
         return qs
-    return qs.filter(book__created_by=user)
+    from core.models import Book
+
+    books = scope_mail_books(Book.objects.all(), user)
+    return qs.filter(
+        Q(book__in=books)
+        | Q(book__isnull=True, created_by=user)
+    )
 
 
 def can_view_thread(thread, user) -> bool:
     """أيحقّ للمستخدم فتح هذا الخيط؟"""
     if sees_all_mail(user):
         return True
-    return bool(thread.book_id and thread.book.created_by_id == user.id)
+    if thread.book_id:
+        return can_view_book_mail(thread.book, user)
+    return thread.created_by_id == user.id
 
 
 def can_view_book_mail(book, user) -> bool:
     """أيحقّ للمستخدم رؤية بريد هذا الكتاب؟"""
-    if sees_all_mail(user):
-        return True
-    return book.created_by_id == user.id
+    from core.models import Book
+
+    return scope_mail_books(Book.objects.filter(pk=book.pk), user).exists()

@@ -16,8 +16,9 @@ from django.utils import timezone
 
 from core.models import (Book, BookHistory, BookReferral, Department, Entity,
                          Notification, UserProfile)
-from core.referral_service import (ACTION_NEEDS_DUE, distribute, mark_done, mark_received,
-                                   mark_returned, open_referrals_for, send_reminder)
+from core.referral_service import (ACTION_NEEDS_DUE, cancel_referral, distribute,
+                                   mark_done, mark_received, mark_returned,
+                                   open_referrals_for, send_reminder)
 from core.scoping import can_view_book, scope_books_for, scope_referrals_for
 
 
@@ -180,6 +181,35 @@ class ActionNeedsDueTests(ReferralTestCase):
                          purpose=BookReferral.INFO)[0]
         self.assertEqual(row.purpose, BookReferral.INFO)
         self.assertIsNone(row.due_date)
+
+
+class CancelReferralTests(ReferralTestCase):
+
+    def test_cancel_closes_unreceived_row_without_deleting_it(self):
+        row = distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)[0]
+
+        cancel_referral(row, by=self.clerk, note='خُصّص لوحدة أخرى')
+        row.refresh_from_db()
+
+        self.assertEqual(row.status, BookReferral.CANCELLED)
+        self.assertEqual(self.book.referrals.count(), 1)
+        self.assertFalse(row.is_open)
+
+    def test_cannot_cancel_after_receipt(self):
+        row = distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)[0]
+        mark_received(row, by=self.budget_staff)
+
+        with self.assertRaises(ValidationError):
+            cancel_referral(row, by=self.clerk)
+
+    def test_cancel_writes_a_history_entry(self):
+        row = distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)[0]
+
+        cancel_referral(row, by=self.clerk)
+
+        self.assertTrue(BookHistory.objects.filter(
+            book=self.book, action='referral-cancelled',
+        ).exists())
 
 
 class NotificationTests(ReferralTestCase):

@@ -12,7 +12,7 @@
 // الدمجُ يجمع أصولَ الفرعين، فالنسخةُ تُرفع **فوق أعلاهما** (v95 · v83) كي
 // يُبطل كاشُ كلّ متصفّحٍ مهما كان الفرعُ الذي كان يخدمه. ورقمٌ أدنى من أحدهما
 // يترك متصفّحاً كاملاً على أصولٍ قديمةٍ بلا أن يظهر خطأ.
-const CACHE_VERSION = 'v130-20261011-scan-agent';
+const CACHE_VERSION = 'v138-20261011-pwa-updates';
 const CACHE_NAME = 'lettersys-' + CACHE_VERSION;
 
 // قشرة التطبيق الثابتة فقط — لا '/' ولا أي صفحة مُصادَقة.
@@ -35,10 +35,9 @@ self.addEventListener('install', (event) => {
       })
     )
   );
-  self.skipWaiting();
 });
 
-// Activate — تنظيف الكاش القديم وإخطار العملاء بالتحديث
+// Activate — تنظيف الكاش القديم
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
@@ -46,13 +45,6 @@ self.addEventListener('activate', (event) => {
         names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))
       ))
       .then(() => self.clients.claim())
-      .then(() => self.clients.matchAll())
-      .then((clients) => {
-        clients.forEach((client) => client.postMessage({
-          type: 'UPDATE_AVAILABLE',
-          message: 'تحديث جديد متوفر للتطبيق'
-        }));
-      })
   );
 });
 

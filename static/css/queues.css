@@ -2,7 +2,7 @@
    الشاشتان تتشاركان القالبَ والنمط. الألوانُ من متغيّرات الهويّة
    (`--brand`) لا بقيمٍ مُصلَّبة، فتتبع الصفحةَ التي تُدرَج فيها. */
 
-.queues-page { padding: 1rem 0; max-width: 1180px; }
+.queues-page { padding: 1rem 0; max-width: 1520px; }
 
 .queues-head {
   display: flex; align-items: flex-start; justify-content: space-between;
@@ -27,6 +27,7 @@
 .qb-accent { --qb-tone: var(--brand, #0f766e); }
 .qb-muted  { --qb-tone: #64748b; }
 .qb-secret { --qb-tone: #7c3aed; }
+.qb-done   { --qb-tone: #15803d; }
 
 .qb-card { scroll-margin-top: 96px; }
 .qb-card:hover, .qb-card:focus-within { box-shadow: 0 6px 18px rgba(15, 23, 42, .08); }
@@ -73,6 +74,114 @@
   font-size: .72rem; color: #64748b; font-variant-numeric: tabular-nums;
 }
 .qb-to { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qb-status, .qb-purpose {
+  border-radius: 999px; padding: .12rem .45rem; background: #eef2f7;
+  color: #475569; font-size: .68rem; font-weight: 700; white-space: nowrap;
+}
+.qb-status--sent { background: #fff7ed; color: #9a3412; }
+.qb-status--received { background: #ecfdf5; color: #166534; }
+.qb-status--done { background: #dcfce7; color: #166534; }
+.qb-status--returned { background: #fef2f2; color: #991b1b; }
+.qb-audit-note {
+  margin: .8rem 0 0; padding: .65rem .85rem; border-inline-start: 3px solid #64748b;
+  background: #f8fafc; color: #475569; font-size: .82rem;
+}
+
+.qb-recent {
+  margin-top: 1.35rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 1rem 1.1rem 1.15rem;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, .06);
+}
+.qb-recent-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: .9rem;
+}
+.qb-recent-head h2 { margin: 0 0 .2rem; font-size: 1.08rem; font-weight: 800; }
+.qb-recent-head p { margin: 0; color: #64748b; font-size: .84rem; max-width: 70ch; }
+.qb-action-status { margin-bottom: .8rem; }
+.qb-recent-scroll { overflow-x: auto; }
+.qb-recent-table {
+  width: 100%; min-width: 1120px; border-collapse: separate; border-spacing: 0;
+  font-size: .88rem;
+}
+.qb-recent-table th,
+.qb-recent-table td {
+  padding: .9rem .8rem; vertical-align: top; border-bottom: 1px solid #e5e7eb;
+}
+.qb-recent-table thead th {
+  background: #f8fafc; color: #0f172a; font-weight: 800; white-space: nowrap;
+  position: sticky; top: 0; z-index: 1;
+}
+.qb-recent-book {
+  display: inline-flex; flex-wrap: wrap; gap: .45rem; align-items: baseline;
+  color: inherit; text-decoration: none; font-weight: 800;
+}
+.qb-recent-book:hover { text-decoration: underline; }
+.qb-recent-number {
+  color: var(--brand-strong, #b45309); font-variant-numeric: tabular-nums;
+}
+.qb-recent-meta {
+  display: block; margin-top: .28rem; color: #64748b; font-size: .77rem;
+  font-variant-numeric: tabular-nums;
+}
+.qb-recent-referrals { list-style: none; margin: 0; padding: 0; display: grid; gap: .7rem; }
+.qb-recent-referrals li { background: #f8fafc; border-radius: 14px; padding: .72rem .8rem; }
+.qb-recent-referral-head {
+  display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; margin-bottom: .15rem;
+}
+.qb-followup-edit { margin-top: .45rem; }
+.qb-followup-edit summary {
+  cursor: pointer; color: var(--brand, #0f766e); font-weight: 700; font-size: .78rem;
+}
+.qb-followup-edit form {
+  display: flex; align-items: end; gap: .55rem; flex-wrap: wrap; margin-top: .45rem;
+}
+.qb-followup-edit label,
+.qb-cancel-referral label {
+  display: block; width: 100%; color: #475569; font-size: .76rem; font-weight: 700;
+}
+.qb-followup-edit input,
+.qb-cancel-referral input {
+  min-height: 38px; border: 1px solid #cbd5e1; border-radius: 10px;
+  padding: .45rem .6rem; background: #fff;
+}
+.qb-recent-actions {
+  display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-start;
+}
+.qb-act-link {
+  display: inline-flex; align-items: center; gap: .35rem; min-height: 34px;
+  border-radius: 999px; padding: .22rem .8rem; border: 1px solid #cbd5e1;
+  background: #fff; color: #334155; text-decoration: none; font-size: .78rem; font-weight: 700;
+}
+.qb-act-link:hover {
+  color: var(--brand, #0f766e); border-color: var(--brand, #0f766e);
+  background: color-mix(in srgb, var(--brand, #0f766e) 6%, #fff);
+}
+.qb-cancel-referral { display: inline-block; }
+.qb-cancel-referral summary { list-style: none; }
+.qb-cancel-referral summary::-webkit-details-marker { display: none; }
+.qb-cancel-referral[open] {
+  background: #fff7ed; border: 1px solid #fed7aa; border-radius: 14px; padding: .55rem;
+}
+.qb-cancel-referral form {
+  display: grid; gap: .45rem; min-width: 240px; margin-top: .45rem;
+}
+.qb-act--danger { border-color: #fecaca; color: #b91c1c; }
+.qb-act--danger:hover:not(:disabled) {
+  border-color: #ef4444; color: #991b1b;
+  background: color-mix(in srgb, #ef4444 8%, #fff);
+}
+.qb-recent-undistributed {
+  display: inline-flex; align-items: center; min-height: 36px; color: #64748b; font-weight: 700;
+}
+.qb-recent-empty {
+  display: grid; place-items: center; gap: .55rem; min-height: 190px;
+  color: #64748b; text-align: center;
+}
+.qb-recent-empty i { font-size: 2rem; color: #94a3b8; }
 
 .qb-more { margin: .5rem 0 0; font-size: .75rem; color: #64748b; }
 .qb-empty { margin: 0; font-size: .82rem; color: #64748b; }
@@ -105,6 +214,7 @@
 @media (max-width: 576px) {
   .qb-act { min-height: 44px; padding-inline: 1rem; }
   .qb-link { min-height: 44px; align-items: center; }
+  .qb-act-link { min-height: 44px; }
 }
 
 /* ══ اعتمادُ «طاولات العمل» (2026-09-13، أمرُ المالك) ═══════════════════════════
@@ -147,6 +257,11 @@
   .qb-meta { display: flex; flex-wrap: wrap; row-gap: .35rem; }
   .qb-to { display: none; }
   .qb-row { flex-wrap: wrap; row-gap: .3rem; }
+}
+
+@media (max-width: 991.98px) {
+  .qb-recent { padding-inline: .9rem; }
+  .qb-recent-table { min-width: 920px; }
 }
 
 /* حالةُ فراغٍ **واحدةٌ** على مستوى الصفحة، وفيها طريقٌ للخارج (ي-3 · ي-4) */

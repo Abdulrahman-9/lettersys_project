@@ -25,6 +25,8 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.db import DatabaseError, connection
+from django.db.models import Q
 
 from core.views.helpers import staff_required
 from django.http import JsonResponse, StreamingHttpResponse
@@ -199,12 +201,9 @@ def _scan_subnet(subnet_base: str, port: int = 8000, timeout: float = 0.8) -> li
 
 
 def _active_sessions_count() -> int:
-    """يعدّ الجلسات النشطة (غير المنتهية)."""
-    try:
-        from django.contrib.sessions.models import Session
-        return Session.objects.filter(expire_date__gt=timezone.now()).count()
-    except Exception:
-        return 0
+    """يعدّ الجلسات التي لم تنتهِ صلاحيتها بعد."""
+    from django.contrib.sessions.models import Session
+    return Session.objects.filter(expire_date__gt=timezone.now()).count()
 
 
 def _register_self(cfg: NetworkSettings):
@@ -236,16 +235,27 @@ def network_settings_page(request):
     cfg = NetworkSettings.get()
     nodes = NetworkNode.objects.all()
     local_ip = _get_local_ip()
+    local_port = int(request.get_port())
     hostname = _get_hostname()
     db = settings.DATABASES.get('default', {})
+    current_node_id = nodes.filter(
+        ip_address=local_ip,
+        app_port=local_port,
+    ).values_list('pk', flat=True).first()
+    stale_node_ids = set(nodes.filter(
+        Q(last_seen__lt=timezone.now() - timedelta(minutes=2))
+        | Q(last_seen__isnull=True),
+    ).values_list('pk', flat=True))
 
     return render(request, 'core/network_settings.html', {
         'cfg': cfg,
         'nodes': nodes,
         'local_ip': local_ip,
+        'current_node_id': current_node_id,
+        'stale_node_ids': stale_node_ids,
         'hostname': hostname,
         'device_name': device_identity.get_device_name(),
-        'active_users': _active_sessions_count(),
+        'active_sessions': _active_sessions_count(),
         'current_db_host': db.get('HOST', 'localhost'),
         'current_db_port': db.get('PORT', '5432'),
         'current_db_name': db.get('NAME', ''),
@@ -515,22 +525,49 @@ def network_scan_subnet(request):
 @require_GET
 def network_devices(request):
     """يعيد قائمة الأجهزة المسجّلة مع حالتها الحالية."""
-    # تعليم الأجهزة القديمة (لم تُرَ منذ > دقيقتين) كغير متصلة
+    local_ip = _get_local_ip()
+    local_port = int(request.get_port())
+    current_identity = (local_ip, local_port)
+    checked_at = timezone.now()
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            database_online = cursor.fetchone()[0] == 1
+    except DatabaseError:
+        logger.exception('[NetworkHealth] database connectivity check failed')
+        database_online = False
+
+    # Remote nodes are online only while their heartbeat is recent. The current
+    # HTTP request itself proves that this application node is reachable.
     cutoff = timezone.now() - timedelta(minutes=2)
-    NetworkNode.objects.filter(last_seen__lt=cutoff, is_online=True).update(is_online=False)
+    stale_nodes = NetworkNode.objects.filter(is_online=True).filter(
+        Q(last_seen__lt=cutoff) | Q(last_seen__isnull=True),
+    ).exclude(
+        ip_address=local_ip,
+        app_port=local_port,
+    )
+    stale_nodes.update(is_online=False)
 
     nodes = NetworkNode.objects.all()
     devices = []
     for n in nodes:
+        is_current = (n.ip_address, n.app_port) == current_identity
+        is_stale = not is_current and (
+            n.last_seen is None or n.last_seen < cutoff
+        )
         devices.append({
             'id':         n.pk,
             'name':       n.name,
             'ip':         n.ip_address,
             'port':       n.app_port,
             'role':       n.role,
-            'is_online':  n.is_online,
-            'is_current': n.is_current,
-            'last_seen':  n.last_seen.isoformat() if n.last_seen else None,
+            'is_online':  True if is_current else (n.is_online and not is_stale),
+            'is_stale':   is_stale,
+            'is_current': is_current,
+            'last_seen':  checked_at.isoformat() if is_current else (
+                n.last_seen.isoformat() if n.last_seen else None
+            ),
             'ping_ms':    n.last_ping_ms,
             'version':    n.app_version,
         })
@@ -538,8 +575,13 @@ def network_devices(request):
     return JsonResponse({
         'ok':           True,
         'devices':      devices,
-        'active_users': _active_sessions_count(),
-        'local_ip':     _get_local_ip(),
+        'active_sessions': _active_sessions_count(),
+        'local_ip':     local_ip,
+        'database': {
+            'is_online': database_online,
+            'checked_at': checked_at.isoformat(),
+            'host': settings.DATABASES.get('default', {}).get('HOST', 'localhost'),
+        },
     })
 
 
@@ -548,23 +590,54 @@ def network_devices(request):
 @require_POST
 def network_ping_all(request):
     """يختبر الاتصال بجميع الأجهزة المسجّلة بالتوازي."""
-    nodes = list(NetworkNode.objects.filter(is_current=False))
+    local_ip = _get_local_ip()
+    local_port = int(request.get_port())
+    nodes = list(
+        NetworkNode.objects.exclude(
+            ip_address=local_ip,
+            app_port=local_port,
+        )
+    )
     results = []
 
     def _ping_one(node):
         result = _ping_node(node.ip_address, node.app_port)
         node.update_status(bool(result), result.get('ping_ms') if result else None)
-        return {'id': node.pk, 'is_online': node.is_online, 'ping_ms': node.last_ping_ms}
+        return {
+            'id': node.pk,
+            'name': node.name,
+            'is_online': node.is_online,
+            'status': 'online' if node.is_online else 'offline',
+            'ping_ms': node.last_ping_ms,
+        }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as ex:
-        futs = [ex.submit(_ping_one, n) for n in nodes]
-        for f in concurrent.futures.as_completed(futs, timeout=10):
+        futures = {ex.submit(_ping_one, node): node for node in nodes}
+        for future in concurrent.futures.as_completed(futures):
+            node = futures[future]
             try:
-                results.append(f.result())
+                results.append(future.result())
             except Exception:
-                pass
+                logger.exception('[NetworkHealth] failed to check node %s', node.pk)
+                results.append({
+                    'id': node.pk,
+                    'name': node.name,
+                    'is_online': False,
+                    'status': 'error',
+                    'ping_ms': None,
+                })
 
-    return JsonResponse({'ok': True, 'results': results})
+    online = sum(1 for result in results if result['is_online'])
+    offline = sum(1 for result in results if result['status'] == 'offline')
+    errors = sum(1 for result in results if result['status'] == 'error')
+    return JsonResponse({
+        'ok': True,
+        'checked': len(results),
+        'online': online,
+        'offline': offline,
+        'errors': errors,
+        'results': results,
+    })
 
 
 @login_required
@@ -572,7 +645,11 @@ def network_ping_all(request):
 @require_POST
 def network_delete_device(request, pk):
     """يحذف جهازاً من السجل (لا يمكن حذف الجهاز الحالي)."""
-    deleted, _ = NetworkNode.objects.filter(pk=pk, is_current=False).delete()
+    current_identity = (_get_local_ip(), int(request.get_port()))
+    deleted, _ = NetworkNode.objects.filter(pk=pk).exclude(
+        ip_address=current_identity[0],
+        app_port=current_identity[1],
+    ).delete()
     if deleted:
         return JsonResponse({'ok': True})
     return JsonResponse({'ok': False, 'error': 'لا يمكن حذف الجهاز الحالي أو الجهاز غير موجود'}, status=400)

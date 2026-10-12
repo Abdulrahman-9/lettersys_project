@@ -72,6 +72,37 @@ class QueueScreenTests(TestCase):
         self.assertEqual(totals['today'], 1)
         self.assertEqual(totals['unreceived'], 2)
 
+    def test_received_action_has_its_own_work_queue(self):
+        referral = self._referral(
+            status=BookReferral.RECEIVED, due_date=self.today + timedelta(days=2),
+        )
+        self.client.force_login(self.clerk)
+
+        res = self.client.get(reverse('desk_board'))
+        queue = next(q for q in res.context['queues'] if q['key'] == 'received_action')
+
+        self.assertEqual(queue['total'], 1)
+        self.assertEqual(queue['rows'][0]['referral'], referral)
+        self.assertEqual(queue['rows'][0]['status_label'], 'مستلَم')
+        self.assertEqual(queue['rows'][0]['purpose_label'], 'للتنفيذ')
+
+    def test_info_referrals_do_not_count_as_due_today_or_overdue(self):
+        self._referral(
+            purpose=BookReferral.INFO,
+            due_date=self.today,
+        )
+        self._referral(
+            purpose=BookReferral.INFO,
+            due_date=self.today - timedelta(days=1),
+        )
+        self.client.force_login(self.clerk)
+
+        totals = {q['key']: q['total'] for q in self.client.get(reverse('desk_board')).context['queues']}
+
+        self.assertEqual(totals['today'], 0)
+        self.assertEqual(totals['overdue'], 0)
+        self.assertEqual(totals['unreceived'], 2)
+
     def test_done_referrals_leave_every_queue(self):
         """المنجَزُ يخرج من الطابور — وإلّا صار الطابورُ أرشيفاً لا عملاً."""
         ref = self._referral(due_date=self.today - timedelta(days=1))
@@ -119,6 +150,45 @@ class QueueScreenTests(TestCase):
 
         self.assertTrue(titles, 'الصفُّ لم يصل الطابورَ أصلاً — الاختبارُ لا يقيس شيئاً')
         self.assertNotIn('سرٌّ مكشوف', titles)
+
+    def test_recent_books_show_live_department_books_only(self):
+        live = self._book(title='حيّ')
+        self._referral(book=live, due_date=self.today + timedelta(days=1))
+        Book.objects.create(
+            kind='incoming_external', title='إرث', our_number='9002',
+            department=self.dept, created_by=self.clerk, source_ref='IIMAIL_2025#1',
+        )
+        Book.objects.create(
+            kind='incoming_external', title='تدريب', our_number='T131',
+            department=self.dept, created_by=self.clerk, is_training=True,
+        )
+        self.client.force_login(self.clerk)
+
+        recent = self.client.get(reverse('desk_board')).context['recent_books']
+
+        titles = [b.title for b in recent]
+        self.assertIn('حيّ', titles)
+        self.assertNotIn('إرث', titles)
+        self.assertNotIn('تدريب', titles)
+        row = next(b for b in recent if b.title == 'حيّ')
+        self.assertEqual(row.desk_referrals[0].target_name, 'وحدة التقارير')
+
+    def test_cancel_referral_from_desk_keeps_history_and_closes_row(self):
+        referral = self._referral(due_date=self.today + timedelta(days=1))
+        self.client.force_login(self.clerk)
+
+        response = self.client.post(
+            reverse('desk_cancel_referral', args=[referral.book_id, referral.pk]),
+            {'note': 'توجيهٌ بديل'},
+            follow=True,
+        )
+        referral.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(referral.status, BookReferral.CANCELLED)
+        self.assertFalse(BookReferral.objects.filter(
+            pk=referral.pk, status__in=BookReferral.OPEN_STATUSES,
+        ).exists())
 
     # ── ما يخصّني اليوم ────────────────────────────────────────
     def test_my_today_is_open_to_every_role(self):

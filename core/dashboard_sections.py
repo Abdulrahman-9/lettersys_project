@@ -84,9 +84,16 @@ def _desk(user):
         rows = rows.filter(Q(to_department_id__in=mine) | Q(from_department_id__in=mine))
 
     counts = rows.aggregate(
-        overdue=Count('id', filter=Q(due_date__lt=today)),
-        today=Count('id', filter=Q(due_date=today)),
+        overdue=Count('id', filter=Q(
+            purpose=BookReferral.ACTION, due_date__lt=today,
+        )),
+        today=Count('id', filter=Q(
+            purpose=BookReferral.ACTION, due_date=today,
+        )),
         unreceived=Count('id', filter=Q(status=BookReferral.SENT)),
+        received_action=Count('id', filter=Q(
+            status=BookReferral.RECEIVED, purpose=BookReferral.ACTION,
+        )),
     )
     secret_open = rows.filter(book__in=scope_books_for(
         user, Book.objects.all()).exclude(secret_level='normal')).count()
@@ -97,6 +104,8 @@ def _desk(user):
              'href': _to('desk_board', anchor='overdue')},
             {'label': 'غير مُستلَم', 'value': counts['unreceived'], 'tone': 'warn',
              'href': _to('desk_board', anchor='unreceived')},
+            {'label': 'مستلَم وقيد الإنجاز', 'value': counts['received_action'], 'tone': 'accent',
+             'href': _to('desk_board', anchor='received_action')},
             {'label': 'يستحقّ اليوم', 'value': counts['today'], 'tone': 'accent',
              'href': _to('desk_board', anchor='today')},
             {'label': 'سرّي مفتوح', 'value': secret_open, 'tone': 'secret',

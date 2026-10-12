@@ -22,6 +22,18 @@
   // ─── مساعدات عامة ────────────────────────────────────────────────────────────
   function el(id) { return document.getElementById(id); }
 
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
+      return {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[char];
+    });
+  }
+
   function post(url, body) {
     return fetch(url, {
       method:  'POST',
@@ -158,9 +170,9 @@
       const data = await post(urls.testPing, { ip, port: parseInt(port) });
       if (data.ok) {
         res.innerHTML = `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>
-          متصل — ${data.data?.name || ip} (${data.data?.ping_ms || '?'}ms) — نسخة ${data.data?.version || '?'}</span>`;
+          متصل — ${escapeHtml(data.data?.name || ip)} (${escapeHtml(data.data?.ping_ms || '?')}ms) — نسخة ${escapeHtml(data.data?.version || '?')}</span>`;
       } else {
-        res.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${data.error}</span>`;
+        res.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${escapeHtml(data.error)}</span>`;
       }
     } catch (e) {
       res.innerHTML = '<span class="text-danger">خطأ في الشبكة</span>';
@@ -185,11 +197,11 @@
       const data = await post(urls.testDb, payload);
       if (data.ok) {
         showAlert(res,
-          `<i class="bi bi-check-circle-fill me-2"></i><strong>اتصال ناجح</strong> — ${data.message}`,
+          `<i class="bi bi-check-circle-fill me-2"></i><strong>اتصال ناجح</strong> — ${escapeHtml(data.message)}`,
           'success');
       } else {
         showAlert(res,
-          `<i class="bi bi-x-circle-fill me-2"></i>${data.message || data.error}`,
+          `<i class="bi bi-x-circle-fill me-2"></i>${escapeHtml(data.message || data.error)}`,
           'error');
       }
     } catch (e) {
@@ -227,7 +239,7 @@
       const data = await post(urls.saveConfig, payload);
       if (data.ok) {
         res.style.display = 'inline-block';
-        res.innerHTML = `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>${data.message}</span>`;
+        res.innerHTML = `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>${escapeHtml(data.message)}</span>`;
         // الخادمُ لم يبقَ يكتب في ملفّ البيئة: يعيد الأسطرَ لينسخها المديرُ
         // بيده. `needs_admin_env` هو المعنى الصادق، و`needs_restart` مُبقًى
         // بالقيمة نفسها للتوافق مع نسخةٍ قديمةٍ مُكاشة من هذا الملفّ.
@@ -240,7 +252,7 @@
         loadDevices();
       } else {
         res.style.display = 'inline-block';
-        res.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error || 'فشل الحفظ'}</span>`;
+        res.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${escapeHtml(data.error || 'فشل الحفظ')}</span>`;
       }
     } catch (e) {
       res.style.display = 'inline-block';
@@ -256,9 +268,11 @@
     const roleBadge = n.role === 'master'
       ? '<span class="badge" style="background:#0369a1;font-size:.72rem;">ماستر</span>'
       : '<span class="badge" style="background:#16a34a;font-size:.72rem;">تابع</span>';
-    const statusHtml = n.is_online
-      ? '<span class="ns-online-dot"></span> متصل'
-      : '<span class="ns-offline-dot"></span> غير متصل';
+    const statusHtml = n.is_stale
+      ? '<span class="text-muted"><i class="bi bi-question-circle me-1"></i>غير محدّث</span>'
+      : n.is_online
+        ? '<span class="ns-online-dot"></span> متصل'
+        : '<span class="ns-offline-dot"></span> غير متصل';
     const currentBadge = n.is_current
       ? '<span class="badge bg-primary ms-1" style="font-size:.7rem;">أنا</span>' : '';
     const icon = n.is_current
@@ -270,8 +284,8 @@
     return `
       <tr data-node-id="${n.id}">
         <td>${icon}</td>
-        <td>${n.name}${currentBadge}</td>
-        <td><code>${n.ip}:${n.port}</code></td>
+        <td>${escapeHtml(n.name)}${currentBadge}</td>
+        <td><code>${escapeHtml(n.ip)}:${escapeHtml(n.port)}</code></td>
         <td>${roleBadge}</td>
         <td>${statusHtml}</td>
         <td class="text-muted" style="font-size:.8rem;">${timeSince(n.last_seen)}</td>
@@ -283,10 +297,10 @@
   async function loadDevices() {
     try {
       const data = await get(urls.devices);
-      if (!data.ok) return;
+      if (!data.ok) throw new Error(data.error || 'تعذّر تحميل حالة الأجهزة');
 
       const tbody = el('devicesTableBody');
-      if (!tbody) return;
+      if (!tbody) throw new Error('جدول الأجهزة غير موجود في الصفحة');
 
       if (!data.devices.length) {
         tbody.innerHTML = `
@@ -301,29 +315,29 @@
       }
 
       // تحديث عداد المستخدمين
-      const uc = el('activeUsersCount');
-      if (uc) uc.textContent = data.active_users;
+      const sessions = el('activeSessionsCount');
+      if (sessions) sessions.textContent = data.active_sessions;
 
-      // تحديث حالة DB
-      updateDbStatusChip(data.devices);
+      updateDbStatusChip(data.database);
     } catch (e) {
-      console.warn('loadDevices error:', e);
+      updateDbStatusChip(null, e.message || 'تعذّر فحص قاعدة البيانات');
     }
   }
 
-  function updateDbStatusChip(devices) {
+  function updateDbStatusChip(database, errorMessage) {
     const chip = el('dbStatusChip');
     if (!chip) return;
-    const onlineMaster = devices.find(d => d.role === 'master' && d.is_online);
-    const isConnected  = onlineMaster || cfg.localIp === el('currentDbHost')?.textContent;
-    const dot = chip.querySelector('.ns-dot');
-    if (isConnected) {
-      dot.className = 'ns-dot online';
-      chip.innerHTML = `<span class="ns-dot online"></span> قاعدة البيانات متصلة`;
-    } else {
-      dot.className = 'ns-dot offline';
-      chip.innerHTML = `<span class="ns-dot offline"></span> تحقق من الاتصال`;
-    }
+    const isOnline = database?.is_online;
+    const label = isOnline === true
+      ? 'قاعدة البيانات متصلة'
+      : isOnline === false
+        ? 'قاعدة البيانات غير متصلة'
+        : 'تعذّر فحص قاعدة البيانات';
+    const dotClass = isOnline === true ? 'online' : 'offline';
+    chip.innerHTML = `<span class="ns-dot ${dotClass}"></span> ${label}`;
+    chip.title = database?.checked_at
+      ? `آخر فحص: ${new Date(database.checked_at).toLocaleString()}`
+      : (errorMessage || '');
   }
 
   function bindDeleteButtons() {
@@ -350,17 +364,42 @@
     });
   }
 
+  function applyPingResults(results) {
+    results.forEach(result => {
+      const row = document.querySelector(`[data-node-id="${result.id}"]`);
+      const statusCell = row?.children[4];
+      if (!statusCell) return;
+      statusCell.innerHTML = result.status === 'error'
+        ? '<span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>تعذّر الفحص</span>'
+        : result.is_online
+          ? '<span class="ns-online-dot"></span> متصل'
+          : '<span class="ns-offline-dot"></span> غير متصل';
+    });
+  }
+
   el('refreshDevicesBtn')?.addEventListener('click', loadDevices);
 
   // ─── فحص جميع الأجهزة ────────────────────────────────────────────────────────
   el('pingAllBtn')?.addEventListener('click', async () => {
     const btn = el('pingAllBtn');
+    const result = el('pingAllResult');
     setBusy(btn, true, 'bi-broadcast', 'فحص الكل');
     try {
-      await post(urls.pingAll, {});
+      const data = await post(urls.pingAll, {});
+      if (!data.ok) throw new Error(data.error || 'تعذّر فحص الأجهزة');
       await loadDevices();
+      applyPingResults(data.results);
+      if (result) {
+        result.hidden = false;
+        result.textContent = data.checked
+          ? `اكتمل فحص ${data.checked} جهازاً: ${data.online} متصل، ${data.offline} غير متصل، ${data.errors} تعذّر فحصه.`
+          : 'لا توجد أجهزة أخرى مسجّلة لفحصها؛ هذا الجهاز متصل الآن.';
+      }
     } catch (e) {
-      console.warn('pingAll error:', e);
+      if (result) {
+        result.hidden = false;
+        result.textContent = e.message || 'تعذّر فحص الأجهزة';
+      }
     } finally {
       setBusy(btn, false, 'bi-broadcast', 'فحص الكل');
     }
@@ -415,12 +454,12 @@
       const data = await post(urls.testPing, { ip, port });
       if (data.ok) {
         res.innerHTML = `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>
-          تم إضافة ${data.data?.name || ip} بنجاح</span>`;
+          تم إضافة ${escapeHtml(data.data?.name || ip)} بنجاح</span>`;
         el('newDeviceIp').value  = '';
         el('addDeviceForm').style.display = 'none';
         await loadDevices();
       } else {
-        res.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${data.error}</span>`;
+        res.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${escapeHtml(data.error)}</span>`;
       }
     } catch (e) {
       res.innerHTML = '<span class="text-danger">خطأ في الشبكة</span>';

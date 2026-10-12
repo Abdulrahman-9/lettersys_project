@@ -8,11 +8,15 @@
 كلّ اختبار هنا يفشل على الكود القديم وينجح على الجديد.
 """
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.utils import timezone
 
-from core.models import Book, BookEmailLog, EmailThread, IncomingEmail
+from core.models import (
+    Book, BookEmailLog, Department, EmailThread, IncomingEmail,
+    SecretAccessGrant, UserProfile,
+)
+from core.roles import CONTROLLER_GROUP_NAME
 
 
 class MailScopeTestCase(TestCase):
@@ -55,6 +59,204 @@ class MailScopeTestCase(TestCase):
         cls.inc_orphan = IncomingEmail.objects.create(
             thread=cls.orphan_thread, message_id='<o@x>', from_address='z@example.com',
             subject='وارد يتيم', received_at=timezone.now(), is_read=False,
+        )
+
+
+class DepartmentMailOfficerScopeTests(TestCase):
+    """مسؤول البريد يرى بريد الكتب المفتوحة ضمن قسمه، لا بريد الشركة كلّها."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.department = Department.objects.create(name='قسم البريد', code='ب.ق')
+        cls.other_department = Department.objects.create(
+            name='قسم آخر', code='ب.خ')
+        cls.officer = User.objects.create_user('mail_officer', password='pw-mail-officer')
+        cls.colleague = User.objects.create_user('mail_colleague', password='pw-mail-colleague')
+        cls.outsider = User.objects.create_user('mail_outsider', password='pw-mail-outsider')
+        for user, department in (
+                (cls.officer, cls.department),
+                (cls.colleague, cls.department),
+                (cls.outsider, cls.other_department)):
+            UserProfile.objects.update_or_create(
+                user=user, defaults={'department': department})
+        cls.officer.groups.add(
+            Group.objects.get_or_create(name=CONTROLLER_GROUP_NAME)[0])
+
+        cls.department_book = Book.objects.create(
+            kind='incoming_internal', title='كتاب زميل القسم',
+            department=cls.department, created_by=cls.colleague,
+        )
+        cls.secret_department_book = Book.objects.create(
+            kind='incoming_internal', title='كتاب سري للقسم', secret_level='secret',
+            department=cls.department, created_by=cls.colleague,
+        )
+        cls.other_book = Book.objects.create(
+            kind='incoming_internal', title='كتاب القسم الآخر',
+            department=cls.other_department, created_by=cls.outsider,
+        )
+        cls.granted_secret_book = Book.objects.create(
+            kind='incoming_internal', title='سر بتفويض', secret_level='secret',
+            department=cls.other_department, created_by=cls.outsider,
+        )
+        SecretAccessGrant.objects.create(
+            book=cls.granted_secret_book, user=cls.officer,
+            granted_by=cls.outsider,
+        )
+
+        cls.department_log = BookEmailLog.objects.create(
+            book=cls.department_book, to_address='dept@example.com',
+            subject='صادر القسم', status='sent',
+        )
+        cls.secret_log = BookEmailLog.objects.create(
+            book=cls.secret_department_book, to_address='secret@example.com',
+            subject='صادر سري القسم', status='sent',
+        )
+        cls.other_log = BookEmailLog.objects.create(
+            book=cls.other_book, to_address='other@example.com',
+            subject='صادر القسم الآخر', status='sent',
+        )
+        cls.granted_log = BookEmailLog.objects.create(
+            book=cls.granted_secret_book, to_address='granted@example.com',
+            subject='صادر السر المفوض', status='sent',
+        )
+
+        cls.department_thread = EmailThread.objects.create(
+            book=cls.department_book, created_by=cls.colleague,
+            subject='خيط القسم',
+        )
+        cls.secret_thread = EmailThread.objects.create(
+            book=cls.secret_department_book, created_by=cls.colleague,
+            subject='خيط سري القسم',
+        )
+        cls.other_thread = EmailThread.objects.create(
+            book=cls.other_book, created_by=cls.outsider,
+            subject='خيط القسم الآخر',
+        )
+        cls.granted_thread = EmailThread.objects.create(
+            book=cls.granted_secret_book, created_by=cls.outsider,
+            subject='خيط السر المفوض',
+        )
+        cls.orphan_thread = EmailThread.objects.create(
+            created_by=cls.officer, subject='خيط بلا كتاب للمسؤول',
+        )
+        for index, thread, subject in (
+                ('d', cls.department_thread, 'وارد القسم'),
+                ('s', cls.secret_thread, 'وارد سري القسم'),
+                ('o', cls.other_thread, 'وارد القسم الآخر'),
+                ('g', cls.granted_thread, 'وارد السر المفوض'),
+                ('x', cls.orphan_thread, 'وارد بلا كتاب')):
+            IncomingEmail.objects.create(
+                thread=thread, message_id=f'<{index}@mail-scope.test>',
+                from_address=f'{index}@example.com', subject=subject,
+                received_at=timezone.now(), is_read=False,
+            )
+
+    def test_mail_officer_sees_department_mail_but_not_other_departments(self):
+        from core.messaging.scoping import scope_sent_logs
+
+        visible = scope_sent_logs(
+            BookEmailLog.objects.all(), self.officer)
+        self.assertEqual(
+            set(visible.values_list('id', flat=True)),
+            {self.department_log.pk, self.secret_log.pk, self.granted_log.pk},
+        )
+        self.assertNotIn(self.other_log.pk, visible.values_list('id', flat=True))
+
+    def test_mail_officer_sees_openable_department_threads_and_live_grants(self):
+        from core.messaging.scoping import scope_threads
+
+        visible = scope_threads(EmailThread.objects.all(), self.officer)
+        self.assertEqual(
+            set(visible.values_list('id', flat=True)),
+            {self.department_thread.pk, self.secret_thread.pk,
+             self.granted_thread.pk, self.orphan_thread.pk},
+        )
+
+    def test_mail_officer_inbox_uses_the_same_department_scope(self):
+        from core.messaging.scoping import scope_incoming
+
+        visible = scope_incoming(IncomingEmail.objects.all(), self.officer)
+        self.assertEqual(
+            set(visible.values_list('subject', flat=True)),
+            {'وارد القسم', 'وارد سري القسم', 'وارد السر المفوض',
+             'وارد بلا كتاب'},
+        )
+
+    def test_mail_officer_can_compose_for_a_secret_book_with_a_live_grant(self):
+        from core.messaging.scoping import mailable_book
+
+        self.assertEqual(
+            mailable_book(self.officer, self.granted_secret_book.pk),
+            self.granted_secret_book,
+        )
+        self.assertIsNone(mailable_book(self.officer, self.other_book.pk))
+
+    def test_mail_officer_can_manage_mail_settings_and_templates(self):
+        from core.models import EmailSettings
+
+        self.client.force_login(self.officer)
+        for url in ('/books/mail/settings/', '/books/mail/templates/',
+                    '/books/mail/templates/new/'):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                if url == '/books/mail/templates/':
+                    self.assertContains(response, 'href="/books/mail/settings/"')
+
+        response = self.client.get('/books/api/email/settings/')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('smtp_password', response.json()['settings'])
+
+        inbox = self.client.get('/books/mail/inbox/')
+        self.assertTrue(inbox.context['can_sync_mail'])
+
+        response = self.client.post(
+            '/books/api/email/settings/',
+            data='{"smtp_host":"smtp.department.test","smtp_password":"test-secret"}',
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        settings = EmailSettings.get()
+        self.assertEqual(settings.smtp_host, 'smtp.department.test')
+        self.assertEqual(settings.smtp_password, 'test-secret')
+
+    def test_mail_officer_can_trigger_manual_sync_and_connection_tests(self):
+        from unittest.mock import patch
+
+        self.client.force_login(self.officer)
+        with (
+            patch('core.messaging.engines.imap.sync_inbox', return_value={'synced': 2}),
+            patch('core.messaging.engines.smtp.test_smtp_connection',
+                  return_value={'success': True}),
+            patch('core.messaging.engines.imap.test_imap_connection',
+                  return_value={'success': True}),
+        ):
+            self.assertEqual(
+                self.client.post('/books/mail/api/inbox/sync/').status_code, 200)
+            self.assertEqual(
+                self.client.post('/books/mail/api/settings/test-smtp/').status_code, 200)
+            self.assertEqual(
+                self.client.post('/books/mail/api/settings/test-imap/').status_code, 200)
+
+    def test_non_mail_officer_cannot_manage_mail_settings_or_sync(self):
+        self.client.force_login(self.colleague)
+        inbox = self.client.get('/books/mail/inbox/')
+        self.assertFalse(inbox.context['can_sync_mail'])
+        for url in ('/books/mail/settings/', '/books/mail/templates/',
+                    '/books/api/email/settings/'):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(
+            self.client.post('/books/mail/api/inbox/sync/').status_code, 403)
+
+    def test_regular_employee_still_sees_only_their_own_mail(self):
+        from core.messaging.scoping import scope_sent_logs
+
+        visible = scope_sent_logs(
+            BookEmailLog.objects.all(), self.colleague)
+        self.assertEqual(
+            set(visible.values_list('id', flat=True)),
+            {self.department_log.pk, self.secret_log.pk},
         )
 
 

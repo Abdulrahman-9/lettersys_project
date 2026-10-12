@@ -590,8 +590,13 @@ class InstallerTests(unittest.TestCase):
     def _run(self, args, answer, tmp, bat=None, path_prefix=None, extra_env=None):
         env = dict(os.environ)
         env.update(extra_env or {})
-        if path_prefix:                              # أدواتٌ مزيّفة (whoami) قبل System32
-            env['PATH'] = path_prefix + os.pathsep + env.get('PATH', '')
+        tools = os.path.join(tmp, 'tools')
+        os.makedirs(tools, exist_ok=True)
+        with open(os.path.join(tools, 'pythonw.exe'), 'wb') as f:
+            f.write(b'MZ fake pythonw')
+        env['PATH'] = os.pathsep.join(
+            part for part in (path_prefix, tools, env.get('PATH', '')) if part
+        )
         env['LOCALAPPDATA'] = os.path.join(tmp, 'local')
         env['APPDATA'] = os.path.join(tmp, 'app')
         env['LETTERSYS_INSTALL_NO_START'] = '1'      # لا وكيلَ حقيقيّاً من الاختبار
@@ -648,6 +653,11 @@ class InstallerTests(unittest.TestCase):
                                ('http', '127.0.0.1', 8000), ('http', 'localhost', 8000)})
         self.assertEqual(warns, [], 'الوكيلُ لم يقرأ ما كتبه المُثبِّت')
         self.assertIn('LetterSys Scan Agent.lnk', os.listdir(startup))
+        with open(os.path.join(startup, 'LetterSys Scan Agent.lnk'), 'rb') as f:
+            shortcut = f.read()
+        self.assertIn(b'pythonw.exe', shortcut, 'اختصار بدء التشغيل لا يستخدم pythonw')
+        self.assertNotIn(b'run_agent.bat', shortcut, 'اختصار بدء التشغيل يُظهر نافذة طرفية')
+        self.assertIn('-m scan_agent'.encode('utf-16-le'), shortcut)
 
     def test_shortcut_target_survives_an_apostrophe_in_the_path(self):
         """اسمُ مستخدمٍ فيه فاصلةٌ عليا كان يكسر سطرَ PowerShell فيبقى الهدفُ فارغاً."""
@@ -658,7 +668,8 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(os.path.exists(lnk), p.stdout)
         with open(lnk, 'rb') as f:
             blob = f.read()
-        self.assertIn(b'run_agent.bat', blob, 'الاختصارُ أُنشئ بهدفٍ فارغ')
+        self.assertIn(b'pythonw.exe', blob, 'الاختصارُ لا يشير إلى pythonw')
+        self.assertNotIn(b'run_agent.bat', blob, 'الاختصارُ يُظهر نافذةَ Command Prompt')
 
     # ═══════ الاسمُ المفردُ على http يُنبَّه عليه ═══════
     def test_single_label_http_origin_warns_about_spoofing(self):
@@ -724,7 +735,9 @@ class InstallerTests(unittest.TestCase):
         p = self._run([self.ORIGIN], 'y\n', tmp)
         self.assertEqual(p.returncode, 0, p.stdout)
         with open(lnk, 'rb') as f:
-            self.assertIn(b'run_agent.bat', f.read(), 'بقي الاختصارُ القديم')
+            blob = f.read()
+        self.assertIn(b'pythonw.exe', blob, 'الاختصارُ لا يشير إلى pythonw')
+        self.assertNotIn(b'run_agent.bat', blob, 'بقي اختصارُ الطرفيّة القديم')
 
     # ═══════ لا «تمّ» بلا اختصار ═══════
     def test_failed_shortcut_is_reported_not_claimed(self):

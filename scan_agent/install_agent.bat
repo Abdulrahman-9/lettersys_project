@@ -22,7 +22,7 @@ REM  يفعل هذا فقط:
 REM    1. يكتب %LOCALAPPDATA%\LetterSys\agent.json بالأصول المُمرَّرة (بعد الموافقة).
 REM    2. إن جاء من حزمة التوزيع (python\ بجوار scan_agent\ — يبنيها build_dist.ps1):
 REM       ينسخهما إلى %LOCALAPPDATA%\LetterSys\agent فلا يحتاج الجهازُ Python مثبَّتاً
-REM       ولا يعمل الوكيلُ من مسار شبكة. (من نسخة المشروع: run_agent.bat كما كان.)
+REM       ولا يعمل الوكيلُ من مسار شبكة. ومن نسخة المشروع يستهدف الاختصارُ pythonw المحليّ.
 REM    3. يضع اختصارَ التشغيل التلقائيّ في shell:startup ويشغّل الوكيلَ الآن.
 REM    4. يحذف agent_token.txt القديم (لم يبقَ له معنى بعد إسقاط التوكِن).
 REM ════════════════════════════════════════════════════════════════════════════
@@ -50,6 +50,21 @@ set "SCRIPT_DIR=%~dp0"
 set "DATA_DIR=%LOCALAPPDATA%\LetterSys"
 set "JSON_FILE=%DATA_DIR%\agent.json"
 set "LS_TMP=%TEMP%\lettersys_agent_%RANDOM%%RANDOM%.json"
+
+REM اختصارُ بدء التشغيل يستهدف pythonw مباشرةً، لا ملفّ .bat؛ فملفّ .bat يُظهر
+REM نافذةَ Command Prompt عند كلّ دخول إلى Windows حتى لو بدأ pythonw بلا نافذة.
+set "LS_TARGET=%SCRIPT_DIR%..\python\pythonw.exe"
+set "LS_ARGS=-m scan_agent"
+set "LS_WORKDIR=%SCRIPT_DIR%.."
+if not exist "%LS_TARGET%" (
+    set "LS_TARGET="
+    if exist "%SCRIPT_DIR%..\.venv\Scripts\pythonw.exe" (
+        set "LS_TARGET=%SCRIPT_DIR%..\.venv\Scripts\pythonw.exe"
+    ) else (
+        for /f "delims=" %%P in ('where pythonw.exe 2^>nul') do if not defined LS_TARGET set "LS_TARGET=%%P"
+    )
+)
+if not defined LS_TARGET goto pythonwfail
 
 REM ── 1) تحقَّق من كلّ وسيط قبل أيّ كتابة ──
 set "LS_ORIGINS="
@@ -116,9 +131,6 @@ REM ── 3) الوقتُ التشغيليّ: Python المضمَّن + الح�
 REM `robocopy "%SCRIPT_DIR%."`: الشرطةُ الخلفيّة الختاميّة قبل علامة الاقتباس تُفسد
 REM تحليلَ robocopy للوسيط؛ النقطةُ تُنهي المسارَ بلا شرطة.
 set "AGENT_DIR=%DATA_DIR%\agent"
-set "LS_TARGET=%SCRIPT_DIR%run_agent.bat"
-set "LS_ARGS="
-set "LS_WORKDIR=%SCRIPT_DIR%.."
 if exist "%SCRIPT_DIR%..\python\pythonw.exe" (
     call :stop_running_agent
     robocopy "%SCRIPT_DIR%..\python" "%AGENT_DIR%\python" /MIR /R:5 /W:2 /NFL /NDL /NJH /NJS /NP >nul
@@ -190,6 +202,13 @@ echo.
 echo [خطأ] تعذّر نسخُ الوكيل إلى %AGENT_DIR% — لم يُنشأ اختصارُ التشغيل.
 echo.
 exit /b 4
+
+:pythonwfail
+echo.
+echo [خطأ] لم يُعثر على pythonw.exe — ثبّت Python أو استخدم حزمة التوزيع المضمَّنة.
+echo   لم يُكتب شيء ولم يُنشأ اختصارٌ يُظهر نافذةً سوداء عند بدء Windows.
+echo.
+exit /b 8
 
 :cancel
 del /q "%LS_TMP%" 2>nul

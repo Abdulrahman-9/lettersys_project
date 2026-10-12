@@ -158,8 +158,9 @@ def book_email_logs(request, book_id):
 def test_smtp(request):
     from core.models import EmailSettings
     from core.messaging.engines.smtp import test_smtp_connection
+    from core.scoping import can_manage_mail
 
-    if not request.user.is_staff:
+    if not can_manage_mail(request.user):
         return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
 
     cfg = EmailSettings.get()
@@ -172,8 +173,9 @@ def test_smtp(request):
 @require_http_methods(['GET', 'POST'])
 def email_settings(request):
     from core.models import EmailSettings
+    from core.scoping import can_manage_mail
 
-    if not request.user.is_staff:
+    if not can_manage_mail(request.user):
         return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
 
     cfg = EmailSettings.get()

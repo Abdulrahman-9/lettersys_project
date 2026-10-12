@@ -10,8 +10,8 @@ URL patterns:
   /mail/compose/             → Compose new message
   /mail/compose/<book_id>/   → Compose linked to a book (pre-filled)
   /mail/thread/<id>/         → Thread view
-  /mail/settings/            → SMTP + IMAP settings (staff)
-  /mail/templates/           → Manage templates (staff)
+  /mail/settings/            → SMTP + IMAP settings (mail officer/admin)
+  /mail/templates/           → Manage templates (mail officer/admin)
   /mail/templates/new/       → Create template
   /mail/templates/<id>/edit/ → Edit template
   /mail/templates/<id>/delete/ → Delete template
@@ -23,7 +23,7 @@ import re
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
-from core.views.helpers import staff_required
+from core.views.helpers import mail_manager_required
 from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
@@ -201,14 +201,14 @@ def mail_inbox(request):
         IncomingEmail.objects.filter(is_read=False), request.user
     ).count()
 
-    from core.scoping import can_manage_system
+    from core.scoping import can_manage_mail
 
     return render(request, 'core/mail/hub.html', {
         'active_tab':   'inbox',
         'page_obj':     page,
         'unread_count': unread_count,
         # زرُّ «مزامنة الآن» بوّابةُ فعلٍ تُحسَب في العرض لا في القالب (§7.6).
-        'can_sync_mail': can_manage_system(request.user),
+        'can_sync_mail': can_manage_mail(request.user),
         'read_filter':  read_filter,
         'search':       search,
     })
@@ -359,7 +359,7 @@ def mail_thread(request, thread_id):
 # ══════════════════════════════════════════════════════
 
 @login_required
-@staff_required
+@mail_manager_required
 def mail_settings(request):
     from core.models import EmailSettings
     cfg = EmailSettings.get()
@@ -412,7 +412,7 @@ def _update_email_settings(cfg, data):
 # ══════════════════════════════════════════════════════
 
 @login_required
-@staff_required
+@mail_manager_required
 def mail_templates(request):
     from core.models import EmailTemplate
     templates = EmailTemplate.objects.order_by('applicable_kind', 'name')
@@ -425,7 +425,7 @@ def mail_templates(request):
 
 @login_required
 @require_http_methods(['GET', 'POST'])
-@staff_required
+@mail_manager_required
 def mail_template_edit(request, template_id=None):
     """Create new template or edit existing one."""
     from core.models import EmailTemplate
@@ -475,7 +475,7 @@ def mail_template_edit(request, template_id=None):
 
 @login_required
 @require_http_methods(['POST'])
-@staff_required
+@mail_manager_required
 def mail_template_delete(request, template_id):
     # الحارسُ الواحد كجاراتها (القوالب · التحرير · الإعدادات) — كان `is_staff` وحدَه فيُردّ
     # مديرُ النظام الذي ليس «موظّفاً» عن حذفٍ يرى زرّه

@@ -9,8 +9,11 @@
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.utils import timezone
 
-from core.models import Book, BookReferral, Department, Entity, UserProfile
+from core.models import (
+    Book, BookReferral, Department, Entity, SecretAccessGrant, UserProfile,
+)
 from core.scoping import can_edit_book, can_open_content, can_view_book, scope_books_for
 
 
@@ -60,6 +63,17 @@ class ScopeParityTests(TestCase):
         issued.issuing_entities.add(self.dept_ent)
         self.books['ذُكر فيه القسم صادراً'] = issued
 
+        # تفويضٌ فرديّ سارٍ إلى كتابٍ سرّيّ خارج نطاق قسم الموظّف.
+        granted = Book.objects.create(
+            kind='incoming_external', title='سرٌّ مفوّض',
+            our_number='9008', department=self.far,
+            created_by=self.boss, secret_level='secret',
+        )
+        SecretAccessGrant.objects.create(
+            book=granted, user=self.worker, granted_by=self.boss,
+        )
+        self.books['سرٌّ مفوّض'] = granted
+
     def _user(self, name, department):
         user = User.objects.create_user(name, name + '@x.co', 'pw')
         UserProfile.objects.update_or_create(user=user,
@@ -84,6 +98,23 @@ class ScopeParityTests(TestCase):
                 self.assertEqual(
                     can_view_book(book, user), book.pk in visible,
                     msg='انفرجَ النصفان: %s ⟵ %s' % (who, label))
+
+    def test_a_live_secret_grant_expands_only_its_book_scope(self):
+        granted = self.books['سرٌّ مفوّض']
+
+        self.assertTrue(can_view_book(granted, self.worker))
+        self.assertTrue(can_open_content(granted, self.worker))
+        self.assertNotIn(
+            self.books['مملوكٌ لقسمٍ بعيد'].pk,
+            scope_books_for(self.worker, Book.objects.all()).values_list('pk', flat=True),
+        )
+        SecretAccessGrant.objects.filter(book=granted, user=self.worker).update(
+            revoked_at=timezone.now())
+        self.assertFalse(can_view_book(granted, self.worker))
+        self.assertFalse(
+            scope_books_for(self.worker, Book.objects.all())
+            .filter(pk=granted.pk).exists()
+        )
 
     def test_writing_implies_opening_implies_seeing(self):
         """الحقوقُ الثلاثةُ متداخلة على المصفوفة كلِّها: مَن يكتب يفتح، ومَن يفتح يرى

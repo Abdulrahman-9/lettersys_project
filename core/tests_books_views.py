@@ -18,7 +18,9 @@ from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Book, BookHistory, BookComment, Attachment, Entity, OCRResult
+from .models import (
+    Attachment, Book, BookComment, BookHistory, BookSequence, Entity, OCRResult,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +51,7 @@ class BookViewsBase(TestCase):
         )
 
         self.book = Book.objects.create(
+            department=BookSequence.resolve_department(),
             our_number='2024-001',
             title='كتاب تجريبي',
             date=date(2024, 1, 15),
