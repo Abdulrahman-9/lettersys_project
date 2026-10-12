@@ -4,7 +4,7 @@ param(
     [string]$ConfirmProductionRelease
 )
 
-# RELEASE-SCRIPT-VERSION=20261012-3
+# RELEASE-SCRIPT-VERSION=20261012-4
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -98,7 +98,7 @@ function Restore-OldRelease {
         throw 'Production port 1312 remains bound during rollback.'
     }
     if ($script:CodeUpdated) {
-        Invoke-Checked 'git.exe' @('-C', $App, 'switch', '--detach', $script:OldHead) 'restore previous production revision'
+        Invoke-Checked 'git.exe' @('-C', $App, 'switch', '-C', 'main', $script:OldHead) 'restore previous production revision'
         Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'collectstatic', '--noinput') 'restore previous static manifest'
     }
     Start-Service -Name $ServiceName
@@ -243,7 +243,7 @@ raise SystemExit(subprocess.run(command, env=environment, check=False).returncod
 
     Invoke-Checked 'git.exe' @('-C', $App, 'merge', '--ff-only', $target) 'fast-forward production checkout'
     $script:CodeUpdated = $true
-    $plan = Invoke-Native $Vpy @((Join-Path $App 'manage.py'), 'migrate', '--plan')
+    $plan = Invoke-Native $Vpy @((Join-Path $App 'manage.py'), 'showmigrations', '--plan')
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect post-update migration plan.' }
     $pending = @($plan | Where-Object { "$_" -match '^\s*\[\s\]' })
     if ($pending.Count -ne 1 -or "$($pending[0])" -notmatch 'core\.0083_alter_bookhistory_action_alter_bookreferral_status') {
@@ -252,7 +252,7 @@ raise SystemExit(subprocess.run(command, env=environment, check=False).returncod
     Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'check') 'Django system check'
     Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'migrate', 'core', '0083_alter_bookhistory_action_alter_bookreferral_status', '--noinput') 'apply migration 0083 only'
     $script:MigrationApplied = $true
-    $remaining = @(Invoke-Native $Vpy @((Join-Path $App 'manage.py'), 'migrate', '--plan') | Where-Object { "$_" -match '^\s*\[\s\]' })
+    $remaining = @(Invoke-Native $Vpy @((Join-Path $App 'manage.py'), 'showmigrations', '--plan') | Where-Object { "$_" -match '^\s*\[\s\]' })
     if ($LASTEXITCODE -ne 0 -or $remaining.Count -ne 0) { throw 'Migrations remain pending after 0083.' }
     Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'collectstatic', '--noinput') 'collect production static files'
 
