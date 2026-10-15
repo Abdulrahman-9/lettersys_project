@@ -91,7 +91,7 @@ def _strip_sender_fields_for_outgoing(kind, sender_number, sender_date_str):
     return '', ''
 
 
-def _duplicate_guard(request, data, *, department, kind, title, sender_number,
+def _duplicate_guard(request, data, *, department, kind, title, party_number,
                      cmp_date, party_entities, exclude_id=None):
     """حارس التكرار المشترك (الحفظ + التعديل). يُعيد JsonResponse(409) للمنع/التنبيه،
     أو None للسماح بالمتابعة. يُستدعى قبل استهلاك أي رقم تسلسلي.
@@ -102,7 +102,7 @@ def _duplicate_guard(request, data, *, department, kind, title, sender_number,
     """
     candidates = find_duplicate_candidates(
         department=department, kind=kind, title=title, cmp_date=cmp_date,
-        party_number=sender_number, party_entities=party_entities,
+        party_number=party_number, party_entities=party_entities,
         exclude_id=exclude_id,
     )
     if not candidates:
@@ -146,6 +146,7 @@ def save_book_api(request):
 
         our_number = (data.get('our_number') or data.get('book_number') or '').strip()
         sender_number = (data.get('sender_number') or data.get('outgoing_incoming_number') or '').strip()
+        director_general_number = (data.get('director_general_number') or '').strip()
         title = (data.get('title') or '').strip()
         book_date_str = (data.get('date') or '').strip()
         sender_date_str = (data.get('sender_date') or '').strip()
@@ -158,13 +159,18 @@ def save_book_api(request):
         needs_followup = (data.get('needs_followup') or 'false').lower() in ('true', '1', 'on')
         secret_level = _normalize_secret_level_value(data.get('secret_level'))
         kind_value = normalize_book_kind(kind_value, 'incoming_internal')
+        if kind_value != 'outgoing_external':
+            director_general_number = ''
         document_type = resolve_document_type(kind_value, data.get('document_type') or data.get('book_type_name'))
+        reservation_id = (data.get('reservation_id') or '').strip()
+        auto_number = (data.get('auto_number') or 'false').lower() in ('true', '1')
 
         required_values = {
-            'our_number': our_number,
             'title': title,
             'date': book_date_str,
         }
+        if not (kind_value == 'outgoing_external' and (reservation_id or auto_number)):
+            required_values['our_number'] = our_number
         for field, value in required_values.items():
             if not value:
                 return JsonResponse({
@@ -172,6 +178,12 @@ def save_book_api(request):
                     'message': f'الحقل {field} مطلوب',
                     'error_code': 'MISSING_FIELD'
                 }, status=400)
+        if kind_value == 'outgoing_external' and not director_general_number:
+            return JsonResponse({
+                'success': False,
+                'message': 'رقم مكتب المدير العام مطلوب للصادر الخارجي',
+                'error_code': 'MISSING_DIRECTOR_GENERAL_NUMBER',
+            }, status=400)
 
         issuing_ids = request.POST.getlist('issuing_entity_ids[]')
         issuing_new = request.POST.getlist('issuing_entity_new[]')
@@ -225,7 +237,9 @@ def save_book_api(request):
         _dup_incoming = kind_value in ('incoming_internal', 'incoming_external')
         _dup_resp = _duplicate_guard(
             request, data, department=book_department, kind=kind_value,
-            title=title, sender_number=sender_number,
+            title=title,
+            party_number=(director_general_number
+                          if kind_value == 'outgoing_external' else sender_number),
             cmp_date=(sender_date if _dup_incoming else book_date),
             party_entities=(issuing_entities_list if _dup_incoming else receiving_entities_list),
         )
@@ -233,8 +247,13 @@ def save_book_api(request):
             return _dup_resp
 
         reservation = None
-        reservation_id = (data.get('reservation_id') or '').strip()
-        auto_number = (data.get('auto_number') or 'false').lower() in ('true', '1')
+        if (kind_value == 'outgoing_external' and not reservation_id
+                and not auto_number):
+            return JsonResponse({
+                'success': False,
+                'message': 'يجب حجز رقم القيد المتسلسل أو طلب توليده تلقائياً.',
+                'error_code': 'SYSTEM_NUMBER_REQUIRED',
+            }, status=400)
         # "بلا رقم": استثناء يُسمح به للكتب الداخلية فقط — يأخذ رقماً تقنياً ببادئة سجل 0
         numberless = (data.get('numberless') or 'false').lower() in ('true', '1')
         numberless_internal = numberless and kind_value in ('incoming_internal', 'outgoing_internal')
@@ -369,6 +388,7 @@ def save_book_api(request):
                     department=book_department,
                     our_number=our_number,
                     sender_number=sender_number,
+                    director_general_number=director_general_number,
                     title=title,
                     document_type=document_type,
                     date=book_date,
@@ -754,6 +774,7 @@ def api_book_detail_json(request, pk):
         'our_number': book.our_number or '',                 # المخزَّن — للمطابقة
         'our_number_display': book.our_number_display,       # المعروض — «825/2025»
         'sender_number': book.sender_number or '',
+        'director_general_number': book.director_general_number or '',
         'kind': book.kind,
         'kind_label': book.kind_label,
         'kind_direction': book.kind_direction,
@@ -856,11 +877,20 @@ def update_book_api(request):
             return JsonResponse({'success': False, 'message': 'ليس لديك صلاحية تعديل هذا الكتاب', 'error_code': 'PERMISSION_DENIED'}, status=403)
 
         sender_number = (data.get('sender_number') or '').strip()
+        director_general_number = (data.get('director_general_number') or '').strip()
         title = (data.get('title') or '').strip()
         book_date_str = (data.get('date') or '').strip()
         sender_date_str = (data.get('sender_date') or '').strip()
         sender_number, sender_date_str = _strip_sender_fields_for_outgoing(
             (data.get('kind') or getattr(book, 'kind', '') or ''), sender_number, sender_date_str)
+        if book.kind != 'outgoing_external':
+            director_general_number = ''
+        elif not director_general_number:
+            return JsonResponse({
+                'success': False,
+                'message': 'رقم مكتب المدير العام مطلوب للصادر الخارجي',
+                'error_code': 'MISSING_DIRECTOR_GENERAL_NUMBER',
+            }, status=400)
         due_date_str = (data.get('due_date') or data.get('dueDate') or '').strip()
         needs_followup = (data.get('needs_followup') or 'false').lower() in ('true', '1', 'on')
         secret_level = _normalize_secret_level_value(data.get('secret_level'))
@@ -905,6 +935,7 @@ def update_book_api(request):
 
         with transaction.atomic():
             book.sender_number = sender_number
+            book.director_general_number = director_general_number
             book.title = title
             book.document_type = document_type
             book.date = book_date

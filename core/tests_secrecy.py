@@ -18,7 +18,7 @@ from django.utils import timezone
 from core.models import Attachment, Book, Department, SecretAccessGrant, UserProfile
 from core.roles import CONTROLLER_GROUP_NAME
 from core.scoping import (ACCESS_FULL, ACCESS_STUB, STUB_TITLE, can_open_content,
-                          can_view_book, secret_access)
+                          can_view_book, secret_access, stub_book_payload)
 
 
 class SecrecyTestCase(TestCase):
@@ -76,6 +76,10 @@ class AccessMatrixTests(SecrecyTestCase):
 
 class RowIsVisibleContentIsNotTests(SecrecyTestCase):
     """جوهرُ التصحيح: الصفُّ يُرى والمحتوى لا."""
+
+    def test_stub_hides_director_general_office_number(self):
+        payload = stub_book_payload({'director_general_number': 'DG-109'})
+        self.assertEqual(payload['director_general_number'], '')
 
     def test_plain_member_sees_the_row(self):
         self.assertTrue(can_view_book(self.secret, self.clerk),

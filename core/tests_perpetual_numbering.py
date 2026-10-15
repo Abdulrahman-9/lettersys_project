@@ -117,9 +117,11 @@ class BookNumberDisplayTests(TestCase):
         b = self._book('825')
         self.assertIn('رقمنا', b.our_number_explained)
 
-    def test_explained_for_manual_kind_names_the_source(self):
-        b = self._book('27189', kind='outgoing_external')
-        self.assertIn('المدير العام', b.our_number_explained)
+    def test_outgoing_external_keeps_office_number_separate_from_our_series(self):
+        b = self._book('27189', kind='outgoing_external',
+                       director_general_number='109')
+        self.assertIn('رقم قيدنا', b.our_number_explained)
+        self.assertEqual(b.director_general_number, '109')
 
     def test_display_is_one_string_for_every_shape(self):
         # سطرٌ واحد تستعمله كلّ الصفحات خارج القائمة الموحّدة
@@ -324,6 +326,26 @@ class DuplicateDetectionTests(TestCase):
 
     def test_same_book_in_another_department_is_not_a_duplicate(self):
         self.assertEqual(self._find(department=self.other_department), [])
+
+    def test_external_outgoing_uses_the_director_general_office_number(self):
+        receiver = Entity.objects.create(name='ديوان المحافظة', etype='receiver')
+        Book.objects.create(
+            our_number='1', title='إحالة معاملة', kind='outgoing_external',
+            date=date(2026, 5, 1), director_general_number='109',
+            created_by=self.user, department=self.department,
+        ).receiving_entities.add(receiver)
+
+        matches = find_duplicate_candidates(
+            department=self.department,
+            kind='outgoing_external',
+            title='إحالة معاملة',
+            cmp_date=date(2026, 5, 1),
+            party_number='109',
+            party_entities=[receiver],
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]['match_count'], 4)
 
 
 class DuplicateGuardApiTests(TestCase):

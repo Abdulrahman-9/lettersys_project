@@ -43,7 +43,7 @@ def find_duplicate_candidates(*, department, kind, title, cmp_date, party_number
         kind:            نوع الكتاب (نطاق البحث — نفس النوع فقط)
         title:           عنوان الكتاب المُدخَل
         cmp_date:        تاريخ المقارنة (sender_date للوارد، date للصادر) — أو None
-        party_number:    رقم الطرف (sender_number) — أو ''
+        party_number:    رقم الطرف المقابل؛ للمراسلات رقم الجهة، وللصادر الخارجي رقم مكتب المدير العام
         party_entities:  قائمة كائنات Entity لجهة الطرف الآخر (مُصدِرة للوارد/مُستلمة للصادر)
         exclude_id:      استثناء كتاب (للتعديل)
         limit:           أقصى عدد مرشّحين يُعادون
@@ -68,8 +68,10 @@ def find_duplicate_candidates(*, department, kind, title, cmp_date, party_number
         prelim |= Q(title__icontains=title.strip()[:80])
     if cmp_date:
         prelim |= (Q(sender_date=cmp_date) if is_incoming else Q(date=cmp_date))
+    number_field = ('director_general_number' if kind == 'outgoing_external'
+                    else 'sender_number')
     if nnumber:
-        prelim |= Q(sender_number=nnumber)
+        prelim |= Q(**{number_field: nnumber})
     if party_ids:
         rel = 'issuing_entities__in' if is_incoming else 'receiving_entities__in'
         prelim |= Q(**{rel: party_ids})
@@ -90,7 +92,7 @@ def find_duplicate_candidates(*, department, kind, title, cmp_date, party_number
             matched.append('date')
         if nparty and (nparty & _book_party_names(b, is_incoming)):
             matched.append('entity')
-        b_number = (b.sender_number or '').strip()
+        b_number = (getattr(b, number_field) or '').strip()
         if nnumber and b_number and b_number == nnumber:
             matched.append('number')
 
@@ -99,6 +101,7 @@ def find_duplicate_candidates(*, department, kind, title, cmp_date, party_number
                 'id': b.id,
                 'our_number': b.our_number,
                 'our_number_display': b.our_number_display,
+                'sender_number': b.sender_number,
                 'title': b.title,
                 'date': (b_date.isoformat() if b_date else ''),
                 'match_count': len(matched),

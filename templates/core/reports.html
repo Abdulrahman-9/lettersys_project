@@ -184,7 +184,7 @@
             <td class="rx-date">{{ b.date|date:"d/m/Y"|default:"—" }}</td>
             <td>
               <div class="rx-t">{% if b.restricted %}<span class="rx-secret"><i class="bi bi-lock-fill" aria-hidden="true"></i>{{ b.shown_title }}</span>{% else %}{{ b.shown_title|default:"—" }}{% endif %}</div>
-              <span class="rx-kind"><i class="rx-dot {% if b.is_outgoing %}k-out{% else %}k-in{% endif %}" aria-hidden="true"></i>{{ b.kind_label }}{% if b.shown_sender_number %} · رقمهم <span class="num">{{ b.shown_sender_number }}</span>{% endif %}{% if b.shown_sender_date %} في <span class="num">{{ b.shown_sender_date|date:"d/m/Y" }}</span>{% endif %}</span>
+              <span class="rx-kind"><i class="rx-dot {% if b.is_outgoing %}k-out{% else %}k-in{% endif %}" aria-hidden="true"></i>{{ b.kind_label }}{% if b.shown_sender_number %} · رقمهم <span class="num">{{ b.shown_sender_number }}</span>{% endif %}{% if b.shown_director_general_number %} · رقم مكتب المدير العام <span class="num">{{ b.shown_director_general_number }}</span>{% endif %}{% if b.shown_sender_date %} في <span class="num">{{ b.shown_sender_date|date:"d/m/Y" }}</span>{% endif %}</span>
               {% if b.shown_margin %}<div class="rx-margin">الهامش: {{ b.shown_margin }}</div>{% endif %}
             </td>
             <td class="rx-party">{% if b.restricted %}<span class="rx-none">—</span>{% else %}{{ b.shown_issuing.0|default:"—" }}{% if b.shown_issuing|length > 1 %} <small>+{{ b.shown_issuing|length|add:"-1" }}</small>{% endif %}<i class="bi bi-arrow-left" aria-hidden="true"></i><span class="visually-hidden">إلى</span>{{ b.shown_receiving.0|default:"—" }}{% if b.shown_receiving|length > 1 %} <small>+{{ b.shown_receiving|length|add:"-1" }}</small>{% endif %}{% endif %}</td>

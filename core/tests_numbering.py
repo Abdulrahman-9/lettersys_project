@@ -122,8 +122,9 @@ class ContractTests(SimpleTestCase):
         self.assertEqual(N.BASE_YEAR, 2026)
 
     def test_registers_are_split_by_who_issues_the_number(self):
-        self.assertIn('outgoing_external', N.MANUAL_KINDS)
-        for k in ('incoming_internal', 'incoming_external', 'outgoing_internal'):
+        self.assertNotIn('outgoing_external', N.MANUAL_KINDS)
+        for k in ('incoming_internal', 'incoming_external', 'outgoing_internal',
+                  'outgoing_external'):
             self.assertIn(k, N.SERIES_KINDS)
         self.assertEqual(set(N.SERIES_KINDS) & set(N.MANUAL_KINDS), set())
 

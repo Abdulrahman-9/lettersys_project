@@ -44,7 +44,7 @@
     <span class="date-val" title="{% if book.is_incoming %}تاريخ استلامنا للكتاب{% else %}تاريخ إصدار الكتاب{% endif %}">{{ book.date|date:"d/m/Y"|default:"—" }}</span>
   </td>
 
-  {# 4: رقم الجهة (رقمهم) — للوارد فقط؛ يُخفى العمود كاملاً في الصادر #}
+  {# 4: رقم الجهة الواردة أو رقم مكتب المدير العام للصادر الخارجي #}
   <td class="col-sender-number">
     {% if book.is_incoming %}
       {% if book.sender_number %}
@@ -52,6 +52,8 @@
       {% else %}
         <span class="sender-number-empty" title="العدد المطبوع على المستند لم يُسجَّل بعد — أضِفه عند التعديل">لم يُسجَّل</span>
       {% endif %}
+    {% elif book.kind == "outgoing_external" and book.shown_director_general_number %}
+      <span class="sender-number-value" title="رقم مكتب المدير العام — مستقل عن رقم القيد المتسلسل لدينا.">{{ book.shown_director_general_number }}</span>
     {% endif %}
   </td>
 
