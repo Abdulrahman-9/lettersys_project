@@ -13,7 +13,7 @@
              sender_number = NUM  — رقمهم (مبعثر، تكرار مقبول)
              receiving_entities = SUBROOT مفصولاً على "+"  — جهة الارتباط
   - صادر داخلي: our_number من عمود NUM (لا عمود WID في جداول الصادر)
-  - صادر خارجي: our_number = NUM كما هو — رقم مكتب المدير العام، بلا سلسلة منّا
+  - صادر خارجي: NUM = رقم مكتب المدير العام، وour_number من سلسلتنا الداخلية
   والصيغة: سجلّ 2026 فما بعد ⇒ رقم مجرّد؛ 2025 وما قبله ⇒ موسوم بسنة سجلّه.
   - document_type = CLAS، التواريخ من DATE/CND، العنوان من SUB، الجهة المصدرة من FROM (للوارد)
   - المرفق من العمود {P}FILE (varbinary → PDF)
@@ -1121,11 +1121,14 @@ class LegacyRestoreEngine:
             sender_number = ''
             from_name = ''
         else:
-            # الصادر الخارجي: رقمه من مكتب السيد المدير العام — يُخزَّن كما هو
-            # بلا سنةٍ ولا بادئة، ولا سلسلة لنا فيه، ويجوز تكراره.
-            our_number = '' if numbering.is_no_number(num) else num
+            # الصادر الخارجي: NUM هو رقم مكتب المدير العام؛ رقم قيدنا المتسلسل
+            # يُستهلك عند إنشاء الكتاب أدناه.
+            our_number = ''
+            director_general_number = '' if numbering.is_no_number(num) else num
             sender_number = ''
             from_name = ''
+        if kind != 'outgoing_external':
+            director_general_number = ''
 
         # المنطق الموحَّد: 'pending' من المصدر القديم ⇒ نشط (is_archived=False)، غيره ⇒ مؤرشف
         legacy_status = _norm_status(stat, bdate)
@@ -1148,6 +1151,9 @@ class LegacyRestoreEngine:
                     existing.source_ref = source_ref; changed.append('source_ref')
                 if not existing.sender_number and sender_number:
                     existing.sender_number = sender_number; changed.append('sender_number')
+                if not existing.director_general_number and director_general_number:
+                    existing.director_general_number = director_general_number
+                    changed.append('director_general_number')
                 if not existing.document_type and clas:
                     existing.document_type = clas; changed.append('document_type')
                 if changed:
@@ -1164,6 +1170,9 @@ class LegacyRestoreEngine:
                 # والمصدر لا يعرف الصيغة الدائمة. إعادة الكتابة كانت تصطدم بقيد
                 # التفرّد وتُبطل عمل توحيد الترقيم.
                 existing.sender_number = sender_number or existing.sender_number
+                if director_general_number:
+                    existing.director_general_number = (
+                        existing.director_general_number or director_general_number)
                 existing.title = title or existing.title
                 existing.document_type = clas or existing.document_type
                 if bdate:
@@ -1187,15 +1196,23 @@ class LegacyRestoreEngine:
 
         # ── إنشاء جديد ──
         with transaction.atomic():
+            department = None
+            if kind == 'outgoing_external':
+                from .models import BookSequence
+                department = BookSequence.resolve_department()
+                our_number = BookSequence.consume_next(
+                    kind, department=department)['formatted']
             book = Book.objects.create(
                 our_number=our_number,
                 sender_number=sender_number,
+                director_general_number=director_general_number,
                 title=title,
                 document_type=clas,
                 date=bdate or timezone.localdate(),
                 sender_date=sdate,
                 secret_level='secret' if 'سري' in (clas or '') else 'normal',
                 kind=kind,
+                department=department,
                 margin=margin,
                 is_archived=is_archived_value,
                 created_by=created_by,
@@ -1302,4 +1319,3 @@ class LegacyRestoreEngine:
                     os.unlink(tmp_path)
                 except OSError:
                     pass
-

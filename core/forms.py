@@ -77,6 +77,7 @@ class BookForm(forms.ModelForm):
             "kind",
             "our_number",
             "sender_number",
+            "director_general_number",
             "title",
             "document_type",
             "secret_level",
@@ -90,6 +91,7 @@ class BookForm(forms.ModelForm):
             "kind": "نوع الكتاب",
             "our_number": "رقمنا (صادر/وارد)",
             "sender_number": "رقم صادر الجهة",
+            "director_general_number": "رقم مكتب المدير العام",
             "title": "عنوان الكتاب",
             "document_type": "نوع المستند",
             "secret_level": "مستوى السرية",
@@ -108,6 +110,11 @@ class BookForm(forms.ModelForm):
             "sender_number": forms.TextInput(attrs={
                 "class": "form-control",
                 "placeholder": "رقم صادر الجهة المرسلة (اختياري)",
+                "type": "text"
+            }),
+            "director_general_number": forms.TextInput(attrs={
+                "class": "form-control",
+                "placeholder": "رقم مكتب المدير العام كما ورد",
                 "type": "text"
             }),
             "document_type": forms.TextInput(attrs={

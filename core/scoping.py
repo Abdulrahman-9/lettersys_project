@@ -629,7 +629,7 @@ def ensure_profile(user):
 #: تُبقى **الأربعةُ الظاهرة في الدفتر الورقيّ**: الرقم والتاريخ والنوع (وارد/صادر
 #: — ``kind``، لا نوعُ المستند: ``document_type`` مُصفَّرٌ أدناه) والقسم.
 STUB_BLANK_FIELDS = (
-    'sender_number', 'sender_date', 'sender_date_display', 'margin',
+    'sender_number', 'director_general_number', 'sender_date', 'sender_date_display', 'margin',
     'document_type', 'attachment_url', 'legacy_number',
 )
 

@@ -155,6 +155,7 @@
           <div><dt>الجهة المستلمة</dt><dd class="bx-tags">{% include "core/_bx_entities.html" with entities=book.receiving_entities.all archived=book.archived_receiving_names %}</dd></div>
           <div><dt>رقمنا وتاريخه</dt><dd class="num">{{ book.our_number_display|default:"بلا رقم" }}{% if book.date %} <small>· {{ book.date|date:"d/m/Y" }}</small>{% endif %}</dd></div>
           <div><dt>الجهة المُصدِرة</dt><dd class="bx-tags">{% include "core/_bx_entities.html" with entities=book.issuing_entities.all archived=book.archived_issuing_names %}</dd></div>
+          {% if book.kind == "outgoing_external" %}<div><dt>رقم مكتب المدير العام</dt><dd class="num">{{ book.director_general_number|default:"—" }}</dd></div>{% endif %}
           {% endif %}
           <div><dt>نوع المستند</dt><dd>{{ book.document_type|default:"—" }}</dd></div>
           <div><dt>السرّيّة</dt><dd>{{ book.get_secret_level_display }}

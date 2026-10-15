@@ -78,7 +78,7 @@ def reserve_number(request):
     if kind not in BookSequence.SERIES_KINDS:
         return JsonResponse({
             'success': False,
-            'message': 'هذا السجلّ يدوي ولا يملك سلسلة أرقام للحجز.',
+            'message': 'هذا السجلّ لا يملك سلسلة أرقام قابلة للحجز.',
             'error_code': 'MANUAL_REGISTER',
         }, status=400)
 
