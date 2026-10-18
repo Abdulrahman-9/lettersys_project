@@ -10,11 +10,13 @@ import logging
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from .models import BookNumberReservation, BookSequence, SystemSettings
 from .reservation_service import claim_reservation_for_client
+from .reservation_identity import request_client_key as _request_client_key
 from .decorators import rate_limit
 
 logger = logging.getLogger('lettersys')
@@ -29,14 +31,6 @@ logger = logging.getLogger('lettersys')
 def _request_department(user):
     profile = getattr(user, 'profile', None)
     return BookSequence.resolve_department(getattr(profile, 'department', None))
-
-
-def _request_client_key(request):
-    """Bind number holds to this authenticated browser session, not the shared login."""
-    if not request.session.session_key:
-        request.session.save()
-    from .reservation_service import reservation_client_key
-    return reservation_client_key(request.session.session_key)
 
 
 def _reservation_dict(r):
@@ -56,6 +50,22 @@ def _reservation_dict(r):
         'reserved_at':      r.reserved_at.isoformat(),
         'is_recycled':      r.is_recycled,
         'cooldown_until':   r.cooldown_until.isoformat() if r.cooldown_until else None,
+    }
+
+
+def _other_holds(request, kind, department):
+    now = timezone.now()
+    holds = BookNumberReservation.objects.filter(
+        kind=kind, department=department, book__isnull=True,
+    ).filter(
+        Q(status__in=['active', 'reactivated'], expires_at__gt=now)
+        | Q(status='cooldown', cooldown_until__gt=now)
+    ).exclude(
+        user=request.user, client_key=_request_client_key(request),
+    ).order_by('number')
+    return {
+        'count': holds.count(),
+        'numbers': list(holds.values_list('formatted', flat=True)[:10]),
     }
 
 
@@ -105,6 +115,7 @@ def reserve_number(request):
         'already_reserved': outcome == 'existing',
         'outcome': outcome,
         'reservation': _reservation_dict(reservation),
+        'other_holds': _other_holds(request, kind, reservation.department),
         'message': messages.get(outcome, messages['new']),
     })
 
@@ -128,6 +139,8 @@ def reservation_heartbeat(request):
     try:
         r = claim_reservation_for_client(
             res_id, request.user, _request_client_key(request))
+        from .reservation_service import heartbeat_reservation
+        r = heartbeat_reservation(r, request.user, _request_client_key(request))
     except BookNumberReservation.DoesNotExist:
         return JsonResponse({'success': False, 'alive': False, 'message': 'الحجز غير موجود'}, status=404)
 
@@ -138,8 +151,10 @@ def reservation_heartbeat(request):
             'message': 'انتهت صلاحية حجزك أو أُعيد تدويره — اطلب رقماً جديداً.',
         })
 
-    r.touch_heartbeat()
-    return JsonResponse({'success': True, 'alive': True, 'remaining_seconds': r.remaining_seconds})
+    return JsonResponse({
+        'success': True, 'alive': True, 'remaining_seconds': r.remaining_seconds,
+        'reservation': _reservation_dict(r),
+    })
 
 
 @login_required
@@ -247,6 +262,7 @@ def reservation_status(request):
             'manual_number': True,
         })
     department = _request_department(request.user)
+    other_holds = _other_holds(request, kind, department)
 
     # فحص وتحديث الحجوزات المنتهية
     active = BookNumberReservation.objects.filter(
@@ -263,6 +279,20 @@ def reservation_status(request):
         return JsonResponse({
             'has_reservation': True,
             'reservation': _reservation_dict(active),
+            'other_holds': other_holds,
+        })
+
+    resumable = BookNumberReservation.objects.filter(
+        user=request.user, kind=kind, department=department,
+        client_key=_request_client_key(request),
+        status=BookNumberReservation.STATUS_COOLDOWN, book__isnull=True,
+        cooldown_until__gt=timezone.now(),
+    ).order_by('number').first()
+    if resumable:
+        return JsonResponse({
+            'has_reservation': False,
+            'resumable_reservation': _reservation_dict(resumable),
+            'other_holds': other_holds,
         })
 
     # هل انتهت صلاحية حجز مؤخراً (آخر ساعة)؟
@@ -277,6 +307,7 @@ def reservation_status(request):
         return JsonResponse({
             'has_reservation': False,
             'expired_reservation': _reservation_dict(recent_expired),
+            'other_holds': other_holds,
             'message': f'انتهت صلاحية قيدك المحجوز {recent_expired.formatted} — هل كتبته على وثيقة؟'
         })
 
@@ -286,4 +317,5 @@ def reservation_status(request):
         'has_reservation': False,
         'expired_reservation': None,
         'preview_number': seq_info['formatted'],
+        'other_holds': other_holds,
     })

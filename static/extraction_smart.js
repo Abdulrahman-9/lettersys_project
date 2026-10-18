@@ -765,24 +765,6 @@ class ExtractionSmartSystem {
         ].includes(code);
     }
 
-    updateFormDataReservation(formData, reservation) {
-        const formattedNumber = reservation?.formatted || '';
-
-        formData.delete('reservation_id');
-        formData.delete('auto_number');
-        formData.delete('our_number');
-        formData.delete('book_number');
-
-        if (reservation?.id) {
-            formData.append('reservation_id', reservation.id);
-        } else {
-            formData.append('auto_number', this.autoNumberEnabled ? 'true' : 'false');
-        }
-
-        formData.append('our_number', formattedNumber);
-        formData.append('book_number', formattedNumber);
-    }
-
     async recoverReservationForRetry(kind, currentMessage) {
         const previousReservation = this.reservations[kind] || null;
         const previousNumber = previousReservation?.formatted || document.getElementById('bookNumber')?.value || '';
@@ -794,19 +776,11 @@ class ExtractionSmartSystem {
             bookNumberField.classList.remove('is-valid');
         }
 
-        this.showToast(currentMessage || 'تغيّرت حالة الحجز الحالي. جارٍ طلب رقم قيد جديد...', 'warning', 4500);
-
-        const reservation = await this.ensureReservation(kind);
-        if (!reservation || !reservation.id) {
-            return null;
-        }
-
-        const newNumber = reservation.formatted || '';
-        if (newNumber && newNumber !== previousNumber) {
-            this.showToast(`تم تحديث رقم القيد تلقائياً إلى ${newNumber} لاستكمال الحفظ.`, 'info', 5000);
-        }
-
-        return reservation;
+        this.renderReservationState(kind);
+        this.showToast(
+            `${currentMessage || 'تغيّرت حالة الحجز.'} لم يُحفظ الكتاب. راجع الرقم ${previousNumber} المكتوب على الورقة، ثم اضغط زر الحجز صراحةً قبل إعادة الحفظ.`,
+            'warning', 9000);
+        return null;
     }
 
     addCustomDocumentType(kind, value) {
@@ -1627,8 +1601,7 @@ class ExtractionSmartSystem {
 
         this.syncDocumentTypeControls(kind);
 
-        // Ensure a reservation exists for this kind (atomic, idempotent per session)
-        this.ensureReservation(kind);
+        this.renderReservationState(kind);
     }
 
     /**
@@ -1638,12 +1611,8 @@ class ExtractionSmartSystem {
      * Per-kind atomic number reservation with smooth tab navigation.
      *
      * Flow:
-     *  - Tab click → ensureReservation(kind):
-     *      • If we have it cached → just paint the UI (preserves the held number)
-     *      • Else → POST /reservation/reserve/ → cache → paint
-     *  - On save → consume that reservation_id; clear cache; reserve fresh one
-     *  - On manual clear → POST /reservation/void/ for current kind; clear cache
-     *  - On page open → loadAllReservationStatuses() restores any active holds
+     * Only the reserve button creates a hold. Opening, switching, saving and
+     * releasing leave the next form ready without consuming another number.
      */
 
     /**
@@ -1662,7 +1631,7 @@ class ExtractionSmartSystem {
         field.setAttribute('inputmode', manual ? 'numeric' : 'none');
 
         // عناصر الحجز لا معنى لها بلا سلسلة
-        ['reservationStatus', 'reservationRing', 'numberlessToggle', 'recycledBanner']
+        ['reservationStatus', 'reservationRing', 'numberlessToggle', 'recycledBanner', 'reservationContext']
             .forEach((id) => {
                 const el = document.getElementById(id);
                 if (el && manual) el.style.display = 'none';
@@ -1692,7 +1661,8 @@ class ExtractionSmartSystem {
         if (this._reservationRequests[kind]) {
             return this._reservationRequests[kind];
         }
-        // Otherwise reserve atomically on the server
+        if (document.getElementById('numberlessCheckbox')?.checked) return Promise.resolve(null);
+        // Otherwise reserve atomically on the server, on explicit user action.
         const request = fetch(this.apiEndpoints.reservationReserve, {
             method: 'POST',
             headers: {
@@ -1701,29 +1671,74 @@ class ExtractionSmartSystem {
             },
             body: JSON.stringify({ kind })
         })
-            .then(r => r.json())
+            .then(async r => {
+                const data = await r.json();
+                if (!r.ok || !data.success) throw new Error(data.message || 'تعذّر حجز الرقم');
+                return data;
+            })
             .then(data => {
                 if (data.success && data.reservation) {
                     this.reservations[kind] = data.reservation;
+                    delete this._resumableReservations?.[kind];
+                    this._reservationContexts = this._reservationContexts || {};
+                    this._reservationContexts[kind] = data.other_holds;
                     this.applyReservationToUI(kind, data.reservation);
                     return data.reservation;
                 }
-                // Fallback: show next-available preview if reservation refused
-                this.fetchNextNumber(kind);
-                return null;
+                throw new Error('لم يُرجع الخادم حجزًا صالحًا');
             })
             .catch(err => {
                 console.warn('[ExtractionSmart] ensureReservation error:', err);
-                this.fetchNextNumber(kind);
+                this.showToast(err.message || 'تعذّر حجز الرقم — حاول مجددًا', 'error', 6000);
                 return null;
             });
         this._reservationRequests[kind] = request;
+        this._updateReservationRing();
         request.finally(() => {
             if (this._reservationRequests[kind] === request) {
                 delete this._reservationRequests[kind];
+                this._updateReservationRing();
             }
         });
         return request;
+    }
+
+    renderReservationState(kind) {
+        const held = this.reservations[kind];
+        if (held?.id) {
+            this.applyReservationToUI(kind, held);
+            return;
+        }
+        if (this._editData) return;
+        const badge = document.getElementById(`tabNum_${kind}`);
+        const resumable = this._resumableReservations?.[kind];
+        if (badge) {
+            badge.textContent = resumable?.number || '—';
+            badge.title = resumable ? 'حجز سابق — اضغط زر الحجز لاستئنافه' : 'لم يُحجز رقم — اضغط زر الحجز عند بدء الإدخال';
+        }
+        if (this.getCurrentKind() !== kind) return;
+        const field = document.getElementById('bookNumber');
+        if (field) {
+            field.value = '';
+            delete field.dataset.reservationId;
+            delete field.dataset.formatted;
+            field.classList.remove('is-valid', 'is-pending', 'has-error');
+        }
+        const banner = document.getElementById('recycledBanner');
+        if (banner) banner.style.display = 'none';
+        this._updateReservationPill();
+    }
+
+    _renderReservationContext() {
+        const el = document.getElementById('reservationContext');
+        if (!el) return;
+        const kind = this.getCurrentKind();
+        const context = this._reservationContexts?.[kind];
+        el.hidden = !!this._editData || !!document.getElementById('numberlessCheckbox')?.checked
+            || !context?.count;
+        el.textContent = context?.count
+            ? `أرقام محجوزة مؤقتًا في جلسات أخرى لهذا السجل: ${context.numbers.join('، ')}${context.count > context.numbers.length ? '، …' : ''}. قد تُحفظ لاحقًا؛ ترتيب الحفظ ليس ترتيب إصدار الأرقام.`
+            : '';
     }
 
     applyReservationToUI(kind, reservation) {
@@ -1783,14 +1798,28 @@ class ExtractionSmartSystem {
         if (!ring) return;
         const numberless = document.getElementById('numberlessCheckbox')?.checked;
         const reserved = !this._editData && !numberless && !!this._activeReservation();
+        const pending = !!this._reservationRequests[this.getCurrentKind()];
+        const resumable = this._resumableReservations?.[this.getCurrentKind()];
         ring.classList.toggle('is-reserved', reserved);
-        ring.title = reserved ? 'الرقم محجوز لك — اكتبه على المستند' : 'لم يُحجز رقم بعد';
+        ring.disabled = !!this._editData || !!numberless || reserved || pending;
+        ring.setAttribute('aria-pressed', String(reserved));
+        ring.setAttribute('aria-busy', String(pending));
+        ring.title = reserved ? 'الرقم محجوز لك — اكتبه على المستند'
+            : pending ? 'جارٍ حجز الرقم'
+            : resumable ? `استئناف حجز الرقم ${resumable.number}` : 'احجز رقمًا عند بدء إدخال الكتاب';
+        ring.setAttribute('aria-label', ring.title);
+        const icon = ring.querySelector('i');
+        if (icon) {
+            icon.classList.toggle('bi-check-lg', !pending);
+            icon.classList.toggle('bi-hourglass-split', pending);
+        }
     }
 
     /** مؤشّر «محجوز لك» البارز: يُظهر الحالة + الوقت المتبقّي بلون يتدرّج مع الاقتراب من الانتهاء.
      *  حين يظهر المؤشّر يُخفى #bookNumberHint المكرّر فيبقى سطر تنبيه واحد نظيف أسفل الحقل. */
     _updateReservationPill() {
         this._updateReservationRing();   // الخاتم يتحدّث دائماً، مستقلّاً عن وجود المؤشّر أو مساراته المبكّرة
+        this._renderReservationContext();
         const pill = document.getElementById('reservationStatus');
         const hint = document.getElementById('bookNumberHint');
         if (!pill) return;
@@ -1800,6 +1829,12 @@ class ExtractionSmartSystem {
         if (this._editData || numberless || !cur) {
             pill.style.display = 'none';
             if (hint) hint.style.display = '';        // لا مؤشّر → أظهِر التلميح (قيد الطلب / بلا رقم)
+            if (hint && !this._editData && !numberless) {
+                const previous = this._resumableReservations?.[this.getCurrentKind()];
+                hint.textContent = previous
+                    ? `لديك حجز سابق للرقم ${previous.number} — اضغط زر الصح لاستئنافه.`
+                    : 'جاهز للإدخال دون حجز — اضغط زر الصح لحجز رقم قبل كتابته على المستند.';
+            }
             return;
         }
         pill.style.display = 'flex';
@@ -1811,7 +1846,7 @@ class ExtractionSmartSystem {
         pill.classList.remove('rs-warn', 'rs-critical');
         if (secs > 0 && secs < 5 * 60) pill.classList.add('rs-critical');
         else if (secs < 10 * 60) pill.classList.add('rs-warn');
-        if (timerEl) timerEl.textContent = secs > 0 ? `صالح ${Math.ceil(secs / 60)} د` : 'انتهى — سيُجدَّد';
+        if (timerEl) timerEl.textContent = secs > 0 ? `صالح ${Math.ceil(secs / 60)} د` : 'انتهى — راجع الرقم';
     }
 
     /** عدّاد تنازلي مركزي يحدّث ألوان وشارات تبويبات الأنواع كل 20 ثانية. */
@@ -1839,8 +1874,7 @@ class ExtractionSmartSystem {
                     // إذا كان هذا التبويب هو الفعّال، تحقّق من الحقل
                     const kindSelect = document.getElementById('bookKind');
                     if (kindSelect && kindSelect.value === k) {
-                        this.showToast('انتهت صلاحية حجز الرقم — جارٍ طلب رقم جديد', 'warning', 4000);
-                        this.ensureReservation(k);
+                        this._onReservationLost(k);
                     }
                 } else if (secondsLeft < 5 * 60) {
                     tab.classList.add('reservation-critical');
@@ -1936,8 +1970,13 @@ class ExtractionSmartSystem {
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCookie('csrftoken') },
             body: JSON.stringify({ reservation_id: cur.r.id }),
         }).then(r => r.json()).then(d => {
+            if (this.reservations[cur.kind]?.id !== cur.r.id) return;
             if (d && d.alive === false) this._onReservationLost(cur.kind);
-        }).catch(() => {});
+            else if (d?.alive && d.reservation) {
+                this.reservations[cur.kind] = d.reservation;
+                this._updateReservationPill();
+            }
+        }).catch(err => console.warn('[ExtractionSmart] reservation heartbeat failed:', err));
     }
 
     _beep() {
@@ -1970,30 +2009,37 @@ class ExtractionSmartSystem {
 
     _onReservationLost(kind) {
         delete this.reservations[kind];
-        const f = document.getElementById('bookNumber');
-        if (f) { f.value = ''; delete f.dataset.reservationId; }
+        this.renderReservationState(kind);
         this._beep();
-        this.showToast('انتهى حجز رقمك أو أُعيد تدويره — سنطلب رقماً جديداً.', 'warning', 7000, 'تنبيه حجز');
-        this.ensureReservation(kind);
+        this.showToast('لم يعد الحجز فعالًا. راجع الرقم المكتوب على الورقة ثم اضغط زر الحجز؛ لن يُطلب رقم آخر تلقائيًا.', 'warning', 9000, 'تنبيه حجز');
     }
 
     _releaseCurrentReservation() {
         const cur = this._activeReservation();
         if (!cur) return;
+        if (!window.confirm(`هل تؤكد أن الرقم ${cur.r.formatted} غير مكتوب على مستند؟ سيُتاح لزميل آخر.`)) return;
         fetch(this.apiEndpoints.reservationVoid, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCookie('csrftoken') },
             body: JSON.stringify({ reservation_id: cur.r.id, note: 'تحرير اختياريّ من المستخدم' }),
-        }).then(r => r.json()).then(() => {
+        }).then(async r => {
+            const data = await r.json();
+            if (!r.ok || !data.success) throw new Error(data.message || 'تعذّر تحرير الرقم');
+            return data;
+        }).then(() => {
             delete this.reservations[cur.kind];
-            const f = document.getElementById('bookNumber');
-            if (f) { f.value = ''; delete f.dataset.reservationId; }
-            this.showToast('حُرّر الرقم — يمكن لزميلك استخدامه الآن. سنطلب لك رقماً جديداً عند الحاجة.', 'info', 6000);
-            this.ensureReservation(cur.kind);
+            this.renderReservationState(cur.kind);
+            this.showToast('حُرّر الرقم. الصفحة جاهزة دون حجز؛ اضغط زر الحجز عند بدء كتاب آخر.', 'info', 6000);
         }).catch(() => this.showToast('تعذّر تحرير الرقم — حاول مجدداً', 'error'));
     }
 
     loadAllReservationStatuses() {
+        if (this._editData) return;
+        const ring = document.getElementById('reservationRing');
+        if (ring && !this._reserveButtonBound) {
+            this._reserveButtonBound = true;
+            ring.addEventListener('click', () => this.ensureReservation(this.getCurrentKind()));
+        }
         const kinds = ['incoming_internal', 'incoming_external', 'outgoing_internal', 'outgoing_external'];
         kinds.forEach((k) => {
             if (this.getKindConfig(k).manualNumber) {
@@ -2008,6 +2054,8 @@ class ExtractionSmartSystem {
             fetch(url, { headers: { 'X-CSRFToken': this.getCookie('csrftoken') } })
                 .then(r => r.json())
                 .then(data => {
+                    this._reservationContexts = this._reservationContexts || {};
+                    this._reservationContexts[k] = data.other_holds;
                     // قد يكتمل طلب الحجز بعد إرسال طلب الحالة وقبل وصول جوابه.
                     // عندها تكون معاينة ``next`` أقدم من الحجز الفعلي ولا يجوز أن
                     // تكتب رقماً مختلفاً على الشارة بينما الحقل يحمل المحجوز.
@@ -2018,18 +2066,15 @@ class ExtractionSmartSystem {
                     if (data.has_reservation && data.reservation) {
                         this.reservations[k] = data.reservation;
                         this.applyReservationToUI(k, data.reservation);
-                    } else if (data.preview_number) {
-                        // Use reservation-status preview directly when no active hold exists.
-                        const badge = document.getElementById(`tabNum_${k}`);
-                        if (badge) badge.textContent = data.preview_number;
                     } else {
-                        // No active hold yet → show next-available number as a preview only
-                        this.fetchNextNumber(k);
+                        this._resumableReservations = this._resumableReservations || {};
+                        this._resumableReservations[k] = data.resumable_reservation;
+                        this.renderReservationState(k);
                     }
                 })
                 .catch(err => {
                     console.warn('[ExtractionSmart] reservation status error:', err);
-                    this.fetchNextNumber(k);
+                    this.showToast('تعذّر التحقق من الحجوزات السابقة — تحقق من الاتصال قبل حجز رقم.', 'warning', 6000);
                 });
         });
     }
@@ -5224,7 +5269,7 @@ class ExtractionSmartSystem {
         fields.forEach(field => {
             // Keep kind select and date fields (dates reset separately)
             if (field.id === 'bookKind' || field.id === 'date' || field.id === 'senderDate') return;
-            // Clear bookNumber too — ensureReservation() will paint the next reserved value.
+            // The next book starts without a reservation.
             field.value = '';
             field.classList.remove('has-error', 'is-valid');
             resetCaptureProvenance(field);
@@ -5243,7 +5288,7 @@ class ExtractionSmartSystem {
         window.entityTagManagers?.receiving?.clear();
         this._resetEntityProvenance();
 
-        // صفّر «بلا رقم» كي لا يعلق مؤشَّراً للكتاب التالي (عبر معالج القالب الواحد → يُعيد الحجز).
+        // صفّر «بلا رقم» للكتاب التالي دون طلب حجز.
         const _nlCb = document.getElementById('numberlessCheckbox');
         if (_nlCb && _nlCb.checked) { _nlCb.checked = false; _nlCb.dispatchEvent(new Event('change', { bubbles: true })); }
 
@@ -5299,6 +5344,12 @@ class ExtractionSmartSystem {
             && !!document.getElementById('numberlessCheckbox')?.checked
             && (kindValue === 'incoming_internal' || kindValue === 'outgoing_internal');
 
+        if (!isEdit && !numberlessChecked && !this.getKindConfig(kindValue).manualNumber
+                && !this.reservations[kindValue]?.id) {
+            this.showToast('احجز رقمًا بزر الصح أولًا، واكتبه على المستند قبل الحفظ.', 'warning', 6000);
+            document.getElementById('reservationRing')?.focus();
+            return;
+        }
         // في التعديل الرقم ثابت فلا يُتحقَّق منه؛ في الإدخال نتخطّاه عند "بلا رقم".
         const hasSystemNumber = kindValue === 'outgoing_external'
             && (this.reservations[kindValue]?.id || this.autoNumberEnabled);
@@ -5426,12 +5477,12 @@ class ExtractionSmartSystem {
             formData.delete('reservation_id');
             formData.append('auto_number', 'false');
         } else {
-            // Prefer the active reservation; fall back to auto_number generation server-side.
+            // The operator must explicitly reserve before saving.
             const activeReservation = this.reservations[kindValue];
             if (activeReservation && activeReservation.id) {
                 formData.append('reservation_id', activeReservation.id);
             } else {
-                formData.append('auto_number', this.autoNumberEnabled ? 'true' : 'false');
+                formData.append('auto_number', 'false');
             }
         }
 
@@ -5653,7 +5704,6 @@ class ExtractionSmartSystem {
         saveBtn.innerHTML = '<span class="spinner"></span> جاري الحفظ...';
         saveBtn.disabled = true;
 
-        let retriedAfterReservationRefresh = false;
         let confirmedDuplicate = false;
 
         try {
@@ -5683,19 +5733,16 @@ class ExtractionSmartSystem {
                     if (savedDocumentType) {
                         this.addCustomDocumentType(savedKind, savedDocumentType);
                     }
-                    // الرقمُ في الرسالة: النموذجُ يُمسح فوراً ويُرسم رقمٌ جديد، فبلا هذا
+                    // الرقمُ في الرسالة: النموذجُ يُمسح فوراً، فبلا هذا
                     // لا يعرف الكاتبُ أيَّ رقمٍ أخذ ما حفظه (تدقيقُ نيلسن C#3).
                     const savedNumber = String(data.book_number || '').trim();
                     const savedAs = `${this._kindMeta(savedKind).label} ${savedNumber ? `برقم ${savedNumber}` : 'بلا رقم'}`;
-                    const successMessage = retriedAfterReservationRefresh
-                        ? `تم تجديد رقم القيد تلقائياً ثم حُفظ الكتاب: ${savedAs}.`
-                        : `${this.t('saveSuccess')} — ${savedAs}`;
-                    this.showToast(successMessage, 'success', retriedAfterReservationRefresh ? 6500 : 4000);
+                    this.showToast(`${this.t('saveSuccess')} — ${savedAs}`, 'success', 4000);
                     if (window.SubjectLocate) window.SubjectLocate.confirmOnSave(formData.get('title'));
                     delete this.reservations[savedKind];
                     this.smartClearAndStay(savedKind);
                     this.clearFile();
-                    this.ensureReservation(savedKind);
+                    this.renderReservationState(savedKind);
                     // «حفظ وإرسال»: النموذج يُمسح بعد الحفظ، لذا نلتقط معرّف الكتاب
                     // من الاستجابة ونفتح حوار الإرسال عليه.
                     if (this.sendToEntityAfterSave && data.book_id) {
@@ -5705,13 +5752,9 @@ class ExtractionSmartSystem {
                     break;
                 }
 
-                if (!retriedAfterReservationRefresh && this.isRecoverableReservationError(data)) {
-                    const replacementReservation = await this.recoverReservationForRetry(savedKind, data.message);
-                    if (replacementReservation?.id) {
-                        retriedAfterReservationRefresh = true;
-                        this.updateFormDataReservation(formData, replacementReservation);
-                        continue;
-                    }
+                if (this.isRecoverableReservationError(data)) {
+                    await this.recoverReservationForRetry(savedKind, data.message);
+                    break;
                 }
 
                 // كشف التكرار: 3/4 (SIMILAR) أو 4/4 (DUPLICATE) — نستأذن مرّة ثم نُعيد بعلَم التأكيد

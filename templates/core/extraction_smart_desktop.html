@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261012c">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261018-explicit-reservation">
 <style>
 .scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
 .scan-agent-status:hover{filter:brightness(.97)}
@@ -208,8 +208,7 @@
                             <div class="book-number-cell{% if edit_book_json == 'null' %} has-ring{% endif %}">
                                 <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
                                 {% if edit_book_json == 'null' %}
-                                {% comment %}خاتم الحجز: رمادي=لا حجز، أخضر=محجوز — يقوده _updateReservationRing من مصدر الحجز نفسه.{% endcomment %}
-                                <span class="res-ring" id="reservationRing" title="لم يُحجز رقم بعد" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+                                <button type="button" class="res-ring" id="reservationRing" title="احجز رقمًا عند بدء إدخال الكتاب" aria-label="احجز رقمًا عند بدء إدخال الكتاب" aria-pressed="false" aria-describedby="bookNumberHint"><i class="bi bi-check-lg" aria-hidden="true"></i></button>
                                 {% comment %}استثناء «بلا رقم»: أيقونة تُبدّل #numberlessCheckbox المخفي (حالة يقرؤها saveBook) — popover لا يُزيح التخطيط.{% endcomment %}
                                 <button type="button" class="nl-btn" id="numberlessToggle" style="display:none;" title="استثناء: كتاب داخلي بلا رقم رسمي" aria-pressed="false"><i class="bi bi-slash-circle"></i></button>
                                 <input type="checkbox" id="numberlessCheckbox" class="visually-hidden-cb" tabindex="-1" aria-hidden="true">
@@ -225,7 +224,8 @@
                                     <i class="bi bi-x-circle"></i>
                                 </button>
                             </div>
-                            <div class="input-hint" id="bookNumberHint">رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.</div>
+                            <div class="input-hint" id="bookNumberHint">جاهز للإدخال دون حجز — اضغط زر الصح لحجز رقم قبل كتابته على المستند.</div>
+                            <div class="input-hint" id="reservationContext" role="status" aria-live="polite" hidden></div>
                             <div id="recycledBanner" class="recycled-banner" style="display:none;" role="alert">
                                 <i class="bi bi-recycle"></i>
                                 <span>رقم مُدوّر: سُحب تلقائياً لعدم اكتمال إدخالٍ سابق. تأكّد أن الورقة بين يديك لا تحمل رقماً متضارباً واكتب هذا الرقم عليها.</span>
@@ -445,7 +445,7 @@
                         </div>
 
                         <div class="form-group-smart">
-                            <label class="field-label">
+                            <label class="field-label" for="issuingEntity">
                                 جهة الإصدار
                                 <span class="field-required">*</span>
                                 <small class="text-muted">(يمكن إضافة أكثر من جهة)</small>
@@ -453,14 +453,20 @@
                             <div class="entity-input-container" data-name-check-url="{% url 'entity_name_check' %}">
                                 <div class="multi-tag-wrapper" id="issuingTagWrapper">
                                     <input type="text" class="tag-text-input" id="issuingEntity"
+                                           aria-label="جهة الإصدار" aria-required="true"
+                                           role="combobox" aria-autocomplete="list" aria-haspopup="listbox"
+                                           aria-expanded="false" aria-controls="issuingEntityDropdown"
                                            placeholder="اكتب اسم الجهة أو رمزها ثم Enter..." autocomplete="off">
                                 </div>
-                                <div class="entity-dropdown-container entity-suggestions" id="issuingEntityDropdown"></div>
+                                <div class="entity-dropdown-container entity-suggestions" id="issuingEntityDropdown"
+                                     role="listbox" aria-label="اقتراحات جهة الإصدار"></div>
+                                <div class="entity-suggestion-message" id="issuingEntityStatus"
+                                     role="status" aria-live="polite" hidden></div>
                             </div>
                         </div>
 
                         <div class="form-group-smart">
-                            <label class="field-label">
+                            <label class="field-label" for="receivingEntity">
                                 جهة الاستقبال
                                 <span class="field-required">*</span>
                                 <small class="text-muted">(يمكن إضافة أكثر من جهة)</small>
@@ -468,9 +474,15 @@
                             <div class="entity-input-container" data-name-check-url="{% url 'entity_name_check' %}">
                                 <div class="multi-tag-wrapper" id="receivingTagWrapper">
                                     <input type="text" class="tag-text-input" id="receivingEntity"
+                                           aria-label="جهة الاستقبال" aria-required="true"
+                                           role="combobox" aria-autocomplete="list" aria-haspopup="listbox"
+                                           aria-expanded="false" aria-controls="receivingEntityDropdown"
                                            placeholder="اكتب اسم الجهة أو رمزها ثم Enter..." autocomplete="off">
                                 </div>
-                                <div class="entity-dropdown-container entity-suggestions" id="receivingEntityDropdown"></div>
+                                <div class="entity-dropdown-container entity-suggestions" id="receivingEntityDropdown"
+                                     role="listbox" aria-label="اقتراحات جهة الاستقبال"></div>
+                                <div class="entity-suggestion-message" id="receivingEntityStatus"
+                                     role="status" aria-live="polite" hidden></div>
                             </div>
                         </div>
                     </div>
@@ -640,7 +652,7 @@
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
 <script src="{% static 'js/subject_locate.js' %}?v=20260929exc"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20261015-outgoing-office-number"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20261018-duplicate-document-v2"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20261007"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
 
@@ -698,19 +710,26 @@
 (function() {
   'use strict';
 
+  const MIN_ENTITY_SIMILARITY = 0.45;
+
   // ── EntityTagInput: نظام إدخال متعدد الجهات لكل حقل ──
   class EntityTagInput {
     constructor(opts) {
       this.wrapper      = document.getElementById(opts.wrapperId);
       this.input        = document.getElementById(opts.inputId);
       this.dropdown     = document.getElementById(opts.dropdownId);
+      this.status       = document.getElementById(opts.statusId);
       this.entityType   = opts.entityType;            // 'issuer' | 'receiver'
       this.tags         = [];                         // [{id, name, code, isNew}]
       this.highlightIdx = -1;
       this.debounceTimer = null;
       this._reqSeq = 0;
       this._lastResults = [];
-      if (!this.wrapper || !this.input || !this.dropdown) return;
+      this._searchController = null;
+      this._suggestController = null;
+      this._pendingNameChecks = new Map();
+      this._pendingNewEntity = null;
+      if (!this.wrapper || !this.input || !this.dropdown || !this.status) return;
       this._init();
     }
 
@@ -721,6 +740,17 @@
 
       this.input.addEventListener('input', () => {
         clearTimeout(this.debounceTimer);
+        this._searchController?.abort();
+        this._suggestController?.abort();
+        this._reqSeq++;
+        this._lastResults = [];
+        this._pendingNewEntity = null;
+        this.dropdown.replaceChildren();
+        this._hideDropdown();
+        if (this.status) {
+          this.status.textContent = '';
+          this.status.hidden = true;
+        }
         this.debounceTimer = setTimeout(() => this._search(this.input.value.trim()), 200);
       });
 
@@ -780,22 +810,32 @@
       const exact = (this._lastResults || []).find(r =>
         (r.name||'').toLowerCase() === q || (r.code||'').toLowerCase() === q
       );
-            if (exact) { this.addEntity(exact); return Promise.resolve(exact); }
+      if (exact) { this.addEntity(exact); return Promise.resolve(exact); }
       // ثمّ ابحث على السيرفر للتأكد من عدم وجود مطابقة دقيقة
-            return fetch(`/books/api/search/entities/?q=${encodeURIComponent(query)}&limit=8`,
-            { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(r => r.ok ? r.json() : { results: [] })
+      return fetch(`/books/api/search/entities/?q=${encodeURIComponent(query)}&limit=8`,
+        { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(response => {
+          if (!response.ok) throw new Error('entity search failed: ' + response.status);
+          return response.json();
+        })
         .then(data => {
+          const results = (data.results || []).map(r => ({
+            id: r.id, name: r.text || r.name, code: r.code || '',
+            similarity: Number(r.similarity) || 0
+          }));
           const found = (data.results || []).find(r =>
             (r.text||r.name||'').toLowerCase() === q || (r.code||'').toLowerCase() === q
           );
           if (found) {
             this.addEntity({ id: found.id, name: found.text || found.name, code: found.code || '' });
           } else {
-            this.addNewEntity(query);
+            this.addNewEntity(query, results);
           }
         })
-                .catch(() => this.addNewEntity(query));
+        .catch(error => {
+          console.error('Entity search failed', error);
+          this._showNameCheckMessage('تعذّر البحث عن الجهات الآن؛ أعد المحاولة قبل إضافة اسم جديد.');
+        });
     }
 
     // يؤكّد الاقتراح المُؤشَّر حالياً: كيان موجود أو خيار «➕ جهة جديدة» — ثم يبقى في الحقل لجهة تالية
@@ -804,7 +844,13 @@
       if (this.highlightIdx >= 0 && this.highlightIdx < results.length) {
         this.addEntity(results[this.highlightIdx]);
       } else if (this.highlightIdx === results.length && this.input.value.trim()) {
-        this.addNewEntity(this.input.value.trim());
+        if (this._pendingNewEntity) {
+          const pending = this._pendingNewEntity;
+          this._pendingNewEntity = null;
+          this._commitNewEntity(pending.name, pending.kindLabel);
+        } else {
+          this.addNewEntity(this.input.value.trim(), results);
+        }
       }
     }
 
@@ -815,18 +861,28 @@
       let matches = [];
 
       const reqId = ++this._reqSeq;
+      this._searchController?.abort();
+      const controller = new AbortController();
+      this._searchController = controller;
       try {
         const resp = await fetch(`/books/api/search/entities/?q=${encodeURIComponent(query)}&limit=10`,
-                                 { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          { headers: { 'X-Requested-With': 'XMLHttpRequest' }, signal: controller.signal });
         if (reqId !== this._reqSeq) return;
-        if (resp.ok) {
-          const data = await resp.json();
-          matches = (data.results || [])
-            .filter(r => !existingIds.has(r.id))
-            .map(r => ({ id: r.id, name: r.text || r.name, code: r.code || '' }))
-            .slice(0, 8);
-        }
-      } catch(_) {}
+        if (!resp.ok) throw new Error('entity search failed: ' + resp.status);
+        const data = await resp.json();
+        matches = (data.results || [])
+          .filter(r => !existingIds.has(r.id))
+          .map(r => ({
+            id: r.id, name: r.text || r.name, code: r.code || '',
+            similarity: Number(r.similarity) || 0
+          }))
+          .slice(0, 8);
+      } catch(error) {
+        if (error.name === 'AbortError' || reqId !== this._reqSeq) return;
+        console.error('Entity suggestions failed', error);
+        this._showNameCheckMessage('تعذّر تحميل اقتراحات الجهات؛ تحقّق من الاتصال ثم أعد المحاولة.');
+        return;
+      }
 
       this._lastResults = matches;
       this.dropdown.replaceChildren();
@@ -835,6 +891,9 @@
       matches.forEach((entity, idx) => {
         const item = document.createElement('div');
         item.className = 'entity-suggestion-item';
+        item.id = `${this.input.id}-option-${idx}`;
+        item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', 'false');
         item.dataset.idx = idx;
         item.classList.add('is-existing');
         const left = document.createElement('span');
@@ -856,6 +915,9 @@
       if (!exactMatch && !existingNames.has(q)) {
         const newItem = document.createElement('div');
         newItem.className = 'entity-suggestion-item new-entity-option';
+        newItem.id = `${this.input.id}-option-${matches.length}`;
+        newItem.setAttribute('role', 'option');
+        newItem.setAttribute('aria-selected', 'false');
         newItem.classList.add('is-new');
         newItem.textContent = `➕ إضافة "${query}" كجهة جديدة`;
         newItem.dataset.idx = matches.length;
@@ -865,7 +927,7 @@
         this._suggestKindForOption(query, newItem, reqId);
       }
 
-      this.dropdown.style.display = this.dropdown.children.length ? 'block' : 'none';
+      this._setDropdownOpen(this.dropdown.children.length > 0);
     }
 
     addEntity(entity) {
@@ -875,10 +937,22 @@
       this._render(); this._reset();
     }
 
-    async addNewEntity(name) {
+    async addNewEntity(name, possibleMatches = this._lastResults) {
       const clean = (name || '').replace(/<[^>]*>/g, '').replace(/javascript:/gi, '').trim();
       if (!clean) return;
       if (this.tags.some(t => t.name.toLowerCase() === clean.toLowerCase())) { this._reset(); return; }
+      const key = clean.toLocaleLowerCase();
+      if (this._pendingNameChecks.has(key)) return this._pendingNameChecks.get(key);
+      const check = this._checkNewEntityName(clean, possibleMatches);
+      this._pendingNameChecks.set(key, check);
+      try {
+        return await check;
+      } finally {
+        if (this._pendingNameChecks.get(key) === check) this._pendingNameChecks.delete(key);
+      }
+    }
+
+    async _checkNewEntityName(clean, possibleMatches) {
       const source = this.wrapper.closest('.entity-input-container');
       const checkUrl = source && source.dataset.nameCheckUrl;
       if (!checkUrl) {
@@ -911,43 +985,119 @@
           this._showNameCheckMessage('هذا الاسم لجهة معطّلة؛ استعدها من دليل الجهات بدلاً من إنشاء نسخة.');
           return;
         }
-        this.tags.push({
-          id: null, name: clean, code: '', isNew: true,
-          kindLabel: data.suggested_label || ''
-        });
+        const seen = new Set();
+        const similar = [
+          ...(possibleMatches || []),
+          ...(data.matches || []).map(row => ({ ...row, similarity: 1 }))
+        ]
+          .map(row => ({
+            id: row.id,
+            name: row.name || row.text || '',
+            code: row.code || '',
+            status: row.status || 'active',
+            kindLabel: row.kind_label || '',
+            similarity: Number(row.similarity) || 0
+          }))
+          .filter(row => row.id && row.name
+            && row.name.toLocaleLowerCase() !== clean.toLocaleLowerCase()
+            && row.code.toLocaleLowerCase() !== clean.toLocaleLowerCase()
+            && row.status === 'active'
+            && row.similarity >= MIN_ENTITY_SIMILARITY
+            && !seen.has(row.id) && seen.add(row.id));
+        if (similar.length) {
+          this._showSimilarChoices(clean, similar, data.suggested_label || '');
+          return;
+        }
+        this._commitNewEntity(clean, data.suggested_label || '');
       } catch (error) {
         console.error('Entity name check failed', error);
         this._showNameCheckMessage('تعذّر التحقق من الاسم الآن؛ أعد المحاولة بعد استقرار الاتصال.');
         return;
       }
-      this._render(); this._reset();
+    }
+
+    _commitNewEntity(name, kindLabel) {
+      const clean = (name || '').trim();
+      if (!clean || this.tags.some(t => t.name.toLocaleLowerCase() === clean.toLocaleLowerCase())) {
+        this._reset();
+        return;
+      }
+      this.tags.push({ id: null, name: clean, code: '', isNew: true, kindLabel });
+      this._render();
+      this._reset();
+    }
+
+    _showSimilarChoices(name, matches, kindLabel) {
+      this._pendingNewEntity = { name, kindLabel };
+      this._lastResults = matches;
+      this.dropdown.replaceChildren();
+      if (this.status) {
+        this.status.textContent = `أسماء قريبة موجودة. اختر جهةً منها، أو أضف «${name}» صراحةً كجهة جديدة.`;
+        this.status.hidden = false;
+      }
+      matches.forEach((entity, idx) => {
+        const item = document.createElement('div');
+        item.className = 'entity-suggestion-item is-existing';
+        item.id = `${this.input.id}-option-${idx}`;
+        item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', 'false');
+        item.dataset.idx = idx;
+        const label = document.createElement('span');
+        label.textContent = entity.name;
+        const detail = document.createElement('small');
+        detail.className = 'entity-suggestion-code';
+        detail.textContent = [entity.code ? `[${entity.code}]` : '', entity.kindLabel].filter(Boolean).join(' · ');
+        item.append(label, detail);
+        item.addEventListener('mouseenter', () => { this.highlightIdx = idx; this._updateHighlight(); });
+        item.addEventListener('mousedown', event => { event.preventDefault(); this.addEntity(entity); });
+        this.dropdown.appendChild(item);
+      });
+      const newItem = document.createElement('div');
+      newItem.className = 'entity-suggestion-item new-entity-option is-new';
+      newItem.id = `${this.input.id}-option-${matches.length}`;
+      newItem.setAttribute('role', 'option');
+      newItem.setAttribute('aria-selected', 'false');
+      newItem.dataset.idx = matches.length;
+      newItem.textContent = `إضافة «${name}» كجهة جديدة${kindLabel ? ` · ${kindLabel}` : ''}`;
+      newItem.addEventListener('mouseenter', () => { this.highlightIdx = matches.length; this._updateHighlight(); });
+      newItem.addEventListener('mousedown', event => {
+        event.preventDefault();
+        this._pendingNewEntity = null;
+        this._commitNewEntity(name, kindLabel);
+      });
+      this.dropdown.appendChild(newItem);
+      this.highlightIdx = -1;
+      this._setDropdownOpen(true);
     }
 
     async _suggestKindForOption(name, option, reqId) {
       const source = this.wrapper.closest('.entity-input-container');
       const checkUrl = source && source.dataset.nameCheckUrl;
       if (!checkUrl) return;
+      this._suggestController?.abort();
+      const controller = new AbortController();
+      this._suggestController = controller;
       try {
         const url = new URL(checkUrl, window.location.origin);
         url.searchParams.set('name', name);
         const response = await fetch(url.toString(), {
-          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          signal: controller.signal
         });
         if (!response.ok) throw new Error('name check failed: ' + response.status);
         const data = await response.json();
         if (reqId !== this._reqSeq || !option.isConnected || !data.suggested_label) return;
         option.textContent += ' · التبويب المقترح: ' + data.suggested_label;
       } catch (error) {
-        console.error('Entity kind suggestion failed', error);
+        if (error.name !== 'AbortError') console.error('Entity kind suggestion failed', error);
       }
     }
 
     _showNameCheckMessage(message) {
-      const item = document.createElement('div');
-      item.className = 'entity-suggestion-message';
-      item.textContent = message;
-      this.dropdown.replaceChildren(item);
-      this.dropdown.style.display = 'block';
+      this.status.textContent = message;
+      this.status.hidden = false;
+      this.dropdown.replaceChildren();
+      this._setDropdownOpen(false);
       this.input.focus();
     }
 
@@ -980,13 +1130,30 @@
       this.tags.forEach((tag, idx) => {
         const badge = document.createElement('span');
         badge.className = `entity-tag${tag.isNew ? ' new-entity' : ''}`;
-        const codeHtml = tag.code ? `<span class="tag-code">${tag.code.replace(/</g,'&lt;')}</span>` : '';
-        const nameHtml = (tag.name || '').replace(/</g,'&lt;');
-        badge.innerHTML = `${codeHtml}${nameHtml}${tag.isNew ? ` <small class="entity-tag-kind">(جديدة${tag.kindLabel ? ' · ' + tag.kindLabel : ''})</small>` : ''}
-          <button type="button" class="tag-remove" aria-label="حذف">&times;</button>`;
-        badge.querySelector('.tag-remove').addEventListener('click', e => {
+        if (tag.code) {
+          const code = document.createElement('span');
+          code.className = 'tag-code';
+          code.textContent = tag.code;
+          badge.appendChild(code);
+        }
+        const name = document.createElement('span');
+        name.textContent = tag.name || '';
+        badge.appendChild(name);
+        if (tag.isNew) {
+          const kind = document.createElement('small');
+          kind.className = 'entity-tag-kind';
+          kind.textContent = `(جديدة${tag.kindLabel ? ` · ${tag.kindLabel}` : ''})`;
+          badge.appendChild(kind);
+        }
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'tag-remove';
+        remove.setAttribute('aria-label', `إزالة جهة ${tag.name || ''}`);
+        remove.textContent = '×';
+        remove.addEventListener('click', e => {
           e.stopPropagation(); this.removeTag(idx);
         });
+        badge.appendChild(remove);
         this.wrapper.insertBefore(badge, this.input);
       });
       this.wrapper.classList.toggle('has-error', this.tags.length === 0);
@@ -1002,17 +1169,30 @@
       this.dropdown.querySelectorAll('.entity-suggestion-item, .new-entity-option').forEach((el, i) => {
         if (i === this.highlightIdx) {
           el.classList.add('is-highlighted');
+          el.setAttribute('aria-selected', 'true');
+          this.input.setAttribute('aria-activedescendant', el.id);
         } else {
           el.classList.remove('is-highlighted');
+          el.setAttribute('aria-selected', 'false');
         }
       });
     }
+    _setDropdownOpen(open) {
+      this.dropdown.style.display = open ? 'block' : 'none';
+      this.input.setAttribute('aria-expanded', String(open));
+      if (!open) this.input.removeAttribute('aria-activedescendant');
+    }
     _hideDropdown() {
-      this.dropdown.style.display = 'none';
+      this._setDropdownOpen(false);
       this.highlightIdx = -1;
     }
     _reset() {
       this.input.value = '';
+      this._pendingNewEntity = null;
+      if (this.status) {
+        this.status.textContent = '';
+        this.status.hidden = true;
+      }
       this._hideDropdown();
       this.input.focus();
       // حدثٌ برمجيّ لا لمسةٌ بشريّة: بدون codeFill يقلب وسمَ المنشأ إلى «مؤكَّد» عند
@@ -1033,11 +1213,11 @@
     if (window.entityTagManagers.issuing) return;
     window.entityTagManagers.issuing = new EntityTagInput({
       wrapperId: 'issuingTagWrapper', inputId: 'issuingEntity',
-      dropdownId: 'issuingEntityDropdown', entityType: 'issuer'
+      dropdownId: 'issuingEntityDropdown', statusId: 'issuingEntityStatus', entityType: 'issuer'
     });
     window.entityTagManagers.receiving = new EntityTagInput({
       wrapperId: 'receivingTagWrapper', inputId: 'receivingEntity',
-      dropdownId: 'receivingEntityDropdown', entityType: 'receiver'
+      dropdownId: 'receivingEntityDropdown', statusId: 'receivingEntityStatus', entityType: 'receiver'
     });
   }
 
@@ -1582,8 +1762,8 @@
       // الحقل قد يكون فارغاً لحظة التأشير (الحجز لم يصل) فتعلق «بلا رقم» بلا رجعة.
       const k = currentKind();
       bookNumField.value = '';
-      if (sys && typeof sys.ensureReservation === 'function') {
-        sys.ensureReservation(k);
+      if (sys && typeof sys.renderReservationState === 'function') {
+        sys.renderReservationState(k);
       }
     }
     // حدّث الخاتم + مؤشّر الحجز من مصدرهما الواحد (يقرأ حالة #numberlessCheckbox).

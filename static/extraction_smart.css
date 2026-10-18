@@ -943,12 +943,18 @@ body.app-shell-body {
 .book-number-cell.has-ring .book-number-readonly { padding-inline-end: 76px !important; }
 .res-ring {
     position: absolute; inset-inline-end: 10px; top: 50%; transform: translateY(-50%);
-    width: 26px; height: 26px; border-radius: 50%;
+    width: 32px; height: 32px; border-radius: 50%; padding: 0;
     display: inline-flex; align-items: center; justify-content: center;
-    background: #e2e8f0; color: #94a3b8; font-size: 0.9rem; pointer-events: none;
+    border: 1px solid #64748b; background: #fff; color: #475569; font-size: 0.9rem; cursor: pointer; touch-action: manipulation;
     transition: background 0.3s, color 0.3s;
 }
 .res-ring.is-reserved { background: #16a34a; color: #fff; }
+.res-ring:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.res-ring:disabled { cursor: default; }
+.res-ring[aria-busy="true"] { opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) {
+    .res-ring { transition: none; }
+}
 .nl-btn {
     position: absolute; inset-inline-end: 44px; top: 50%; transform: translateY(-50%);
     width: 22px; height: 22px; border-radius: 50%; padding: 0;
@@ -1518,7 +1524,7 @@ textarea.title-autogrow {
 }
 .entity-suggestion-item {
     display: flex; justify-content: space-between; align-items: center; gap: 12px;
-    padding: 10px 14px; background: #fff; color: #334155; cursor: pointer;
+    min-height: 44px; padding: 10px 14px; background: #fff; color: #334155; cursor: pointer;
     border-bottom: 1px solid #edf2f1;
 }
 .entity-suggestion-item:last-child { border-bottom: 0; }
