@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}تجهيز هذا الجهاز — LetterSys{% endblock %}
+{% block extra_css %}
+<style>
+  #deviceSetup .btn { min-block-size: 44px; touch-action: manipulation; }
+  #deviceSetup h2 { scroll-margin-top: 6rem; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="container py-4" id="deviceSetup"
+         data-health-url="{% url 'device_setup_health' %}" data-agent-port="{{ agent_port }}">
+  <div class="card border-0 shadow-sm mx-auto" style="max-width: 760px">
+    <div class="card-body p-4">
+      <h1 class="h4 mb-2">تجهيز هذا الجهاز</h1>
+      <p class="text-muted">لا تحتاج إلى كتابة أوامر أو تغيير ملفات. اتبع الخطوة الظاهرة فقط.</p>
+      <div class="border rounded p-3 mb-3">
+        <h2 class="h6">السيرفر والكلاينت ليسا نفس التجهيز</h2>
+        <p class="small mb-2">السيرفر الحالي: <bdi>{{ server_name }}</bdi> — <bdi>{{ server_url }}</bdi>. عليه النظام وقاعدة البيانات وخدمة HTTPS، وتبدأ خدماته مع إقلاع Windows.</p>
+        <p class="small mb-0">الأجهزة الأخرى كلاينت: تستخدم الموقع وأدوات المسح فقط. الحزمة أدناه لا تثبّت سيرفراً أو قاعدة بيانات عليها، ولا تنقل كلمات مرور السيرفر. أداة المسح تبدأ عند دخول الموظف إلى Windows.</p>
+        {% if can_manage_workstations %}
+        <a class="btn btn-outline-primary mt-3" href="{% url 'workstation_board' %}">إدارة أجهزة الكلاينت من السيرفر</a>
+        {% endif %}
+      </div>
+      <h2 class="h6">تجهيز أدوات محطة العمل والماسح</h2>
+      <p class="small text-muted">إذا كنت تستخدم هذا الجهاز كسيرفر فقط، فلا تحتاج حزمة الكلاينت. الحزمة مخصصة لأجهزة الموظفين وتمنع تركيبها على السيرفر نفسه. إذا كان الماسح موصولاً بالسيرفر، يجهّز مسؤول النظام أدوات مسحه كخطوة مستقلة دون تغيير دوره.</p>
+      <div id="setupConnection" class="alert alert-info" role="status" aria-live="polite">
+        جارٍ التحقق من اتصال النظام…
+      </div>
+      <ol class="list-group list-group-numbered mb-4">
+        <li class="list-group-item">
+          <strong>الاتصال الآمن وشهادة الثقة</strong>
+          <p class="small mb-2">افتح النظام عبر HTTPS بعد تجهيز شهادة الثقة. الزر لا يتجاوز تحذيرات المتصفح.</p>
+          <div class="d-flex flex-wrap gap-2">
+            {% if secure_setup_url %}
+            <a class="btn btn-outline-primary" id="secureSetupLink" href="{{ secure_setup_url }}">فتح الاتصال الآمن</a>
+            {% endif %}
+            <button class="btn btn-outline-secondary" type="button" id="showTrustHelp" aria-controls="trustSetupHelp" aria-expanded="false">تجهيز شهادة الثقة</button>
+            <button class="btn btn-outline-secondary" type="button" id="retryConnection">إعادة فحص الاتصال</button>
+          </div>
+        </li>
+        <li class="list-group-item">
+          <strong>توصيل الماسح وفحص هذا الجهاز</strong>
+          <p class="small mb-2">إذا تستخدم ماسحاً: شغّله ووصل كابله، ثم اضغط الزر. لا يسحب الفحص أي ورقة.</p>
+          <button type="button" class="btn btn-primary" id="checkDevice">
+            <span class="spinner-border spinner-border-sm me-2 d-none" id="deviceCheckSpinner" aria-hidden="true"></span>
+            <span id="deviceCheckLabel">فحص هذا الجهاز</span>
+          </button>
+          <a class="btn btn-outline-secondary" href="{% url 'dashboard' %}">لا أستخدم ماسحاً — متابعة النظام</a>
+        </li>
+        <li class="list-group-item">
+          <strong>تجهيز أدوات الجهاز عند الحاجة</strong>
+          <p class="small mb-2">إن احتاج الجهاز إعداداً، شغّل حزمة التجهيز مرة واحدة ثم أعد الفحص. الأدوات لحواسيب Windows ذات 64 بت فقط.</p>
+          <button class="btn btn-outline-primary" type="button" id="showSetupHelp" aria-controls="deviceSetupHelp" aria-expanded="false">تجهيز أدوات الجهاز خطوة بخطوة</button>
+        </li>
+      </ol>
+      <section id="trustSetupHelp" class="border rounded p-3 mb-3" hidden>
+        <h2 class="h6" tabindex="-1">تجهيز شهادة الشركة بأمان</h2>
+        <p>لأول تجهيز، احصل على الحزمة من مسؤول النظام عبر USB أو مشاركة ملفات موثوقة للشركة، وافتحها من حساب الموظف العادي. وافق على شهادة الشركة التي سلّمها لك المسؤول فقط.</p>
+        <p class="small mb-2">المتصفح لا يستطيع تثبيت شهادة Windows وحده. لا ننزّل حزمة الثقة عبر HTTP، ولا تختَر تجاوز تحذير الشهادة. إذا ظهرت رسالة «الاتصال بالشبكة»، اطلب من المسؤول فحص الثقة والشبكة.</p>
+        {% if secure_setup_url %}
+        <a class="btn btn-outline-primary" href="{{ secure_setup_url }}">جهّزت الشهادة — فتح الرابط الآمن</a>
+        {% else %}
+        <p class="text-warning mb-0">عنوان HTTPS غير محدد لهذا العنوان؛ اطلب الرابط الآمن من مسؤول النظام.</p>
+        {% endif %}
+      </section>
+      <p class="small text-muted mt-2">إذا طلب المتصفح السماح بالاتصال بالأجهزة المحلية، اختر «سماح» لتتمكن من استخدام الماسح.</p>
+      <div id="deviceCheckResult" class="alert alert-secondary mt-3" role="status" aria-live="polite">
+        الفحص لا يسحب الورق ولا يرفع مستندات.
+      </div>
+      <div class="d-flex flex-wrap gap-2 mt-3">
+        <button class="btn btn-outline-primary" type="button" id="goEnrollment" aria-controls="deviceEnrollment">تسمية الجهاز وتفعيل الربط</button>
+        <button class="btn btn-outline-secondary" type="button" id="showScannerHelp" aria-controls="scannerSetupHelp" aria-expanded="false">الماسح لا يظهر — خطوات الإصلاح</button>
+      </div>
+      <section id="scannerSetupHelp" class="border rounded p-3 mt-3" hidden>
+        <h2 class="h6" tabindex="-1">إعادة إظهار الماسح</h2>
+        <ol>
+          <li>شغّل الماسح ووصل الكابل، وأغلق برامج المسح الأخرى.</li>
+          <li>إن منعت اتصال الأجهزة المحلية في Chrome أو Edge، افتح إعدادات هذا الموقع من الرمز بجانب العنوان واسمح بإذن الشبكة أو الأجهزة المحلية إن ظهر، ثم أعد تحميل الصفحة.</li>
+          <li>إذا بقي غير ظاهر، اطلب من المسؤول تركيب تعريف المصنع الصحيح (TWAIN/WIA). لا تثبّت تعريفاً من مصدر مجهول.</li>
+        </ol>
+        <button class="btn btn-outline-primary" type="button" id="recheckScanner">أكملت الخطوات — إعادة الفحص</button>
+      </section>
+      <section id="deviceEnrollment" class="border rounded p-3 mt-3" hidden
+               data-enroll-url="{% url 'workstation_enroll' %}" data-mine-url="{% url 'workstation_mine' %}">
+        <h2 class="h6" tabindex="-1">اسم الجهاز وربطه بالشركة</h2>
+        <p class="small text-muted">يتفعّل الربط فور تسجيل الدخول والموافقة. تُرسل حالة الاتصال وإصدار الأدوات ونتيجة فحص الماسح، وليس محتوى مستنداتك أو ملفاتك الشخصية.</p>
+        <form id="deviceEnrollmentForm">
+          {% csrf_token %}
+          <label for="workstationName" class="form-label">اسم يميّز هذا الجهاز</label>
+          <input id="workstationName" name="workstation_name" class="form-control" required maxlength="80"
+                 autocomplete="off" aria-describedby="workstationNameHelp">
+          <p id="workstationNameHelp" class="small text-muted mt-1">مثال: حاسبة بريد الشؤون الإدارية. لا تكتب كلمة مرور هنا.</p>
+          <div class="form-check my-3">
+            <input id="workstationConsent" class="form-check-input" type="checkbox" required>
+            <label class="form-check-label" for="workstationConsent">أوافق على ربط هذا الجهاز بحسابي ومتابعة حالته تلقائياً عند دخولي إلى Windows.</label>
+          </div>
+          <button class="btn btn-primary" type="submit" id="pairWorkstation">حفظ الاسم وتفعيل الربط</button>
+        </form>
+        <div id="workstationPairResult" class="alert alert-secondary mt-3" role="status" aria-live="polite">افحص هذا الجهاز أولاً لقراءة هويته المحلية.</div>
+      </section>
+      <div id="deviceSetupHelp" class="border rounded p-3 mt-3" hidden>
+        <h2 class="h6" tabindex="-1">خطوة واحدة: تجهيز أدوات المسح</h2>
+        <p class="small text-muted">حزمة أدوات المسح لحواسيب Windows ذات 64 بت، وليست للهاتف. يمكنك استخدام الموقع وتثبيت أيقونته على الأجهزة الأخرى دون هذه الحزمة.</p>
+        {% if package_available and request.is_secure %}
+        <a class="btn btn-outline-primary mb-2" href="{% url 'device_setup_download' %}" id="downloadSetup">
+          تنزيل حزمة تجهيز الجهاز
+        </a>
+        <ol class="mb-2">
+          <li>نزّل ملف <bdi>LetterSys-Workstation-Setup.exe</bdi> من هذه الصفحة الآمنة وافتحه بالنقر المزدوج من حساب الموظف العادي، وليس «تشغيل كمسؤول».</li>
+          <li>انتظر نافذة التجهيز، ثم وافق على مكونات حزمة الشركة الموثوقة. يفكّ البرنامج ملفاته تلقائياً؛ لا تحتاج أوامر أو استخراجاً يدوياً.</li>
+          <li>وافق على تجهيز هذا الجهاز لخادم الشركة. سيُجهّز البرنامج الشهادة وأدوات المسح والتشغيل التلقائي.</li>
+          <li>عد إلى هذه الصفحة واضغط «فحص هذا الجهاز».</li>
+        </ol>
+        {% elif package_available %}
+        <p class="text-warning mb-2">أنت تستخدم HTTP. احصل على الحزمة من مسؤول النظام مباشرةً لتجهيز شهادة الثقة، ثم افتح عنوان HTTPS؛ التنزيل من هذه الصفحة غير متاح قبل الاتصال الآمن.</p>
+        {% else %}
+        <p class="text-danger mb-2">حزمة التجهيز لم ينشرها مسؤول النظام بعد. لا يستطيع المتصفح تثبيت أدوات Windows وحده؛ اطلب الحزمة من المسؤول.</p>
+        {% endif %}
+        <p class="small text-muted mb-0">للحزمة المضغوطة الاحتياطية فقط: «استخراج الكل» ثم تشغيل <bdi>Setup.vbs</bdi>. إذا لم يظهر ماسح بعد التجهيز، تحقّق من الطاقة والكابل. قد يحتاج تعريف الشركة المصنّعة إلى تركيب بواسطة المسؤول؛ لا يثبت المعالج تعريفاً تخمينياً.</p>
+        <button class="btn btn-outline-primary mt-3" type="button" id="recheckAfterSetup">انتهيت من التجهيز — إعادة الفحص</button>
+      </div>
+      <div class="border-top pt-3 mt-4">
+        <h2 class="h6">إضافة أيقونة البرنامج</h2>
+        <button class="btn btn-outline-primary mb-2" type="button" id="installSetupApp">تثبيت أيقونة البرنامج</button>
+        <div id="setupInstallResult" class="small mb-2" role="status" aria-live="polite"></div>
+        <p class="mb-1">استخدم زر «تثبيت» إن ظهر، أو رمز التثبيت قرب شريط العنوان. في Edge: القائمة ⋯ ثم «التطبيقات» ثم تثبيت الموقع. في Chrome: خيار التثبيت من قائمة المتصفح.</p>
+        <p class="small text-muted">على iPhone أو iPad: «مشاركة» ثم «إضافة إلى الشاشة الرئيسية». قد تختلف الخيارات حسب المتصفح.</p>
+        <a class="btn btn-outline-secondary" href="{% url 'dashboard' %}">العودة إلى النظام</a>
+        <a class="btn btn-outline-primary" href="{% url 'book_create_incoming' %}">فتح الإدخال لتجربة ورقة</a>
+        {% if can_manage_workstations %}
+        <a class="btn btn-outline-primary" href="{% url 'workstation_board' %}">متابعة أجهزة الموظفين</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/device_setup.js' %}?v=20261013-guided-actions"></script>
+<script src="{% static 'js/workstation_setup.js' %}?v=20261013-guided-actions-errors"></script>
+{% endblock %}

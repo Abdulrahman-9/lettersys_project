@@ -8,6 +8,7 @@ from . import logging_views
 from . import api as api_views
 from . import reservation_api
 from . import network_views
+from core.views import device_setup as device_setup_views
 from django.conf import settings
 from rest_framework.routers import DefaultRouter
 from .merge_api import AttachmentMergeViewSet
@@ -18,6 +19,10 @@ router = DefaultRouter()
 router.register('attachments', AttachmentMergeViewSet, basename='attachment-merge')
 
 urlpatterns = [
+    path("workstations/", include("core.workstations.urls")),
+    path("device-setup/", device_setup_views.device_setup, name="device_setup"),
+    path("api/device-setup/health/", device_setup_views.device_setup_health, name="device_setup_health"),
+    path("device-setup/download/", device_setup_views.device_setup_download, name="device_setup_download"),
     # API البحث والإتمام التلقائي (Autocomplete API)
     path("api/search/entities/", api_views.search_entities, name="search_entities"),
     path("api/search/titles/", api_views.search_titles, name="search_titles"),
