@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261012d">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261018-explicit-reservation">
 <style>
 .scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
 .scan-agent-status:hover{filter:brightness(.97)}
@@ -208,8 +208,7 @@
                             <div class="book-number-cell{% if edit_book_json == 'null' %} has-ring{% endif %}">
                                 <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
                                 {% if edit_book_json == 'null' %}
-                                {% comment %}خاتم الحجز: رمادي=لا حجز، أخضر=محجوز — يقوده _updateReservationRing من مصدر الحجز نفسه.{% endcomment %}
-                                <span class="res-ring" id="reservationRing" title="لم يُحجز رقم بعد" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+                                <button type="button" class="res-ring" id="reservationRing" title="احجز رقمًا عند بدء إدخال الكتاب" aria-label="احجز رقمًا عند بدء إدخال الكتاب" aria-pressed="false" aria-describedby="bookNumberHint"><i class="bi bi-check-lg" aria-hidden="true"></i></button>
                                 {% comment %}استثناء «بلا رقم»: أيقونة تُبدّل #numberlessCheckbox المخفي (حالة يقرؤها saveBook) — popover لا يُزيح التخطيط.{% endcomment %}
                                 <button type="button" class="nl-btn" id="numberlessToggle" style="display:none;" title="استثناء: كتاب داخلي بلا رقم رسمي" aria-pressed="false"><i class="bi bi-slash-circle"></i></button>
                                 <input type="checkbox" id="numberlessCheckbox" class="visually-hidden-cb" tabindex="-1" aria-hidden="true">
@@ -225,7 +224,8 @@
                                     <i class="bi bi-x-circle"></i>
                                 </button>
                             </div>
-                            <div class="input-hint" id="bookNumberHint">رقم تلقائي محجوز لك بشكل ذري — غير قابل للتعديل.</div>
+                            <div class="input-hint" id="bookNumberHint">جاهز للإدخال دون حجز — اضغط زر الصح لحجز رقم قبل كتابته على المستند.</div>
+                            <div class="input-hint" id="reservationContext" role="status" aria-live="polite" hidden></div>
                             <div id="recycledBanner" class="recycled-banner" style="display:none;" role="alert">
                                 <i class="bi bi-recycle"></i>
                                 <span>رقم مُدوّر: سُحب تلقائياً لعدم اكتمال إدخالٍ سابق. تأكّد أن الورقة بين يديك لا تحمل رقماً متضارباً واكتب هذا الرقم عليها.</span>
@@ -642,7 +642,7 @@
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
 <script src="{% static 'js/subject_locate.js' %}?v=20260929exc"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20261011"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20261018-explicit-reservation"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20261007"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
 
@@ -1752,8 +1752,8 @@
       // الحقل قد يكون فارغاً لحظة التأشير (الحجز لم يصل) فتعلق «بلا رقم» بلا رجعة.
       const k = currentKind();
       bookNumField.value = '';
-      if (sys && typeof sys.ensureReservation === 'function') {
-        sys.ensureReservation(k);
+      if (sys && typeof sys.renderReservationState === 'function') {
+        sys.renderReservationState(k);
       }
     }
     // حدّث الخاتم + مؤشّر الحجز من مصدرهما الواحد (يقرأ حالة #numberlessCheckbox).
