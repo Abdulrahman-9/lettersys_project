@@ -1797,6 +1797,9 @@ class BookNumberReservation(models.Model):
     )
 
     reserved_at  = models.DateTimeField(auto_now_add=True, verbose_name='وقت الحجز')
+    assigned_at  = models.DateTimeField(
+        null=True, blank=True, verbose_name='وقت الإسناد الحالي',
+    )
     expires_at   = models.DateTimeField(verbose_name='ينتهي في')
     used_at      = models.DateTimeField(null=True, blank=True, verbose_name='وقت الاستخدام')
     voided_at    = models.DateTimeField(null=True, blank=True, verbose_name='وقت الإلغاء')
@@ -1868,10 +1871,12 @@ class BookNumberReservation(models.Model):
         """
         if extra_minutes is None:
             extra_minutes = SystemSettings.reservation_ttl()
+        now = timezone.now()
         self.status    = self.STATUS_REACTIVATED
-        self.expires_at = timezone.now() + timedelta(minutes=extra_minutes)
+        self.assigned_at = now
+        self.expires_at = now + timedelta(minutes=extra_minutes)
         self.void_reason = ''
-        self.save(update_fields=['status', 'expires_at', 'void_reason'])
+        self.save(update_fields=['status', 'assigned_at', 'expires_at', 'void_reason'])
 
     def touch_heartbeat(self):
         """تحديث نبضة الحضور (WS/ping) — لا تُغيّر الحالة."""

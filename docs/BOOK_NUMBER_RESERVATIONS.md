@@ -1,0 +1,71 @@
+# دليل أرقام القيود والحجوزات
+
+## إدخال كتاب
+
+1. تبدأ صفحة الإدخال في وضع الاستعداد. بقاء الصفحة مفتوحة لا يحجز رقمًا.
+2. عند بدء إدخال كتاب فعلي، اضغط زر الصح الأبيض مرة واحدة. بعد تأكيد الخادم يتحول إلى الأخضر ويظهر الرقم.
+3. اكتب الرقم الظاهر على المستند، ثم أكمل الحفظ. لا تنتقل إلى رقم آخر إذا تأخر الحفظ؛ افحص رسالة الصفحة أولًا.
+4. بعد نجاح الحفظ تعود الصفحة إلى الاستعداد. اضغط زر الصح من جديد عند بدء الكتاب التالي.
+5. عند تغيير الجهاز أو تسجيل الخروج ثم الدخول، يستأنف المتصفح نفسه حجزه إن بقي صالحًا. لكل متصفح حجز مستقل.
+
+## الإلغاء وإعادة التدوير
+
+- لا تحرّر الحجز إذا كتبت رقمه على ورقة ستبقى في التداول. احفظ الكتاب أو تواصل مع المدير قبل التحرير.
+- الحجز المحرر أو المنتهي قد يُعاد تدوير رقمه إلى كاتب آخر. لذلك تأكد دائمًا أن الرقم المكتوب على الورقة هو الرقم الحالي الظاهر.
+- لا يُحجز رقم أثناء الاستعداد، ولا يطلب النظام رقمًا بديلًا تلقائيًا بعد انتهاء الحجز أو فشل الحفظ.
+- نقل كتاب محفوظ إلى سلة المحذوفات لا يحرّر رقمه: يبقى الحجز مستخدمًا ومرتبطًا بالكتاب القابل للاستعادة. لذلك قد تظهر فجوة في القائمة العادية رغم وجود الرقم في المحذوفات؛ هذا يختلف عن تدوير حجز لم يُستخدم لحفظ كتاب.
+
+## الأرقام المتزامنة والفجوات المؤقتة
+
+يحجز النظام الرقم قبل الحفظ كي يستطيع الموظف كتابته على المستند. إذا عمل متصفحان بالتوازي، فقد يحجز أحدهما رقمًا أصغر ثم يحفظ الآخر أولًا. لذلك **ترتيب الحجز لا يساوي بالضرورة ترتيب الحفظ**، وقد توجد فجوة مؤقتة ما دام رقم محجوزًا أو بانتظار انتهاء فترة السماح. بعد تحرير الرقم أو انقضاء مهلة الحجز قد يعاد تدويره.
+
+لا تستنتج من فجوة وحدها أن العداد قفز، ولا تعدّل العداد يدويًا. يراجع مدير النظام تبويب **لوحة الإدارة ← حجوزات الأرقام** قبل اتخاذ أي إجراء.
+
+## ترتيب العرض وعزل الأقسام
+
+- في فرز «الأحدث أولًا» و«الأقدم أولًا»، يبقى تاريخ الكتاب المعروض هو الأساس، وتُرتّب كتب التاريخ نفسه رقميًا بحسب رقم القيد وباتجاه الفرز نفسه، لا بحسب وقت اكتمال الحفظ. حفظ 3920 بعد 3921 و3922 لا يغيّر أي رقم رسمي؛ إنما يضعه في موضعه الصحيح داخل تاريخ الكتاب.
+- فرز رقم القيد الصريح يبقى مستقلًا عن التاريخ، والبحث الافتراضي يحافظ على أولوية صلة النتائج.
+- لكل قسم عداد وحجوزات مستقلة لكل نوع سجل. تساوي رقمين في قسمين مختلفين مشروع ولا يعني مشاركة العداد.
+- تُخزّن الكتب في جداول مشتركة مرتبطة بالقسم، وليست في جدول منفصل ماديًا لكل قسم. قواعد النطاق تضبط الرؤية: مدير النظام يرى الجميع، والموظف يرى نطاقه وما تسمح به الإحالات والذكر والصلاحيات المعتمدة؛ ظهور إحالة من قسم آخر لا ينقل رقمها إلى عداد قسم المستلم.
+
+## تقرير المدير
+
+- يعرض تبويب **حجوزات الأرقام** جميع الحجوزات النشطة وفترات السماح القائمة، إضافة إلى السجل في آخر 7 أو 30 أو 90 يومًا.
+- يبيّن التقرير الحالة الفعلية للمهلة، وعمر الإسناد الحالي، والقسم ونوع السجل والمستخدم، وعدد الأرقام التي أعيد تدويرها. التقرير للقراءة فقط ولا يغيّر حجزًا أو رقمًا.
+- قد لا يظهر عمر الإسناد لبعض الحجوزات السابقة لإضافة تتبّع الإسناد؛ لا يمكن استنتاج عمرها الحالي بدقة من وقت إنشاء سجل الحجز القديم.
+- لا يعرض التقرير بصمة المتصفح أو مفتاح الجلسة. والرقم المعاد تدويره يحمل وقت إسناد جديدًا، منفصلًا عن عمر سجل الحجز الأصلي.
+
+## تحقق قبول آمن
+
+يمكن اختبار عزل متصفحين واستئناف الجلسة والحفظ بعد تدوير الجلسة باختبارات SQLite دون لمس عداد الإنتاج:
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+python manage.py test core.tests_reservation_identity core.tests_reservation_recycle --settings=lettersys.settings_test
+node --test scripts/tests_reservation_ui.cjs
+```
+
+اختبار اليد على النظام الحي يجب تنسيقه مع مستخدمين وحجز تجريبي معلوم قبل التنفيذ؛ حجز رقم حيّ يحرّك العداد أو سجل التدوير، حتى لو لم يُحفظ كتاب.
+
+## External outgoing deployment (2026-10-19)
+
+The release candidate is based on production revision `b84e678` and merges
+`556c906`, preserving browser-scoped explicit reservations, assignment timestamps,
+the reservation report, workstation setup, and numeric same-day sorting.
+`0086_merge_outgoing_reservation` joins both `0085` migration branches.
+
+Run `scripts/deploy_outgoing_sequence.ps1 -ConfirmProductionRelease LETTERSYS`
+from the prepared candidate in a normal production terminal. It finalizes the
+staged merge with the normal Git hooks, refusing any unstaged edits. The script refuses
+a changed production revision or dirty checkout and runs isolated SQLite and JS
+tests before downtime. It stops the service before taking a PostgreSQL custom
+backup, checks the archive and SHA-256, then fast-forwards code, migrates,
+collects static assets, restarts, and checks HTTP health.
+
+If deployment fails after code update or migration begins, do not simply switch
+back to old code: review the recorded previous revision and database backup first.
+The outgoing migration preserves office numbers in `director_general_number`
+and numbers existing outgoing books per department. Empty numbers and explicitly
+marked training books remain unchanged and do not advance the series. This release
+does not delete books created in the application. Authenticated browser checks
+of reserve, save, and reopen are still required after the script succeeds.

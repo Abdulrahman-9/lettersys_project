@@ -13,6 +13,8 @@ def assign_outgoing_external_series(apps, schema_editor):
     for book in (
         Book.objects.using(alias)
         .filter(kind="outgoing_external")
+        .exclude(our_number="")
+        .filter(is_training=False)
         .order_by("department_id", "pk")
         .iterator(chunk_size=1000)
     ):
@@ -50,7 +52,10 @@ def restore_office_numbers(apps, schema_editor):
     BookSequence = apps.get_model("core", "BookSequence")
     missing_office_number = (
         Book.objects.using(alias)
-        .filter(kind="outgoing_external", our_number__gt="", director_general_number="")
+        .filter(
+            kind="outgoing_external", our_number__gt="",
+            is_training=False, director_general_number="",
+        )
         .values_list("pk", flat=True)
         .first()
     )
@@ -61,8 +66,11 @@ def restore_office_numbers(apps, schema_editor):
         )
 
     batch = []
-    for book in Book.objects.using(alias).filter(kind="outgoing_external").iterator(
-            chunk_size=1000):
+    for book in (
+        Book.objects.using(alias)
+        .filter(kind="outgoing_external", director_general_number__gt="")
+        .iterator(chunk_size=1000)
+    ):
         book.our_number = book.director_general_number
         book.director_general_number = ""
         batch.append(book)

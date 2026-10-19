@@ -9,7 +9,7 @@ const classSource = source.slice(source.indexOf('class ExtractionSmartSystem'), 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const kind = 'incoming_internal';
 
-function harness({ reserveError = false, voidError = false } = {}) {
+function harness({ reserveError = false, voidError = false, kind = 'incoming_internal' } = {}) {
   const nodes = new Map();
   for (const id of ['reservationRing', 'reservationStatus', 'reservationTimer', 'reservationContext',
     'bookNumberHint', 'bookNumber', 'bookKind', 'numberlessCheckbox', 'recycledBanner',
@@ -63,7 +63,6 @@ function harness({ reserveError = false, voidError = false } = {}) {
     reservations: {}, _reservationRequests: {},
     apiEndpoints: { reservationReserve: '/reserve/', reservationStatus: '/status/', reservationVoid: '/void/', saveBook: '/save/' },
     getCurrentKind: () => nodes.get('bookKind').value,
-    getKindConfig: k => ({ manualNumber: k === 'outgoing_external' }),
     getCookie: () => 'csrf',
     _kindMeta: () => ({ label: 'الوارد الداخلي', bg: '#fff', fg: '#000' }),
     showToast: (...args) => toasts.push(args),
@@ -74,6 +73,16 @@ function harness({ reserveError = false, voidError = false } = {}) {
   });
   return { system, nodes, calls, toasts, reservation };
 }
+
+test('external outgoing uses explicit system reservation and a separate office number', async () => {
+  const h = harness({ kind: 'outgoing_external' });
+  const config = h.system.getKindConfig('outgoing_external');
+  assert.ok(!config.manualNumber);
+  assert.equal(config.showDirectorGeneralNumber, true);
+  await h.system.ensureReservation('outgoing_external');
+  assert.equal(h.calls.filter(c => c.url === '/reserve/').length, 1);
+  assert.equal(h.nodes.get('bookNumber').value, '3925');
+});
 
 test('opening and switching kinds never reserves or displays an unheld preview', async () => {
   const h = harness();

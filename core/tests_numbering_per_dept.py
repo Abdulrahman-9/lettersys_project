@@ -188,6 +188,29 @@ class ReservationPerDepartmentTests(TestCase):
             1,
         )
 
+    def test_recycling_never_takes_another_departments_number(self):
+        foreign, _ = reserve_number(self.licensing_user, 'incoming_internal')
+        foreign.mark_voided()
+        BookSequence.objects.update_or_create(
+            department=self.followup, kind='incoming_internal',
+            defaults={'next_number': 3920})
+
+        own, outcome = reserve_number(self.followup_user, 'incoming_internal')
+
+        self.assertEqual((own.number, outcome), (3920, 'new'))
+        foreign.refresh_from_db()
+        self.assertEqual(foreign.department, self.licensing)
+        self.assertEqual(foreign.status, BookNumberReservation.STATUS_VOIDED)
+
+    def test_reserve_ignores_client_supplied_department(self):
+        self.client.force_login(self.followup_user)
+        response = self.client.post(
+            reverse('reservation-reserve'),
+            data={'kind': 'incoming_internal', 'department_id': self.licensing.pk},
+            content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['reservation']['department_id'], self.followup.pk)
+
     def test_same_login_on_two_browsers_gets_distinct_live_holds(self):
         first_client = Client()
         second_client = Client()
@@ -277,7 +300,7 @@ class ReservationPerDepartmentTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['formatted'], '7')
 
-    def test_manual_register_has_no_preview_or_reservation(self):
+    def test_external_outgoing_preview_and_reservation_use_department_series(self):
         self.client.force_login(self.licensing_user)
 
         preview = self.client.get(
@@ -289,10 +312,11 @@ class ReservationPerDepartmentTests(TestCase):
         )
 
         self.assertEqual(preview.status_code, 200)
-        self.assertTrue(preview.json()['manual_number'])
-        self.assertEqual(preview.json()['preview_number'], '')
-        self.assertEqual(reserve.status_code, 400)
-        self.assertEqual(reserve.json()['error_code'], 'MANUAL_REGISTER')
+        self.assertFalse(preview.json()['has_reservation'])
+        self.assertEqual(preview.json()['preview_number'], '1')
+        self.assertEqual(reserve.status_code, 200)
+        self.assertEqual(reserve.json()['reservation']['formatted'], '1')
+        self.assertEqual(reserve.json()['reservation']['department_id'], self.licensing.pk)
 
 
 class UniquenessIsScopedToDepartmentTests(TestCase):

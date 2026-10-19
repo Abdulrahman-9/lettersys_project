@@ -98,7 +98,11 @@ class ReservationBrowserIdentityTests(TestCase):
 
     def test_heartbeat_resumes_own_cooldown_without_issuing_another_number(self):
         first = self.reserve()['reservation']
-        BookNumberReservation.objects.get(pk=first['id']).enter_cooldown(15)
+        reservation = BookNumberReservation.objects.get(pk=first['id'])
+        reservation.assigned_at = timezone.now() - timedelta(days=1)
+        reservation.save(update_fields=['assigned_at'])
+        original_assignment = reservation.assigned_at
+        reservation.enter_cooldown(15)
 
         response = self.client.post(
             reverse('reservation-heartbeat'),
@@ -109,6 +113,7 @@ class ReservationBrowserIdentityTests(TestCase):
         self.assertEqual(response.json()['reservation']['id'], first['id'])
         reservation = BookNumberReservation.objects.get(pk=first['id'])
         self.assertEqual(reservation.status, 'active')
+        self.assertGreater(reservation.assigned_at, original_assignment)
         self.assertEqual(BookSequence.get_next(KIND)['number'], 2)
 
     def test_heartbeat_does_not_revive_a_recyclable_cooldown(self):
