@@ -10,24 +10,33 @@
 هناك تعيش التوأمةُ التلقائيّة وحارسُ حلقات الشجرة وأثرُ تغيير الأدوار.
 """
 
+from datetime import timedelta
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
+from django.db.models import Count, Q
 from django.shortcuts import redirect, render
+from django.utils import timezone
+from django.views.decorators.cache import never_cache
 
 from core.admin_service import (assign_user, create_department, delete_group,
                                 save_group,
                                 update_department)
-from core.models import Department, Entity, EntityGroup
+from core.models import BookNumberReservation, Department, Entity, EntityGroup
 from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
                         CONTROLLER_GROUP_NAME)
 from core.scoping import can_manage_accounts
 
-TABS = ('departments', 'users', 'groups')
+TABS = ('departments', 'users', 'groups', 'reservations')
+RESERVATION_REPORT_DAYS = (7, 30, 90)
+RESERVATION_REPORT_PAGE_SIZE = 50
 
 
 @login_required
+@never_cache
 def admin_panel(request):
     """التبويبات الثلاثة — قراءةً وكتابة.
 
@@ -42,7 +51,7 @@ def admin_panel(request):
     if request.method == 'POST':
         return _handle(request)
 
-    return render(request, 'core/admin_panel.html', {
+    context = {
         'tab': tab,
         'departments': _department_rows(),
         'all_departments': Department.objects.order_by('code'),
@@ -55,7 +64,111 @@ def admin_panel(request):
         # في القائمة عيبٌ صامت (674 جهةً في القاعدة).
         'editing': _editing_group(request),
         'member_ids': _editing_member_ids(request),
-    })
+    }
+    if tab == 'reservations':
+        context.update(_reservation_report(request))
+    return render(request, 'core/admin_panel.html', context)
+
+
+def _reservation_report(request):
+    """ملخّصٌ للقراءة فقط: كلّ الحجوزات القائمة وسجلّات الفترة المختارة."""
+    now = timezone.now()
+    raw_days = request.GET.get('days', '')
+    days = int(raw_days) if raw_days.isdigit() and int(raw_days) in RESERVATION_REPORT_DAYS else 7
+    cutoff = now - timedelta(days=days)
+    live_statuses = (
+        BookNumberReservation.STATUS_ACTIVE,
+        BookNumberReservation.STATUS_REACTIVATED,
+    )
+    rows = (
+        BookNumberReservation.objects.filter(
+            Q(status__in=live_statuses)
+            | Q(status=BookNumberReservation.STATUS_COOLDOWN,
+                cooldown_until__gt=now)
+            | Q(assigned_at__gte=cutoff)
+            | Q(assigned_at__isnull=True, reserved_at__gte=cutoff)
+        )
+        .select_related('user', 'department')
+        .order_by('-assigned_at', '-reserved_at', '-pk')
+    )
+    status_counts = {
+        row['status']: row['total']
+        for row in rows.order_by().values('status').annotate(total=Count('pk'))
+    }
+    current_active = rows.filter(
+        status__in=live_statuses, expires_at__gt=now,
+    ).count()
+    overdue_active = rows.filter(
+        status__in=live_statuses, expires_at__lte=now,
+    ).count()
+    current_cooldown = rows.filter(
+        status=BookNumberReservation.STATUS_COOLDOWN, cooldown_until__gt=now,
+    ).count()
+    elapsed_cooldown = rows.filter(
+        status=BookNumberReservation.STATUS_COOLDOWN,
+    ).filter(Q(cooldown_until__isnull=True) | Q(cooldown_until__lte=now)).count()
+    summary = {
+        'total': rows.count(),
+        'active': current_active,
+        'overdue_active': overdue_active,
+        'cooldown': current_cooldown,
+        'elapsed_cooldown': elapsed_cooldown,
+        'used': status_counts.get(BookNumberReservation.STATUS_USED, 0),
+        'expired': status_counts.get(BookNumberReservation.STATUS_EXPIRED, 0),
+        'voided': status_counts.get(BookNumberReservation.STATUS_VOIDED, 0),
+        'recycled': rows.filter(is_recycled=True).count(),
+    }
+
+    page_obj = Paginator(rows, RESERVATION_REPORT_PAGE_SIZE).get_page(
+        request.GET.get('page'))
+    report_rows = []
+    for reservation in page_obj.object_list:
+        if reservation.status in live_statuses and reservation.expires_at <= now:
+            status_label = 'انتهت المهلة — بانتظار التنظيف'
+        elif reservation.status == BookNumberReservation.STATUS_COOLDOWN:
+            if reservation.cooldown_until and reservation.cooldown_until > now:
+                status_label = 'فترة السماح'
+            else:
+                status_label = 'انتهت فترة السماح — بانتظار التدوير'
+        else:
+            status_label = reservation.get_status_display()
+
+        assigned_at = reservation.assigned_at
+        age_seconds = (
+            max(0, int((now - assigned_at).total_seconds()))
+            if assigned_at else None
+        )
+        if age_seconds is None:
+            age_label = 'غير متاح — حجز سابق لإضافة تتبّع الإسناد'
+        elif age_seconds < 60:
+            age_label = 'أقل من دقيقة'
+        elif age_seconds < 3600:
+            age_label = f'{age_seconds // 60} دقيقة'
+        elif age_seconds < 86400:
+            age_label = f'{age_seconds // 3600} ساعة'
+        else:
+            age_label = f'{age_seconds // 86400} يوم'
+        deadline = (
+            reservation.cooldown_until
+            if reservation.status == BookNumberReservation.STATUS_COOLDOWN
+            else reservation.expires_at
+        )
+        report_rows.append({
+            'reservation': reservation,
+            'status_label': status_label,
+            'age_label': age_label,
+            'assigned_at': timezone.localtime(assigned_at) if assigned_at else None,
+            'deadline': timezone.localtime(deadline) if deadline else None,
+        })
+
+    return {
+        'reservation_summary': summary,
+        'reservation_rows': report_rows,
+        'reservation_page': page_obj,
+        'reservation_days': days,
+        'reservation_day_options': RESERVATION_REPORT_DAYS,
+        'reservation_cutoff': timezone.localtime(cutoff),
+    }
 
 
 # ───────────────────────────── الكتابة ─────────────────────────────

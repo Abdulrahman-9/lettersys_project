@@ -30,12 +30,16 @@ class RecycleNoGapTests(TestCase):
 
     def test_voided_number_is_recycled_no_gap(self):
         r1, _ = reserve_number(self.a, KIND)          # 1 (جديد)
+        r1.assigned_at = timezone.now() - timedelta(days=1)
+        r1.save(update_fields=['assigned_at'])
+        original_assignment = r1.assigned_at
         r1.mark_voided()                               # تُرك → قابل للتدوير
         r2, o2 = reserve_number(self.b, KIND)          # يُعاد تدوير 1
         self.assertEqual(o2, 'recycled')
         self.assertEqual(r2.number, r1.number)
         self.assertTrue(r2.is_recycled)
         self.assertEqual(r2.user, self.b)
+        self.assertGreater(r2.assigned_at, original_assignment)
         # المستخدم الثالث يأخذ الرقم الجديد التالي (2) — بلا فجوة ولا تكرار
         r3, o3 = reserve_number(self.c, KIND)
         self.assertEqual(o3, 'new')
@@ -68,6 +72,9 @@ class CooldownPriorityTests(TestCase):
 
     def test_cooldown_reserved_for_owner_not_recycled_early(self):
         r1, _ = reserve_number(self.a, KIND)           # 1
+        r1.assigned_at = timezone.now() - timedelta(days=1)
+        r1.save(update_fields=['assigned_at'])
+        original_assignment = r1.assigned_at
         r1.enter_cooldown(15)                           # انقطاع قسريّ — محجوز لـa 15د
         # b يحجز أثناء cooldown a → لا يأخذ رقم a، بل رقماً جديداً
         r2, o2 = reserve_number(self.b, KIND)
@@ -79,6 +86,7 @@ class CooldownPriorityTests(TestCase):
         self.assertEqual(r3.pk, r1.pk)
         self.assertEqual(r3.number, 1)
         self.assertEqual(r3.status, BookNumberReservation.STATUS_ACTIVE)
+        self.assertGreater(r3.assigned_at, original_assignment)
 
     def test_cooldown_expired_recycled_to_others(self):
         r1, _ = reserve_number(self.a, KIND)           # 1

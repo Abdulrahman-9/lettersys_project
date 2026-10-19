@@ -123,12 +123,13 @@ def reserve_number(user, kind, expire_minutes=None, department=None, client_key=
             .order_by('number').first()
         )
         if own_cd:
+            own_cd.assigned_at = now
             own_cd.status = R.STATUS_ACTIVE
             own_cd.expires_at = now + timedelta(minutes=expire_minutes)
             own_cd.last_heartbeat = now
             own_cd.cooldown_until = None
             own_cd.void_reason = ''
-            own_cd.save(update_fields=['status', 'expires_at', 'last_heartbeat',
+            own_cd.save(update_fields=['assigned_at', 'status', 'expires_at', 'last_heartbeat',
                                        'cooldown_until', 'void_reason'])
             return own_cd, 'resumed'
 
@@ -141,6 +142,7 @@ def reserve_number(user, kind, expire_minutes=None, department=None, client_key=
                 continue
             cand.user = user
             cand.client_key = client_key
+            cand.assigned_at = now
             cand.status = R.STATUS_ACTIVE
             cand.is_recycled = True
             cand.expires_at = now + timedelta(minutes=expire_minutes)
@@ -148,7 +150,8 @@ def reserve_number(user, kind, expire_minutes=None, department=None, client_key=
             cand.cooldown_until = None
             cand.void_reason = ''
             cand.note = ''
-            cand.save(update_fields=['user', 'client_key', 'status', 'is_recycled', 'expires_at',
+            cand.save(update_fields=['user', 'client_key', 'assigned_at', 'status',
+                                     'is_recycled', 'expires_at',
                                      'last_heartbeat', 'cooldown_until', 'void_reason', 'note'])
             return cand, 'recycled'
 
@@ -160,7 +163,7 @@ def reserve_number(user, kind, expire_minutes=None, department=None, client_key=
             number=consumed['number'], prefix='',
             year=consumed['year'], formatted=consumed['formatted'],
             status=R.STATUS_ACTIVE, expires_at=now + timedelta(minutes=expire_minutes),
-            last_heartbeat=now, is_recycled=False,
+            assigned_at=now, last_heartbeat=now, is_recycled=False,
         )
         return res, 'new'
 
@@ -203,12 +206,13 @@ def heartbeat_reservation(reservation, user, client_key):
                 status__in=[R.STATUS_ACTIVE, R.STATUS_REACTIVATED],
             ).exclude(pk=r.pk).exists()
             if not other_active:
+                r.assigned_at = now
                 r.status = R.STATUS_ACTIVE
                 r.expires_at = now + timedelta(minutes=SystemSettings.reservation_ttl())
                 r.cooldown_until = None
                 r.void_reason = ''
                 r.save(update_fields=[
-                    'status', 'expires_at', 'cooldown_until', 'void_reason'])
+                    'assigned_at', 'status', 'expires_at', 'cooldown_until', 'void_reason'])
         if r.is_live_status:
             r.touch_heartbeat()
         return r

@@ -13,6 +13,7 @@
 القديم) أو يقرؤها من كاش LocMem.
 """
 import importlib
+from datetime import timedelta
 
 from django.conf import settings as dj_settings
 from django.contrib.auth.models import User
@@ -48,6 +49,20 @@ class ReservationTtlContractTests(TestCase):
         r, outcome = reserve_number(self.clerk, KIND)
         self.assertEqual(outcome, 'new')
         self.assertAlmostEqual(_minutes_until(r.expires_at), 45, delta=1)
+        self.assertIsNotNone(r.assigned_at)
+
+    def test_reactivation_starts_a_new_assignment_age(self):
+        from .reservation_service import reserve_number
+        reservation, _ = reserve_number(self.clerk, KIND)
+        reservation.assigned_at = timezone.now() - timedelta(days=2)
+        reservation.save(update_fields=['assigned_at'])
+        original_assignment = reservation.assigned_at
+        reservation.mark_expired()
+
+        reservation.reactivate(extra_minutes=15)
+
+        self.assertGreater(reservation.assigned_at, original_assignment)
+        self.assertGreater(reservation.expires_at, reservation.assigned_at)
 
     # ── 2) الأثرُ فوريٌّ بلا إعادةِ تشغيل ──────────────────────────────────
     def test_takes_effect_immediately_for_new_reservations(self):
@@ -294,4 +309,3 @@ class EveryReservationPathUsesTheStoredTtlTests(TestCase):
             reservation_expire_minutes=25)
         fresh = BookNumberReservation.reserve(self.b, KIND)
         self.assertAlmostEqual(_minutes_until(fresh.expires_at), 25, delta=1)
-

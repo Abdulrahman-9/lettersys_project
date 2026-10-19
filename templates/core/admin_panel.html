@@ -3,13 +3,13 @@
 {% block global_messages %}{% endblock %}
 {% load static %}
 
-{% block title %}لوحة الإدارة{% endblock %}
+{% block title %}{% if tab == 'reservations' %}حجوزات أرقام القيود{% else %}لوحة الإدارة{% endif %}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-3">
 
   <h5 class="fw-bold mb-3">
-    <i class="bi bi-sliders text-primary me-2"></i>لوحة الإدارة
+    <i class="bi bi-sliders text-primary me-2"></i>{% if tab == 'reservations' %}حجوزات أرقام القيود{% else %}لوحة الإدارة{% endif %}
   </h5>
 
   {% if messages %}
@@ -35,7 +35,102 @@
         <i class="bi bi-collection me-1"></i>العناقيد
       </a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'reservations' %}active{% endif %}" href="?tab=reservations">
+        <i class="bi bi-list-ol me-1" aria-hidden="true"></i>حجوزات الأرقام
+      </a>
+    </li>
   </ul>
+
+  {% if tab == 'reservations' %}
+    <section aria-labelledby="reservation-report-heading">
+      <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+        <div>
+          <h6 class="fw-bold mb-1" id="reservation-report-heading">متابعة الحجوزات</h6>
+          <p class="text-muted small mb-0">
+            يعرض الحجوزات القائمة كلها، وسجل آخر {{ reservation_days }} يومًا. التقرير للقراءة فقط ولا يغيّر الأرقام أو الحالات.
+          </p>
+        </div>
+        <form method="get" class="d-flex align-items-end gap-2">
+          <input type="hidden" name="tab" value="reservations">
+          <div>
+            <label for="reservation-days" class="form-label small mb-1">الفترة للسجل</label>
+            <select class="form-select form-select-sm" id="reservation-days" name="days">
+              {% for option in reservation_day_options %}
+                <option value="{{ option }}"{% if reservation_days == option %} selected{% endif %}>{{ option }} يومًا</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-sm btn-outline-primary">تحديث العرض</button>
+        </form>
+      </div>
+
+      <div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-2 mb-3">
+        <div class="col"><div class="card h-100"><div class="card-body py-2"><div class="small text-muted">نشط ضمن المهلة</div><strong>{{ reservation_summary.active }}</strong></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body py-2"><div class="small text-muted">تجاوز المهلة وينتظر التنظيف</div><strong>{{ reservation_summary.overdue_active }}</strong></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body py-2"><div class="small text-muted">ضمن فترة السماح</div><strong>{{ reservation_summary.cooldown }}</strong></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body py-2"><div class="small text-muted">انتهى السماح وينتظر التدوير</div><strong>{{ reservation_summary.elapsed_cooldown }}</strong></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body py-2"><div class="small text-muted">أُعيد تدويرها</div><strong>{{ reservation_summary.recycled }}</strong></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body py-2"><div class="small text-muted">استُخدمت في كتاب</div><strong>{{ reservation_summary.used }}</strong></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body py-2"><div class="small text-muted">منتهية</div><strong>{{ reservation_summary.expired }}</strong></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body py-2"><div class="small text-muted">ملغاة</div><strong>{{ reservation_summary.voided }}</strong></div></div></div>
+        <div class="col"><div class="card h-100"><div class="card-body py-2"><div class="small text-muted">إجمالي السجلات المعروضة</div><strong>{{ reservation_summary.total }}</strong></div></div></div>
+      </div>
+
+      <div class="alert alert-info py-2 small" role="note">
+        عمر الإسناد يُحسب من آخر إسناد فعلي للرقم، لا من إنشاء سجلّه. قد لا يتوفر العمر للحجوزات القديمة السابقة لتتبّع الإسناد.
+        الأرقام المتزامنة لا تضمن ترتيب الحفظ؛ لا تعدّل العداد يدويًا بسبب فجوة قبل مراجعة الحجوزات.
+      </div>
+
+      <div class="card border-0 shadow-sm rounded-3">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 small">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">الرقم</th>
+                <th scope="col">الحالة</th>
+                <th scope="col">المستخدم</th>
+                <th scope="col">القسم</th>
+                <th scope="col">نوع السجل</th>
+                <th scope="col">عمر الإسناد</th>
+                <th scope="col">أُسند في</th>
+                <th scope="col">المهلة</th>
+                <th scope="col">آخر نبضة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in reservation_rows %}
+                <tr>
+                  <td class="fw-semibold text-nowrap" dir="ltr" style="font-variant-numeric:tabular-nums">{{ row.reservation.formatted }}{% if row.reservation.is_recycled %}<span class="badge text-bg-info ms-1">مُدوّر</span>{% endif %}</td>
+                  <td>{{ row.status_label }}</td>
+                  <td>{{ row.reservation.user.get_username }}</td>
+                  <td>{{ row.reservation.department.name|default:'—' }}</td>
+                  <td>{{ row.reservation.get_kind_display }}</td>
+                  <td class="text-nowrap">{{ row.age_label }}</td>
+                  <td class="text-nowrap" style="font-variant-numeric:tabular-nums">{{ row.assigned_at|date:'Y-m-d H:i'|default:'—' }}</td>
+                  <td class="text-nowrap" style="font-variant-numeric:tabular-nums">{{ row.deadline|date:'Y-m-d H:i'|default:'—' }}</td>
+                  <td class="text-nowrap" style="font-variant-numeric:tabular-nums">{{ row.reservation.last_heartbeat|date:'Y-m-d H:i'|default:'—' }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="9" class="text-center text-muted py-4">لا توجد حجوزات في هذه الفترة أو حجوزات قائمة.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if reservation_page.paginator.num_pages > 1 %}
+          <nav class="card-footer d-flex justify-content-between align-items-center" aria-label="صفحات تقرير الحجوزات">
+            {% if reservation_page.has_previous %}
+              <a class="btn btn-sm btn-outline-secondary" href="?tab=reservations&amp;days={{ reservation_days }}&amp;page={{ reservation_page.previous_page_number }}">الأحدث</a>
+            {% else %}<span></span>{% endif %}
+            <span class="small text-muted" aria-live="polite">صفحة {{ reservation_page.number }} من {{ reservation_page.paginator.num_pages }}</span>
+            {% if reservation_page.has_next %}
+              <a class="btn btn-sm btn-outline-secondary" href="?tab=reservations&amp;days={{ reservation_days }}&amp;page={{ reservation_page.next_page_number }}">الأقدم</a>
+            {% else %}<span></span>{% endif %}
+          </nav>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
 
   {% comment %}────────────────────────── الأقسام ──────────────────────────{% endcomment %}
   {% if tab == 'departments' %}
@@ -249,7 +344,7 @@
     </div>
 
   {% comment %}────────────────────────── العناقيد ──────────────────────────{% endcomment %}
-  {% else %}
+  {% elif tab == 'groups' %}
     <div class="row g-3">
       <div class="col-lg-4">
         <div class="card border-0 shadow-sm rounded-4">
