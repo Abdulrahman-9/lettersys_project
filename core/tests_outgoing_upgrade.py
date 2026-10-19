@@ -8,8 +8,10 @@ class OutgoingUpgradeTests(TransactionTestCase):
         previous = [("core", "0085_reservation_assignment_time")]
         target = [("core", "0086_merge_outgoing_reservation")]
         executor = MigrationExecutor(connection)
-        executor.migrate(previous)
         try:
+            executor.migrate([("core", "0084_attachment_version_unique")])
+            executor = MigrationExecutor(connection)
+            executor.migrate(previous)
             apps = executor.loader.project_state(previous).apps
             User = apps.get_model("auth", "User")
             Department = apps.get_model("core", "Department")
