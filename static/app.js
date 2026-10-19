@@ -731,6 +731,92 @@ async function requestNotificationPermission() {
  * إظهار زر التثبيت (Install Prompt)
  */
 let deferredPrompt;
+const INSTALL_GUIDE_KEY = 'lettersys-install-guide-v1';
+let installGuideToast = null;
+let appInstalledThisSession = false;
+
+function isInstalledApp() {
+  return appInstalledThisSession || window.matchMedia('(display-mode: standalone)').matches ||
+    navigator.standalone === true;
+}
+
+function rememberInstallGuide() {
+  try {
+    localStorage.setItem(INSTALL_GUIDE_KEY, 'seen');
+  } catch (error) {
+    console.warn('تعذّر حفظ حالة دليل التثبيت في هذا المتصفح:', error);
+  }
+}
+
+function initInstallGuide() {
+  const setupUrl = document.body.dataset?.deviceSetupUrl;
+  if (window.self !== window.top || isInstalledApp() || location.pathname === '/offline.html' ||
+      location.pathname === setupUrl) return;
+  try {
+    if (localStorage.getItem(INSTALL_GUIDE_KEY) === 'seen') return;
+  } catch (error) {
+    console.warn('تعذّر قراءة حالة دليل التثبيت في هذا المتصفح:', error);
+  }
+
+  const secure = window.isSecureContext && location.protocol === 'https:';
+  const steps = secure ? [
+    'مرحباً بك. هذا الاتصال يستخدم HTTPS. على أجهزة الموظفين الأخرى، ثبّت شهادة الثقة التي يزوّدك بها مسؤول النظام أولاً، ثم افتح عنوان HTTPS نفسه. لا تتجاوز تحذيرات الشهادة.',
+    'للتثبيت: استخدم زر «تثبيت» إذا ظهر أسفل الصفحة، أو رمز التثبيت قرب شريط العنوان. في Edge افتح قائمة «التطبيقات»، وفي Chrome ابحث عن «تثبيت» ضمن قائمة المتصفح. على iPhone وiPad استخدم «مشاركة» ثم «إضافة إلى الشاشة الرئيسية». قد تختلف الخيارات حسب المتصفح.',
+    'بعد التثبيت افتح النظام من أيقونته. التطبيق يحتاج الشبكة وجهاز الخادم؛ الأيقونة لا تشغّل خادماً متوقفاً. لفحص الماسح وتجهيز أدواته خطوة بخطوة، اختر «تجهيز هذا الجهاز». يمكنك العودة إلى المعالج من القائمة في أي وقت.'
+  ] : [
+    'أنت تستخدم عنوان HTTP أو سياقاً غير آمن؛ التثبيت كتطبيق ليس متاحاً هنا بالطريقة المعتمدة للشبكة. احصل من مسؤول النظام على حزمة شهادة الثقة وعنوان HTTPS الصحيح.',
+    'ثبّت شهادة الثقة من الحزمة المعتمدة بحسابك، ثم أغلق المتصفح وأعد فتحه على عنوان HTTPS. لا تتجاوز أي تحذير شهادة. سيشرح لك الدليل هناك خطوات التثبيت.'
+  ];
+  const previousFocus = document.activeElement;
+
+  function showStep(index) {
+    let nextStep = null;
+    const actions = [
+      {
+        label: index < steps.length - 1 ? 'التالي' : 'فهمت',
+        className: 'btn btn-sm btn-primary',
+        onClick: function() {
+          if (index < steps.length - 1) nextStep = index + 1;
+        },
+      },
+      {
+        label: 'إغلاق الدليل',
+        className: 'btn btn-sm btn-outline-secondary',
+      },
+    ];
+    if (setupUrl) {
+      actions.push({
+        label: 'تجهيز هذا الجهاز',
+        className: 'btn btn-sm btn-outline-primary',
+        onClick: function() {
+          window.location.assign(setupUrl);
+        },
+      });
+    }
+    installGuideToast = window.ToastCenter.action('info', steps[index], actions, {
+      title: `دليل تجهيز الجهاز — ${index + 1} من ${steps.length}`,
+      iconClass: 'bi-download',
+      autohide: false,
+      onShown: function(toast) {
+        if (index > 0) toast.element.querySelector('button:not(.btn-close)')?.focus();
+      },
+      onHidden: function() {
+        installGuideToast = null;
+        if (nextStep !== null && !isInstalledApp()) {
+          showStep(nextStep);
+        } else if (previousFocus?.isConnected) {
+          previousFocus.focus();
+        }
+      },
+    });
+    if (installGuideToast) {
+      installGuideToast.element.dataset.installGuide = 'true';
+      rememberInstallGuide();
+    }
+  }
+
+  showStep(0);
+}
 
 window.addEventListener('beforeinstallprompt', (e) => {
   // منع إظهار الإشعار التلقائي
@@ -738,13 +824,46 @@ window.addEventListener('beforeinstallprompt', (e) => {
   deferredPrompt = e;
   
   // إظهار زر التثبيت المخصص
-  showInstallButton();
+  if (window.self === window.top && !isInstalledApp()) showInstallButton();
 });
+
+window.addEventListener('appinstalled', () => {
+  appInstalledThisSession = true;
+  deferredPrompt = null;
+  document.getElementById('installBanner')?.remove();
+  installGuideToast?.hide();
+  rememberInstallGuide();
+  showToast('تم تثبيت التطبيق؛ يمكنك فتحه من أيقونته', 'success');
+});
+
+async function promptAppInstall(button) {
+  if (!deferredPrompt) return 'unavailable';
+  const prompt = deferredPrompt;
+  deferredPrompt = null;
+  button.disabled = true;
+  try {
+    await prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    if (outcome === 'accepted') {
+      showToast('تم قبول طلب التثبيت؛ أكمل الخطوات التي يعرضها المتصفح', 'info');
+    }
+    document.getElementById('installBanner')?.remove();
+    return outcome;
+  } catch (error) {
+    console.error('تعذّر فتح طلب تثبيت التطبيق:', error);
+    document.getElementById('installBanner')?.remove();
+    showToast('تعذّر فتح طلب التثبيت. جرّب خيار التثبيت من قائمة المتصفح.', 'error');
+    return 'error';
+  } finally {
+    button.disabled = false;
+  }
+}
 
 /**
  * إظهار زر التثبيت
  */
 function showInstallButton() {
+  if (document.getElementById('installBanner')) return;
   const installBanner = document.createElement('div');
   installBanner.className = 'position-fixed bottom-0 start-0 end-0 p-3 animate-slide-up';
   installBanner.style.zIndex = '9999';
@@ -752,15 +871,15 @@ function showInstallButton() {
   installBanner.innerHTML = `
     <div class="alert alert-success d-flex justify-content-between align-items-center shadow-lg glass-effect" role="alert">
       <div class="d-flex align-items-center gap-2">
-        <i class="bi bi-download fs-4"></i>
+        <i class="bi bi-download fs-4" aria-hidden="true"></i>
         <span>ثبّت التطبيق على جهازك للوصول السريع</span>
       </div>
       <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-success" id="installButton">
-          <i class="bi bi-plus-circle me-1"></i>تثبيت
+        <button type="button" class="btn btn-sm btn-success" id="installButton">
+          <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>تثبيت
         </button>
-        <button class="btn btn-sm btn-outline-secondary" id="dismissInstall">
-          <i class="bi bi-x"></i>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="dismissInstall" aria-label="إغلاق عرض التثبيت">
+          <i class="bi bi-x" aria-hidden="true"></i>
         </button>
       </div>
     </div>
@@ -769,20 +888,8 @@ function showInstallButton() {
   document.body.appendChild(installBanner);
   
   // معالج زر التثبيت
-  document.getElementById('installButton').addEventListener('click', async () => {
-    if (!deferredPrompt) return;
-    
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    console.log(`User response: ${outcome}`);
-    
-    if (outcome === 'accepted') {
-      showToast('تم تثبيت التطبيق بنجاح!', 'success');
-    }
-    
-    deferredPrompt = null;
-    document.getElementById('installBanner')?.remove();
+  document.getElementById('installButton').addEventListener('click', function() {
+    promptAppInstall(this);
   });
   
   // معالج زر الإغلاق
@@ -1617,6 +1724,7 @@ if (window.LetterSystem) {
 document.addEventListener('DOMContentLoaded', function(){
   initBootstrapToastsCenter();
   initUpdateNotification();
+  initInstallGuide();
 });
 
 // ===== PWA Update Notification System =====

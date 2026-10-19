@@ -55,7 +55,7 @@
 
     {% block extra_head %}{% endblock %}
   </head>
-  <body class="{% if is_embed %}settings-embed-body{% elif request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %}app-shell-body{% endif %}{% block body_class %}{% endblock %}">
+  <body data-device-setup-url="{% url 'device_setup' %}" class="{% if is_embed %}settings-embed-body{% elif request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %}app-shell-body{% endif %}{% block body_class %}{% endblock %}">
     {% if not is_embed %}<a class="visually-hidden-focusable skip-link" href="#main">تخطَّ إلى المحتوى</a>{% endif %}
     {% if is_embed %}
     <main class="app-embed-main" id="main">
@@ -192,6 +192,9 @@
 
         {% if request.user.is_authenticated %}
         <div class="app-sidebar-panel app-sidebar-panel-footer">
+          <a class="app-sidebar-link" href="{% url 'device_setup' %}">
+            <i class="bi bi-pc-display" aria-hidden="true"></i><span>تجهيز هذا الجهاز</span>
+          </a>
           <form method="post" action="{% url 'logout' %}">
             {% csrf_token %}
             <button type="submit" class="app-sidebar-logout">
@@ -270,7 +273,7 @@
     <script src="{% static 'logging-system.js' %}"></script>
     
     <!-- نظام إدارة الكتب - JavaScript الحديث -->
-    <script src="{% static 'app.js' %}?v=20261011-pwa-update"></script>
+    <script src="{% static 'app.js' %}?v=20261013-guided-actions"></script>
 
     <!-- Sidebar Mini Toggle -->
     <script>
