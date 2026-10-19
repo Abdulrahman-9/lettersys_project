@@ -1479,25 +1479,22 @@ class ExtractionSmartSystem {
                 directionText: 'صادر',
                 scopeText: 'خارجي',
                 summaryCopy: 'مراسلة تخرج إلى جهة خارجية، لذا نُبرز رقمنا وتاريخنا الرسميين مع متابعة التسليم أو الرد إن وجدت.',
-                numberPlanTitle: 'رقم الصادر الرسمي',
-                numberPlanCopy: 'في الصادر الخارجي نستخدم رقمنا الرسمي فقط لأنه المرجع الذي يُرسل إلى الخارج.',
+                numberPlanTitle: 'رقم قيدنا + رقم مكتب المدير العام',
+                numberPlanCopy: 'يولّد النظام رقم قيدنا المتسلسل، ونحفظ رقم مكتب المدير العام في حقل مستقل كما ورد.',
                 datePlanTitle: 'تاريخ الإرسال + المتابعة',
                 datePlanCopy: 'تاريخنا هو تاريخ الإرسال الرسمي، ويمكن إدخال تاريخ متابعة للرد أو الإنجاز.',
-                bookNumberLabel: 'رقم صادر مكتب السيد المدير العام',
-                bookNumberHint: 'اكتبه كما هو على الكتاب، أو امسح المستند ليُقرأ تلقائياً. لا يولّده النظام.',
-                bookNumberPlaceholder: 'مثال: 7436',
+                bookNumberLabel: 'رقم الصادر الخارجي',
+                bookNumberHint: 'رقم قيد متسلسل يحجزه النظام لهذا القسم — اكتبه على الكتاب.',
+                bookNumberPlaceholder: 'يُولَّد تلقائياً',
                 senderNumberLabel: 'رقم الجهة المرسلة',
                 senderNumberHint: '',
                 dateLabel: 'تاريخ الإرسال',
                 dateHint: 'تاريخ إصدار وإرسال الكتاب إلى الجهة الخارجية.',
                 senderDateLabel: 'تاريخ الجهة المرسلة',
                 senderDateHint: '',
-                propertiesCopy: 'الصادر الخارجي لا يحتاج رقم جهة مرسلة، لكنه يحتاج صياغة متابعة واضحة إذا كان هناك رد منتظر.',
+                propertiesCopy: 'يحتفظ الصادر الخارجي برقم قيدنا المتسلسل ورقم مكتب المدير العام كلٍّ في حقل مستقل.',
                 showSenderFields: false,
-                // هذا السجلّ **لا سلسلة له**: الرقم يصدر من مكتب المدير العام لا من النظام.
-                // قياساً على البيانات الفعلية أرقامه (0, 109, 1555, 27189…) بلا تسلسل ولا
-                // ترتيب، وتتكرّر — فحجز رقمٍ له من عدّادنا يخترع رقماً لا وجود له على الورق.
-                manualNumber: true,
+                showDirectorGeneralNumber: true,
             },
         };
 
@@ -1531,6 +1528,7 @@ class ExtractionSmartSystem {
         const kindTabs = document.querySelectorAll('.kind-tab');
         const senderNumberGroup = document.getElementById('senderNumberGroup');
         const senderDateGroup = document.getElementById('senderDateGroup');
+        const directorGeneralNumberGroup = document.getElementById('directorGeneralNumberGroup');
         const startScanButton = document.getElementById('startScanButton');
         const previousKind = kindSelect?.value;
 
@@ -1568,6 +1566,22 @@ class ExtractionSmartSystem {
         if (senderDateGroup) {
             senderDateGroup.classList.toggle('is-hidden', !config.showSenderFields);
         }
+        if (directorGeneralNumberGroup) {
+            directorGeneralNumberGroup.classList.toggle(
+                'is-hidden', !config.showDirectorGeneralNumber);
+        }
+        const officeNumberInput = document.getElementById('directorGeneralNumber');
+        if (officeNumberInput) {
+            officeNumberInput.required = !!config.showDirectorGeneralNumber;
+            officeNumberInput.setAttribute(
+                'aria-required', config.showDirectorGeneralNumber ? 'true' : 'false');
+        }
+        if (!config.showDirectorGeneralNumber) {
+            if (officeNumberInput) {
+                officeNumberInput.value = '';
+                officeNumberInput.classList.remove('has-error');
+            }
+        }
 
         if (!config.showSenderFields) {
             const senderNumber = document.getElementById('senderNumber');
@@ -1604,11 +1618,9 @@ class ExtractionSmartSystem {
     /**
      * يضبط سلوك حقل الرقم حسب السجلّ.
      *
-     * السجلّات الثلاثة الأولى: الرقم يولّده النظام ويُحجز ذرّياً — الحقل للقراءة فقط
+     * السجلّات: الرقم يولّده النظام ويُحجز ذرّياً — الحقل للقراءة فقط
      * كي لا يكتب موظّفان الرقم نفسه.
-     * الصادر الخارجي: لا سلسلة له أصلاً — الرقم يصدر من مكتب المدير العام. فالحقل
-     * قابل للكتابة، ويُملأ تلقائياً من استخلاص المستند الممسوح، وإن كُتب قبل المسح
-     * يُطلَب تأكيد المطابقة بدل الكتابة فوقه بصمت.
+     * رقم مكتب المدير العام محفوظ في حقل مستقل ولا يحل محل رقم القيد المتسلسل.
      */
     applyNumberMode(kind, config, field) {
         const manual = !!config.manualNumber;
@@ -1639,7 +1651,7 @@ class ExtractionSmartSystem {
     ensureReservation(kind) {
         // وضع التعديل: الرقم ثابت فلا حجز (كان override في القالب — نُقل للصنف لتوحيد كشف الوضع)
         if (this._editData) return Promise.resolve(null);
-        // سجلّ بلا سلسلة (الصادر الخارجي): لا نحجز رقماً لا وجود له على الورق.
+        // السجلات اليدوية فقط لا تملك رقماً للحجز.
         if (this.getKindConfig(kind).manualNumber) return Promise.resolve(null);
         // Already have an active reservation cached for this kind → just paint
         if (this.reservations[kind] && this.reservations[kind].id) {
@@ -2247,7 +2259,7 @@ class ExtractionSmartSystem {
         }
 
         // Form inputs - Live validation & suggestions
-        const formFields = ['bookNumber', 'senderNumber', 'title', 'date', 'senderDate', 'dueDate', 'issuingEntity', 'receivingEntity', 'margin'];
+        const formFields = ['bookNumber', 'senderNumber', 'directorGeneralNumber', 'title', 'date', 'senderDate', 'dueDate', 'issuingEntity', 'receivingEntity', 'margin'];
         let fieldsFound = 0;
         
         formFields.forEach(fieldId => {
@@ -2287,7 +2299,7 @@ class ExtractionSmartSystem {
             if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
                 const el = document.activeElement;
                 // داخل حقل قابل للتحرير غير مُتتبَّع (الجهات/التواريخ) → دع المتصفّح يتراجع محرفياً
-                const tracked = ['senderNumber', 'title', 'documentTypeCustom', 'margin'];
+                const tracked = ['senderNumber', 'directorGeneralNumber', 'title', 'documentTypeCustom', 'margin'];
                 const editableUntracked = el
                     && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
                     && !tracked.includes(el.id);
@@ -2313,7 +2325,7 @@ class ExtractionSmartSystem {
     // يلتقط: الكتابة اليدوية (مُجمَّعة بمهلة) + التعبئة/التفريغ البرمجي (عبر begin/endTextUndoBatch).
     // حقول التاريخ والجهات مُستثناة عمداً (تبسيط) — لها تراجع المتصفّح الأصلي.
     setupTextUndo() {
-        const IDS = ['senderNumber', 'title', 'documentTypeCustom', 'margin'];
+        const IDS = ['senderNumber', 'directorGeneralNumber', 'title', 'documentTypeCustom', 'margin'];
         const MAX = 60;
         const stack = [];      // [{id, value}] — أحدث تغيير في النهاية
         const prev = {};       // آخر قيمة مُثبَّتة لكل حقل
@@ -5339,7 +5351,9 @@ class ExtractionSmartSystem {
             return;
         }
         // في التعديل الرقم ثابت فلا يُتحقَّق منه؛ في الإدخال نتخطّاه عند "بلا رقم".
-        const requiredFields = (isEdit || numberlessChecked)
+        const hasSystemNumber = kindValue === 'outgoing_external'
+            && (this.reservations[kindValue]?.id || this.autoNumberEnabled);
+        const requiredFields = (isEdit || numberlessChecked || hasSystemNumber)
             ? ['title', 'date', 'issuingEntity', 'receivingEntity']
             : ['bookNumber', 'title', 'date', 'issuingEntity', 'receivingEntity'];
         let isValid = true;
@@ -5379,9 +5393,12 @@ class ExtractionSmartSystem {
         const formData = new FormData();
         const senderNumber = document.getElementById('senderNumber')?.value || '';
         const senderDate = document.getElementById('senderDate')?.value || '';
+        const directorGeneralNumber =
+            document.getElementById('directorGeneralNumber')?.value.trim() || '';
         formData.append('title', document.getElementById('title').value);
         formData.append('date', document.getElementById('date').value);
         formData.append('sender_number', senderNumber);
+        formData.append('director_general_number', directorGeneralNumber);
         formData.append('sender_date', senderDate);
         // مصدرُ قيمة التاريخ والعدد: مكتوبةٌ بيد الكاتب أم مؤكَّدةٌ بلمسة أم
         // مملوءةٌ تلقائيّاً وحُفظت بلا لمس. المؤكَّدةُ ليست شاهدَ تقييمٍ مستقلّاً
@@ -5428,11 +5445,9 @@ class ExtractionSmartSystem {
         // ── 6) وضع الإدخال: حقول الترقيم/الحجز + إرسال إلى save-book-api ──
         const bookNumber = document.getElementById('bookNumber').value;
 
-        // سجلّ بلا سلسلة: النظام لا يملك رقماً يمنحه، فالرقم إلزاميّ من الموظّف.
-        if (!numberlessChecked && this.getKindConfig(kindValue).manualNumber && !bookNumber.trim()) {
-            this.showToast('أدخل رقم صادر مكتب السيد المدير العام — هذا السجلّ لا يولّد رقماً تلقائياً.',
-                           'error', 6000);
-            const el = document.getElementById('bookNumber');
+        if (kindValue === 'outgoing_external' && !directorGeneralNumber) {
+            this.showToast('أدخل رقم مكتب المدير العام للصادر الخارجي.', 'error', 6000);
+            const el = document.getElementById('directorGeneralNumber');
             if (el) { el.focus(); el.classList.add('has-error'); }
             return;
         }

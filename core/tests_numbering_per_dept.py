@@ -23,6 +23,7 @@ class SequencePerDepartmentTests(TestCase):
     def setUpTestData(cls):
         cls.d1 = Department.objects.create(name='المتابعة', code='ن-ش13')
         cls.d2 = Department.objects.create(name='العقود', code='ن-ش5')
+        cls.user = User.objects.create_user('numbering-clerk', password='pw-test-333')
 
     def test_each_department_has_its_own_counter(self):
         a = BookSequence.consume_next('incoming_internal', department=self.d1)
@@ -34,6 +35,28 @@ class SequencePerDepartmentTests(TestCase):
             BookSequence.consume_next('incoming_internal', department=self.d1)
         self.assertEqual(BookSequence.get_next('incoming_internal', self.d1)['number'], 4)
         self.assertEqual(BookSequence.get_next('incoming_internal', self.d2)['number'], 1)
+
+    def test_external_outgoing_has_a_unique_system_series_and_repeatable_office_number(self):
+        first = Book.objects.create(
+            department=self.d1, kind='outgoing_external', our_number='1',
+            director_general_number='109', title='كتاب 1', created_by=self.user,
+        )
+        second = Book.objects.create(
+            department=self.d1, kind='outgoing_external', our_number='2',
+            director_general_number='109', title='كتاب 2', created_by=self.user,
+        )
+        self.assertEqual(first.director_general_number, second.director_general_number)
+        self.assertEqual(
+            BookSequence.consume_next('outgoing_external', department=self.d1)['formatted'],
+            '1')
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Book.objects.create(
+                    department=self.d1, kind='outgoing_external', our_number='1',
+                    director_general_number='27189', title='تكرار رقم القيد',
+                    created_by=self.user,
+                )
 
     def test_missing_department_falls_back_to_default(self):
         """المسارات القديمة لا تعرف القسم — تسقط إلى الافتراضيّ لا إلى خطأ."""
@@ -72,6 +95,80 @@ class ReservationPerDepartmentTests(TestCase):
         self.assertEqual(first.number, 3917)
         self.assertEqual(second.department, self.licensing)
         self.assertEqual(second.number, 1)
+
+    def test_external_outgoing_can_reserve_its_new_series(self):
+        reservation, outcome = reserve_number(
+            self.followup_user, 'outgoing_external')
+
+        self.assertEqual(outcome, 'new')
+        self.assertEqual(reservation.department, self.followup)
+        self.assertEqual(reservation.formatted, '1')
+
+    def test_external_outgoing_save_requires_both_numbers_and_allocates_the_series(self):
+        self.client.force_login(self.followup_user)
+        url = reverse('save-book-api')
+        data = {
+            'kind': 'outgoing_external',
+            'our_number': '1',
+            'title': 'كتاب خارجي',
+            'date': '2026-10-14',
+            'director_general_number': '109',
+            'auto_number': 'true',
+        }
+
+        missing_office_number = self.client.post(
+            url, {**data, 'director_general_number': ''})
+        self.assertEqual(missing_office_number.status_code, 400)
+        self.assertEqual(
+            missing_office_number.json()['error_code'],
+            'MISSING_DIRECTOR_GENERAL_NUMBER')
+        self.assertEqual(
+            BookSequence.get_next('outgoing_external', self.followup)['number'], 1)
+
+        manual_internal_number = self.client.post(
+            url, {**data, 'auto_number': 'false'})
+        self.assertEqual(manual_internal_number.status_code, 400)
+        self.assertEqual(manual_internal_number.json()['error_code'], 'SYSTEM_NUMBER_REQUIRED')
+
+        saved = self.client.post(url, data)
+        self.assertEqual(saved.status_code, 201, saved.content.decode())
+        book = Book.objects.get(pk=saved.json()['book_id'])
+        self.assertEqual(book.our_number, '1')
+        self.assertEqual(book.director_general_number, '109')
+
+    def test_external_outgoing_auto_number_accepts_blank_internal_number(self):
+        self.client.force_login(self.followup_user)
+        response = self.client.post(reverse('save-book-api'), {
+            'kind': 'outgoing_external',
+            'our_number': '',
+            'title': 'كتاب صادر آلي',
+            'date': '2026-10-14',
+            'director_general_number': '109',
+            'auto_number': 'true',
+        })
+        self.assertEqual(response.status_code, 201, response.content.decode())
+        book = Book.objects.get(pk=response.json()['book_id'])
+        self.assertEqual(book.our_number, '1')
+        self.assertEqual(book.director_general_number, '109')
+
+    def test_external_outgoing_reservation_accepts_blank_internal_number(self):
+        self.client.force_login(self.followup_user)
+        reservation, _ = reserve_number(
+            self.followup_user, 'outgoing_external',
+            client_key=reservation_client_key(self.client.session.session_key),
+        )
+        response = self.client.post(reverse('save-book-api'), {
+            'kind': 'outgoing_external',
+            'our_number': '',
+            'title': 'كتاب صادر محجوز',
+            'date': '2026-10-14',
+            'director_general_number': '110',
+            'reservation_id': str(reservation.pk),
+        })
+        self.assertEqual(response.status_code, 201, response.content.decode())
+        book = Book.objects.get(pk=response.json()['book_id'])
+        self.assertEqual(book.our_number, reservation.formatted)
+        self.assertEqual(book.director_general_number, '110')
 
     def test_repeated_reservation_request_reuses_the_live_hold(self):
         first, outcome = reserve_number(self.licensing_user, 'incoming_internal')

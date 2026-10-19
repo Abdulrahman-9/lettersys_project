@@ -256,6 +256,16 @@
 
                     <!-- الصف 2: رقم الجهة المرسلة + تاريخ الجهة المرسلة -->
                     <div class="field-grid-two">
+                        <div class="form-group-smart is-hidden" id="directorGeneralNumberGroup">
+                            <label class="field-label" for="directorGeneralNumber">رقم مكتب المدير العام</label>
+                            <input type="text" class="form-control-smart" id="directorGeneralNumber"
+                                   name="director_general_number" required aria-required="true"
+                                   placeholder="رقم مكتب المدير العام كما ورد…"
+                                   aria-describedby="directorGeneralNumberHint" autocomplete="off">
+                            <div class="input-hint" id="directorGeneralNumberHint">
+                                يُحفَظ كما ورد، منفصلاً عن رقم القيد المتسلسل الذي يولّده النظام.
+                            </div>
+                        </div>
                         <div class="form-group-smart" id="senderNumberGroup">
                             <label class="field-label" id="senderNumberLabel">
                                 العدد
@@ -642,7 +652,7 @@
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
 <script src="{% static 'js/subject_locate.js' %}?v=20260929exc"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20261018-explicit-reservation"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20261019-outgoing-sequence"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20261007"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
 
@@ -1494,7 +1504,7 @@
   // كي لا يرفع العلم زوراً عند الملء البرمجي (applyExtractionResult / حقن EDIT_DATA).
   // والملاحظاتُ ونوعُ المستند المكتوب ووسومُ الجهتين: كانت خارج القائمة — ووسمُ الجهة
   // يُفرِغ حقلَه (`_reset`) فلا تراه المقارنةُ — فتضيع بمغادرةٍ صامتة (تدقيقُ نيلسن C#6).
-  var FIELDS = ['title', 'date', 'senderNumber', 'senderDate', 'issuingEntity',
+  var FIELDS = ['title', 'date', 'senderNumber', 'senderDate', 'directorGeneralNumber', 'issuingEntity',
                 'receivingEntity', 'dueDate', 'secretLevel', 'bookKind',
                 'margin', 'documentTypeCustom'];
   var baseline = {};
@@ -1585,6 +1595,7 @@
     const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
     set('title', EDIT_DATA.title);
     set('senderNumber', EDIT_DATA.sender_number);
+    set('directorGeneralNumber', EDIT_DATA.director_general_number);
     set('margin', EDIT_DATA.margin);
     if (window.__autoGrowTitle) window.__autoGrowTitle();   // وسّع حقل الموضوع لطول العنوان المُحمَّل
 

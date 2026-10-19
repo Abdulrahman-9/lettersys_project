@@ -54,6 +54,14 @@ BOOK UNIFIED CARD (Mobile View)
         </span>
       </div>
       {% endif %}
+      {% if book.kind == "outgoing_external" and book.shown_director_general_number %}
+      <div class="card-secondary-number">
+        <span class="secondary-number-badge-mobile badge-outgoing"
+              title="رقم مكتب المدير العام — مستقل عن رقم قيدنا المتسلسل.">
+          مكتب-{{ book.shown_director_general_number }}
+        </span>
+      </div>
+      {% endif %}
     </div>
   </div>
   

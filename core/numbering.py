@@ -22,8 +22,8 @@
   • **لا بادئة سجلّ في الرقم إطلاقاً.** النوع يحمله عمود `kind`، والتفرّد
     (kind, our_number) — مقيس: صفر تصادم داخل أي نوع.
 
-  • **الصادر الخارجي لا سلسلة له**: رقمه يصدر من مكتب المدير العام ويُكتب كما هو،
-    ويجوز تكراره. (بياناته: 0، 109، 1555، 27189 — بلا تسلسل ولا ترتيب.)
+  • **الصادر الخارجي له رقمان مستقلان**: رقم قيدٍ متسلسل من النظام، ورقم مكتب
+    المدير العام محفوظٌ في ``Book.director_general_number`` كما ورد، ويجوز تكراره.
 
   • **بلا رقم رسمي**: نصّ فارغ، ولا يستهلك عدّاداً.
 
@@ -44,9 +44,10 @@ MAX_YEAR = 2099
 TRAINING_PREFIX = 'T'
 
 #: السجلّات التي يمنحها النظام أرقاماً من سلسلته
-SERIES_KINDS = ('incoming_internal', 'incoming_external', 'outgoing_internal')
-#: السجلّ الذي يأتي رقمه من الخارج ولا سلسلة له
-MANUAL_KINDS = ('outgoing_external',)
+SERIES_KINDS = (
+    'incoming_internal', 'incoming_external', 'outgoing_internal', 'outgoing_external')
+#: لا توجد حالياً سجلات يدوية الرقم
+MANUAL_KINDS = ()
 
 _TRAINING_RE = re.compile(r'^%s(\d+)$' % TRAINING_PREFIX, re.IGNORECASE)
 

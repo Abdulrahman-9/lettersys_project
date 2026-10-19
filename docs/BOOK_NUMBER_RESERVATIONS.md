@@ -46,3 +46,24 @@ node --test scripts/tests_reservation_ui.cjs
 ```
 
 اختبار اليد على النظام الحي يجب تنسيقه مع مستخدمين وحجز تجريبي معلوم قبل التنفيذ؛ حجز رقم حيّ يحرّك العداد أو سجل التدوير، حتى لو لم يُحفظ كتاب.
+
+## External outgoing deployment (2026-10-19)
+
+The release candidate is based on production revision `b84e678` and merges
+`556c906`, preserving browser-scoped explicit reservations, assignment timestamps,
+the reservation report, workstation setup, and numeric same-day sorting.
+`0086_merge_outgoing_reservation` joins both `0085` migration branches.
+
+Run `scripts/deploy_outgoing_sequence.ps1 -ConfirmProductionRelease LETTERSYS`
+from the prepared candidate in a normal production terminal. It finalizes the
+staged merge with the normal Git hooks, refusing any unstaged edits. The script refuses
+a changed production revision or dirty checkout and runs isolated SQLite and JS
+tests before downtime. It stops the service before taking a PostgreSQL custom
+backup, checks the archive and SHA-256, then fast-forwards code, migrates,
+collects static assets, restarts, and checks HTTP health.
+
+If deployment fails after code update or migration begins, do not simply switch
+back to old code: review the recorded previous revision and database backup first.
+The outgoing migration preserves office numbers in `director_general_number`
+and numbers existing outgoing books per department. Authenticated browser checks
+of reserve, save, and reopen are still required after the script succeeds.

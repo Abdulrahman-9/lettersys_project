@@ -144,7 +144,11 @@
         </div>
         <div class="field" style="margin-bottom:8px"><div class="k">العنوان</div><div class="v" style="font-size:15px">{{ book.title|default:"—" }}</div></div>
         <div class="grid">
+          {% if book.kind == "outgoing_external" %}
+          <div class="field"><div class="k">رقم مكتب المدير العام</div><div class="v">{{ book.director_general_number|default:"—" }}</div></div>
+          {% else %}
           <div class="field"><div class="k">رقم الجهة المقابل</div><div class="v">{{ book.sender_number|default:"—" }}</div></div>
+          {% endif %}
           <div class="field"><div class="k">نوع المستند</div><div class="v">{{ book.document_type|default:"—" }}</div></div>
           <div class="field"><div class="k">بعهدة الآن</div><div class="v">{% if book.current_custody %}{{ book.current_custody.holder_name }}{% else %}—{% endif %}</div></div>
           <div class="field" style="grid-column:span 3"><div class="k">القيد في الدفاتر</div><div class="v">{% for reg in registrations %}{{ reg.department.name }} {{ reg.number|default:"بلا رقم" }}{% if reg.registered_at %} ({{ reg.registered_at|date:"d/m/Y" }}){% endif %}{% if not forloop.last %} · {% endif %}{% empty %}في دفتر قسمه وحده{% endfor %}</div></div>

@@ -15,7 +15,7 @@
     الأرقام تكرّرت بين السنتين (2,432 رقماً في الوارد الداخلي وحده)، والوسم
     هو ما يفصلها. والسنة سنةُ **السجلّ** (اسم جدول المصدر) لا تاريخ المستند.
 
-  • **الصادر الخارجي بلا سلسلة**: رقمه من مكتب المدير العام، يُخزَّن كما هو.
+  • **الصادر الخارجي له رقم قيد متسلسل**؛ رقم مكتب المدير العام محفوظٌ في حقلٍ مستقل.
 
   • **كتب التدريب** (بلا صفّ في المصدر) تنتقل إلى فضاء `T` المنفصل فلا تستهلك
     السلسلة، وتُحذف كلّها عند التدشين لأن أصلها موجود في النظام القديم.
@@ -48,8 +48,7 @@ from core.models import Book, BookNumberReservation, BookSequence
 #: عمود رقمِنا في كل سجلّ — مُثبَت بالقياس لا بالحدس.
 #  الوارد (II/OI): عمودان — `WID` سلسلةٌ كثيفة 1.00 (رقم ختمنا)، و`NUM` مبعثر
 #  (0..228836، كثافة 0.02) لأنّه رقم الجهة المرسِلة. الصادر (IO/OO): لا عمود
-#  `WID` أصلاً، و`NUM` هو رقمنا — كثيف 1.00 في الصادر الداخلي، ومبعثر 0.00 في
-#  الصادر الخارجي لأنّ رقمه من مكتب المدير العام لا من سلسلتنا.
+#  `WID` أصلاً؛ `NUM` رقمنا في الصادر الداخلي ورقم مكتب المدير العام في الخارجي.
 STAMP_COLUMN = {
     'incoming_internal': 'WID',
     'incoming_external': 'WID',
@@ -121,6 +120,9 @@ class Command(BaseCommand):
             if not b:
                 missing.append(bid)
                 continue
+            if b.kind == 'outgoing_external':
+                drifted.append((bid, b.our_number, r['new_our_number']))
+                continue
             if b.our_number != r['new_our_number']:
                 # الرقم تغيّر بعد إعادة البناء (تحريرٌ يدويّ؟) — لا نطمسه
                 drifted.append((bid, b.our_number, r['new_our_number']))
@@ -185,6 +187,14 @@ class Command(BaseCommand):
                 new = N.format_training(train_seq)
                 plan.append((bid, onum, new, kind, 'تدريب — فضاء T منفصل', True))
                 reasons['تدريب → T'] += 1
+                continue
+
+            if kind == 'outgoing_external':
+                # إعادة البناء تقرأ NUM من المصدر وهو رقم المكتب، لا رقم قيدنا.
+                # السلسلة الجديدة أُسنِدت مستقلةً في الهجرة 0085 وتبقى كما هي.
+                plan.append((bid, onum, onum, kind,
+                             'تسلسل الصادر الخارجي محفوظ؛ رقم المكتب في حقل مستقل', False))
+                reasons['تسلسل الصادر الخارجي محفوظ'] += 1
                 continue
 
             if stamp is None:
@@ -256,6 +266,9 @@ class Command(BaseCommand):
         w('-' * 78)
         w('أساس العدّاد بعد إعادة البناء (أعلى رقم في السلسلة الجارية + 1):')
         for kind in N.SERIES_KINDS:
+            if kind == 'outgoing_external':
+                w('   %-20s يُحفَظ عدّاد كلّ قسم من الهجرة 0085' % kind)
+                continue
             w('   %-20s %d' % (kind, tops[kind] + 1))
 
         # ── كتابة الخريطة ──────────────────────────────────────────────────
@@ -322,7 +335,7 @@ class Command(BaseCommand):
                     row.next_number = target
                     row.save(update_fields=['next_number'])
 
-            # الصادر الخارجي لا سلسلة له — رقمه من مكتب السيد المدير العام
+            # الصادر الخارجي سلسلته مستقلةٌ عن رقم مكتب المدير العام وتبقى كما رُحّلت.
             retired = BookSequence.objects.exclude(kind__in=N.SERIES_KINDS).delete()[0]
 
         w(self.style.SUCCESS(

@@ -64,6 +64,12 @@
                   <div class="fw-semibold" id="bpSenderNumber">—</div>
                 </div>
               </div>
+              <div class="col-6 col-md-4 d-none" id="bpDirectorGeneralNumGroup">
+                <div class="p-2 rounded bg-light">
+                  <div class="small text-muted">رقم مكتب المدير العام</div>
+                  <div class="fw-semibold" id="bpDirectorGeneralNumber">—</div>
+                </div>
+              </div>
               <div class="col-6 col-md-4">
                 <div class="p-2 rounded bg-light">
                   <div class="small text-muted">تاريخنا</div>
@@ -387,6 +393,10 @@
 
       // Conditional fields
       if (d.is_incoming && d.sender_number) { show('bpSenderNumGroup'); text('bpSenderNumber', d.sender_number); } else { hide('bpSenderNumGroup'); }
+      if (d.kind === 'outgoing_external' && d.director_general_number) {
+        show('bpDirectorGeneralNumGroup');
+        text('bpDirectorGeneralNumber', d.director_general_number);
+      } else { hide('bpDirectorGeneralNumGroup'); }
       if (d.is_incoming && d.sender_date) { show('bpSenderDateGroup'); text('bpSenderDate', dmy(d.sender_date)); } else { hide('bpSenderDateGroup'); }
 
       // الحالة + شرائح المتابعة + زر الإنهاء/إعادة الفتح
