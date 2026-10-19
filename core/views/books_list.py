@@ -89,6 +89,7 @@ def _serialize_book(book):
         'version': book.version,
         'legacy_number': book.legacy_number or '',
         'sender_number': book.sender_number or '',
+        'director_general_number': book.director_general_number or '',
         'date_display': book.date.strftime('%d/%m/%Y') if book.date else '—',
         'sender_date_display': book.sender_date.strftime('%d/%m/%Y') if book.sender_date else '',
         'title': book.title,
@@ -154,7 +155,10 @@ def book_unified(request):
     from .filter_helpers import FOLLOWUP_LABELS, BookFilterEngine, BookSortEngine
 
     rows_qs, counters_qs, legacy, widened = _list_scope(request)
-    base_qs = rows_qs.select_related("created_by").prefetch_related("issuing_entities", "receiving_entities", "attachments")
+    from core.scoping import restricted_flag_sql
+    base_qs = (rows_qs.select_related("created_by")
+               .prefetch_related("issuing_entities", "receiving_entities", "attachments")
+               .annotate(restricted=restricted_flag_sql(request.user)))
 
     tab = (request.GET.get("tab") or "incoming").strip()
     search_text = (request.GET.get("q") or "").strip()
@@ -203,6 +207,9 @@ def book_unified(request):
         page_obj = paginator.page(1)
 
     books = list(page_obj.object_list)
+    for book in books:
+        book.shown_director_general_number = (
+            '' if book.restricted else book.director_general_number)
 
     counter_badges = BookFilterEngine.get_counter_badges(counters_qs)
 
@@ -288,7 +295,10 @@ def api_unified_data(request):
     from .filter_helpers import BookFilterEngine, BookSortEngine
 
     rows_qs, counters_qs, legacy, widened = _list_scope(request)
-    base_qs = rows_qs.select_related('created_by').prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
+    from core.scoping import restricted_flag_sql
+    base_qs = (rows_qs.select_related('created_by')
+               .prefetch_related('issuing_entities', 'receiving_entities', 'attachments')
+               .annotate(restricted=restricted_flag_sql(request.user)))
 
     tab = (request.GET.get('tab') or 'incoming').strip()
     search_text = (request.GET.get('q') or '').strip()
@@ -326,6 +336,9 @@ def api_unified_data(request):
         page_obj = paginator.page(1)
 
     books_qs = list(page_obj.object_list)
+    for book in books_qs:
+        book.shown_director_general_number = (
+            '' if book.restricted else book.director_general_number)
     # المُقدِّم بعد المُسلسِل: نقطةُ اختناقٍ واحدة يمرّ منها كلُّ حقلٍ يُضاف
     # مستقبلاً، فلا يتسرّب محتوى كتابٍ سرّيّ من حقلٍ نُسي (سجلّ العيوب ح1).
     books_data = [present_book_payload(_serialize_book(b), b, request.user)

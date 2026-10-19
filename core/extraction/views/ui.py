@@ -120,6 +120,7 @@ def extraction_smart_desktop(request):
             'kind': book.kind,
             'our_number': book.our_number or '',
             'sender_number': book.sender_number or '',
+            'director_general_number': book.director_general_number or '',
             'title': book.title or '',
             'date': str(book.date) if book.date else '',
             'sender_date': str(book.sender_date) if book.sender_date else '',

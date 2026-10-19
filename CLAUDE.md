@@ -122,8 +122,9 @@ Rebased 2026-08-17 onto the number stamped inside the incoming stamp (ختم ا�
 - **Tagged** — `{year}{seq:04d}`, e.g. `20250825`, for ledger year ≤ 2025. Displays
   as `825` with a separate `2025` tag. The year is the **source table's** year
   (`IIMAIL_2025`), not the document date.
-- **Manual** — `outgoing_external` has no series of ours; its number comes from the
-  Director General's office and is stored verbatim (duplicates allowed).
+- **External outgoing** — has a unique system series in `our_number`; the Director
+  General's office number is separate in `director_general_number` (duplicates allowed).
+  Migration 0085 preserves current office numbers and assigns one sequence per department.
 - **Numberless** — empty string. Supported exception; consumes no counter.
 - **Training** — `T131`. Books entered during the training period; outside the
   official space by construction (leading non-digit). Purged at launch.
@@ -132,8 +133,9 @@ Source columns (measured, not guessed): incoming tables have both `WID` and `NUM
 `WID` is a dense 1.00 series (our stamp number), `NUM` is scattered 0.02 (the
 sender's number). Outgoing tables have **no `WID` column**; `NUM` is ours.
 
-Uniqueness is `(kind, our_number)` scoped by migration 0058 to app-issued rows only —
+Uniqueness is `(department, kind, our_number)` for active app-issued rows —
 paper-imported rows are exempt because the 2025 clerk really did stamp 825 twice.
+The Director General's office number is intentionally not unique.
 
 Commands: `rebase_book_numbers` (idempotent, `--dry-run` by default, `--undo CSV`),
 `purge_dev_seed_books` (keys off `is_training`). See `docs/LAUNCH_RUNBOOK.md`.

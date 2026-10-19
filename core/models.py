@@ -271,11 +271,13 @@ class Book(models.Model):
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, default="incoming_internal")
 
     # ── أرقام الكتاب ──
-    # الصادر: our_number = رقم الصادر الخاص بنا
-    # الوارد: our_number = رقم الوارد الخاص بنا، sender_number = رقم صادر الجهة المرسلة
+    # our_number = رقم قيدنا المتسلسل. الصادر الخارجي له أيضاً رقم مستقل من مكتب
+    # المدير العام؛ أما sender_number فيبقى لرقم الجهة المرسلة في الكتب الواردة.
     # صيغة `our_number` وتحليلها وعرضها كلّها في `core/numbering.py` — المصدر الوحيد.
     our_number = models.CharField("رقمنا (صادر/وارد)", max_length=50, default="", db_index=True)
     sender_number = models.CharField("رقم صادر الجهة", max_length=50, blank=True, default="")
+    director_general_number = models.CharField(
+        "رقم مكتب المدير العام", max_length=50, blank=True, default="")
     # ── حقول التطبيع ──
     legacy_number = models.CharField(
         "الرقم الأصلي قبل التطبيع",
@@ -532,9 +534,6 @@ class Book(models.Model):
             return (f'رقم قيدنا: {p.seq} من سجلّ سنة {p.year} · {label} — '
                     f'الوسم السنوي يفصله عن رقم السلسلة الجارية. '
                     f'هذا رقمنا نحن، وليس العدد المطبوع على المستند.')
-        if self.kind in numbering.MANUAL_KINDS:
-            return (f'رقم الصادر: {p.raw} — يصدر من مكتب السيد المدير العام، '
-                    f'ولا يخضع لسلسلة النظام.')
         return (f'رقم قيدنا: {p.raw} · {label} — من السلسلة الجارية المستمرّة '
                 f'بلا تصفير سنوي. هذا رقمنا نحن، وليس العدد المطبوع على المستند.')
 
@@ -577,15 +576,13 @@ class Book(models.Model):
             #    تكرارٌ حقيقي: الكاتب كتب «٨٢٥» على مستندين مختلفين في اليوم نفسه
             #    (مُتحقَّق بالعين على المستندين). فرضُ التفرّد عليه يُجبرنا على
             #    تزوير أحدهما.
-            #  • الصادر الخارجي رقمه من مكتب المدير العام لا من سلسلتنا، وتكراره
-            #    مشروع (بياناته: 0، 109، 1555، 27189 — بلا تسلسل).
+            #  • رقم مكتب المدير العام محفوظٌ في حقل مستقل، ولا يدخل في هذا القيد.
             #  • المحذوف لا يحجز رقمه: كتابٌ حُذف كان يمنع إعادة إدخال رقمه
             #    الشرعي، فيعجز الموظّف عن تصحيح خطئه.
             models.UniqueConstraint(
                 fields=['department', 'our_number', 'kind'],
                 condition=(~models.Q(our_number='')
                            & models.Q(source_ref='')
-                           & ~models.Q(kind='outgoing_external')
                            & models.Q(is_deleted=False)),
                 name='uniq_book_number_kind_dept',
             ),
@@ -746,6 +743,12 @@ class AttachmentVersion(models.Model):
 
     class Meta:
         ordering = ["-version_number", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["attachment", "version_number"],
+                name="uniq_attachment_version_number",
+            ),
+        ]
         indexes = [
             models.Index(fields=['attachment', '-version_number']),
             models.Index(fields=['is_merged', 'created_at']),
@@ -1620,9 +1623,9 @@ class BookSequence(models.Model):
 
     أساسه أرقام سنة 2026 كما هي مثبَّتة في ختم الوارد: بعد 2432 يأتي 2433، في
     2027 و2028 وما بعدها. الرقم يُخزَّن مجرّداً بلا بادئة سجلّ وبلا سنة — النوع
-    يحمله عمود `kind`، والتفرّد على (kind, our_number).
+    يحمله عمود `kind`، والتفرّد على (department, kind, our_number).
 
-    الصادر الخارجي لا عدّاد له: رقمه يصدر من مكتب السيد المدير العام.
+    كلّ سجلّ، بما فيه الصادر الخارجي، له عدّاده المستقلّ لكلّ قسم.
     وكتب السنوات السابقة موسومةٌ بسنتها ({السنة}{الرقم}) فهي خارج فضاء العدّاد.
     كل تحليلٍ أو تنسيق يمرّ عبر `core/numbering.py`.
     """

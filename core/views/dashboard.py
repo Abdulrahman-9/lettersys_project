@@ -244,6 +244,7 @@ def _shape(b):
     b.shown_issuing = [] if r else list(b.issuing_entities.all())
     b.shown_receiving = [] if r else list(b.receiving_entities.all())
     b.shown_sender_number = "" if r else b.sender_number
+    b.shown_director_general_number = "" if r else b.director_general_number
     b.shown_sender_date = None if r else b.sender_date
     b.shown_margin = "" if r else b.margin
     b.shown_holder = None if r else (b.current_custody.holder_name if b.current_custody_id else "")
@@ -1009,8 +1010,8 @@ def _reseed_book_sequences():
 
     السلسلة لا نهائية بلا تصفير سنوي، فيُحتسب أساسها من أرقام **السلسلة الجارية**
     وحدها (المجرّدة). الموسوم بسنته وكتب التدريب خارج فضائها: لو حُسب '20255782'
-    تسلسلاً لقفز العدّاد إلى عشرين مليوناً. والصادر الخارجي لا عدّاد له أصلاً —
-    رقمه من مكتب السيد المدير العام.
+    تسلسلاً لقفز العدّاد إلى عشرين مليوناً. رقم مكتب المدير العام حقل مستقلّ عن
+    سلسلة الصادر الخارجيّ.
 
     العدّاد لا ينزل لأن الرقم قد يكون **محجوزاً الآن** لمستخدم يكتب كتاباً لم يُحفظ بعد
     (BookNumberReservation نشط)، أو قد يكون في حجزٍ ينتظر. إنزال العدّاد كان يمنح
@@ -1028,22 +1029,50 @@ def _reseed_book_sequences():
             BookNumberReservation.STATUS_USED)
 
     # مسحة واحدة على الأرقام كلها بدل مسحةٍ لكل سجلّ تُحمّلها في الذاكرة مراراً.
-    max_seq = {kind: 0 for kind in numbering.SERIES_KINDS}
-    for kind, onum in (Book.objects.exclude(our_number='')
-                       .filter(kind__in=numbering.SERIES_KINDS)
-                       .values_list('kind', 'our_number').iterator(chunk_size=2000)):
+    max_seq = {}
+    for department_id, kind, onum in (
+        Book.all_objects.exclude(our_number='')
+        .filter(kind__in=numbering.SERIES_KINDS)
+        .values_list('department_id', 'kind', 'our_number').iterator(chunk_size=2000)
+    ):
         p = numbering.parse(onum)
         if p.kind_of == 'series' and p.seq:
-            max_seq[kind] = max(max_seq[kind], p.seq)
+            key = (department_id, kind)
+            max_seq[key] = max(max_seq.get(key, 0), p.seq)
 
-    reserved = dict(BookNumberReservation.objects.filter(status__in=live)
-                    .values_list('kind').annotate(m=Max('number')))
-
-    for kind in numbering.SERIES_KINDS:
-        obj, _c = BookSequence.objects.get_or_create(
-            kind=kind, defaults={'next_number': 1, 'year': timezone.now().year}
+    reserved = {
+        (department_id, kind): number
+        for department_id, kind, number in (
+            BookNumberReservation.objects.filter(status__in=live)
+            .values('department_id', 'kind')
+            .annotate(m=Max('number'))
+            .values_list('department_id', 'kind', 'm')
         )
-        target = max(obj.next_number, max_seq[kind] + 1, (reserved.get(kind) or 0) + 1, 1)
+    }
+
+    default_department_id = BookSequence.resolve_department()
+    default_department_id = (
+        default_department_id.pk if default_department_id else None)
+    sequence_rows = {
+        (row.department_id, row.kind): row
+        for row in BookSequence.objects.filter(kind__in=numbering.SERIES_KINDS)
+    }
+    keys = (set(max_seq) | set(reserved) | set(sequence_rows)
+            | {(default_department_id, kind) for kind in numbering.SERIES_KINDS})
+
+    for department_id, kind in keys:
+        obj = sequence_rows.get((department_id, kind))
+        if obj is None:
+            obj, _created = BookSequence.objects.get_or_create(
+                kind=kind, department_id=department_id,
+                defaults={'next_number': 1, 'year': timezone.now().year}
+            )
+        target = max(
+            obj.next_number,
+            max_seq.get((department_id, kind), 0) + 1,
+            reserved.get((department_id, kind), 0) + 1,
+            1,
+        )
         if target != obj.next_number:
             obj.next_number = target
             obj.save(update_fields=['next_number', 'updated_at'])
