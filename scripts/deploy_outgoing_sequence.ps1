@@ -90,6 +90,7 @@ try {
         Invoke-Checked 'node' @('--check', 'static\extraction_smart.js')
         $dataAudit = @'
 import os
+os.chdir(r'D:\lettersys\app')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lettersys.settings')
 import django
 django.setup()
