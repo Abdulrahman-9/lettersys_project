@@ -218,6 +218,25 @@ class SearchFormatTests(TestCase):
                             kind='incoming_internal', created_by=self.user)
         self.assertIn('T57', self._search('57'))
 
+    def test_office_number_matches_whole_numeric_token(self):
+        Book.objects.create(
+            our_number='90', director_general_number='DG/512/26',
+            title='office', kind='outgoing_external', created_by=self.user,
+        )
+        Book.objects.create(
+            our_number='91', director_general_number='15120',
+            title='other office', kind='outgoing_external', created_by=self.user,
+        )
+        self.assertIn('90', self._search('512'))
+        self.assertNotIn('91', self._search('512'))
+
+    def test_text_search_includes_office_number(self):
+        Book.objects.create(
+            our_number='92', director_general_number='OFFICE-REF',
+            title='office', kind='outgoing_external', created_by=self.user,
+        )
+        self.assertIn('92', self._search('OFFICE-REF'))
+
 
 class SearchRankingTests(TestCase):
     """الترتيب حين يتكرّر الرقم بين السلسلة الجارية والموسوم بسنته."""
