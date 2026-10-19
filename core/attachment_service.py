@@ -11,15 +11,51 @@ PyMuPDF (مثبّت أصلاً، يحفظ جودة الصورة بلا إعاد�
 """
 
 import logging
+from contextlib import contextmanager
 from pathlib import Path
+from uuid import uuid4
 
 import fitz  # PyMuPDF
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
+from django.db import transaction
 
 from .models import Attachment, AttachmentVersion
 from .pdf_lock import MUPDF_LOCK, mupdf_locked
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def attachment_write(attachment, *, allow_deleted=False):
+    """Lock/reload before reading files; compensate writes if this operation fails.
+
+    Successful nested operations still depend on the caller committing its outer
+    transaction: Django does not provide an outer-rollback file hook.
+    """
+    written = []
+
+    def save_file(field, name, content):
+        path = Path(name)
+        # Never overwrite a live file, even on overwrite-enabled storage.
+        unique_name = f"{path.stem[:32]}_{uuid4().hex}{path.suffix}"
+        field.save(unique_name, content, save=False)
+        written.append((field.storage, field.name))
+
+    try:
+        with transaction.atomic():
+            locked = Attachment.all_objects.select_for_update().get(pk=attachment.pk)
+            if locked.is_deleted and not allow_deleted:
+                raise ValidationError("المرفق محذوف؛ استعده قبل تعديله.")
+            yield locked, save_file
+    except Exception:
+        for storage, name in reversed(written):
+            try:
+                storage.delete(name)
+            except OSError:
+                logger.error("Could not remove rolled-back attachment file %s", name,
+                             exc_info=True)
+        raise
 
 # الصيغ التي نعاملها كصور قابلة للّفّ في PDF. ما عداها (وما يبدأ بـ %PDF-)
 # يُعامل كـ PDF ويمرّ كما هو.

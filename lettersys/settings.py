@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'channels',
     # تطبيقات المشروع
     'core.apps.CoreConfig',
+    'core.workstations.apps.WorkstationsConfig',
 ]
 
 # ─── الـ Middleware ───────────────────────────────────────────────────────────
@@ -401,6 +402,11 @@ if not DEBUG:
 # وكيل المسح المحلي يعمل على منفذ خاص (افتراضياً 17865) — يجب السماح للصفحة بالاتصال به.
 # نقرأ نفس متغيّر البيئة الذي يستخدمه الوكيل وعرض Django كي لا تنحرف القيم.
 _AGENT_PORT = os.environ.get('LETTERSYS_AGENT_PORT', '17865')
+LETTERSYS_AGENT_PORT = int(_AGENT_PORT)
+WORKSTATION_SETUP_PACKAGE = Path(os.environ.get(
+    'LETTERSYS_WORKSTATION_PACKAGE',
+    str(BASE_DIR / 'var' / 'workstation' / 'LetterSys-Workstation-Setup.exe'),
+))
 _AGENT_ORIGINS = f"http://127.0.0.1:{_AGENT_PORT} http://localhost:{_AGENT_PORT}"
 SECURE_CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "

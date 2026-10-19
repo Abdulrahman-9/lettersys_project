@@ -21,8 +21,9 @@ import logging
 import secrets
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
 from django.utils import timezone
+
+from core.attachment_service import attachment_write
 
 logger = logging.getLogger(__name__)
 
@@ -71,33 +72,25 @@ def sign_attachment(attachment, *, by, note=''):
     يُعيد ``BookSignature``. ويرفع ``PermissionDenied`` لمن لا يملك الصفة،
     و``ValidationError`` إن لم يكن الملفُّ مستنداً يُختم.
     """
-    from core.models import AttachmentVersion, BookSignature
+    from core.models import BookSignature
 
-    book = attachment.book
-    if not can_sign(by, book):
-        raise PermissionDenied('التوقيعُ لرئيس القسم ومدير النظام.')
-
-    try:
-        source = attachment.file.read()
-    except (ValueError, OSError) as exc:
-        raise ValidationError('تعذّر قراءةُ المرفق.') from exc
-    finally:
+    with attachment_write(attachment) as (locked, save_file):
+        book = locked.book
+        if not can_sign(by, book):
+            raise PermissionDenied('التوقيعُ لرئيس القسم ومدير النظام.')
         try:
-            attachment.file.close()
-        except Exception:                                   # noqa: BLE001
-            pass
-
-    if not source:
-        raise ValidationError('المرفقُ فارغ.')
-
-    token = secrets.token_urlsafe(16)[:32]
-    signer_name = (by.get_full_name() or by.username).strip()
-    stamped = _stamp(source, signer_name, token)
-    if stamped is None:
-        raise ValidationError('الختمُ يعمل على مستندات PDF فقط.')
-
-    with transaction.atomic():
-        version = _new_version(attachment, stamped, by, signer_name)
+            with locked.file.open('rb') as handle:
+                source = handle.read()
+        except (ValueError, OSError) as exc:
+            raise ValidationError('تعذّر قراءةُ المرفق.') from exc
+        if not source:
+            raise ValidationError('المرفقُ فارغ.')
+        token = secrets.token_urlsafe(16)[:32]
+        signer_name = (by.get_full_name() or by.username).strip()
+        stamped = _stamp(source, signer_name, token)
+        if stamped is None:
+            raise ValidationError('الختمُ يعمل على مستندات PDF فقط.')
+        version = _new_version(locked, stamped, by, signer_name, save_file)
         signature = BookSignature.objects.create(
             book=book, version=version, signer=by,
             capacity=capacity_of(by, book),
@@ -202,7 +195,7 @@ def _stamp(pdf_bytes, signer_name, token):
         return None
 
 
-def _new_version(attachment, data, by, signer_name):
+def _new_version(attachment, data, by, signer_name, save_file):
     """نسخةٌ جديدةٌ في السلسلة — الأصلُ باقٍ والموقَّعُ مميَّز."""
     from django.core.files.base import ContentFile
 
@@ -215,7 +208,7 @@ def _new_version(attachment, data, by, signer_name):
         attachment=attachment, version_number=number, created_by=by,
         note='توقيع: %s' % signer_name,
     )
-    version.file.save('signed_v%d.pdf' % number, ContentFile(data), save=False)
+    save_file(version.file, 'signed_v%d.pdf' % number, ContentFile(data))
     version.save()
     return version
 

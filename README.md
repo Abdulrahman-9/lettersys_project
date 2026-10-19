@@ -1,6 +1,12 @@
 # 📚 نظام إدارة الكتب — النسخة 2.0 المحدثة
 ## Django + Bootstrap 5 RTL + PWA + Modern JavaScript
 
+> **تنبيه التشغيل:** معلومات التثبيت أدناه للتطوير المحلي وليست طريقة تشغيل
+> خدمة الشبكة. نسخة LetterSys الحالية للأجهزة تعمل عبر خدمة Windows
+> `LetterSys` (Waitress/NSSM) على `172.16.2.16:1312`. راجع
+> [`docs/WINDOWS_LAN_DEPLOYMENT.md`](docs/WINDOWS_LAN_DEPLOYMENT.md)
+> و[`docs/LAUNCH_RUNBOOK.md`](docs/LAUNCH_RUNBOOK.md) للإجراءات الحالية.
+
 ![Django](https://img.shields.io/badge/Django-4.2.14-green)
 ![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3.3-purple)
 ![PWA](https://img.shields.io/badge/PWA-Ready-orange)
@@ -78,13 +84,28 @@ python manage.py db_healthcheck --strict
 python manage.py createsuperuser
 ```
 
-### 5️⃣ تشغيل الخادم
+### 5️⃣ تشغيل الخادم محلياً للتطوير فقط
 ```powershell
 python manage.py runserver
 ```
 
-### 6️⃣ فتح المتصفح
+هذا يشغّل خادم Django التطويري على `localhost:8000` لهذا الحاسوب فقط؛ لا
+يُشغّل خدمة الشبكة ولا يُحدّثها. **خدمة LetterSys المستخدمة بين أجهزة الشبكة
+تعمل عبر Waitress/NSSM على المنفذ `1312`**. من جهاز آخر افتح
+`http://172.16.2.16:1312`، ولا تشغّل `runserver` بديلاً عنها.
+
+### 6️⃣ فتح نسخة التطوير محلياً
 افتح: `http://localhost:8000`
+
+### أيقونة تشغيل خدمة LetterSys الحالية (Windows)
+
+على حاسوب الخادم `172.16.2.16`، أنشئ أيقونة **Start LetterSys Server** مرة واحدة:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install_lettersys_server_shortcut.ps1
+```
+
+الأيقونة تبدأ خدمة Windows الموجودة `LetterSys` فقط بعد التحقق من أنها نسخة Waitress المهيأة على المنفذ `1312` ضمن `D:\lettersys`. قد يطلب Windows تأكيد المسؤول لتشغيل الخدمة. لا تغيّر قاعدة PostgreSQL أو إعداداتها؛ وبعد ظهور رسالة نجاح افتح أيقونة التطبيق المثبّتة المعتادة.
 
 ---
 
@@ -330,24 +351,16 @@ python manage.py check
 
 ---
 
-## 🎉 ابدأ الآن!
+## 🧪 تشغيل نسخة تطوير محلية
 
 ```powershell
-# تثبيت وتشغيل في 3 خطوات
+# هذه الخطوات للتطوير المحلي فقط، ولا تُحدّث خدمة الشبكة على 1312.
 pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver
+python manage.py runserver 127.0.0.1:8000
 ```
 
-**ثم افتح:** `http://localhost:8000`
-
-**استمتع بالنظام المحدث! ✨**
-
----
-
-**آخر تحديث:** 2025  
-**النسخة:** 2.0  
-**الحالة:** ✅ جاهز للإنتاج
+افتح `http://localhost:8000`. لا تشغّل migrations أو تنشئ حسابات على قاعدة
+الإنتاج ضمن إعداد التطوير هذا.
 
 - أو جدوله يوميًا (09:00) عبر **Windows Task Scheduler**.
 

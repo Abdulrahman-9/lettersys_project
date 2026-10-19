@@ -1,6 +1,6 @@
 """خادم HTTP محلي لوكيل المسح (127.0.0.1 فقط).
 
-ثلاث نقاط فقط: /agent/health و/agent/devices و/agent/scan.
+نقاط المسح ونقطة ربط جهاز الموظف ومتابعته.
 
 الأمن — بوّابتان مستقلّتان تمرّان قبل أيّ توجيه، ولا توكِن بعد اليوم:
   1. **Host**: يجب أن يكون الحلقةَ المحلّيّة حرفيّاً بمنفذنا — حارسُ DNS-rebinding
@@ -174,7 +174,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(204)
         self._send_cors()
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        headers = "Content-Type, X-LetterSys-Pairing" if self.path == "/agent/workstation/pair" else "Content-Type"
+        self.send_header("Access-Control-Allow-Headers", headers)
         # الشبكةُ الخاصّة/المحلّيّة: مقيسٌ أنّ كروم اليوم لا يحجب صفحةَ http ⟶ الحلقةَ
         # المحلّيّة، والرأسُ يُبقيها عاملةً لو أنفذ إصدارٌ قادمٌ الفحصَ فعلاً.
         self.send_header("Access-Control-Allow-Private-Network", "true")
@@ -196,6 +197,13 @@ class Handler(BaseHTTPRequestHandler):
             if not self._origin_allowed():
                 return self._reject_origin()
             return self._devices()
+        if path == "/agent/workstation":
+            if not self._origin_allowed():
+                return self._reject_origin()
+            monitor = getattr(self.server, 'device_monitor', None)
+            if monitor is None:
+                return self._json(503, {"ok": False, "error": "Device monitor is not running"})
+            return self._json(200, monitor.public_status())
         return self._json(404, {"ok": False, "error": "غير موجود"})
 
     def do_POST(self):
@@ -205,9 +213,35 @@ class Handler(BaseHTTPRequestHandler):
             if not self._origin_allowed():
                 return self._reject_origin()
             return self._scan()
+        if self.path == "/agent/workstation/pair":
+            if not self._origin_allowed():
+                return self._reject_origin()
+            return self._pair_workstation()
         return self._json(404, {"ok": False, "error": "غير موجود"})
 
     # ───────── المعالجات ─────────
+    def _pair_workstation(self):
+        if (self.headers.get('X-LetterSys-Pairing') != '1' or
+                self.headers.get('Content-Type') != 'application/json'):
+            return self._json(400, {"ok": False, "error": "Explicit JSON pairing approval required"})
+        monitor = getattr(self.server, 'device_monitor', None)
+        if monitor is None:
+            return self._json(503, {"ok": False, "error": "Device monitor is not running"})
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 < length <= 4096:
+                raise ValueError('Invalid pairing request length')
+            payload = json.loads(self.rfile.read(length))
+            status = monitor.pair(payload, self.headers.get('Origin'))
+        except (ValueError, TypeError) as exc:
+            return self._json(400, {"ok": False, "error": str(exc)})
+        except OSError as exc:
+            sys.stderr.write('Workstation pairing failed: %s\n' % exc)
+            return self._json(500, {"ok": False, "error": "Cannot save protected device settings"})
+        if status.get('error'):
+            return self._json(503, {"ok": False, "error": status['error']})
+        return self._json(200, status)
+
     def _health(self):
         exe = naps2.locate_exe()
         self._json(200, {
@@ -230,11 +264,21 @@ class Handler(BaseHTTPRequestHandler):
                 names = naps2.list_devices("wia")
                 driver = "wia"
         except Exception as exc:                          # غياب NAPS2/مهلة → قائمة فارغة مع تحذير
+            monitor = getattr(self.server, 'device_monitor', None)
+            if monitor:
+                monitor.observe_scanner('error')
             return self._json(200, {"ok": True, "driver": driver, "devices": [], "warning": str(exc)})
+        monitor = getattr(self.server, 'device_monitor', None)
+        if monitor:
+            monitor.observe_scanner('ready' if names else 'no_device', names)
         devices = [{"id": n, "name": n, "driver": driver} for n in names]
         self._json(200, {"ok": True, "driver": driver, "devices": devices})
 
     def _scan(self):
+        monitor = getattr(self.server, 'device_monitor', None)
+        if monitor and not monitor.check_server():
+            return self._json(503, {"ok": False, "code": "server_unavailable",
+                                    "error": "اربط الجهاز من صفحة «تجهيز هذا الجهاز» أولاً. إذا كان مرتبطاً، فقد انقطع اتصال الخادم أو أوقف المسؤول ربطه. أعد الفحص قبل سحب الورق."})
         length = int(self.headers.get("Content-Length") or 0)
         try:
             req = json.loads(self.rfile.read(length) or b"{}") if length else {}
@@ -333,9 +377,13 @@ def serve():
           % "، ".join(sorted(_describe_origin(o) for o in config.ALLOWED_ORIGINS)))
     for w in config.ORIGIN_WARNINGS:
         sys.stderr.write("[تنبيه] %s\n" % w)
+    from .workstation import DeviceMonitor
+    httpd.device_monitor = DeviceMonitor()
+    httpd.device_monitor.start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\nإيقاف الوكيل...")
     finally:
+        httpd.device_monitor.stop()
         httpd.server_close()

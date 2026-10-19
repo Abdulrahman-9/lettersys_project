@@ -21,6 +21,27 @@ This folder contains utility scripts for system administration, OCR training, an
 | `enable_scan_simulator.bat` | Batch | Batch wrapper for scan simulator | ⚠️ Dev-only | `scripts\enable_scan_simulator.bat` |
 | `manage_server_background.ps1` | PowerShell | Manage background server process | ⚠️ Dev-only | `.\scripts\manage_server_background.ps1` |
 
+### Current Windows LAN service
+
+The live LetterSys service is the existing Windows `LetterSys` service
+(NSSM + Waitress) on **port 1312**. The production path is not Django's
+development server:
+
+- On the server, use the installed **Start LetterSys Server** shortcut. The
+  checked launcher is `start_lettersys_service.ps1`; it starts the existing
+  service only after checking its configured application directory and port.
+- From another device on the company LAN, open `http://172.16.2.16:1312`.
+- For the current service's deployment and safety procedures, see
+  [`../docs/WINDOWS_LAN_DEPLOYMENT.md`](../docs/WINDOWS_LAN_DEPLOYMENT.md)
+  and [`../docs/LAUNCH_RUNBOOK.md`](../docs/LAUNCH_RUNBOOK.md).
+
+Do not use `runserver`, `start_django.ps1`, or a background development helper
+to start, replace, or update this LAN service. Do not install the alternative
+Daphne/Caddy setup over the existing Waitress service.
+`start_django.ps1` is a development helper that binds `0.0.0.0:8000`; do not
+use that broad development bind as a substitute for the guarded service on
+port 1312.
+
 ### DB Health Command (Django)
 
 `python manage.py db_healthcheck`
@@ -195,31 +216,22 @@ python scripts/run_server_background.py --stop
 
 ---
 
-## 🚀 Production Deployment
+## 🚀 Server startup
 
-### Recommended Pre-Deployment Steps:
+### Development only — loopback port 8000
 ```bash
-# 1. Pre-cache OCR model (if using EasyOCR)
-python scripts/preload_ocr_model.py
-
-# 2. Verify user setup
-python scripts/manage_users.py --action list
-
-# 3. Export current entities
-python scripts/get_entities.py --format json --output backup_entities.json
-
-# 4. Analyze startup performance
-python scripts/optimize_startup.py
-```
-
-### Development Startup:
-```bash
-# Option 1: PowerShell (Windows)
+# Legacy development helper; it binds 0.0.0.0:8000, not the live service.
 .\scripts\start_django.ps1
 
-# Option 2: Direct
-python manage.py runserver 0.0.0.0:8000
+# Local-only alternative:
+python manage.py runserver 127.0.0.1:8000
 ```
+
+Production release and backup operations are gated and environment-specific;
+follow the current Windows LAN deployment and launch runbook linked above.
+The former generic pre-deployment checklist is intentionally not retained here:
+preloading OCR, exporting live entities, or running generic startup scripts is
+not a substitute for the verified release procedure.
 
 ---
 

@@ -2661,6 +2661,7 @@ class ExtractionSmartSystem {
             if (!document.body) { resolve(false); return; }
 
             let settled = false;
+            const previousFocus = document.activeElement;
             const overlay = document.createElement('div');
             overlay.className = 'dup-modal-overlay';
             overlay.innerHTML =
@@ -2681,14 +2682,114 @@ class ExtractionSmartSystem {
                 settled = true;
                 document.removeEventListener('keydown', onKey);
                 overlay.classList.add('dup-closing');
-                setTimeout(() => overlay.remove(), 160);
+                setTimeout(() => {
+                    overlay.remove();
+                    if (previousFocus?.isConnected) previousFocus.focus();
+                }, 160);
                 resolve(r);
             };
             const backOrCancel = () => {
                 if (overlay.dataset.view === 'preview') renderList();
                 else finish(false);
             };
-            const onKey = (e) => { if (e.key === 'Escape') backOrCancel(); };
+            const onKey = (e) => {
+                if (e.key === 'Escape') {
+                    backOrCancel();
+                    return;
+                }
+                if (e.key !== 'Tab') return;
+                const dialog = overlay.querySelector('.dup-modal');
+                const focusable = Array.from(dialog.querySelectorAll(
+                    'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+                )).filter(element => element.getClientRects().length > 0);
+                if (!focusable.length) {
+                    e.preventDefault();
+                    dialog.focus();
+                    return;
+                }
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (e.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            };
+            const loadBookPreview = async (id) => {
+                const response = await fetch(`/books/api/book/${encodeURIComponent(id)}/preview/`, {
+                    credentials: 'same-origin',
+                });
+                const book = await response.json();
+                if (!response.ok) {
+                    const error = new Error(book.error || 'تعذّر تحميل الكتاب');
+                    error.status = response.status;
+                    throw error;
+                }
+                return book;
+            };
+            const openDuplicateDocument = async (button) => {
+                const actions = button.closest('.dup-item-actions');
+                const status = actions?.querySelector('.dup-document-status');
+                const originalLabel = button.innerHTML;
+                if (status) status.textContent = '';
+                button.disabled = true;
+                button.setAttribute('aria-busy', 'true');
+                button.innerHTML = `<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> عرض المستند`;
+                try {
+                    const book = await loadBookPreview(button.dataset.id);
+                    const attachments = book.attachments || [];
+                    const primary = attachments.find(a => a.is_primary) || attachments[0];
+                    if (!primary?.url) {
+                        button.dataset.missingDocument = 'true';
+                        button.innerHTML = '<i class="bi bi-file-earmark"></i> لا يوجد مستند';
+                        if (status) status.textContent = 'لا يوجد مستند مرفق لهذا الكتاب.';
+                        return;
+                    }
+                    const docModal = document.getElementById('docPreviewModal');
+                    if (!window.DocView || typeof window.DocView.open !== 'function' || !docModal) {
+                        throw new Error('عارض المستند غير متاح');
+                    }
+                    const restoreDuplicateAlert = () => {
+                        overlay.classList.remove('dup-document-open');
+                        overlay.removeAttribute('aria-hidden');
+                        document.addEventListener('keydown', onKey);
+                        if (button.isConnected) button.focus();
+                    };
+                    docModal.addEventListener('hidden.bs.modal', restoreDuplicateAlert, { once: true });
+                    overlay.classList.add('dup-document-open');
+                    overlay.setAttribute('aria-hidden', 'true');
+                    document.removeEventListener('keydown', onKey);
+                    try {
+                        window.DocView.open(primary.url, book.title, {
+                            pages: primary.page_count,
+                            lastBy: primary.last_merge_by,
+                            lastAdded: primary.last_merge_added,
+                            reportUrl: book.report_url,
+                        });
+                    } catch (error) {
+                        docModal.removeEventListener('hidden.bs.modal', restoreDuplicateAlert);
+                        restoreDuplicateAlert();
+                        throw error;
+                    }
+                } catch (error) {
+                    if (status) {
+                        status.textContent = error.status === 403
+                            ? 'لا تملك صلاحية عرض مستند هذا الكتاب.'
+                            : error.status === 404
+                                ? 'الكتاب غير موجود أو لم يعد متاحاً.'
+                                : 'تعذّر تحميل المستند. حاول مرة أخرى.';
+                    }
+                    console.error('Could not open suspected duplicate document:', error);
+                } finally {
+                    button.removeAttribute('aria-busy');
+                    if (button.isConnected && !button.dataset.missingDocument) {
+                        button.disabled = false;
+                        button.innerHTML = originalLabel;
+                    }
+                }
+            };
             document.addEventListener('keydown', onKey);
             overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) backOrCancel(); });
             overlay.querySelector('.dup-modal-close').addEventListener('click', backOrCancel);
@@ -2705,14 +2806,25 @@ class ExtractionSmartSystem {
                                 <div class="dup-item-title">${esc(d.title || 'بدون عنوان')}</div>
                                 <div class="dup-item-date">${esc(d.date || '')}</div>
                             </div>
-                            <button type="button" class="dup-preview-btn" data-id="${esc(d.id)}"><i class="bi bi-eye"></i> معاينة</button>
+                            <div class="dup-item-actions">
+                                <div class="dup-item-buttons">
+                                    <button type="button" class="dup-preview-btn" data-id="${esc(d.id)}"><i class="bi bi-eye" aria-hidden="true"></i> معاينة</button>
+                                    <button type="button" class="dup-preview-btn dup-document-btn" data-id="${esc(d.id)}" aria-label="عرض مستند الكتاب ${esc(d.our_number_display || d.our_number || '')}">
+                                        <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> عرض المستند
+                                    </button>
+                                </div>
+                                <span class="dup-document-status" role="status" aria-live="polite"></span>
+                            </div>
                         </div>`).join('') + `</div>`;
                 footer.innerHTML =
                     (canProceed ? `<button type="button" class="btn btn-sm ${hard ? 'btn-danger' : 'btn-warning text-dark'} fw-semibold" data-act="proceed">${hard ? 'حفظ رغم التكرار' : 'متابعة الحفظ'}</button>` : '') +
                     `<button type="button" class="btn btn-sm btn-outline-secondary fw-semibold" data-act="cancel">إلغاء الإدخال</button>`;
                 footer.querySelector('[data-act="cancel"]').onclick = () => finish(false);
                 const pb = footer.querySelector('[data-act="proceed"]'); if (pb) pb.onclick = () => finish(true);
-                body.querySelectorAll('.dup-preview-btn').forEach(b => b.onclick = () => renderPreview(b.dataset.id));
+                body.querySelectorAll('.dup-preview-btn:not(.dup-document-btn)').forEach(
+                    b => b.onclick = () => renderPreview(b.dataset.id),
+                );
+                body.querySelectorAll('.dup-document-btn').forEach(b => b.onclick = () => openDuplicateDocument(b));
             };
 
             const renderPreview = async (id) => {
@@ -2722,9 +2834,7 @@ class ExtractionSmartSystem {
                 footer.querySelector('[data-act="back"]').onclick = renderList;
                 let b;
                 try {
-                    const r = await fetch(`/books/api/book/${id}/preview/`, { credentials: 'same-origin' });
-                    b = await r.json();
-                    if (!r.ok) throw new Error(b.error || 'تعذّر التحميل');
+                    b = await loadBookPreview(id);
                 } catch (e) {
                     body.innerHTML = `<div class="dup-error">تعذّرت المعاينة. <a href="/books/${esc(id)}/" target="_blank">افتح الكتاب في صفحة مستقلة ↗</a></div>`;
                     return;

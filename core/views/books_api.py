@@ -799,6 +799,7 @@ def api_book_detail_json(request, pk):
         'attachments': attachments,
         'edit_url': reverse('book_edit', args=[book.pk]),
         'detail_url': reverse('book_detail', args=[book.pk]),
+        'report_url': reverse('book_report', args=[book.pk]),
         'inline_status_url': reverse('api_book_inline_status', args=[book.pk]),
     }
     return JsonResponse(data)

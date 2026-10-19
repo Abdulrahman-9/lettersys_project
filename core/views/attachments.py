@@ -26,7 +26,7 @@ from django.utils._os import safe_join
 from django.utils.http import content_disposition_header, url_has_allowed_host_and_scheme
 from pypdf import PdfReader, PdfWriter
 
-from ..attachment_service import ensure_pdf, validate_attachment_file
+from ..attachment_service import attachment_write, ensure_pdf, validate_attachment_file
 from ..models import Attachment, AttachmentVersion, BookHistory
 from core.scoping import can_edit_book, can_open_content, is_privileged
 
@@ -149,7 +149,7 @@ def serve_media(request, path):
                              as_attachment=bool(request.GET.get('download')))
 
 
-def _save_attachment_version(attachment, user, note="", merge_type="none", page_count=None):
+def _save_attachment_version(attachment, user, save_file, note="", merge_type="none", page_count=None):
     """
     حفظ نسخة من الملف قبل عمليات التعديل (حذف صفحات، دمج، إلخ)
     
@@ -161,7 +161,7 @@ def _save_attachment_version(attachment, user, note="", merge_type="none", page_
         page_count: عدد الصفحات بعد التعديل
     
     Returns:
-        AttachmentVersion: النسخة المحفوظة أو None عند الفشل
+        AttachmentVersion: النسخة المحفوظة؛ الفشل يوقف العملية.
     """
     try:
         last_version = attachment.versions.order_by("-version_number").first()
@@ -182,11 +182,12 @@ def _save_attachment_version(attachment, user, note="", merge_type="none", page_
                 page_count=page_count,
                 is_merged=merge_type != "none",
             )
-            version.file.save(version_name, File(fh), save=True)
+            save_file(version.file, version_name, File(fh))
+            version.save()
         return version
     except Exception as exc:
         logger.warning("Could not save attachment version: %s", exc, exc_info=True)
-        return None
+        raise
 
 
 def _is_ajax(request):
@@ -235,19 +236,20 @@ def attachment_delete(request, pk):
     if request.method != "POST":
         return _mgmt_result(request, book, ok=False, message="طريقة غير مسموحة.", status=405)
 
-    # حفظ نسخة قبل الحذف
-    _save_attachment_version(att, request.user, note="Deleted from book_detail")
-
-    # حذف ناعم
-    att.is_deleted = True
-    att.deleted_at = timezone.now()
-    att.deleted_by = request.user
-    att.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
-
-    BookHistory.objects.create(
-        book=att.book, action='delete-attachment', by=request.user, attachment=att,
-        notes=f"Deleted attachment: {att.file.name}",
-    )
+    try:
+        with attachment_write(att) as (att, save_file):
+            _save_attachment_version(att, request.user, save_file, note="Deleted from book_detail")
+            att.is_deleted = True
+            att.deleted_at = timezone.now()
+            att.deleted_by = request.user
+            att.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
+            BookHistory.objects.create(
+                book=att.book, action='delete-attachment', by=request.user, attachment=att,
+                notes=f"Deleted attachment: {att.file.name}",
+            )
+    except Exception:
+        logger.error("Attachment deletion failed", exc_info=True)
+        return _mgmt_result(request, book, ok=False, message="فشل حذف المرفق؛ لم تُحفظ العملية.", status=500)
 
     return _mgmt_result(request, book, ok=True, message="تم نقل المرفق إلى سلة المهملات.", attachment_id=att.id)
 
@@ -282,22 +284,26 @@ def attachment_replace(request, pk):
     except ValidationError as ve:
         return _mgmt_result(request, book, ok=False, message="؛ ".join(ve.messages), status=400)
 
-    # حفظ نسخة من الملف القديم
-    _save_attachment_version(att, request.user, note="Replaced with new file")
-
-    # توحيد الصيغة: الصور تُحوَّل إلى PDF، وملفات PDF تمرّ كما هي
     try:
-        pdf_bytes, _converted, _orig = ensure_pdf(new_file)
-        base = Path(new_file.name).stem or "document"
-        att.file.save(f"{base}.pdf", ContentFile(pdf_bytes), save=True)
-    except ValueError:
-        # شبكة أمان: تعذّر التحويل ⇒ احفظ الأصل كما هو (لا نفقد المستند)
-        att.file.save(new_file.name, new_file, save=True)
-
-    BookHistory.objects.create(
-        book=book, action="replace-attachment", by=request.user, attachment=att,
-        notes=f"Replaced attachment: {new_file.name}",
-    )
+        with attachment_write(att) as (att, save_file):
+            _save_attachment_version(att, request.user, save_file, note="Replaced with new file")
+            try:
+                pdf_bytes, _converted, _orig = ensure_pdf(new_file)
+            except ValueError:
+                logger.warning("PDF conversion failed during attachment replacement", exc_info=True)
+                new_file.seek(0)
+                save_file(att.file, new_file.name, new_file)
+            else:
+                base = Path(new_file.name).stem or "document"
+                save_file(att.file, f"{base}.pdf", ContentFile(pdf_bytes))
+            att.save(update_fields=["file"])
+            BookHistory.objects.create(
+                book=book, action="replace-attachment", by=request.user, attachment=att,
+                notes=f"Replaced attachment: {new_file.name}",
+            )
+    except Exception:
+        logger.error("Attachment replacement failed", exc_info=True)
+        return _mgmt_result(request, book, ok=False, message="فشل استبدال المرفق؛ بقي الأصل محفوظاً.", status=500)
 
     return _mgmt_result(request, book, ok=True, message="تم استبدال المرفق بنجاح.", attachment_id=att.id)
 
@@ -339,48 +345,33 @@ def attachment_merge_pages(request, pk):
         except ValidationError as ve:
             return _mgmt_result(request, book, ok=False, message="؛ ".join(ve.messages), status=400)
         try:
-            # حفظ نسخة قبل الدمج
-            _save_attachment_version(att, request.user, note="Merged with other PDFs", merge_type="pdf")
-            
-            # قراءة الملف الرئيسي إلى الذاكرة ثم إغلاق المقبض
-            # (تفادي قفل الملف على Windows عند الكتابة فوقه + منع تسرّب المقابض)
-            att.file.open("rb")
-            try:
-                main_bytes = att.file.read()
-            finally:
-                att.file.close()
-            writer = PdfWriter()
-            main_reader = PdfReader(BytesIO(main_bytes))
-            
-            # إضافة جميع الصفحات من ملف PDF الرئيسي
-            for page in main_reader.pages:
-                writer.add_page(page)
-            
-            # إضافة صفحات من ملفات الدمج
-            merge_files = request.FILES.getlist("merge_files")
-            for merge_file in merge_files:
-                try:
+            with attachment_write(att) as (att, save_file):
+                if not att.file.name.lower().endswith(".pdf"):
+                    raise ValidationError("يمكن دمج الملفات فقط مع ملفات PDF.")
+                _save_attachment_version(
+                    att, request.user, save_file, note="Merged with other PDFs", merge_type="pdf")
+                with att.file.open("rb") as handle:
+                    main_bytes = handle.read()
+                writer = PdfWriter()
+                main_reader = PdfReader(BytesIO(main_bytes))
+                for page in main_reader.pages:
+                    writer.add_page(page)
+                merge_files = request.FILES.getlist("merge_files")
+                for merge_file in merge_files:
+                    merge_file.seek(0)
                     merge_reader = PdfReader(merge_file)
                     for page in merge_reader.pages:
                         writer.add_page(page)
-                except Exception as e:
-                    logger.warning("Could not read merge file: %s", e)
-            
-            # حفظ ملف PDF المدمج
-            buffer = BytesIO()
-            writer.write(buffer)
-            buffer.seek(0)
-            
-            att.file.save(att.file.name, File(buffer), save=True)
-            
-            # تسجيل العملية
-            BookHistory.objects.create(
-                book=book,
-                action="merge-pages",
-                by=request.user,
-                attachment=att,
-                notes=f"Merged {len(merge_files)} PDFs"
-            )
+                buffer = BytesIO()
+                writer.write(buffer)
+                writer.close()
+                buffer.seek(0)
+                save_file(att.file, Path(att.file.name).name, File(buffer))
+                att.save(update_fields=["file"])
+                BookHistory.objects.create(
+                    book=book, action="merge-pages", by=request.user, attachment=att,
+                    notes=f"Merged {len(merge_files)} PDFs",
+                )
             
             return _mgmt_result(request, book, ok=True, message=f"تم دمج {len(merge_files)} ملفات بنجاح.", attachment_id=att.id)
         except Exception as e:
@@ -435,38 +426,28 @@ def attachment_remove_pages(request, pk):
                 else:
                     page_numbers.append(int(part)-1)
             
-            # حفظ نسخة قبل التعديل
-            _save_attachment_version(att, request.user, note=f"Removed pages: {pages_to_remove}")
-            
-            # قراءة الملف إلى الذاكرة ثم إغلاق المقبض
-            # (تفادي قفل الملف على Windows عند الكتابة فوقه + منع تسرّب المقابض)
-            att.file.open("rb")
-            try:
-                pdf_bytes = att.file.read()
-            finally:
-                att.file.close()
-            reader = PdfReader(BytesIO(pdf_bytes))
-            writer = PdfWriter()
-            
-            for idx, page in enumerate(reader.pages):
-                if idx not in page_numbers:
-                    writer.add_page(page)
-            
-            # حفظ ملف PDF المعدل
-            buffer = BytesIO()
-            writer.write(buffer)
-            buffer.seek(0)
-            
-            att.file.save(att.file.name, File(buffer), save=True)
-            
-            # تسجيل العملية
-            BookHistory.objects.create(
-                book=book,
-                action="remove-pages",
-                by=request.user,
-                attachment=att,
-                notes=f"Removed pages: {pages_to_remove}"
-            )
+            with attachment_write(att) as (att, save_file):
+                if not att.file.name.lower().endswith(".pdf"):
+                    raise ValidationError("يمكن حذف الصفحات فقط من ملفات PDF.")
+                _save_attachment_version(
+                    att, request.user, save_file, note=f"Removed pages: {pages_to_remove}")
+                with att.file.open("rb") as handle:
+                    pdf_bytes = handle.read()
+                reader = PdfReader(BytesIO(pdf_bytes))
+                writer = PdfWriter()
+                for idx, page in enumerate(reader.pages):
+                    if idx not in page_numbers:
+                        writer.add_page(page)
+                buffer = BytesIO()
+                writer.write(buffer)
+                writer.close()
+                buffer.seek(0)
+                save_file(att.file, Path(att.file.name).name, File(buffer))
+                att.save(update_fields=["file"])
+                BookHistory.objects.create(
+                    book=book, action="remove-pages", by=request.user, attachment=att,
+                    notes=f"Removed pages: {pages_to_remove}",
+                )
             
             return _mgmt_result(request, book, ok=True, message="تم حذف الصفحات بنجاح.", attachment_id=att.id)
         except Exception as e:

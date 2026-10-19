@@ -996,6 +996,7 @@ textarea.title-autogrow {
 }
 .dup-modal-overlay.dup-open { opacity: 1; }
 .dup-modal-overlay.dup-closing { opacity: 0; }
+.dup-modal-overlay.dup-document-open { visibility: hidden; pointer-events: none; }
 .dup-modal {
     width: 100%; max-width: 560px; max-height: 88vh;
     background: #fff; border-radius: 14px;
@@ -1047,6 +1048,12 @@ textarea.title-autogrow {
     display: inline-flex; align-items: center; gap: 0.3rem;
 }
 .dup-preview-btn:hover { background: var(--theme-primary, #0f766e); color: #fff; }
+.dup-preview-btn:focus-visible { outline: 3px solid #14b8a6; outline-offset: 2px; }
+.dup-preview-btn:disabled { opacity: 0.6; cursor: wait; }
+.dup-item-actions { flex-shrink: 0; min-width: 0; }
+.dup-item-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.dup-document-status { display: block; margin-top: 4px; color: #64748b; font-size: 0.72rem; }
+.dup-document-status:empty { display: none; }
 .dup-loading, .dup-error { padding: 24px; text-align: center; color: #64748b; }
 .dup-preview { display: flex; gap: 14px; }
 .dup-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -1070,6 +1077,9 @@ textarea.title-autogrow {
 .dup-open-full { font-size: 0.78rem; color: var(--theme-primary, #0f766e); text-decoration: none; }
 .dup-open-full:hover { text-decoration: underline; }
 @media (max-width: 560px) {
+    .dup-item { flex-wrap: wrap; }
+    .dup-item-actions { flex: 1 0 calc(100% - 56px); margin-inline-start: 56px; }
+    .dup-item-buttons .dup-preview-btn { flex: 1 1 auto; min-height: 44px; justify-content: center; }
     .dup-preview { flex-direction: column; }
     .dup-doc { width: 100%; }
 }
