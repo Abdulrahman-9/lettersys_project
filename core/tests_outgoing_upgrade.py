@@ -27,6 +27,16 @@ class OutgoingUpgradeTests(TransactionTestCase):
                 )
                 for department, office in [(first, "109"), (first, "250"), (second, "109")]
             ]
+            numberless = Book.objects.create(
+                kind="outgoing_external", our_number="",
+                department_id=first.pk, created_by_id=user.pk,
+                title="Numberless fixture",
+            )
+            training = Book.objects.create(
+                kind="outgoing_external", our_number="T131", is_training=True,
+                department_id=first.pk, created_by_id=user.pk,
+                title="Training fixture",
+            )
             executor = MigrationExecutor(connection)
             executor.migrate(target)
             apps = executor.loader.project_state(target).apps
@@ -36,6 +46,16 @@ class OutgoingUpgradeTests(TransactionTestCase):
                 list(Book.objects.filter(pk__in=[b.pk for b in records])
                      .order_by("pk").values_list("our_number", "director_general_number")),
                 [("1", "109"), ("2", "250"), ("1", "109")],
+            )
+            self.assertEqual(
+                Book.objects.filter(pk=numberless.pk)
+                .values_list("our_number", "director_general_number").get(),
+                ("", ""),
+            )
+            self.assertEqual(
+                Book.objects.filter(pk=training.pk)
+                .values_list("our_number", "director_general_number", "is_training").get(),
+                ("T131", "", True),
             )
             self.assertEqual(
                 Sequence.objects.get(department_id=first.pk, kind="outgoing_external").next_number,

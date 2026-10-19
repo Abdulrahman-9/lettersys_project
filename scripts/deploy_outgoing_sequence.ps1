@@ -88,7 +88,25 @@ try {
             '--settings=lettersys.settings_test')
         Invoke-Checked 'node' @('--test', 'scripts\tests_reservation_ui.cjs')
         Invoke-Checked 'node' @('--check', 'static\extraction_smart.js')
-    } finally {
+        $dataAudit = @'
+import os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lettersys.settings')
+import django
+django.setup()
+from django.db.models import Count, Q
+from core.models import Book
+summary = Book.all_objects.filter(kind='outgoing_external').aggregate(
+        total=Count('pk'),
+        imported=Count('pk', filter=~Q(source_ref='')),
+        app_created=Count('pk', filter=Q(source_ref='')),
+        numberless=Count('pk', filter=Q(our_number='')),
+        training=Count('pk', filter=Q(is_training=True)),
+        deleted=Count('pk', filter=Q(is_deleted=True)),
+)
+print('Outgoing-external data audit (read-only):', summary)
+'@
+        Invoke-Checked $Python @('-c', $dataAudit) 'audit outgoing-external records (read-only)'
+        } finally {
         Pop-Location
     }
 

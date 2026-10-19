@@ -65,5 +65,7 @@ collects static assets, restarts, and checks HTTP health.
 If deployment fails after code update or migration begins, do not simply switch
 back to old code: review the recorded previous revision and database backup first.
 The outgoing migration preserves office numbers in `director_general_number`
-and numbers existing outgoing books per department. Authenticated browser checks
+and numbers existing outgoing books per department. Empty numbers and explicitly
+marked training books remain unchanged and do not advance the series. This release
+does not delete books created in the application. Authenticated browser checks
 of reserve, save, and reopen are still required after the script succeeds.
