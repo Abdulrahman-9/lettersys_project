@@ -9,7 +9,7 @@ Set-StrictMode -Version Latest
 $App = 'D:\lettersys\app'
 $Python = 'D:\lettersys\venv\Scripts\python.exe'
 $Candidate = Split-Path $PSScriptRoot -Parent
-$ExpectedHead = 'b84e678cb4bb9b27988fdb70a3fdb1ebcc4958b0'
+$ExpectedHead = 'd60bdf56b4b7cd0cc26b7d9fd4774ca591edb3de'
 $PgRestore = 'C:\Program Files\PostgreSQL\16\bin\pg_restore.exe'
 $BackupRoot = 'D:\migration\backups'
 $Stopped = $false
@@ -51,23 +51,14 @@ try {
         throw 'Production service configuration differs from the reviewed deployment.'
     }
     Assert-Clean $App
-    if ((Get-Revision $Candidate) -eq $ExpectedHead) {
-        $mergeHead = & git -C $Candidate rev-parse MERGE_HEAD
-        if ($LASTEXITCODE -ne 0 -or "$mergeHead".Trim() -ne '556c906e333e011ec0566d27d4cb8ef492209c03') {
-            throw 'Candidate is not the prepared outgoing-numbering merge.'
-        }
-        Invoke-Checked 'git' @('-C', $Candidate, 'diff', '--exit-code')
-        Invoke-Checked 'git' @('-C', $Candidate, 'diff', '--cached', '--check')
-        Invoke-Checked 'git' @('-C', $Candidate, 'commit',
-            '-m', 'Merge external outgoing sequence with deployed reservation improvements',
-            '-m', 'Preserve production b84e678 and join migration branches with guarded deployment.',
-            '-m', 'Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>')
-    }
     Assert-Clean $Candidate
     if ((Get-Revision $App) -ne $ExpectedHead) {
         throw 'Production changed since preparation. Reconcile the candidate before release.'
     }
     $target = Get-Revision $Candidate
+    if ($target -eq $ExpectedHead) {
+        throw 'Candidate matches the installed production revision; there is nothing new to release.'
+    }
     Invoke-Checked 'git' @('-C', $Candidate, 'merge-base', '--is-ancestor', $ExpectedHead, $target)
     Invoke-Checked 'git' @('-C', $App, 'fetch', $Candidate, $target)
     if ((& git -C $App rev-parse FETCH_HEAD).Trim() -ne $target) {
@@ -78,6 +69,10 @@ try {
     try {
         $env:PYTHONIOENCODING = 'utf-8'
         Invoke-Checked $Python @('manage.py', 'test',
+            'core.tests_books_views', 'core.tests_security',
+            'core.tests_attachment_critical', 'core.tests_database_upgrade',
+            'core.tests_device_setup', 'core.workstations.tests',
+            'core.tests_entity_kinds',
             'core.tests_numbering', 'core.tests_numbering_per_dept',
             'core.tests_perpetual_numbering', 'core.tests_reservation_identity',
             'core.tests_reservation_admin', 'core.tests_reservation_recycle',
@@ -86,8 +81,11 @@ try {
             '--settings=lettersys.settings_test', '--noinput')
         Invoke-Checked $Python @('manage.py', 'makemigrations', '--check', '--dry-run',
             '--settings=lettersys.settings_test')
-        Invoke-Checked 'node' @('--test', 'scripts\tests_reservation_ui.cjs')
+        Invoke-Checked 'node' @('--test',
+            'scripts\tests_device_setup.cjs', 'scripts\tests_install_guide.cjs',
+            'scripts\tests_reservation_ui.cjs')
         Invoke-Checked 'node' @('--check', 'static\extraction_smart.js')
+        Invoke-Checked 'node' @('--check', 'static\service-worker.js')
         $dataAudit = @'
 import os
 os.chdir(r'D:\lettersys\app')
@@ -120,7 +118,7 @@ print('Outgoing-external data audit (read-only):', summary)
         previous = $ExpectedHead
         target = $target
         created = (Get-Date -Format o)
-        migration = '0086_merge_outgoing_reservation'
+        migration = 'none-expected'
     } | ConvertTo-Json | Set-Content -LiteralPath $metadata -Encoding UTF8
 
     # Test stop/start authorization before changing code or data.
@@ -145,11 +143,6 @@ with connection.cursor() as cursor:
     identity = cursor.fetchone()
 if identity != ('lettersys', 'lettersys_user'):
     raise RuntimeError('Unexpected production database identity')
-loader = MigrationLoader(connection)
-if ('core', '0085_reservation_assignment_time') not in loader.applied_migrations:
-    raise RuntimeError('Expected reservation migration is not applied')
-if ('core', '0085_outgoing_external_sequence') in loader.applied_migrations:
-    raise RuntimeError('Outgoing migration is already applied; review before retry')
 database = settings.DATABASES['default']
 environment = os.environ.copy()
 environment['PGPASSWORD'] = database['PASSWORD']
