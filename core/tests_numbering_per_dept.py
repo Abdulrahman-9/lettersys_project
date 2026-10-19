@@ -91,6 +91,29 @@ class ReservationPerDepartmentTests(TestCase):
             1,
         )
 
+    def test_recycling_never_takes_another_departments_number(self):
+        foreign, _ = reserve_number(self.licensing_user, 'incoming_internal')
+        foreign.mark_voided()
+        BookSequence.objects.update_or_create(
+            department=self.followup, kind='incoming_internal',
+            defaults={'next_number': 3920})
+
+        own, outcome = reserve_number(self.followup_user, 'incoming_internal')
+
+        self.assertEqual((own.number, outcome), (3920, 'new'))
+        foreign.refresh_from_db()
+        self.assertEqual(foreign.department, self.licensing)
+        self.assertEqual(foreign.status, BookNumberReservation.STATUS_VOIDED)
+
+    def test_reserve_ignores_client_supplied_department(self):
+        self.client.force_login(self.followup_user)
+        response = self.client.post(
+            reverse('reservation-reserve'),
+            data={'kind': 'incoming_internal', 'department_id': self.licensing.pk},
+            content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['reservation']['department_id'], self.followup.pk)
+
     def test_same_login_on_two_browsers_gets_distinct_live_holds(self):
         first_client = Client()
         second_client = Client()

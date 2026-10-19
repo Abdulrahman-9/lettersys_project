@@ -6,6 +6,8 @@
 الرقم إطلاقاً. نحو الأرقام نفسه مُثبَّت في `core/tests_numbering.py`؛ هذا الملف
 يُثبّت **الطبقات فوقه**: العدّاد، وخصائص العرض، والبحث، والفرز، وحارس التكرار.
 """
+import csv
+import io
 from datetime import date
 
 from django.contrib.auth.models import User
@@ -275,6 +277,84 @@ class NumericSortTests(TestCase):
     def test_descending_is_the_exact_mirror(self):
         self.assertEqual(self._sorted('-our_number'),
                          ['100', '10', '9', '20259999', '20250009'])
+
+
+class DailySequenceSortTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser('daily-sort', password='test-only')
+        self.department = Department.objects.create(name='Daily sort', code='daily-sort')
+        UserProfile.objects.update_or_create(
+            user=self.user, defaults={'department': self.department})
+        for number in ('3921', '3922', '3920'):
+            Book.objects.create(
+                our_number=number, title='Daily sequence', kind='incoming_internal',
+                date=date(2026, 10, 18), created_by=self.user,
+                department=self.department)
+        self.client.force_login(self.user)
+
+    def test_late_save_is_sorted_numerically_within_the_same_day(self):
+        for field, expected in (
+            ('date', ['3920', '3921', '3922']),
+            ('-date', ['3922', '3921', '3920']),
+            ('invalid', ['3922', '3921', '3920']),
+        ):
+            with self.subTest(field=field):
+                ordered = BookSortEngine.apply_sort(Book.objects.all(), field)
+                self.assertEqual(list(ordered.values_list('our_number', flat=True)), expected)
+
+    def test_day_remains_the_primary_key_and_numbers_are_not_changed(self):
+        earlier = Book.objects.create(
+            our_number='9999', title='Earlier day', kind='incoming_internal',
+            date=date(2026, 10, 17), created_by=self.user, department=self.department)
+        before = list(Book.objects.order_by('pk').values_list('pk', 'our_number', 'date'))
+        ordered = BookSortEngine.apply_sort(Book.objects.all(), '-date')
+        self.assertEqual(
+            list(ordered.values_list('our_number', flat=True)),
+            ['3922', '3921', '3920', earlier.our_number])
+        self.assertEqual(
+            list(Book.objects.order_by('pk').values_list('pk', 'our_number', 'date')), before)
+
+    def test_explicit_numeric_sort_remains_independent_of_day(self):
+        Book.objects.create(
+            our_number='9', title='Later day', kind='incoming_internal',
+            date=date(2026, 10, 19), created_by=self.user, department=self.department)
+        self.assertEqual(
+            list(BookSortEngine.apply_sort(Book.objects.all(), 'our_number')
+                 .values_list('our_number', flat=True)),
+            ['9', '3920', '3921', '3922'])
+
+    def test_page_ajax_and_csv_use_the_same_daily_order(self):
+        expected = ['3922', '3921', '3920']
+        page = self.client.get(reverse('book_unified'), {'tab': 'incoming_internal'})
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual([b.our_number for b in page.context['books']], expected)
+        ajax = self.client.get(reverse('api_unified_data'), {'tab': 'incoming_internal'})
+        self.assertEqual(ajax.status_code, 200)
+        self.assertEqual([b['our_number'] for b in ajax.json()['books']], expected)
+        export = self.client.get(reverse('api_export_csv'), {'tab': 'incoming_internal'})
+        self.assertEqual(export.status_code, 200)
+        content = b''.join(export.streaming_content).decode('utf-8-sig')
+        rows = list(csv.reader(io.StringIO(content)))
+        self.assertEqual([r[0] for r in rows[1:]], expected)
+
+    def test_numeric_order_is_applied_before_pagination(self):
+        Book.objects.all().delete()
+        for number in (list(range(2, 16)) + [1]):
+            Book.objects.create(
+                our_number=str(number), title='Paged daily sequence',
+                kind='incoming_internal', date=date(2026, 10, 18),
+                created_by=self.user, department=self.department)
+        first = self.client.get(reverse('api_unified_data'), {
+            'tab': 'incoming_internal', 'sort': 'date',
+        })
+        second = self.client.get(reverse('api_unified_data'), {
+            'tab': 'incoming_internal', 'sort': 'date', 'page': '2',
+        })
+        self.assertEqual(
+            [b['our_number'] for b in first.json()['books']],
+            [str(n) for n in range(1, 13)])
+        self.assertEqual(
+            [b['our_number'] for b in second.json()['books']], ['13', '14', '15'])
 
 
 class DuplicateDetectionTests(TestCase):

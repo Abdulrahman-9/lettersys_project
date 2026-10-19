@@ -316,6 +316,10 @@ class BookSortEngine:
             keys = ('-_num_year', '-_num_seq') if desc else ('_num_year', '_num_seq')
             return queryset.annotate(**numbering.sort_key_sql()).order_by(*keys, "-id")
 
+        if resolved.lstrip('-') == 'date':
+            keys = ('-_num_year', '-_num_seq') if resolved.startswith('-') else ('_num_year', '_num_seq')
+            return queryset.annotate(**numbering.sort_key_sql()).order_by(resolved, *keys, "-id")
+
         # الفرز بالعنوان على العنوان **كما يراه القارئ**: الصفُّ المحجوب يُطبع
         # «— سرّي —» لكنّ فرزَه بعنوانه الحقيقيّ يضعه بين جارَين يكشفان بادئتَه،
         # ومن يعدّل عنوانَ كتابٍ يملكه يستخرجه حرفاً حرفاً بالبحث الثنائيّ.

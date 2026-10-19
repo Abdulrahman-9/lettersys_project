@@ -149,6 +149,21 @@ class ForeignBookIsUnreachableTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, 'كتاب بوب')
 
+    def test_ajax_excludes_foreign_books_even_with_department_parameter(self):
+        resp = self.client.get('/books/api/unified/data/', {
+            'department_id': self.book_b.department_id,
+            'tab': 'all',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn(self.book_b.pk, [book['id'] for book in resp.json()['books']])
+        self.assertNotContains(resp, 'كتاب بوب')
+
+    def test_csv_excludes_foreign_books(self):
+        resp = self.client.get('/books/api/unified/export/csv/', {'tab': 'all'})
+        self.assertEqual(resp.status_code, 200)
+        content = b''.join(resp.streaming_content).decode('utf-8-sig')
+        self.assertNotIn('كتاب بوب', content)
+
 
 class HiddenBookIs404Tests(TestCase):
     """«غير موجود» لا «ممنوع» — تقريرُ فيبل لتفاصيل الكتاب، P0 البند 12.
