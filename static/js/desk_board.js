@@ -1,6 +1,15 @@
 (function () {
   'use strict';
 
+  var oldQueue = /^#q-([a-z_]+)$/.exec(window.location.hash);
+  if (oldQueue && !new URLSearchParams(window.location.search).has('queue')) {
+    var queueLink = document.querySelector('[data-desk-queue="' + oldQueue[1] + '"]');
+    if (queueLink) {
+      window.location.replace(queueLink.href);
+      return;
+    }
+  }
+
   var region = document.getElementById('recent-books');
   if (!region) return;
 
@@ -27,6 +36,16 @@
     if (!node) return;
     node.disabled = !!on;
     node.setAttribute('aria-busy', on ? 'true' : 'false');
+    var spinner = node.querySelector('[data-desk-spinner]');
+    if (on && !spinner) {
+      spinner = document.createElement('span');
+      spinner.className = 'spinner-border spinner-border-sm';
+      spinner.dataset.deskSpinner = '1';
+      spinner.setAttribute('aria-hidden', 'true');
+      node.prepend(spinner);
+    } else if (!on && spinner) {
+      spinner.remove();
+    }
   }
 
   function postJson(url, payload) {
@@ -57,9 +76,24 @@
     var button = event.target.closest('[data-desk-referral-act]');
     if (!button) return;
     event.preventDefault();
-    busy(button, true);
-    postJson(button.dataset.url, { act: button.dataset.deskReferralAct })
+    var target = button.dataset.deskTarget || 'الجهة المستلمة';
+    button.disabled = true;
+    var question = {
+      title: 'تأكيد وصول الإحالة إلى «' + target + '»',
+      message: 'ستتغيّر حالة الإحالة إلى «مستلَم». هذا لا يسجّل توقيعاً ورقياً أو انتقال عهدة.',
+      okText: 'تأكيد الوصول',
+      danger: false
+    };
+    var confirmed = typeof window.confirmDelete === 'function'
+      ? window.confirmDelete(question)
+      : Promise.resolve(window.confirm(question.title + '\n' + question.message));
+    confirmed.then(function (answer) {
+      if (!answer) return null;
+      busy(button, true);
+      return postJson(button.dataset.url, { act: button.dataset.deskReferralAct });
+    })
       .then(function (data) {
+        if (!data) return;
         show(data.message || 'تمّ تحديث الإحالة.', true);
         refresh();
       })

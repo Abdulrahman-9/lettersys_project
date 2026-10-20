@@ -56,6 +56,15 @@ class LifecyclePanelTestCase(TestCase):
 
 class PanelContentTests(LifecyclePanelTestCase):
 
+    def test_answer_and_actions_have_separate_columns_and_clear_custody_guidance(self):
+        distribute(self.book, [self.unit], by=self.clerk, due_date=self.due)
+        body = self._page(self.book)
+        self.assertIn('<th scope="col">الجواب</th><th scope="col">الإجراءات</th>', body)
+        self.assertIn('تأكيد الوصول يحدّث حالة الإحالة فقط', body)
+        self.assertIn('class="bx-referral-actions" role="group"', body)
+        self.assertIn('data-referral-target="شعبة الموازنة"', body)
+        self.assertIn('إرسال تنبيه', body)
+
     def test_it_shows_who_holds_the_book(self):
         record_custody(self.book, CustodyEvent.UNIT_RECEIPT, to_department=self.unit,
                        by=self.clerk, note='بموجب كشف التسليم 14')

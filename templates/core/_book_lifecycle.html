@@ -37,14 +37,16 @@
     <span class="spacer"></span>
     {% if can_distribute %}
     <button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#distributeModal"><i class="bi bi-plus" aria-hidden="true"></i>فرِّق إلى وحدةٍ أخرى</button>
+    <button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#custodyModal"><i class="bi bi-person-badge" aria-hidden="true"></i>تسجيل عهدة…</button>
     {% endif %}
   </div>
+  <p class="bx-action-note">تأكيد الوصول يحدّث حالة الإحالة فقط. «تسجيل عهدة» يوثّق الحامل والتوقيع؛ والطباعة وحدها لا تثبت الاستلام.</p>
 
   {% if referrals %}
-  <div class="bx-table-wrap">
+  <div class="bx-table-wrap" role="region" aria-labelledby="h-route" tabindex="0">
     <table class="bx-route">
       <thead>
-        <tr><th scope="col">الوحدة</th><th scope="col">الصفة</th><th scope="col">الحال</th><th scope="col">الموعد</th><th scope="col">الجواب</th></tr>
+        <tr><th scope="col">الوحدة</th><th scope="col">الغرض</th><th scope="col">حالة الإحالة</th><th scope="col">الموعد</th><th scope="col">الجواب</th><th scope="col">الإجراءات</th></tr>
       </thead>
       <tbody>
         {% for row in referrals %}
@@ -66,18 +68,24 @@
           </td>
           <td><span class="bx-role {% if row.referral.purpose == 'info' %}bx-role--info{% else %}bx-role--act{% endif %}">{{ row.purpose }}</span></td>
           <td>
-            {% if row.is_overdue %}<span class="bx-st bx-st--late"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>متأخّر</span>
-            {% elif row.is_open %}<span class="bx-st bx-st--wait">{{ row.status }}</span>
-            {% else %}<span class="bx-st bx-st--done"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>{{ row.status }}</span>{% endif %}
+            <span class="bx-st {% if row.referral.status == 'done' %}bx-st--done{% elif row.is_open %}bx-st--wait{% else %}bx-st--closed{% endif %}">{{ row.status }}</span>
+            {% if row.is_overdue %}<small class="bx-overdue-note"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> متأخّر عن الموعد</small>{% endif %}
           </td>
           <td class="num">{{ row.due_date|date:"d/m/Y"|default:"—" }}{% if row.reminded_at %} <i class="bi bi-bell-fill bx-reminded" title="نُبِّه في {{ row.reminded_at|date:'d/m/Y H:i' }}" aria-label="نُبِّه"></i>{% endif %}</td>
-          <td class="bx-route-acts">
+          <td>
             {% if row.reply_id %}
               <a href="{% url 'book_detail' row.reply_id %}" class="num"><i class="bi bi-reply-fill" aria-hidden="true"></i> {{ row.reply_number }}</a>
+            {% elif row.referral.purpose == 'info' %}<span class="bx-muted">للعلم؛ لا يتطلّب جواباً</span>
+            {% else %}<span class="bx-muted">لم يُسجّل جواب</span>{% endif %}
+          </td>
+          <td class="bx-route-acts">
+            <div class="bx-referral-actions" role="group" aria-label="إجراءات إحالة {{ row.target }}">
+            {% if row.reply_id %}
+              <span class="bx-muted">أُغلقت بالجواب</span>
             {% elif row.is_open and row.referral.purpose == 'info' %}
               {# للعلم: لا مطاردة — استلامٌ (قرأته الوحدة) أو تفعيلُ متابعةٍ بمدّة (§5.2) #}
               {% if row.referral.status == 'sent' and row.can_act %}
-              <button type="button" class="bx-row-act" data-referral-act="received" data-referral-id="{{ row.referral.pk }}" title="استلمته الوحدة">استلم</button>
+              <button type="button" class="bx-row-act" data-referral-act="received" data-referral-id="{{ row.referral.pk }}" data-referral-target="{{ row.target }}" title="تأكيد وصول الإحالة؛ لا يسجّل توقيعاً ورقياً">تأكيد الوصول</button>
               {% endif %}
               {% if can_distribute %}
               <button type="button" class="bx-row-act" data-followup-activate="{{ row.referral.pk }}" data-followup-target="{{ row.target }}" title="حوّلها إلى «للإجراء» بموعد">فعِّل متابعة</button>
@@ -85,20 +93,21 @@
             {% elif row.can_act or row.can_chase %}
               {# الأزرارُ لمن يقبلها الخادم: can_act (الطرفُ المُلتزِم) · can_chase (المُنتظِر) #}
               {% if row.can_act and row.referral.status == 'sent' %}
-              <button type="button" class="bx-row-act" data-referral-act="received" data-referral-id="{{ row.referral.pk }}" title="استلمته الوحدة">استلم</button>
+              <button type="button" class="bx-row-act" data-referral-act="received" data-referral-id="{{ row.referral.pk }}" data-referral-target="{{ row.target }}" title="تأكيد وصول الإحالة؛ لا يسجّل توقيعاً ورقياً">تأكيد الوصول</button>
               {% endif %}
               {% if row.can_act %}
-              <button type="button" class="bx-row-act bx-row-act--ok" data-referral-act="done" data-referral-id="{{ row.referral.pk }}" data-referral-target="{{ row.target }}" title="أُنجز ما وُجّه">أُنجز</button>
+              <button type="button" class="bx-row-act bx-row-act--ok" data-referral-act="done" data-referral-id="{{ row.referral.pk }}" data-referral-target="{{ row.target }}" title="إغلاق الإحالة بعد إنجاز ما وُجّه">تسجيل الإنجاز…</button>
               {% endif %}
               {% if row.can_chase %}
-              <button type="button" class="bx-row-act" data-referral-act="remind" data-referral-id="{{ row.referral.pk }}" title="تنبيهٌ على الوحدة"><i class="bi bi-bell" aria-hidden="true"></i><span class="visually-hidden">تنبيه</span></button>
+              <button type="button" class="bx-row-act" data-referral-act="remind" data-referral-id="{{ row.referral.pk }}" title="إرسال تنبيه إلى الوحدة"><i class="bi bi-bell" aria-hidden="true"></i> إرسال تنبيه</button>
               {% endif %}
               {% if row.can_act %}
-              <button type="button" class="bx-row-act bx-row-act--bad" data-referral-act="returned" data-referral-id="{{ row.referral.pk }}" data-referral-target="{{ row.target }}" title="أُعيد بلا إنجاز">أُعيد</button>
+              <button type="button" class="bx-row-act bx-row-act--bad" data-referral-act="returned" data-referral-id="{{ row.referral.pk }}" data-referral-target="{{ row.target }}" title="إغلاق الإحالة لعودتها بلا إنجاز">تسجيل الإعادة…</button>
               {% endif %}
             {% else %}
               <span class="bx-muted">—</span>
             {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}

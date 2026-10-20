@@ -5,28 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>كشف التسليم{% if chosen %} — {{ chosen }}{% endif %}</title>
 {% include "core/_sheet_style.html" %}
+{% include "core/_desk_document_assets.html" %}
 </head>
-<body>
+<body class="desk-workspace desk-document">
+<a class="desk-skip" href="#desk-document-main">تخطَّ إلى الكشف</a>
+{% include "core/_desk_header.html" with desk_page="handover" desk_title="كشف التسليم" desk_description="اختر الوحدة، وراجع كتبها بانتظار التوقيع، ثم اطبع الكشف لإتمام التسليم." %}
 
 <header class="toolbar prep-bar">
   <div class="prep-title">
-    <h1>كشف التسليم <small class="muted">{{ org_name }}{% if department %} · {{ department }}{% endif %}</small></h1>
     <p class="muted">
       {% if chosen and rows %}«{{ chosen }}» — الكتب الجاهزة: <b class="num">{{ rows|length }}</b>. راجع الورقة ثمّ اطبعها.
-      {% elif chosen %}لا شيء بانتظار توقيع «{{ chosen }}».
-      {% else %}اختر الوحدة المستلِمة لتجهيز ورقتها.{% endif %}
+      {% elif chosen %}لا شيء بانتظار توقيع «{{ chosen }}» ضمن التصفية المختارة.
+      {% else %}اختر الوحدة المستلِمة لتجهيز ورقتها. {% if department_choices is not None and not department %}اختر القسم واضغط «عرض الوحدات» أولاً.{% endif %}{% endif %}
     </p>
   </div>
   <form method="get" action="" class="prep-form">
     {% if department_choices is not None %}
+    <div class="desk-field">
     <label for="department" class="muted">القسم</label>
-    <select name="department" id="department" onchange="this.form.to.value=''; this.form.submit()">
+    <select name="department" id="department">
       <option value="">— اختر قسماً —</option>
       {% for d in department_choices %}<option value="{{ d.pk }}"{% if department and department.pk == d.pk %} selected{% endif %}>{{ d }}</option>{% endfor %}
     </select>
+    </div>
     {% endif %}
+    <div class="desk-field">
     <label for="to" class="muted">الوحدة</label>
-    <select name="to" id="to" onchange="this.form.submit()">
+    <select name="to" id="to">
       <option value="">— اختر وحدةً —</option>
       {% for unit, count in targets %}
         <option value="{{ unit.pk }}" {% if chosen and chosen.pk == unit.pk %}selected{% endif %}>
@@ -34,40 +39,46 @@
         </option>
       {% endfor %}
     </select>
-    <noscript><button type="submit" class="print">عرض</button></noscript>
+    </div>
+    {% include "core/_desk_filters.html" %}
+    <button type="submit" class="print">{% if department_choices is not None and not department %}عرض الوحدات{% else %}تجهيز الكشف{% endif %}</button>
+    <a class="btn back" href="{{ reset_filter_url }}">مسح التصفية</a>
   </form>
   <div class="prep-actions">
+    <a class="btn back" href="{% url 'desk_board' %}"><i class="bi bi-arrow-right" aria-hidden="true"></i> الرجوع لطاولة الوارد</a>
     {% if rows %}<button type="button" class="print" onclick="window.print()">طباعة الكشف</button>{% endif %}
-    <a class="btn back" href="{% url 'desk_board' %}">رجوع إلى الطاولة</a>
   </div>
 </header>
 
 {% if not chosen %}
-<main class="ho-prep">
+<main class="ho-prep" id="desk-document-main" tabindex="-1">
   <ol class="ho-steps" aria-label="خطوات التسليم">
-    <li class="is-current"><b>1</b> اختر الوحدة</li>
+    <li class="is-current" aria-current="step"><b>1</b> اختر الوحدة</li>
     <li><b>2</b> راجع الكشف واطبعه</li>
     <li><b>3</b> سلّم الكتب ووقّعا</li>
     <li><b>4</b> أرجع الورقة وقيّد الاستلام</li>
   </ol>
-  {% if not department %}
+  {% include "core/_desk_filter_summary.html" %}
+  {% if desk_filters.errors %}
+    <div class="empty">تعذّر عرض النتائج. صحّح حقول التصفية أعلاه ثم أعد تجهيز الكشف.</div>
+  {% elif not department %}
     <div class="empty">اختر قسماً من الأعلى ثمّ وحدةً لطباعة كشف تسليمها.</div>
   {% elif targets %}
     <h2 class="ho-prep-h">وحداتٌ عليها كتبٌ بانتظار توقيع الاستلام</h2>
     <ul class="ho-units">
       {% for unit, count in targets %}
-        <li><a href="?{% if department_choices is not None %}department={{ department.pk }}&amp;{% endif %}to={{ unit.pk }}">
+        <li><a href="?{% if target_query %}{{ target_query }}&amp;{% endif %}to={{ unit.pk }}">
           <span class="ho-unit-name">{{ unit }}</span>
           <span class="ho-unit-count"><b class="num">{{ count }}</b> بانتظار التوقيع</span>
         </a></li>
       {% endfor %}
     </ul>
   {% else %}
-    <div class="empty">لا توجد كتبٌ مُفرَّقةٌ بانتظار توقيع الاستلام — الطاولة نظيفة.</div>
+    <div class="empty">لا توجد كتب بانتظار توقيع الاستلام ضمن النطاق المختار. يمكنك توسيع النطاق أو مسح التصفية.</div>
   {% endif %}
 </main>
 {% else %}
-<div class="sheet">
+<main class="sheet" id="desk-document-main" tabindex="-1">
   <div class="rep-head">
     <div class="rep-org">
       {{ org_name }}
@@ -79,7 +90,8 @@
     </div>
   </div>
 
-  <h2 class="rep-title">كشف تسليم واستلام كتب</h2>
+  <h2 class="rep-title" id="handover-heading">كشف تسليم واستلام كتب</h2>
+  {% include "core/_desk_filter_summary.html" %}
 
   {% if not rows %}
     <div class="empty">لا شيء بانتظار توقيع «{{ chosen }}».</div>
@@ -88,12 +100,13 @@
       <div><dt>الجهة المُسلِّمة</dt><dd>{{ department|default:"—" }}</dd></div>
       <div><dt>الجهة المستلِمة</dt><dd>{{ chosen }}</dd></div>
       <div><dt>عدد الكتب</dt><dd class="num">{{ rows|length }}</dd></div>
-      <div><dt>تاريخ الكشف</dt><dd class="num">{% now "Y/m/d" %}</dd></div>
+      <div><dt>تاريخ الكشف</dt><dd class="num ho-report-date">{% now "Y/m/d" %}</dd></div>
     </dl>
 
+    <div class="desk-sheet-scroll" role="region" aria-labelledby="handover-heading" tabindex="0">
     <table class="rep ho">
       <colgroup>
-        <col class="c-seq"><col class="c-book"><col><col class="c-purpose"><col class="c-sign">
+        <col class="c-seq"><col class="c-book"><col class="c-title"><col class="c-purpose"><col class="c-sign">
       </colgroup>
       <thead>
         <tr>
@@ -110,7 +123,8 @@
             <td class="num">{{ forloop.counter }}</td>
             <td>
               <span class="num">{{ row.number }}</span>
-              <span class="ho-sub num">{{ row.date|date:"Y/m/d"|default:"—" }}</span>
+              {% if row.number_year %}<small class="ho-sub">سجل {{ row.number_year }}</small>{% endif %}
+              <span class="ho-sub num desk-book-date">{{ row.date|date:"Y/m/d"|default:"—" }}</span>
             </td>
             <td>
               <span class="ho-title{% if row.restricted %} stub{% endif %}">{{ row.title }}{% if row.restricted %} *{% endif %}</span>
@@ -126,6 +140,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% if any_restricted %}<p class="ho-legend">* موضوعٌ محجوبٌ لسرّيّته — يُطّلع عليه من النظام بصلاحيته.</p>{% endif %}
 
     <div class="ho-close">
@@ -158,7 +173,8 @@
       </div>
     </div>
   {% endif %}
-</div>
+</main>
+<p class="desk-sheet-hint">معاينة ورقة A4 · الطباعة وحدها لا تسجّل الاستلام. أعد الورقة موقّعة ثم قيّد الاستلام في النظام.</p>
 {% endif %}
 </body>
 </html>

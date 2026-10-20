@@ -1,0 +1,53 @@
+<section class="desk-queue-panel qb-{{ selected_queue.tone }}" id="q-{{ selected_queue.key }}" aria-labelledby="desk-queue-heading">
+  <div class="desk-queue-head">
+    <div>
+      <h2 id="desk-queue-heading">{{ selected_queue.label }} <span class="desk-queue-total">{{ selected_queue.total }}</span></h2>
+      <p>{{ selected_queue.hint }} · العدد للإحالات، وقد يتكرر الكتاب إذا كانت له إحالات متعددة.</p>
+    </div>
+    <a class="qb-act-link" href="?queue={{ selected_queue.key }}{% if selected_queue.expanded %}&amp;expand={{ selected_queue.key }}{% endif %}#q-{{ selected_queue.key }}"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> تحديث التصنيف</a>
+  </div>
+  {% if selected_queue.rows %}
+  <div class="desk-queue-scroll" role="region" aria-labelledby="desk-queue-heading" tabindex="0">
+    <table class="desk-queue-table">
+      <thead>
+        <tr>
+          <th scope="col">رقم الكتاب</th>
+          <th scope="col">الموضوع</th>
+          <th scope="col">الجهة المحال إليها</th>
+          <th scope="col">حالة الإحالة</th>
+          <th scope="col">الغرض</th>
+          <th scope="col">موعد الإنجاز</th>
+          <th scope="col">الإجراء</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in selected_queue.rows %}
+        <tr>
+          <td class="desk-queue-number">{{ row.book.our_number_display|default:"—" }}{% if row.book.our_number_year %}<small>{{ row.book.our_number_year }}</small>{% endif %}</td>
+          <th scope="row"><a href="{% url 'book_detail' row.book.pk %}">{{ row.title }}</a></th>
+          <td>{{ row.meta_label|default:"—" }}</td>
+          <td><span class="qb-status qb-status--{{ row.referral.status }}">{{ row.status_label|default:"—" }}</span></td>
+          <td>{{ row.purpose_label|default:"—" }}</td>
+          <td>{% if row.meta_date %}<time datetime="{{ row.meta_date|date:'Y-m-d' }}">{{ row.meta_date|date:"d/m/Y" }}</time>{% if row.overdue %}<small class="desk-overdue-label">متأخر عن الموعد</small>{% endif %}{% else %}غير محدّد{% endif %}</td>
+          <td><a class="qb-act-link" href="{% url 'book_detail' row.book.pk %}#lifecycleCard">فتح الإجراءات</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="desk-queue-foot">
+    <span>معروض {{ selected_queue.rows|length }} من {{ selected_queue.total }} إحالة</span>
+    {% if selected_queue.more %}
+      <a href="?queue={{ selected_queue.key }}&amp;expand={{ selected_queue.key }}#q-{{ selected_queue.key }}">عرض كل الإحالات ({{ selected_queue.total }})</a>
+    {% elif selected_queue.expanded %}
+      <a href="?queue={{ selected_queue.key }}#q-{{ selected_queue.key }}">عرض مختصر</a>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="qb-recent-empty">
+    <i class="bi bi-check2-circle" aria-hidden="true"></i>
+    <p>لا إحالات في هذا التصنيف حالياً.</p>
+    <a class="qb-act-link" href="{% url 'desk_board' %}#recent-books">العودة إلى آخر القيود</a>
+  </div>
+  {% endif %}
+</section>

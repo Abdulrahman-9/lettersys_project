@@ -12,15 +12,18 @@
 المطبوع يخرج من الجهاز، فهو أخطرُ من الشاشة لا أقلّ**.
 """
 
-from datetime import datetime
+from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import render
+from django.urls import reverse
 from django.utils import timezone
 
 from core.branding import org_name
+from core import numbering
 from core.custody_service import undelivered
+from core.forms import DeskFilterForm
 from core.models import Book, BookReferral, CustodyEvent, Department
 from core.scoping import (ACCESS_STUB, STUB_TITLE, can_use_desk, is_privileged,
                           scope_books_for, secret_access, subtree_ids,
@@ -35,7 +38,10 @@ def desk_handover(request):
     التي عليها التزاماتٌ غيرُ موقَّعة كي لا يبدأ الكاتبُ من فراغ.
     """
     department = _acting_department(request)
-    visible = scope_books_for(request.user, Book.objects.all())
+    filters = DeskFilterForm(request.GET)
+    visible = _filtered_books(
+        scope_books_for(request.user, Book.objects.all()), filters, department,
+    )
 
     targets = _units_with_pending(department, visible)
     chosen = _chosen_unit(request, targets)
@@ -44,8 +50,8 @@ def desk_handover(request):
     if chosen is not None:
         pending = undelivered(chosen, qs=visible).select_related(
             'book', 'to_department', 'assignee'
-        ).order_by('created_at')
-        rows = [_handover_row(r, request.user) for r in pending]
+        ).prefetch_related('book__registrations').order_by('created_at')
+        rows = [_handover_row(r, request.user, department) for r in pending]
 
     return render(request, 'core/desk_handover.html', {
         'org_name': org_name(),
@@ -55,6 +61,7 @@ def desk_handover(request):
         'chosen': chosen,
         'rows': rows,
         'any_restricted': any(row['restricted'] for row in rows),
+        **_filter_context(request, filters),
     })
 
 
@@ -68,23 +75,20 @@ def desk_ledger(request):
     الذي على الطاولة.
     """
     department = _acting_department(request)
-    date_from, date_to = _date_range(request)
+    filters = DeskFilterForm(request.GET)
 
     # §7.2 صراحةً: الحرزُ الذي كان يُبعد المنقولَ من الورق عن الدفتر **عرَضيّ**
     # (``legacy_restore`` لا يكتب ``department`` فيسقط بـ``_in_our_register``)؛
     # أوّلُ سكربتٍ يملأ ``department`` بأثرٍ رجعيّ كان سيطبع 13 ألفَ سطر.
-    visible = scope_books_for(request.user, Book.objects.live())
+    visible = _filtered_books(
+        scope_books_for(request.user, Book.objects.live()), filters, department,
+    )
     books = visible.filter(
         _in_our_register(department)
     ).select_related('department', 'current_custody').prefetch_related(
         'registrations__department', 'referrals__to_department', 'referrals__to_entity',
         'custody_events__to_holder_department', 'custody_events__to_holder_user',
     )
-    if date_from:
-        books = books.filter(date__gte=date_from)
-    if date_to:
-        books = books.filter(date__lte=date_to)
-
     rows = [_ledger_row(b, department, request.user) for b in books.order_by('date', 'id')]
 
     return render(request, 'core/desk_ledger.html', {
@@ -92,8 +96,7 @@ def desk_ledger(request):
         'department': department,
         'department_choices': _department_choices(request),
         'rows': rows,
-        'date_from': request.GET.get('date_from', ''),
-        'date_to': request.GET.get('date_to', ''),
+        **_filter_context(request, filters),
     })
 
 
@@ -157,12 +160,14 @@ def _chosen_unit(request, targets):
     return next((unit for unit, _ in targets if unit.pk == int(wanted)), None)
 
 
-def _handover_row(referral, user):
+def _handover_row(referral, user, department):
     """صفٌّ في الكشف — والموضوعُ محجوبٌ إن كان الكتابُ سرّيّاً على القارئ."""
     book = referral.book
     restricted = secret_access(user, book) == ACCESS_STUB
+    number = _register_number(book, department)
     return {
-        'number': book.our_number_display or '—',
+        'number': numbering.display(number) or '—',
+        'number_year': numbering.year_tag(number),
         'date': book.date,
         'title': STUB_TITLE if restricted else (book.title or '—'),
         'restricted': restricted,
@@ -190,9 +195,7 @@ def _ledger_row(book, department, user):
     """أعمدةُ الكاتب الخمسة — والرقمُ رقمُ **دفترنا** لا رقمُ صاحبه."""
     restricted = secret_access(user, book) == ACCESS_STUB
 
-    ours = next((r for r in book.registrations.all()
-                 if r.department_id == department.pk), None)
-    number = ours.number if ours else (book.our_number_display or '')
+    number = _register_number(book, department)
 
     distributed = [r.target_name for r in book.referrals.all()]
     received = [
@@ -201,7 +204,8 @@ def _ledger_row(book, department, user):
     ]
 
     return {
-        'number': number or '—',
+        'number': numbering.display(number) or '—',
+        'number_year': numbering.year_tag(number),
         'date': book.date,
         'title': STUB_TITLE if restricted else (book.title or '—'),
         'restricted': restricted,
@@ -211,12 +215,74 @@ def _ledger_row(book, department, user):
     }
 
 
-def _date_range(request):
-    def parse(key):
-        raw = (request.GET.get(key) or '').strip()
-        try:
-            return datetime.strptime(raw, '%Y-%m-%d').date() if raw else None
-        except (ValueError, TypeError):
-            return None
+def _register_number(book, department):
+    if department is None:
+        return ''
+    ours = next((r for r in book.registrations.all()
+                 if r.department_id == department.pk), None)
+    if ours:
+        return ours.number
+    return book.our_number if book.department_id == department.pk else ''
 
-    return parse('date_from'), parse('date_to')
+
+def _filtered_books(books, filters, department):
+    if not filters.is_valid():
+        return books.none()
+    data = filters.cleaned_data
+    if data['kind']:
+        books = books.filter(kind=data['kind'])
+    if data['date_from']:
+        books = books.filter(date__gte=data['date_from'])
+    if data['date_to']:
+        books = books.filter(date__lte=data['date_to'])
+    lower, upper = data['number_from'], data['number_to']
+    if lower or upper:
+        bound = lower or upper
+        matches = []
+        candidates = books.only('pk', 'department_id', 'our_number').prefetch_related(
+            'registrations',
+        )
+        for book in candidates.iterator(chunk_size=256):
+            parsed = numbering.parse(_register_number(book, department))
+            if (parsed.is_official and parsed.year == bound.year
+                    and (lower is None or parsed.seq >= lower.seq)
+                    and (upper is None or parsed.seq <= upper.seq)):
+                matches.append(book.pk)
+        books = books.filter(pk__in=matches)
+    return books
+
+
+def _filter_context(request, filters):
+    active = []
+    if filters.is_valid():
+        for name, field in filters.fields.items():
+            value = filters.cleaned_data.get(name)
+            if value:
+                label = dict(field.choices).get(value) if name == 'kind' else filters[name].value()
+                active.append('%s: %s' % (field.label, label))
+    first_error = True
+    for name in filters.errors:
+        if name in filters.fields:
+            attrs = filters.fields[name].widget.attrs
+            attrs['aria-invalid'] = 'true'
+            attrs['aria-describedby'] = filters[name].auto_id + '-errors'
+            if first_error:
+                attrs['autofocus'] = True
+                first_error = False
+    query = request.GET.copy()
+    query.pop('to', None)
+    target_query = query.urlencode()
+    reset = {}
+    for key in ('department', 'to'):
+        if request.GET.get(key):
+            reset[key] = request.GET[key]
+    return {
+        'desk_filters': filters,
+        'active_filter_labels': active,
+        'target_query': target_query,
+        'desk_ledger_url': reverse('desk_ledger') + ('?' + target_query if target_query else ''),
+        'desk_handover_url': reverse('desk_handover') + ('?' + target_query if target_query else ''),
+        'reset_filter_url': '?' + urlencode(reset),
+        'date_from': request.GET.get('date_from', ''),
+        'date_to': request.GET.get('date_to', ''),
+    }

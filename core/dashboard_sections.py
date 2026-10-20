@@ -27,6 +27,8 @@ def _to(name, *args, anchor='', **query):
     """وجهةُ عدّادٍ **تصدق**: `reverse()` لا مساراً حرفيّاً (يشيخ بصمت)، ومرشّحٌ
     يطابق ما يعدّه العدّاد. `anchor` = مفتاحُ الطابور على لوحة الطوابير
     (`_queue_board.html` يمنح كلَّ بطاقةٍ `id="q-<key>"`)."""
+    if name == 'desk_board' and anchor:
+        query.setdefault('queue', anchor)
     url = reverse(name, args=args)
     if query:
         url += '?' + urlencode(query)

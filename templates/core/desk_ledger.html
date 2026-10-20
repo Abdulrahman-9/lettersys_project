@@ -5,29 +5,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>دفتر الوارد — {{ department|default:"" }}</title>
 {% include "core/_sheet_style.html" %}
+{% include "core/_desk_document_assets.html" %}
 </head>
-<body>
+<body class="desk-workspace desk-document">
+<a class="desk-skip" href="#desk-document-main">تخطَّ إلى الدفتر</a>
+{% include "core/_desk_header.html" with desk_page="ledger" desk_title="دفتر الوارد" desk_description="راجع قيود القسم وتوزيعها، وحدّد المدّة قبل طباعة الدفتر الرسمي." %}
 
 <div class="toolbar">
   <form method="get" action="">
     {% if department_choices is not None %}
+    <div class="desk-field">
     <label for="department" class="muted">القسم:</label>
     <select name="department" id="department">
       <option value="">— اختر قسماً —</option>
       {% for d in department_choices %}<option value="{{ d.pk }}"{% if department and department.pk == d.pk %} selected{% endif %}>{{ d }}</option>{% endfor %}
     </select>
+    </div>
     {% endif %}
-    <label for="date_from" class="muted">من:</label>
-    <input type="date" name="date_from" id="date_from" value="{{ date_from }}">
-    <label for="date_to" class="muted">إلى:</label>
-    <input type="date" name="date_to" id="date_to" value="{{ date_to }}">
-    <button type="submit" class="print">عرض</button>
+    {% include "core/_desk_filters.html" %}
+    <button type="submit" class="print">عرض القيود</button>
+    <a class="btn back" href="{{ reset_filter_url }}">مسح التصفية</a>
   </form>
-  {% if rows %}<button type="button" class="print" onclick="window.print()">طباعة</button>{% endif %}
-  <a class="btn back" href="{% url 'desk_board' %}">رجوع</a>
+  <div class="prep-actions">
+    <a class="btn back" href="{% url 'desk_board' %}"><i class="bi bi-arrow-right" aria-hidden="true"></i> الرجوع لطاولة الوارد</a>
+    {% if rows %}<button type="button" class="print" onclick="window.print()"><i class="bi bi-printer" aria-hidden="true"></i> طباعة الدفتر</button>{% endif %}
+  </div>
 </div>
 
-<div class="sheet">
+<main class="sheet" id="desk-document-main" tabindex="-1">
   <div class="rep-head">
     <div class="rep-org">
       {{ org_name }}
@@ -39,38 +44,44 @@
       {% if date_from or date_to %}
         المدّة: {{ date_from|default:"…" }} ← {{ date_to|default:"…" }}
       {% else %}
-        كامل الدفتر
+        {% if active_filter_labels %}حسب النطاق المبيّن أدناه{% else %}كامل الدفتر{% endif %}
       {% endif %}
     </div>
   </div>
 
-  <div class="rep-title">دفتر الوارد</div>
+  <h2 class="rep-title" id="ledger-heading">دفتر الوارد</h2>
+  {% include "core/_desk_filter_summary.html" %}
 
   {% if not rows %}
-    <div class="empty">{% if department %}لا قيود في هذه المدّة.{% else %}اختر قسماً لعرض دفتره.{% endif %}</div>
+    <div class="empty">{% if desk_filters.errors %}تعذّر عرض النتائج. صحّح حقول التصفية أعلاه ثم أعد العرض.{% elif department %}لا قيود تطابق عوامل التصفية المختارة. وسّع النطاق أو امسح التصفية.{% else %}اختر قسماً لعرض دفتره.{% endif %}</div>
   {% else %}
     {% comment %}
       أعمدةُ الكاتب الخمسة حرفيّاً كما أملاها: الرقم · التاريخ · الموضوع ·
       إلى مَن وُزِّع · مَن استلم. لا عمودَ سادسَ من عندنا — هذه الورقةُ جسرُ
       الثقة، ويقارنها بدفتره سطراً بسطر.
     {% endcomment %}
-    <table class="rep">
+    <div class="desk-sheet-scroll" role="region" aria-labelledby="ledger-heading" tabindex="0">
+    <table class="rep desk-ledger-table">
+      <colgroup>
+        <col class="desk-col-index"><col class="desk-col-number"><col class="desk-col-date">
+        <col class="desk-col-title"><col class="desk-col-target"><col class="desk-col-receipt">
+      </colgroup>
       <thead>
         <tr>
-          <th style="width:3rem">ت</th>
-          <th style="width:7rem">الرقم</th>
-          <th style="width:6.5rem">التاريخ</th>
-          <th>الموضوع</th>
-          <th style="width:15rem">إلى مَن وُزِّع</th>
-          <th style="width:14rem">مَن استلم</th>
+          <th scope="col">ت</th>
+          <th scope="col">الرقم</th>
+          <th scope="col">التاريخ</th>
+          <th scope="col">الموضوع</th>
+          <th scope="col">إلى مَن وُزِّع</th>
+          <th scope="col">مَن استلم</th>
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
           <tr>
             <td class="num">{{ forloop.counter }}</td>
-            <td class="num">{{ row.number }}</td>
-            <td class="num">{{ row.date|date:"Y/m/d"|default:"—" }}</td>
+            <td class="num">{{ row.number }}{% if row.number_year %}<small class="ho-sub">سجل {{ row.number_year }}</small>{% endif %}</td>
+            <td class="num desk-book-date">{{ row.date|date:"Y/m/d"|default:"—" }}</td>
             <td><span {% if row.restricted %}class="stub"{% endif %}>{{ row.title }}</span></td>
             <td>{{ row.distributed }}</td>
             <td>{{ row.received }}</td>
@@ -78,13 +89,15 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
 
     <div class="rep-foot">
       <span>مجموع القيود: <b>{{ rows|length }}</b></span>
       <span>{{ department }}</span>
     </div>
   {% endif %}
-</div>
+</main>
+<p class="desk-sheet-hint">معاينة ورقة A4 · على الشاشات الصغيرة، مرّر الجدول أفقياً لمراجعة جميع الأعمدة. لا تظهر أدوات الصفحة في النسخة المطبوعة.</p>
 
 </body>
 </html>

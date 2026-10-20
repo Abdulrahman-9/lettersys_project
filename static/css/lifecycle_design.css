@@ -61,6 +61,22 @@
 .lc-scope .btn-outline-secondary { color: var(--ink-soft); border-color: var(--rule); }
 .lc-scope .btn-outline-secondary:hover { background: var(--paper-tint); color: var(--amber); }
 .lc-scope .btn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.lc-scope .lc-dialog-intro { margin: 0 0 1rem; padding: .75rem .9rem; border-inline-start: 3px solid var(--amber); border-radius: 6px; background: var(--paper-tint); color: var(--ink-soft); font-size: .82rem; line-height: 1.9; }
+.lc-scope .lc-targets .form-check { display: flex; gap: .6rem; align-items: center; padding: .5rem .7rem; margin: 0; }
+.lc-scope .lc-targets .form-check-input { float: none; margin: 0; flex: none; }
+.lc-scope .lc-targets .form-check-label { flex: 1; min-width: 0; padding-block: .25rem; cursor: pointer; overflow-wrap: anywhere; }
+.lc-scope .form-text { color: var(--ink-soft); }
+.bx .bx-action-note { margin: 0 0 1rem; padding: .65rem .8rem; border-radius: 8px; background: var(--bx-quiet); color: var(--bx-muted); font-size: .78rem; line-height: 1.9; }
+.bx .bx-route-acts { white-space: normal; min-width: 230px; }
+.bx-referral-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.bx .bx-row-act { min-height: 36px; height: auto; padding-block: .35rem; touch-action: manipulation; }
+.bx .bx-st--closed { color: var(--bx-muted); background: var(--bx-quiet); }
+.bx-overdue-note { display: block; color: #b91c1c; margin-block-start: .35rem; font-size: .72rem; }
+.bx .bx-table-wrap:focus-visible { outline: 3px solid var(--bx-teal); outline-offset: -3px; }
+@media (max-width: 640px) {
+  .lc-scope :is(.form-control, .form-select) { font-size: 1rem; min-height: 44px; }
+  .lc-scope .btn, .bx .bx-row-act { min-height: 44px; }
+}
 
 /* قائمةُ الأهداف: صفوفٌ قابلةٌ للنقر كلَّها لا مربّعُ اختيارٍ وحده */
 .lc-targets {
