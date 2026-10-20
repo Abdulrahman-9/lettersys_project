@@ -121,9 +121,9 @@
               <span>ما يخصّني اليوم</span>
             </a>
             {% if nav.desk %}
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'desk_board' or request.resolver_match.url_name == 'desk_ledger' or request.resolver_match.url_name == 'desk_handover' %} active{% endif %}" href="{% url 'desk_board' %}" title="طاولة الوارد">
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'desk_board' or request.resolver_match.url_name == 'desk_ledger' or request.resolver_match.url_name == 'desk_handover' %} active{% endif %}" href="{% url 'desk_board' %}" title="طاولة البريد">
               <i class="bi bi-inboxes"></i>
-              <span>طاولة الوارد</span>
+              <span>طاولة البريد</span>
             </a>
             {% endif %}
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' %} active{% endif %}" href="{% url 'book_unified' %}" title="قائمة الكتب">

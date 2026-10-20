@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}طاولة الوارد{% endblock %}
+{% block title %}طاولة البريد{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20261012-no-archive-desk">
-<link rel="stylesheet" href="{% static 'css/desk.css' %}?v=20261020-desk-compact-paper">
+<link rel="stylesheet" href="{% static 'css/desk.css' %}?v=20261020-mail-desk2">
 {% endblock %}
 
 {% block content %}
 <div class="queues-page desk-workspace">
-  {% include "core/_desk_header.html" with desk_page="board" desk_title="طاولة الوارد" desk_description="ابدأ بما يحتاج انتباهك، ثم تابع استلام الكتب وتفريقها من مكان واحد." %}
+  {% include "core/_desk_header.html" with desk_page="board" desk_title="طاولة البريد" desk_description="ابدأ بما يحتاج انتباهك، ثم تابع استلام الكتب وتفريقها من مكان واحد." %}
 
   <section class="desk-priorities" aria-labelledby="desk-priorities-heading">
     <div class="desk-section-head">
@@ -31,7 +31,7 @@
       <h2>الطاولةُ نظيفة</h2>
       <p>لا متأخّرَ ولا غيرَ مُستلَمٍ ولا مستحقَّ اليوم في القسم الآن.</p>
       <div class="qb-blank-acts">
-        <a class="btn btn-primary btn-sm" href="{% url 'desk_ledger' %}">دفتر الوارد</a>
+        <a class="btn btn-primary btn-sm" href="{% url 'desk_ledger' %}">دفتر البريد</a>
         <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">القائمةُ الموحّدة</a>
       </div>
     </div>

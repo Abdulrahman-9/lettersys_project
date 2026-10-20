@@ -1,21 +1,28 @@
+{% load static %}
 <header class="desk-header">
+  {% if desk_page != "board" %}
+  <div class="desk-topline">
+    <a class="desk-back" href="{% if desk_back_url %}{{ desk_back_url }}{% else %}{% url 'desk_board' %}{% endif %}"><i class="bi bi-arrow-right" aria-hidden="true"></i><span>{{ desk_back_label|default:"الرجوع إلى طاولة البريد" }}</span></a>
+    {% include "core/_desk_lockup.html" %}
+  </div>
+  {% endif %}
   <div class="desk-heading">
-    <span class="desk-eyebrow">مساحة عمل الوارد{% if org_name %} · {{ org_name }}{% endif %}{% if department %} · {{ department }}{% endif %}</span>
-    <h1>{{ desk_title }}</h1>
+    <span class="desk-eyebrow">مساحة عمل البريد (الوارد والصادر){% if department %} · {{ department }}{% endif %}</span>
+    <h1>{% if desk_page == "ledger" %}دفتر {{ mail_noun }}{% elif desk_page == "handover" %}{% if is_courier %}كشف تسليم الصادر الخارجي إلى متعهّد البريد{% else %}كشف تسليم {{ mail_noun }}{% endif %}{% else %}{{ desk_title }}{% endif %}</h1>
     <p>{{ desk_description }}</p>
   </div>
-  <nav class="desk-nav" aria-label="صفحات طاولة الوارد">
+  <nav class="desk-nav" aria-label="صفحات طاولة البريد">
     <a href="{% url 'desk_board' %}"{% if desk_page == "board" %} aria-current="page"{% endif %}>
-      <i class="bi bi-inboxes" aria-hidden="true"></i><span>طاولة الوارد<small>الاستلام والمتابعة</small></span>
+      <i class="bi bi-inboxes" aria-hidden="true"></i><span>طاولة البريد<small>الاستلام والمتابعة</small></span>
     </a>
     <a href="{% if desk_ledger_url %}{{ desk_ledger_url }}{% else %}{% url 'desk_ledger' %}{% if department %}?department={{ department.pk }}{% endif %}{% endif %}"{% if desk_page == "ledger" %} aria-current="page"{% endif %}>
-      <i class="bi bi-journal-text" aria-hidden="true"></i><span>دفتر الوارد<small>القيود والتوزيع</small></span>
+      <i class="bi bi-journal-text" aria-hidden="true"></i><span>دفتر البريد<small>القيود والتوزيع والإرسال</small></span>
     </a>
     <a href="{% if desk_handover_url %}{{ desk_handover_url }}{% else %}{% url 'desk_handover' %}{% if department %}?department={{ department.pk }}{% endif %}{% endif %}"{% if desk_page == "handover" %} aria-current="page"{% endif %}>
-      <i class="bi bi-pen" aria-hidden="true"></i><span>كشف التسليم<small>التجهيز والتوقيع</small></span>
+      <i class="bi bi-pen" aria-hidden="true"></i><span>كشف التسليم<small>للوحدات ومتعهّد البريد</small></span>
     </a>
   </nav>
   {% if desk_page == "ledger" or desk_page == "handover" %}
-  <p class="desk-relation-note"><b>الدفتر</b> سجل القيود والتوزيع والاستلام، أما <b>كشف التسليم</b> فهو ورقة توقيع للإحالات التي لم تُوثَّق عهدتها بعد، وليس نسخة من الدفتر. تنتقل عوامل التصفية معك بينهما.</p>
+  <p class="desk-relation-note"><b>الدفتر</b> سجل القيود والتوزيع والاستلام، أما <b>كشف التسليم</b> فهو ورقة توقيع لما لم تُوثَّق عهدته بعد، وليس نسخة من الدفتر. تنتقل عوامل التصفية معك بينهما.</p>
   {% endif %}
 </header>

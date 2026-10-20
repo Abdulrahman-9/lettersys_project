@@ -3,43 +3,50 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>دفتر الوارد — {{ department|default:"" }}</title>
+<title>دفتر {{ mail_noun }} — {{ department|default:"" }}</title>
 {% include "core/_sheet_style.html" %}
 {% include "core/_desk_document_assets.html" %}
 </head>
 <body class="desk-workspace desk-document">
 <a class="desk-skip" href="#desk-document-main">تخطَّ إلى الدفتر</a>
-{% include "core/_desk_header.html" with desk_page="ledger" desk_title="دفتر الوارد" desk_description="راجع قيود القسم وتوزيعها، وحدّد المدّة قبل طباعة الدفتر الرسمي." %}
+{% include "core/_desk_header.html" with desk_page="ledger" desk_description="راجع قيود القسم الواردة والصادرة وتوزيعها، وحدّد النطاق قبل طباعة الدفتر الرسمي." %}
 
-<div class="toolbar">
-  <form method="get" action="">
+<section class="toolbar desk-filter-panel" aria-label="تصفية الدفتر">
+  <form method="get" action="" class="desk-filter-form" data-desk-filter-form>
     {% if department_choices is not None %}
-    <div class="desk-field">
-    <label for="department" class="muted">القسم:</label>
-    <select name="department" id="department">
+    <div class="desk-field desk-department-field">
+    <label for="department" class="muted">القسم</label>
+    <select name="department" id="department" data-desk-search>
       <option value="">— اختر قسماً —</option>
       {% for d in department_choices %}<option value="{{ d.pk }}"{% if department and department.pk == d.pk %} selected{% endif %}>{{ d }}</option>{% endfor %}
     </select>
     </div>
     {% endif %}
     {% include "core/_desk_filters.html" %}
-    <button type="submit" class="print">عرض القيود</button>
-    <a class="btn back" href="{{ reset_filter_url }}">مسح التصفية</a>
+    <div class="desk-form-actions">
+      <button type="submit" class="desk-btn desk-btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i> تطبيق التصفية</button>
+      {% if active_filter_labels or desk_filters.errors %}<a class="desk-btn desk-btn-quiet" href="{{ reset_filter_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i> مسح التصفية</a>{% endif %}
+    </div>
   </form>
-  <div class="prep-actions">
-    <a class="btn back" href="{% url 'desk_board' %}"><i class="bi bi-arrow-right" aria-hidden="true"></i> الرجوع لطاولة الوارد</a>
-    {% if rows %}<button type="button" class="print" onclick="window.print()"><i class="bi bi-printer" aria-hidden="true"></i> طباعة الدفتر</button>{% endif %}
-  </div>
+</section>
+
+{% if rows %}
+<div class="desk-output-bar" data-desk-output>
+  <p class="desk-output-status" role="status">
+    <span data-desk-fresh><i class="bi bi-check2-circle" aria-hidden="true"></i> الدفتر جاهز{% if active_filter_labels %} حسب التصفية{% endif %} — عدد القيود: <b class="num">{{ rows|length }}</b>.</span>
+    <span data-desk-stale hidden><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> غيّرت التصفية ولم تطبّقها — اضغط «تطبيق التصفية» لتحديث الدفتر قبل طباعته.</span>
+  </p>
+  <button type="button" class="desk-btn desk-btn-print" onclick="window.print()" data-desk-print><i class="bi bi-printer" aria-hidden="true"></i> طباعة دفتر {{ mail_noun }}</button>
 </div>
+{% endif %}
 
 <main class="sheet" id="desk-document-main" tabindex="-1">
   <div class="rep-head">
     <div class="rep-org">
-      {{ org_name }}
-      <small>{{ department|default:"—" }}</small>
+      {% include "core/_desk_lockup.html" with lockup_class="desk-lockup-sheet" %}
     </div>
     <div class="rep-meta">
-      دفتر الوارد<br>
+      دفتر {{ mail_noun }}{% if department %} · سجل {{ department.code }}{% endif %}<br>
       طُبع في {% now "Y/m/d — H:i" %}<br>
       {% if date_from or date_to %}
         المدّة: {{ date_from|default:"…" }} ← {{ date_to|default:"…" }}
@@ -49,7 +56,7 @@
     </div>
   </div>
 
-  <h2 class="rep-title" id="ledger-heading">دفتر الوارد</h2>
+  <h2 class="rep-title" id="ledger-heading">دفتر {{ mail_noun }}</h2>
   {% include "core/_desk_filter_summary.html" %}
 
   {% if not rows %}
@@ -72,12 +79,13 @@
           <th scope="col">الرقم</th>
           <th scope="col">التاريخ</th>
           <th scope="col">الموضوع</th>
-          <th scope="col">إلى مَن وُزِّع</th>
+          <th scope="col">إلى مَن وُزِّع أو أُرسل</th>
           <th scope="col">مَن استلم</th>
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
+          {% if show_kind %}{% ifchanged row.kind %}<tr class="desk-kind-group"><th scope="rowgroup" colspan="6">{{ row.kind_label }}</th></tr>{% endifchanged %}{% endif %}
           <tr>
             <td class="num">{{ forloop.counter }}</td>
             <td class="num">{{ row.number }}{% if row.number_year %}<small class="ho-sub">سجل {{ row.number_year }}</small>{% endif %}</td>
@@ -91,9 +99,32 @@
     </table>
     </div>
 
-    <div class="rep-foot">
-      <span>مجموع القيود: <b>{{ rows|length }}</b></span>
-      <span>{{ department }}</span>
+    <div class="ho-close">
+      <div class="ho-attest">
+        <p>أُقرّ أنا الموقِّع أدناه بمطابقة قيود هذا الدفتر وعددها (<b class="num">{{ rows|length }}</b>) واستلام ما يخصّني من {{ mail_noun }} المدرج فيه.</p>
+        <div class="ho-checks">
+          <span><span class="ho-box" aria-hidden="true"></span>مطابق واستُلم كاملاً</span>
+          <span><span class="ho-box" aria-hidden="true"></span>مع ملاحظات: <span class="ho-fill"></span></span>
+        </div>
+      </div>
+      <div class="ho-sign">
+        <section>
+          <h2>المُسلِّم <small>— {{ department|default:"" }}</small></h2>
+          <div class="ho-field"><span>الاسم</span><i>{{ request.user.get_full_name|default:request.user.username }}</i></div>
+          <div class="ho-field"><span>التوقيع</span><i></i></div>
+          <div class="ho-field"><span>التاريخ والوقت</span><i></i></div>
+        </section>
+        <section>
+          <h2>المستلِم</h2>
+          <div class="ho-field"><span>الاسم</span><i></i></div>
+          <div class="ho-field"><span>التوقيع</span><i></i></div>
+          <div class="ho-field"><span>التاريخ والوقت</span><i></i></div>
+        </section>
+      </div>
+      <div class="rep-foot">
+        <span>مجموع القيود: <b class="num">{{ rows|length }}</b></span>
+        <span>{{ department }}</span>
+      </div>
     </div>
   {% endif %}
 </main>

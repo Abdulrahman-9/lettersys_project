@@ -71,7 +71,7 @@ def _my_queue(user):
 
 
 def _desk(user):
-    """طاولةُ الوارد — عملُ القسم اليوم، لمن يمسك بريدَه."""
+    """طاولةُ البريد — عملُ القسم اليوم، لمن يمسك بريدَه."""
     from core.models import Book, BookReferral
     from core.scoping import (scope_books_for, scope_referrals_for,
                               subtree_ids, user_department_id)
@@ -114,8 +114,8 @@ def _desk(user):
              'href': _to('desk_board', anchor='secret')},
         ],
         'links': [
-            {'label': 'طاولة الوارد', 'href': _to('desk_board'), 'icon': 'bi-inboxes'},
-            {'label': 'دفتر الوارد', 'href': _to('desk_ledger'), 'icon': 'bi-journal-text'},
+            {'label': 'طاولة البريد', 'href': _to('desk_board'), 'icon': 'bi-inboxes'},
+            {'label': 'دفتر البريد', 'href': _to('desk_ledger'), 'icon': 'bi-journal-text'},
             {'label': 'كشف التسليم', 'href': _to('desk_handover'), 'icon': 'bi-pen'},
         ],
         'home': _to('desk_board'),
@@ -225,7 +225,7 @@ def _can_admin(user):
 #: **ما يخصّني أوّلاً** لأنّه ما يفتحه الموظّفُ صباحاً، ثمّ ما يتّسع دائرةً.
 SECTIONS = (
     ('mine', 'ما يخصّني اليوم', 'التزاماتي المفتوحة باسمي', _always, _my_queue),
-    ('desk', 'طاولة الوارد', 'عملُ القسم اليوم', _can_desk, _desk),
+    ('desk', 'طاولة البريد', 'عملُ القسم اليوم', _can_desk, _desk),
     ('mail', 'البريد الإلكتروني', 'ما وصل وما أخفق', _can_mail, _mail),
     ('dossier', 'أضبارة وحدتي', 'ما ذُكر فيه اسمُنا', _always, _dossier),
     ('admin', 'الإدارة', 'الشجرةُ والناسُ والعناقيد', _can_admin, _administration),
@@ -242,7 +242,7 @@ def sections_for(user):
     و``quiet`` = كلُّ عدّاداته صفر: يُطوى سطراً واحداً (عنوانُه رابطٌ إلى ``home``
     ورسالتُه ``quiet_msg``) بدل صفٍّ من البلاطات الصفريّة — والحكمُ هنا لا في القالب.
     و``quiet_links`` = روابطُه بلا رابطِ ``home``: العنوانُ نفسُه رابطٌ إليه، فتكرارُه
-    أوّلَ السطر («طاولة الوارد» مرّتين) ضجيجٌ لقارئ الشاشة وللعين.
+    أوّلَ السطر («طاولة البريد» مرّتين) ضجيجٌ لقارئ الشاشة وللعين.
     """
     built = []
     for key, title, hint, gate, builder in SECTIONS:

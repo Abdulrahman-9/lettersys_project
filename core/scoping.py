@@ -589,6 +589,17 @@ def guard_secret_text_search(qs, user, search_text):
     return qs.exclude(_unauthorized_secret_q(user) & ~identity)
 
 
+def content_authorized_books(qs, user):
+    """الكتبُ التي يملك المستخدمُ محتواها — لكلّ ما يكشف **علاقاتِ** الكتاب لا رقمَه.
+
+    جهاتُ الإرسال والورود والتوزيع محتوىً كالعنوان: قائمةُ جهاتٍ مبنيّةٌ من سرّيٍّ
+    محجوب، أو تصفيةٌ بجهةٍ تُعيده، تكشف مراسلاتِه جهةً جهة.
+    """
+    if is_privileged(user):
+        return qs
+    return qs.exclude(_unauthorized_secret_q(user))
+
+
 def _unauthorized_secret_q(user):
     """الكتبُ السرّيّة التي لا يملك هذا المستخدم محتواها.
 

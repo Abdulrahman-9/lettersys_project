@@ -1,0 +1,7 @@
+{% load static %}<span class="desk-lockup{% if lockup_class %} {{ lockup_class }}{% endif %}">
+  <img src="{% static 'img/mdoc-logo-mark.png' %}" alt="" width="38" height="44">
+  <span class="desk-lockup-text">
+    <b>{{ org_name|default:"شركة نفط الوسط" }}</b>
+    <span>{{ department.name|default:"قسم المتابعة" }}</span>
+  </span>
+</span>

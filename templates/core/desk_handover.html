@@ -3,36 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>كشف التسليم{% if chosen %} — {{ chosen }}{% endif %}</title>
+<title>{% if is_courier %}كشف تسليم الصادر الخارجي — متعهّد البريد{% else %}كشف تسليم {{ mail_noun }}{% if chosen %} — {{ chosen }}{% endif %}{% endif %}</title>
 {% include "core/_sheet_style.html" %}
 {% include "core/_desk_document_assets.html" %}
 </head>
 <body class="desk-workspace desk-document">
 <a class="desk-skip" href="#desk-document-main">تخطَّ إلى الكشف</a>
-{% include "core/_desk_header.html" with desk_page="handover" desk_title="كشف التسليم" desk_description="اختر الوحدة، وراجع كتبها بانتظار التوقيع، ثم اطبع الكشف لإتمام التسليم." %}
+{% include "core/_desk_header.html" with desk_page="handover" desk_description="اختر الجهة المستلِمة (وحدة أو متعهّد البريد)، وراجع الكتب بانتظار التوقيع، ثم اطبع الكشف لإتمام التسليم." %}
 
-<header class="toolbar prep-bar">
-  <div class="prep-title">
-    <p class="muted">
-      {% if chosen and rows %}«{{ chosen }}» — الكتب الجاهزة: <b class="num">{{ rows|length }}</b>. راجع الورقة ثمّ اطبعها.
-      {% elif chosen %}لا شيء بانتظار توقيع «{{ chosen }}» ضمن التصفية المختارة.
-      {% else %}اختر الوحدة المستلِمة لتجهيز ورقتها. {% if department_choices is not None and not department %}اختر القسم واضغط «عرض الوحدات» أولاً.{% endif %}{% endif %}
-    </p>
-  </div>
-  <form method="get" action="" class="prep-form">
+<section class="toolbar desk-filter-panel prep-bar" aria-label="تجهيز كشف التسليم">
+  <form method="get" action="" class="desk-filter-form prep-form" data-desk-filter-form>
     {% if department_choices is not None %}
-    <div class="desk-field">
+    <div class="desk-field desk-department-field">
     <label for="department" class="muted">القسم</label>
-    <select name="department" id="department">
+    <select name="department" id="department" data-desk-search>
       <option value="">— اختر قسماً —</option>
       {% for d in department_choices %}<option value="{{ d.pk }}"{% if department and department.pk == d.pk %} selected{% endif %}>{{ d }}</option>{% endfor %}
     </select>
     </div>
     {% endif %}
-    <div class="desk-field">
-    <label for="to" class="muted">الوحدة</label>
-    <select name="to" id="to">
-      <option value="">— اختر وحدةً —</option>
+    <div class="desk-field desk-target-field">
+    <label for="to" class="muted">الجهة المستلِمة</label>
+    <select name="to" id="to" data-desk-search>
+      <option value="">— اختر جهةً —</option>
+      {% if courier_count %}
+        <option value="{{ courier.pk }}" {% if is_courier %}selected{% endif %}>{{ courier }} — الصادر الخارجي ({{ courier_count }})</option>
+      {% endif %}
       {% for unit, count in targets %}
         <option value="{{ unit.pk }}" {% if chosen and chosen.pk == unit.pk %}selected{% endif %}>
           {{ unit }} ({{ count }})
@@ -41,19 +37,29 @@
     </select>
     </div>
     {% include "core/_desk_filters.html" %}
-    <button type="submit" class="print">{% if department_choices is not None and not department %}عرض الوحدات{% else %}تجهيز الكشف{% endif %}</button>
-    <a class="btn back" href="{{ reset_filter_url }}">مسح التصفية</a>
+    <div class="desk-form-actions">
+      <button type="submit" class="desk-btn desk-btn-primary"><i class="bi bi-clipboard-check" aria-hidden="true"></i> {% if department_choices is not None and not department %}عرض الجهات{% else %}تجهيز الكشف{% endif %}</button>
+      {% if active_filter_labels or desk_filters.errors %}<a class="desk-btn desk-btn-quiet" href="{{ reset_filter_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i> مسح التصفية</a>{% endif %}
+    </div>
   </form>
-  <div class="prep-actions">
-    <a class="btn back" href="{% url 'desk_board' %}"><i class="bi bi-arrow-right" aria-hidden="true"></i> الرجوع لطاولة الوارد</a>
-    {% if rows %}<button type="button" class="print" onclick="window.print()">طباعة الكشف</button>{% endif %}
-  </div>
-</header>
+</section>
+
+{% if rows %}
+<div class="desk-output-bar" data-desk-output>
+  <p class="desk-output-status" role="status">
+    <span data-desk-fresh><i class="bi bi-check2-circle" aria-hidden="true"></i> كشف «{{ chosen }}» جاهز — عدد الكتب: <b class="num">{{ rows|length }}</b>. راجعه ثم اطبعه.</span>
+    <span data-desk-stale hidden><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> غيّرت الاختيار ولم تطبّقه — اضغط «تجهيز الكشف» لتحديث الورقة قبل طباعتها.</span>
+  </p>
+  <button type="button" class="desk-btn desk-btn-print" onclick="window.print()" data-desk-print><i class="bi bi-printer" aria-hidden="true"></i> طباعة الكشف</button>
+</div>
+{% elif chosen %}
+<p class="desk-output-bar desk-output-empty" role="status">لا شيء بانتظار توقيع «{{ chosen }}» ضمن التصفية المختارة.</p>
+{% endif %}
 
 {% if not chosen %}
 <main class="ho-prep" id="desk-document-main" tabindex="-1">
   <ol class="ho-steps" aria-label="خطوات التسليم">
-    <li class="is-current" aria-current="step"><b>1</b> اختر الوحدة</li>
+    <li class="is-current" aria-current="step"><b>1</b> اختر الجهة المستلِمة</li>
     <li><b>2</b> راجع الكشف واطبعه</li>
     <li><b>3</b> سلّم الكتب ووقّعا</li>
     <li><b>4</b> أرجع الورقة وقيّد الاستلام</li>
@@ -62,10 +68,16 @@
   {% if desk_filters.errors %}
     <div class="empty">تعذّر عرض النتائج. صحّح حقول التصفية أعلاه ثم أعد تجهيز الكشف.</div>
   {% elif not department %}
-    <div class="empty">اختر قسماً من الأعلى ثمّ وحدةً لطباعة كشف تسليمها.</div>
-  {% elif targets %}
-    <h2 class="ho-prep-h">وحداتٌ عليها كتبٌ بانتظار توقيع الاستلام</h2>
+    <div class="empty">اختر قسماً من الأعلى ثمّ جهةً مستلِمة لطباعة كشف تسليمها.</div>
+  {% elif targets or courier_count %}
+    <h2 class="ho-prep-h">جهاتٌ عليها كتبٌ بانتظار توقيع الاستلام</h2>
     <ul class="ho-units">
+      {% if courier_count %}
+        <li class="ho-unit-courier"><a href="?{% if target_query %}{{ target_query }}&amp;{% endif %}to={{ courier.pk }}">
+          <span class="ho-unit-name"><i class="bi bi-truck" aria-hidden="true"></i> {{ courier }} <small>الصادر الخارجي</small></span>
+          <span class="ho-unit-count"><b class="num">{{ courier_count }}</b> بانتظار التسليم</span>
+        </a></li>
+      {% endif %}
       {% for unit, count in targets %}
         <li><a href="?{% if target_query %}{{ target_query }}&amp;{% endif %}to={{ unit.pk }}">
           <span class="ho-unit-name">{{ unit }}</span>
@@ -81,8 +93,7 @@
 <main class="sheet" id="desk-document-main" tabindex="-1">
   <div class="rep-head">
     <div class="rep-org">
-      {{ org_name }}
-      <small>{{ department|default:"—" }}</small>
+      {% include "core/_desk_lockup.html" with lockup_class="desk-lockup-sheet" %}
     </div>
     <div class="rep-meta">
       طُبع في <span class="num">{% now "Y/m/d — H:i" %}</span><br>
@@ -90,7 +101,7 @@
     </div>
   </div>
 
-  <h2 class="rep-title" id="handover-heading">كشف تسليم واستلام كتب</h2>
+  <h2 class="rep-title" id="handover-heading">{% if is_courier %}كشف تسليم الصادر الخارجي إلى متعهّد البريد{% else %}كشف تسليم واستلام {{ mail_noun }}{% endif %}</h2>
   {% include "core/_desk_filter_summary.html" %}
 
   {% if not rows %}
@@ -113,12 +124,13 @@
           <th scope="col">ت</th>
           <th scope="col">الرقم والتاريخ</th>
           <th scope="col">الموضوع</th>
-          <th scope="col">الغرض والموعد</th>
+          <th scope="col">{% if is_courier %}الجهة المرسَل إليها{% else %}الغرض والموعد{% endif %}</th>
           <th scope="col">توقيع المستلم</th>
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
+          {% if show_kind and not is_courier %}{% ifchanged row.kind %}<tr class="desk-kind-group"><th scope="rowgroup" colspan="5">{{ row.kind_label }}</th></tr>{% endifchanged %}{% endif %}
           <tr>
             <td class="num">{{ forloop.counter }}</td>
             <td>
@@ -145,7 +157,7 @@
 
     <div class="ho-close">
       <div class="ho-attest">
-        <p>أُقرّ أنا الموقِّع أدناه باستلام الكتب المدرجة في هذا الكشف وعددها (<b class="num">{{ rows|length }}</b>) عن «{{ chosen }}».</p>
+        <p>أُقرّ أنا الموقِّع أدناه {% if is_courier %}بصفتي متعهّدَ البريد باستلام الكتب المدرجة في هذا الكشف وعددها (<b class="num">{{ rows|length }}</b>) من «{{ department }}» لإيصالها إلى الجهات المذكورة.{% else %}باستلام الكتب المدرجة في هذا الكشف وعددها (<b class="num">{{ rows|length }}</b>) عن «{{ chosen }}».{% endif %}</p>
         <div class="ho-checks">
           <span><span class="ho-box" aria-hidden="true"></span>استُلمت كاملةً</span>
           <span><span class="ho-box" aria-hidden="true"></span>استُلمت مع ملاحظات: <span class="ho-fill"></span></span>
@@ -174,7 +186,7 @@
     </div>
   {% endif %}
 </main>
-<p class="desk-sheet-hint">معاينة ورقة A4 · الطباعة وحدها لا تسجّل الاستلام. أعد الورقة موقّعة ثم قيّد الاستلام في النظام.</p>
+<p class="desk-sheet-hint">معاينة ورقة A4 · الطباعة وحدها لا تسجّل الاستلام. أعد الورقة موقّعة ثم {% if is_courier %}سجّل «تسليمٌ لمتعهّد البريد» من «تسجيل العهدة» في صفحة كل كتاب.{% else %}قيّد الاستلام في النظام.{% endif %}</p>
 {% endif %}
 </body>
 </html>

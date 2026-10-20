@@ -12,8 +12,14 @@ from . import numbering
 
 class DeskFilterForm(forms.Form):
     kind = forms.ChoiceField(
-        label="نوع الكتاب", required=False,
-        choices=[("", "كل الأنواع"), *Book.KIND_CHOICES],
+        label="نوع البريد", required=False,
+        choices=[
+            ("", "كل البريد (وارد وصادر)"),
+            ("incoming", "كل الوارد"),
+            ("outgoing", "كل الصادر"),
+            *Book.KIND_CHOICES,
+        ],
+        widget=forms.Select(attrs={"data-desk-search": ""}),
     )
     date_from = forms.DateField(
         label="من تاريخ الكتاب", required=False,
@@ -31,6 +37,26 @@ class DeskFilterForm(forms.Form):
         label="إلى رقم قيد القسم", required=False, max_length=32,
         widget=forms.TextInput(attrs={"inputmode": "numeric", "placeholder": "مثال: 3930…"}),
     )
+    party = forms.ChoiceField(
+        label="الجهة", required=False, choices=[("", "كل الجهات")],
+        widget=forms.Select(attrs={"data-desk-search": ""}),
+    )
+
+    def __init__(self, *args, party_choices=None, **kwargs):
+        """``party_choices`` مجموعاتُ ``(عنوان، [(قيمة، اسم)…])``؛ وبدونها لا يُعرض الحقل
+        (كشفُ التسليم له منتقي جهتِه الخاصّ)."""
+        super().__init__(*args, **kwargs)
+        if party_choices is None:
+            del self.fields["party"]
+        else:
+            self.fields["party"].choices = [("", "كل الجهات"), *party_choices]
+
+    def party_label(self, value):
+        for group in self.fields["party"].choices[1:]:
+            for key, label in group[1]:
+                if key == value:
+                    return label
+        return value
 
     def _clean_number(self, name):
         raw = self.cleaned_data[name]

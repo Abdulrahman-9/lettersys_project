@@ -87,7 +87,7 @@ class DashboardSectionTests(TestCase):
         self.assertIn('dossier', self._keys(worker))
 
     def test_the_gate_is_the_page_gate_not_a_second_rule(self):
-        """بوّابةُ «طاولة الوارد» هي `can_use_desk` نفسُها — لا صياغةٌ ثانية."""
+        """بوّابةُ «طاولة البريد» هي `can_use_desk` نفسُها — لا صياغةٌ ثانية."""
         from core.scoping import can_use_desk
 
         for name, kwargs in (('a', {}), ('b', {'head': True}),

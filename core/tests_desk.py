@@ -15,7 +15,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.custody_service import record_custody
-from core.models import (Book, CustodyEvent, Department, Entity, UserProfile)
+from core.models import (Book, BookReferral, BookRegistration, CustodyEvent, Department, Entity,
+                         UserProfile)
 from core.referral_service import distribute
 from core.registration_service import register_book_here
 from core.roles import CONTROLLER_GROUP_NAME
@@ -219,10 +220,10 @@ class DeskWorkspacePresentationTests(DeskTestCase):
         for page in ('desk_board', 'desk_ledger', 'desk_handover'):
             with self.subTest(page=page):
                 response = self.client.get(reverse(page))
-                self.assertContains(response, 'aria-label="صفحات طاولة الوارد"')
+                self.assertContains(response, 'aria-label="صفحات طاولة البريد"')
                 self.assertContains(response, 'aria-current="page"', count=2 if page == 'desk_board' else 1)
                 self.assertContains(response, '<h1', count=1)
-                self.assertContains(response, 'css/desk.css?v=20261020-desk-compact-paper')
+                self.assertContains(response, 'css/desk.css?v=20261020-mail-desk2')
                 for destination in ('desk_board', 'desk_ledger', 'desk_handover'):
                     self.assertContains(response, reverse(destination))
 
@@ -394,3 +395,161 @@ class DeskFilteringTests(DeskTestCase):
             with self.subTest(page=page):
                 self.assertEqual([r['number'] for r in response.context['rows']], ['3925'])
                 self.assertContains(response, 'سجل 2025')
+
+
+class MailDeskTests(DeskTestCase):
+    """طاولةُ البريد: العنوانُ يتبع النوع، والصادرُ الخارجيُّ يُسلَّم لمتعهّد البريد."""
+
+    def setUp(self):
+        self.client.force_login(self.officer)
+        self.outgoing = Book.objects.create(
+            kind='outgoing_external', title='كتابٌ صادرٌ للوزارة', created_by=self.officer,
+            department=self.dept, our_number='455',
+        )
+        self.outgoing.receiving_entities.add(Entity.objects.create(name='وزارة النفط'))
+
+    def test_titles_follow_the_selected_mail_kind(self):
+        cases = {'': 'دفتر البريد', 'incoming': 'دفتر الوارد', 'outgoing': 'دفتر الصادر',
+                 'outgoing_external': 'دفتر الصادر الخارجي'}
+        for kind, title in cases.items():
+            with self.subTest(kind=kind):
+                resp = self.client.get('/books/desk/ledger/', {'kind': kind})
+                self.assertContains(resp, '<h2 class="rep-title" id="ledger-heading">%s</h2>' % title,
+                                    html=True)
+        resp = self.client.get('/books/desk/handover/', {'kind': 'incoming'})
+        self.assertContains(resp, 'كشف تسليم الوارد')
+
+    def test_direction_groups_filter_the_ledger(self):
+        incoming = self.client.get('/books/desk/ledger/', {'kind': 'incoming'})
+        outgoing = self.client.get('/books/desk/ledger/', {'kind': 'outgoing'})
+        everything = self.client.get('/books/desk/ledger/')
+        self.assertContains(incoming, 'تخصيصاتُ الحفر')
+        self.assertNotContains(incoming, 'كتابٌ صادرٌ للوزارة')
+        self.assertContains(outgoing, 'كتابٌ صادرٌ للوزارة')
+        self.assertNotContains(outgoing, 'تخصيصاتُ الحفر')
+        self.assertContains(outgoing, 'وزارة النفط')
+        self.assertContains(everything, 'class="desk-kind-group"')
+        body = everything.content.decode()
+        self.assertLess(body.index('تخصيصاتُ الحفر'), body.index('كتابٌ صادرٌ للوزارة'))
+        self.assertNotContains(
+            self.client.get('/books/desk/ledger/', {'kind': 'incoming_external'}), 'desk-kind-group')
+
+    def test_ledger_print_carries_the_attest_and_signature_boxes(self):
+        resp = self.client.get('/books/desk/ledger/')
+        self.assertContains(resp, 'class="ho-attest"')
+        self.assertContains(resp, '<h2>المستلِم</h2>', html=True)
+
+    def test_courier_sheet_lists_undelivered_outgoing_external_until_pickup(self):
+        prep = self.client.get('/books/desk/handover/')
+        self.assertEqual(prep.context['courier_count'], 1)
+        self.assertContains(prep, 'to=courier')
+
+        sheet = self.client.get('/books/desk/handover/', {'to': 'courier'})
+        self.assertTrue(sheet.context['is_courier'])
+        self.assertEqual([r['title'] for r in sheet.context['rows']], ['كتابٌ صادرٌ للوزارة'])
+        self.assertContains(sheet, 'كشف تسليم الصادر الخارجي إلى متعهّد البريد')
+        self.assertContains(sheet, 'وزارة النفط')
+        self.assertContains(sheet, 'الرجوع لاختيار الجهة المستلِمة')
+
+        record_custody(self.outgoing, CustodyEvent.COURIER_PICKUP, to_name='أبو علي',
+                       by=self.officer)
+        after = self.client.get('/books/desk/handover/', {'to': 'courier'})
+        self.assertEqual(after.context['courier_count'], 0)
+        self.assertFalse(after.context['is_courier'])
+        ledger = self.client.get('/books/desk/ledger/', {'kind': 'outgoing'})
+        self.assertContains(ledger, 'أبو علي')
+
+    def test_ledger_filters_by_party_distributed_to_sent_to_or_received_from(self):
+        BookReferral.objects.create(book=self.book, from_department=self.dept,
+                                    to_department=self.unit, due_date=self.due)
+        from_unit = Book.objects.create(
+            kind='incoming_internal', title='مذكّرةٌ من الشعبة', created_by=self.officer,
+            department=self.dept, our_number='2440',
+        )
+        from_unit.issuing_entities.add(self.unit.entity)
+        ministry = Entity.objects.get(name='وزارة النفط')
+
+        ledger = self.client.get('/books/desk/ledger/')
+        choices = dict(ledger.context['desk_filters'].fields['party'].choices[1:])
+        self.assertIn(('u:%d' % self.unit.pk, str(self.unit)), choices['وحدات وأقسام داخلية'])
+        entity_values = [value for value, _ in choices['جهات المراسلة']]
+        self.assertIn('e:%d' % ministry.pk, entity_values)
+        self.assertNotIn('e:%d' % self.unit.entity_id, entity_values)
+
+        by_unit = self.client.get('/books/desk/ledger/', {'party': 'u:%d' % self.unit.pk})
+        self.assertContains(by_unit, 'تخصيصاتُ الحفر')
+        self.assertContains(by_unit, 'مذكّرةٌ من الشعبة')
+        self.assertNotContains(by_unit, 'كتابٌ صادرٌ للوزارة')
+        self.assertContains(by_unit, 'الجهة: %s' % self.unit)
+
+        by_ministry = self.client.get('/books/desk/ledger/', {'party': 'e:%d' % ministry.pk})
+        self.assertContains(by_ministry, 'كتابٌ صادرٌ للوزارة')
+        self.assertNotContains(by_ministry, 'تخصيصاتُ الحفر')
+
+        forged = self.client.get('/books/desk/ledger/', {'party': 'e:999999'})
+        self.assertTrue(forged.context['desk_filters'].errors)
+        self.assertEqual(forged.context['rows'], [])
+
+        handover = self.client.get('/books/desk/handover/')
+        self.assertNotIn('party', handover.context['desk_filters'].fields)
+
+    def test_party_filter_never_reveals_a_secret_books_correspondents(self):
+        secret = Book.objects.create(
+            kind='incoming_external', title='سرٌّ وارد', created_by=self.outsider,
+            department=self.other, our_number='5001', secret_level='secret',
+        )
+        hidden = Entity.objects.create(name='جهةٌ لا تُكشف')
+        secret.issuing_entities.add(hidden)
+        BookReferral.objects.create(book=secret, from_department=self.other,
+                                    to_department=self.dept, due_date=self.due)
+        BookRegistration.objects.create(book=secret, department=self.dept, number='2450',
+                                        registered_by=self.officer)
+        ledger = self.client.get('/books/desk/ledger/')
+        self.assertContains(ledger, '2450')
+        self.assertNotContains(ledger, 'جهةٌ لا تُكشف')
+        probed = self.client.get('/books/desk/ledger/', {'party': 'e:%d' % hidden.pk})
+        self.assertEqual(probed.context['rows'], [])
+
+        public = Book.objects.create(
+            kind='incoming_external', title='كتابٌ علنيّ من الجهة نفسها', created_by=self.officer,
+            department=self.dept, our_number='2452',
+        )
+        public.issuing_entities.add(hidden)
+        listed = self.client.get('/books/desk/ledger/', {'party': 'e:%d' % hidden.pk})
+        self.assertEqual([row['book_id'] for row in listed.context['rows']], [public.pk])
+
+    def test_a_registered_copy_of_foreign_outgoing_is_not_our_courier_duty(self):
+        foreign = Book.objects.create(
+            kind='outgoing_external', title='صادرُ قسمٍ آخر', created_by=self.outsider,
+            department=self.other, our_number='77',
+        )
+        BookReferral.objects.create(book=foreign, from_department=self.other,
+                                    to_department=self.dept, due_date=self.due)
+        BookRegistration.objects.create(book=foreign, department=self.dept, number='2451',
+                                        registered_by=self.officer)
+        prep = self.client.get('/books/desk/handover/')
+        self.assertEqual(prep.context['courier_count'], 1)
+
+    def test_print_lives_outside_the_filter_form_with_a_stale_guard(self):
+        html = self.client.get('/books/desk/ledger/').content.decode()
+        form = html.split('data-desk-filter-form>', 1)[1].split('</form>', 1)[0]
+        self.assertIn('تطبيق التصفية', form)
+        self.assertNotIn('window.print', form)
+        self.assertIn('data-desk-output', html)
+        self.assertIn('js/desk_actions.js', html)
+
+    def test_back_link_sits_in_the_header_not_in_the_toolbar(self):
+        for url in ('/books/desk/ledger/', '/books/desk/handover/'):
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode()
+                header = html.split('<header class="desk-header">', 1)[1].split('</header>', 1)[0]
+                self.assertIn('class="desk-back"', header)
+                self.assertIn('الرجوع إلى طاولة البريد', header)
+                self.assertEqual(html.count('class="desk-back"'), 1)
+                self.assertNotIn('class="btn back" href="/books/desk/"', html)
+
+    def test_searchable_selects_load_local_assets_only(self):
+        html = self.client.get('/books/desk/ledger/').content.decode()
+        self.assertIn('vendor/tom-select/tom-select.complete.min.js', html)
+        self.assertIn('data-desk-search', html)
+        self.assertNotIn('cdn', html.lower())

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""حرّاسُ طابورَي العمل — طاولةُ الوارد و«ما يخصّني اليوم»."""
+"""حرّاسُ طابورَي العمل — طاولةُ البريد و«ما يخصّني اليوم»."""
 
 from datetime import timedelta
 
@@ -52,7 +52,7 @@ class QueueScreenTests(TestCase):
         data.update(kw)
         return BookReferral.objects.create(**data)
 
-    # ── طاولةُ الوارد ──────────────────────────────────────────
+    # ── طاولةُ البريد ──────────────────────────────────────────
     def test_desk_board_is_closed_to_ordinary_staff(self):
         """الطاولةُ تعرض خريطةَ عملِ القسم — ليست لكلّ موظّف."""
         self.client.force_login(self.worker)

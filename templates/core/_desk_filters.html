@@ -1,14 +1,47 @@
-<fieldset class="desk-filters" aria-describedby="desk-filter-help">
-  <legend>تصفية الكتب قبل العرض والطباعة</legend>
-  {% for field in desk_filters %}
-  <div class="desk-field">
-    {{ field.label_tag }}
-    {{ field }}
-    {% if field.errors %}<div id="{{ field.auto_id }}-errors" class="desk-field-error" role="alert">{{ field.errors }}</div>{% endif %}
+{% with f=desk_filters %}
+<fieldset class="desk-filters">
+  <legend>تصفية الكتب</legend>
+  <div class="desk-filter-grid">
+    <div class="desk-field desk-filter-kind">
+      {{ f.kind.label_tag }}
+      {{ f.kind }}
+      {% if f.kind.errors %}<div id="{{ f.kind.auto_id }}-errors" class="desk-field-error" role="alert">{{ f.kind.errors }}</div>{% endif %}
+      <p class="desk-field-hint">وارد أو صادر، أو نوع سجل محدّد.</p>
+    </div>
+    {% if "party" in f.fields %}
+    <div class="desk-field desk-filter-kind">
+      {{ f.party.label_tag }}
+      {{ f.party }}
+      {% if f.party.errors %}<div id="{{ f.party.auto_id }}-errors" class="desk-field-error" role="alert">{{ f.party.errors }}</div>{% endif %}
+      <p class="desk-field-hint">وحدةٌ أو قسمٌ وُزِّع إليه، أو جهةٌ أُرسل إليها الكتاب أو ورد منها.</p>
+    </div>
+    {% endif %}
+    <fieldset class="desk-range" aria-describedby="desk-date-hint">
+      <legend><i class="bi bi-calendar3" aria-hidden="true"></i> تاريخ الكتاب</legend>
+      <div class="desk-range-pair">
+        {% for field in f %}{% if field.name == "date_from" or field.name == "date_to" %}
+        <div class="desk-field">
+          <label for="{{ field.id_for_label }}"><span aria-hidden="true">{% if field.name == "date_from" %}من{% else %}إلى{% endif %}</span><span class="visually-hidden">{{ field.label }}</span></label>
+          {{ field }}
+          {% if field.errors %}<div id="{{ field.auto_id }}-errors" class="desk-field-error" role="alert">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endif %}{% endfor %}
+      </div>
+      <p id="desk-date-hint" class="desk-field-hint">يكفي طرف واحد.</p>
+    </fieldset>
+    <fieldset class="desk-range" aria-describedby="desk-number-hint">
+      <legend><i class="bi bi-hash" aria-hidden="true"></i> رقم قيد القسم</legend>
+      <div class="desk-range-pair">
+        {% for field in f %}{% if field.name == "number_from" or field.name == "number_to" %}
+        <div class="desk-field">
+          <label for="{{ field.id_for_label }}"><span aria-hidden="true">{% if field.name == "number_from" %}من{% else %}إلى{% endif %}</span><span class="visually-hidden">{{ field.label }}</span></label>
+          {{ field }}
+          {% if field.errors %}<div id="{{ field.auto_id }}-errors" class="desk-field-error" role="alert">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endif %}{% endfor %}
+      </div>
+      <p id="desk-number-hint" class="desk-field-hint">يشمل الطرفين. لكل نوع سجلّ مستقل، فحدّد النوع مع الأرقام؛ وتُستبعد الكتب غير المقيّدة في سجل القسم.</p>
+    </fieldset>
   </div>
-  {% endfor %}
-  <p id="desk-filter-help" class="desk-filter-help">
-    النطاق شامل لرقمَي البداية والنهاية؛ يمكنك إدخال طرف واحد فقط.
-    لكل نوع سجل مستقل. عند تحديد أرقام، تُستبعد الكتب غير المقيّدة في سجل القسم.
-  </p>
 </fieldset>
+{% endwith %}
