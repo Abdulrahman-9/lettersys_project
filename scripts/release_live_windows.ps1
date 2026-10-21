@@ -89,6 +89,19 @@ function Test-ServiceHealth {
         $evilHost -eq '400' -and $media -like '302 *login*' -and [bool]$sweeper)
 }
 
+# The service reports Stopped before its Waitress child exits; give the
+# listener up to 30 seconds to close instead of racing it.
+function Wait-PortReleased([int]$Seconds = 30) {
+    $deadline = (Get-Date).AddSeconds($Seconds)
+    do {
+        if (-not (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+    return $false
+}
+
 function Restore-OldRelease {
     Write-ReleaseLog "ROLLBACK requested; code update=$script:CodeUpdated migration recorded=$script:MigrationApplied"
     $service = Get-Service -Name $ServiceName
@@ -98,7 +111,7 @@ function Restore-OldRelease {
         $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(45))
     }
     $script:ServiceStopped = $true
-    if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) {
+    if (-not (Wait-PortReleased)) {
         throw 'Production port 1312 remains bound during rollback.'
     }
     if ($script:MigrationApplied) {
@@ -198,7 +211,7 @@ try {
     Stop-Service -Name $ServiceName
     $service = Get-Service -Name $ServiceName
     $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(45))
-    if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) {
+    if (-not (Wait-PortReleased)) {
         throw 'Production port 1312 remains bound after service stop.'
     }
     Write-ReleaseLog 'SERVICE STOPPED; production writes through web service are paused'
