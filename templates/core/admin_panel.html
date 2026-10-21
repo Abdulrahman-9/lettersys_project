@@ -3,14 +3,17 @@
 {% block global_messages %}{% endblock %}
 {% load static %}
 
-{% block title %}{% if tab == 'reservations' %}حجوزات أرقام القيود{% else %}لوحة الإدارة{% endif %}{% endblock %}
+{% block title %}{% if is_superadmin %}إدارة النظام{% else %}إدارة القسم{% endif %}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-3">
 
   <h5 class="fw-bold mb-3">
-    <i class="bi bi-sliders text-primary me-2"></i>{% if tab == 'reservations' %}حجوزات أرقام القيود{% else %}لوحة الإدارة{% endif %}
+    <i class="bi bi-diagram-3-fill text-primary me-2"></i>{% if is_superadmin %}إدارة النظام{% else %}إدارة القسم{% endif %}
   </h5>
+  <p class="text-muted small mb-3">
+    {% if is_superadmin %}إشراف شامل على الهيكل والحسابات والصلاحيات الحسّاسة.{% else %}نطاقك الإداري: {{ scope_label }} وما يتبعه من شُعب ووحدات.{% endif %}
+  </p>
 
   {% if messages %}
     {% for message in messages %}
@@ -18,6 +21,42 @@
            role="alert" style="font-size:.9rem">{{ message }}</div>
     {% endfor %}
   {% endif %}
+
+  <section class="row row-cols-2 row-cols-lg-4 g-2 mb-3" aria-label="ملخص الإدارة">
+    <div class="col">
+      <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card-body py-3">
+          <div class="small text-muted">الأقسام والوحدات</div>
+          <div class="fs-4 fw-bold" style="font-variant-numeric:tabular-nums">{{ department_count }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card-body py-3">
+          <div class="small text-muted">النشطة</div>
+          <div class="fs-4 fw-bold text-success" style="font-variant-numeric:tabular-nums">{{ active_department_count }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card-body py-3">
+          <div class="small text-muted">الحسابات في النطاق</div>
+          <div class="fs-4 fw-bold" style="font-variant-numeric:tabular-nums">{{ staff_count }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card-body py-3">
+          <div class="small text-muted">حسابات موقوفة</div>
+          <div class="fs-4 fw-bold{% if inactive_user_count %} text-warning{% endif %}"
+               style="font-variant-numeric:tabular-nums">{{ inactive_user_count }}</div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <ul class="nav nav-pills mb-3" style="font-size:.9rem">
     <li class="nav-item">
@@ -30,6 +69,7 @@
         <i class="bi bi-people me-1"></i>المستخدمون
       </a>
     </li>
+    {% if is_superadmin %}
     <li class="nav-item">
       <a class="nav-link {% if tab == 'groups' %}active{% endif %}" href="?tab=groups">
         <i class="bi bi-collection me-1"></i>العناقيد
@@ -40,6 +80,7 @@
         <i class="bi bi-list-ol me-1" aria-hidden="true"></i>حجوزات الأرقام
       </a>
     </li>
+    {% endif %}
   </ul>
 
   {% if tab == 'reservations' %}
@@ -149,12 +190,12 @@
 
             <div class="mb-2">
               <label for="dep-name" class="form-label" style="font-size:.82rem">اسم القسم</label>
-              <input type="text" class="form-control form-control-sm" id="dep-name"
+              <input type="text" class="form-control" id="dep-name"
                      name="name" required maxlength="200">
             </div>
             <div class="mb-2">
               <label for="dep-code" class="form-label" style="font-size:.82rem">رمز السجلّ</label>
-              <input type="text" class="form-control form-control-sm" id="dep-code"
+              <input type="text" class="form-control" id="dep-code"
                      name="code" required maxlength="20" placeholder="ش13">
               <div class="form-text" style="font-size:.75rem">
                 الرمز المطبوع على ختم الوارد — يظهر في الترويسات لا في الجداول.
@@ -162,9 +203,14 @@
             </div>
             <div class="mb-2">
               <label for="dep-parent" class="form-label" style="font-size:.82rem">يتبع</label>
-              <select class="form-select form-select-sm" id="dep-parent" name="parent">
+              <select class="form-select" id="dep-parent" name="parent"
+                      {% if not is_superadmin %}required{% endif %}>
+                {% if is_superadmin %}
                 <option value="">— قسمٌ مستقلّ —</option>
-                {% for d in all_departments %}
+                {% else %}
+                <option value="" selected disabled>— اختر القسم الأب —</option>
+                {% endif %}
+                {% for d in active_departments %}
                   {% if d.is_active %}<option value="{{ d.pk }}">{{ d.code }} — {{ d.name }}</option>{% endif %}
                 {% endfor %}
               </select>
@@ -172,16 +218,18 @@
                 الشعبةُ تتبع قسمَها — والقسمُ يرى دفاتر شُعبه، والشعبةُ لا ترى دفتر الأمّ.
               </div>
             </div>
+            {% if is_superadmin %}
             <div class="mb-3">
               <label for="dep-entity" class="form-label" style="font-size:.82rem">الجهة المقابلة</label>
-              <select class="form-select form-select-sm" id="dep-entity" name="entity">
+              <select class="form-select" id="dep-entity" name="entity">
                 <option value="">— تُنشأ تلقائيّاً باسم القسم —</option>
-                {% for e in entities %}<option value="{{ e.pk }}"{% if e.pk in member_ids %} selected{% endif %}>{{ e.name }}{% if e.code %} · {{ e.code }}{% endif %}</option>{% endfor %}
+                {% for e in entities %}<option value="{{ e.pk }}">{{ e.name }}{% if e.code %} · {{ e.code }}{% endif %}</option>{% endfor %}
               </select>
               <div class="form-text" style="font-size:.75rem">
                 اربطه بجهةٍ قائمةٍ إن كانت في الدليل أصلاً — وإلّا فقد يظهر مرّتين.
               </div>
             </div>
+            {% endif %}
             <button type="submit" class="btn btn-sm btn-success w-100">
               <i class="bi bi-check2 me-1"></i>أنشئ
             </button>
@@ -200,7 +248,7 @@
                     <th scope="col" style="width:6rem">الرمز</th>
                     <th scope="col" style="width:5rem">كتب</th>
                     <th scope="col" style="width:6rem">موظّفون</th>
-                    <th scope="col" style="width:8rem">الحالة</th>
+                    <th scope="col" style="width:11rem">الحالة والإجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -213,12 +261,46 @@
                         {% if not row.department.entity_id %}
                           <span class="badge text-bg-warning ms-1" title="لا جهةَ في الدليل — لا يُخاطَب">بلا جهة</span>
                         {% endif %}
+                        <details class="mt-1">
+                          <summary class="small text-primary" style="cursor:pointer">تعديل بيانات القسم</summary>
+                          <form method="post" class="border rounded-3 bg-light p-2 mt-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="update_department">
+                            <input type="hidden" name="tab" value="departments">
+                            <input type="hidden" name="id" value="{{ row.department.pk }}">
+                            <label class="visually-hidden" for="dep-name-{{ row.department.pk }}">اسم القسم</label>
+                            <input class="form-control mb-2"
+                                   id="dep-name-{{ row.department.pk }}" name="name"
+                                   value="{{ row.department.name }}" maxlength="200" required>
+                            <label class="visually-hidden" for="dep-code-{{ row.department.pk }}">رمز القسم</label>
+                            <input class="form-control mb-2"
+                                   id="dep-code-{{ row.department.pk }}" name="code"
+                                   value="{{ row.department.code }}" maxlength="20" required>
+                            {% if is_superadmin or row.department.pk != manager_root_id %}
+                              <label class="visually-hidden" for="dep-parent-{{ row.department.pk }}">القسم الأب</label>
+                              <select class="form-select mb-2"
+                                      id="dep-parent-{{ row.department.pk }}" name="parent">
+                                {% if is_superadmin %}<option value="">— قسم مستقل —</option>{% endif %}
+                                {% for d in all_departments %}
+                                  {% if d.pk != row.department.pk and d.is_active %}
+                                    <option value="{{ d.pk }}"{% if row.department.parent_id == d.pk %} selected{% endif %}>
+                                      {{ d.code }} — {{ d.name }}
+                                    </option>
+                                  {% endif %}
+                                {% endfor %}
+                              </select>
+                            {% endif %}
+                            <button type="submit" class="btn btn-sm btn-outline-primary">حفظ التعديلات</button>
+                          </form>
+                        </details>
                       </td>
                       <td style="font-variant-numeric:tabular-nums">{{ row.department.code }}</td>
                       <td style="font-variant-numeric:tabular-nums">{{ row.department.book_count }}</td>
                       <td style="font-variant-numeric:tabular-nums">{{ row.department.member_count }}</td>
                       <td>
-                        <form method="post" class="d-inline">
+                        <form method="post" class="d-inline"
+                              {% if row.department.is_active %}data-confirm="تعطيل «{{ row.department.name }}»؟ لا يمكن تعطيله ما دامت له شُعبٌ نشطة."
+                              data-confirm-ok="عطّل"{% endif %}>
                           {% csrf_token %}
                           <input type="hidden" name="action" value="update_department">
                           <input type="hidden" name="tab" value="departments">
@@ -246,6 +328,78 @@
 
   {% comment %}────────────────────────── المستخدمون ──────────────────────────{% endcomment %}
   {% elif tab == 'users' %}
+    {% if created_credentials %}
+      <div class="alert alert-warning border-0 shadow-sm" role="alert" aria-live="polite">
+        <h6 class="fw-bold"><i class="bi bi-key-fill me-1"></i>كلمة مرور مؤقتة — ستُعرض مرة واحدة</h6>
+        <p class="mb-2">انسخها وسلّمها لصاحب الحساب الآن. سيُطلب منه تغييرها عند أول دخول.</p>
+        <div class="row g-2 align-items-center">
+          <div class="col-md-4"><span class="text-muted">اسم المستخدم:</span> <code>{{ created_credentials.username }}</code></div>
+          <div class="col-md-6"><span class="text-muted">كلمة المرور:</span> <code class="user-select-all">{{ created_credentials.password }}</code></div>
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-header bg-white border-bottom p-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-person-plus-fill text-success me-1"></i>إنشاء حساب داخل النطاق</h6>
+      </div>
+      <form method="post" class="card-body p-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_department_user">
+        <input type="hidden" name="tab" value="users">
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label" for="new-user-department">القسم</label>
+            <select class="form-select" id="new-user-department" name="department" required>
+              <option value="">— اختر القسم —</option>
+              {% for d in active_departments %}<option value="{{ d.pk }}"{% if create_form_values.department == d.pk|stringformat:"s" %} selected{% endif %}>{{ d.code }} — {{ d.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="new-user-username">اسم المستخدم</label>
+            <input class="form-control" id="new-user-username" name="username"
+                   value="{{ create_form_values.username }}" maxlength="150" autocomplete="username" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="new-user-job">المسمّى الوظيفي</label>
+            <input class="form-control" id="new-user-job" name="job_title"
+                   value="{{ create_form_values.job_title }}" maxlength="120">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="new-user-first">الاسم الأول</label>
+            <input class="form-control" id="new-user-first" name="first_name"
+                   value="{{ create_form_values.first_name }}" maxlength="150">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="new-user-last">اسم العائلة</label>
+            <input class="form-control" id="new-user-last" name="last_name"
+                   value="{{ create_form_values.last_name }}" maxlength="150">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="new-user-email">البريد الإلكتروني</label>
+            <input class="form-control" type="email" id="new-user-email" name="email"
+                   value="{{ create_form_values.email }}" autocomplete="email" spellcheck="false">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="new-user-role">الدور التشغيلي</label>
+            <select class="form-select" id="new-user-role" name="role">
+              <option value="viewer"{% if create_form_values.role == 'viewer' %} selected{% endif %}>قارئ</option>
+              <option value="entry"{% if create_form_values.role == 'entry' %} selected{% endif %}>مدخل كتب</option>
+            </select>
+          </div>
+          <div class="col-md-1 d-flex align-items-end">
+            <button type="submit" class="btn btn-sm btn-success w-100" aria-label="إنشاء الحساب">
+              <i class="bi bi-person-plus" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+        <div class="form-text mt-2">
+          تُولّد كلمة مرور عشوائية وتظهر بعد الإنشاء مرة واحدة؛ يتعيّن تغييرها فور تسجيل الدخول الأول.
+          الأدوار الحسّاسة، ومنها رئاسة القسم والبريد والأرشفة، يمنحها مدير النظام فقط.
+        </div>
+      </form>
+    </div>
+
     <div class="card border-0 shadow-sm rounded-4">
       <div class="card-body p-0">
         <div class="table-responsive">
@@ -254,31 +408,56 @@
               <tr>
                 <th scope="col" style="width:12rem">الموظّف</th>
                 <th scope="col" style="width:16rem">القسم</th>
+                <th scope="col" style="width:12rem">المسمّى الوظيفي</th>
+                <th scope="col" style="width:9rem">إدخال الكتب</th>
+                {% if is_superadmin %}
                 <th scope="col" style="width:10rem">رئيس القسم</th>
                 <th scope="col" style="width:10rem">مختصّ البريد</th>
                 <th scope="col" style="width:10rem">مسؤول الأرشفة</th>
+                {% endif %}
+                <th scope="col" style="width:7rem">الحالة</th>
                 <th scope="col" style="width:7rem"></th>
               </tr>
             </thead>
             <tbody>
               {% for row in people %}
-                <tr>
-                  <form method="post">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="assign_user">
-                    <input type="hidden" name="tab" value="users">
-                    <input type="hidden" name="user_id" value="{{ row.user.pk }}">
+                <tr{% if not row.is_active %} class="table-secondary text-muted"{% endif %}>
                     <td>
+                      <form method="post" id="assign-user-{{ row.user.pk }}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="assign_user">
+                        <input type="hidden" name="tab" value="users">
+                        <input type="hidden" name="user_id" value="{{ row.user.pk }}">
+                      </form>
                       <span class="fw-semibold">{{ row.user.get_full_name|default:row.user.username }}</span>
                       {% if row.user.is_superuser %}
                         <span class="badge text-bg-dark ms-1" style="font-size:.7rem">مدير نظام</span>
                       {% endif %}
                       <div class="text-muted" style="font-size:.76rem">{{ row.user.username }}</div>
+                      <details class="mt-1">
+                        <summary class="small text-primary" style="cursor:pointer">الاسم والبريد</summary>
+                        <div class="mt-2">
+                          <label class="visually-hidden" for="first-{{ row.user.pk }}">الاسم الأول</label>
+                          <input class="form-control mb-1" id="first-{{ row.user.pk }}"
+                                 name="first_name" value="{{ row.user.first_name }}" maxlength="150"
+                                 autocomplete="given-name" form="assign-user-{{ row.user.pk }}">
+                          <label class="visually-hidden" for="last-{{ row.user.pk }}">اسم العائلة</label>
+                          <input class="form-control mb-1" id="last-{{ row.user.pk }}"
+                                 name="last_name" value="{{ row.user.last_name }}" maxlength="150"
+                                 autocomplete="family-name" form="assign-user-{{ row.user.pk }}">
+                          <label class="visually-hidden" for="email-{{ row.user.pk }}">البريد الإلكتروني</label>
+                          <input class="form-control" type="email" id="email-{{ row.user.pk }}"
+                                 name="email" value="{{ row.user.email }}" maxlength="254"
+                                 autocomplete="email" spellcheck="false"
+                                 form="assign-user-{{ row.user.pk }}">
+                        </div>
+                      </details>
                     </td>
                     <td>
                       <label class="visually-hidden" for="dep-{{ row.user.pk }}">قسم {{ row.user.username }}</label>
-                      <select class="form-select form-select-sm" name="department" id="dep-{{ row.user.pk }}">
-                        <option value="">— بلا قسم —</option>
+                      <select class="form-select" name="department" id="dep-{{ row.user.pk }}"
+                              form="assign-user-{{ row.user.pk }}">
+                        {% if is_superadmin %}<option value="">— بلا قسم —</option>{% endif %}
                         {% for d in all_departments %}
                           <option value="{{ d.pk }}" {% if row.department and row.department.pk == d.pk %}selected{% endif %}>
                             {{ d.code }} — {{ d.name }}
@@ -287,9 +466,28 @@
                       </select>
                     </td>
                     <td>
+                      <label class="visually-hidden" for="job-{{ row.user.pk }}">المسمّى الوظيفي</label>
+                      <input class="form-control" id="job-{{ row.user.pk }}"
+                             name="job_title" value="{{ row.job_title }}" maxlength="120"
+                             form="assign-user-{{ row.user.pk }}">
+                    </td>
+                    <td>
+                      <input type="hidden" name="is_entry" value="0" form="assign-user-{{ row.user.pk }}">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="1"
+                               name="is_entry" id="entry-{{ row.user.pk }}"
+                               form="assign-user-{{ row.user.pk }}"
+                               {% if row.is_entry %}checked{% endif %}>
+                        <label class="form-check-label" for="entry-{{ row.user.pk }}"
+                               style="font-size:.78rem">مدخل كتب</label>
+                      </div>
+                    </td>
+                    {% if is_superadmin %}
+                    <td>
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" value="1"
                                name="is_department_head" id="head-{{ row.user.pk }}"
+                               form="assign-user-{{ row.user.pk }}"
                                {% if row.is_head %}checked{% endif %}>
                         <label class="form-check-label" for="head-{{ row.user.pk }}"
                                style="font-size:.78rem">يرى السجلّ والسرّي</label>
@@ -299,6 +497,7 @@
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" value="1"
                                name="is_controller" id="ctrl-{{ row.user.pk }}"
+                               form="assign-user-{{ row.user.pk }}"
                                {% if row.is_controller %}checked{% endif %}>
                         <label class="form-check-label" for="ctrl-{{ row.user.pk }}"
                                style="font-size:.78rem">طاولة البريد</label>
@@ -308,6 +507,7 @@
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" value="1"
                                name="is_archivist" id="arch-{{ row.user.pk }}"
+                               form="assign-user-{{ row.user.pk }}"
                                {% if row.is_archivist %}checked{% endif %}>
                         <label class="form-check-label" for="arch-{{ row.user.pk }}"
                                style="font-size:.78rem">مسؤول الأرشفة</label>
@@ -316,22 +516,47 @@
                       <div class="form-check ms-3">
                         <input class="form-check-input" type="checkbox" value="1"
                                name="is_company_archivist" id="arall-{{ row.user.pk }}"
+                               form="assign-user-{{ row.user.pk }}"
                                {% if row.is_company_archivist %}checked{% endif %}>
                         <label class="form-check-label text-muted" for="arall-{{ row.user.pk }}"
                                style="font-size:.72rem">أرشيف الشركة كلّها</label>
                       </div>
                     </td>
+                    {% endif %}
                     <td>
-                      <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem">حفظ</button>
+                      <span class="d-block small mb-1">
+                        {% if row.is_active %}<span class="badge text-bg-success">نشط</span>
+                        {% else %}<span class="badge text-bg-secondary">موقوف</span>{% endif %}
+                      </span>
+                      <form method="post" class="d-inline"
+                            {% if row.is_active and not row.is_self %}data-confirm="تعطيل حساب «{{ row.user.username }}»؟ سيُمنع من تسجيل الدخول، ويمكن إعادة تفعيله لاحقاً."
+                            data-confirm-ok="عطّل الحساب"{% endif %}>
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="toggle_user_active">
+                        <input type="hidden" name="tab" value="users">
+                        <input type="hidden" name="user_id" value="{{ row.user.pk }}">
+                        <input type="hidden" name="is_active" value="{% if row.is_active %}0{% else %}1{% endif %}">
+                        <button type="submit" class="btn btn-sm {% if row.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}"
+                                {% if row.is_self %}disabled title="لا يمكن تعطيل الحساب الحالي"{% endif %}>
+                          {% if row.is_active %}تعطيل{% else %}تفعيل{% endif %}
+                        </button>
+                      </form>
                     </td>
-                  </form>
+                    <td>
+                      <button type="submit" form="assign-user-{{ row.user.pk }}"
+                              class="btn btn-sm btn-primary" style="font-size:.78rem">حفظ</button>
+                    </td>
                 </tr>
+              {% empty %}
+                <tr><td colspan="{% if is_superadmin %}9{% else %}6{% endif %}"
+                        class="text-center text-muted py-4">لا يوجد مستخدمون في هذا النطاق بعد.</td></tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
       </div>
       <div class="card-footer bg-white text-muted py-2" style="font-size:.78rem">
+        {% if is_superadmin %}
         <i class="bi bi-info-circle me-1"></i>
         <b>رئيس القسم</b> يرى سجلّ مَن قرأ ماذا وكتبَ قسمه السرّية ودفاتر شُعبه ·
         <b>مختصّ البريد</b> يفتح طاولة البريد والكتب السرّية ولا يرى سجلّ القراءة ·
@@ -340,6 +565,11 @@
         الأقسام كلِّها. و<b>مسؤول إدارة البريد والأرشفة</b> = «طاولة البريد» و«طاولة
         الأرشفة» معاً — ولا مجموعةَ ثالثة، كي يكفيَ حسابٌ ثانٍ بالخانات نفسِها حين
         يقتسمون العملَ بينهم، وسجلُّ كلّ كتابٍ يقول مَن فعل ماذا.
+        {% else %}
+        <i class="bi bi-info-circle me-1"></i>
+        يمكنك إدارة الحسابات والمسمّيات الوظيفية داخل قسمك وشُعبه، ومنح دور «مدخل كتب».
+        إدارة الحسابات الحسّاسة والعناقيد تبقى للسوبر أدمن.
+        {% endif %}
       </div>
     </div>
 

@@ -24,13 +24,15 @@ from django.views.decorators.http import require_POST
 from ..backup_service import create_encrypted_pg_backup, default_backup_dir, list_db_backups
 from ..extraction.kinds import get_kind_label
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
-                      RestoreJob)
+                      Department, RestoreJob)
+from ..logging_models import UserActivityLog
 from .filter_helpers import (_FOLLOWUP_STATES, FOLLOWUP_LABELS, days_ar, followup_phrase,
                              followup_q)
 from .helpers import staff_required
 from core.scoping import (STUB_TITLE, books_in_scope, can_edit_book, can_view_reports,
                           is_privileged, report_departments, restricted_flag_sql,
-                          subtree_ids)
+                          can_manage_departments, managed_department_ids,
+                          scope_activity_for, subtree_ids)
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,7 @@ def dashboard(request):
     role = get_user_role(request.user)
     profile = getattr(request.user, 'profile', None)
     sections = sections_for(request.user)
+    command_center = _command_center(request.user, books, today)
 
     ctx = {
         "sections":         sections,
@@ -105,8 +108,66 @@ def dashboard(request):
         "incoming_done":    stats['incoming_archived'],
         "outgoing_pending": stats['outgoing_active'],
         "outgoing_done":    stats['outgoing_archived'],
+        "command_center":   command_center,
     }
     return render(request, "core/dashboard.html", ctx)
+
+
+def _command_center(user, books, today):
+    """Read-only leadership snapshot bounded to the actor's department scope."""
+    if not can_manage_departments(user):
+        return None
+
+    department_ids = managed_department_ids(user)
+    department_scope = Department.objects.filter(pk__in=department_ids)
+    department_total = department_scope.count()
+    departments = list(
+        department_scope
+        .annotate(
+            member_count=Count('members', distinct=True),
+            active_member_count=Count(
+                'members__user',
+                filter=Q(members__user__is_active=True),
+                distinct=True,
+            ),
+        )
+        .order_by('-active_member_count', '-member_count', 'code')[:8]
+    )
+    shown_ids = [department.pk for department in departments]
+    department_books = (
+        books.filter(department_id__in=shown_ids)
+        .order_by()
+        .values('department_id')
+        .annotate(
+            book_count=Count('pk'),
+            overdue_count=Count('pk', filter=followup_q('overdue', today)),
+        )
+    )
+    counts = {
+        row['department_id']: row
+        for row in department_books
+    }
+    largest = max((counts.get(dept.pk, {}).get('book_count', 0)
+                   for dept in departments), default=0)
+    for department in departments:
+        count = counts.get(department.pk, {})
+        department.book_count = count.get('book_count', 0)
+        department.overdue_count = count.get('overdue_count', 0)
+        department.load_percent = (
+            round(department.book_count * 100 / largest) if largest else 0
+        )
+
+    activity = (
+        scope_activity_for(user, UserActivityLog.objects.all())
+        .select_related('user', 'department')
+        .order_by('-timestamp')[:6]
+    )
+    return {
+        'departments': departments,
+        'department_total': department_total,
+        'recent_activity': activity,
+        'scope_label': 'كل المؤسسة' if user.is_superuser else 'قسمك وشُعبه',
+    }
 
 
 #: دلاءُ التقارير — **مفاتيحُ فلتر المتابعة في القائمة نفسُها** (``_FOLLOWUP_TABS``)

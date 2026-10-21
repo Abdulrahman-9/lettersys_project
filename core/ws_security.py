@@ -16,7 +16,9 @@ IP متغيّرة، فـ`ALLOWED_HOSTS` مضبوط على `*` — وعندها �
 """
 from urllib.parse import urlparse
 
+from channels.db import database_sync_to_async
 from django.conf import settings
+from core.models import UserProfile
 
 
 def _header(scope, name):
@@ -66,3 +68,24 @@ class SameOriginWebsocketValidator:
 
         allowed = {_host_only(h) for h in getattr(settings, 'ALLOWED_HOSTS', []) if h != '*'}
         return origin_host in allowed
+
+
+class FirstLoginPasswordChangeWebsocketMiddleware:
+    """Prevent temporary-password sessions from bypassing the HTTP password gate."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        user = scope.get('user')
+        if getattr(user, 'is_authenticated', False) and await self._must_change(user.pk):
+            await send({'type': 'websocket.close', 'code': 4403})
+            return
+        return await self.app(scope, receive, send)
+
+    @staticmethod
+    @database_sync_to_async
+    def _must_change(user_id):
+        return UserProfile.objects.filter(
+            user_id=user_id, must_change_password=True,
+        ).exists()

@@ -9,13 +9,15 @@
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
+from asgiref.sync import async_to_sync
 
-from core.admin_service import (UNSET, assign_user, create_department, save_group,
-                                update_department)
+from core.admin_service import (UNSET, assign_user, create_department,
+                                create_department_user, save_group, update_department)
 from core.logging_models import UserActivityLog
 from core.models import Department, Entity, EntityGroup, UserProfile
-from core.roles import CONTROLLER_GROUP_NAME
-from core.scoping import can_use_desk, can_view_audit, subtree_ids
+from core.roles import CONTROLLER_GROUP_NAME, ENTRY_GROUP_NAME
+from core.scoping import (can_manage_department, can_manage_departments, can_use_desk,
+                          can_view_audit, subtree_ids)
 
 
 class AdminPanelTestCase(TestCase):
@@ -40,11 +42,17 @@ class GateTests(AdminPanelTestCase):
         self.client.force_login(self.clerk)
         self.assertEqual(self.client.get('/books/admin/').status_code, 403)
 
-    def test_a_department_head_may_not_yet(self):
-        """رئيسُ القسم يرى سجلَّه وطاولتَه — وإدارةُ الأقسام قرارٌ أوسع."""
+    def test_a_department_head_opens_the_scoped_admin_panel(self):
         UserProfile.objects.filter(user=self.clerk).update(is_department_head=True)
         self.client.force_login(User.objects.get(pk=self.clerk.pk))
-        self.assertEqual(self.client.get('/books/admin/').status_code, 403)
+        self.assertEqual(self.client.get('/books/admin/').status_code, 200)
+
+    def test_department_admin_gate_is_separate_from_global_account_admin(self):
+        UserProfile.objects.filter(user=self.clerk).update(is_department_head=True)
+        fresh = User.objects.get(pk=self.clerk.pk)
+        self.assertTrue(can_manage_departments(fresh))
+        self.assertFalse(can_manage_department(fresh, Department.objects.create(
+            name='قسم خارج النطاق', code='خ-1')))
 
     def test_the_service_refuses_a_non_admin_too(self):
         """الحارسُ في الخدمة لا في العرض وحده — العرضُ يُتجاوز."""
@@ -59,6 +67,12 @@ class TwinEntityTests(AdminPanelTestCase):
         d = create_department(name='قسم العقود', code='أ-ش5', by=self.root)
         self.assertIsNotNone(d.entity_id)
         self.assertEqual(d.entity.name, 'قسم العقود')
+        self.assertEqual(d.entity.kind, Entity.KIND_INTERNAL)
+
+    def test_child_departments_create_unit_entities(self):
+        child = create_department(
+            name='وحدة العقود', code='أ-ش5/1', parent=self.dept, by=self.root)
+        self.assertEqual(child.entity.kind, Entity.KIND_UNIT)
 
     def test_an_existing_entity_may_be_linked_instead(self):
         """الحالةُ الغالبة: الدليلُ يحمل الوحدةَ منذ سنوات — فلا تُنشأ ثانيةً."""
@@ -67,6 +81,12 @@ class TwinEntityTests(AdminPanelTestCase):
                               entity=entity, by=self.root)
         self.assertEqual(d.entity, entity)
         self.assertEqual(Entity.objects.filter(name='قسم الفحص الهندسي').count(), 1)
+
+    def test_department_rename_keeps_its_entity_twin_in_sync(self):
+        department = create_department(name='قبل التعديل', code='أ-ش9', by=self.root)
+        update_department(department, by=self.root, name='بعد التعديل')
+        department.refresh_from_db()
+        self.assertEqual(department.entity.name, department.name)
 
     def test_one_entity_cannot_serve_two_departments(self):
         entity = Entity.objects.create(name='جهةٌ واحدة')
@@ -171,6 +191,169 @@ class RoleAssignmentTests(AdminPanelTestCase):
         create_department(name='قسمٌ جديد', code='أ-ج1', by=self.root)
         row = UserActivityLog.objects.get(action='CREATE_DEPARTMENT')
         self.assertEqual(row.metadata['code'], 'أ-ج1')
+
+
+class DepartmentManagerScopeTests(AdminPanelTestCase):
+
+    def setUp(self):
+        self.unit = create_department(name='شعبة القسم', code='أ-ش13/1',
+                                      parent=self.dept, by=self.root)
+        self.other = create_department(name='قسم آخر', code='أ-ش8', by=self.root)
+        UserProfile.objects.filter(user=self.clerk).update(is_department_head=True)
+        self.manager = User.objects.get(pk=self.clerk.pk)
+
+    def test_department_manager_sees_only_their_subtree_and_staff(self):
+        outside = User.objects.create_user('outside', password='outside-pass-123456')
+        UserProfile.objects.create(user=outside, department=self.other)
+        self.client.force_login(self.manager)
+        response = self.client.get('/books/admin/?tab=users')
+        body = response.content.decode('utf-8')
+        self.assertContains(response, self.unit.name)
+        self.assertNotContains(response, self.other.name)
+        self.assertNotContains(response, 'outside')
+        self.assertNotContains(response, '?tab=groups')
+        self.assertContains(response, '/books/admin/')
+        self.assertNotContains(response, '/books/users/')
+
+    def test_manager_may_create_children_but_not_root_departments(self):
+        child = create_department(name='وحدة داخلية', code='أ-ش13/1/1',
+                                  parent=self.dept, by=self.manager)
+        self.assertEqual(child.parent, self.dept)
+        with self.assertRaises(PermissionDenied):
+            create_department(name='قسم مستقل', code='أ-م9', by=self.manager)
+        with self.assertRaises(PermissionDenied):
+            create_department(name='تحت قسم أجنبي', code='أ-م10',
+                              parent=self.other, by=self.manager)
+
+    def test_manager_cannot_move_or_edit_a_department_outside_scope(self):
+        with self.assertRaises(PermissionDenied):
+            update_department(self.other, name='اسم مستولى عليه', by=self.manager)
+        with self.assertRaises(PermissionDenied):
+            update_department(self.unit, parent=self.other, by=self.manager)
+
+    def test_manager_may_assign_operational_details_only_inside_scope(self):
+        assign_user(self.clerk, job_title='رئيس وحدة', by=self.manager)
+        assign_user(self.clerk, is_entry=True, by=self.manager)
+        fresh = User.objects.get(pk=self.clerk.pk)
+        self.assertEqual(fresh.profile.job_title, 'رئيس وحدة')
+        self.assertTrue(fresh.groups.filter(name=ENTRY_GROUP_NAME).exists())
+
+    def test_manager_cannot_grant_sensitive_roles_or_manage_foreign_users(self):
+        with self.assertRaises(PermissionDenied):
+            assign_user(self.clerk, is_controller=True, by=self.manager)
+        outside = User.objects.create_user('outside2', password='outside-pass-123456')
+        UserProfile.objects.create(user=outside, department=self.other)
+        with self.assertRaises(PermissionDenied):
+            assign_user(outside, job_title='معدّل', by=self.manager)
+
+    def test_manager_cannot_provision_a_sensitive_role_or_external_account(self):
+        with self.assertRaises(PermissionDenied):
+            create_department_user(
+                by=self.manager, department=self.unit, username='local-controller',
+                role='controller')
+        with self.assertRaises(PermissionDenied):
+            create_department_user(
+                by=self.manager, department=self.other, username='foreign-user')
+
+    def test_local_account_creation_returns_one_time_password_and_forces_rotation(self):
+        self.client.force_login(self.manager)
+        response = self.client.post('/books/admin/', {
+            'action': 'create_department_user',
+            'department': self.unit.pk,
+            'username': 'local-clerk',
+            'first_name': 'كاتب',
+            'job_title': 'محرر',
+            'role': 'entry',
+            'tab': 'users',
+        })
+        self.assertEqual(response.status_code, 200)
+        user = User.objects.get(username='local-clerk')
+        self.assertTrue(user.profile.must_change_password)
+        self.assertTrue(user.groups.filter(name=ENTRY_GROUP_NAME).exists())
+        password = response.context['created_credentials']['password']
+        self.assertTrue(user.check_password(password))
+        self.assertIn('no-store, private', response['Cache-Control'])
+        log = UserActivityLog.objects.get(action='CREATE_USER')
+        self.assertNotIn(password, str(log.metadata))
+
+        self.client.force_login(user)
+        blocked = self.client.get('/books/')
+        self.assertEqual(blocked.status_code, 302)
+        self.assertEqual(blocked.url, '/password/')
+        password_page = self.client.get('/password/')
+        self.assertEqual(password_page.status_code, 200)
+        self.assertContains(password_page, 'تغيير كلمة المرور')
+        self.assertNotContains(password_page, 'title="لوحة التحكم"')
+        self.assertNotContains(password_page, 'title="قائمة الكتب"')
+
+        changed = 'Changed-Temporary-Password-42'
+        result = self.client.post('/password/', {
+            'old_password': password,
+            'new_password1': changed,
+            'new_password2': changed,
+        })
+        self.assertEqual(result.status_code, 302)
+        user.refresh_from_db()
+        self.assertFalse(user.profile.must_change_password)
+        self.assertTrue(user.check_password(changed))
+        self.assertFalse(hasattr(user, 'temp_password'))
+
+    def test_forced_password_rotation_blocks_api_requests_with_403(self):
+        user = User.objects.create_user('api-limited', password='temporary-password-42')
+        UserProfile.objects.create(
+            user=user, department=self.unit, must_change_password=True)
+        self.client.force_login(user)
+
+        response = self.client.get(
+            '/books/api/unified/data/',
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response['Content-Type'], 'application/json')
+        self.assertIn('no-store', response['Cache-Control'])
+
+    def test_department_manager_cannot_manage_sensitive_accounts(self):
+        controller = User.objects.create_user('unit-controller', password='controller-pass')
+        UserProfile.objects.create(user=controller, department=self.unit)
+        controller.groups.add(Group.objects.create(name=CONTROLLER_GROUP_NAME))
+
+        with self.assertRaises(PermissionDenied):
+            assign_user(controller, is_active=False, by=self.manager)
+
+        department_head = User.objects.create_user('unit-head', password='head-password')
+        UserProfile.objects.create(
+            user=department_head, department=self.unit, is_department_head=True)
+        with self.assertRaises(PermissionDenied):
+            assign_user(department_head, email='changed@example.test', by=self.manager)
+
+    def test_temporary_password_session_cannot_bypass_gate_over_websocket(self):
+        from core.ws_security import FirstLoginPasswordChangeWebsocketMiddleware
+
+        profile = self.manager.profile
+        profile.must_change_password = True
+        profile.save(update_fields=['must_change_password'])
+        events = []
+
+        async def application(scope, receive, send):
+            await send({'type': 'websocket.accept'})
+
+        async def receive():
+            return {'type': 'websocket.connect'}
+
+        async def send(event):
+            events.append(event)
+
+        middleware = FirstLoginPasswordChangeWebsocketMiddleware(application)
+        async_to_sync(middleware)(
+            {'type': 'websocket', 'user': self.manager}, receive, send)
+        self.assertEqual(events, [{'type': 'websocket.close', 'code': 4403}])
+
+    def test_superuser_still_sees_organization_wide_data(self):
+        self.client.force_login(self.root)
+        response = self.client.get('/books/admin/?tab=departments')
+        self.assertContains(response, self.other.name)
+        self.assertContains(response, 'العناقيد')
 
 
 class GroupAdminTests(AdminPanelTestCase):

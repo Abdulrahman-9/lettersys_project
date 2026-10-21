@@ -128,6 +128,43 @@ class DashboardSectionTests(TestCase):
         self.assertTrue(desk['متأخّر'].endswith('#q-overdue'))
         self.assertTrue(desk['غير مُستلَم'].endswith('#q-unreceived'))
 
+    def test_command_center_is_additive_and_scoped_to_department_leadership(self):
+        from core.scoping import managed_department_ids
+
+        head = self._user('command_head', self.dept, head=True)
+        Book.objects.create(
+            kind='incoming_external', title='كتاب ضمن النطاق', our_number='6101',
+            department=self.unit, created_by=head)
+        outside = Department.objects.create(name='قسم خارج النطاق', code='ل.خ')
+        Book.objects.create(
+            kind='incoming_external', title='كتاب خارج النطاق', our_number='6102',
+            department=outside, created_by=head)
+        self.client.force_login(head)
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        center = response.context['command_center']
+        self.assertIsNotNone(center)
+        self.assertEqual(
+            {department.pk for department in center['departments']},
+            set(managed_department_ids(head)),
+        )
+        unit_metrics = next(
+            row for row in center['departments'] if row.pk == self.unit.pk)
+        self.assertEqual(unit_metrics.book_count, 1)
+        self.assertNotIn(outside.pk, {row.pk for row in center['departments']})
+        self.assertContains(response, 'مركز القيادة')
+        self.assertContains(response, 'الملخّص')
+
+    def test_command_center_is_not_shown_to_ordinary_users(self):
+        worker = self._user('command_worker', self.dept)
+        self.client.force_login(worker)
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertIsNone(response.context['command_center'])
+        self.assertNotContains(response, 'مركز القيادة')
+
     def test_quiet_is_true_exactly_when_every_counter_is_zero(self):
         """مرحلة نيلسن: القسمُ الذي كلُّ عدّاداته صفرٌ يُطوى سطراً — والحكمُ في بايثون.
 

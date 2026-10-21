@@ -12,7 +12,8 @@ django_asgi_app = get_asgi_application()
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from core.routing import websocket_urlpatterns
-from core.ws_security import SameOriginWebsocketValidator
+from core.ws_security import (FirstLoginPasswordChangeWebsocketMiddleware,
+                              SameOriginWebsocketValidator)
 
 # حارس الأصل إلزامي: بدونه يفتح أي موقع خارجي WebSocket إلى
 # /ws/reservation/presence/ بكوكي جلسة الموظّف، وقطعُه يُدخل حجوزات أرقامه في
@@ -21,7 +22,8 @@ from core.ws_security import SameOriginWebsocketValidator
 application = ProtocolTypeRouter({
     'http': django_asgi_app,
     'websocket': SameOriginWebsocketValidator(
-        AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
+        AuthMiddlewareStack(FirstLoginPasswordChangeWebsocketMiddleware(
+            URLRouter(websocket_urlpatterns)))
     ),
 })
 

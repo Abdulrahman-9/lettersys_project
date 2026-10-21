@@ -1,10 +1,13 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('LETTERSYS')]
-    [string]$ConfirmProductionRelease
+    [string]$ConfirmProductionRelease,
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[0-9a-fA-F]{40}$')]
+    [string]$ReleaseCommit
 )
 
-# RELEASE-SCRIPT-VERSION=20261012-4
+# RELEASE-SCRIPT-VERSION=20261021-1
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -13,9 +16,10 @@ $Root = 'D:\lettersys'
 $Vpy = Join-Path $Root 'venv\Scripts\python.exe'
 $ServiceName = 'LetterSys'
 $Port = 1312
-$ExpectedOldHead = 'affb89e472ffa9bac5fd7f3f4b8b17163c20fbd1'
-$RequiredReleaseBase = '1f69014e3eafc0a9094d7f195898d9bbf36c7e8b'
-$Backup = 'D:\migration\backups\lettersys_release_20261012_081534\lettersys_pre_release_20261012_081534.dump'
+$ExpectedOldHead = 'c14552d49343364e013d7499aaedcdd8264a03d4'
+$RequiredReleaseBase = 'c14552d49343364e013d7499aaedcdd8264a03d4'
+$MigrationName = '0087_userprofile_must_change_password_and_more'
+$RollbackMigration = '0086_merge_outgoing_reservation'
 $LogPath = Join-Path 'D:\migration\logs' ("release_live_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
 $script:CodeUpdated = $false
 $script:MigrationApplied = $false
@@ -97,6 +101,11 @@ function Restore-OldRelease {
     if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) {
         throw 'Production port 1312 remains bound during rollback.'
     }
+    if ($script:MigrationApplied) {
+        Invoke-Checked $Vpy @(
+            (Join-Path $App 'manage.py'), 'migrate', 'core', $RollbackMigration, '--noinput'
+        ) 'reverse administration migration before restoring old code'
+    }
     if ($script:CodeUpdated) {
         Invoke-Checked 'git.exe' @('-C', $App, 'switch', '-C', 'main', $script:OldHead) 'restore previous production revision'
         Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'collectstatic', '--noinput') 'restore previous static manifest'
@@ -130,15 +139,6 @@ try {
     }
     if ((Get-Location).Path -ne $App) { Set-Location $App }
     if (-not (Test-Path $Vpy)) { throw 'Production virtual environment is missing.' }
-    if (-not (Test-Path $Backup)) { throw 'Verified production pre-release backup is missing.' }
-    $expectedHash = ((Get-Content "$Backup.sha256" -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
-    $actualHash = (Get-FileHash $Backup -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($expectedHash -ne $actualHash) { throw 'Production backup checksum mismatch.' }
-    $backupAge = (Get-Date) - (Get-Item $Backup).LastWriteTime
-    if ($backupAge.TotalHours -gt 24) { throw 'Production backup is older than 24 hours; take a fresh one.' }
-    $toc = & 'C:\Program Files\PostgreSQL\16\bin\pg_restore.exe' --list $Backup
-    if ($LASTEXITCODE -ne 0 -or @($toc).Count -lt 100) { throw 'Production backup archive validation failed.' }
-
     $registry = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\LetterSys\Parameters'
     if ($registry.Application -ne (Join-Path $Root 'venv\Scripts\python.exe') -or
         $registry.AppDirectory -ne $Root -or
@@ -158,8 +158,16 @@ try {
     if (git status --porcelain=v1) { throw 'Production checkout is not clean.' }
     $script:OldHead = (git rev-parse HEAD).Trim()
     if ($script:OldHead -ne $ExpectedOldHead) { throw "Unexpected production revision $script:OldHead." }
-    Invoke-Checked 'git.exe' @('-C', $App, 'fetch', 'origin', 'main') 'fetch release target'
-    $target = (git rev-parse origin/main).Trim()
+    $target = $ReleaseCommit.ToLowerInvariant()
+    Invoke-Checked 'git.exe' @(
+        '-C', $App, 'fetch', 'origin', 'release/dept-admin-dashboard'
+    ) 'fetch reviewed release branch'
+    $fetchedCommit = (& git.exe -C $App rev-parse FETCH_HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $fetchedCommit -ne $target) {
+        throw 'Fetched release branch does not match the pinned ReleaseCommit.'
+    }
+    git cat-file -e "$target^{commit}"
+    if ($LASTEXITCODE -ne 0) { throw 'Pinned release commit is not available in the local repository.' }
     git merge-base --is-ancestor $RequiredReleaseBase $target
     if ($LASTEXITCODE -ne 0) {
         throw 'Release target does not contain the reviewed code commit.'
@@ -170,33 +178,23 @@ try {
     }
     $changedFiles = @(git diff --name-only $script:OldHead $target)
     $allowed = @(
-        '.env.example', 'COMPANY_ROLLOUT_PLAN_v2_2026-08-31.md', 'ROLLOUT_EXECUTION.md',
-        'core/context_processors.py', 'core/dashboard_sections.py',
-        'core/messaging/api/email_endpoints.py', 'core/messaging/api/mail_endpoints.py',
-        'core/messaging/scoping.py', 'core/messaging/views/ui.py',
-        'core/migrations/0083_alter_bookhistory_action_alter_bookreferral_status.py',
-        'core/models.py', 'core/network_views.py', 'core/referral_service.py', 'core/scoping.py',
-        'core/tests_archive_desk.py', 'core/tests_audit_mail_1008.py', 'core/tests_books_views.py',
-        'core/tests_mail_scope.py', 'core/tests_network_health.py', 'core/tests_queues.py',
-        'core/tests_referrals.py', 'core/tests_scope_parity.py', 'core/urls.py',
-        'core/views/helpers.py', 'core/views/lifecycle_api.py', 'core/views/queues.py',
-        'docs/WINDOWS_LAN_DEPLOYMENT.md', 'docs/log/2026-10-12.md',
-        'requirements.txt', 'scan_agent/README.md', 'scan_agent/install_agent.bat',
-        'scan_agent/tests_agent.py', 'scripts/tests_windows_service.py',
-        'scripts/windows_service.py', 'static/app.css', 'static/app.js',
-        'static/css/queues.css', 'static/css/reports.css', 'static/js/desk_board.js',
-        'static/network_settings.js', 'static/service-worker.js', 'templates/base.html',
-        'templates/core/_queue_board.html', 'templates/core/archive_desk.html',
-        'templates/core/desk_board.html', 'templates/core/mail/hub.html',
-        'templates/core/my_today.html', 'templates/core/network_settings.html',
-        'templates/core/reports.html',
+        'core/admin_service.py', 'core/auth_views.py', 'core/context_processors.py',
+        'core/logging_models.py', 'core/middleware/force_password_change.py',
+        'core/migrations/0087_userprofile_must_change_password_and_more.py',
+        'core/models.py', 'core/scoping.py', 'core/tests_admin_panel.py',
+        'core/tests_dashboard_roles.py', 'core/tests_template_role_gates.py',
+        'core/views/admin_panel.py', 'core/views/dashboard.py',
+        'core/ws_security.py', 'lettersys/asgi.py', 'lettersys/settings.py',
+        'docs/WINDOWS_LAN_DEPLOYMENT.md',
+        'static/css/dashboard_roles.css', 'static/service-worker.js',
+        'templates/base.html', 'templates/core/admin_panel.html', 'templates/core/dashboard.html',
         'scripts/release_live_windows.ps1'
     )
     $unexpected = @($changedFiles | Where-Object { $_ -notin $allowed })
     if ($unexpected.Count) { throw "Unexpected release files: $($unexpected -join ', ')" }
-    Invoke-Native 'git.exe' @('cat-file', '-e', "$target`:core/migrations/0083_alter_bookhistory_action_alter_bookreferral_status.py") | Out-Null
+    Invoke-Native 'git.exe' @('cat-file', '-e', "$target`:core/migrations/$MigrationName.py") | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        throw 'Release migration 0083 is missing from the target.'
+        throw "Release migration $MigrationName is missing from the target."
     }
     Write-ReleaseLog "PRECHECK PASS user=$($identity.Name) freeMB=$freeMB db=$dbFacts old=$script:OldHead target=$target backupSHA=$actualHash"
     Write-ReleaseLog "FILES $($changedFiles -join ',')"
@@ -246,14 +244,14 @@ raise SystemExit(subprocess.run(command, env=environment, check=False).returncod
     $plan = Invoke-Native $Vpy @((Join-Path $App 'manage.py'), 'showmigrations', '--plan')
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect post-update migration plan.' }
     $pending = @($plan | Where-Object { "$_" -match '^\s*\[\s\]' })
-    if ($pending.Count -ne 1 -or "$($pending[0])" -notmatch 'core\.0083_alter_bookhistory_action_alter_bookreferral_status') {
-        throw "Expected only core.0083 pending; actual pending plan: $($pending -join ' | ')"
+    if ($pending.Count -ne 1 -or "$($pending[0])" -notmatch "core\.$MigrationName") {
+        throw "Expected only core.$MigrationName pending; actual pending plan: $($pending -join ' | ')"
     }
     Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'check') 'Django system check'
-    Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'migrate', 'core', '0083_alter_bookhistory_action_alter_bookreferral_status', '--noinput') 'apply migration 0083 only'
+    Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'migrate', 'core', $MigrationName, '--noinput') "apply $MigrationName only"
     $script:MigrationApplied = $true
     $remaining = @(Invoke-Native $Vpy @((Join-Path $App 'manage.py'), 'showmigrations', '--plan') | Where-Object { "$_" -match '^\s*\[\s\]' })
-    if ($LASTEXITCODE -ne 0 -or $remaining.Count -ne 0) { throw 'Migrations remain pending after 0083.' }
+    if ($LASTEXITCODE -ne 0 -or $remaining.Count -ne 0) { throw "Migrations remain pending after $MigrationName." }
     Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'collectstatic', '--noinput') 'collect production static files'
 
     Start-Service -Name $ServiceName
@@ -262,7 +260,7 @@ raise SystemExit(subprocess.run(command, env=environment, check=False).returncod
     $deadline = (Get-Date).AddSeconds(90)
     do {
         if (Test-ServiceHealth) {
-            Write-ReleaseLog "RELEASE SUCCESS revision=$(git rev-parse --short HEAD) db=$dbFacts migration=0083 freshBackup=$freshBackup"
+            Write-ReleaseLog "RELEASE SUCCESS revision=$(git rev-parse --short HEAD) db=$dbFacts migration=$MigrationName freshBackup=$freshBackup"
             exit 0
         }
         Start-Sleep -Seconds 3

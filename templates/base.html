@@ -65,7 +65,8 @@
     <header class="app-topbar">
       <div class="app-topbar-brand">
         <button type="button" class="app-topbar-menu d-xl-none" data-bs-toggle="offcanvas" data-bs-target="#appNav" aria-controls="appNav" aria-haspopup="dialog"><i class="bi bi-list" aria-hidden="true"></i><span>القائمة</span></button>
-        <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'dashboard' %}">
+        <a class="navbar-brand d-flex align-items-center gap-2"
+           href="{% if nav.password_change_required %}{% url 'password_change' %}{% else %}{% url 'dashboard' %}{% endif %}">
           <img src="{% static 'img/md-o-c-logo.png' %}" alt="الشركة" style="height: 40px; width: auto;">
           <span class="brand-text">{{ system_settings.app_name|default:'نظام الكتب' }}</span>
         </a>
@@ -73,6 +74,7 @@
       </div>
       <div class="app-topbar-actions">
         {% if request.user.is_authenticated %}
+        {% if not nav.password_change_required %}
         <a class="app-topbar-alert" href="{% url 'notifications' %}">
           <i class="bi bi-bell"></i>
           <span class="app-topbar-label">التنبيهات</span>
@@ -80,6 +82,7 @@
           <span class="app-topbar-alert-badge">{{ navbar_unread_notifications }}</span>
           {% endif %}
         </a>
+        {% endif %}
         <a class="app-topbar-user" href="{% url 'password_change' %}" title="تغيير كلمة المرور" style="text-decoration:none;color:inherit">
           <i class="bi bi-person-circle"></i>
           <span>{{ request.user.get_full_name|default:request.user.username }}</span>
@@ -103,6 +106,12 @@
             <button type="button" class="btn-close d-xl-none ms-auto" data-bs-dismiss="offcanvas" data-bs-target="#appNav" aria-label="إغلاق القائمة"></button>
           </div>
           <nav class="app-sidebar-nav" aria-label="التنقل الرئيسي">
+            {% if nav.password_change_required %}
+            <a class="app-sidebar-link active" href="{% url 'password_change' %}" aria-current="page">
+              <i class="bi bi-key-fill" aria-hidden="true"></i>
+              <span>تغيير كلمة المرور</span>
+            </a>
+            {% else %}
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" href="{% url 'dashboard' %}" title="لوحة التحكم">
               <i class="bi bi-grid-1x2-fill"></i>
               <span>لوحة التحكم</span>
@@ -169,7 +178,7 @@
               <i class="bi bi-buildings"></i>
               <span>الجهات</span>
             </a>
-            {# الحساباتُ لمدير النظام وحدَه (can_manage_accounts) — بوّابةُ لوحة الإدارة نفسُها #}
+            {# الحسابات العامة لمدير النظام وحده؛ إدارة القسم لها رابط مستقل أدناه. #}
             {% if nav.roles %}
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'user_roles' %} active{% endif %}" href="{% url 'user_roles' %}" title="المستخدمون">
               <i class="bi bi-person-gear"></i>
@@ -185,6 +194,13 @@
               <span>الإعدادات</span>
             </a>
             {% endif %}
+            {% if nav.department_admin %}
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'admin_panel' %} active{% endif %}" href="{% url 'admin_panel' %}" title="إدارة القسم">
+              <i class="bi bi-diagram-3-fill"></i>
+              <span>{% if request.user.is_superuser %}إدارة النظام{% else %}إدارة القسم{% endif %}</span>
+            </a>
+            {% endif %}
+            {% endif %}
           </nav>
         </div>
 
@@ -192,9 +208,11 @@
 
         {% if request.user.is_authenticated %}
         <div class="app-sidebar-panel app-sidebar-panel-footer">
+          {% if not nav.password_change_required %}
           <a class="app-sidebar-link" href="{% url 'device_setup' %}">
             <i class="bi bi-pc-display" aria-hidden="true"></i><span>تجهيز هذا الجهاز</span>
           </a>
+          {% endif %}
           <form method="post" action="{% url 'logout' %}">
             {% csrf_token %}
             <button type="submit" class="app-sidebar-logout">

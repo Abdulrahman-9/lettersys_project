@@ -17,7 +17,9 @@
 **`is_staff` لا تُوسّع الرؤية.** كانت تمنح حاملها رؤيةَ كلّ الكتب ضمناً،
 وإبقاؤها مع نطاق القسم يقوّضه من يومه الأوّل. صارت صفةً إداريّةً لواجهات
 الإدارة فحسب — وهي ما يحرسه ``staff_required``. **والهويّةُ والسلطة** (الحساباتُ
-وإسنادُ الأقسام والأدوار والعناقيد) لمدير النظام وحدَه: ``can_manage_accounts``.
+وإسنادُ الأدوار الحسّاسة والعناقيد والإدارة العابرة للأقسام) لمدير النظام
+وحدَه: ``can_manage_accounts``. إدارةُ الموظفين التشغيليّة والشُّعب محصورةٌ
+بشجرة رئيس القسم عبر ``can_manage_departments`` و``can_manage_department``.
 """
 
 from django.db.models import Q
@@ -193,7 +195,9 @@ def can_manage_accounts(user) -> bool:
     في صفحة الجهات — بوّابةٌ واحدةٌ لثلاثتها. كانت صفحةُ الحسابات على ``is_staff``
     ولوحةُ الإدارة على ``is_superuser``: فالموظّفُ الإداريّ يُنشئ حساباً ثمّ يلقى
     403 عند إسناد قسمه، وورشةُ العناقيد تُفتح له وكلُّ حفظٍ فيها يُرفض.
-    و``is_staff`` تبقى لإدارة البيانات وحدَها (``can_manage_system``)."""
+    وإدارةُ رئيس القسم لمستخدمي شجرته لا توسّع هذه البوّابة؛ لها
+    ``can_manage_departments``. و``is_staff`` تبقى لإدارة البيانات وحدَها
+    (``can_manage_system``)."""
     return is_privileged(user)
 
 
@@ -502,6 +506,35 @@ def subtree_ids(department_id):
                     if pid in frontier and cid not in found}
         found |= frontier
     return sorted(found)
+
+
+def managed_department_ids(user):
+    """الأقسامُ التي يديرها المستخدم — مديرُ النظام يرى الكلَّ والرئيسُ شجرته."""
+    from core.models import Department
+
+    if can_manage_accounts(user):
+        return list(Department.objects.values_list('pk', flat=True))
+    if is_department_head(user):
+        return subtree_ids(user_department_id(user))
+    return []
+
+
+def can_manage_departments(user) -> bool:
+    """أيحقّ له فتحَ إدارة الأقسام؟ مديرُ النظام أو رئيسُ قسمٍ مسند."""
+    return can_manage_accounts(user) or bool(
+        is_department_head(user) and user_department_id(user))
+
+
+def can_manage_department(user, department) -> bool:
+    """أيحقّ له إدارةُ عقدةٍ بعينها؟ ولا تُوسّع هذه القاعدة إدارةَ الحسابات العامة."""
+    department_id = getattr(department, 'pk', department)
+    if can_manage_accounts(user):
+        return True
+    return bool(
+        is_department_head(user)
+        and department_id is not None
+        and department_id in subtree_ids(user_department_id(user))
+    )
 
 
 def _referred_to(department_id):

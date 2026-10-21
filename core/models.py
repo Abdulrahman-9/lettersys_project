@@ -150,6 +150,7 @@ class UserProfile(models.Model):
     job_title  = models.CharField("المسمّى الوظيفي", max_length=120, blank=True, default="")
     # رئيس القسم يرى سرّيّات قسمه — انظر ``core.scoping``.
     is_department_head = models.BooleanField("رئيس القسم", default=False)
+    must_change_password = models.BooleanField("تغيير كلمة المرور عند الدخول", default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

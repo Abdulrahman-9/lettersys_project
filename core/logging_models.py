@@ -49,6 +49,7 @@ class UserActivityLog(models.Model):
         ('CREATE_DEPARTMENT', 'إنشاء قسم'),
         ('EDIT_DEPARTMENT', 'تعديل قسم'),
         ('ASSIGN_USER', 'إسناد موظّف/دور'),
+        ('CREATE_USER', 'إنشاء حساب محلي'),
         ('CREATE_GROUP', 'إنشاء عنقود'),
         ('EDIT_GROUP', 'تعديل عنقود'),
         # ── حسابات ──

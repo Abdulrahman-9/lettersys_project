@@ -3,7 +3,7 @@
 {% block title %}لوحة التحكم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20260929b">
+<link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20261021a">
 {% endblock %}
 
 {% block content %}
@@ -54,6 +54,76 @@
       </div>
     </div>
   </section>
+
+  {% if command_center %}
+  <section class="db-card db-command" aria-labelledby="db-command-heading">
+    <div class="db-card-hd">
+      <div>
+        <h2 id="db-command-heading">مركز القيادة</h2>
+        <p class="db-command-scope">نظرة مباشرة ضمن النطاق المصرّح: {{ command_center.scope_label }}</p>
+      </div>
+      <a class="db-link" href="{% url 'admin_panel' %}">
+        <i class="bi bi-diagram-3" aria-hidden="true"></i>إدارة الهيكل والحسابات
+      </a>
+    </div>
+    <div class="db-command-grid">
+      <section aria-labelledby="db-departments-heading">
+        <div class="db-row-hd">
+          <h2 id="db-departments-heading">نبض الأقسام والوحدات</h2>
+        </div>
+        {% if command_center.department_total > 8 %}
+        <p class="db-command-scope">أبرز 8 من {{ command_center.department_total }} قسمًا ووحدةً؛ افتح الإدارة لعرض الهيكل كاملاً.</p>
+        {% endif %}
+        {% if command_center.departments %}
+        <ul class="db-command-list">
+          {% for department in command_center.departments %}
+          <li class="db-command-department">
+            <div class="db-command-department-heading">
+              <strong>{{ department.name }}</strong>
+              <span class="db-command-code">{{ department.code }}</span>
+            </div>
+            <div class="db-command-meta">
+              <span>{{ department.active_member_count }} / {{ department.member_count }} مستخدم نشط</span>
+              <span>{{ department.book_count }} كتاب</span>
+              {% if department.overdue_count %}
+              <span class="db-command-overdue">{{ department.overdue_count }} متأخر</span>
+              {% endif %}
+            </div>
+            <div class="db-command-track" role="progressbar"
+                 aria-label="حجم الكتب في {{ department.name }}"
+                 aria-valuemin="0" aria-valuemax="100"
+                 aria-valuenow="{{ department.load_percent }}">
+              <span style="width:{{ department.load_percent }}%"></span>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="db-command-empty">لا توجد أقسام أو وحدات ضمن هذا النطاق بعد.</p>
+        {% endif %}
+      </section>
+      <section aria-labelledby="db-activity-heading">
+        <div class="db-row-hd">
+          <h2 id="db-activity-heading">آخر الحركات</h2>
+          <a class="db-link" href="{% url 'audit_log' %}">سجل التدقيق</a>
+        </div>
+        {% if command_center.recent_activity %}
+        <ul class="db-command-list db-command-activity">
+          {% for activity in command_center.recent_activity %}
+          <li>
+            <strong>{{ activity.get_action_display }}</strong>
+            <span>{{ activity.username_snapshot|default:activity.user.username|default:"مستخدم محذوف" }}</span>
+            <time datetime="{{ activity.timestamp|date:'c' }}">{{ activity.timestamp|date:"j F · H:i" }}</time>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="db-command-empty">لا توجد حركات حديثة ضمن هذا النطاق.</p>
+        {% endif %}
+      </section>
+    </div>
+  </section>
+  {% endif %}
 
   {% comment %}
     أقسامُ الدور تلي الملخّص: ما يراه المستخدمُ حاصلُ صلاحيّاته لا قائمةٌ مكتوبةٌ هنا،
