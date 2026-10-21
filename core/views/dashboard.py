@@ -88,6 +88,7 @@ def dashboard(request):
     profile = getattr(request.user, 'profile', None)
     sections = sections_for(request.user)
     command_center = _command_center(request.user, books, today)
+    insights = _dashboard_insights(request.user, books, today, stats)
 
     ctx = {
         "sections":         sections,
@@ -109,8 +110,102 @@ def dashboard(request):
         "outgoing_pending": stats['outgoing_active'],
         "outgoing_done":    stats['outgoing_archived'],
         "command_center":   command_center,
+        "insights":         insights,
     }
     return render(request, "core/dashboard.html", ctx)
+
+
+_WEEKDAYS_AR = ('الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد')
+_FLOW_STAGES = (
+    ('pending', 'bi-hourglass-split'),
+    ('due_today', 'bi-calendar-event'),
+    ('overdue', 'bi-alarm'),
+    ('archived', 'bi-check2-circle'),
+)
+
+
+def _dashboard_insights(user, books, today, stats):
+    """أسبوعُ النشاط ومراحلُ المتابعة والإجراءُ التالي — من النطاق نفسِه الذي يعدّ البلاطات.
+
+    المراحلُ الأربع هي حالاتُ ``followup_q`` الحصريّة، فمجموعُها = الإجمالي وكلُّ
+    مرحلةٍ رابطٌ يفتح العددَ نفسَه. والإجراءُ التالي أقدمُ المتأخّرات، يُعرض **كما
+    يحقّ لقارئه** (``restricted_flag_sql``): السرّيُّ برقمه وموعده لا بعنوانه.
+    """
+    from .. import numbering
+
+    week_start = today - timedelta(days=6)
+    per_day = {
+        row['date']: row for row in
+        books.filter(date__range=(week_start, today)).order_by().values('date').annotate(
+            incoming=Count('pk', filter=Q(kind__startswith='incoming')),
+            outgoing=Count('pk', filter=Q(kind__startswith='outgoing')),
+        )
+    }
+    days = []
+    for offset in range(7):
+        day = week_start + timedelta(days=offset)
+        row = per_day.get(day, {})
+        days.append({
+            'date': day,
+            'label': _WEEKDAYS_AR[day.weekday()],
+            'incoming': row.get('incoming', 0),
+            'outgoing': row.get('outgoing', 0),
+            'is_today': day == today,
+        })
+    peak = max((d['incoming'] + d['outgoing'] for d in days), default=0)
+    for d in days:
+        d['incoming_pct'] = round(d['incoming'] * 100 / peak) if peak else 0
+        d['outgoing_pct'] = round(d['outgoing'] * 100 / peak) if peak else 0
+
+    stage_counts = books.aggregate(**{
+        key: Count('pk', filter=followup_q(key, today)) for key, _ in _FLOW_STAGES
+    })
+    stages = [{
+        'key': key,
+        'icon': icon,
+        'label': FOLLOWUP_LABELS[key],
+        'count': stage_counts[key],
+        'percent': _pct(stage_counts[key], stats['total']),
+    } for key, icon in _FLOW_STAGES]
+    hot = stage_counts['overdue'] and 'overdue' or (stage_counts['due_today'] and 'due_today') or ''
+
+    overdue_books = list(
+        books.filter(followup_q('overdue', today))
+        .select_related('department')
+        .annotate(restricted=restricted_flag_sql(user))
+        .order_by('due_date', 'pk')[:5]
+    )
+    next_actions = []
+    for book in overdue_books:
+        history = [{
+            'label': entry.get_action_display(),
+            'actor': entry.actor_name,
+            'at': entry.created_at,
+        } for entry in book.history.order_by('-created_at')[:4]]
+        next_actions.append({
+            'pk': book.pk,
+            'number': numbering.display(book.our_number),
+            'year': numbering.year_tag(book.our_number),
+            'title': STUB_TITLE if book.restricted else (book.title or 'بلا عنوان'),
+            'is_restricted': book.restricted,
+            'kind': get_kind_label(book.kind),
+            'department': book.department.name if book.department_id else '',
+            'due_date': book.due_date,
+            'days_late': (today - book.due_date).days,
+            'history': history,
+        })
+
+    return {
+        'days': days,
+        'week_total': sum(d['incoming'] + d['outgoing'] for d in days),
+        'stages': stages,
+        'hot_stage': hot,
+        'done_percent': _pct(stage_counts['archived'], stats['total']),
+        'next_actions': next_actions,
+        'spark_incoming': ','.join(str(d['incoming']) for d in days),
+        'spark_outgoing': ','.join(str(d['outgoing']) for d in days),
+        'spark_total': ','.join(str(d['incoming'] + d['outgoing']) for d in days),
+    }
 
 
 def _command_center(user, books, today):

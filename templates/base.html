@@ -199,6 +199,22 @@
               <i class="bi bi-diagram-3-fill"></i>
               <span>{% if request.user.is_superuser %}إدارة النظام{% else %}إدارة القسم{% endif %}</span>
             </a>
+            {% if request.resolver_match.url_name == 'admin_panel' %}
+            {% with admin_tab=request.GET.tab|default:'overview' %}
+            <div class="app-sidebar-sub" role="group" aria-label="أقسام الإدارة">
+              <a class="app-sidebar-sublink{% if admin_tab == 'overview' %} active{% endif %}" href="{% url 'admin_panel' %}?tab=overview"><i class="bi bi-speedometer2" aria-hidden="true"></i><span>نظرة عامة</span></a>
+              <a class="app-sidebar-sublink{% if admin_tab == 'departments' %} active{% endif %}" href="{% url 'admin_panel' %}?tab=departments"><i class="bi bi-diagram-2" aria-hidden="true"></i><span>الأقسام والهيكل</span></a>
+              <a class="app-sidebar-sublink{% if admin_tab == 'users' %} active{% endif %}" href="{% url 'admin_panel' %}?tab=users"><i class="bi bi-people" aria-hidden="true"></i><span>الحسابات والأدوار</span></a>
+              {% if nav.roles %}
+              <a class="app-sidebar-sublink{% if admin_tab == 'groups' %} active{% endif %}" href="{% url 'admin_panel' %}?tab=groups"><i class="bi bi-collection" aria-hidden="true"></i><span>العناقيد</span></a>
+              <a class="app-sidebar-sublink{% if admin_tab == 'reservations' %} active{% endif %}" href="{% url 'admin_panel' %}?tab=reservations"><i class="bi bi-list-ol" aria-hidden="true"></i><span>حجوزات الأرقام</span></a>
+              {% endif %}
+              {% if nav.audit %}
+              <a class="app-sidebar-sublink" href="{% url 'audit_log' %}"><i class="bi bi-clock-history" aria-hidden="true"></i><span>سجل الحركات</span></a>
+              {% endif %}
+            </div>
+            {% endwith %}
+            {% endif %}
             {% endif %}
             {% endif %}
           </nav>

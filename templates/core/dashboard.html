@@ -4,15 +4,33 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20261021a">
+<link rel="stylesheet" href="{% static 'css/dashboard_command.css' %}?v=20261021b">
 {% endblock %}
 
 {% block content %}
 <div class="db-page">
-  <header class="db-top">
-    <h1>مرحباً، {{ request.user.get_full_name|default:request.user.username }}</h1>
-    <span class="db-role"><i class="bi bi-person-badge" aria-hidden="true"></i>{{ role_label }}</span>
-    {% if my_department %}<span class="db-dept"><i class="bi bi-diagram-3" aria-hidden="true"></i>{{ my_department.name }}</span>{% endif %}
-  </header>
+  <section class="db-hero" aria-label="ترحيب وملخّص الإنجاز">
+    <canvas class="db-hero-fx" aria-hidden="true"></canvas>
+    <div class="db-hero-copy">
+      <header class="db-top">
+        <h1>مرحباً، {{ request.user.get_full_name|default:request.user.username }}</h1>
+        <span class="db-role"><i class="bi bi-person-badge" aria-hidden="true"></i>{{ role_label }}</span>
+        {% if my_department %}<span class="db-dept"><i class="bi bi-diagram-3" aria-hidden="true"></i>{{ my_department.name }}</span>{% endif %}
+      </header>
+      <p class="db-hero-line">
+        <time datetime="{{ today|date:'Y-m-d' }}">{{ today|date:"l j F Y" }}</time> ·
+        {% if overdue %}<a href="{% url 'book_unified' %}?tab=all&followup=overdue">{{ overdue }} كتاب متأخّر يحتاج متابعتك</a>{% else %}لا كتب متأخّرة — كل شيء في موعده{% endif %}
+        · هذا الأسبوع {{ insights.week_total }} كتاب
+      </p>
+    </div>
+    <div class="db-ring" role="img" aria-label="نسبة المنجز {{ insights.done_percent }}٪ من الكتب">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="db-ring-bg" cx="60" cy="60" r="52" pathLength="100"></circle>
+        <circle class="db-ring-fg" cx="60" cy="60" r="52" pathLength="100" style="--p:{{ insights.done_percent }}"></circle>
+      </svg>
+      <span class="db-ring-label"><strong>{{ insights.done_percent }}٪</strong><small>مُنجَز</small></span>
+    </div>
+  </section>
 
   {# شريطُ الأدوات: بحثٌ سريع + الفعلان الأساسيّان (q1‑ب) #}
   <div class="db-bar">
@@ -27,6 +45,9 @@
     <a href="{% url 'book_unified' %}" class="btn-brand-ghost">
       <i class="bi bi-list-ul" aria-hidden="true"></i> قائمة الكتب
     </a>
+    <button type="button" class="db-kbd-btn" data-palette-open aria-haspopup="dialog" aria-controls="db-palette">
+      <i class="bi bi-command" aria-hidden="true"></i> أوامر سريعة <kbd>Ctrl K</kbd>
+    </button>
   </div>
 
   {# الملخّص أوّلاً (مرحلة نيلسن): البلاطةُ كلُّها رابط، والروابطُ الفرعيّة في سطرها الثاني #}
@@ -43,17 +64,22 @@
       <div class="db-tile db-tile--lg db-tone-in">
         <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=incoming"><span class="db-l">الكتب الواردة</span><span class="db-n"{% if incoming_total %} data-has="1"{% endif %}>{{ incoming_total }}</span></a>
         <p class="db-sub"><a href="{% url 'book_unified' %}?tab=incoming&followup=active">{{ active_label }}: <strong>{{ incoming_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=incoming&followup=archived">مُنجَز / بلا متابعة: <strong>{{ incoming_done }}</strong></a></p>
+        <svg class="db-spark" data-spark="{{ insights.spark_incoming }}" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
       </div>
       <div class="db-tile db-tile--lg db-tone-accent">
         <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=outgoing"><span class="db-l">الكتب الصادرة</span><span class="db-n"{% if outgoing_total %} data-has="1"{% endif %}>{{ outgoing_total }}</span></a>
         <p class="db-sub"><a href="{% url 'book_unified' %}?tab=outgoing&followup=active">{{ active_label }}: <strong>{{ outgoing_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=outgoing&followup=archived">مُنجَز / بلا متابعة: <strong>{{ outgoing_done }}</strong></a></p>
+        <svg class="db-spark" data-spark="{{ insights.spark_outgoing }}" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
       </div>
       <div class="db-tile db-tile--lg db-tone-accent">
         <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=all"><span class="db-l">إجمالي الكتب</span><span class="db-n"{% if total %} data-has="1"{% endif %}>{{ total }}</span></a>
         <p class="db-sub"><a href="{% url 'book_unified' %}?tab=all&date_from={{ today|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}">اليوم: <strong>{{ today_count }}</strong></a> · <a href="{% url 'book_unified' %}?tab=all&date_from={{ week_ago|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}">الأسبوع: <strong>{{ week_count }}</strong></a></p>
-      </div>
-    </div>
-  </section>
+                <svg class="db-spark" data-spark="{{ insights.spark_total }}" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
+              </div>
+            </div>
+          </section>
+
+          {% include "core/_dashboard_insights.html" %}
 
   {% if command_center %}
   <section class="db-card db-command" aria-labelledby="db-command-heading">
@@ -131,4 +157,32 @@
   {% endcomment %}
   {% include "core/_dashboard_sections.html" %}
 </div>
+
+<dialog class="db-palette" id="db-palette" aria-label="أوامر سريعة">
+  <form method="get" action="{% url 'book_unified' %}" class="db-palette-search" role="search">
+    <input type="hidden" name="tab" value="all">
+    <i class="bi bi-search" aria-hidden="true"></i>
+    <input type="search" name="q" data-palette-q placeholder="اكتب أمراً أو ابحث في الكتب…" aria-label="أمر أو بحث" autocomplete="off" enterkeyhint="go">
+    <kbd>Esc</kbd>
+  </form>
+  <ul class="db-palette-list" role="listbox" aria-label="الأوامر">
+    <li role="option"><a href="{% url 'extraction-smart-desktop' %}"><i class="bi bi-plus-circle" aria-hidden="true"></i>إدخال كتاب جديد</a></li>
+    <li role="option"><a href="{% url 'book_unified' %}?tab=all&followup=overdue"><i class="bi bi-alarm" aria-hidden="true"></i>الكتب المتأخرة</a></li>
+    <li role="option"><a href="{% url 'book_unified' %}?tab=all&followup=due_today"><i class="bi bi-calendar-event" aria-hidden="true"></i>المستحق اليوم</a></li>
+    <li role="option"><a href="{% url 'book_unified' %}?tab=incoming"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>الكتب الواردة</a></li>
+    <li role="option"><a href="{% url 'book_unified' %}?tab=outgoing"><i class="bi bi-box-arrow-up" aria-hidden="true"></i>الكتب الصادرة</a></li>
+    <li role="option"><a href="{% url 'book_unified' %}"><i class="bi bi-list-ul" aria-hidden="true"></i>قائمة الكتب</a></li>
+    {% if nav.reports %}<li role="option"><a href="{% url 'reports' %}"><i class="bi bi-graph-up" aria-hidden="true"></i>التقارير</a></li>{% endif %}
+    {% if nav.audit %}<li role="option"><a href="{% url 'audit_log' %}"><i class="bi bi-clock-history" aria-hidden="true"></i>سجل الحركات</a></li>{% endif %}
+    {% if nav.department_admin %}
+    <li role="option"><a href="{% url 'admin_panel' %}"><i class="bi bi-diagram-3" aria-hidden="true"></i>الإدارة — نظرة عامة</a></li>
+    <li role="option"><a href="{% url 'admin_panel' %}?tab=users"><i class="bi bi-people" aria-hidden="true"></i>الإدارة — الحسابات والأدوار</a></li>
+    {% endif %}
+  </ul>
+  <p class="db-palette-hint">↑↓ للتنقل · Enter للفتح · أو اكتب رقماً أو عنواناً واضغط Enter للبحث</p>
+</dialog>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/dashboard_fx.js' %}?v=20261021b" defer></script>
 {% endblock %}

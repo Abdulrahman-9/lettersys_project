@@ -389,3 +389,73 @@ class DashboardOverviewTests(TestCase):
             self.assertNotIn(gone, content)
         self.assertIn('followup=archived', content)
         self.assertIn('date_from=', content)
+
+
+class DashboardInsightsTests(TestCase):
+    """رؤى اللوحة الجديدة: من نطاق القارئ نفسِه، والسرّيُّ برقمه لا بعنوانه."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        cls.dept = Department.objects.create(name='قسم الرؤى', code='INS-A')
+        cls.other = Department.objects.create(name='قسم غريب', code='INS-B')
+        cls.clerk = User.objects.create_user('ins-clerk', password='pw-ins-1111')
+        UserProfile.objects.update_or_create(user=cls.clerk, defaults={'department': cls.dept})
+        cls.author = User.objects.create_user('ins-author', password='pw-ins-2222')
+        UserProfile.objects.update_or_create(user=cls.author, defaults={'department': cls.dept})
+        stranger = User.objects.create_user('ins-stranger', password='pw-ins-3333')
+        UserProfile.objects.update_or_create(user=stranger, defaults={'department': cls.other})
+        late = timezone.localdate() - timedelta(days=4)
+        cls.plain = Book.objects.create(
+            kind='incoming_external', title='كتاب متأخر علني', created_by=cls.clerk,
+            department=cls.dept, our_number='8801', due_date=late)
+        cls.secret = Book.objects.create(
+            kind='incoming_external', title='عنوان سري لا يظهر', created_by=cls.author,
+            department=cls.dept, our_number='8802', due_date=late, secret_level='secret')
+        Book.objects.create(
+            kind='incoming_external', title='متأخر قسم غريب', created_by=stranger,
+            department=cls.other, our_number='8803', due_date=late)
+        # save() يؤرشف ما استحقاقُه ماضٍ عند الإنشاء — المتأخّرُ الحيُّ يُصنع بـ update
+        Book.objects.filter(our_number__in=('8801', '8802', '8803')).update(is_archived=False)
+
+    def setUp(self):
+        self.client.force_login(self.clerk)
+
+    def test_next_action_is_scoped_and_masks_the_secret(self):
+        from core.scoping import STUB_TITLE
+
+        dash = self.client.get(reverse('dashboard'))
+        actions = dash.context['insights']['next_actions']
+        titles = {a['title'] for a in actions}
+
+        self.assertIn('كتاب متأخر علني', titles)
+        self.assertNotIn('متأخر قسم غريب', titles)
+        self.assertNotContains(dash, 'متأخر قسم غريب')
+        self.assertNotContains(dash, 'عنوان سري لا يظهر')
+        self.assertIn(STUB_TITLE, titles)
+        self.assertTrue(any(a['is_restricted'] and a['number'] == '8802' for a in actions))
+        self.assertContains(dash, reverse('book_detail', args=[self.plain.pk]))
+
+    def test_stages_partition_the_total_and_link_to_their_lists(self):
+        dash = self.client.get(reverse('dashboard'))
+        stages = dash.context['insights']['stages']
+
+        self.assertEqual(sum(s['count'] for s in stages), dash.context['total'])
+        self.assertEqual([s['key'] for s in stages],
+                         ['pending', 'due_today', 'overdue', 'archived'])
+        self.assertEqual(dash.context['insights']['hot_stage'], 'overdue')
+        for s in stages:
+            self.assertContains(dash, '?tab=all&followup=%s"' % s['key'])
+
+    def test_week_and_palette_render(self):
+        dash = self.client.get(reverse('dashboard'))
+        days = dash.context['insights']['days']
+
+        self.assertEqual(len(days), 7)
+        self.assertTrue(days[-1]['is_today'])
+        self.assertContains(dash, 'id="db-palette"')
+        self.assertContains(dash, 'data-spark=')
+        self.assertNotContains(dash, 'الإدارة — نظرة عامة')
+

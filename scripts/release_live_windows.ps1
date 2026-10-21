@@ -7,7 +7,7 @@ param(
     [string]$ReleaseCommit
 )
 
-# RELEASE-SCRIPT-VERSION=20261021-1
+# RELEASE-SCRIPT-VERSION=20261021-2 (UI-only: no migrations)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -16,10 +16,10 @@ $Root = 'D:\lettersys'
 $Vpy = Join-Path $Root 'venv\Scripts\python.exe'
 $ServiceName = 'LetterSys'
 $Port = 1312
-$ExpectedOldHead = 'c14552d49343364e013d7499aaedcdd8264a03d4'
-$RequiredReleaseBase = 'c14552d49343364e013d7499aaedcdd8264a03d4'
-$MigrationName = '0087_userprofile_must_change_password_and_more'
-$RollbackMigration = '0086_merge_outgoing_reservation'
+$ExpectedOldHead = '22a81bdfbbbb80cc4e09b18a3a8daa43016a8cb3'
+$RequiredReleaseBase = '22a81bdfbbbb80cc4e09b18a3a8daa43016a8cb3'
+$MigrationName = $null
+$RollbackMigration = $null
 $LogPath = Join-Path 'D:\migration\logs' ("release_live_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
 $script:CodeUpdated = $false
 $script:MigrationApplied = $false
@@ -178,23 +178,18 @@ try {
     }
     $changedFiles = @(git diff --name-only $script:OldHead $target)
     $allowed = @(
-        'core/admin_service.py', 'core/auth_views.py', 'core/context_processors.py',
-        'core/logging_models.py', 'core/middleware/force_password_change.py',
-        'core/migrations/0087_userprofile_must_change_password_and_more.py',
-        'core/models.py', 'core/scoping.py', 'core/tests_admin_panel.py',
-        'core/tests_dashboard_roles.py', 'core/tests_template_role_gates.py',
-        'core/views/admin_panel.py', 'core/views/dashboard.py',
-        'core/ws_security.py', 'lettersys/asgi.py', 'lettersys/settings.py',
-        'docs/WINDOWS_LAN_DEPLOYMENT.md',
-        'static/css/dashboard_roles.css', 'static/service-worker.js',
+        'core/views/admin_panel.py', 'core/views/dashboard.py', 'core/tests_dashboard_roles.py',
+        'static/css/admin_command.css', 'static/css/dashboard_command.css',
+        'static/js/admin_command.js', 'static/js/dashboard_fx.js', 'static/service-worker.js',
         'templates/base.html', 'templates/core/admin_panel.html', 'templates/core/dashboard.html',
+        'templates/core/_admin_org_node.html', 'templates/core/_admin_overview.html',
+        'templates/core/_dashboard_insights.html',
         'scripts/release_live_windows.ps1'
     )
     $unexpected = @($changedFiles | Where-Object { $_ -notin $allowed })
     if ($unexpected.Count) { throw "Unexpected release files: $($unexpected -join ', ')" }
-    Invoke-Native 'git.exe' @('cat-file', '-e', "$target`:core/migrations/$MigrationName.py") | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Release migration $MigrationName is missing from the target."
+    if (@($changedFiles | Where-Object { $_ -like 'core/migrations/*' }).Count) {
+        throw 'This UI-only release must not contain migrations.'
     }
     Write-ReleaseLog "PRECHECK PASS user=$($identity.Name) freeMB=$freeMB db=$dbFacts old=$script:OldHead target=$target"
     Write-ReleaseLog "FILES $($changedFiles -join ',')"
@@ -244,14 +239,10 @@ raise SystemExit(subprocess.run(command, env=environment, check=False).returncod
     $plan = Invoke-Native $Vpy @((Join-Path $App 'manage.py'), 'showmigrations', '--plan')
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect post-update migration plan.' }
     $pending = @($plan | Where-Object { "$_" -match '^\s*\[\s\]' })
-    if ($pending.Count -ne 1 -or "$($pending[0])" -notmatch "core\.$MigrationName") {
-        throw "Expected only core.$MigrationName pending; actual pending plan: $($pending -join ' | ')"
+    if ($pending.Count -ne 0) {
+        throw "UI-only release expects no pending migrations; actual pending plan: $($pending -join ' | ')"
     }
     Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'check') 'Django system check'
-    Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'migrate', 'core', $MigrationName, '--noinput') "apply $MigrationName only"
-    $script:MigrationApplied = $true
-    $remaining = @(Invoke-Native $Vpy @((Join-Path $App 'manage.py'), 'showmigrations', '--plan') | Where-Object { "$_" -match '^\s*\[\s\]' })
-    if ($LASTEXITCODE -ne 0 -or $remaining.Count -ne 0) { throw "Migrations remain pending after $MigrationName." }
     Invoke-Checked $Vpy @((Join-Path $App 'manage.py'), 'collectstatic', '--noinput') 'collect production static files'
 
     Start-Service -Name $ServiceName
@@ -260,7 +251,7 @@ raise SystemExit(subprocess.run(command, env=environment, check=False).returncod
     $deadline = (Get-Date).AddSeconds(90)
     do {
         if (Test-ServiceHealth) {
-            Write-ReleaseLog "RELEASE SUCCESS revision=$(git rev-parse --short HEAD) db=$dbFacts migration=$MigrationName freshBackup=$freshBackup"
+            Write-ReleaseLog "RELEASE SUCCESS revision=$(git rev-parse --short HEAD) db=$dbFacts migrations=none freshBackup=$freshBackup"
             exit 0
         }
         Start-Sleep -Seconds 3

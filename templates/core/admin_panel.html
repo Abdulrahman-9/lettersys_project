@@ -5,8 +5,12 @@
 
 {% block title %}{% if is_superadmin %}إدارة النظام{% else %}إدارة القسم{% endif %}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/admin_command.css' %}?v=20261021c">
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-3">
+<div class="container-fluid py-3 adm-page">
 
   <h5 class="fw-bold mb-3">
     <i class="bi bi-diagram-3-fill text-primary me-2"></i>{% if is_superadmin %}إدارة النظام{% else %}إدارة القسم{% endif %}
@@ -22,7 +26,7 @@
     {% endfor %}
   {% endif %}
 
-  <section class="row row-cols-2 row-cols-lg-4 g-2 mb-3" aria-label="ملخص الإدارة">
+  <section class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-2 mb-3 adm-kpis" aria-label="ملخص الإدارة">
     <div class="col">
       <div class="card border-0 shadow-sm rounded-4 h-100">
         <div class="card-body py-3">
@@ -56,9 +60,31 @@
         </div>
       </div>
     </div>
+    <div class="col">
+      <a class="card border-0 shadow-sm rounded-4 h-100 text-reset text-decoration-none adm-kpi-link" href="?tab=users&amp;status=password">
+        <div class="card-body py-3">
+          <div class="small text-muted">بانتظار تغيير كلمة المرور</div>
+          <div class="fs-4 fw-bold{% if password_pending_count %} text-warning{% endif %}"
+               style="font-variant-numeric:tabular-nums">{{ password_pending_count }}</div>
+        </div>
+      </a>
+    </div>
+    <div class="col">
+      <a class="card border-0 shadow-sm rounded-4 h-100 text-reset text-decoration-none adm-kpi-link" href="?tab=users&amp;status=sensitive">
+        <div class="card-body py-3">
+          <div class="small text-muted">أدوار حسّاسة</div>
+          <div class="fs-4 fw-bold" style="font-variant-numeric:tabular-nums">{{ sensitive_role_count }}</div>
+        </div>
+      </a>
+    </div>
   </section>
 
   <ul class="nav nav-pills mb-3" style="font-size:.9rem">
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'overview' %}active{% endif %}" href="?tab=overview"{% if tab == 'overview' %} aria-current="page"{% endif %}>
+        <i class="bi bi-speedometer2 me-1" aria-hidden="true"></i>نظرة عامة
+      </a>
+    </li>
     <li class="nav-item">
       <a class="nav-link {% if tab == 'departments' %}active{% endif %}" href="?tab=departments">
         <i class="bi bi-diagram-2 me-1"></i>الأقسام
@@ -82,6 +108,10 @@
     </li>
     {% endif %}
   </ul>
+
+  {% if tab == 'overview' %}
+    {% include "core/_admin_overview.html" %}
+  {% endif %}
 
   {% if tab == 'reservations' %}
     <section aria-labelledby="reservation-report-heading">
@@ -238,10 +268,24 @@
       </div>
 
       <div class="col-lg-8">
+        <div class="adm-filter" data-filter-for="adm-dep-table" role="search">
+          <label class="visually-hidden" for="adm-dep-q">بحث في الأقسام</label>
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <input type="search" id="adm-dep-q" class="form-control form-control-sm" data-filter-q
+                 placeholder="ابحث باسم القسم أو رمزه…" autocomplete="off">
+          <label class="visually-hidden" for="adm-dep-status">الحالة</label>
+          <select id="adm-dep-status" class="form-select form-select-sm" data-filter-status>
+            <option value="">كل الحالات</option>
+            <option value="active">نشط</option>
+            <option value="inactive">معطّل</option>
+            <option value="noentity">بلا جهة</option>
+          </select>
+          <span class="adm-filter-count" data-filter-count aria-live="polite"></span>
+        </div>
         <div class="card border-0 shadow-sm rounded-4">
           <div class="card-body p-0">
             <div class="table-responsive">
-              <table class="table table-hover align-middle mb-0" style="font-size:.86rem">
+              <table class="table table-hover align-middle mb-0" id="adm-dep-table" style="font-size:.86rem">
                 <thead class="table-light">
                   <tr>
                     <th scope="col">القسم</th>
@@ -253,7 +297,10 @@
                 </thead>
                 <tbody>
                   {% for row in departments %}
-                    <tr {% if not row.department.is_active %}class="opacity-50"{% endif %}>
+                    <tr id="dep-row-{{ row.department.pk }}" data-filter-row
+                        data-search="{{ row.department.name }} {{ row.department.code }}"
+                        data-status="{% if row.department.is_active %}active{% else %}inactive{% endif %}{% if not row.department.entity_id %} noentity{% endif %}"
+                        {% if not row.department.is_active %}class="opacity-50"{% endif %}>
                       <td>
                         <span style="display:inline-block;width:{{ row.depth }}rem"></span>
                         {% if row.depth %}<span class="text-muted">↳</span>{% endif %}
@@ -318,6 +365,7 @@
                   {% empty %}
                     <tr><td colspan="5" class="text-center text-muted py-4">لا أقسام بعد.</td></tr>
                   {% endfor %}
+                  <tr data-filter-empty hidden><td colspan="5" class="text-center text-muted py-4">لا أقسام تطابق البحث.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -400,10 +448,26 @@
       </form>
     </div>
 
+    <div class="adm-filter" data-filter-for="adm-user-table" role="search">
+      <label class="visually-hidden" for="adm-user-q">بحث في الحسابات</label>
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input type="search" id="adm-user-q" class="form-control form-control-sm" data-filter-q
+             placeholder="ابحث بالاسم أو اسم المستخدم أو القسم…" autocomplete="off">
+      <label class="visually-hidden" for="adm-user-status">التصفية</label>
+      <select id="adm-user-status" class="form-select form-select-sm" data-filter-status>
+        <option value="">كل الحسابات</option>
+        <option value="active">نشط</option>
+        <option value="inactive">موقوف</option>
+        <option value="password">بانتظار تغيير كلمة المرور</option>
+        <option value="sensitive">أدوار حسّاسة</option>
+        <option value="entry">مدخل كتب</option>
+      </select>
+      <span class="adm-filter-count" data-filter-count aria-live="polite"></span>
+    </div>
     <div class="card border-0 shadow-sm rounded-4">
       <div class="card-body p-0">
         <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0" style="font-size:.86rem">
+          <table class="table table-hover align-middle mb-0" id="adm-user-table" style="font-size:.86rem">
             <thead class="table-light">
               <tr>
                 <th scope="col" style="width:12rem">الموظّف</th>
@@ -421,7 +485,10 @@
             </thead>
             <tbody>
               {% for row in people %}
-                <tr{% if not row.is_active %} class="table-secondary text-muted"{% endif %}>
+                <tr data-filter-row
+                    data-search="{{ row.user.get_full_name }} {{ row.user.username }} {{ row.department.name }} {{ row.department.code }} {{ row.job_title }}"
+                    data-status="{% if row.is_active %}active{% else %}inactive{% endif %}{% if row.must_change_password %} password{% endif %}{% if row.is_sensitive %} sensitive{% endif %}{% if row.is_entry %} entry{% endif %}"
+                    {% if not row.is_active %} class="table-secondary text-muted"{% endif %}>
                     <td>
                       <form method="post" id="assign-user-{{ row.user.pk }}">
                         {% csrf_token %}
@@ -527,6 +594,7 @@
                       <span class="d-block small mb-1">
                         {% if row.is_active %}<span class="badge text-bg-success">نشط</span>
                         {% else %}<span class="badge text-bg-secondary">موقوف</span>{% endif %}
+                        {% if row.must_change_password %}<span class="badge text-bg-warning" title="لم يغيّر كلمة المرور المؤقتة بعد">كلمة مؤقتة</span>{% endif %}
                       </span>
                       <form method="post" class="d-inline"
                             {% if row.is_active and not row.is_self %}data-confirm="تعطيل حساب «{{ row.user.username }}»؟ سيُمنع من تسجيل الدخول، ويمكن إعادة تفعيله لاحقاً."
@@ -551,6 +619,8 @@
                 <tr><td colspan="{% if is_superadmin %}9{% else %}6{% endif %}"
                         class="text-center text-muted py-4">لا يوجد مستخدمون في هذا النطاق بعد.</td></tr>
               {% endfor %}
+              <tr data-filter-empty hidden><td colspan="{% if is_superadmin %}9{% else %}6{% endif %}"
+                      class="text-center text-muted py-4">لا حسابات تطابق البحث.</td></tr>
             </tbody>
           </table>
         </div>
@@ -674,4 +744,8 @@
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/admin_command.js' %}?v=20261021b" defer></script>
 {% endblock %}

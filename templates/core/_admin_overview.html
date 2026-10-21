@@ -1,0 +1,128 @@
+{% comment %}
+  نظرةُ المدير العامّة — كلُّ رقمٍ هنا من نطاقه (``managed_department_ids``)، فرئيسُ القسم
+  يرى شجرتَه وحدها، ومديرُ النظام يرى المؤسّسة. العقدةُ تفتح درجاً تملؤه admin_command.js
+  من سماتها، فلا طلبَ إضافيّاً ولا بيانَ خارج ما في الصفحة أصلاً.
+{% endcomment %}
+<div class="adm-ov">
+  <section class="adm-card adm-org" aria-labelledby="adm-org-h">
+    <div class="adm-card-hd">
+      <div>
+        <h2 id="adm-org-h">الهيكل التنظيمي</h2>
+        <p class="adm-sub">قسم ← شعبة ← وحدة · انقر أي عقدة لعرض تفاصيلها{% if org_overdue_total %} · <span class="adm-dot" aria-hidden="true"></span> فيها كتب متأخّرة ({{ org_overdue_total }}){% endif %}</p>
+      </div>
+      <a class="adm-link" href="?tab=departments"><i class="bi bi-pencil-square" aria-hidden="true"></i>تعديل الهيكل</a>
+    </div>
+    {% if org_roots %}
+    {% if org_roots|length > 1 %}
+    <div class="adm-org-top">
+      <span class="adm-org-apex"><i class="bi bi-building" aria-hidden="true"></i>{{ scope_label }}</span>
+    </div>
+    {% endif %}
+    <ul class="adm-org-grid{% if org_roots|length == 1 %} is-single{% endif %}">
+      {% for node in org_roots %}
+      <li class="adm-org-branch{% if node.children %} has-kids{% endif %}">{% include "core/_admin_org_node.html" with node=node %}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="adm-empty">لا أقسام في هذا النطاق بعد. <a href="?tab=departments">أنشئ أول قسم</a>.</p>
+    {% endif %}
+  </section>
+
+  <div class="adm-ov-grid">
+    <section class="adm-card" aria-labelledby="adm-health-h">
+      <div class="adm-card-hd">
+        <div>
+          <h2 id="adm-health-h">صحة الأقسام</h2>
+          <p class="adm-sub">الأكثر تأخّراً ثم الأعلى حملاً</p>
+        </div>
+        <a class="adm-link" href="{% url 'reports' %}?bucket=overdue">تقرير المتأخرات</a>
+      </div>
+      {% if health_rows %}
+      <ul class="adm-health">
+        {% for row in health_rows %}
+        <li>
+          <div class="adm-health-hd">
+            <strong>{{ row.department.name }} <span class="adm-node-code">{{ row.department.code }}</span></strong>
+            <span>{{ row.active_members }}/{{ row.department.member_count }} نشط · {{ row.department.book_count }} كتاب{% if row.overdue %} · <b class="adm-bad">{{ row.overdue }} متأخّر</b>{% endif %}</span>
+          </div>
+          <div class="adm-bar{% if row.overdue %} is-hot{% endif %}" role="progressbar" aria-label="حجم كتب {{ row.department.name }}"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ row.load_percent }}">
+            <span style="--w:{{ row.load_percent }}%"></span>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="adm-empty">لا بيانات بعد.</p>
+      {% endif %}
+    </section>
+
+    <section class="adm-card" aria-labelledby="adm-activity-h">
+      <div class="adm-card-hd">
+        <div>
+          <h2 id="adm-activity-h">آخر الحركات الإدارية</h2>
+          <p class="adm-sub">إنشاء وتعديل الأقسام والحسابات والأدوار</p>
+        </div>
+        <a class="adm-link" href="{% url 'audit_log' %}?tab=users">السجل كاملاً</a>
+      </div>
+      {% if admin_activity %}
+      <ol class="adm-timeline">
+        {% for activity in admin_activity %}
+        <li>
+          <span class="adm-tl-icon" aria-hidden="true"><i class="bi {% if 'DEPARTMENT' in activity.action %}bi-diagram-3{% elif 'GROUP' in activity.action %}bi-collection{% else %}bi-person-gear{% endif %}"></i></span>
+          <div>
+            <strong>{{ activity.get_action_display }}</strong>
+            <span>{{ activity.username_snapshot|default:activity.user.username|default:"مستخدم محذوف" }}{% if activity.department %} · {{ activity.department.name }}{% endif %}</span>
+          </div>
+          <time datetime="{{ activity.timestamp|date:'c' }}">{{ activity.timestamp|date:"j F · H:i" }}</time>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="adm-empty">لا حركات إدارية مسجّلة في هذا النطاق بعد.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="adm-card" aria-labelledby="adm-quick-h">
+    <div class="adm-card-hd"><h2 id="adm-quick-h">إجراءات سريعة</h2></div>
+    <div class="adm-quick">
+      <a href="?tab=departments#dep-name"><i class="bi bi-diagram-3" aria-hidden="true"></i><span>قسم أو شعبة جديدة</span></a>
+      <a href="?tab=users#new-user-username"><i class="bi bi-person-plus" aria-hidden="true"></i><span>حساب جديد</span></a>
+      <a href="?tab=users&amp;status=password"><i class="bi bi-key" aria-hidden="true"></i><span>كلمات مرور مؤقتة</span></a>
+      <a href="?tab=users&amp;status=inactive"><i class="bi bi-person-slash" aria-hidden="true"></i><span>الحسابات الموقوفة</span></a>
+      <a href="{% url 'audit_log' %}"><i class="bi bi-clock-history" aria-hidden="true"></i><span>سجل الحركات</span></a>
+      {% if is_superadmin %}
+      <a href="{% url 'entity_list' %}?view=groups"><i class="bi bi-collection" aria-hidden="true"></i><span>ورشة العناقيد</span></a>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+<div class="offcanvas offcanvas-end adm-drawer" tabindex="-1" id="adm-node-drawer" aria-labelledby="adm-node-drawer-title">
+  <div class="offcanvas-header">
+    <div>
+      <span class="adm-node-lvl" data-slot="level"></span>
+      <h2 class="offcanvas-title" id="adm-node-drawer-title" data-slot="name"></h2>
+      <span class="adm-node-code" data-slot="code"></span>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="إغلاق"></button>
+  </div>
+  <div class="offcanvas-body">
+    <p class="adm-sub" data-slot="parent"></p>
+    <dl class="adm-facts">
+      <div><dt>المستخدمون النشطون</dt><dd data-slot="active-members"></dd></div>
+      <div><dt>كل المستخدمين</dt><dd data-slot="members"></dd></div>
+      <div><dt>الكتب</dt><dd data-slot="books"></dd></div>
+      <div><dt>المتأخرة</dt><dd data-slot="overdue"></dd></div>
+      <div><dt>الشعب والوحدات المباشرة</dt><dd data-slot="children"></dd></div>
+      <div><dt>الحالة</dt><dd data-slot="status"></dd></div>
+    </dl>
+    <div class="adm-drawer-actions">
+      <a class="btn btn-sm btn-primary" data-href="edit"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>تعديل القسم</a>
+      <a class="btn btn-sm btn-outline-primary" data-href="users"><i class="bi bi-people me-1" aria-hidden="true"></i>حساباته</a>
+      <a class="btn btn-sm btn-outline-danger" data-href="overdue"><i class="bi bi-alarm me-1" aria-hidden="true"></i>المتأخرات</a>
+    </div>
+  </div>
+</div>
+<span hidden id="adm-urls" data-reports="{% url 'reports' %}"></span>

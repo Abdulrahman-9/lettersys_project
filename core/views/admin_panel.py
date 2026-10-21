@@ -31,7 +31,9 @@ from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
 from core.scoping import (can_manage_accounts, can_manage_departments,
                           managed_department_ids, user_department_id)
 
-TABS = ('departments', 'users', 'groups', 'reservations')
+TABS = ('overview', 'departments', 'users', 'groups', 'reservations')
+ADMIN_ACTIONS = ('CREATE_DEPARTMENT', 'EDIT_DEPARTMENT', 'ASSIGN_USER',
+                 'CREATE_USER', 'CREATE_GROUP', 'EDIT_GROUP')
 RESERVATION_REPORT_DAYS = (7, 30, 90)
 RESERVATION_REPORT_PAGE_SIZE = 50
 
@@ -44,7 +46,9 @@ def admin_panel(request):
         raise PermissionDenied('إدارة الأقسام لمدير النظام ورئيس القسم.')
 
     tab = request.GET.get('tab')
-    tab = tab if tab in TABS and (tab != 'groups' or can_manage_accounts(request.user)) else 'departments'
+    superadmin_only = ('groups', 'reservations')
+    tab = (tab if tab in TABS and (tab not in superadmin_only or can_manage_accounts(request.user))
+           else 'overview')
 
     if request.method == 'POST':
         return _handle(request)
@@ -75,6 +79,8 @@ def _render_panel(request, tab, created_credentials=None, create_form_values=Non
             row['department'].is_active for row in department_rows),
         'staff_count': len(people),
         'inactive_user_count': sum(not row['is_active'] for row in people),
+        'password_pending_count': sum(row['must_change_password'] for row in people),
+        'sensitive_role_count': sum(row['is_sensitive'] for row in people),
         'groups': (EntityGroup.objects.prefetch_related('members').order_by('name')
                    if is_superadmin else EntityGroup.objects.none()),
         'entities': (Entity.objects.filter(is_active=True).order_by('name')
@@ -90,7 +96,75 @@ def _render_panel(request, tab, created_credentials=None, create_form_values=Non
     }
     if tab == 'reservations':
         context.update(_reservation_report(request))
+    if tab == 'overview':
+        context.update(_overview(request.user, department_rows, people,
+                                 None if is_superadmin else set(department_ids)))
     return render(request, 'core/admin_panel.html', context)
+
+
+def _overview(user, department_rows, people, department_ids):
+    """صورةٌ واحدةٌ للنطاق: شجرةٌ بصريّة وصحّةُ الأقسام وآخرُ الحركات الإداريّة."""
+    from core.logging_models import UserActivityLog
+    from core.scoping import books_in_scope, scope_activity_for
+    from core.views.filter_helpers import followup_q
+
+    today = timezone.localdate()
+    books = books_in_scope(user)
+    if department_ids is not None:
+        books = books.filter(department_id__in=department_ids)
+    overdue = dict(
+        books.filter(followup_q('overdue', today))
+        .order_by().values('department_id')
+        .annotate(total=Count('pk')).values_list('department_id', 'total')
+    )
+    active_members = {}
+    for row in people:
+        if row['department'] is not None and row['is_active']:
+            active_members[row['department'].pk] = active_members.get(row['department'].pk, 0) + 1
+
+    nodes = {}
+    for row in department_rows:
+        department = row['department']
+        nodes[department.pk] = {
+            'department': department,
+            'depth': row['depth'],
+            'overdue': overdue.get(department.pk, 0),
+            'active_members': active_members.get(department.pk, 0),
+            'children': [],
+        }
+    roots = []
+    for node in nodes.values():
+        parent = nodes.get(node['department'].parent_id)
+        (parent['children'] if parent else roots).append(node)
+
+    def descendants(node):
+        return sum(1 + descendants(child) for child in node['children'])
+
+    for node in roots:
+        node['descendant_count'] = descendants(node)
+    roots.sort(key=lambda n: (-n['descendant_count'], -n['overdue'], n['department'].code))
+
+    health = sorted(
+        nodes.values(),
+        key=lambda n: (-n['overdue'], -n['department'].book_count, n['department'].code),
+    )[:6]
+    peak = max((n['department'].book_count for n in health), default=0)
+    for node in health:
+        node['load_percent'] = round(node['department'].book_count * 100 / peak) if peak else 0
+        members = node['department'].member_count
+        node['active_percent'] = round(node['active_members'] * 100 / members) if members else 0
+
+    activity = (
+        scope_activity_for(user, UserActivityLog.objects.filter(action__in=ADMIN_ACTIONS))
+        .select_related('user', 'department')
+        .order_by('-timestamp')[:8]
+    )
+    return {
+        'org_roots': roots,
+        'org_overdue_total': sum(overdue.get(pk, 0) for pk in nodes),
+        'health_rows': health,
+        'admin_activity': activity,
+    }
 
 
 def _reservation_report(request):
@@ -429,7 +503,7 @@ def _user_rows(department_ids=None, actor_id=None):
     people = (people.select_related('profile', 'profile__department')
               .prefetch_related('groups')
               .order_by('username'))
-    return [{
+    rows = [{
         'user': u,
         'department': getattr(getattr(u, 'profile', None), 'department', None),
         'is_head': bool(getattr(getattr(u, 'profile', None), 'is_department_head', False)),
@@ -439,9 +513,15 @@ def _user_rows(department_ids=None, actor_id=None):
                                     for g in u.groups.all()),
         'is_entry': any(g.name == ENTRY_GROUP_NAME for g in u.groups.all()),
         'is_active': u.is_active,
+        'must_change_password': bool(getattr(getattr(u, 'profile', None),
+                                             'must_change_password', False)),
         'job_title': getattr(getattr(u, 'profile', None), 'job_title', ''),
         'is_self': u.pk == actor_id,
     } for u in people]
+    for row in rows:
+        row['is_sensitive'] = (row['user'].is_superuser or row['is_head']
+                               or row['is_controller'] or row['is_company_archivist'])
+    return rows
 
 
 def _department(raw):

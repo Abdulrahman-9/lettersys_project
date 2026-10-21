@@ -1,0 +1,94 @@
+{# رؤى اللوحة — إضافةٌ فوق البلاطات لا بديلٌ عنها. كلُّ رقمٍ من نطاق القارئ نفسِه #}
+<section class="db-flow" aria-labelledby="db-flow-h">
+  <div class="db-card-hd">
+    <h2 id="db-flow-h"><i class="bi bi-diagram-2" aria-hidden="true"></i>خريطة سير المتابعة</h2>
+    <small>كل مرحلة تفتح كتبها مباشرة</small>
+  </div>
+  <ol class="db-flow-track">
+    {% for stage in insights.stages %}
+    <li class="db-flow-stage db-flow-stage--{{ stage.key }}{% if stage.key == insights.hot_stage %} is-hot{% endif %}" style="--i:{{ forloop.counter0 }}">
+      <a href="{% url 'book_unified' %}?tab=all&followup={{ stage.key }}">
+        <span class="db-flow-ico"><i class="bi {{ stage.icon }}" aria-hidden="true"></i></span>
+        <span class="db-flow-label">{{ stage.label }}</span>
+        <strong class="db-flow-n">{{ stage.count }}</strong>
+        <span class="db-flow-bar" aria-hidden="true"><span style="--w:{{ stage.percent }}%"></span></span>
+        <small class="db-flow-pct">{{ stage.percent }}٪ من الإجمالي</small>
+      </a>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+
+<div class="db-insights">
+  <section class="db-card db-next" aria-labelledby="db-next-h">
+    <div class="db-card-hd">
+      <h2 id="db-next-h"><i class="bi bi-lightning-charge" aria-hidden="true"></i>الإجراء التالي</h2>
+      <small>أقدم المتأخرات أولاً</small>
+    </div>
+    {% if insights.next_actions %}
+    <ul class="db-next-list">
+      {% for item in insights.next_actions %}
+      <li style="--i:{{ forloop.counter0 }}">
+        <button type="button" class="db-next-item" data-bs-toggle="offcanvas" data-bs-target="#db-act-{{ item.pk }}" aria-controls="db-act-{{ item.pk }}">
+          <span class="db-next-num">{{ item.number|default:"بلا رقم" }}{% if item.year %} <small>{{ item.year }}</small>{% endif %}</span>
+          <span class="db-next-title">{% if item.is_restricted %}<i class="bi bi-lock-fill" aria-hidden="true"></i> {% endif %}{{ item.title }}</span>
+          <span class="db-next-late">متأخر {{ item.days_late }} يوم</span>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+    <a class="db-card-more" href="{% url 'book_unified' %}?tab=all&followup=overdue">كل المتأخرات <i class="bi bi-arrow-left" aria-hidden="true"></i></a>
+    {% else %}
+    <p class="db-empty"><i class="bi bi-check2-circle" aria-hidden="true"></i>لا متأخرات — أحسنت.</p>
+    {% endif %}
+  </section>
+
+  <section class="db-card db-week" aria-labelledby="db-week-h">
+    <div class="db-card-hd">
+      <h2 id="db-week-h"><i class="bi bi-bar-chart" aria-hidden="true"></i>نشاط آخر 7 أيام</h2>
+      <small><span class="db-dot db-dot--in"></span>وارد <span class="db-dot db-dot--out"></span>صادر</small>
+    </div>
+    <ol class="db-week-chart">
+      {% for d in insights.days %}
+      <li class="{% if d.is_today %}is-today{% endif %}" style="--i:{{ forloop.counter0 }}">
+        <span class="db-week-col" title="{{ d.label }}: وارد {{ d.incoming }} · صادر {{ d.outgoing }}">
+          <span class="db-week-out" style="--h:{{ d.outgoing_pct }}%"></span>
+          <span class="db-week-in" style="--h:{{ d.incoming_pct }}%"></span>
+        </span>
+        <span class="db-week-n">{{ d.incoming|add:d.outgoing }}</span>
+        <span class="db-week-day">{{ d.label }}</span>
+        <span class="visually-hidden">وارد {{ d.incoming }}، صادر {{ d.outgoing }}</span>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+</div>
+
+{% for item in insights.next_actions %}
+<div class="offcanvas offcanvas-end db-drawer" tabindex="-1" id="db-act-{{ item.pk }}" aria-labelledby="db-act-{{ item.pk }}-h">
+  <div class="offcanvas-header">
+    <h2 class="offcanvas-title" id="db-act-{{ item.pk }}-h">كتاب {{ item.number|default:"بلا رقم" }}{% if item.year %} / {{ item.year }}{% endif %}</h2>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="إغلاق"></button>
+  </div>
+  <div class="offcanvas-body">
+    <p class="db-drawer-title">{% if item.is_restricted %}<i class="bi bi-lock-fill" aria-hidden="true"></i> {% endif %}{{ item.title }}</p>
+    <dl class="db-drawer-meta">
+      <div><dt>النوع</dt><dd>{{ item.kind }}</dd></div>
+      {% if item.department %}<div><dt>القسم</dt><dd>{{ item.department }}</dd></div>{% endif %}
+      <div><dt>الاستحقاق</dt><dd><time datetime="{{ item.due_date|date:'Y-m-d' }}">{{ item.due_date|date:"Y/m/d" }}</time></dd></div>
+      <div><dt>التأخير</dt><dd class="text-danger">{{ item.days_late }} يوم</dd></div>
+    </dl>
+    <h3 class="db-drawer-sub">آخر الحركات</h3>
+    {% if item.history %}
+    <ol class="db-timeline">
+      {% for h in item.history %}
+      <li><strong>{{ h.label }}</strong><span>{{ h.actor }}</span><time datetime="{{ h.at|date:'c' }}">{{ h.at|date:"Y/m/d H:i" }}</time></li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="db-empty">لا حركات مسجّلة بعد.</p>
+    {% endif %}
+    <a class="btn-brand w-100 mt-3" href="{% url 'book_detail' item.pk %}"><i class="bi bi-box-arrow-up-left" aria-hidden="true"></i> فتح الكتاب</a>
+  </div>
+</div>
+{% endfor %}
