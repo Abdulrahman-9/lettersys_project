@@ -196,7 +196,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Release migration $MigrationName is missing from the target."
     }
-    Write-ReleaseLog "PRECHECK PASS user=$($identity.Name) freeMB=$freeMB db=$dbFacts old=$script:OldHead target=$target backupSHA=$actualHash"
+    Write-ReleaseLog "PRECHECK PASS user=$($identity.Name) freeMB=$freeMB db=$dbFacts old=$script:OldHead target=$target"
     Write-ReleaseLog "FILES $($changedFiles -join ',')"
 
     $script:ServiceStopped = $true
