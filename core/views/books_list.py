@@ -146,12 +146,15 @@ def _list_scope(request):
     return rows, counters, legacy, widened
 
 
-def _legacy_counts(user, legacy, shown):
+def _legacy_counts(user, legacy, widened, shown):
     """سطرُ «الورق القديم مخفيّ: N» — ما يُضيفه المفتاحُ إن قُلب.
 
     كان المفتاحُ في «متقدم» وحدَه، فبدت القائمةُ الحيّة (22 من 13 ألفاً) عطلاً.
     ``shown`` عدّادُ «الكلّ» المحسوبُ سلفاً — أحدُ الطرفين — فيكفي عدٌّ واحدٌ للآخر.
+    ومع بحثٍ وسّع الصفوفَ (``widened``) لا عدّ: السطرُ مخفيٌّ لتلميح البحث، والجلبُ مع كلّ حرف.
     """
+    if widened:
+        return None
     other = books_in_scope(user, legacy=not legacy).count()
     live, total = (other, shown) if legacy else (shown, other)
     return {'live': live, 'paper': total - live, 'total': total}
@@ -266,7 +269,7 @@ def book_unified(request):
         "current_filter": followup,
         "sort_by": sort,
         "legacy": legacy,
-        "legacy_counts": _legacy_counts(request.user, legacy, counter_badges['all']),
+        "legacy_counts": _legacy_counts(request.user, legacy, widened, counter_badges['all']),
         "search_widened": widened,
         "show_filters": active_filters_count > 0,
         "has_active_filters": active_filters_count > 0,
@@ -386,7 +389,7 @@ def api_unified_data(request):
         'active_filters': active_filters,
         'badges': counter_badges,
         'legacy': legacy,
-        'legacy_counts': _legacy_counts(request.user, legacy, counter_badges['all']),
+        'legacy_counts': _legacy_counts(request.user, legacy, widened, counter_badges['all']),
         'search_widened': widened,
     })
 

@@ -10,7 +10,6 @@
 import csv
 import inspect
 import io
-import json
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -173,9 +172,23 @@ class LegacyLineTests(LiveCountsTestCase):
             with self.subTest(legacy=legacy):
                 self.assertEqual(self._api(tab='all', legacy=legacy)['legacy_counts'], self.WHOLE)
 
+    def test_the_line_does_not_claim_the_tab_shows_it(self):
+        """الأعدادُ للنطاق كلِّه — «تعرض 4» فوق تبويبٍ يعرض 3 كان ادّعاءً خاطئاً."""
+        html = self._html(tab='incoming')
+        self.assertIn('كتبُ النظام: <b data-legacy-count="live">4</b>', html)
+        self.assertIn('الكتبُ كلُّها: <b data-legacy-count="total">7</b>', html)
+        self.assertNotIn('تعرض كتبَ النظام', html)
+
     def test_the_search_hint_speaks_alone(self):
         """البحثُ يشمل الورقَ سلفاً — فـ«مخفيّ» بجواره تناقض."""
         self.assertRegex(self._html(q='825'), r'id="legacyHint"[^>]*\shidden>')
+
+    def test_a_widening_search_does_not_count(self):
+        """السطرُ مخفيٌّ مع البحث، والجلبُ مع كلّ حرف — فلا عدَّ لا يُعرض."""
+        self.assertIsNone(self._list(tab='all', q='825')['legacy_counts'])
+        self.assertIsNone(self._api(tab='all', q='825')['legacy_counts'])
+        # والمفتاحُ مشغولٌ: البحثُ لا يوسّع شيئاً، والسطرُ يُعرض بأعداده
+        self.assertEqual(self._api(tab='all', q='825', legacy='1')['legacy_counts'], self.WHOLE)
 
     def test_no_paper_no_line(self):
         other = Department.objects.create(name='قسمٌ بلا ورق', code='ب.و')
@@ -233,3 +246,20 @@ class OneSourceTests(SimpleTestCase):
         self.assertIn("p.get('legacy') === '1'", src)                       # الاستعادةُ من الرابط
         self.assertIn("e.target.checked ? '1' : ''", src)                   # التأشيرُ لا القيمة
         self.assertRegex(src, r"entityId: '', status: '', legacy: '',")     # المسحُ يُطفئه
+
+    def test_the_list_script_keeps_its_state_honest(self):
+        """مراجعةُ 2026‑10‑27: مؤشّرُ الفرز يُزامَن بعد الاستعادة، والجلبُ أثناء جلبٍ لا يُرمى،
+        والرجوعُ لا يدفع مدخلاً جديداً."""
+        src = (Path(settings.BASE_DIR) / 'static' / 'js' / 'book_unified_ajax_manager.js').read_text(encoding='utf-8')
+
+        def body(name):
+            start = src.index(f'\n    {name}(')
+            return src[start:src.index('\n    }\n', start)]
+
+        self.assertIn('this.syncSortIndicators()', body('restoreStateFromUrl'))
+        self.assertIn("(this.currentState.search ? '' : '-date')", body('syncSortIndicators'))
+        load = body('async updateUrlAndLoadData')
+        self.assertIn('this.pendingReload = { push }', load)
+        self.assertIn('if (next) this.updateUrlAndLoadData(next)', load)
+        self.assertIn('updateUrlAndLoadData({ push: false })', src)
+        self.assertNotIn('history.pushState', body('clearAllFilters'))

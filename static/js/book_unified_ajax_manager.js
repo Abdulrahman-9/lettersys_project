@@ -265,6 +265,7 @@
   class BookUnifiedAjaxManager {
     constructor() {
       this.isLoading = false;
+      this.pendingReload = null;
       this.currentState = {
         tab: 'incoming',
         search: '',
@@ -274,7 +275,7 @@
         status: '',
         legacy: '',
         page: 1,
-        sort: '-date'
+        sort: ''   // فارغٌ = ترتيبُ الخادم: الأحدثُ، ومع البحث الصلةُ
       };
       this.init();
     }
@@ -549,8 +550,11 @@
     // ─── 5. Sort handlers ──────────────────────────────────────────────────────
     // رأسُ العمود زرٌّ، فـ Enter/Space يُطلقان click أصلاً — لا مستمعَ keydown.
     // و aria-sort يُوضع على <th> لا على الزرّ (هو عنصرُ رأس العمود دلاليّاً).
+    // يُزامَن من الحالة في كلّ جلبٍ واستعادة — لا عند النقر وحدَه، وإلّا علّم
+    // عمودَ الحالة الأولى قبل استعادة الرابط. والبحثُ بلا ترتيبٍ صريح مرتَّبٌ
+    // بالصلة على الخادم، فلا عمودَ يُعلَّم.
     syncSortIndicators() {
-      const current = this.currentState.sort || '-date';
+      const current = this.currentState.sort || (this.currentState.search ? '' : '-date');
       const descending = current.startsWith('-');
       const active = descending ? current.slice(1) : current;
       document.querySelectorAll('[data-sort]').forEach(el => {
@@ -573,16 +577,21 @@
           // toggle asc/desc
           self.currentState.sort = self.currentState.sort === field ? `-${field}` : field;
           self.currentState.page = 1;
-          self.syncSortIndicators();
           self.updateUrlAndLoadData();
         });
       });
-      this.syncSortIndicators();
     }
 
     // ─── 6. Core: fetch + re-render ────────────────────────────────────────────
-    async updateUrlAndLoadData() {
-      if (this.isLoading) return;
+    // ما يصل أثناء جلبٍ جارٍ يُعاد بعده بالحالة الأحدث — كان يُرمى صامتاً فتبقى
+    // القائمةُ على حرفٍ قديم من البحث. و push=false للرجوع/التقدّم: الرابطُ في
+    // السجلّ أصلاً، ودفعُه ثانيةً كان يكسر «التقدّم».
+    async updateUrlAndLoadData({ push = true } = {}) {
+      this.syncSortIndicators();
+      if (this.isLoading) {
+        this.pendingReload = { push };
+        return;
+      }
 
       const params = {};
       if (this.currentState.tab && this.currentState.tab !== 'incoming') params.tab = this.currentState.tab;
@@ -593,7 +602,7 @@
       if (this.currentState.status)    params.followup   = this.currentState.status;
       if (this.currentState.legacy)    params.legacy     = this.currentState.legacy;
       if (this.currentState.page > 1)  params.page       = this.currentState.page;
-      if (this.currentState.sort && this.currentState.sort !== '-date') params.sort = this.currentState.sort;
+      if (this.currentState.sort)      params.sort       = this.currentState.sort;
 
       // Update browser URL without reload
       const qs = new URLSearchParams(params).toString();
@@ -602,12 +611,14 @@
       // الجوال: بطاقات القائمة تُصيَّر خادمياً فقط (لا مسار AJAX لها) —
       // فنعتمد تنقّلاً كاملاً ليُعاد بناؤها بدل بقاء القائمة قديمة.
       if (window.matchMedia('(max-width: 991.98px)').matches) {
-        window.location.href = newUrl;
+        if (push) window.location.href = newUrl;
+        else window.location.replace(newUrl);
         return;
       }
 
       this.isLoading = true;
-      history.pushState(params, '', newUrl);
+      if (push && newUrl !== window.location.pathname + window.location.search) history.pushState(params, '', newUrl);
+      else history.replaceState(params, '', newUrl);
 
       // Show loading overlay
       const overlay = document.getElementById('loadingOverlay');
@@ -654,11 +665,15 @@
       } catch (err) {
         console.error('[BookAjax] fetch error:', err);
         // Fallback: full page reload
+        this.pendingReload = null;
         window.location.href = newUrl;
       } finally {
         this.isLoading = false;
         if (overlay)  overlay.style.display  = 'none';
         if (skeleton) skeleton.style.display = 'none';
+        const next = this.pendingReload;
+        this.pendingReload = null;
+        if (next) this.updateUrlAndLoadData(next);
       }
     }
 
@@ -673,8 +688,9 @@
       this.currentState.status     = p.get('followup') || p.get('status') || p.get('due_status') || '';
       this.currentState.legacy     = p.get('legacy') === '1' ? '1' : '';
       this.currentState.page       = parseInt(p.get('page')) || 1;
-      this.currentState.sort       = p.get('sort')       || '-date';
+      this.currentState.sort       = p.get('sort')       || '';
       this.syncLegacyControls();
+      this.syncSortIndicators();
       this.applyTheme();
     }
 
@@ -694,10 +710,9 @@
     clearAllFilters() {
       // التبويبُ ليس فلتراً: المسحُ من «صادر» كان يقفز إلى «وارد» (تدقيقُ نيلسن A#15)
       this.currentState = { tab: this.currentState.tab || 'incoming', search: '', dateFrom: '', dateTo: '',
-                            entityId: '', status: '', legacy: '', page: 1, sort: '-date' };
+                            entityId: '', status: '', legacy: '', page: 1, sort: '' };
       this.syncLegacyControls(false);
-      history.pushState({}, '', window.location.pathname);
-      this.updateUrlAndLoadData();
+      this.updateUrlAndLoadData();   // يدفع الرابطَ الممسوح — دفعٌ ثانٍ هنا كان مدخلاً مكرَّراً
     }
   }
 
@@ -710,7 +725,7 @@
   window.addEventListener('popstate', () => {
     if (window.bookAjaxManager) {
       window.bookAjaxManager.restoreStateFromUrl();
-      window.bookAjaxManager.updateUrlAndLoadData();
+      window.bookAjaxManager.updateUrlAndLoadData({ push: false });
     }
   });
 

@@ -161,8 +161,9 @@
   {% endcomment %}
   <p class="fb-hint fb-legacy-hint{% if legacy %} is-on{% endif %}" id="legacyHint" role="status" data-paper="{{ legacy_counts.paper }}"{% if not legacy_counts.paper or search_widened %} hidden{% endif %}>
     <i class="bi bi-archive" aria-hidden="true"></i>
-    <span data-legacy-state="off"{% if legacy %} hidden{% endif %}>تعرض كتبَ النظام وحدَها: <b data-legacy-count="live">{{ legacy_counts.live }}</b> · الورقُ القديم مخفيّ: <b data-legacy-count="paper">{{ legacy_counts.paper }}</b></span>
-    <span data-legacy-state="on"{% if not legacy %} hidden{% endif %}>تعرض الكتبَ كلَّها: <b data-legacy-count="total">{{ legacy_counts.total }}</b> · منها الورقُ القديم: <b data-legacy-count="paper">{{ legacy_counts.paper }}</b></span>
+    {# الأعدادُ للنطاق كلِّه لا للتبويب — فلا «تعرض N» وتحتها تبويبٌ بعددٍ آخر #}
+    <span data-legacy-state="off"{% if legacy %} hidden{% endif %}>كتبُ النظام: <b data-legacy-count="live">{{ legacy_counts.live }}</b> · الورقُ القديم مخفيّ: <b data-legacy-count="paper">{{ legacy_counts.paper }}</b></span>
+    <span data-legacy-state="on"{% if not legacy %} hidden{% endif %}>الكتبُ كلُّها: <b data-legacy-count="total">{{ legacy_counts.total }}</b> · منها الورقُ القديم: <b data-legacy-count="paper">{{ legacy_counts.paper }}</b></span>
     <button type="button" class="fb-hint-action" id="legacyHintToggle" aria-controls="filterLegacy"
             data-label-off="اعرض الورق القديم" data-label-on="أخفِ الورق القديم">{% if legacy %}أخفِ الورق القديم{% else %}اعرض الورق القديم{% endif %}</button>
   </p>
