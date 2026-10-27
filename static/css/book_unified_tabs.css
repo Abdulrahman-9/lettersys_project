@@ -381,6 +381,20 @@
 .fb-hint { flex-basis: 100%; margin: 0.35rem 0.4rem 0; font-size: 0.78rem; color: var(--muted);
   display: flex; align-items: center; gap: 0.35rem; }
 .fb-hint[hidden] { display: none; }
+/* سطرُ الورق القديم — يقول ما تعرضه القائمة وما تُخفيه، وزرُّه يقلب المفتاح.
+   الحالةُ المقلوبة تتلوّن بثيم التبويب: ``--theme-text`` لا ``--theme-primary`` (أصفرُ الصادر يسقط في التباين) */
+.fb-legacy-hint { padding-top: 0.45rem; border-top: 1px solid rgba(0, 0, 0, 0.06); color: #4b5563; }
+.fb-legacy-hint b { color: #1f2937; font-variant-numeric: tabular-nums; }
+.fb-legacy-hint.is-on { border-top-color: transparent; border-radius: 0.5rem; padding: 0.4rem 0.6rem;
+  background: color-mix(in srgb, var(--theme-primary) 7%, #fff); color: var(--theme-text); }
+.fb-legacy-hint.is-on b { color: inherit; }
+.fb-hint-action { display: inline-flex; align-items: center; padding: 0.2rem 0.7rem; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--theme-primary) 28%, #fff);
+  background: color-mix(in srgb, var(--theme-primary) 9%, #fff); color: var(--theme-text);
+  font: inherit; font-weight: 800; cursor: pointer; transition: border-color 0.18s ease; }
+.fb-hint-action:hover { border-color: var(--theme-accent); }
+.fb-hint-action:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 2px; }
+.fb-legacy-hint.is-on .fb-hint-action { background: #fff; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }

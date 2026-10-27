@@ -144,6 +144,49 @@ class SearchFindsEverythingTests(LiveCountsTestCase):
         self.assertRegex(html, r'id="searchWidenedHint" role="status" hidden>')
 
 
+class LegacyLineTests(LiveCountsTestCase):
+    """سطرُ «الورق القديم مخفيّ: N» (موافقةُ المالك 2026‑10‑26) — كان المفتاحُ في «متقدم»
+    وحدَه، فبدت القائمةُ الحيّةُ (22 من 13 ألفاً) عطلاً في الصلاحيّات."""
+
+    WHOLE = {'live': 4, 'paper': 3, 'total': 7}  # الورقُ اثنان + التدريبُ: ما يُضيفه المفتاح
+
+    def _html(self, user=None, **params):
+        self.client.force_login(user or self.clerk)
+        return self.client.get(reverse('book_unified'), params).content.decode('utf-8')
+
+    def test_the_line_says_what_is_shown_and_what_is_hidden(self):
+        for tab in ('all', 'incoming'):  # أعدادُ النطاق — لا تتبع التبويب
+            with self.subTest(tab=tab):
+                self.assertEqual(self._list(tab=tab)['legacy_counts'], self.WHOLE)
+        html = self._html(tab='all')
+        self.assertRegex(html, r'id="legacyHint" role="status" data-paper="3">')
+        self.assertIn('اعرض الورق القديم</button>', html)
+
+    def test_after_the_switch_it_reports_the_whole(self):
+        self.assertEqual(self._list(tab='all', legacy='1')['legacy_counts'], self.WHOLE)
+        html = self._html(tab='all', legacy='1')
+        self.assertIn('fb-legacy-hint is-on', html)
+        self.assertIn('أخفِ الورق القديم</button>', html)
+
+    def test_the_refresh_carries_the_same_counts(self):
+        for legacy in ('', '1'):
+            with self.subTest(legacy=legacy):
+                self.assertEqual(self._api(tab='all', legacy=legacy)['legacy_counts'], self.WHOLE)
+
+    def test_the_search_hint_speaks_alone(self):
+        """البحثُ يشمل الورقَ سلفاً — فـ«مخفيّ» بجواره تناقض."""
+        self.assertRegex(self._html(q='825'), r'id="legacyHint"[^>]*\shidden>')
+
+    def test_no_paper_no_line(self):
+        other = Department.objects.create(name='قسمٌ بلا ورق', code='ب.و')
+        newcomer = User.objects.create_user('lnew', password='pw-lnew-1111')
+        UserProfile.objects.update_or_create(user=newcomer, defaults={'department': other})
+        Book.objects.create(kind='incoming_internal', title='كتابٌ حيّ', our_number='8001',
+                            created_by=newcomer, department=other, date=self.today)
+        self.assertRegex(self._html(newcomer, tab='all'), r'id="legacyHint"[^>]*\shidden>')
+
+
+
 class OtherCountersTests(LiveCountsTestCase):
 
     def test_overdue_notices_come_from_live_books(self):

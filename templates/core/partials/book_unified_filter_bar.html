@@ -154,6 +154,19 @@
     </form>
   </div>
 
+  {% comment %}
+    سطرُ الورق القديم (موافقةُ المالك 2026‑10‑26): المفتاحُ في «متقدم» وحدَه جعل القائمةَ الحيّة
+    تبدو عطلاً. يُخفى إن لم يكن ورقٌ يُضاف، أو حين يتكلّم تلميحُ البحث — لا رسالتان متناقضتان.
+    والزرُّ يقلب صندوقَ «يشمل الورق القديم» نفسَه (book_unified_ajax_manager.js).
+  {% endcomment %}
+  <p class="fb-hint fb-legacy-hint{% if legacy %} is-on{% endif %}" id="legacyHint" role="status" data-paper="{{ legacy_counts.paper }}"{% if not legacy_counts.paper or search_widened %} hidden{% endif %}>
+    <i class="bi bi-archive" aria-hidden="true"></i>
+    <span data-legacy-state="off"{% if legacy %} hidden{% endif %}>تعرض كتبَ النظام وحدَها: <b data-legacy-count="live">{{ legacy_counts.live }}</b> · الورقُ القديم مخفيّ: <b data-legacy-count="paper">{{ legacy_counts.paper }}</b></span>
+    <span data-legacy-state="on"{% if not legacy %} hidden{% endif %}>تعرض الكتبَ كلَّها: <b data-legacy-count="total">{{ legacy_counts.total }}</b> · منها الورقُ القديم: <b data-legacy-count="paper">{{ legacy_counts.paper }}</b></span>
+    <button type="button" class="fb-hint-action" id="legacyHintToggle" aria-controls="filterLegacy"
+            data-label-off="اعرض الورق القديم" data-label-on="أخفِ الورق القديم">{% if legacy %}أخفِ الورق القديم{% else %}اعرض الورق القديم{% endif %}</button>
+  </p>
+
   {# البحثُ يجد الكلّ — أرقامُ الدفتر القديم أوّلُ ما يُبحث عنه — والعدّاداتُ تبقى للحيّ #}
   <p class="fb-hint" id="searchWidenedHint" role="status"{% if not search_widened %} hidden{% endif %}>
     <i class="bi bi-info-circle" aria-hidden="true"></i>
