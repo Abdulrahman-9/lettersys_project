@@ -171,13 +171,20 @@ class LegacyRestoreEngine:
     @classmethod
     def restore_from_bak(cls, bak_path, sql_server='localhost', admin_user='sa', admin_password='',
                          created_by=None, restore_files=True, mode='skip_existing', progress_cb=None,
-                         work_dir=None):
+                         work_dir=None, boundary_key='ARCHMDOC', include_held=False,
+                         delta_only=False, keep_db=False):
         """
         يستعيد .bak إلى قاعدة SQL Server مؤقتة محلية ثم يستورد منها — دون لمس القاعدة الأصلية.
         - مضغوط (.zip / .7z / .tar.gz): يُفَكّ تلقائياً ويُبحَث عن أول .bak داخله.
         - غير مضغوط (.bak): يُستعمَل مباشرة.
         - work_dir: مجلّد ملفات القاعدة المؤقتة. فارغ = تلقائي (مجلّد بيانات SQL Server،
           فإن ضاقت مساحته فمجلّد ملف الباكاب نفسه).
+        - boundary_key: المفتاح المنطقيّ لملفّ الحدّ (اسم المصدر الأصلي، لا اسم القاعدة
+          المؤقتة). يُقرأ قبل الدمج ويُكتب بعده.
+        - delta_only: يحسب «ما الجديد؟» ويعود بلا كتابة أيّ كتاب.
+        - keep_db: يُبقي القاعدة المؤقتة بعد الانتهاء (اسمُها في `summary['temp_db']`)
+          كي يُدمَج منها لاحقاً بـ`merge_from_database` بلا إعادة استعادةِ عشرات
+          الجيغابايت. على المستدعي إسقاطُها بـ`drop_database` حين ينتهي.
         بعد الاستيراد: تُحذف القاعدة المؤقتة وملفاتها والمستخرجات.
         """
         import os, time, shutil, tempfile
@@ -324,23 +331,83 @@ class LegacyRestoreEngine:
 
             # ── الاستيراد من القاعدة المؤقتة ──
             try:
-                if progress_cb: progress_cb('جارٍ استيراد البيانات من القاعدة المؤقتة...')
-                engine = cls(sql_server, temp_db, admin_user, admin_password)
-                summary = engine.run(created_by=created_by, restore_files=restore_files,
-                                     mode=mode, progress_cb=progress_cb)
+                summary = cls.merge_from_database(
+                    temp_db, sql_server=sql_server, admin_user=admin_user,
+                    admin_password=admin_password, created_by=created_by,
+                    restore_files=restore_files, mode=mode, boundary_key=boundary_key,
+                    include_held=include_held, delta_only=delta_only,
+                    progress_cb=progress_cb, note=os.path.basename(actual_bak))
             finally:
-                # إسقاط القاعدة المؤقتة
-                try:
-                    c2 = pyodbc.connect(admin_cs, autocommit=True).cursor()
-                    c2.execute(f"ALTER DATABASE [{temp_db}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
-                    c2.execute(f"DROP DATABASE [{temp_db}]")
-                    c2.connection.close()
-                except Exception as e:
-                    logger.warning("legacy_restore: drop temp db %s failed: %s", temp_db, e)
+                # إسقاط القاعدة المؤقتة — إلّا إن طُلب إبقاؤها لدمجٍ تالٍ بلا إعادة استعادة
+                if keep_db:
+                    logger.info('legacy_restore: temp db %s kept by request', temp_db)
+                else:
+                    cls.drop_database(temp_db, admin_cs=admin_cs)
+            summary['temp_db'] = temp_db
+            summary['temp_db_kept'] = bool(keep_db)
             return summary
         finally:
             if tmp_extract and os.path.isdir(tmp_extract):
                 shutil.rmtree(tmp_extract, ignore_errors=True)
+
+    # ── الدمج من قاعدةٍ مستعادة سلفاً ──────────────────────────────────────
+    @classmethod
+    def merge_from_database(cls, database, sql_server='localhost', admin_user='sa',
+                            admin_password='', created_by=None, restore_files=True,
+                            mode='skip_existing', boundary_key='ARCHMDOC',
+                            include_held=False, delta_only=False, progress_cb=None,
+                            note=''):
+        """
+        المرحلةُ التي تلي الاستعادة: حدٌّ ⟵ فرقٌ أو دمجٌ ⟵ حدٌّ جديد.
+
+        مفصولةٌ عن `restore_from_bak` لسببٍ عمليّ: استعادةُ عشرين جيغابايت تستغرق
+        عشرات الدقائق، ومعاينةُ الفرق ثمّ الدمج كانا يعنيان استعادتين. الآن
+        تُستعاد النسخة مرّةً (`keep_db=True`)، ثمّ يُدمج منها متى قرّر المالك.
+        """
+        engine = cls(sql_server, database, admin_user, admin_password)
+        # الحدّ يُقرأ بالمفتاح المنطقي لا باسم القاعدة المؤقتة: اسمها يحمل طابعاً
+        # زمنياً يتغيّر كل تشغيل، فالبحث به لا يجد ملفّاً أبداً، فينقلب كل صفٍّ
+        # قديمٍ لم يُستورد قطّ إلى «جديد» ويُضاف بلا قرار.
+        boundary = cls.load_boundary(boundary_key)
+        if delta_only:
+            if progress_cb: progress_cb('جارٍ حساب الفرق (بلا كتابة أيّ كتاب)...')
+            summary = engine.delta(progress_cb=progress_cb, boundary=boundary)
+            summary['delta_only'] = True
+            return summary
+
+        if progress_cb: progress_cb('جارٍ استيراد البيانات من القاعدة المستعادة...')
+        summary = engine.run(created_by=created_by, restore_files=restore_files,
+                             mode=mode, boundary=boundary,
+                             include_held=include_held, progress_cb=progress_cb)
+        if not summary.get('aborted'):
+            # الحدّ الجديد يُكتب من النسخة التي دُمجت للتوّ — وإلّا ظلّ الدمج
+            # التالي يقيس على حدٍّ بائت فيُعيد فتح ما حُسم.
+            if progress_cb: progress_cb('جارٍ تثبيت حدّ المصدر للدمج القادم...')
+            snap = engine.capture_boundary(
+                note=f'بعد دمج {note}' if note else 'بعد دمج',
+                path=cls.boundary_path(boundary_key), label=boundary_key)
+            summary['boundary_path'] = snap.get('path')
+        return summary
+
+    @classmethod
+    def drop_database(cls, database, sql_server='localhost', admin_user='sa',
+                      admin_password='', admin_cs=None):
+        """يُسقط قاعدةً مؤقتة. الفشل يُسجَّل ولا يُرفع: القاعدة ليست المخرَج."""
+        import pyodbc
+        cs = admin_cs or (
+            f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={sql_server};DATABASE=master;"
+            f"UID={admin_user};PWD={admin_password};"
+            f"TrustServerCertificate=yes;Connection Timeout=30;")
+        try:
+            conn = pyodbc.connect(cs, autocommit=True)
+            cur = conn.cursor()
+            cur.execute(f"ALTER DATABASE [{database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+            cur.execute(f"DROP DATABASE [{database}]")
+            conn.close()
+            return True
+        except Exception as e:
+            logger.warning("legacy_restore: drop temp db %s failed: %s", database, e)
+            return False
 
     # ── الاتصال ────────────────────────────────────────────────────────────
     def _conn_str(self, server=None):
@@ -808,7 +875,7 @@ class LegacyRestoreEngine:
         tables = data.get('tables') or {}
         return {t: int(v.get('max_id') or 0) for t, v in tables.items()}
 
-    def capture_boundary(self, note='', path=None):
+    def capture_boundary(self, note='', path=None, label=None):
         """
         يلتقط حدّ كل جدول في المصدر **الحالي** ويكتبه إلى القرص.
 
@@ -845,7 +912,10 @@ class LegacyRestoreEngine:
         self.close()
 
         payload = {
-            'database': self.database,
+            # `label` = الاسم المنطقي للمصدر. مع الاستعادة من ملفّ باكاب تكون
+            # `self.database` قاعدةً مؤقتةً تُحذف بعد دقائق، وتسجيلُها هنا يجعل
+            # الملفّ يبدو حدّاً لقاعدةٍ لا وجود لها.
+            'database': label or self.database,
             'captured_at': timezone.now().isoformat(),
             'note': note,
             'tables': snap,
@@ -895,6 +965,10 @@ class LegacyRestoreEngine:
             years = [y for y in years if y in self.years]
 
         known = set(Book.objects.exclude(source_ref='').values_list('source_ref', flat=True))
+        # الجداول التي استوردنا منها صفّاً فعلاً. الحدُّ لا معنى له خارجها: باكابُ
+        # قسمٍ آخر يحمل نفس أسماء الجداول بمعرّفاتٍ تبدأ من ١، فلو طُبّق حدُّ قسمنا
+        # عليها لصُنّفت كلُّها «موقوفة» وسقط القسمُ الجديد صامتاً.
+        known_tables = {ref.split('#')[0] for ref in known}
         if boundary is None:
             boundary = self.load_boundary(self.database)
         has_boundary = boundary is not None
@@ -915,6 +989,8 @@ class LegacyRestoreEngine:
                 rows = cur.fetchall()
                 # بلا حدّ محفوظ: لا مزامنة سابقة ⇒ كل غير مطالَب جديد (الحدّ = صفر)
                 limit = boundary.get(tbl, 0) if has_boundary else 0
+                if limit and tbl not in known_tables:
+                    limit = 0          # جدولٌ لم نستورد منه شيئاً ⇒ مصدرٌ جديد
 
                 new_ids, new_bytes = [], 0
                 held_ids, held_bytes = [], 0
@@ -996,6 +1072,8 @@ class LegacyRestoreEngine:
         # بكتابٍ خاطئ ربطاً صامتاً. البديل الرصين: أمر `reconcile_legacy_source`
         # يختم source_ref مرّةً واحدة بمفتاحٍ فريد ومُتحقَّق منه بالبصمات.
         by_sref = dict(Book.objects.exclude(source_ref='').values_list('source_ref', 'id'))
+        # انظر `delta()`: الحدُّ يسري على الجداول التي نعرفها وحدَها.
+        known_tables = {ref.split('#')[0] for ref in by_sref}
 
         summary = defaultdict(int)
 
@@ -1029,6 +1107,8 @@ class LegacyRestoreEngine:
                     continue
                 blob_len = {r[0]: int(r[1] or 0) for r in cur.fetchall()}
                 limit = None if boundary is None else int(boundary.get(tbl, 0))
+                if limit and tbl not in known_tables:
+                    limit = 0
 
                 todo = []
                 for sid in blob_len:
