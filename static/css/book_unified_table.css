@@ -428,6 +428,29 @@ tr.book-row.row-expanded .entity-name-secondary {
 
 .th-content.sortable:hover { color: var(--theme-accent); }
 
+/* رأسُ الفرز زرٌّ حقيقيّ ليعمل بلوحة المفاتيح (WCAG 2.1.1).
+   إعادةُ تعيينٍ مستهدَفة لا `all: unset`: الأخيرةُ أعلى خصوصيّةً من
+   `.th-content` فتمحو inline-flex و font-weight معها. */
+button.th-content {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  text-align: inherit;
+}
+
+button.th-content:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .sort-icon {
   color: var(--muted);
   font-size: 0.7rem;

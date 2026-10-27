@@ -519,6 +519,23 @@
     }
 
     // ─── 5. Sort handlers ──────────────────────────────────────────────────────
+    // رأسُ العمود زرٌّ، فـ Enter/Space يُطلقان click أصلاً — لا مستمعَ keydown.
+    // و aria-sort يُوضع على <th> لا على الزرّ (هو عنصرُ رأس العمود دلاليّاً).
+    syncSortIndicators() {
+      const current = this.currentState.sort || '-date';
+      const descending = current.startsWith('-');
+      const active = descending ? current.slice(1) : current;
+      document.querySelectorAll('[data-sort]').forEach(el => {
+        const th = el.closest('th');
+        if (!th) return;
+        if (el.dataset.sort === active) {
+          th.setAttribute('aria-sort', descending ? 'descending' : 'ascending');
+        } else {
+          th.removeAttribute('aria-sort');
+        }
+      });
+    }
+
     attachSortHandlers() {
       const self = this;
       document.querySelectorAll('[data-sort], .sortable-header').forEach(link => {
@@ -528,9 +545,11 @@
           // toggle asc/desc
           self.currentState.sort = self.currentState.sort === field ? `-${field}` : field;
           self.currentState.page = 1;
+          self.syncSortIndicators();
           self.updateUrlAndLoadData();
         });
       });
+      this.syncSortIndicators();
     }
 
     // ─── 6. Core: fetch + re-render ────────────────────────────────────────────
