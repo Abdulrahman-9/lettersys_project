@@ -137,9 +137,26 @@ ORIGIN_WARNINGS = []
 ALLOWED_ORIGINS = load_allowed_origins(warnings=ORIGIN_WARNINGS)
 
 
+def requires_pairing():
+    try:
+        with open(config_file(), encoding="utf-8-sig") as file:
+            options = json.load(file)
+    except FileNotFoundError:
+        return False
+    if not isinstance(options, dict):
+        raise ValueError("Invalid agent configuration")
+    required = options.get("require_pairing", False)
+    if type(required) is not bool:
+        raise ValueError("Invalid managed-client setting")
+    return required
+
+
 def naps2_candidates():
-    """مسارات NAPS2.Console.exe المحتملة بالأولوية (NAPS2_CONSOLE ثم المثبّت ثم المحمول)."""
+    """الحزمة المُدارة تستخدم نسختها فقط؛ التثبيت القديم يحافظ على أولوياته."""
     here = os.path.dirname(os.path.abspath(__file__))
+    portable = os.path.join(here, "naps2_portable", "NAPS2.Console.exe")
+    if requires_pairing():
+        return [portable]
     env = os.environ.get("NAPS2_CONSOLE")
     cands = [env] if env else []
     cands += [
@@ -147,6 +164,6 @@ def naps2_candidates():
         r"C:\Program Files (x86)\NAPS2\NAPS2.Console.exe",
         # تثبيتُ «لي وحدي» (بلا صلاحيّات مسؤول) — الشائعُ على حاسبة كاتبةٍ بحسابٍ عاديّ.
         os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "NAPS2", "NAPS2.Console.exe"),
-        os.path.join(here, "naps2_portable", "NAPS2.Console.exe"),
+        portable,
     ]
     return [c for c in cands if c]

@@ -3,26 +3,29 @@
 
 {% block title %}طاولة الوارد{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20261012-no-archive-desk">{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20261012-no-archive-desk">
+<link rel="stylesheet" href="{% static 'css/desk.css' %}?v=20261020-desk-compact-paper">
+{% endblock %}
 
 {% block content %}
-<div class="queues-page">
-  <div class="queues-head">
-    <div>
-      <h1 class="h4 mb-0"><i class="bi bi-inboxes" aria-hidden="true"></i> طاولة الوارد</h1>
-      <p class="queues-sub">آخر القيود وتفريقها، مع الاستلام والمتابعة والإجراءات في مكانٍ واحد.</p>
-    </div>
-    <div class="queues-actions">
-      <a class="btn btn-outline-secondary btn-sm" href="{% url 'desk_ledger' %}">
-        <i class="bi bi-journal-text"></i> دفتر الوارد
-      </a>
-      <a class="btn btn-outline-secondary btn-sm" href="{% url 'desk_handover' %}">
-        <i class="bi bi-pen"></i> كشف التسليم
-      </a>
-    </div>
-  </div>
+<div class="queues-page desk-workspace">
+  {% include "core/_desk_header.html" with desk_page="board" desk_title="طاولة الوارد" desk_description="ابدأ بما يحتاج انتباهك، ثم تابع استلام الكتب وتفريقها من مكان واحد." %}
 
-  {% if queues_empty %}
+  <section class="desk-priorities" aria-labelledby="desk-priorities-heading">
+    <div class="desk-section-head">
+      <h2 id="desk-priorities-heading">المتابعة حسب الحالة</h2>
+      <p>اختر تصنيفاً لعرض تفاصيله؛ قد يظهر الكتاب في أكثر من تصنيف.</p>
+    </div>
+    <nav class="desk-queue-tabs" aria-label="تصنيفات متابعة الوارد">
+      <a href="{% url 'desk_board' %}#recent-books"{% if active_queue == "recent" %} aria-current="page"{% endif %}><span>آخر القيود</span><i class="bi bi-list-ul" aria-hidden="true"></i></a>
+      {% for queue in queues %}
+      <a class="qb-{{ queue.tone }}" data-desk-queue="{{ queue.key }}" href="?queue={{ queue.key }}#q-{{ queue.key }}"{% if active_queue == queue.key %} aria-current="page"{% endif %}><span>{{ queue.label }}</span><b>{{ queue.total }}</b></a>
+      {% endfor %}
+    </nav>
+  </section>
+
+  {% if queues_empty and active_queue == "recent" %}
     <div class="qb-blank">
       <i class="bi bi-check2-circle qb-blank-icon" aria-hidden="true"></i>
       <h2>الطاولةُ نظيفة</h2>
@@ -32,10 +35,11 @@
         <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">القائمةُ الموحّدة</a>
       </div>
     </div>
-  {% else %}
-    {% include "core/_queue_board.html" %}
   {% endif %}
 
+  {% if selected_queue %}
+  {% include "core/_desk_queue_panel.html" %}
+  {% else %}
   <section class="qb-recent" id="recent-books" aria-labelledby="recent-books-heading">
     <div class="qb-recent-head">
       <div>
@@ -51,19 +55,19 @@
     <div id="deskActionStatus" class="qb-action-status" role="alert" hidden></div>
 
     {% if recent_books %}
-    <div class="qb-recent-scroll">
-      <table class="qb-recent-table">
-        <thead>
-          <tr>
-            <th scope="col">الكتاب وآخر حركة</th>
-            <th scope="col">التفريق والمتابعة الزمنية</th>
-            <th scope="col">الوصول والإجراءات</th>
+    <div class="qb-recent-scroll" role="region" aria-labelledby="recent-books-heading" tabindex="0">
+      <table class="qb-recent-table" role="table" aria-label="آخر الكتب المُدخلة والمُفرّقة">
+        <thead role="rowgroup">
+          <tr role="row">
+            <th scope="col" role="columnheader">الكتاب وآخر حركة</th>
+            <th scope="col" role="columnheader">التفريق والمتابعة الزمنية</th>
+            <th scope="col" role="columnheader">الوصول والإجراءات</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup">
           {% for book in recent_books %}
-          <tr>
-            <th scope="row">
+          <tr role="row">
+            <th scope="row" role="rowheader">
               <a class="qb-recent-book" href="{% url 'book_detail' book.pk %}#lifecycleCard">
                 <span class="qb-recent-number">{{ book.our_number_display|default:"بلا رقم" }}</span>
                 <span>{{ book.desk_title }}</span>
@@ -79,7 +83,7 @@
               <small class="qb-recent-meta">لا حركةَ مسجّلة بعد</small>
               {% endif %}
             </th>
-            <td>
+            <td role="cell" data-label="التفريق والمتابعة الزمنية">
               {% if book.desk_referrals %}
               <ul class="qb-recent-referrals">
                 {% for referral in book.desk_referrals %}
@@ -116,13 +120,17 @@
               <span class="qb-recent-undistributed">لم يُفرّق بعد</span>
               {% endif %}
             </td>
-            <td>
+            <td role="cell" data-label="الوصول والإجراءات">
               <div class="qb-recent-actions">
                 {% for referral in book.desk_referrals %}
+                  {% if referral.desk_can_receive or referral.desk_can_finish or referral.desk_can_cancel %}
+                  <fieldset class="desk-referral-actions">
+                    <legend>{{ referral.target_name }}</legend>
                   {% if referral.desk_can_receive %}
                   <button class="qb-act" type="button" data-desk-referral-act="received"
+                          data-desk-target="{{ referral.target_name }}"
                           data-url="{% url 'api_referral_action' book.pk referral.pk %}">
-                    <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> استلام
+                    <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> تأكيد وصول الإحالة
                   </button>
                   {% endif %}
                   {% if referral.desk_can_finish %}
@@ -146,13 +154,17 @@
                     </form>
                   </details>
                   {% endif %}
+                  </fieldset>
+                  {% endif %}
                 {% endfor %}
+                <div class="desk-book-actions">
                 <a class="qb-act-link" href="{% url 'book_detail' book.pk %}#lifecycleCard">
                   <i class="bi bi-sliders" aria-hidden="true"></i> إجراءات الكتاب والتفريق
                 </a>
                 <a class="qb-act-link" href="{% url 'book_detail' book.pk %}#followupHistoryCard">
                   <i class="bi bi-clock-history" aria-hidden="true"></i> التسلسل الزمني
                 </a>
+                </div>
               </div>
             </td>
           </tr>
@@ -168,14 +180,16 @@
     </div>
     {% endif %}
   </section>
+  {% endif %}
 
   <p class="qb-audit-note">
     فتحُ الكتاب يُسجَّل في سجلّ الحركات؛ وهو لا يُعدّ إقراراً باستلام الإحالة.
+    تأكيد وصول الإحالة لا يوثّق توقيعاً ورقياً؛ توثيق الحامل والتوقيع من «تسجيل عهدة» داخل الكتاب.
     إيصالُ القراءة لكلّ مستلم ليس مفعّلاً بعد.
   </p>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/desk_board.js' %}?v=20261012-no-archive-desk"></script>
+<script src="{% static 'js/desk_board.js' %}?v=20261020-desk-tabs"></script>
 {% endblock %}

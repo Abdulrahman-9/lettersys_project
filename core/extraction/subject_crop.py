@@ -122,7 +122,7 @@ def record_sample(entity_id, box, text, *, page=1, by=None) -> Optional[Dict]:
 # ── الاقتراح ──────────────────────────────────────────────────────────────
 _RECIP_RE = re.compile(r'^[\W\d]{0,3}\s*(?:إلى|الى|السادة|السيد)\b|^\s*to\b', re.I)
 _GREET_RE = re.compile(r'تحي[ةه]|سلام|dear|greeting', re.I)
-DEFAULT_BAND = {'x': 0.08, 'y': 0.22, 'w': 0.84, 'h': 0.14}
+DEFAULT_BAND = {'x': 0.08, 'y': 0.40, 'w': 0.84, 'h': 0.14}
 
 
 def structural_box(lines_geometry: List[Dict]) -> Optional[Dict[str, float]]:

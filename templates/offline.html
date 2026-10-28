@@ -8,52 +8,205 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 2rem 1rem;
     text-align: center;
   }
-  .offline-icon {
-    font-size: 8rem;
-    color: #94a3b8;
-    animation: pulse 2s ease-in-out infinite;
+  .offline-panel {
+    width: min(100%, 680px);
   }
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
+  .offline-icon {
+    color: #64748b;
+    font-size: clamp(5rem, 14vw, 8rem);
+    animation: offline-pulse 2.4s ease-in-out infinite;
+  }
+  .offline-status {
+    border: 1px solid rgba(15, 118, 110, .18);
+    background: rgba(255, 255, 255, .72);
+    color: #334155;
+  }
+  .offline-status.is-disconnected {
+    border-color: rgba(220, 38, 38, .22);
+    background: rgba(254, 242, 242, .9);
+    color: #991b1b;
+  }
+  .offline-status.is-checking {
+    border-color: rgba(15, 118, 110, .3);
+  }
+  .offline-status.is-retrying {
+    border-color: rgba(217, 119, 6, .3);
+    background: rgba(255, 251, 235, .92);
+    color: #92400e;
+  }
+  .offline-status-icon {
+    display: inline-flex;
+    width: 1.4rem;
+    justify-content: center;
+  }
+  .offline-spinner {
+    animation: offline-spin 1s linear infinite;
+  }
+  .offline-countdown {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .offline-tips {
+    text-align: start;
+  }
+  @keyframes offline-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .55; transform: scale(.97); }
+  }
+  @keyframes offline-spin {
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .offline-icon, .offline-spinner { animation: none; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="offline-wrapper animate-fade-in">
-  <div>
-    <i class="bi bi-wifi-off offline-icon mb-4"></i>
+  <div class="offline-panel">
+    <i class="bi bi-wifi-off offline-icon mb-4" aria-hidden="true"></i>
     <h1 class="gradient-text mb-3">تعذّر الوصول إلى الخادم</h1>
-    <p class="text-muted mb-4 fs-5">النظامُ يعمل على شبكة المكتب لا على الإنترنت — تحقّق من اتصال جهازك بشبكة المكتب، أو أنّ الخادمَ مشغَّل، ثمّ أعد المحاولة.</p>
-    
+    <p class="text-muted mb-4 fs-5">النظامُ يعمل على شبكة المكتب لا على الإنترنت — تحقّق من اتصال جهازك بشبكة المكتب، أو أنّ الخادمَ مشغَّل، وسنتابع المحاولة تلقائياً.</p>
+
+    <div id="offlineStatus" class="offline-status is-checking rounded-4 p-3 mb-4 d-flex align-items-center justify-content-center gap-2"
+         role="status" aria-live="polite" aria-atomic="true">
+      <span class="offline-status-icon" aria-hidden="true"><i class="bi bi-arrow-repeat offline-spinner"></i></span>
+      <span id="offlineStatusText">جاري التحقق من عودة الخادم تلقائياً…</span>
+      <span id="offlineCountdown" class="offline-countdown small opacity-75"></span>
+    </div>
+
     <div class="d-flex gap-3 justify-content-center flex-wrap">
-      <button type="button" class="btn btn-primary btn-lg hover-lift" onclick="window.location.reload()">
-        <i class="bi bi-arrow-clockwise me-2"></i>إعادة المحاولة
+      <button id="offlineRetry" type="button" class="btn btn-primary btn-lg hover-lift">
+        <i class="bi bi-arrow-clockwise me-2" aria-hidden="true"></i><span>إعادة المحاولة الآن</span>
       </button>
       <a href="/" class="btn btn-outline-secondary btn-lg hover-lift">
-        <i class="bi bi-house me-2"></i>العودة للرئيسية
+        <i class="bi bi-house me-2" aria-hidden="true"></i>العودة للرئيسية
       </a>
     </div>
-    
+
     <div class="mt-5">
-      <div class="card glass-effect d-inline-block text-start">
-        <div class="card-body">
-          <h6 class="fw-bold mb-3"><i class="bi bi-info-circle me-2"></i>نصائح:</h6>
+      <div class="card glass-effect d-inline-block">
+        <div class="card-body offline-tips">
+          <h2 class="h6 fw-bold mb-3"><i class="bi bi-info-circle me-2" aria-hidden="true"></i>نصائح سريعة</h2>
           <ul class="list-unstyled mb-0">
-            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>تحقّق من كابل الشبكة أو اتصال Wi‑Fi المكتب</li>
-            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>اسأل زميلاً: إن تعذّر عليه أيضاً فالخادمُ متوقّف</li>
-            <li><i class="bi bi-check-circle text-success me-2"></i>أبلغ مديرَ النظام إن طال الانقطاع</li>
+            <li class="mb-2"><i class="bi bi-check-circle text-success me-2" aria-hidden="true"></i>تحقّق من كابل الشبكة أو اتصال Wi‑Fi المكتب</li>
+            <li class="mb-2"><i class="bi bi-check-circle text-success me-2" aria-hidden="true"></i>اسأل زميلاً: إن تعذّر عليه أيضاً فالخادمُ متوقّف</li>
+            <li><i class="bi bi-check-circle text-success me-2" aria-hidden="true"></i>أبلغ مديرَ النظام إن طال الانقطاع</li>
           </ul>
         </div>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  var status = document.getElementById('offlineStatus');
+  var statusText = document.getElementById('offlineStatusText');
+  var countdown = document.getElementById('offlineCountdown');
+  var retryButton = document.getElementById('offlineRetry');
+  if (!status || !statusText || !countdown || !retryButton) return;
+
+  var retryDelay = 5;
+  var secondsLeft = retryDelay;
+  var retryTimer = null;
+  var countdownTimer = null;
+  var checking = false;
+  var probeTimeout = 3500;
+  var retryIcon = retryButton.querySelector('i');
+
+  function setStatus(kind, message, extra) {
+    status.className = 'offline-status rounded-4 p-3 mb-4 d-flex align-items-center justify-content-center gap-2 ' + kind;
+    statusText.textContent = message;
+    countdown.textContent = extra || '';
+  }
+
+  function updateConnectionMessage() {
+    if (navigator.onLine === false) {
+      setStatus('is-disconnected', 'كابل الشبكة أو الواي فاي مفصول على هذا الجهاز', 'سنواصل التحقق عند عودة الاتصال');
+      return false;
+    }
+    setStatus('is-retrying', 'جهازك متصل بالشبكة، لكن الخادم لا يستجيب حالياً — سنعيد المحاولة تلقائياً', '');
+    return true;
+  }
+
+  function scheduleProbe(delay) {
+    window.clearTimeout(retryTimer);
+    window.clearInterval(countdownTimer);
+    secondsLeft = Math.max(1, Math.ceil(delay / 1000));
+    countdown.textContent = 'المحاولة التالية بعد ' + secondsLeft + ' ث';
+    countdownTimer = window.setInterval(function () {
+      secondsLeft -= 1;
+      if (secondsLeft > 0) countdown.textContent = 'المحاولة التالية بعد ' + secondsLeft + ' ث';
+    }, 1000);
+    retryTimer = window.setTimeout(function () {
+      window.clearInterval(countdownTimer);
+      probe();
+    }, delay);
+  }
+
+  function probe() {
+    if (checking) return;
+    checking = true;
+    retryButton.disabled = true;
+    retryButton.setAttribute('aria-busy', 'true');
+    if (retryIcon) retryIcon.className = 'bi bi-arrow-repeat offline-spinner me-2';
+    setStatus('is-checking', 'جاري التحقق من عودة الخادم تلقائياً…', 'المحاولة ' + (retryDelay === 5 ? 'الأولى' : 'المتكررة'));
+
+    var controller = window.AbortController ? new AbortController() : null;
+    var timeout = window.setTimeout(function () {
+      if (controller) controller.abort();
+    }, probeTimeout);
+    var options = { method: 'HEAD', cache: 'no-store', credentials: 'same-origin' };
+    if (controller) options.signal = controller.signal;
+
+    fetch('/offline.html', options).then(function (response) {
+      if (response.status >= 200 && response.status < 500) {
+        window.location.reload();
+        return;
+      }
+      throw new Error('server-error');
+    }).catch(function () {
+      updateConnectionMessage();
+      retryDelay = Math.min(retryDelay + 5, 30);
+      scheduleProbe(retryDelay * 1000);
+    }).finally(function () {
+      window.clearTimeout(timeout);
+      checking = false;
+      retryButton.disabled = false;
+      retryButton.removeAttribute('aria-busy');
+      if (retryIcon) retryIcon.className = 'bi bi-arrow-clockwise me-2';
+    });
+  }
+
+  retryButton.addEventListener('click', function () {
+    window.clearTimeout(retryTimer);
+    window.clearInterval(countdownTimer);
+    retryDelay = 5;
+    probe();
+  });
+  window.addEventListener('online', function () {
+    retryDelay = 5;
+    window.clearTimeout(retryTimer);
+    probe();
+  });
+  window.addEventListener('offline', function () {
+    window.clearTimeout(retryTimer);
+    window.clearInterval(countdownTimer);
+    updateConnectionMessage();
+    scheduleProbe(5000);
+  });
+
+  updateConnectionMessage();
+  probe();
+}());
+</script>
 {% endblock %}

@@ -10,6 +10,7 @@ from datetime import timedelta
 
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
+from django.test.html import parse_html
 from django.urls import reverse
 from django.utils import timezone
 
@@ -191,9 +192,11 @@ class LedgerTests(DeskTestCase):
                                {'date_from': '1990-01-01', 'date_to': '1990-12-31'}).content.decode()
         self.assertNotIn('تخصيصاتُ الحفر', body)
 
-    def test_a_broken_date_is_ignored_not_fatal(self):
+    def test_a_broken_date_is_reported_without_crashing(self):
         resp = self.client.get('/books/desk/ledger/', {'date_from': 'ليس تاريخاً'})
         self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'aria-invalid="true"')
+        self.assertEqual(resp.context['rows'], [])
 
 
 class SheetsCarryTheCompanyNameTests(DeskTestCase):
@@ -206,3 +209,188 @@ class SheetsCarryTheCompanyNameTests(DeskTestCase):
             self.assertEqual(r.status_code, 200, name)
             self.assertContains(r, 'شركة نفط الوسط')
             self.assertNotContains(r, 'نفط ميسان')
+
+
+class DeskWorkspacePresentationTests(DeskTestCase):
+    def setUp(self):
+        self.client.force_login(self.officer)
+
+    def test_all_pages_share_navigation_and_identify_the_current_page(self):
+        for page in ('desk_board', 'desk_ledger', 'desk_handover'):
+            with self.subTest(page=page):
+                response = self.client.get(reverse(page))
+                self.assertContains(response, 'aria-label="صفحات طاولة الوارد"')
+                self.assertContains(response, 'aria-current="page"', count=2 if page == 'desk_board' else 1)
+                self.assertContains(response, '<h1', count=1)
+                self.assertContains(response, 'css/desk.css?v=20261020-desk-compact-paper')
+                for destination in ('desk_board', 'desk_ledger', 'desk_handover'):
+                    self.assertContains(response, reverse(destination))
+
+    def test_sheet_navigation_preserves_the_selected_department(self):
+        admin = User.objects.create_superuser('desk-preview-admin', password='test-only')
+        self.client.force_login(admin)
+        response = self.client.get(reverse('desk_ledger'), {'department': self.dept.pk})
+        self.assertContains(
+            response,
+            'href="%s?department=%s"' % (reverse('desk_handover'), self.dept.pk),
+        )
+
+    def test_handover_selection_uses_explicit_submission(self):
+        response = self.client.get(reverse('desk_handover'))
+        self.assertContains(response, 'تجهيز الكشف')
+        self.assertNotContains(response, 'onchange=')
+        self.assertContains(response, '<button type="submit"')
+
+    def test_paper_tables_keep_their_columns_and_keyboard_scroll_region(self):
+        distribute(self.book, [self.unit], by=self.officer, due_date=self.due)
+        for page, params, columns in (
+            ('desk_ledger', {}, 6),
+            ('desk_handover', {'to': self.unit.pk}, 5),
+        ):
+            with self.subTest(page=page):
+                response = self.client.get(reverse(page), params)
+                self.assertContains(response, 'class="desk-sheet-scroll" role="region"')
+                self.assertContains(response, 'tabindex="0"')
+                self.assertContains(response, '<th scope="col"', count=columns)
+
+    def test_paper_pages_have_well_formed_html_including_empty_states(self):
+        distribute(self.book, [self.unit], by=self.officer, due_date=self.due)
+        for page, params in (
+            ('desk_ledger', {}),
+            ('desk_ledger', {'kind': 'invalid'}),
+            ('desk_handover', {}),
+            ('desk_handover', {'to': self.unit.pk}),
+            ('desk_handover', {'to': self.unit.pk, 'kind': 'invalid'}),
+        ):
+            with self.subTest(page=page, params=params):
+                response = self.client.get(reverse(page), params)
+                self.assertEqual(response.status_code, 200)
+                parse_html(response.content.decode())
+
+
+class DeskFilteringTests(DeskTestCase):
+    def setUp(self):
+        self.client.force_login(self.officer)
+        self.today = timezone.localdate()
+        for number in ('3921', '3930', '3931'):
+            book = Book.objects.create(
+                kind='incoming_external', title='قيد %s' % number, our_number=number,
+                department=self.dept, created_by=self.officer, date=self.today,
+            )
+            distribute(book, [self.unit], by=self.officer, due_date=self.due)
+        distribute(self.secret, [self.unit], by=self.officer, due_date=self.due)
+
+    def _responses(self, filters):
+        for page in ('desk_ledger', 'desk_handover'):
+            params = dict(filters)
+            if page == 'desk_handover':
+                params['to'] = self.unit.pk
+            yield page, self.client.get(reverse(page), params)
+
+    def test_number_range_is_inclusive_on_both_sheets(self):
+        for page, response in self._responses({
+            'number_from': '3921', 'number_to': '3930',
+        }):
+            with self.subTest(page=page):
+                self.assertEqual({r['number'] for r in response.context['rows']}, {'3921', '3930'})
+                self.assertContains(response, 'نطاق النتائج المطبوعة')
+                self.assertContains(response, 'من رقم قيد القسم: 3921')
+
+    def test_open_ended_and_arabic_digit_range(self):
+        for page, response in self._responses({'number_from': '٣٩٣٠'}):
+            with self.subTest(page=page):
+                self.assertEqual({r['number'] for r in response.context['rows']}, {'3930', '3931'})
+
+    def test_kind_and_date_are_combined_with_the_number_range(self):
+        for page, response in self._responses({
+            'kind': 'incoming_external', 'number_from': '3921',
+            'date_from': self.today.isoformat(), 'date_to': self.today.isoformat(),
+        }):
+            with self.subTest(page=page):
+                self.assertEqual(len(response.context['rows']), 3)
+        for page, response in self._responses({'kind': 'incoming_internal'}):
+            with self.subTest(page=page):
+                self.assertEqual({r['number'] for r in response.context['rows']}, {'2437'})
+
+    def test_invalid_filters_show_errors_and_never_print_an_unfiltered_sheet(self):
+        for filters in (
+            {'number_from': '3930', 'number_to': '3921'},
+            {'number_from': '-1'},
+            {'number_to': 'abc'},
+            {'number_from': '0'},
+            {'kind': 'unknown'},
+            {'date_from': '2026-10-20', 'date_to': '2026-10-19'},
+            {'date_from': 'invalid'},
+            {'number_from': '20250825', 'number_to': '3930'},
+        ):
+            for page, response in self._responses(filters):
+                with self.subTest(page=page, filters=filters):
+                    self.assertEqual(response.status_code, 200)
+                    self.assertTrue(response.context['desk_filters'].errors)
+                    self.assertEqual(response.context['rows'], [])
+                    self.assertContains(response, 'aria-invalid="true"')
+                    self.assertNotContains(response, 'onclick="window.print()"')
+
+    def test_target_links_and_reset_preserve_department_and_unit_context(self):
+        response = self.client.get(reverse('desk_handover'), {
+            'kind': 'incoming_external', 'number_from': '3921',
+        })
+        self.assertContains(response, 'kind=incoming_external&amp;number_from=3921&amp;to=')
+        chosen = self.client.get(reverse('desk_handover'), {
+            'to': self.unit.pk, 'number_from': '3921',
+        })
+        self.assertEqual(chosen.context['reset_filter_url'], '?to=%s' % self.unit.pk)
+        self.assertEqual(
+            chosen.context['desk_ledger_url'],
+            reverse('desk_ledger') + '?number_from=3921',
+        )
+
+    def test_a_foreign_number_does_not_count_as_our_number(self):
+        from core.models import BookReferral
+
+        foreign = Book.objects.create(
+            kind='incoming_external', title='رقم القسم الآخر', our_number='3925',
+            department=self.other, created_by=self.outsider,
+        )
+        BookReferral.objects.create(
+            book=foreign, from_department=self.dept, to_department=self.unit,
+            created_by=self.officer, purpose=BookReferral.ACTION, due_date=self.due,
+        )
+        for page, response in self._responses({'number_from': '3925', 'number_to': '3925'}):
+            with self.subTest(page=page):
+                self.assertEqual(response.context['rows'], [])
+
+    def test_local_registration_number_is_used_for_filtering_and_printing(self):
+        from core.models import BookReferral
+
+        foreign = Book.objects.create(
+            kind='incoming_external', title='قيدنا المحلي', our_number='9991',
+            department=self.other, created_by=self.outsider,
+        )
+        distribute(foreign, [self.dept], by=self.outsider, due_date=self.due)
+        registration = register_book_here(foreign, self.dept, by=self.officer)
+        registration.number = '3925'
+        registration.save(update_fields=['number'])
+        BookReferral.objects.create(
+            book=foreign, from_department=self.dept, to_department=self.unit,
+            created_by=self.officer, purpose=BookReferral.ACTION, due_date=self.due,
+        )
+        for page, response in self._responses({'number_from': '3925', 'number_to': '3925'}):
+            with self.subTest(page=page):
+                self.assertEqual([r['number'] for r in response.context['rows']], ['3925'])
+                self.assertContains(response, 'قيدنا المحلي')
+                self.assertNotContains(response, '9991')
+
+    def test_tagged_numbers_do_not_leak_into_the_current_series(self):
+        book = Book.objects.create(
+            kind='incoming_external', title='رقم موسوم', our_number='20253925',
+            department=self.dept, created_by=self.officer,
+        )
+        distribute(book, [self.unit], by=self.officer, due_date=self.due)
+        for page, response in self._responses({'number_from': '3921', 'number_to': '3930'}):
+            with self.subTest(page=page):
+                self.assertNotContains(response, 'رقم موسوم')
+        for page, response in self._responses({'number_from': '20253925', 'number_to': '20253925'}):
+            with self.subTest(page=page):
+                self.assertEqual([r['number'] for r in response.context['rows']], ['3925'])
+                self.assertContains(response, 'سجل 2025')

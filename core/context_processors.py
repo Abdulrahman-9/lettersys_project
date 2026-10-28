@@ -81,9 +81,11 @@ def nav_gates(request):
     if user is None or not user.is_authenticated:
         return {'nav': {}}
 
-    from core.scoping import (can_archive, can_manage_accounts, can_manage_mail,
+    from core.scoping import (can_archive, can_manage_accounts, can_manage_departments,
+                              can_manage_mail,
                               can_manage_system, can_restore_system, can_use_desk,
                               can_view_audit, can_view_reports)
+    profile = getattr(user, 'profile', None)
 
     return {'nav': {
         'desk': can_use_desk(user),
@@ -92,15 +94,17 @@ def nav_gates(request):
         # السلّةُ مُنطَّقةٌ أصلاً بـ`scope_books_for`، والاستعادةُ بـ
         # `can_open_content`. فالأرشيفيُّ يستعيد ورقاً حُذف خطأً — وهو
         # عملُه — وكان الرابطُ محجوباً عنه بـ`is_staff` وحدَها.
-        'trash': user.is_staff or can_archive(user),
+        'trash': can_archive(user),
         # الجهاتُ والنسخُ وإعداداتُ النظام العامة — بوّابةٌ مسمّاةٌ يحرسها
         # tests_wiring. تشغيل البريد له بوّابة مستقلة أدناه.
         'admin': can_manage_system(user),
         'mail_admin': can_manage_mail(user),
-        # الهويّةُ والسلطة: الحساباتُ ولوحةُ الإدارة وورشةُ العناقيد — حارسُها نفسُه
-        # (`can_manage_accounts`)؛ فلا يُدلّ عليها مَن يلقى 403 (تدقيقُ نيلسن F#4،
-        # والتوحيدُ قرارُ المالك 2026‑10‑07: كانت الحساباتُ للموظّفين واللوحةُ للمدير).
+        # إدارة الحسابات العامة وورشة العناقيد للسوبر أدمن وحده؛ إدارة القسم لها
+        # بوابة منفصلة أدناه وتظل محصورة في شجرة رئيس القسم.
+        # لا يظهر رابط الحسابات العامة لمن يلقى 403.
         'roles': can_manage_accounts(user),
+        'department_admin': can_manage_departments(user),
+        'password_change_required': bool(profile and profile.must_change_password),
         # استعادةُ نسخة النظام إلى قاعدةٍ جديدة — حارسُ صفحتها نفسُه (قرارُ المالك 2026‑10‑07، البند 3)
         'restore_system': can_restore_system(user),
     }}

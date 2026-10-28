@@ -93,6 +93,9 @@ class Entity(models.Model):
         return [e.strip() for e in self.email_cc.split(',') if e.strip()]
 
 
+BOOK_ATTACHMENT_MEDIA_PREFIX = "books/"
+
+
 def book_attachment_path(instance, filename):
     # يدعم Attachment (instance.book) وAttachmentVersion (instance.attachment.book)
     book = getattr(instance, 'book', None)
@@ -100,7 +103,7 @@ def book_attachment_path(instance, filename):
         book = getattr(getattr(instance, 'attachment', None), 'book', None)
     y = book.date.year if book and book.date else timezone.localdate().year
     our_number = (book.our_number if book else '') or 'no-num'
-    return f"books/{y}/{our_number}_{filename}"
+    return f"{BOOK_ATTACHMENT_MEDIA_PREFIX}{y}/{our_number}_{filename}"
 
 
 class Department(models.Model):
@@ -150,6 +153,7 @@ class UserProfile(models.Model):
     job_title  = models.CharField("المسمّى الوظيفي", max_length=120, blank=True, default="")
     # رئيس القسم يرى سرّيّات قسمه — انظر ``core.scoping``.
     is_department_head = models.BooleanField("رئيس القسم", default=False)
+    must_change_password = models.BooleanField("تغيير كلمة المرور عند الدخول", default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

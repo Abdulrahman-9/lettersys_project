@@ -33,8 +33,9 @@ from ..models import (
     BookSequence,
 )
 from ..reservation_service import (
-    claim_reservation_for_client, reservation_client_key,
+    claim_reservation_for_client,
 )
+from ..reservation_identity import request_client_key
 from core.scoping import can_edit_book, can_open_content, is_privileged, scope_books_for
 from .books_helpers import (
     _normalize_secret_level_value,
@@ -267,7 +268,7 @@ def save_book_api(request):
             try:
                 reservation = claim_reservation_for_client(
                     reservation_id, request.user,
-                    reservation_client_key(request.session.session_key),
+                    request_client_key(request),
                     department=book_department,
                 )
             except BookNumberReservation.DoesNotExist:
@@ -360,7 +361,7 @@ def save_book_api(request):
                         pk=reservation.pk,
                         user=request.user,
                         department=book_department,
-                        client_key=reservation_client_key(request.session.session_key),
+                        client_key=request_client_key(request),
                     )
                     if (reservation.status not in [
                             BookNumberReservation.STATUS_ACTIVE,
@@ -798,6 +799,7 @@ def api_book_detail_json(request, pk):
         'attachments': attachments,
         'edit_url': reverse('book_edit', args=[book.pk]),
         'detail_url': reverse('book_detail', args=[book.pk]),
+        'report_url': reverse('book_report', args=[book.pk]),
         'inline_status_url': reverse('api_book_inline_status', args=[book.pk]),
     }
     return JsonResponse(data)

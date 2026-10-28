@@ -218,6 +218,7 @@ class PipelineHookTests(TestCase):
         prop = res.subject_box_proposal
         self.assertIsNotNone(prop)
         self.assertEqual(prop['source'], 'default')          # det2 صامت ⟵ الحزامُ الافتراضيّ للسحب
+        self.assertEqual(prop['box'], {'x': 0.08, 'y': 0.40, 'w': 0.84, 'h': 0.14})
         self.assertTrue(prop['page_preview'].startswith('data:image/jpeg;base64,'))
         self.assertTrue(cache.get('subject_page:' + prop['page_token']))
         self.assertEqual(res.title, '')

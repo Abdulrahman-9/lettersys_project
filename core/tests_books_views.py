@@ -416,10 +416,11 @@ class BookDetailJSONTests(BookViewsBase):
         for field in ['id', 'our_number', 'title', 'kind', 'date', 'followup_state',
                       'is_archived', 'followup_label',
                       'issuing_entities', 'receiving_entities', 'attachments',
-                      'edit_url', 'detail_url']:
+                      'edit_url', 'detail_url', 'report_url']:
             self.assertIn(field, data, f"Missing field: {field}")
         self.assertEqual(data['id'], self.book.pk)
         self.assertEqual(data['our_number'], '2024-001')
+        self.assertEqual(data['report_url'], reverse('book_report', args=[self.book.pk]))
 
     def test_inline_status_url_present(self):
         self._login()

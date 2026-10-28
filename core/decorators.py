@@ -138,11 +138,10 @@ def rate_limit_scan(max_attempts=3, window_seconds=300):
 # Generic rate limiter
 # ─────────────────────────────────────────────────────────────────────────────
 def _client_ip(request):
-    """Best-effort client IP extraction (respects X-Forwarded-For)."""
-    xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
-    if xff:
-        return xff.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', '0.0.0.0')
+    """Use the same explicit forwarding trust policy as the audit log."""
+    from .audit_service import client_ip
+
+    return client_ip(request) or '0.0.0.0'
 
 
 def rate_limit(scope, max_attempts=10, window_seconds=60, by='user'):

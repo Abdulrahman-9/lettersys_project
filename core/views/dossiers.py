@@ -27,7 +27,7 @@ from datetime import date, datetime
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
-from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum, prefetch_related_objects
+from django.db.models import Count, F, IntegerField, Min, OuterRef, Q, Subquery, Sum, prefetch_related_objects
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -323,13 +323,15 @@ def dossier_list(request):
         qs = qs.filter(Q(name__icontains=search_q) | Q(code__icontains=search_q))
 
     # الفرز في DB (لا تجسيد كامل في الذاكرة) + Paginator يطبّق LIMIT/OFFSET
-    last_sq = (
-        visible.filter(Q(issuing_entities=OuterRef("pk")) | Q(receiving_entities=OuterRef("pk")))
-        .exclude(date__isnull=True).order_by("-date").values("date")[:1]
-    )
+    book_dates_sq = visible.filter(
+        Q(issuing_entities=OuterRef("pk")) | Q(receiving_entities=OuterRef("pk"))
+    ).exclude(date__isnull=True)
+    last_sq = book_dates_sq.order_by("-date").values("date")[:1]
+    first_sq = book_dates_sq.order_by("date").values("date")[:1]
     qs = qs.annotate(
         total_count=F("issued_count") + F("received_count"),
         last_date=Subquery(last_sq),
+        first_date=Subquery(first_sq),
     )
     sort = request.GET.get("sort") or "count"
     if sort not in _LIST_SORTS:

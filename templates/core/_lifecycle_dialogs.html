@@ -18,6 +18,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
       </div>
       <div class="modal-body">
+        <p class="lc-dialog-intro">التفريق يوجّه الكتاب إلى الجهات المختارة. لا يثبت وصول الإحالة أو توقيع المستلم؛ لكل منهما إجراء مستقل.</p>
 
         <div class="mb-3">
           <label for="distGroup" class="form-label" style="font-size:.85rem">
@@ -30,9 +31,7 @@
 
         <fieldset class="mb-3">
           <legend class="form-label" style="font-size:.85rem">الجهات</legend>
-          <div id="distTargets"
-               style="max-height:14rem;overflow-y:auto;border:1px solid var(--bs-border-color);
-                      border-radius:.5rem;padding:.6rem">
+          <div id="distTargets" class="lc-targets" aria-live="polite">
             <span class="text-muted" style="font-size:.85rem">جارٍ التحميل…</span>
           </div>
         </fieldset>
@@ -173,6 +172,7 @@
       </div>
       <div class="modal-body">
 
+        <p class="lc-dialog-intro">سجّل انتقال الحيازة بعد التحقق من الحدث والحامل والتوقيع. طباعة كشف التسليم أو تأكيد وصول الإحالة لا ينقل العهدة تلقائياً.</p>
         <div class="mb-3">
           <label for="custEvent" class="form-label" style="font-size:.85rem">الحدث</label>
           <select class="form-select form-select-sm" id="custEvent"></select>
@@ -223,7 +223,7 @@
         <button type="button" class="btn btn-sm btn-outline-secondary"
                 data-bs-dismiss="modal">إلغاء</button>
         <button type="button" class="btn btn-sm btn-primary" id="custSubmit">
-          <i class="bi bi-check2 me-1"></i>سجّل
+          <i class="bi bi-check2 me-1" aria-hidden="true"></i>تسجيل العهدة
         </button>
       </div>
     </div>

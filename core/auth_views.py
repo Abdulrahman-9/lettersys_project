@@ -80,5 +80,12 @@ class LetterSysPasswordChangeView(PasswordChangeView):
 
     def form_valid(self, form):
         response = super().form_valid(form)   # يحدّث بصمةَ الجلسة فلا يُخرَج المستخدم
+        profile = getattr(self.request.user, 'profile', None)
+        if profile and profile.must_change_password:
+            profile.must_change_password = False
+            profile.save(update_fields=['must_change_password', 'updated_at'])
+        temporary = getattr(self.request.user, 'temp_password', None)
+        if temporary:
+            temporary.delete()
         _messages.success(self.request, 'تمّ تغيير كلمة المرور.')
         return response

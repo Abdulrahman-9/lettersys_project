@@ -43,7 +43,7 @@ def _token_owner_ok(data, user):
     """صاحب رمز المسح فقط (أو superuser) — يسدّ IDOR على الرموز المُسرَّبة.
     الرموز القديمة بلا user_id تُقبل (توافق رجعي)."""
     uid = (data or {}).get('user_id')
-    return uid is None or uid == user.id or user.is_superuser
+    return uid is None or uid == user.id or is_privileged(user)
 
 
 @login_required

@@ -9,7 +9,7 @@ from io import BytesIO
 from pypdf import PdfReader, PdfWriter
 
 from django.core.files.base import ContentFile
-from .attachment_service import ensure_pdf_bytes, validate_attachment_file
+from .attachment_service import attachment_write, ensure_pdf_bytes, validate_attachment_file
 from .models import AttachmentVersion, MergeLog
 
 
@@ -90,7 +90,7 @@ class SmartMergeService:
         if self.merge_log:
             self.merge_log.status = status
             self.merge_log.error_message = error_message
-            self.merge_log.save()
+            self.merge_log.save(update_fields=['status', 'error_message'])
     
     def merge_files(self, new_file, merge_type='smart'):
         """
@@ -101,96 +101,66 @@ class SmartMergeService:
         """
         # تحقّق موحّد من الحجم والنوع قبل أي سجل دمج أو كتابة — #12
         validate_attachment_file(new_file)
+        self.create_merge_log(action='merge', description=f"دمج ملف جديد: {new_file.name}")
         try:
-            # مصدر الدمج هو الملف الحيّ للمرفق (يحوي آخر التعديلات)، لا أحدث نسخة —
-            # فالنسخ لقطاتٌ لِما قبل التعديل (والنسخة 1 قد تكون الأصل الصُّوري)، فاستخدامها
-            # كأساس يُسقط تعديلات المستخدم أو يدمج على الصورة الأصلية بدل الـPDF.
-            current_version = self.attachment.versions.order_by('-version_number').first()
-            live_file = self.attachment.file
-            current_file = live_file if getattr(live_file, 'name', None) else (
-                current_version.file if current_version else None)
-            next_version_number = (current_version.version_number + 1) if current_version else 1
-
-            # إنشاء سجل الدمج
-            self.create_merge_log(
-                action='merge',
-                source_version=None,  # سيتم تحديثه بعد الدمج
-                target_version=current_version,
-                description=f"دمج ملف جديد: {new_file.name}"
-            )
-
-            # توحيد الصيغة: حوّل كلا المدخلين إلى PDF ثم ادمجهما كـ PDF
-            new_pdf_bytes, _, _ = ensure_pdf_bytes(_file_bytes(new_file), getattr(new_file, 'name', ''))
-            current_pdf_bytes, _, _ = ensure_pdf_bytes(_file_bytes(current_file), getattr(current_file, 'name', ''))
-
-            merged_file = self.merge_pdfs(BytesIO(new_pdf_bytes), BytesIO(current_pdf_bytes))
-            filename = f"merged_{timezone.localtime().strftime('%Y%m%d_%H%M%S')}.pdf"
-
-            # **كم ورقةً أُضيفت، ومَن أضافها** (قرارُ المالك 2026‑09‑13): الحقلُ
-            # ``page_count`` كان موجوداً في النموذج ولا يُملأ أبداً، فلم يكن أحدٌ يعرف
-            # أنّ المرفقَ صار خمسَ ورقاتٍ بعد أن كان ورقتين. يُحسَب من البايتات نفسِها
-            # (لا من القرص: الملفُّ لم يُحفظ بعد) ويُسجَّل الفرقُ في بيانات الدمج.
-            added_pages = _pdf_pages(new_pdf_bytes)
-            pages_before = _pdf_pages(current_pdf_bytes)
-            merged_bytes = merged_file.getbuffer().tobytes()
-            total_pages = _pdf_pages(merged_bytes) or (pages_before + added_pages)
-
-            # حفظ النسخة الجديدة
-            new_version = AttachmentVersion.objects.create(
-                attachment=self.attachment,
-                version_number=next_version_number,
-                created_by=self.user,
-                note=f"دمج الملف: {new_file.name}",
-                merge_type='pdf',
-                merged_from_version=current_version,
-                is_merged=True,
-                merge_metadata={
-                    'source_filename': str(new_file.name),
-                    'target_filename': str(getattr(current_file, 'name', '')),
-                    'merge_type': 'pdf',
-                    'merged_at': timezone.now().isoformat(),
-                    'added_pages': added_pages,
-                    'pages_before': pages_before,
-                },
-                page_count=total_pages,
-                file_size=merged_file.getbuffer().nbytes
-            )
-            
-            # حفظ الملف المدمج
-            new_version.file.save(filename, ContentFile(merged_file.read()), save=True)
-            
-            # تحديث الملف الأساسي
-            self.attachment.file = new_version.file
-            self.attachment.save()
-            
-            # تحديث سجل الدمج
-            self.merge_log.target_version = new_version
-            self.merge_log.status = 'success'
-            self.merge_log.save()
-            
-            return new_version
-        
+            with attachment_write(self.attachment) as (locked, save_file):
+                self.attachment = locked
+                return self._merge_files(new_file, save_file)
         except Exception as e:
             self.update_merge_log('failed', str(e))
             raise
+
+    def _merge_files(self, new_file, save_file):
+        # The live file includes edits; the latest version may be an old snapshot.
+        current_version = self.attachment.versions.order_by('-version_number').first()
+        live_file = self.attachment.file
+        current_file = live_file if getattr(live_file, 'name', None) else (
+            current_version.file if current_version else None)
+        number = (current_version.version_number + 1) if current_version else 1
+        new_pdf_bytes, _, _ = ensure_pdf_bytes(_file_bytes(new_file), getattr(new_file, 'name', ''))
+        current_pdf_bytes, _, _ = ensure_pdf_bytes(
+            _file_bytes(current_file), getattr(current_file, 'name', ''))
+        merged_file = self.merge_pdfs(BytesIO(new_pdf_bytes), BytesIO(current_pdf_bytes))
+        filename = f"merged_{timezone.localtime().strftime('%Y%m%d_%H%M%S')}.pdf"
+        added_pages = _pdf_pages(new_pdf_bytes)
+        pages_before = _pdf_pages(current_pdf_bytes)
+        merged_bytes = merged_file.getbuffer().tobytes()
+        total_pages = _pdf_pages(merged_bytes) or (pages_before + added_pages)
+        new_version = AttachmentVersion(
+            attachment=self.attachment, version_number=number, created_by=self.user,
+            note=f"دمج الملف: {new_file.name}", merge_type='pdf',
+            merged_from_version=current_version, is_merged=True,
+            merge_metadata={
+                'source_filename': str(new_file.name),
+                'target_filename': str(getattr(current_file, 'name', '')),
+                'merge_type': 'pdf',
+                'merged_at': timezone.now().isoformat(),
+                'added_pages': added_pages,
+                'pages_before': pages_before,
+            },
+            page_count=total_pages, file_size=len(merged_bytes),
+        )
+        save_file(new_version.file, filename, ContentFile(merged_bytes))
+        new_version.save()
+        self.attachment.file = new_version.file
+        self.attachment.save(update_fields=['file'])
+        self.merge_log.target_version = new_version
+        self.merge_log.status = 'success'
+        self.merge_log.save(update_fields=['target_version', 'status'])
+        return new_version
+
     
     def delete_current_file(self, reason=''):
         """حذف الملف الحالي (soft delete)"""
+        self.create_merge_log(action='delete', description=reason)
         try:
-            self.create_merge_log(
-                action='delete',
-                status='pending',
-                description=reason
-            )
-            
-            # حذف ناعم موحّد: نُبقي الملف على القرص (كي تعمل الاستعادة restore_attachment
-            # ولا يتيتّم الملف) — لا نُفرّغ FieldFile. #11
-            self.attachment.is_deleted = True
-            self.attachment.deleted_at = timezone.now()
-            self.attachment.deleted_by = self.user
-            self.attachment.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
-            
-            self.update_merge_log('success')
+            with attachment_write(self.attachment) as (locked, _save_file):
+                self.attachment = locked
+                locked.is_deleted = True
+                locked.deleted_at = timezone.now()
+                locked.deleted_by = self.user
+                locked.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
+                self.update_merge_log('success')
             return True
         
         except Exception as e:
@@ -199,30 +169,24 @@ class SmartMergeService:
     
     def restore_version(self, version_number):
         """استعادة نسخة سابقة"""
+        self.create_merge_log(
+            action='restore', description=f"استعادة النسخة {version_number}")
         try:
-            version = self.attachment.versions.get(version_number=version_number)
-            
-            self.create_merge_log(
-                action='restore',
-                source_version=version,
-                status='pending',
-                description=f"استعادة النسخة {version_number}"
-            )
-
-            # توحيد الصيغة عند الاستعادة: النسخة 1 قد تكون الأصل الصُّوري (PNG/JPG)،
-            # فنحوّل المُستعاد إلى PDF كي لا يُكسر ثبات «المرفق دائماً PDF».
-            from pathlib import Path
-            from .attachment_service import ensure_pdf_bytes
-            raw = _file_bytes(version.file)
-            pdf_bytes, _, _ = ensure_pdf_bytes(raw, getattr(version.file, 'name', ''))
-            base = Path(getattr(version.file, 'name', 'restored') or 'restored').stem or 'restored'
-            self.attachment.file.save(f"{base}.pdf", ContentFile(pdf_bytes), save=False)
-            self.attachment.is_deleted = False
-            self.attachment.deleted_at = None
-            self.attachment.deleted_by = None
-            self.attachment.save()
-            
-            self.update_merge_log('success')
+            with attachment_write(self.attachment, allow_deleted=True) as (locked, save_file):
+                self.attachment = locked
+                version = locked.versions.get(version_number=version_number)
+                from pathlib import Path
+                raw = _file_bytes(version.file)
+                pdf_bytes, _, _ = ensure_pdf_bytes(raw, getattr(version.file, 'name', ''))
+                base = Path(version.file.name).stem or 'restored'
+                save_file(locked.file, f"{base}.pdf", ContentFile(pdf_bytes))
+                locked.is_deleted = False
+                locked.deleted_at = None
+                locked.deleted_by = None
+                locked.save(update_fields=['file', 'is_deleted', 'deleted_at', 'deleted_by'])
+                self.merge_log.source_version = version
+                self.merge_log.status = 'success'
+                self.merge_log.save(update_fields=['source_version', 'status'])
             return version
         
         except AttachmentVersion.DoesNotExist:

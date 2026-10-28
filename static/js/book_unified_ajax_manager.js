@@ -504,21 +504,66 @@
           self.updateUrlAndLoadData();
         });
       }
-    }
-
-    // المفتاحُ والتلميحُ يتبعان الحالةَ بعد الرجوع/التقدّم والمسح وكلِّ جلب
-    syncLegacyControls(widened) {
-      const legacy = document.querySelector('[name="legacy"]');
-      if (legacy) legacy.checked = this.currentState.legacy === '1';
-      const hint = document.getElementById('searchWidenedHint');
-      if (hint) {
-        hint.hidden = typeof widened === 'boolean'
-          ? !widened
-          : !(this.currentState.search && this.currentState.legacy !== '1');
+      // زرُّ سطر الورق القديم يقلب الصندوقَ نفسَه — مسارٌ واحدٌ للحالة لا نسختان
+      const legacyToggle = document.getElementById('legacyHintToggle');
+      if (legacy && legacyToggle) {
+        legacyToggle.addEventListener('click', () => {
+          legacy.checked = !legacy.checked;
+          legacy.dispatchEvent(new Event('change'));
+        });
       }
     }
 
+    // المفتاحُ والتلميحُ يتبعان الحالةَ بعد الرجوع/التقدّم والمسح وكلِّ جلب
+    syncLegacyControls(widened, counts) {
+      const legacy = document.querySelector('[name="legacy"]');
+      if (legacy) legacy.checked = this.currentState.legacy === '1';
+      const searching = typeof widened === 'boolean'
+        ? widened
+        : !!(this.currentState.search && this.currentState.legacy !== '1');
+      const hint = document.getElementById('searchWidenedHint');
+      if (hint) hint.hidden = !searching;
+      this.syncLegacyHint(searching, counts);
+    }
+
+    // سطرُ الورق القديم: الحالةُ من المفتاح، والأعدادُ من آخر جلب — لا تتبع التبويبَ ولا البحث
+    syncLegacyHint(searching, counts) {
+      const line = document.getElementById('legacyHint');
+      if (!line) return;
+      if (counts) {
+        line.querySelectorAll('[data-legacy-count]').forEach(el => {
+          el.textContent = counts[el.dataset.legacyCount];
+        });
+        line.dataset.paper = counts.paper;
+      }
+      const on = this.currentState.legacy === '1';
+      line.hidden = !Number(line.dataset.paper) || searching;
+      line.classList.toggle('is-on', on);
+      line.querySelectorAll('[data-legacy-state]').forEach(el => {
+        el.hidden = el.dataset.legacyState !== (on ? 'on' : 'off');
+      });
+      const btn = document.getElementById('legacyHintToggle');
+      if (btn) btn.textContent = on ? btn.dataset.labelOn : btn.dataset.labelOff;
+    }
+
     // ─── 5. Sort handlers ──────────────────────────────────────────────────────
+    // رأسُ العمود زرٌّ، فـ Enter/Space يُطلقان click أصلاً — لا مستمعَ keydown.
+    // و aria-sort يُوضع على <th> لا على الزرّ (هو عنصرُ رأس العمود دلاليّاً).
+    syncSortIndicators() {
+      const current = this.currentState.sort || '-date';
+      const descending = current.startsWith('-');
+      const active = descending ? current.slice(1) : current;
+      document.querySelectorAll('[data-sort]').forEach(el => {
+        const th = el.closest('th');
+        if (!th) return;
+        if (el.dataset.sort === active) {
+          th.setAttribute('aria-sort', descending ? 'descending' : 'ascending');
+        } else {
+          th.removeAttribute('aria-sort');
+        }
+      });
+    }
+
     attachSortHandlers() {
       const self = this;
       document.querySelectorAll('[data-sort], .sortable-header').forEach(link => {
@@ -528,9 +573,11 @@
           // toggle asc/desc
           self.currentState.sort = self.currentState.sort === field ? `-${field}` : field;
           self.currentState.page = 1;
+          self.syncSortIndicators();
           self.updateUrlAndLoadData();
         });
       });
+      this.syncSortIndicators();
     }
 
     // ─── 6. Core: fetch + re-render ────────────────────────────────────────────
@@ -581,7 +628,7 @@
         renderPagination(data.pagination, params);
         renderFilterBadges(data.active_filters);
         renderBadgeCounts(data.badges);
-        this.syncLegacyControls(data.search_widened);
+        this.syncLegacyControls(data.search_widened, data.legacy_counts);
         this.updateSearchResultsDisplay();
 
         // Empty state visibility

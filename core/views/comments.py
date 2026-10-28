@@ -12,7 +12,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from core.scoping import can_open_content
+from core.scoping import can_open_content, is_privileged
 
 
 from ..models import Book, BookComment
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 def can_edit_comment(user, comment) -> bool:
     """مالكُ التعليق أو مديرُ النظام — الحارسُ الخادميُّ وبوّابةُ الزرّ في القالب معاً
     (§7.6: القالبُ لا يحمل شرطَ دور؛ يقرأ ``comment.can_edit`` المحسوبةَ في العرض)."""
-    return user == comment.created_by or bool(user.is_superuser)
+    return user == comment.created_by or is_privileged(user)
 
 @login_required
 @require_http_methods(["POST"])

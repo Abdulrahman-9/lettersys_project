@@ -10,10 +10,35 @@
 .summary-chip { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:.5rem .9rem; font-size:.8rem; color:#475569; font-weight:600; display:flex; align-items:center; gap:.4rem; }
 .summary-chip b { color:#1e293b; font-size:1rem; }
 .summary-chip.out { color:#b45309; } .summary-chip.in { color:#1e5a9e; }
+/* شريط بحث+ترتيب موحّد */
+.dossier-fbar { display:flex; align-items:center; gap:.5rem; background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:.5rem .75rem; margin-bottom:.6rem; flex-wrap:wrap; box-shadow:0 1px 3px rgba(0,0,0,.03); }
+.dfb-search { position:relative; flex:1 1 200px; min-width:160px; }
+.dfb-search input { width:100%; border:1px solid #e5e7eb; border-radius:8px; padding:.42rem 1.9rem .42rem .65rem; font-size:.88rem; background:#f8fafc; transition:border-color .15s, box-shadow .15s; }
+.dfb-search input:focus { outline:none; border-color:#0f766e; box-shadow:0 0 0 3px rgba(15,118,110,.1); background:#fff; }
+.dfb-search-ico { position:absolute; inset-inline-end:.6rem; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:.9rem; pointer-events:none; }
+.dfb-div { width:1px; height:24px; background:#e5e7eb; flex:0 0 auto; margin:.1rem .05rem; }
+.dfb-sorts { display:inline-flex; align-items:center; gap:.3rem; flex-wrap:wrap; }
 .dossier-sort { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; margin:-.4rem 0 1rem; font-size:.8rem; }
 .dossier-sort .ds-lbl { color:#64748b; font-weight:600; }
+.ds-lbl { color:#64748b; font-weight:600; font-size:.78rem; white-space:nowrap; }
+/* نطاق تاريخ البطاقة (يحلّ محلّ dc-last) */
+.dc-dates { margin-top:.5rem; font-size:.73rem; color:#64748b; font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:.3rem; border-top:1px solid #f1f5f9; padding-top:.45rem; }
+.dc-dates-sep { color:#cbd5e1; font-size:.7rem; }
+.dc-dates-empty { color:#cbd5e1; }
+/* متوافقية: .dc-last قد يبقى في صفحة التفاصيل */
 .dc-last { margin-top:.55rem; font-size:.74rem; color:#64748b; font-variant-numeric:tabular-nums; }
 .dc-badge.out.zero, .dc-badge.in.zero { background:#f8fafc; color:#94a3b8; border-color:#e2e8f0; font-weight:600; }
+/* شرائح الفلاتر الفعّالة */
+.dossier-active-filters { display:flex; align-items:center; flex-wrap:wrap; gap:.35rem; margin-bottom:.75rem; }
+.daf-chip { background:#fff7ed; color:#b45309; border:1px solid #fed7aa; border-radius:999px; padding:.2rem .65rem; font-size:.76rem; font-weight:600; display:inline-flex; align-items:center; gap:.3rem; }
+.daf-remove { color:#b45309; opacity:.6; text-decoration:none; font-weight:800; }
+.daf-remove:hover { opacity:1; }
+.daf-clear { margin-inline-start:auto; font-size:.74rem; color:#be123c; font-weight:700; text-decoration:none; }
+.daf-clear:hover { text-decoration:underline; }
+/* شرائح الملخّص — active state للروابط */
+.summary-chip { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:.5rem .9rem; font-size:.8rem; color:#475569; font-weight:600; display:flex; align-items:center; gap:.4rem; text-decoration:none; transition:border-color .15s; }
+.summary-chip:hover { border-color:#b45309; }
+.summary-chip.active { background:#fff7ed; border-color:#fed7aa; }
 .dossier-search { display:flex; gap:.5rem; margin-bottom:1rem; max-width:420px; }
 .dossier-search input { flex:1; border:1px solid #d1d5db; border-radius:8px; padding:.5rem .8rem; font-size:.9rem; }
 .dossier-search button { border:none; background:#b45309; color:#fff; border-radius:8px; padding:.5rem 1rem; font-weight:600; cursor:pointer; }

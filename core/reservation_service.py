@@ -183,6 +183,37 @@ def force_cooldown_for_user(user, kind=None, minutes=COOLDOWN_MINUTES,
     return count
 
 
+def heartbeat_reservation(reservation, user, client_key):
+    """Resume only an owned hold still inside its exclusive return window."""
+    from django.contrib.auth import get_user_model
+    from .models import BookNumberReservation as R, SystemSettings
+
+    with transaction.atomic():
+        get_user_model().objects.select_for_update().get(pk=user.pk)
+        r = R.objects.select_for_update().get(
+            pk=reservation.pk, user=user, client_key=client_key)
+        now = timezone.now()
+        if r.is_live_status and r.is_expired:
+            r.mark_expired()
+        if (r.status == R.STATUS_COOLDOWN and r.book_id is None
+                and r.cooldown_until and r.cooldown_until > now):
+            other_active = R.objects.filter(
+                user=user, kind=r.kind, department_id=r.department_id,
+                client_key=client_key,
+                status__in=[R.STATUS_ACTIVE, R.STATUS_REACTIVATED],
+            ).exclude(pk=r.pk).exists()
+            if not other_active:
+                r.status = R.STATUS_ACTIVE
+                r.expires_at = now + timedelta(minutes=SystemSettings.reservation_ttl())
+                r.cooldown_until = None
+                r.void_reason = ''
+                r.save(update_fields=[
+                    'status', 'expires_at', 'cooldown_until', 'void_reason'])
+        if r.is_live_status:
+            r.touch_heartbeat()
+        return r
+
+
 def sweep_stale(now=None):
     """شبكة أمان دورية:
       • نبضة نشطة ميتة (> HEARTBEAT_DEAD_SECONDS) → cooldown (فوات حدث WS/انقطاع مفاجئ).

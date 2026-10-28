@@ -43,7 +43,7 @@ from core.models import (
     SuggestionItem,
     ExtractionStatistics,
 )
-from core.scoping import can_edit_book, can_open_content, can_review_extraction, user_department_id
+from core.scoping import can_edit_book, can_open_content, can_review_extraction, is_privileged, user_department_id
 from core.extraction.kinds import BOOK_KIND_LABELS, DEFAULT_BOOK_KIND, get_kind_label, normalize_book_kind
 logger = logging.getLogger(__name__)
 
@@ -568,7 +568,7 @@ def scan_token_retrieve(request, token: str):
         )
     # ربط الرمز بصاحبه (يسدّ IDOR على رمز مُسرَّب)
     uid = data.get('user_id')
-    if uid is not None and uid != request.user.id and not request.user.is_superuser:
+    if uid is not None and uid != request.user.id and not is_privileged(request.user):
         return _api_response(
             False, 'رمز المسح غير متاح',
             status_code=status.HTTP_404_NOT_FOUND, error_code='TOKEN_NOT_FOUND',

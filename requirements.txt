@@ -1,16 +1,17 @@
-Django==4.2.14
+-c security-constraints.txt
+
+Django==5.2.18
 channels[daphne]==4.3.2
 daphne==4.2.2
 pywin32==306; sys_platform == "win32"
 channels-redis==4.3.0
 openpyxl==3.1.2
-Pillow==10.3.0
+Pillow==13.0.0
 django-ratelimit==4.1.0
-cryptography==46.0.3
-pypdf==5.2.0
-PyPDF2==3.0.1
+cryptography==50.0.2
+pypdf==6.21.1
 python-magic==0.4.27
-djangorestframework==3.14.0
+djangorestframework==3.18.3
 
 # ===================================
 # Database (PostgreSQL + Full-Text Search)
@@ -41,7 +42,7 @@ scikit-learn>=1.3.0
 # Image Processing
 opencv-python>=4.8.0
 numpy>=1.24.0
-# Pillow مثبّت أعلاه (Pillow==10.3.0)
+# Pillow مثبّت أعلاه (Pillow==13.0.0)
 
 # PDF Processing
 PyMuPDF>=1.23.0
@@ -54,7 +55,7 @@ celery>=5.3.0
 # redis مثبّت أعلاه (قسم Caching)
 
 # Additional
-requests>=2.31.0
+requests>=2.34.2
 
 
 # HTML Sanitization (حماية XSS في عرض محتوى البريد الخارجي)
@@ -67,3 +68,10 @@ bleach>=6.1.0
 # مبنيّةً من هذا الملفّ كانت **بلا أيّ قراءةٍ يدويّة** بلا أن يظهر عطب.
 # CPU فقط عمداً (جهازُ الخدمة بلا GPU) — 0.4 ث للصفحة و~350MB.
 onnxruntime>=1.17,<2.0
+
+
+# ── جسرُ SQL Server (الدمجُ من النظام القديم) ────────────────────────────────
+# **كان ناقصاً**: `core/legacy_restore.py` يستورده كسولاً، فنسخةٌ مبنيّةٌ من هذا
+# الملفّ تصل بلا أيّ مسارِ دمجٍ من الباكاب القديم وتبدو سليمة حتى يوم الحاجة.
+# يحتاج أيضاً «ODBC Driver 17 for SQL Server» مثبّتاً على الجهاز (ليس حزمةَ بايثون).
+pyodbc>=5.1,<6.0

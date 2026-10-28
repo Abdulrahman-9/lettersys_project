@@ -236,9 +236,15 @@ def desk_board(request):
         {'key': 'secret', 'label': 'سرّي مفتوح', 'tone': 'secret',
          'hint': 'التزامٌ قائمٌ على كتابٍ مقيَّد', **_queue(secret_open, request.user, limit=_limit_for(request, 'secret'))},
     ]
+    active_queue = request.GET.get('queue') or request.GET.get('expand') or 'recent'
+    selected_queue = next((q for q in queues if q['key'] == active_queue), None)
+    if active_queue != 'recent' and selected_queue is None:
+        raise Http404('تصنيف المتابعة غير موجود.')
 
     return render(request, 'core/desk_board.html', {
         'queues': queues,
+        'active_queue': active_queue,
+        'selected_queue': selected_queue,
         # فراغٌ واحدٌ بمخرج بدل خمس بطاقاتٍ تقول «لا شيء هنا» — كـ«ما يخصّني» (تدقيقُ نيلسن D#24)
         'queues_empty': not any(q.get('total') for q in queues),
         'today': today,

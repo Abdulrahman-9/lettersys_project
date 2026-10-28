@@ -315,12 +315,14 @@
     <div class="rs-step__bd">
       <div class="rs-why mb-3">
         ملف <code>.bak</code> صيغةٌ خاصّة بـ SQL Server لا تُقرأ إلا باستعادتها داخل خادم SQL محلي.
-        الأداة تفكّ الضغط (إن لزم)، تستعيد إلى قاعدة <strong>مؤقتة تُحذف تلقائياً</strong>، ثم تستورد.
+        الأداة تفكّ الضغط (إن لزم)، تستعيد إلى قاعدة <strong>مؤقتة تُحذف تلقائياً</strong>،
+        تقرأ حدّ المصدر المحفوظ لتمييز الجديد، تدمج الجديد وحدَه، ثمّ تكتب الحدّ الجديد —
+        كلّه في الخلفية بمؤشّر تقدّمٍ وإلغاء.
         <strong>احسب المساحة:</strong> الاستعادة تكتب ملف بيانات وملف سجلّ بحجمهما الأصلي —
         باكاب ١٥ ج.ب قد يحتاج ٣٥ ج.ب حرّة. اختر «مجلّد العمل» على قرصٍ واسع.
       </div>
       <form method="post"
-            data-confirm="تأكيد الاستعادة من الملف؟&#10;&#10;يُفَكّ الضغط ثم تُستعاد إلى قاعدة مؤقتة ثم تُستورَد. قد تستغرق وقتاً طويلاً حسب الحجم." data-confirm-ok="ابدأ الاستعادة">
+            data-confirm="تأكيد البدء من الملف؟&#10;&#10;يُفَكّ الضغط ثم تُستعاد إلى قاعدة مؤقتة ثم يُحسب الجديد. مع «معاينة فقط» لا يُكتب أيّ كتاب. تعمل في الخلفية وقد تستغرق ساعات حسب الحجم." data-confirm-ok="ابدأ">
         {% csrf_token %}
         <div class="mb-2">
           <label class="form-label small mb-1" for="bakPathInput">مسار ملف الباكاب</label>
@@ -364,12 +366,25 @@
             <label class="form-check-label small" for="bakModeUpdate"><strong>تحديث الموجود</strong> — يستبدل الحقول من المصدر</label>
           </div>
         </div>
-        <div class="form-check mb-3">
+        <div class="form-check">
           <input type="checkbox" class="form-check-input" name="restore_files" id="bakRestoreFiles" checked>
           <label class="form-check-label small" for="bakRestoreFiles">إحضار المرفقات</label>
         </div>
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input" name="dry_run" id="bakDryRun" checked>
+          <label class="form-check-label small" for="bakDryRun">
+            <strong>معاينة فقط</strong> — تستعيد الملفّ وتحسب الجديد بلا كتابة أيّ كتاب
+          </label>
+        </div>
+        <div class="form-check mb-3">
+          <input type="checkbox" class="form-check-input" name="include_held" id="bakIncludeHeld">
+          <label class="form-check-label small" for="bakIncludeHeld">
+            استيراد الصفوف <strong>الموقوفة</strong> أيضاً
+            <span class="text-muted">(قديمةٌ لم تُستورد سابقاً — غالباً تُركت عمداً)</span>
+          </label>
+        </div>
         <button type="submit" name="action" value="restore_from_bak" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-file-earmark-zip me-1"></i>استعادة من الملف
+          <i class="bi bi-file-earmark-zip me-1"></i>ابدأ في الخلفية
         </button>
       </form>
     </div>
@@ -394,7 +409,7 @@
         <div id="bakBrowseList" class="border rounded" style="max-height:340px; overflow-y:auto;">
           <div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>جارٍ التحميل...</div>
         </div>
-        <div class="form-text mt-2">تُعرَض المجلدات وملفات النسخ الاحتياطي فقط (<code>.bak</code> / <code>.zip</code> / <code>.7z</code> / <code>.tar.gz</code>).</div>
+        <div class="form-text mt-2">تُعرَض المجلدات وملفات النسخ الاحتياطي فقط (<code>.bak</code> / <code>.zip</code> / <code>.tar.gz</code> / <code>.tgz</code>). ملفات <code>.7z</code> تُستخرج يدوياً ثم يُمرَّر مسار <code>.bak</code>.</div>
       </div>
     </div>
   </div>

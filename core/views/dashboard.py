@@ -714,27 +714,40 @@ def data_restore(request):
             if not bak_path:
                 messages.error(request, 'مسار ملف الباكاب مطلوب.')
                 return render(request, 'core/data_restore.html', ctx)
-            try:
-                summary = LegacyRestoreEngine.restore_from_bak(
-                    bak_path, sql_server=bak_server, admin_user=bak_user, admin_password=bak_pass,
-                    created_by=request.user, restore_files=restore_files, mode=mode,
-                    work_dir=bak_work_dir or None,
-                )
-                if summary.get('aborted'):
-                    messages.warning(request, summary.get('reason', 'تم الإيقاف.'))
-                else:
-                    ctx['summary'] = summary
-                    parts = []
-                    if summary.get('books'):   parts.append(f"{summary['books']:,} كتاب جديد")
-                    if summary.get('updated'): parts.append(f"{summary['updated']:,} مُحدَّث")
-                    if summary.get('skipped'): parts.append(f"{summary['skipped']:,} متخطّى")
-                    if restore_files and summary.get('files'): parts.append(f"{summary['files']:,} مرفق")
-                    if summary.get('dedup_fixed'): parts.append(f"فُكّ {summary['dedup_fixed']} تكرار")
-                    messages.success(request, "تمت الاستعادة من الملف: " + ("، ".join(parts) if parts else "لا تغييرات"))
-                    _reseed_book_sequences()
-            except Exception as e:
-                logger.exception('restore_from_bak failed')
-                messages.error(request, f'فشل أثناء الاستعادة من الملف: {e}')
+            if not bak_pass:
+                messages.error(request, 'كلمة سرّ SQL Server مطلوبة (أو اضبط LEGACY_SQL_PASSWORD في بيئة الخادم).')
+                return render(request, 'core/data_restore.html', ctx)
+            live = RestoreJob.running()
+            if live:
+                messages.warning(request, f'توجد مهمّة دمج قيد التنفيذ (#{live.id}) — '
+                                          'انتظر انتهاءها أو ألغِها قبل بدء أخرى.')
+                ctx['live_job_id'] = live.id
+                ctx['state'] = _restore_state()
+                return render(request, 'core/data_restore.html', ctx)
+
+            # الدمج من ملفّ باكاب يستغرق ساعات (استعادة عشرات الجيغابايت ثمّ نقل
+            # المرفقات)، فلا يجوز أن يحمله طلب HTTP: كان ينتهي بمهلة المتصفّح
+            # بينما العمل ماضٍ بلا تقدّمٍ ظاهر ولا إلغاء ولا أثرٍ بعد إغلاق الصفحة.
+            # نفس مسار «ابدأ الدمج» للقاعدة الحيّة: صفُّ مهمّةٍ وعمليةٌ مستقلّة.
+            job = RestoreJob.objects.create(
+                created_by=request.user,
+                params={
+                    'source': 'bak', 'bak_path': bak_path, 'server': bak_server,
+                    'username': bak_user, 'work_dir': bak_work_dir, 'mode': mode,
+                    'restore_files': restore_files,
+                    'include_held': request.POST.get('include_held') == 'on',
+                    'delta_only': request.POST.get('dry_run') == 'on',
+                    'boundary_key': (request.POST.get('boundary_key') or 'ARCHMDOC').strip(),
+                },
+            )
+            ok, err = _spawn_restore_process('merge_legacy_bak', job, bak_pass)
+            if ok:
+                ctx['live_job_id'] = job.id
+                messages.success(
+                    request, f'بدأ الدمج من الملفّ في الخلفية — مهمّة #{job.id}. '
+                             'التقدّم والإلغاء في الخطوة ٤، ويمكنك إغلاق الصفحة.')
+            else:
+                messages.error(request, err)
             ctx['state'] = _restore_state()
             return render(request, 'core/data_restore.html', ctx)
 
@@ -841,6 +854,34 @@ def restore_reconcile(request):
     return JsonResponse(report)
 
 
+def _spawn_restore_process(command, job, password):
+    """
+    يشغّل أمر دمجٍ كعمليةٍ مستقلّة ويعود فوراً — يُعيد (نجح، رسالة الخطأ).
+
+    مشتركٌ بين مساري الدمج (قاعدة حيّة / ملفّ باكاب) كي لا يفترقا في تمرير
+    الاعتماد. الاعتماد يمرّ في **بيئة العملية الابنة** فقط: لا في صفّ المهمّة
+    ولا في سطر الأوامر (يراه أيّ مستخدم في قائمة العمليات).
+    """
+    import subprocess
+    import sys
+
+    env = dict(os.environ, LEGACY_SQL_PASSWORD=password, PYTHONIOENCODING='utf-8')
+    creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+    try:
+        subprocess.Popen(
+            [sys.executable, 'manage.py', command, '--job', str(job.id)],
+            cwd=str(settings.BASE_DIR), env=env, creationflags=creationflags,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        job.status = RestoreJob.STATUS_FAILED
+        job.error_message = f'تعذّر تشغيل العملية: {exc}'
+        job.finished_at = timezone.now()
+        job.save(update_fields=['status', 'error_message', 'finished_at'])
+        return False, job.error_message
+    return True, ''
+
+
 @staff_required
 @require_POST
 def restore_start(request):
@@ -851,9 +892,6 @@ def restore_start(request):
     قبل هذا كان الدمج يعمل داخل الطلب نفسه — فتنتهي مهلة المتصفّح ويظنّ المستخدم
     أنه فشل بينما هو ماضٍ، ولا يبقى منه أثر إن أُغلقت الصفحة.
     """
-    import subprocess
-    import sys
-
     from ..models import RestoreJob
 
     live = RestoreJob.running()
@@ -882,22 +920,9 @@ def restore_start(request):
         },
     )
 
-    # الاعتماد يُمرَّر في بيئة العملية الابنة فقط — لا في صفّ المهمّة ولا في سطر الأوامر.
-    env = dict(os.environ, LEGACY_SQL_PASSWORD=password, PYTHONIOENCODING='utf-8')
-    creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
-    try:
-        subprocess.Popen(
-            [sys.executable, 'manage.py', 'run_restore_job', '--job', str(job.id)],
-            cwd=str(settings.BASE_DIR), env=env, creationflags=creationflags,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-    except OSError as exc:
-        job.status = RestoreJob.STATUS_FAILED
-        job.error_message = f'تعذّر تشغيل العملية: {exc}'
-        job.finished_at = timezone.now()
-        job.save(update_fields=['status', 'error_message', 'finished_at'])
-        return JsonResponse({'ok': False, 'error': job.error_message})
-
+    ok, err = _spawn_restore_process('run_restore_job', job, password)
+    if not ok:
+        return JsonResponse({'ok': False, 'error': err})
     return JsonResponse({'ok': True, 'job_id': job.id})
 
 
@@ -948,10 +973,11 @@ def restore_delta(request):
 def bak_browse(request):
     """
     متصفّح ملفات على جهاز الخادم لاختيار ملف باكاب — للقراءة فقط، يعرض المجلدات
-    وملفات النسخ الاحتياطي فقط (.bak / .zip / .7z / .tar.gz). يُستخدَم من صفحة الاستعادة.
+    وملفات النسخ الاحتياطي فقط (.bak / .zip / .tar.gz / .tgz).
+    فك ملفات 7z يتم يدوياً ثم تُمرَّر الاستعادة على ملف .bak الناتج.
     """
     import os
-    BACKUP_EXTS = ('.bak', '.zip', '.7z', '.tar.gz', '.tgz', '.gz')
+    BACKUP_EXTS = ('.bak', '.zip', '.tar.gz', '.tgz')
     raw = (request.GET.get('path') or '').strip()
 
     # المستوى الأعلى: الأقراص + مجلدات سريعة

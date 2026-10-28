@@ -86,6 +86,52 @@ class QueueScreenTests(TestCase):
         self.assertEqual(queue['rows'][0]['status_label'], 'مستلَم')
         self.assertEqual(queue['rows'][0]['purpose_label'], 'للتنفيذ')
 
+    def test_desk_classification_shows_one_queue_in_a_structured_table(self):
+        self._referral(due_date=self.today - timedelta(days=1))
+        self._referral(due_date=self.today)
+        self.client.force_login(self.clerk)
+        response = self.client.get(reverse('desk_board'), {'queue': 'overdue'})
+        self.assertEqual(response.context['selected_queue']['key'], 'overdue')
+        self.assertContains(response, 'class="desk-queue-table"', count=1)
+        self.assertContains(response, 'class="desk-queue-panel ', count=1)
+        self.assertNotContains(response, 'class="qb-grid"')
+        self.assertNotContains(response, 'id="recent-books"')
+        self.assertContains(response, 'الجهة المحال إليها')
+        self.assertContains(response, 'موعد الإنجاز')
+
+    def test_recent_actions_identify_the_recipient_and_distinguish_arrival_from_custody(self):
+        self._referral(due_date=self.today)
+        self.client.force_login(self.clerk)
+        response = self.client.get(reverse('desk_board'))
+        self.assertContains(response, 'class="desk-referral-actions"')
+        self.assertContains(response, '<legend>وحدة التقارير</legend>')
+        self.assertContains(response, 'data-desk-target="وحدة التقارير"')
+        self.assertContains(response, 'تأكيد وصول الإحالة')
+        self.assertContains(response, 'لا يوثّق توقيعاً ورقياً')
+
+    def test_unknown_desk_classification_is_not_silently_ignored(self):
+        self.client.force_login(self.clerk)
+        self.assertEqual(self.client.get(reverse('desk_board'), {'queue': 'unknown'}).status_code, 404)
+
+    def test_dashboard_queue_links_select_the_corresponding_desk_tab(self):
+        from core.dashboard_sections import _to
+
+        self.assertEqual(
+            _to('desk_board', anchor='overdue'),
+            reverse('desk_board') + '?queue=overdue#q-overdue',
+        )
+
+    def test_desk_expand_preserves_selected_classification(self):
+        from core.views.queues import ROW_LIMIT
+
+        for _ in range(ROW_LIMIT + 1):
+            self._referral(due_date=self.today)
+        self.client.force_login(self.clerk)
+        response = self.client.get(reverse('desk_board'), {'queue': 'today'})
+        self.assertContains(response, '?queue=today&amp;expand=today#q-today')
+        expanded = self.client.get(reverse('desk_board'), {'queue': 'today', 'expand': 'today'})
+        self.assertEqual(len(expanded.context['selected_queue']['rows']), ROW_LIMIT + 1)
+
     def test_info_referrals_do_not_count_as_due_today_or_overdue(self):
         self._referral(
             purpose=BookReferral.INFO,

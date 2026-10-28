@@ -12,13 +12,14 @@
 """
 
 import tempfile
+from pathlib import Path
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from core.models import Attachment, Book
+from core.models import Attachment, AttachmentVersion, Book
 
 _MEDIA = tempfile.mkdtemp()
 import atexit, shutil
@@ -105,3 +106,88 @@ class ServeMediaProtectionTests(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 403)
         self.assertNotIn("X-Accel-Redirect", resp)
+
+    def assert_media_rejected(self, url):
+        for accelerated in (False, True):
+            with self.subTest(url=url, accelerated=accelerated):
+                with override_settings(USE_X_ACCEL_REDIRECT=accelerated):
+                    resp = self.client.get(url)
+                    try:
+                        self.assertIn(resp.status_code, (403, 404))
+                        self.assertNotIn("X-Accel-Redirect", resp)
+                        self.assertNotIn(_PDF, resp.content)
+                    finally:
+                        resp.close()
+
+    def test_noncanonical_paths_never_bypass_ownership(self):
+        self.client.force_login(self.other)
+        parent, filename = self.att.file.name.rsplit("/", 1)
+        paths = (
+            parent + "/./" + filename,
+            parent + "/unused/../" + filename,
+            parent + "//" + filename,
+            self.att.file.name.replace("/", "\\"),
+            self.att.file.name.upper(),
+            self.att.file.name.replace("books/", "books./", 1),
+            self.att.file.name.replace("books/", "books /", 1),
+            self.att.file.name + ".",
+            self.att.file.name + " ",
+            self.att.file.name + "::$DATA",
+        )
+        for path in paths:
+            self.assert_media_rejected("/media/" + path)
+
+    def test_deleted_attachment_is_not_generic_media_even_for_owner(self):
+        Attachment.all_objects.filter(pk=self.att.pk).update(is_deleted=True)
+        for user in (self.other, self.owner):
+            self.client.force_login(user)
+            self.assert_media_rejected(self.url)
+
+    def make_version(self):
+        return AttachmentVersion.objects.create(
+            attachment=self.att,
+            file=SimpleUploadedFile("previous.pdf", _PDF, content_type="application/pdf"),
+            version_number=1,
+            created_by=self.owner,
+        )
+
+    def test_version_retains_content_permissions(self):
+        version = self.make_version()
+        url = "/media/" + version.file.name
+        self.client.force_login(self.other)
+        self.assert_media_rejected(url)
+        self.client.force_login(self.owner)
+        resp = self.client.get(url)
+        try:
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(b"".join(resp.streaming_content), _PDF)
+        finally:
+            resp.close()
+
+    def test_deleted_attachment_versions_are_not_served(self):
+        version = self.make_version()
+        Attachment.all_objects.filter(pk=self.att.pk).update(is_deleted=True)
+        for user in (self.other, self.owner):
+            self.client.force_login(user)
+            self.assert_media_rejected("/media/" + version.file.name)
+
+    def test_unregistered_document_is_not_generic_media(self):
+        self.client.force_login(self.other)
+        path = Path(_MEDIA) / "books" / "orphan.pdf"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(_PDF)
+        self.addCleanup(path.unlink)
+        self.assert_media_rejected("/media/books/orphan.pdf")
+
+    def test_other_media_remains_available_to_authenticated_users(self):
+        self.client.force_login(self.other)
+        path = Path(_MEDIA) / "branding" / "logo.png"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"synthetic-branding")
+        self.addCleanup(path.unlink)
+        resp = self.client.get("/media/branding/logo.png")
+        try:
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(b"".join(resp.streaming_content), b"synthetic-branding")
+        finally:
+            resp.close()

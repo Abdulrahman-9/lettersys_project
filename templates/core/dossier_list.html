@@ -5,7 +5,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20260831">
-<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20261012b">
+<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20261022">
 {% endblock %}
 
 {% block content %}
@@ -18,8 +18,14 @@
     </div>
     <div class="dossiers-summary">
       <span class="summary-chip"><b>{{ totals.departments }}</b> جهة</span>
-      <span class="summary-chip out"><i class="bi bi-arrow-up-right"></i> <b>{{ totals.issued }}</b> صادر</span>
-      <span class="summary-chip in"><i class="bi bi-arrow-down-left"></i> <b>{{ totals.received }}</b> وارد</span>
+      <a class="summary-chip out{% if kind == 'external' %} active{% endif %}"
+         href="?kind=external&sort={{ sort }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}">
+        <i class="bi bi-arrow-up-right"></i> <b>{{ totals.issued }}</b> صادر
+      </a>
+      <a class="summary-chip in{% if kind == 'internal' %} active{% endif %}"
+         href="?kind=internal&sort={{ sort }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}">
+        <i class="bi bi-arrow-down-left"></i> <b>{{ totals.received }}</b> وارد
+      </a>
     </div>
   </div>
 
@@ -42,20 +48,36 @@
     {% endfor %}
   </nav>
 
-  <form class="dossier-search" method="get">
+  <form class="dossier-fbar" method="get" role="search" aria-label="فلترة الأضابير">
     <input type="hidden" name="kind" value="{{ kind }}">
-    <input type="hidden" name="sort" value="{{ sort }}">
-    <input type="text" name="q" value="{{ search_q }}" placeholder="ابحث باسم الجهة أو رمزها..." aria-label="بحث في الأضابير">
-    <button type="submit"><i class="bi bi-search"></i> بحث</button>
+    <div class="dfb-search">
+      <input type="text" name="q" value="{{ search_q }}"
+             placeholder="ابحث باسم الجهة أو رمزها..."
+             aria-label="بحث في الأضابير">
+      <i class="bi bi-search dfb-search-ico" aria-hidden="true"></i>
+    </div>
+    <span class="dfb-div" aria-hidden="true"></span>
+    <nav class="dfb-sorts" aria-label="ترتيب الأضابير">
+      <span class="ds-lbl">ترتيب:</span>
+      {% for s in sorts %}
+      <button type="submit" name="sort" value="{{ s.key }}"
+              class="pchip{% if s.key == sort %} on{% endif %}"
+              {% if s.key == sort %}aria-current="true"{% endif %}>{{ s.label }}</button>
+      {% endfor %}
+    </nav>
   </form>
 
-  <nav class="dossier-sort" aria-label="ترتيب الأضابير">
-    <span class="ds-lbl">ترتيب:</span>
-    {% for s in sorts %}<a class="pchip{% if s.key == sort %} on" aria-current="true{% endif %}" href="?kind={{ kind }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}&sort={{ s.key }}">{{ s.label }}</a>{% endfor %}
-  </nav>
+  {% if search_q or sort != 'count' %}
+  <div class="dossier-active-filters" aria-label="الفلاتر الفعّالة">
+    {% if search_q %}<span class="daf-chip">«{{ search_q }}» <a href="?kind={{ kind }}&sort={{ sort }}" aria-label="إزالة البحث" class="daf-remove">×</a></span>{% endif %}
+    {% if sort != 'count' %}<span class="daf-chip">{{ sort|default:'' }}{% for s in sorts %}{% if s.key == sort %}: {{ s.label }}{% endif %}{% endfor %} <a href="?kind={{ kind }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}&sort=count" aria-label="إعادة الترتيب" class="daf-remove">×</a></span>{% endif %}
+    <a href="?kind={{ kind }}" class="daf-clear">مسح الكل</a>
+  </div>
+  {% endif %}
 
   {% if page_obj.object_list %}
-  <div class="dossier-grid">
+  <div class="dossier-grid" role="status" aria-live="polite" aria-atomic="true"
+       aria-label="نتائج البحث: {{ page_obj.paginator.count }} جهة">
     {% for e in page_obj.object_list %}
     <a class="dossier-card" href="{% url 'dossier_detail' e.pk %}">
       <div class="dc-top">
@@ -66,10 +88,24 @@
         </div>
       </div>
       <div class="dc-counts">
-        <div class="dc-badge out{% if not e.issued_count %} zero{% endif %}"><span class="n">{{ e.issued_count }}</span><span>صادر</span></div>
-        <div class="dc-badge in{% if not e.received_count %} zero{% endif %}"><span class="n">{{ e.received_count }}</span><span>وارد</span></div>
+        <div class="dc-badge out{% if not e.issued_count %} zero{% endif %}"
+             aria-label="صادر: {{ e.issued_count }}">
+          <span class="n" aria-hidden="true">{{ e.issued_count }}</span><span>صادر</span>
+        </div>
+        <div class="dc-badge in{% if not e.received_count %} zero{% endif %}"
+             aria-label="وارد: {{ e.received_count }}">
+          <span class="n" aria-hidden="true">{{ e.received_count }}</span><span>وارد</span>
+        </div>
       </div>
-      <div class="dc-last">{% if e.last_date %}آخر كتاب: <time datetime="{{ e.last_date|date:'Y-m-d' }}">{{ e.last_date|date:'Y/m/d' }}</time>{% else %}بلا تاريخ{% endif %}</div>
+      {% if e.first_date or e.last_date %}
+      <div class="dc-dates">
+        {% if e.first_date %}<time datetime="{{ e.first_date|date:'Y-m-d' }}">{{ e.first_date|date:'Y/m/d' }}</time>{% endif %}
+        {% if e.first_date and e.last_date %}<span class="dc-dates-sep" aria-hidden="true">←</span>{% endif %}
+        {% if e.last_date %}<time datetime="{{ e.last_date|date:'Y-m-d' }}">{{ e.last_date|date:'Y/m/d' }}</time>{% endif %}
+      </div>
+      {% else %}
+      <div class="dc-dates dc-dates-empty">بلا تاريخ</div>
+      {% endif %}
     </a>
     {% endfor %}
   </div>
@@ -83,7 +119,7 @@
   {% endif %}
 
   {% else %}
-  <div class="dossier-empty">
+  <div class="dossier-empty" role="status" aria-live="polite">
     <i class="bi bi-folder-x"></i>
     {% if search_q %}لا جهةَ تطابق بحثك «{{ search_q }}».{% else %}لا توجد أضابير بعد — ستظهر الجهاتُ هنا فور ربط كتبٍ بها.{% endif %}
   </div>

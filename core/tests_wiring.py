@@ -77,7 +77,6 @@ KNOWN_UNWIRED = {
     'extraction-results-ui':    'صفحةُ نتائجٍ قديمة بلا مدخل (الحيُّ سطحُ الاستخراج الذكيّ)',
     'media':                    'يُطلَب بمسار الملفّ (attachment.file.url) لا بالاسم — بحكم طبيعته',
     # كشفتها قاعدةُ «مقطعان بعد آخر معلمة» (كان مقطعٌ واحدٌ يطابق روابطَ بريئة):
-    'book_create_incoming':     'مدخلٌ قديمٌ يُعيد التوجيه إلى سطح الاستخراج — يبقى للروابط المحفوظة',
     'book_create_outgoing':     'مدخلٌ قديمٌ يُعيد التوجيه إلى سطح الاستخراج — يبقى للروابط المحفوظة',
     'add_new_entity':           'API إضافةِ جهةٍ بلا مستهلك (السطحُ يستعمل entity-list والبحث)',
     'email-send':               'الإرسالُ العامّ بلا مستهلك؛ الحيُّ book-email-send',
@@ -86,6 +85,10 @@ KNOWN_UNWIRED = {
     'attachment-merge-history': 'ViewSet قديم — كما أعلاه',
     'attachment-merge-restore': 'ViewSet قديم — كما أعلاه',
     'attachment-merge-delete-file': 'ViewSet قديم — كما أعلاه',
+    # مسارات Workstation API — تُستدعى من عميل الماسحة (scan_agent) لا من القوالب
+    'workstation_heartbeat': 'نبضةُ حياةٍ من عميل الماسحة عبر HTTP لا قالب',
+    'workstation_revoke':    'إلغاءُ جهازٍ — يبنيه workstation_board.js من data-api-base (صفحة الأجهزة)',
+    'workstation_unblock':   'رفعُ حجبٍ — يبنيه workstation_board.js من data-api-base (صفحة الأجهزة)',
 }
 
 

@@ -25,9 +25,9 @@ class ReservationPresenceConsumer(AsyncWebsocketConsumer):
             return
         self.user = user
         session = self.scope.get('session')
-        from .reservation_service import reservation_client_key
-        self.reservation_client_key = reservation_client_key(
-            getattr(session, 'session_key', None))
+        from .reservation_identity import browser_key
+        self.reservation_client_key = browser_key(
+            self.scope.get('cookies', {}), getattr(session, 'session_key', None))
         await self.accept()
         await self._touch()
 

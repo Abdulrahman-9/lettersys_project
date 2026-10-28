@@ -1,0 +1,6 @@
+{% if active_filter_labels %}
+<div class="desk-filter-summary" aria-label="نطاق الكشف">
+  <b>نطاق النتائج المطبوعة:</b>
+  {% for label in active_filter_labels %}<span>{{ label }}</span>{% endfor %}
+</div>
+{% endif %}

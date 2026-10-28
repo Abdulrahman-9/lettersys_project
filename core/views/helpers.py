@@ -5,146 +5,42 @@ Helper Functions - دوال مساعدة للمعالجات
 دوال مساعدة مشتركة بين معالجات الكتب والجهات والمرفقات
 """
 
-import re
-
-from django.db.models import Case, IntegerField, Q, Value, When
 from functools import wraps
 
 from django.conf import settings
+from django.db.models import Q, Value
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 
-from .. import numbering
 from ..scoping import can_manage_accounts, can_manage_mail
 
 
 def apply_search_filters(queryset, search_text):
     """
     تطبيق فلاتر البحث على QuerySet الكتب.
-
-    - مدخل رقمي محض: يبحث في حقول الأرقام (our_number, sender_number).
-      كتابة الرقم المجرّد («825») تجده في كل صيغه المخزَّنة: رقم السلسلة
-      الجارية '825'، وكتاب 2025 المخزَّن '20250825'، وكتاب 2007 المخزَّن
-      '20070825' — والأنماط كلّها من `core/numbering.py` لا مكتوبة هنا.
-    - مدخل نصي: PostgreSQL FTS أو SQLite icontains.
+    PostgreSQL: بحث نص كامل (FTS) + تشابه Trigram مرتّب حسب الصلة
+    SQLite (اختبارات): icontains بسيط
     """
     if not search_text:
         return queryset
 
-    search_text = search_text.strip()
-    # هويّةُ الكتاب في دفترنا (رقمُنا بكلّ صيغه · التسلسلُ المركّب · السنةُ الموسومة)
-    # من المصدر الوحيد — وعليها وحدها يُبقي ``guard_secret_text_search`` المقيَّد.
-    identity = numbering.identity_search_q(search_text)
-
-    # ── بحث برقم مركّب: "X-Y" أو "X/Y" (مثل 2-15 أو 1304/3) ──
-    compound_m = numbering.COMPOUND_QUERY_RE.match(search_text)
-    if compound_m:
-        x, y = int(compound_m.group(1)), int(compound_m.group(2))
-        return queryset.filter(
-            identity
-            | Q(legacy_number__icontains=f"{x}-{y}")
-        ).distinct().order_by('-our_number', '-date')
-
-    # ── البحث الرقمي ──
+    # ── بحث مباشر بالمعرف الرقمي ──
     if search_text.isdigit():
-        n = len(search_text)
-        ival = int(search_text)
-        # ≤5 خانات: الرقم المجرّد في كل صيغه المخزَّنة + series_no + سنةُ السجلّ؛
-        # وما فوقها: جزءٌ من our_number — كلاهما من ``identity_search_q``.
-        q = identity
-
-        if n <= 5:
-            # رقم الجهة المرسلة: رقم مستقل (لا يُطابَق كجزء من رقم أطول)
-            _sn_pat = r'(^|[^0-9])' + re.escape(search_text) + r'([^0-9]|$)'
-            q |= Q(sender_number__iregex=_sn_pat)
-
-            # الأرقام القديمة (legacy) — icontains للمرونة
-            q |= Q(legacy_number__icontains=search_text)
-
-            # العنوان والملاحظات — يدعم البحث بالكلمة حتى عند إدخال رقم
-            q |= Q(title__icontains=search_text)
-            q |= Q(margin__icontains=search_text)
-        else:
-            q |= Q(legacy_number__icontains=search_text)
-            q |= Q(sender_number__icontains=search_text)
-            q |= Q(title__icontains=search_text)
-            q |= Q(margin__icontains=search_text)
-
-        # الترتيب (الرقم نفسه يتكرّر عبر السجلّات والسنوات، فالترتيب هو ما يفرزه):
-        #   1) _exact   : مطابقة رقم القيد الكامل حرفياً (كتابة 825) تتصدّر.
-        #   2) _num_pri : مطابقات حقول الأرقام (0-1) قبل ضوضاء العنوان/الهامش (2).
-        #                 **ومطابقُ الهويّة في الرتبة 0 دائماً**: وإلّا رتّب رقمُ
-        #                 الجهة المحجوبُ السرّيَّ الظاهرَ برقمه («0825» يطابق قيدَ
-        #                 '825' نمطاً لا احتواءً) — فيصير الترتيبُ نفسُه جواباً.
-        #   3) -date    : الأحدث أولاً — يضع كتاب السلسلة الجارية فوق الموسوم
-        #                 بسنته لنفس الرقم، وهو ما يريده الباحث غالباً.
-        #   4) -our_number : كسر تعادل ثابت.
-        return (
-            queryset.filter(q)
-            .annotate(
-                _exact=Case(
-                    When(our_number=search_text, then=Value(0)),
-                    default=Value(1), output_field=IntegerField(),
-                ),
-                _num_pri=Case(
-                    When(identity | Q(our_number__icontains=search_text) | Q(series_no=ival),
-                         then=Value(0)),
-                    When(Q(sender_number__icontains=search_text)
-                         | Q(legacy_number__icontains=search_text), then=Value(1)),
-                    default=Value(2),
-                    output_field=IntegerField(),
-                ),
-            )
-            .distinct()
-            .order_by('_exact', '_num_pri', '-date', '-our_number')
-        )
+        id_match = queryset.filter(id=int(search_text))
+        if id_match.exists():
+            return id_match
 
     from django.db import connection
-    if connection.vendor == 'postgresql':
-        return _pg_search(queryset, search_text)
-    return _simple_search(queryset, search_text)
+    if connection.vendor != 'postgresql':
+        return queryset.filter(
+            Q(our_number__icontains=search_text)
+            | Q(sender_number__icontains=search_text)
+            | Q(title__icontains=search_text)
+            | Q(margin__icontains=search_text)
+        ).distinct()
 
-
-def _legacy_flexible_q(search_text):
-    """
-    يبني Q-filter يطابق legacy_number بمرونة (يتجاهل المسافات/الشرطات بين الكلمات).
-    مثال: 'قديم 544' و 'قديم-544' و 'قديم544' كلها تطابق legacy='قديم-544' أو 'قديم-544-2'.
-    """
-    tokens = [t for t in re.split(r'[\s\-_/،,]+', search_text or '') if t]
-    if len(tokens) <= 1:
-        return Q(legacy_number__icontains=search_text) if search_text else Q()
-    pattern = r'[-\s_/،,]*'.join(re.escape(t) for t in tokens)
-    return Q(legacy_number__iregex=pattern)
-
-
-def _ocr_text_q(search_text):
-    """يطابق **نصّ المستند الممسوح** الذي يُخزّنه أنبوبُ الاستخراج.
-
-    النظام يقرأ نصّ كلّ مسحةٍ ويحفظه في ``OCRResult`` منذ سنوات، **والبحثُ لم
-    يكن يمسّه إطلاقاً** — أي أنّ ثمن الـOCR مدفوعٌ وقيمتُه اليوميّة مهدورة.
-    وهي أوّلُ ميزةٍ محبوبةٍ في أنظمة الأرشفة المشابهة: أن تجد كتاباً لا تذكر
-    رقمَه ولا عنوانَه الدقيق، بكلمةٍ وردت في متنه.
-
-    (السرّيّةُ محروسةٌ فوق هذا: ``guard_secret_text_search`` يستثني السرّيَّ من
-    كلّ بحثٍ نصّيّ لغير المخوَّل — وهذا منه.)
-    """
-    return Q(attachments__ocr_result__cleaned_text__icontains=search_text)
-
-
-def _simple_search(queryset, search_text):
-    """بحث icontains بسيط — يُستخدم في بيئة SQLite (الاختبارات)."""
-    return queryset.filter(
-        Q(our_number__icontains=search_text)
-        | Q(sender_number__icontains=search_text)
-        | Q(legacy_number__icontains=search_text)
-        | _legacy_flexible_q(search_text)
-        | Q(title__icontains=search_text)
-        | Q(margin__icontains=search_text)
-        | Q(issuing_entities__name__icontains=search_text)
-        | Q(receiving_entities__name__icontains=search_text)
-        | _ocr_text_q(search_text)
-    ).distinct()
+    return _pg_search(queryset, search_text)
 
 
 def _pg_search(queryset, search_text):
@@ -156,7 +52,7 @@ def _pg_search(queryset, search_text):
     vector = (
         SearchVector('our_number', weight='A', config='simple')
         + SearchVector('sender_number', weight='A', config='simple')
-        + SearchVector('legacy_number', weight='A', config='simple')
+        + SearchVector('director_general_number', weight='A', config='simple')
         + SearchVector('title', weight='B', config='simple')
         + SearchVector('margin', weight='C', config='simple')
     )
@@ -171,15 +67,11 @@ def _pg_search(queryset, search_text):
         .filter(
             Q(fts_rank__gt=0)
             | Q(title_sim__gt=0.15)
-            | Q(title__icontains=search_text)
-            | Q(margin__icontains=search_text)
             | Q(our_number__icontains=search_text)
             | Q(sender_number__icontains=search_text)
-            | Q(legacy_number__icontains=search_text)
-            | _legacy_flexible_q(search_text)
+            | Q(director_general_number__icontains=search_text)
             | Q(issuing_entities__name__icontains=search_text)
             | Q(receiving_entities__name__icontains=search_text)
-            | _ocr_text_q(search_text)
         )
         .distinct()
         .order_by('-fts_rank', '-title_sim')
@@ -203,15 +95,45 @@ def validate_sort_parameters(sort_by, sort_dir):
         'our_number': 'our_number',
         'title': 'title',
         'date': 'date',
+        'final_status': 'final_status',
         'kind': 'kind'
     }
-
+    
     if sort_by not in valid_sorts:
         sort_by = 'date'
     if sort_dir not in ('asc', 'desc'):
         sort_dir = 'desc'
-
+    
     return valid_sorts[sort_by], sort_dir
+
+
+def compute_time_state(book):
+    """
+    حساب حالة الوقت للكتاب (متأخر/قريب من الاستحقاق/آمن)
+    
+    Returns:
+        str: حالة الوقت ('overdue'/'critical'/'warning'/'safe')
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+    
+    if book.final_status == 'done':
+        return 'done'
+    
+    if not book.due_date:
+        return 'safe'
+    
+    today = timezone.localdate()
+    days_left = (book.due_date - today).days
+    
+    if days_left < 0:
+        return 'overdue'
+    elif days_left == 0:
+        return 'critical'
+    elif days_left <= 2:
+        return 'warning'
+    else:
+        return 'safe'
 
 
 def is_ajax(request):
@@ -224,8 +146,30 @@ def is_ajax(request):
     return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
 
+def staff_required(view_func):
+    """
+    ديكور يسمح بدخول الموظفين أو المدراء فقط
+    
+    Args:
+        view_func: دالة المعالج المراد حمايتها
+    
+    Returns:
+        decorated_func: دالة المعالج المحمية
+    """
+    return user_passes_test(lambda u: u.is_staff or u.is_superuser)(view_func)
+
+
+def privileged_required(view_func):
+    """Require account-management access while preserving the app's 403 behavior."""
+    return _guarded(view_func, can_manage_accounts, 'هذه الصفحةُ لمدير النظام.')
+
+
+def mail_manager_required(view_func):
+    """Require the mail-management access policy."""
+    return _guarded(view_func, can_manage_mail, 'هذه الصفحةُ لمسؤول البريد.')
+
+
 def _guarded(view_func, allowed, denial):
-    """جسمُ الحارسَين الواحد — السلوكُ لا يفترق بينهما، المسندُ وحدَه يفترق."""
     @wraps(view_func)
     def _wrapped(request, *args, **kwargs):
         user = getattr(request, 'user', None)
@@ -235,28 +179,3 @@ def _guarded(view_func, allowed, denial):
             raise PermissionDenied(denial)
         return view_func(request, *args, **kwargs)
     return _wrapped
-
-
-def staff_required(view_func):
-    """الحارسُ **الواحد** لصفحات الإدارة: الموظّفون والمدراء (مراجعةُ 2026‑09‑13).
-
-    كان النظامُ يقول «هذه للموظّفين» بخمسة أساليب: مزيِّنٌ، و``user_passes_test``،
-    وفحصٌ في الجسم يعيد نصّاً عارياً، و``Http404`` مضلِّلة، ولا شيء. التوحيدُ هنا:
-    - **داخلٌ بلا صلاحيّة** ⟵ ``PermissionDenied`` فتظهر صفحةُ 403 داخل قشرة التطبيق
-      بزرّ عودة (كانت تحويلاً إلى صفحة الدخول — وهو يُربك مَن هو داخلٌ فعلاً).
-    - **غيرُ داخلٍ** ⟵ تحويلٌ إلى الدخول مع ``next`` كما يفعل ``login_required``.
-    """
-    return _guarded(view_func, lambda user: user.is_staff or user.is_superuser,
-                    'هذه الصفحةُ لإدارة النظام.')
-
-
-def privileged_required(view_func):
-    """توأمُ ``staff_required`` لصفحات **الهويّة والسلطة** (الحسابات): السلوكُ نفسُه
-    (403 داخل القشرة للداخل، وتحويلٌ إلى الدخول لغيره)، والمسندُ
-    ``scoping.can_manage_accounts`` — مديرُ النظام وحدَه، كلوحة الإدارة."""
-    return _guarded(view_func, can_manage_accounts, 'هذه الصفحةُ لمدير النظام.')
-
-
-def mail_manager_required(view_func):
-    """حارسُ إدارة البريد: مسؤول البريد أو موظّف الإدارة أو مدير النظام."""
-    return _guarded(view_func, can_manage_mail, 'هذه الصفحةُ لمسؤول البريد.')

@@ -40,6 +40,7 @@
       if (opts.noteLabel) return Promise.resolve(window.prompt(opts.title + ' — ' + opts.noteLabel));
       return Promise.resolve(window.confirm(opts.title) ? '' : null);
     }
+    var returnFocus = document.activeElement;
     var el = document.createElement('div');
     el.className = 'modal fade';
     el.tabIndex = -1;
@@ -68,7 +69,11 @@
       var answer = null;
       ok.addEventListener('click', function () { answer = note.isConnected ? note.value.trim() : ''; modal.hide(); });
       el.addEventListener('shown.bs.modal', function () { (note.isConnected ? note : ok).focus(); });
-      el.addEventListener('hidden.bs.modal', function () { el.remove(); resolve(answer); });
+      el.addEventListener('hidden.bs.modal', function () {
+        el.remove();
+        if (returnFocus && returnFocus.isConnected) returnFocus.focus();
+        resolve(answer);
+      });
       modal.show();
     });
   }
@@ -189,8 +194,17 @@
   function busy(button, on) {
     if (!button) return;
     button.disabled = on;
-    button.dataset.label = button.dataset.label || button.innerHTML;
-    button.innerHTML = on ? 'جارٍ…' : button.dataset.label;
+    button.setAttribute('aria-busy', on ? 'true' : 'false');
+    var spinner = button.querySelector('[data-lifecycle-spinner]');
+    if (on && !spinner) {
+      spinner = document.createElement('span');
+      spinner.className = 'spinner-border spinner-border-sm me-1';
+      spinner.dataset.lifecycleSpinner = '1';
+      spinner.setAttribute('aria-hidden', 'true');
+      button.prepend(spinner);
+    } else if (!on && spinner) {
+      spinner.remove();
+    }
   }
 
   function fill(select, items, valueKey, labelKey, placeholder) {
@@ -371,12 +385,16 @@
     var unit = button.dataset.referralTarget || 'الوحدة';
     // «أُنجز/أُعيد» يُقفلان الالتزامَ ولا فعلَ يعيد فتحه — فلا يمضيان بنقرةٍ واحدة.
     var asked = Promise.resolve('');
-    if (act === 'done') {
+    if (act === 'received') {
+      asked = ask({ title: 'تأكيد وصول الإحالة إلى «' + unit + '»؟',
+                    body: 'ستتغيّر حالة الإحالة إلى «مستلَم». هذا لا يسجّل توقيعاً ورقياً أو انتقال عهدة.',
+                    okText: 'تأكيد الوصول' });
+    } else if (act === 'done') {
       asked = ask({ title: 'أُنجز ما وُجّه إلى «' + unit + '»؟',
                     body: 'يُقفَل التزامُ الوحدة ولا يُعاد فتحُه من هنا.',
                     noteLabel: 'ملاحظةُ الإنجاز (اختياريّة)', okText: 'أُنجز' });
     } else if (act === 'returned') {
-      asked = ask({ title: 'أُعيد إلى «' + unit + '» بلا إنجاز؟',
+      asked = ask({ title: 'تسجيل إعادة الإحالة من «' + unit + '» بلا إنجاز؟',
                     body: 'يُقفَل التزامُ الوحدة ولا يُعاد فتحُه من هنا.',
                     noteLabel: 'سببُ الإعادة (اختياريّ)', okText: 'أُعيد', danger: true });
     }
@@ -386,7 +404,7 @@
       busy(button, true);
       post('/books/api/book/' + bookId + '/referral/' + referralId + '/act/',
            { act: act, note: note })
-        .then(function () { notify('تمّ.', true); })
+        .then(function (data) { notify(data.message, true); })
         .catch(function (err) { notify(err.message, false); })
         .finally(function () { busy(button, false); });
     });

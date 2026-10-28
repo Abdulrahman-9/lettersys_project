@@ -5,8 +5,62 @@ class MultipleFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
 
 from .models import Attachment, Book, Entity
+from . import numbering
 
 ## ALLOWED_EXTS = {"pdf", "jpg", "jpeg", "png"}  // لم يعد هناك تحقق نوع
+
+
+class DeskFilterForm(forms.Form):
+    kind = forms.ChoiceField(
+        label="نوع الكتاب", required=False,
+        choices=[("", "كل الأنواع"), *Book.KIND_CHOICES],
+    )
+    date_from = forms.DateField(
+        label="من تاريخ الكتاب", required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    date_to = forms.DateField(
+        label="إلى تاريخ الكتاب", required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    number_from = forms.CharField(
+        label="من رقم قيد القسم", required=False, max_length=32,
+        widget=forms.TextInput(attrs={"inputmode": "numeric", "placeholder": "مثال: 3921…"}),
+    )
+    number_to = forms.CharField(
+        label="إلى رقم قيد القسم", required=False, max_length=32,
+        widget=forms.TextInput(attrs={"inputmode": "numeric", "placeholder": "مثال: 3930…"}),
+    )
+
+    def _clean_number(self, name):
+        raw = self.cleaned_data[name]
+        if not raw:
+            return None
+        if not raw.isdecimal():
+            raise forms.ValidationError("أدخل رقم قيد موجباً بالأرقام فقط.")
+        parsed = numbering.parse(raw)
+        if not parsed.is_official or parsed.seq <= 0:
+            raise forms.ValidationError("أدخل رقم قيد موجباً.")
+        return parsed
+
+    def clean_number_from(self):
+        return self._clean_number("number_from")
+
+    def clean_number_to(self):
+        return self._clean_number("number_to")
+
+    def clean(self):
+        cleaned = super().clean()
+        start, end = cleaned.get("date_from"), cleaned.get("date_to")
+        if start and end and start > end:
+            self.add_error("date_to", "تاريخ النهاية يجب ألا يسبق تاريخ البداية.")
+        lower, upper = cleaned.get("number_from"), cleaned.get("number_to")
+        if lower and upper:
+            if lower.year != upper.year:
+                self.add_error("number_to", "اختر رقمين من سلسلة السجل نفسها.")
+            elif lower.seq > upper.seq:
+                self.add_error("number_to", "رقم النهاية يجب ألا يقل عن رقم البداية.")
+        return cleaned
 
 
 class EntityForm(forms.ModelForm):

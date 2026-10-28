@@ -1,0 +1,21 @@
+<header class="desk-header">
+  <div class="desk-heading">
+    <span class="desk-eyebrow">مساحة عمل الوارد{% if org_name %} · {{ org_name }}{% endif %}{% if department %} · {{ department }}{% endif %}</span>
+    <h1>{{ desk_title }}</h1>
+    <p>{{ desk_description }}</p>
+  </div>
+  <nav class="desk-nav" aria-label="صفحات طاولة الوارد">
+    <a href="{% url 'desk_board' %}"{% if desk_page == "board" %} aria-current="page"{% endif %}>
+      <i class="bi bi-inboxes" aria-hidden="true"></i><span>طاولة الوارد<small>الاستلام والمتابعة</small></span>
+    </a>
+    <a href="{% if desk_ledger_url %}{{ desk_ledger_url }}{% else %}{% url 'desk_ledger' %}{% if department %}?department={{ department.pk }}{% endif %}{% endif %}"{% if desk_page == "ledger" %} aria-current="page"{% endif %}>
+      <i class="bi bi-journal-text" aria-hidden="true"></i><span>دفتر الوارد<small>القيود والتوزيع</small></span>
+    </a>
+    <a href="{% if desk_handover_url %}{{ desk_handover_url }}{% else %}{% url 'desk_handover' %}{% if department %}?department={{ department.pk }}{% endif %}{% endif %}"{% if desk_page == "handover" %} aria-current="page"{% endif %}>
+      <i class="bi bi-pen" aria-hidden="true"></i><span>كشف التسليم<small>التجهيز والتوقيع</small></span>
+    </a>
+  </nav>
+  {% if desk_page == "ledger" or desk_page == "handover" %}
+  <p class="desk-relation-note"><b>الدفتر</b> سجل القيود والتوزيع والاستلام، أما <b>كشف التسليم</b> فهو ورقة توقيع للإحالات التي لم تُوثَّق عهدتها بعد، وليس نسخة من الدفتر. تنتقل عوامل التصفية معك بينهما.</p>
+  {% endif %}
+</header>
