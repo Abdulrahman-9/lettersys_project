@@ -22,7 +22,8 @@ from django.shortcuts import render
 
 from core.logging_models import UserActivityLog
 from core.models import BookHistory, Department
-from core.scoping import (ACCESS_STUB, STUB_TITLE, can_view_audit, is_privileged,
+from core.scoping import (ACCESS_STUB, STUB_TITLE, can_view_audit, department_lens,
+                          is_privileged,
                           scope_activity_for, secret_access, subtree_ids,
                           user_department_id)
 
@@ -47,11 +48,17 @@ def audit_log(request):
     date_from, date_to = _date_range(request)
     actor = (request.GET.get('actor') or '').strip()
     action = (request.GET.get('action') or '').strip()
+    # عدسةُ القسم: «سجلُّ حركات» قسمٍ بعينه وما تحته — من المصدر نفسِه للّوحة والقائمة
+    lens_department, lens_ids = department_lens(request.user, request.GET.get('dept'))
 
     if tab == TAB_USERS:
         rows, actions = _user_activity(request, date_from, date_to, actor, action)
+        if lens_ids is not None:
+            rows = rows.filter(Q(department_id__in=lens_ids) | Q(book__department_id__in=lens_ids))
     else:
         rows, actions = _book_history(request, date_from, date_to, actor, action)
+        if lens_ids is not None:
+            rows = rows.filter(book__department_id__in=lens_ids)
 
     page = _paginate(rows, request.GET.get('page'))
 
@@ -61,8 +68,10 @@ def audit_log(request):
         'rows': [_present(row, request.user, tab) for row in page.object_list],
         'actions': actions,
         'departments': _visible_departments(request.user),
+        'lens_department': lens_department,
         'filters': {
             'actor': actor, 'action': action,
+            'dept': str(lens_department.pk) if lens_department else '',
             'date_from': request.GET.get('date_from', ''),
             'date_to': request.GET.get('date_to', ''),
         },
@@ -162,7 +171,8 @@ def _present(row, user, tab):
 
 def _visible_departments(user):
     if is_privileged(user):
-        return Department.objects.filter(is_active=True).order_by('code')
+        # المعطَّلُ يبقى قابلاً للتدقيق — سجلُّه لا يُمحى بتعطيله
+        return Department.objects.order_by('-is_active', 'code')
     return Department.objects.filter(pk__in=subtree_ids(user_department_id(user)))
 
 

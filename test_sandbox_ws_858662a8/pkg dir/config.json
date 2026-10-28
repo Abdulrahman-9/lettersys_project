@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "package_role": "client",
+  "server_machine_name": "LS-FIXTURE-SRV",
+  "server_origin": "https://127.0.0.1:1",
+  "device_setup_url": "https://127.0.0.1:1/books/device-setup/",
+  "root_cert_file": "root_ca.cer",
+  "root_cert_sha256": "E70D0461C64EB58B1D9C8BDE19CABEF00A544C1EB1D00F51EEF69183544E46CD",
+  "root_cert_thumbprint": "4D68648BA0FD592D6693F0AA97E90E50CAD62565",
+  "created_at": "2026-01-01T00:00:00Z"
+}

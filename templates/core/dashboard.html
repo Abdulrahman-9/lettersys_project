@@ -4,7 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20261021a">
-<link rel="stylesheet" href="{% static 'css/dashboard_command.css' %}?v=20261021b">
+<link rel="stylesheet" href="{% static 'css/dashboard_command.css' %}?v=20261021d">
 {% endblock %}
 
 {% block content %}
@@ -15,11 +15,46 @@
       <header class="db-top">
         <h1>مرحباً، {{ request.user.get_full_name|default:request.user.username }}</h1>
         <span class="db-role"><i class="bi bi-person-badge" aria-hidden="true"></i>{{ role_label }}</span>
-        {% if my_department %}<span class="db-dept"><i class="bi bi-diagram-3" aria-hidden="true"></i>{{ my_department.name }}</span>{% endif %}
+        {% if scope_tree %}
+        <details class="db-scope" data-scope-switcher>
+          <summary class="db-scope-pill">
+            <i class="bi bi-bullseye" aria-hidden="true"></i>
+            <span class="db-scope-k">النطاق</span>
+            <strong>{{ scope_name }}</strong>
+            <span class="visually-hidden">— اختر قسماً</span>
+            <i class="bi bi-chevron-down db-scope-caret" aria-hidden="true"></i>
+          </summary>
+          <div class="db-scope-pop">
+            <label class="visually-hidden" for="db-scope-q">ابحث عن قسم</label>
+            <input type="search" id="db-scope-q" class="db-scope-q" data-scope-q placeholder="ابحث عن قسم أو شعبة أو وحدة…" autocomplete="off">
+            <ul class="db-scope-list" data-scope-list>
+              <li><a class="db-scope-item db-scope-all" href="{% url 'dashboard' %}"{% if not lens_department %} aria-current="page"{% endif %}>
+                <i class="bi bi-buildings" aria-hidden="true"></i><span class="db-scope-name">{{ scope_whole_label }}</span>
+              </a></li>
+              {% for node in scope_tree %}
+              <li style="--d:{{ node.depth }}"><a class="db-scope-item" href="?dept={{ node.pk }}" data-name="{{ node.name }}"{% if lens_department.pk == node.pk %} aria-current="page"{% endif %}>
+                <span class="db-scope-lvl db-lvl-{{ node.level_key }}">{{ node.level }}</span>
+                <span class="db-scope-name">{{ node.name }}</span>
+                <span class="db-scope-n{% if not node.count %} is-zero{% endif %}">{{ node.count }}</span>
+              </a></li>
+              {% endfor %}
+            </ul>
+            <p class="db-scope-empty" data-scope-empty hidden>لا قسم بهذا الاسم</p>
+          </div>
+        </details>
+        {% endif %}
+        {% if my_department and not lens_department %}<span class="db-dept"><i class="bi bi-diagram-3" aria-hidden="true"></i>{{ my_department.name }}</span>{% endif %}
       </header>
+      {% if lens_department %}
+      <nav class="db-lens-trail" aria-label="مسار القسم">
+        <a href="{% url 'dashboard' %}">{{ scope_whole_label }}</a>
+        {% for step in lens_trail %}<span aria-hidden="true">‹</span>{% if forloop.last %}<strong aria-current="page">{{ step.name }}</strong>{% else %}<a href="?dept={{ step.pk }}">{{ step.name }}</a>{% endif %}{% endfor %}
+        <a class="db-lens-x" href="{% url 'dashboard' %}" aria-label="إزالة النطاق"><i class="bi bi-x-lg" aria-hidden="true"></i></a>
+      </nav>
+      {% endif %}
       <p class="db-hero-line">
         <time datetime="{{ today|date:'Y-m-d' }}">{{ today|date:"l j F Y" }}</time> ·
-        {% if overdue %}<a href="{% url 'book_unified' %}?tab=all&followup=overdue">{{ overdue }} كتاب متأخّر يحتاج متابعتك</a>{% else %}لا كتب متأخّرة — كل شيء في موعده{% endif %}
+        {% if overdue %}<a href="{% url 'book_unified' %}?tab=all&followup=overdue{{ lens_q }}">{{ overdue }} كتاب متأخّر يحتاج متابعتك</a>{% else %}لا كتب متأخّرة — كل شيء في موعده{% endif %}
         · هذا الأسبوع {{ insights.week_total }} كتاب
       </p>
     </div>
@@ -36,13 +71,14 @@
   <div class="db-bar">
     <form action="{% url 'book_unified' %}" method="get" role="search" class="db-search">
       <input type="hidden" name="tab" value="all">
+      {% if lens_department %}<input type="hidden" name="dept" value="{{ lens_department.pk }}">{% endif %}
       <input type="search" name="q" class="field-brand" placeholder="ابحث برقم القيد أو العنوان أو الجهة…" aria-label="بحث سريع" enterkeyhint="search">
       <button type="submit" class="db-search-btn" aria-label="بحث"><i class="bi bi-search" aria-hidden="true"></i></button>
     </form>
     <a href="{% url 'extraction-smart-desktop' %}" class="btn-brand">
       <i class="bi bi-plus-circle" aria-hidden="true"></i> إدخال كتاب جديد
     </a>
-    <a href="{% url 'book_unified' %}" class="btn-brand-ghost">
+    <a href="{% url 'book_unified' %}{% if lens_department %}?tab=all{{ lens_q }}{% endif %}" class="btn-brand-ghost">
       <i class="bi bi-list-ul" aria-hidden="true"></i> قائمة الكتب
     </a>
     <button type="button" class="db-kbd-btn" data-palette-open aria-haspopup="dialog" aria-controls="db-palette">
@@ -54,26 +90,26 @@
   <section class="db-card db-summary" aria-labelledby="db-h-summary">
     <div class="db-card-hd">
       <h2 id="db-h-summary">الملخّص</h2>
-      <span class="db-asof">محدَّث {{ now|time:"H:i" }} · <a href="{% url 'dashboard' %}">تحديث</a></span>
+      <span class="db-asof">محدَّث {{ now|time:"H:i" }} · <a href="{% url 'dashboard' %}{% if lens_department %}?dept={{ lens_department.pk }}{% endif %}">تحديث</a></span>
     </div>
     <div class="db-tiles">
       <div class="db-tile db-tile--lg db-tone-danger">
-        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=all&followup=overdue"><span class="db-l">كتب متأخّرة</span><span class="db-n"{% if overdue %} data-has="1"{% endif %}>{{ overdue }}</span></a>
+        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=all&followup=overdue{{ lens_q }}"><span class="db-l">كتب متأخّرة</span><span class="db-n"{% if overdue %} data-has="1"{% endif %}>{{ overdue }}</span></a>
         <p class="db-sub">{% if overdue %}تحتاج متابعة{% else %}لا كتبَ متأخّرة{% endif %}</p>
       </div>
       <div class="db-tile db-tile--lg db-tone-in">
-        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=incoming"><span class="db-l">الكتب الواردة</span><span class="db-n"{% if incoming_total %} data-has="1"{% endif %}>{{ incoming_total }}</span></a>
-        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=incoming&followup=active">{{ active_label }}: <strong>{{ incoming_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=incoming&followup=archived">مُنجَز / بلا متابعة: <strong>{{ incoming_done }}</strong></a></p>
+        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=incoming{{ lens_q }}"><span class="db-l">الكتب الواردة</span><span class="db-n"{% if incoming_total %} data-has="1"{% endif %}>{{ incoming_total }}</span></a>
+        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=incoming&followup=active{{ lens_q }}">{{ active_label }}: <strong>{{ incoming_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=incoming&followup=archived{{ lens_q }}">مُنجَز / بلا متابعة: <strong>{{ incoming_done }}</strong></a></p>
         <svg class="db-spark" data-spark="{{ insights.spark_incoming }}" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
       </div>
       <div class="db-tile db-tile--lg db-tone-accent">
-        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=outgoing"><span class="db-l">الكتب الصادرة</span><span class="db-n"{% if outgoing_total %} data-has="1"{% endif %}>{{ outgoing_total }}</span></a>
-        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=outgoing&followup=active">{{ active_label }}: <strong>{{ outgoing_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=outgoing&followup=archived">مُنجَز / بلا متابعة: <strong>{{ outgoing_done }}</strong></a></p>
+        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=outgoing{{ lens_q }}"><span class="db-l">الكتب الصادرة</span><span class="db-n"{% if outgoing_total %} data-has="1"{% endif %}>{{ outgoing_total }}</span></a>
+        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=outgoing&followup=active{{ lens_q }}">{{ active_label }}: <strong>{{ outgoing_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=outgoing&followup=archived{{ lens_q }}">مُنجَز / بلا متابعة: <strong>{{ outgoing_done }}</strong></a></p>
         <svg class="db-spark" data-spark="{{ insights.spark_outgoing }}" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
       </div>
       <div class="db-tile db-tile--lg db-tone-accent">
-        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=all"><span class="db-l">إجمالي الكتب</span><span class="db-n"{% if total %} data-has="1"{% endif %}>{{ total }}</span></a>
-        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=all&date_from={{ today|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}">اليوم: <strong>{{ today_count }}</strong></a> · <a href="{% url 'book_unified' %}?tab=all&date_from={{ week_ago|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}">الأسبوع: <strong>{{ week_count }}</strong></a></p>
+        <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=all{{ lens_q }}"><span class="db-l">إجمالي الكتب</span><span class="db-n"{% if total %} data-has="1"{% endif %}>{{ total }}</span></a>
+        <p class="db-sub"><a href="{% url 'book_unified' %}?tab=all&date_from={{ today|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}{{ lens_q }}">اليوم: <strong>{{ today_count }}</strong></a> · <a href="{% url 'book_unified' %}?tab=all&date_from={{ week_ago|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}{{ lens_q }}">الأسبوع: <strong>{{ week_count }}</strong></a></p>
                 <svg class="db-spark" data-spark="{{ insights.spark_total }}" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
               </div>
             </div>
@@ -86,7 +122,7 @@
     <div class="db-card-hd">
       <div>
         <h2 id="db-command-heading">مركز القيادة</h2>
-        <p class="db-command-scope">نظرة مباشرة ضمن النطاق المصرّح: {{ command_center.scope_label }}</p>
+        <p class="db-command-scope">نظرة مباشرة ضمن النطاق المصرّح: {% if lens_department %}{{ lens_department.name }} وما تحته{% else %}{{ command_center.scope_label }}{% endif %}</p>
       </div>
       <a class="db-link" href="{% url 'admin_panel' %}">
         <i class="bi bi-diagram-3" aria-hidden="true"></i>إدارة الهيكل والحسابات
@@ -105,7 +141,7 @@
           {% for department in command_center.departments %}
           <li class="db-command-department">
             <div class="db-command-department-heading">
-              <strong>{{ department.name }}</strong>
+              <a class="db-command-drill" href="?dept={{ department.pk }}"><strong>{{ department.name }}</strong></a>
               <span class="db-command-code">{{ department.code }}</span>
             </div>
             <div class="db-command-meta">
@@ -131,7 +167,7 @@
       <section aria-labelledby="db-activity-heading">
         <div class="db-row-hd">
           <h2 id="db-activity-heading">آخر الحركات</h2>
-          <a class="db-link" href="{% url 'audit_log' %}">سجل التدقيق</a>
+          <a class="db-link" href="{% url 'audit_log' %}{% if lens_department %}?dept={{ lens_department.pk }}{% endif %}">سجل التدقيق</a>
         </div>
         {% if command_center.recent_activity %}
         <ul class="db-command-list db-command-activity">
@@ -184,5 +220,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/dashboard_fx.js' %}?v=20261021b" defer></script>
+<script src="{% static 'js/dashboard_fx.js' %}?v=20261021d" defer></script>
 {% endblock %}

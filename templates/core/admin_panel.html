@@ -378,7 +378,7 @@
   {% elif tab == 'users' %}
     {% if created_credentials %}
       <div class="alert alert-warning border-0 shadow-sm" role="alert" aria-live="polite">
-        <h6 class="fw-bold"><i class="bi bi-key-fill me-1"></i>كلمة مرور مؤقتة — ستُعرض مرة واحدة</h6>
+        <h6 class="fw-bold"><i class="bi bi-key-fill me-1"></i>{% if created_credentials.is_reset %}أُعيد تعيين كلمة المرور{% else %}كلمة مرور مؤقتة{% endif %} — ستُعرض مرة واحدة</h6>
         <p class="mb-2">انسخها وسلّمها لصاحب الحساب الآن. سيُطلب منه تغييرها عند أول دخول.</p>
         <div class="row g-2 align-items-center">
           <div class="col-md-4"><span class="text-muted">اسم المستخدم:</span> <code>{{ created_credentials.username }}</code></div>
@@ -485,7 +485,7 @@
             </thead>
             <tbody>
               {% for row in people %}
-                <tr data-filter-row
+                <tr data-filter-row data-lineage="{{ row.lineage }}"
                     data-search="{{ row.user.get_full_name }} {{ row.user.username }} {{ row.department.name }} {{ row.department.code }} {{ row.job_title }}"
                     data-status="{% if row.is_active %}active{% else %}inactive{% endif %}{% if row.must_change_password %} password{% endif %}{% if row.is_sensitive %} sensitive{% endif %}{% if row.is_entry %} entry{% endif %}"
                     {% if not row.is_active %} class="table-secondary text-muted"{% endif %}>
@@ -609,6 +609,19 @@
                           {% if row.is_active %}تعطيل{% else %}تفعيل{% endif %}
                         </button>
                       </form>
+                      {% if row.is_active and not row.is_self %}
+                      <form method="post" class="d-inline"
+                            data-confirm="إعادة تعيين كلمة مرور «{{ row.user.username }}»؟ ستُولَّد كلمةٌ مؤقتة تُعرض لك مرة واحدة، وتُغلق جلساته المفتوحة، ويُطلب منه تغييرها عند أول دخول."
+                            data-confirm-ok="أعِد التعيين">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="reset_user_password">
+                        <input type="hidden" name="tab" value="users">
+                        <input type="hidden" name="user_id" value="{{ row.user.pk }}">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" aria-label="إعادة تعيين كلمة مرور {{ row.user.username }}">
+                          <i class="bi bi-key" aria-hidden="true"></i> كلمة مؤقتة
+                        </button>
+                      </form>
+                      {% endif %}
                     </td>
                     <td>
                       <button type="submit" form="assign-user-{{ row.user.pk }}"

@@ -137,6 +137,19 @@ class Department(models.Model):
     def __str__(self):
         return f"{self.code} — {self.name}"
 
+    #: المستوى من **اسم القسم نفسه** — الشجرةُ الحيّة لا تطابق العمق: «مكتب المدير
+    #: العام» جذرٌ و«قسم المتابعة» تحته، فالعمقُ وحده سمّى القسمَ شعبةً والشعبةَ وحدة.
+    LEVEL_WORDS = (('مكتب', 'office'), ('قسم', 'dept'), ('شعبة', 'section'), ('وحدة', 'unit'))
+    LEVEL_BY_DEPTH = (('قسم', 'dept'), ('شعبة', 'section'), ('وحدة', 'unit'))
+
+    def level(self, depth=0):
+        """``(التسمية، المفتاح)`` — من الكلمة الأولى في الاسم، وإلّا من العمق."""
+        first = ((self.name or '').split() or [''])[0]
+        for word, key in self.LEVEL_WORDS:
+            if first == word:
+                return word, key
+        return self.LEVEL_BY_DEPTH[min(max(depth, 0), len(self.LEVEL_BY_DEPTH) - 1)]
+
 
 class UserProfile(models.Model):
     """امتدادُ المستخدم: قسمُه وصفتُه فيه.

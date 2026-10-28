@@ -461,3 +461,13 @@
 }
 
 /* ▲ END DESIGN REVIEW · BATCH 3 */
+
+/* عدسةُ القسم (?dept=) — شارةُ نطاقٍ فوق الفلاتر بمسارِ الأسلاف */
+.dept-lens-bar{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem;margin:.6rem 0;padding:.55rem .9rem;border-radius:14px;background:linear-gradient(135deg,#3b2417,#5a3824);color:#fff;font-size:.86rem}
+.dept-lens-bar > .bi{color:#e8b04a;font-size:1.05rem}
+.dept-lens-label,.dept-lens-note{opacity:.8}
+.dept-lens-trail{display:flex;flex-wrap:wrap;gap:.3rem;margin:0;padding:0;list-style:none;font-weight:700}
+.dept-lens-trail li+li::before{content:"‹";margin-inline-end:.3rem;color:#e8b04a}
+.dept-lens-clear{margin-inline-start:auto;display:inline-flex;align-items:center;gap:.3rem;min-height:32px;padding:.2rem .75rem;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;text-decoration:none;font-weight:600}
+.dept-lens-clear:hover{background:rgba(255,255,255,.24);color:#fff}
+.dept-lens-clear:focus-visible{outline:2px solid #e8b04a;outline-offset:2px}

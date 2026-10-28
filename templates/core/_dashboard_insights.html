@@ -7,7 +7,7 @@
   <ol class="db-flow-track">
     {% for stage in insights.stages %}
     <li class="db-flow-stage db-flow-stage--{{ stage.key }}{% if stage.key == insights.hot_stage %} is-hot{% endif %}" style="--i:{{ forloop.counter0 }}">
-      <a href="{% url 'book_unified' %}?tab=all&followup={{ stage.key }}">
+      <a href="{% url 'book_unified' %}?tab=all&followup={{ stage.key }}{{ lens_q }}">
         <span class="db-flow-ico"><i class="bi {{ stage.icon }}" aria-hidden="true"></i></span>
         <span class="db-flow-label">{{ stage.label }}</span>
         <strong class="db-flow-n">{{ stage.count }}</strong>
@@ -37,7 +37,7 @@
       </li>
       {% endfor %}
     </ul>
-    <a class="db-card-more" href="{% url 'book_unified' %}?tab=all&followup=overdue">كل المتأخرات <i class="bi bi-arrow-left" aria-hidden="true"></i></a>
+    <a class="db-card-more" href="{% url 'book_unified' %}?tab=all&followup=overdue{{ lens_q }}">كل المتأخرات <i class="bi bi-arrow-left" aria-hidden="true"></i></a>
     {% else %}
     <p class="db-empty"><i class="bi bi-check2-circle" aria-hidden="true"></i>لا متأخرات — أحسنت.</p>
     {% endif %}

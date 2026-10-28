@@ -21,6 +21,9 @@
     var rows = Array.prototype.slice.call(table.querySelectorAll('[data-filter-row]'));
     var empty = table.querySelector('[data-filter-empty]');
     rows.forEach(function (row) { row._s = norm(row.getAttribute('data-search')); });
+    // ?dept=<pk> من درج الشجرة: حساباتُ القسم **وشجرتِه** (سلسلةُ آبائه في data-lineage)
+    var lens = /^\d+$/.test(params.get('dept') || '') ? ' ' + params.get('dept') + ' ' : '';
+    var lensRows = lens ? rows.filter(function (row) { return row.hasAttribute('data-lineage'); }) : [];
 
     function apply() {
       var needle = norm(q.value);
@@ -28,12 +31,23 @@
       var shown = 0;
       rows.forEach(function (row) {
         var ok = (!needle || row._s.indexOf(needle) !== -1) &&
-          (!want || (' ' + row.getAttribute('data-status') + ' ').indexOf(' ' + want + ' ') !== -1);
+          (!want || (' ' + row.getAttribute('data-status') + ' ').indexOf(' ' + want + ' ') !== -1) &&
+          (!lensRows.length || (' ' + row.getAttribute('data-lineage') + ' ').indexOf(lens) !== -1);
         row.hidden = !ok;
         if (ok) shown += 1;
       });
       if (empty) empty.hidden = shown !== 0 || rows.length === 0;
-      count.textContent = (needle || want) ? shown + ' من ' + rows.length : '';
+      count.textContent = (needle || want || lensRows.length) ? shown + ' من ' + rows.length : '';
+    }
+
+    if (lensRows.length && params.get('dept_name')) {
+      var chip = document.createElement('a');
+      chip.className = 'adm-lens-chip';
+      chip.href = window.location.pathname + '?tab=' + (params.get('tab') || 'users');
+      chip.innerHTML = '<i class="bi bi-funnel-fill" aria-hidden="true"></i><span></span><i class="bi bi-x-lg" aria-hidden="true"></i>';
+      chip.querySelector('span').textContent = 'ضمن: ' + params.get('dept_name');
+      chip.setAttribute('aria-label', 'إزالة تصفية القسم ' + params.get('dept_name'));
+      bar.appendChild(chip);
     }
 
     if (params.get('q')) q.value = params.get('q');
@@ -70,7 +84,10 @@
       slot('children').textContent = d.children;
       slot('status').textContent = d.active === '1' ? 'نشط' : 'معطّل';
       drawer.querySelector('[data-href="edit"]').href = '?tab=departments#dep-row-' + d.id;
-      drawer.querySelector('[data-href="users"]').href = '?tab=users&q=' + encodeURIComponent(d.name);
+      drawer.querySelector('[data-href="users"]').href = '?tab=users&dept=' + d.id + '&dept_name=' + encodeURIComponent(d.name);
+      drawer.querySelector('[data-href="books"]').href = urls.getAttribute('data-books') + '?tab=all&dept=' + d.id;
+      drawer.querySelector('[data-href="dashboard"]').href = urls.getAttribute('data-dashboard') + '?dept=' + d.id;
+      drawer.querySelector('[data-href="audit"]').href = urls.getAttribute('data-audit') + '?dept=' + d.id;
       var overdue = drawer.querySelector('[data-href="overdue"]');
       overdue.hidden = d.overdue === '0';
       overdue.href = urls.getAttribute('data-reports') + '?dept=' + d.id + '&bucket=overdue';

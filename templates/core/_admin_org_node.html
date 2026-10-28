@@ -2,19 +2,19 @@
 <button type="button" class="adm-node{% if not d.is_active %} is-off{% endif %}{% if node.overdue %} has-overdue{% endif %}"
         data-bs-toggle="offcanvas" data-bs-target="#adm-node-drawer" aria-controls="adm-node-drawer"
         data-id="{{ d.pk }}" data-name="{{ d.name }}" data-code="{{ d.code }}"
-        data-level="{% if node.depth == 0 %}قسم{% elif node.depth == 1 %}شعبة{% else %}وحدة{% endif %}"
+        data-level="{{ node.level }}"
         data-parent="{{ d.parent.name|default:'' }}" data-books="{{ d.book_count }}"
         data-members="{{ d.member_count }}" data-active-members="{{ node.active_members }}"
         data-overdue="{{ node.overdue }}" data-active="{{ d.is_active|yesno:'1,0' }}"
         data-children="{{ node.children|length }}">
-  <span class="adm-node-lvl adm-lvl-{% if node.depth == 0 %}0{% elif node.depth == 1 %}1{% else %}2{% endif %}">{% if node.depth == 0 %}قسم{% elif node.depth == 1 %}شعبة{% else %}وحدة{% endif %}</span>
+  <span class="adm-node-lvl adm-lvl-{{ node.level_key }}">{{ node.level }}</span>
   <span class="adm-node-name">{% if node.overdue %}<span class="adm-dot" aria-hidden="true"></span>{% endif %}{{ d.name }}</span>
   <span class="adm-node-code">{{ d.code }}</span>
   <span class="adm-node-meta">{{ node.active_members }}/{{ d.member_count }} نشط · {{ d.book_count }} كتاب{% if node.overdue %} · <b>{{ node.overdue }} متأخّر</b>{% endif %}</span>
 </button>
 {% if node.children %}
 <ul class="adm-org-kids">
-  {% for child in node.children %}<li>{% include "core/_admin_org_node.html" with node=child %}</li>{% endfor %}
+  {% for child in node.children %}<li{% if child.children %} class="has-kids"{% endif %}>{% include "core/_admin_org_node.html" with node=child %}</li>{% endfor %}
 </ul>
 {% endif %}
 {% endwith %}

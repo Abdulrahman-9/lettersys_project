@@ -32,7 +32,8 @@ from .helpers import staff_required
 from core.scoping import (STUB_TITLE, books_in_scope, can_edit_book, can_view_reports,
                           is_privileged, report_departments, restricted_flag_sql,
                           can_manage_departments, managed_department_ids,
-                          scope_activity_for, subtree_ids)
+                          scope_activity_for, subtree_ids,
+                          department_lens, department_trail)
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,12 @@ def dashboard(request):
     books = books_in_scope(request.user)
     today = timezone.localdate()
 
+    # عدسةُ القسم: المشرفُ يرى المؤسسةَ كلَّها افتراضاً ويضيّقها إلى أيّ قسمٍ وشجرته؛
+    # والرئيسُ يضيّق داخل شجرته فقط (``department_lens`` يُعيد 404 لما خارجها)
+    lens_department, lens_ids = department_lens(request.user, request.GET.get('dept'))
+    scope_tree = _scope_tree(request.user, books)
+    if lens_ids is not None:
+        books = books.filter(department_id__in=lens_ids)
     # «جارية» من المصدر الوحيد: الرقمُ هنا والقائمةُ التي يفتحها (`followup=active`)
     # يقرآن القاعدةَ نفسَها فلا ينحرفان.
     active_q = followup_q('active')
@@ -87,10 +94,18 @@ def dashboard(request):
     role = get_user_role(request.user)
     profile = getattr(request.user, 'profile', None)
     sections = sections_for(request.user)
-    command_center = _command_center(request.user, books, today)
+    command_center = _command_center(request.user, books, today, lens_ids)
     insights = _dashboard_insights(request.user, books, today, stats)
+    whole_label = 'كل المؤسسة' if is_privileged(request.user) else (
+        profile.department.name if profile and profile.department_id else 'نطاقي')
 
     ctx = {
+        "lens_department":  lens_department,
+        "lens_trail":       department_trail(lens_department),
+        "lens_q":           f"&dept={lens_department.pk}" if lens_department else "",
+        "scope_tree":       scope_tree,
+        "scope_whole_label": whole_label,
+        "scope_name":       lens_department.name if lens_department else whole_label,
         "sections":         sections,
         "has_quiet":        any(s['quiet'] for s in sections),
         "today":            today,
@@ -208,12 +223,52 @@ def _dashboard_insights(user, books, today, stats):
     }
 
 
-def _command_center(user, books, today):
+def _scope_tree(user, books):
+    """شجرةُ مبدِّل النطاق — أقسامُ ``report_departments`` مرتّبةً بعمقها، ولكلٍّ
+    عددُ كتبه **مع ما تحته** (العدسةُ تسيل نزولاً فالعددُ عددُ ما تفتحه).
+
+    فارغةٌ لمن لا يملك إلّا قسماً واحداً: مبدِّلٌ بخيارٍ واحد ضجيج.
+    """
+    departments = list(report_departments(user).only('id', 'name', 'parent_id', 'code'))
+    if len(departments) < 2:
+        return []
+    by_id = {d.pk: d for d in departments}
+    direct = dict(books.filter(department_id__in=list(by_id)).order_by()
+                  .values_list('department_id').annotate(n=Count('pk')))
+    children = {}
+    for d in departments:
+        parent = d.parent_id if d.parent_id in by_id else None
+        children.setdefault(parent, []).append(d)
+
+    rows = []
+
+    def walk(node, depth):
+        start = len(rows)
+        rows.append(None)
+        total = direct.get(node.pk, 0)
+        for kid in sorted(children.get(node.pk, []), key=lambda k: (k.code or '', k.name)):
+            total += walk(kid, depth + 1)
+        label, key = node.level(depth)
+        rows[start] = {'pk': node.pk, 'name': node.name, 'depth': depth,
+                       'level': label, 'level_key': key, 'count': total,
+                       'has_kids': bool(children.get(node.pk))}
+        return total
+
+    # الجذورُ ذاتُ الكتب أوّلاً — 34 جذراً حيّاً أغلبُها فارغ
+    roots = sorted(children.get(None, []), key=lambda r: (-(direct.get(r.pk, 0)), r.code or '', r.name))
+    for root in roots:
+        walk(root, 0)
+    return rows
+
+
+def _command_center(user, books, today, lens_ids=None):
     """Read-only leadership snapshot bounded to the actor's department scope."""
     if not can_manage_departments(user):
         return None
 
     department_ids = managed_department_ids(user)
+    if lens_ids is not None:
+        department_ids = [pk for pk in department_ids if pk in set(lens_ids)]
     department_scope = Department.objects.filter(pk__in=department_ids)
     department_total = department_scope.count()
     departments = list(
@@ -252,8 +307,11 @@ def _command_center(user, books, today):
             round(department.book_count * 100 / largest) if largest else 0
         )
 
+    activity = scope_activity_for(user, UserActivityLog.objects.all())
+    if lens_ids is not None:
+        activity = activity.filter(Q(department_id__in=lens_ids) | Q(book__department_id__in=lens_ids))
     activity = (
-        scope_activity_for(user, UserActivityLog.objects.all())
+        activity
         .select_related('user', 'department')
         .order_by('-timestamp')[:6]
     )
@@ -261,6 +319,7 @@ def _command_center(user, books, today):
         'departments': departments,
         'department_total': department_total,
         'recent_activity': activity,
+        'lensed': lens_ids is not None,
         'scope_label': 'كل المؤسسة' if user.is_superuser else 'قسمك وشُعبه',
     }
 

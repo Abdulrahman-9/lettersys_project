@@ -129,3 +129,58 @@
   });
   dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
 })();
+
+/* مبدِّلُ النطاق: بحثٌ يُبقي آباءَ المطابِق ظاهرين (السياقُ لا يُفقد)، وEsc يطوي */
+(function () {
+  var box = document.querySelector('[data-scope-switcher]');
+  if (!box) return;
+  var q = box.querySelector('[data-scope-q]');
+  var empty = box.querySelector('[data-scope-empty]');
+  var rows = Array.prototype.slice.call(box.querySelectorAll('[data-scope-list] li'));
+  var norm = function (s) {
+    return (s || '').replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase().trim();
+  };
+  var depth = function (li) { return parseInt(li.style.getPropertyValue('--d'), 10) || 0; };
+  var hero = box.closest('.db-hero');
+  // :has() غائبٌ في متصفّحات الشبكة الأقدم — الصنفُ يرفع قصَّ البطل عن القائمة
+  box.addEventListener('toggle', function () {
+    if (hero) hero.classList.toggle('is-scope-open', box.open);
+    if (box.open && q) setTimeout(function () { q.focus(); }, 0);
+  });
+  box.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { box.open = false; box.querySelector('summary').focus(); return; }
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target.classList.contains('db-scope-item')) {
+      var links = rows.filter(function (li) { return !li.hidden; }).map(function (li) { return li.querySelector('a'); });
+      var i = links.indexOf(e.target) + (e.key === 'ArrowDown' ? 1 : -1);
+      e.preventDefault();
+      if (i < 0) { if (q) q.focus(); } else if (links[i]) { links[i].focus(); }
+    }
+  });
+  document.addEventListener('click', function (e) { if (box.open && !box.contains(e.target)) box.open = false; });
+  if (!q) return;
+  q.addEventListener('input', function () {
+    var term = norm(q.value), shown = 0;
+    var keep = rows.map(function () { return !term; });
+    rows.forEach(function (li, i) {
+      var a = li.querySelector('[data-name]');
+      if (!term || !a || norm(a.getAttribute('data-name')).indexOf(term) === -1) return;
+      keep[i] = true;
+      for (var j = i - 1, d = depth(li); j >= 0 && d > 0; j--) {
+        if (depth(rows[j]) < d) { keep[j] = true; d = depth(rows[j]); }
+      }
+    });
+    rows.forEach(function (li, i) { li.hidden = !keep[i]; if (keep[i]) shown++; });
+    if (empty) empty.hidden = shown > 0;
+  });
+  q.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown') {
+      var vis = rows.filter(function (li) { return !li.hidden; });
+      if (vis[0]) { e.preventDefault(); vis[0].querySelector('a').focus(); }
+      return;
+    }
+    if (e.key === 'Enter') {
+      var first = rows.filter(function (li) { return !li.hidden && li.querySelector('[data-name]') && norm(li.querySelector('[data-name]').getAttribute('data-name')).indexOf(norm(q.value)) !== -1; })[0];
+      if (first) { e.preventDefault(); window.location.href = first.querySelector('a').href; }
+    }
+  });
+})();

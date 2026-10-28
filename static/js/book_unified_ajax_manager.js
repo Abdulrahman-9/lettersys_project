@@ -273,6 +273,7 @@
         entityId: '',
         status: '',
         legacy: '',
+        dept: '',
         page: 1,
         sort: '-date'
       };
@@ -545,6 +546,7 @@
       if (this.currentState.entityId)  params.entity_id  = this.currentState.entityId;
       if (this.currentState.status)    params.followup   = this.currentState.status;
       if (this.currentState.legacy)    params.legacy     = this.currentState.legacy;
+      if (this.currentState.dept)      params.dept       = this.currentState.dept;
       if (this.currentState.page > 1)  params.page       = this.currentState.page;
       if (this.currentState.sort && this.currentState.sort !== '-date') params.sort = this.currentState.sort;
 
@@ -625,6 +627,7 @@
       this.currentState.entityId   = p.get('entity_id')  || '';
       this.currentState.status     = p.get('followup') || p.get('status') || p.get('due_status') || '';
       this.currentState.legacy     = p.get('legacy') === '1' ? '1' : '';
+      this.currentState.dept       = /^\d+$/.test(p.get('dept') || '') ? p.get('dept') : '';
       this.currentState.page       = parseInt(p.get('page')) || 1;
       this.currentState.sort       = p.get('sort')       || '-date';
       this.syncLegacyControls();
@@ -647,9 +650,11 @@
     clearAllFilters() {
       // التبويبُ ليس فلتراً: المسحُ من «صادر» كان يقفز إلى «وارد» (تدقيقُ نيلسن A#15)
       this.currentState = { tab: this.currentState.tab || 'incoming', search: '', dateFrom: '', dateTo: '',
-                            entityId: '', status: '', legacy: '', page: 1, sort: '-date' };
+                            entityId: '', status: '', legacy: '',
+                            // عدسةُ القسم نطاقٌ لا فلتر — كالتبويب تبقى، وتُزال من شارتها
+                            dept: this.currentState.dept || '', page: 1, sort: '-date' };
       this.syncLegacyControls(false);
-      history.pushState({}, '', window.location.pathname);
+      history.pushState({}, '', window.location.pathname + (this.currentState.dept ? '?dept=' + this.currentState.dept : ''));
       this.updateUrlAndLoadData();
     }
   }

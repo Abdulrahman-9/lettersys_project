@@ -143,6 +143,12 @@ def _list_scope(request):
     widened = bool((request.GET.get('q') or '').strip()) and not legacy
     counters = books_in_scope(request.user, legacy=legacy)
     rows = books_in_scope(request.user, legacy=True) if widened else counters
+    # عدسةُ القسم (?dept=) تضيّق الصفوفَ والعدّاداتِ والتصديرَ معاً — فوق النطاق لا بدلَه
+    from core.scoping import department_lens
+    _lens, lens_ids = department_lens(request.user, request.GET.get('dept'))
+    if lens_ids is not None:
+        counters = counters.filter(department_id__in=lens_ids)
+        rows = rows.filter(department_id__in=lens_ids)
     return rows, counters, legacy, widened
 
 
@@ -236,7 +242,16 @@ def book_unified(request):
         query_copy.pop("page")
     base_querystring = query_copy.urlencode()
 
+    from core.scoping import department_lens, department_trail
+    lens_department, _lens_ids = department_lens(request.user, request.GET.get('dept'))
+    lens_clear = request.GET.copy()
+    for key in ('dept', 'page'):
+        lens_clear.pop(key, None)
+
     context = {
+        "lens_department": lens_department,
+        "lens_trail": department_trail(lens_department),
+        "lens_clear_qs": lens_clear.urlencode(),
         "books": books,
         "page_obj": page_obj,
         "total_count": paginator.count,
@@ -280,6 +295,7 @@ def book_unified(request):
             "followup": followup,
             "sort": sort,
             "legacy": "1" if legacy else "",
+            "dept": str(lens_department.pk) if lens_department else "",
         }),
     }
 

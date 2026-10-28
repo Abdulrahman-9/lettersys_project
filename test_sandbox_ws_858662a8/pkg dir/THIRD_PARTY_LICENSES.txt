@@ -1,0 +1,21 @@
+﻿================================================================================
+LetterSys Workstation Bundle - Third-Party Components & Licenses
+================================================================================
+
+1. NAPS2 (Not Another PDF Scanner 2)
+   - Upstream Source Code: https://github.com/cyanfish/naps2
+   - Official Website:     https://www.naps2.com
+   - License:              GNU General Public License v2 (GPL-2.0)
+                           and LGPL components.
+   - Author:               Ben Olden-Cooligan (cyanfish)
+   - Source availability:  In accordance with the GNU General Public License v2,
+                           the complete corresponding source code for NAPS2 is
+                           publicly available at https://github.com/cyanfish/naps2.
+                           No modifications have been made to the NAPS2 binaries.
+
+2. Python (Windows Embeddable Package)
+   - Upstream:             https://www.python.org
+   - License:              Python Software Foundation (PSF) License
+   - Copyright (c) 2001-2026 Python Software Foundation. All rights reserved.
+
+================================================================================

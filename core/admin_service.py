@@ -269,6 +269,45 @@ def create_department_user(*, by, department, username, first_name='',
     return user, password
 
 
+def reset_department_user_password(*, by, user):
+    """كلمةُ مرورٍ مؤقّتةٌ جديدة لموظّفٍ في شجرة الرئيس — تُعرض مرّةً واحدة.
+
+    الحرّاسُ حرّاسُ التعديل نفسُها (``_guard_user_target``: لا إداريَّ ولا رئيسَ
+    آخر ولا أرشيفيّاً ولا خارجَ الشجرة)، وفوقها: لا حسابُك أنت (يُغيَّر بكلمتك
+    الحاليّة) ولا حسابٌ معطَّل (يُفعَّل أوّلاً). والكلمةُ عشوائيّةٌ لا يكتبها الرئيس،
+    و``must_change_password`` يُجبر صاحبَها على تغييرها في أوّل دخول — فلا تبقى
+    للرئيس كلمةٌ يعرفها. و``set_password`` يُسقط جلساتِه المفتوحة.
+    """
+    from core.models import SecuritySettings, UserPassword, UserProfile
+
+    if by is None or user.pk == by.pk:
+        raise PermissionDenied('كلمةُ مرورك أنت تُغيَّر من صفحة «تغيير كلمة المرور».')
+    _guard_user_target(by, user)
+    if not user.is_active:
+        raise ValidationError('الحسابُ معطَّل — فعِّله أوّلاً ثم أعِد تعيينَ كلمته.')
+
+    password = secrets.token_urlsafe(max(24, SecuritySettings.get().password_min_length))
+    with transaction.atomic():
+        user.set_password(password)
+        user.save(update_fields=['password'])
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.must_change_password = True
+        profile.save(update_fields=['must_change_password'])
+        UserPassword.objects.filter(user=user).delete()
+        temporary = UserPassword(
+            user=user,
+            expires_at=timezone.now() + timedelta(hours=24),
+            is_viewed=True,
+        )
+        temporary.set_password(password)
+        temporary.save()
+        _log(by, 'PASSWORD_RESET', {
+            'user': user.get_username(),
+            'department': profile.department.code if profile.department_id else '',
+        })
+    return password
+
+
 def save_group(*, by, name, member_ids=None, auto_rule='', group=None, is_active=None):
     """يُنشئ عنقوداً أو يعدّله — والعضويّةُ **لقطتُها في صفوف الإحالة** لا هنا."""
     from core.models import Entity, EntityGroup

@@ -5,7 +5,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/book_unified.css' %}?v=20261007">
-<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20261007">
+<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20261021">
 <link rel="stylesheet" href="{% static 'css/book_unified_table.css' %}?v=20260811a">
 <link rel="stylesheet" href="{% static 'css/book_unified_mobile.css' %}?v=20260629-preview">
 <link rel="stylesheet" href="{% static 'css/number_hint.css' %}?v=20260810">
@@ -24,6 +24,20 @@
 
   {# تبويبان رئيسيان كاملان عرض الصفحة #}
   {% include 'core/partials/book_unified_tabs.html' %}
+
+  {% if lens_department %}
+  <nav class="dept-lens-bar" aria-label="نطاق القسم">
+    <i class="bi bi-diagram-3" aria-hidden="true"></i>
+    <span class="dept-lens-label">كتبُ</span>
+    <ol class="dept-lens-trail">
+      {% for step in lens_trail %}<li>{{ step.name }}</li>{% endfor %}
+    </ol>
+    <span class="dept-lens-note">وما تحته</span>
+    <a class="dept-lens-clear" href="?{{ lens_clear_qs }}" aria-label="إزالة نطاق القسم وعرض كل الكتب">
+      <i class="bi bi-x-lg" aria-hidden="true"></i> كل الأقسام
+    </a>
+  </nav>
+  {% endif %}
 
   {# شريط فلترة موحّد: بحث + scope + status pills + متقدم #}
   {% include 'core/partials/book_unified_filter_bar.html' %}

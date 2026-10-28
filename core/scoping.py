@@ -165,7 +165,10 @@ def scope_activity_for(user, qs=None):
     mine = subtree_ids(user_department_id(user))
     if not mine:
         return qs.none()
-    return qs.filter(Q(department_id__in=mine) | Q(book__department_id__in=mine))
+    # أفعالُ مدير النظام الإداريّة (إعادةُ كلمة سرّ، فتحُ السجلّ…) تحمل لقطةَ قسمه
+    # فكانت تظهر لرئيس ذلك القسم؛ ويبقى ظاهراً ما مسَّ **كتاباً** من شجرته
+    return qs.filter((Q(department_id__in=mine) & ~Q(user__is_superuser=True))
+                     | Q(book__department_id__in=mine))
 
 
 def can_manage_system(user) -> bool:
@@ -506,6 +509,51 @@ def subtree_ids(department_id):
                     if pid in frontier and cid not in found}
         found |= frontier
     return sorted(found)
+
+
+def department_lens(user, raw):
+    """عدسةُ القسم ``?dept=<pk>`` — **مصدرٌ واحد** للوحة والقائمة والسجلّ.
+
+    يُعيد ``(department, ids)``: القسمُ وشجرتُه (تسيل نزولاً كالنطاق)، أو
+    ``(None, None)`` حين لا عدسة. والمسموحُ ``report_departments`` نفسُها التي
+    تحرس فلتر التقارير؛ وما خارجها «غيرُ موجود» (404) لا «ممنوع» — فلا يكشف
+    الرابطُ وجودَ قسمٍ خارج النطاق. العدسةُ **تضيّق** النطاق ولا توسّعه أبداً:
+    تُطبَّق فوق ``books_in_scope`` لا بدلاً منه.
+    """
+    from django.http import Http404
+
+    raw = (raw or '').strip()
+    if not raw:
+        return None, None
+    # مَن لا تقريرَ له (موظّفُ الوحدة) لا عدسةَ له: يُتجاهَل الرابطُ المنسوخ ولا يُكسر —
+    # فنطاقُه أضيقُ من أيّ قسمٍ أصلاً، فلا شيءَ يتسرّب
+    if not can_view_reports(user):
+        return None, None
+    if not raw.isdigit():
+        raise Http404('لا قسم بهذا الرقم')
+    from core.models import Department
+    # المديرُ يُدقّق المعطَّلَ أيضاً (الشجرةُ في الإدارة تعرضه، وكتبُه القديمة باقية)
+    allowed = Department.objects.all() if is_privileged(user) else report_departments(user)
+    department = allowed.filter(pk=int(raw)).first()
+    if department is None:
+        raise Http404('لا قسم بهذا الرقم')
+    return department, subtree_ids(department.pk)
+
+
+def department_trail(department):
+    """سلسلةُ الآباء من الأعلى إلى القسم نفسه — لمسار التنقّل في العدسة."""
+    from core.models import Department
+
+    if department is None:
+        return []
+    parents = {pk: (pid, name) for pk, pid, name in
+               Department.objects.values_list('id', 'parent_id', 'name')}
+    trail, seen, current = [], set(), department.pk
+    while current is not None and current not in seen and current in parents:
+        seen.add(current)
+        trail.append({'pk': current, 'name': parents[current][1]})
+        current = parents[current][0]
+    return list(reversed(trail))
 
 
 def managed_department_ids(user):

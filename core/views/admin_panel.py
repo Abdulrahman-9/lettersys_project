@@ -23,7 +23,8 @@ from django.utils import timezone
 from django.views.decorators.cache import never_cache
 
 from core.admin_service import (UNSET, assign_user, create_department,
-                                create_department_user, delete_group, save_group,
+                                create_department_user, delete_group,
+                                reset_department_user_password, save_group,
                                 update_department)
 from core.models import BookNumberReservation, Department, Entity, EntityGroup
 from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
@@ -33,7 +34,7 @@ from core.scoping import (can_manage_accounts, can_manage_departments,
 
 TABS = ('overview', 'departments', 'users', 'groups', 'reservations')
 ADMIN_ACTIONS = ('CREATE_DEPARTMENT', 'EDIT_DEPARTMENT', 'ASSIGN_USER',
-                 'CREATE_USER', 'CREATE_GROUP', 'EDIT_GROUP')
+                 'CREATE_USER', 'CREATE_GROUP', 'EDIT_GROUP', 'PASSWORD_RESET')
 RESERVATION_REPORT_DAYS = (7, 30, 90)
 RESERVATION_REPORT_PAGE_SIZE = 50
 
@@ -128,6 +129,8 @@ def _overview(user, department_rows, people, department_ids):
         nodes[department.pk] = {
             'department': department,
             'depth': row['depth'],
+            'level': department.level(row['depth'])[0],
+            'level_key': department.level(row['depth'])[1],
             'overdue': overdue.get(department.pk, 0),
             'active_members': active_members.get(department.pk, 0),
             'children': [],
@@ -300,6 +303,27 @@ def _handle(request):
             response['Referrer-Policy'] = 'no-referrer'
             return response
         return redirect(_back_to(request, 'users'))
+
+    if action == 'reset_user_password':
+        try:
+            raw_id = (request.POST.get('user_id') or '').strip()
+            target = User.objects.filter(pk=int(raw_id)).first() if raw_id.isdigit() else None
+            if target is None:
+                raise ValidationError('المستخدمُ غير موجود.')
+            password = reset_department_user_password(by=request.user, user=target)
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, exc.messages[0] if isinstance(exc, ValidationError) else str(exc))
+            return redirect(_back_to(request, 'users'))
+        messages.success(request, 'أُعيد تعيين كلمة المرور، وستظهر الكلمة المؤقتة مرة واحدة.')
+        response = _render_panel(request, 'users', {
+            'username': target.get_username(),
+            'password': password,
+            'is_reset': True,
+        })
+        response['Cache-Control'] = 'no-store, private'
+        response['Pragma'] = 'no-cache'
+        response['Referrer-Policy'] = 'no-referrer'
+        return response
 
     try:
         handler = _HANDLERS.get(action)
@@ -503,9 +527,20 @@ def _user_rows(department_ids=None, actor_id=None):
     people = (people.select_related('profile', 'profile__department')
               .prefetch_related('groups')
               .order_by('username'))
+    parents = dict(Department.objects.values_list('id', 'parent_id'))
+
+    def lineage(department_id):
+        chain, seen = [], set()
+        while department_id is not None and department_id not in seen:
+            seen.add(department_id)
+            chain.append(str(department_id))
+            department_id = parents.get(department_id)
+        return ' '.join(chain)
+
     rows = [{
         'user': u,
         'department': getattr(getattr(u, 'profile', None), 'department', None),
+        'lineage': lineage(getattr(getattr(u, 'profile', None), 'department_id', None)),
         'is_head': bool(getattr(getattr(u, 'profile', None), 'is_department_head', False)),
         'is_controller': any(g.name == CONTROLLER_GROUP_NAME for g in u.groups.all()),
         'is_archivist': any(g.name == ARCHIVIST_GROUP_NAME for g in u.groups.all()),

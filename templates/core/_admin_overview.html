@@ -8,7 +8,7 @@
     <div class="adm-card-hd">
       <div>
         <h2 id="adm-org-h">الهيكل التنظيمي</h2>
-        <p class="adm-sub">قسم ← شعبة ← وحدة · انقر أي عقدة لعرض تفاصيلها{% if org_overdue_total %} · <span class="adm-dot" aria-hidden="true"></span> فيها كتب متأخّرة ({{ org_overdue_total }}){% endif %}</p>
+        <p class="adm-sub">مكتب ← قسم ← شعبة ← وحدة · انقر أي عقدة لعرض تفاصيلها وفتح لوحتها وكتبها وسجلّها{% if org_overdue_total %} · <span class="adm-dot" aria-hidden="true"></span> فيها كتب متأخّرة ({{ org_overdue_total }}){% endif %}</p>
       </div>
       <a class="adm-link" href="?tab=departments"><i class="bi bi-pencil-square" aria-hidden="true"></i>تعديل الهيكل</a>
     </div>
@@ -119,10 +119,14 @@
       <div><dt>الحالة</dt><dd data-slot="status"></dd></div>
     </dl>
     <div class="adm-drawer-actions">
-      <a class="btn btn-sm btn-primary" data-href="edit"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>تعديل القسم</a>
+      <a class="btn btn-sm btn-primary" data-href="dashboard"><i class="bi bi-bullseye me-1" aria-hidden="true"></i>لوحته وإحصاءاته</a>
+      <a class="btn btn-sm btn-outline-primary" data-href="books"><i class="bi bi-journal-text me-1" aria-hidden="true"></i>كل كتبه</a>
       <a class="btn btn-sm btn-outline-primary" data-href="users"><i class="bi bi-people me-1" aria-hidden="true"></i>حساباته</a>
+      <a class="btn btn-sm btn-outline-primary" data-href="audit"><i class="bi bi-clock-history me-1" aria-hidden="true"></i>سجل حركاته</a>
+      <a class="btn btn-sm btn-outline-secondary" data-href="edit"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>تعديل القسم</a>
       <a class="btn btn-sm btn-outline-danger" data-href="overdue"><i class="bi bi-alarm me-1" aria-hidden="true"></i>المتأخرات</a>
     </div>
   </div>
 </div>
-<span hidden id="adm-urls" data-reports="{% url 'reports' %}"></span>
+<span hidden id="adm-urls" data-reports="{% url 'reports' %}" data-books="{% url 'book_unified' %}"
+      data-dashboard="{% url 'dashboard' %}" data-audit="{% url 'audit_log' %}"></span>
