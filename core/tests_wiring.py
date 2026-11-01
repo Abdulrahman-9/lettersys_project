@@ -66,8 +66,6 @@ KNOWN_UNWIRED = {
     'workstation_heartbeat':    'يستدعيه وكيلُ الماسح على الجهاز (scan_agent/workstation.py) لا صفحة',
     'workstation_revoke':       'يبنيه workstation_board.js وقتَ التشغيل: apiBase + المعرّف + revoke',
     'workstation_unblock':      'يبنيه workstation_board.js وقتَ التشغيل: apiBase + المعرّف + unblock',
-    'entity_stats':             'API إحصاءٍ بلا مستهلك',
-    'search_titles':            'API بحثٍ بلا مستهلك (title_autocomplete يستعمل مساراً آخر)',
     'ai_extraction_statistics': 'API إحصاءٍ للاستخراج بلا مستهلك',
     'mail-api-stats':           'API إحصاءِ بريدٍ بلا مستهلك',
     'mail-api-bulk-send':       'إرسالٌ جماعيٌّ بلا واجهة',

@@ -38,10 +38,9 @@ def invalidate_entity_cache(sender, **kwargs):
 
 @receiver([post_save, post_delete], sender=Book)
 def invalidate_book_cache(sender, **kwargs):
-    """أبطل كاش بحث العناوين وكاش كلمات القاموس عند أي تعديل/حذف للكتاب."""
+    """أبطل كاش إكمال العناوين وكاش كلمات القاموس عند أي تعديل/حذف للكتاب —
+    مفتاحاهما (لكلّ مستخدم) يحملان رقمَ الإصدار، فالرفعُ يُبطلهما كلَّهما."""
     _bump(BOOK_CACHE_VERSION_KEY)
-    # مسح كاش كلمات القاموس المُستخرجة من العناوين
-    cache.delete('title_words_dict_v1')
 
 
 @receiver(m2m_changed, sender=Book.issuing_entities.through)

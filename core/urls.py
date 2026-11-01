@@ -25,11 +25,9 @@ urlpatterns = [
     path("device-setup/download/", device_setup_views.device_setup_download, name="device_setup_download"),
     # API البحث والإتمام التلقائي (Autocomplete API)
     path("api/search/entities/", api_views.search_entities, name="search_entities"),
-    path("api/search/titles/", api_views.search_titles, name="search_titles"),
     path("api/title-autocomplete/", api_views.title_autocomplete, name="title_autocomplete"),
     path("api/title-words/",        api_views.title_words_api,    name="title_words_api"),
     path("api/entity/add/", api_views.add_new_entity, name="add_new_entity"),
-    path("api/stats/", api_views.get_entity_stats, name="entity_stats"),
 
     path("unified/", views.book_unified, name="book_unified"),
     path("api/unified/data/", views.api_unified_data, name="api_unified_data"),

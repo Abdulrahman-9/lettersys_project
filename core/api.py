@@ -7,13 +7,14 @@ API endpoints للبحث السريع والذكي
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Case, Count, When, Value, IntegerField, FloatField, OuterRef, Subquery
+from django.db.models import Q, Case, Count, When, Value, IntegerField, FloatField
 from django.db.models.functions import Coalesce, Greatest
 from django.contrib.postgres.search import TrigramSimilarity
 from django.core.cache import cache
 from django.utils.text import slugify
-from .models import Entity, Book
+from .models import Entity
 from .decorators import rate_limit
+from .scoping import content_authorized_books, is_privileged, scope_books_for, user_department_id
 import json
 import logging
 
@@ -137,57 +138,22 @@ def search_entities(request):
     return JsonResponse(response)
 
 
-@login_required
-@require_http_methods(["GET"])
-@rate_limit('search_titles', max_attempts=60, window_seconds=60, by='user')
-def search_titles(request):
+def _titles_in_scope(user):
+    """الكتبُ التي تُقترح عناوينُها — ما يراه المستخدم **ويملك محتواه** وحدَه.
+
+    العنوانُ محتوى: الإكمالُ وقاموسُ الكلمات بحثٌ نصّيٌّ في العناوين، فحكمُهما حكمُ
+    ``guard_secret_text_search`` — نطاقُ القسم (``scope_books_for``) ثمّ حجبُ السرّيّ
+    عمّن لا يفتحه (``content_authorized_books``).
     """
-    البحث عن عناوين الكتب
-    PostgreSQL: TrigramSimilarity على العنوان — يدعم الأخطاء الإملائية
-    """
-    search_term = request.GET.get('q', '').strip()
-    try:
-        limit = min(int(request.GET.get('limit', 10)), 50)
-    except (ValueError, TypeError):
-        limit = 10
-    entity_id = request.GET.get('entity_id', None)
+    return content_authorized_books(scope_books_for(user), user)
 
-    if not search_term or len(search_term) < 2:
-        return JsonResponse({'results': []})
 
-    cache_key = (
-        f"title_search_v{_get_book_cache_version()}_"
-        f"{slugify(search_term, allow_unicode=True)}_{entity_id}"
-    )
-    cached_result = cache.get(cache_key)
-    if cached_result:
-        return JsonResponse(cached_result)
-
-    queryset = Book.objects.all()
-
-    if entity_id:
-        queryset = queryset.filter(
-            Q(issuing_entities__id=entity_id)
-            | Q(receiving_entities__id=entity_id)
-        )
-
-    titles = (
-        queryset
-        .annotate(sim=TrigramSimilarity('title', search_term))
-        .filter(Q(sim__gt=0.15) | Q(title__icontains=search_term))
-        .order_by('-sim')
-        .values_list('title', flat=True)
-        .distinct()[:limit]
-    )
-
-    response = {
-        'results': [
-            {'id': i, 'text': title}
-            for i, title in enumerate(titles)
-        ]
-    }
-    cache.set(cache_key, response, 1800)
-    return JsonResponse(response)
+def _title_cache_scope(user):
+    """وسمُ نطاقِ الكاش: النتيجةُ تتبع المستخدم (قسمُه وتفاويضُه)، فلا يُقدَّم
+    كاشُ مستخدمٍ لآخر. ومديرُ النظام يرى الكلَّ فيتقاسم مديرو النظام كاشاً واحداً."""
+    if is_privileged(user):
+        return 'all'
+    return f'u{user.pk}d{user_department_id(user)}'
 
 
 @login_required
@@ -206,12 +172,14 @@ def title_autocomplete(request):
     if not q or len(q) < 2:
         return JsonResponse({'suggestions': [], 'next_word': None})
 
-    cache_key = f"title_ac_{slugify(q[:60])}_{mode}_{kind}"
+    # allow_unicode: بدونه يصير كلُّ استعلامٍ عربيٍّ مفتاحاً فارغاً واحداً (كما في search_entities)
+    cache_key = (f"title_ac_v{_get_book_cache_version()}_{_title_cache_scope(request.user)}_"
+                 f"{slugify(q[:60], allow_unicode=True)}_{mode}_{kind}")
     cached = cache.get(cache_key)
     if cached:
         return JsonResponse(cached)
 
-    qs = Book.objects.all()
+    qs = _titles_in_scope(request.user)
     if kind:
         qs = qs.filter(kind=kind)
 
@@ -277,7 +245,7 @@ def title_words_api(request):
     import re
     from collections import Counter
 
-    cache_key = 'title_words_dict_v1'
+    cache_key = f'title_words_v{_get_book_cache_version()}_{_title_cache_scope(request.user)}'
     cached = cache.get(cache_key)
     if cached:
         return JsonResponse(cached)
@@ -309,7 +277,7 @@ def title_words_api(request):
     }
 
     titles = list(
-        Book.objects.all()
+        _titles_in_scope(request.user)
         .values_list('title', flat=True)
         .distinct()[:8000]
     )
@@ -433,46 +401,3 @@ def add_new_entity(request):
             'success': False,
             'message': 'حدث خطأ أثناء إنشاء الجهة. يرجى المحاولة مرة أخرى.'
         }, status=500)
-
-
-@login_required
-@require_http_methods(["GET"])
-def get_entity_stats(request):
-    """
-    إحصائيات عن الجهات والعناوين
-    مفيدة للتحليل والتحسين
-    """
-    
-    # عدّ كتب كل جهة عبر استعلامين فرعيين مستقلّين — يتجنّب الضرب الديكارتي
-    # الناتج عن ضمّ علاقتَي M2M (issued/received) في استعلام واحد.
-    _issued_sq = (
-        Book.objects.filter(issuing_entities=OuterRef('pk'))
-        .order_by().values('issuing_entities').annotate(c=Count('id')).values('c')
-    )
-    _received_sq = (
-        Book.objects.filter(receiving_entities=OuterRef('pk'))
-        .order_by().values('receiving_entities').annotate(c=Count('id')).values('c')
-    )
-
-    stats = {
-        'total_entities': Entity.objects.count(),
-        'active_entities': Entity.objects.filter(is_active=True).count(),
-        'total_titles': Book.objects.values('title').distinct().count(),
-        'total_books': Book.objects.count(),
-        'most_used_entities': list(
-            Entity.objects.annotate(
-                book_count=(
-                    Coalesce(Subquery(_issued_sq, output_field=IntegerField()), 0)
-                    + Coalesce(Subquery(_received_sq, output_field=IntegerField()), 0)
-                )
-            ).order_by('-book_count').values('id', 'name', 'book_count')[:5]
-        ),
-        'most_used_titles': list(
-            Book.objects.all()
-            .values('title')
-            .annotate(count=Count('title'))
-            .order_by('-count')[:5]
-        )
-    }
-    
-    return JsonResponse(stats)

@@ -9,7 +9,9 @@ Routes (book-centric):
   POST /books/api/email/test-smtp/          — SMTP connection test (canonical)
   GET|POST /books/api/email/settings/       — read/update email settings
   GET  /books/api/email/entity/<id>/        — entity email info
-  POST /books/api/email/entity/<id>/update/ — update entity email fields
+
+Entity contact fields (email, CC, notify flags) are edited in one place only:
+entity_edit, behind staff_required — they steer mail for every department.
 """
 
 import json
@@ -406,34 +408,3 @@ def entity_email_info(request, entity_id):
             'notify_on_send':    entity.notify_on_send,
         }
     })
-
-
-# ── 6. Update entity email ─────────────────────────────────────
-@login_required
-@require_http_methods(['POST'])
-def update_entity_email(request, entity_id):
-    from core.models import Entity
-
-    try:
-        entity = Entity.objects.get(pk=entity_id)
-    except Entity.DoesNotExist:
-        return JsonResponse({'success': False, 'message': 'الجهة غير موجودة'}, status=404)
-
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({'success': False, 'message': 'بيانات غير صالحة'}, status=400)
-
-    allowed = ['email', 'email_cc', 'phone', 'address', 'contact_person',
-               'notes', 'notify_on_receive', 'notify_on_send']
-    update_fields = []
-    for field in allowed:
-        if field in data:
-            setattr(entity, field, data[field])
-            update_fields.append(field)
-
-    if update_fields:
-        entity.save(update_fields=update_fields)
-        logger.info(f'[EntityEmail] Updated entity={entity_id} fields={update_fields} by {request.user.username}')
-
-    return JsonResponse({'success': True, 'message': 'تم التحديث'})

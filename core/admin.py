@@ -1,5 +1,26 @@
 from django.contrib import admin
+from .auth_views import LOGIN_RATE_LIMIT
+from .decorators import rate_limit
 from .models import Entity, Book, Attachment, Notification, BookHistory, AIIntegrationSettings, BookEmailLog, EmailSettings, EmailThread, IncomingEmail, EmailTemplate
+from .scoping import is_privileged
+
+# لوحةُ Django لا تعرف الأقسام ولا السرّيّة ولا BookHistory: ما يُعدَّل منها يتخطّى
+# ``core/scoping.py`` وسجلَّ الحركات. فهي لمدير النظام وحدَه — لا لكلّ حاملِ
+# ``is_staff`` تمنحه مجموعةُ دورٍ صلاحيّةَ نموذج (``roles.ensure_role_groups``).
+admin.site.has_permission = lambda request: request.user.is_active and is_privileged(request.user)
+
+_admin_login = admin.site.login
+_admin_login_limited = rate_limit('login', **LOGIN_RATE_LIMIT)(_admin_login)
+
+
+def _admin_login_with_limit(request, extra_context=None):
+    """بابُ /admin/login/ يقاسم /login/ دلوَ محاولاته — والحدُّ على الإرسال وحدَه كأخيه."""
+    if request.method == 'POST':
+        return _admin_login_limited(request, extra_context)
+    return _admin_login(request, extra_context)
+
+
+admin.site.login = _admin_login_with_limit
 
 @admin.register(Entity)
 class EntityAdmin(admin.ModelAdmin):
@@ -30,8 +51,18 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(BookHistory)
 class BookHistoryAdmin(admin.ModelAdmin):
+    """سجلُّ أفعال الكتاب أثرٌ لا مسودّة: يُقرأ ولا يُضاف إليه ولا يُعدَّل ولا يُحذف."""
     list_display = ('book','action','by','created_at')
     list_filter = ('action',)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(BookEmailLog)

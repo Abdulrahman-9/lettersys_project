@@ -526,8 +526,11 @@ def api_delete_book(request, book_id):
 
     book = get_object_or_404(Book, id=book_id)
 
-    # الحذفُ للقسم المالك وطاولته والمدير (Q1‑ج) — والوحدةُ المُحالُ إليها لا تحذف كتابَ غيرها
+    # الحذفُ للقسم المالك وطاولته والمدير (Q1‑ج) — والوحدةُ المُحالُ إليها لا تحذف كتابَ غيرها.
+    # وما خارج النطاق «غير موجود» لا «ممنوع» — كأخيه ``api_book_inline_status``.
     if not can_edit_book(book, request.user):
+        if not can_open_content(book, request.user):
+            return JsonResponse({"error": "غير موجود"}, status=404)
         return JsonResponse({"error": "Unauthorized"}, status=403)
 
     try:
@@ -677,13 +680,16 @@ def api_undo_delete_book(request, book_id):
     if request.method != "POST":
         return JsonResponse({"error": "Only POST allowed"}, status=405)
 
+    # البحثُ والبوّابةُ خارج ``try``: كان 404 يُبتلع فيصير 500 بنصّ الاستثناء.
+    book = get_object_or_404(Book.all_objects, id=book_id, is_deleted=True)
+
+    # الاستعادةُ عكسُ الحذف — بالبوّابة نفسِها (Q1‑ج)، وما خارج النطاق «غير موجود».
+    if not can_edit_book(book, request.user):
+        if not can_open_content(book, request.user):
+            return JsonResponse({"error": "غير موجود"}, status=404)
+        return JsonResponse({"error": "Unauthorized"}, status=403)
+
     try:
-        book = get_object_or_404(Book.all_objects, id=book_id, is_deleted=True)
-
-        # الاستعادةُ عكسُ الحذف — بالبوّابة نفسِها (Q1‑ج)
-        if not can_edit_book(book, request.user):
-            return JsonResponse({"error": "Unauthorized"}, status=403)
-
         book.is_deleted = False
         book.deleted_at = None
         book.deleted_by = None

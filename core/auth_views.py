@@ -10,8 +10,12 @@ from django.utils.decorators import method_decorator
 
 from .decorators import rate_limit
 
+#: حدُّ محاولات الدخول — **دلوٌ واحدٌ لكلّ أبواب الدخول** (هذه الصفحة و/admin/login/
+#: في ``core/admin.py``): بابٌ ثانٍ بعدّادٍ مستقلّ يضاعف المحاولات المتاحة.
+LOGIN_RATE_LIMIT = dict(max_attempts=10, window_seconds=300, by='ip')
 
-@method_decorator(rate_limit('login', max_attempts=10, window_seconds=300, by='ip'), name='post')
+
+@method_decorator(rate_limit('login', **LOGIN_RATE_LIMIT), name='post')
 class CustomLoginView(LoginView):
     """
     Custom Login View مع دعم Remember Me

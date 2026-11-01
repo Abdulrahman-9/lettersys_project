@@ -201,10 +201,13 @@ class DeleteBookAPITests(BookViewsBase):
         resp = self.client.get(self._url(self.book.pk))
         self.assertEqual(resp.status_code, 405)
 
-    def test_unauthorized_user_gets_403(self):
+    def test_out_of_scope_user_gets_404(self):
+        """خارجَ نطاقه: «غير موجود» لا «ممنوع» — فرقُ الرمزين يُثبت وجودَ الكتاب."""
         self._login(self.other)
         resp = self.client.post(self._url(self.book.pk))
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 404)
+        self.book.refresh_from_db()
+        self.assertFalse(self.book.is_deleted)
 
     def test_owner_can_soft_delete(self):
         self._login()
@@ -363,10 +366,13 @@ class UndoDeleteBookTests(BookViewsBase):
         resp = self.client.get(self._url(self.book.pk))
         self.assertEqual(resp.status_code, 405)
 
-    def test_unauthorized_gets_403(self):
+    def test_out_of_scope_user_gets_404(self):
+        """خارجَ نطاقه: «غير موجود» لا «ممنوع» — كالحذف."""
         self._login(self.other)
         resp = self.client.post(self._url(self.book.pk))
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 404)
+        self.book.refresh_from_db()
+        self.assertTrue(self.book.is_deleted)
 
     def test_owner_restores_book(self):
         self._login()
