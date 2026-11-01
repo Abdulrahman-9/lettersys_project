@@ -63,6 +63,9 @@ class NavGatesContractTests(TestCase):
 #: مراجَعةٌ بالعين 2026‑09‑10 — كلُّ سطرٍ بسببه. إضافةُ اسمٍ هنا قرارٌ لا تسكين.
 KNOWN_UNWIRED = {
     'dev_login':                'أداةُ تطويرٍ تُفتح بالمسار عمداً',
+    'workstation_heartbeat':    'يستدعيه وكيلُ الماسح على الجهاز (scan_agent/workstation.py) لا صفحة',
+    'workstation_revoke':       'يبنيه workstation_board.js وقتَ التشغيل: apiBase + المعرّف + revoke',
+    'workstation_unblock':      'يبنيه workstation_board.js وقتَ التشغيل: apiBase + المعرّف + unblock',
     'entity_stats':             'API إحصاءٍ بلا مستهلك',
     'search_titles':            'API بحثٍ بلا مستهلك (title_autocomplete يستعمل مساراً آخر)',
     'ai_extraction_statistics': 'API إحصاءٍ للاستخراج بلا مستهلك',
@@ -77,7 +80,6 @@ KNOWN_UNWIRED = {
     'extraction-results-ui':    'صفحةُ نتائجٍ قديمة بلا مدخل (الحيُّ سطحُ الاستخراج الذكيّ)',
     'media':                    'يُطلَب بمسار الملفّ (attachment.file.url) لا بالاسم — بحكم طبيعته',
     # كشفتها قاعدةُ «مقطعان بعد آخر معلمة» (كان مقطعٌ واحدٌ يطابق روابطَ بريئة):
-    'book_create_incoming':     'مدخلٌ قديمٌ يُعيد التوجيه إلى سطح الاستخراج — يبقى للروابط المحفوظة',
     'book_create_outgoing':     'مدخلٌ قديمٌ يُعيد التوجيه إلى سطح الاستخراج — يبقى للروابط المحفوظة',
     'add_new_entity':           'API إضافةِ جهةٍ بلا مستهلك (السطحُ يستعمل entity-list والبحث)',
     'email-send':               'الإرسالُ العامّ بلا مستهلك؛ الحيُّ book-email-send',

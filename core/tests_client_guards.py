@@ -134,13 +134,15 @@ class LifecycleScriptGuardsTests(SimpleTestCase):
         self.assertIn('button.dataset.ledger', handler)
 
     def test_done_and_returned_ask_before_closing(self):
-        """«أُنجز/أُعيد» يُقفلان الالتزامَ بلا رجوع — فيمرّان بحواريّةٍ تسمّي الوحدة (B#6)."""
+        """«أُنجز/أُعيد» يُقفلان الالتزامَ بلا رجوع — فيمرّان بحواريّةٍ تسمّي الوحدة (B#6).
+        و«وصلت» صار يسأل كذلك (83fefdc): ثلاثُ حواريّاتٍ لثلاثة أفعال."""
         src = self.src()
         handler = src[src.index("closest('[data-referral-act]')"):]
         handler = handler[:handler.index("/act/'")]
-        self.assertIn("if (act === 'done') {", handler)
+        self.assertIn("if (act === 'received') {", handler)
+        self.assertIn("} else if (act === 'done') {", handler)
         self.assertIn("} else if (act === 'returned') {", handler)
-        self.assertEqual(handler.count('asked = ask({'), 2)
+        self.assertEqual(handler.count('asked = ask({'), 3)
         self.assertIn('button.dataset.referralTarget', handler)
 
     def test_register_here_is_delegated_on_the_document(self):

@@ -14,10 +14,13 @@ class BackLandsWhereYouCameFromTests(TestCase):
         self.client.force_login(self.staff)
 
     def test_desk_print_pages_go_back_to_the_desk_board(self):
+        # رابطُ الرجوع انتقل إلى الترويسة المشتركة (c14552d) — الصفحتان تضمّانها
+        header = open('templates/core/_desk_header.html', encoding='utf-8').read()
+        self.assertIn("{% url 'desk_board' %}", header)
         for name in ('desk_handover', 'desk_ledger'):
             src = open(f'templates/core/{name}.html', encoding='utf-8').read()
-            self.assertIn("{% url 'desk_board' %}", src, name)
-            self.assertNotIn('href="/books/"', src, name)
+            self.assertIn('{% include "core/_desk_header.html"', src, name)
+            self.assertNotIn('href="/books/"', src + header, name)
 
     def test_settings_subpages_cancel_back_into_the_hub(self):
         for tpl, tab in (('scan_settings', 'scan'), ('sequence_settings', 'sequences'), ('network_settings', 'network')):
