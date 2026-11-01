@@ -166,6 +166,7 @@ class LegacyRestoreEngine:
         self._entity_cache = {}       # norm_key → Entity (لهذا التشغيل)
         self._entity_by_key = None    # خريطة كل الجهات، تُبنى عند أول حاجة
         self._created_entities = []   # أسماء أُنشئت فعلاً — تُعرض للمراجعة
+        self._department = None       # قسمُ السجلّ — يُحسم عند أوّل كتاب
 
     # ── الاستعادة من ملف باكاب (.bak أو مضغوط) ──────────────────────────────
     @classmethod
@@ -1236,6 +1237,8 @@ class LegacyRestoreEngine:
                     changed.append('director_general_number')
                 if not existing.document_type and clas:
                     existing.document_type = clas; changed.append('document_type')
+                if existing.department_id is None:
+                    existing.department = self._register_department(); changed.append('department')
                 if changed:
                     existing.save(update_fields=changed)
                 # جهات/مرفق ناقصة فقط
@@ -1276,10 +1279,9 @@ class LegacyRestoreEngine:
 
         # ── إنشاء جديد ──
         with transaction.atomic():
-            department = None
+            department = self._register_department()
             if kind == 'outgoing_external':
                 from .models import BookSequence
-                department = BookSequence.resolve_department()
                 our_number = BookSequence.consume_next(
                     kind, department=department)['formatted']
             book = Book.objects.create(
@@ -1303,6 +1305,18 @@ class LegacyRestoreEngine:
             self._attach_if_missing(book, rd, prefix, restore_files, our_number, summary, has_file)
         summary['books'] += 1
         summary[f'books_{kind}'] += 1
+
+    def _register_department(self):
+        """قسمُ السجلّ الذي تُقيَّد فيه كتبُ المصدر — الدفترُ القديم دفترُ قسمٍ واحد
+        (قرارُ المالك 2026‑11‑01: سجلٌّ واحدٌ لقسم المتابعة).
+
+        كان الكتابُ الجديد يُنشأ بلا قسم إلّا الصادرَ الخارجيّ، فلا يراه أحدٌ في القسم
+        سوى مدير النظام ولا يدخل لوحاتِه: 2,622 كتاباً من دمج 2026‑10‑27.
+        """
+        if self._department is None:
+            from .models import BookSequence
+            self._department = BookSequence.resolve_department()
+        return self._department
 
     # ── مساعدات الجهات والمرفقات ───────────────────────────────────────────
     def _set_entities(self, book, is_out, from_name, subroot, rd, prefix, replace_receiving=True):
