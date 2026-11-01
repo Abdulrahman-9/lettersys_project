@@ -26,6 +26,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core.decorators import rate_limit
+from core.views.helpers import writer_required_api
 
 logger = logging.getLogger('lettersys')
 
@@ -53,6 +54,7 @@ def _json(request):
 # ══════════════════════════════════════════════════════
 
 @login_required
+@writer_required_api
 @require_http_methods(['POST'])
 @rate_limit('mail_compose', max_attempts=20, window_seconds=300, by='user')
 def api_compose(request):
@@ -273,6 +275,7 @@ def api_thread_detail(request, pk):
 # ══════════════════════════════════════════════════════
 
 @login_required
+@writer_required_api
 @require_http_methods(['POST'])
 def api_thread_status(request, pk):
     from core.models import EmailThread
@@ -299,6 +302,7 @@ def api_thread_status(request, pk):
 # ══════════════════════════════════════════════════════
 
 @login_required
+@writer_required_api
 @require_http_methods(['POST'])
 @rate_limit('bulk_mail_send', max_attempts=5, window_seconds=300, by='user')
 def api_bulk_send(request):

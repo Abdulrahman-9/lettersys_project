@@ -20,6 +20,7 @@ from core.referral_service import (ACTION_NEEDS_DUE, cancel_referral, distribute
                                    mark_done, mark_received, mark_returned,
                                    open_referrals_for, send_reminder)
 from core.scoping import can_view_book, scope_books_for, scope_referrals_for
+from core.testing import as_writer
 
 
 class ReferralTestCase(TestCase):
@@ -40,7 +41,7 @@ class ReferralTestCase(TestCase):
         cls.ministry = Entity.objects.create(name='وزارة النفط')
 
         def member(name, dept):
-            u = User.objects.create_user(name, password='pw-%s-11111' % name)
+            u = as_writer(User.objects.create_user(name, password='pw-%s-11111' % name))
             UserProfile.objects.create(user=u, department=dept)
             return u
 
@@ -216,7 +217,7 @@ class NotificationTests(ReferralTestCase):
     """«حسابُ الوحدة يجمع التنبيهات لكلّ موظّفيه بشفافيّة» — أمرُ المالك."""
 
     def test_every_member_of_the_unit_is_notified(self):
-        colleague = User.objects.create_user('rbudget2', password='pw-b2-11111')
+        colleague = as_writer(User.objects.create_user('rbudget2', password='pw-b2-11111'))
         UserProfile.objects.create(user=colleague, department=self.unit_budget)
 
         distribute(self.book, [self.unit_budget], by=self.clerk, due_date=self.due)

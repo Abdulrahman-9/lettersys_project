@@ -18,6 +18,7 @@ from core.models import Book, BookHistory, BookReferral, Department, Entity, Use
 from core.referral_service import distribute
 from core.roles import CONTROLLER_GROUP_NAME
 from core.scoping import can_edit_book, can_open_content
+from core.testing import as_writer
 
 
 class EditRightsTestCase(TestCase):
@@ -33,7 +34,7 @@ class EditRightsTestCase(TestCase):
         cls.kh = Department.objects.create(name='قسمُ الكتابة الآخر', code='ك.خ', entity=kh_twin)
 
         def member(name, dept, *, head=False, desk=False):
-            u = User.objects.create_user(name, password=f'pw-{name}-1111')
+            u = as_writer(User.objects.create_user(name, password=f'pw-{name}-1111'))
             UserProfile.objects.update_or_create(
                 user=u, defaults={'department': dept, 'is_department_head': head})
             if desk:
@@ -47,7 +48,7 @@ class EditRightsTestCase(TestCase):
         cls.unit = member('wunit', cls.sh)
         cls.mentioned = member('wmentioned', cls.kh)
         cls.admin = User.objects.create_superuser('wadmin', 'w@x.co', 'pw-wadmin-1111')
-        cls.loner = User.objects.create_user('wloner', password='pw-wloner-1111')   # بلا قسم
+        cls.loner = as_writer(User.objects.create_user('wloner', password='pw-wloner-1111'))   # بلا قسم
 
         def book(num, by, dept, **kw):
             return Book.objects.create(
@@ -142,7 +143,7 @@ class TheDoorsTests(EditRightsTestCase):
         self.assertFalse(self.book.is_deleted)
 
     def test_one_who_cannot_see_the_book_gets_not_found(self):
-        stranger = User.objects.create_user('wstranger', password='pw-wstranger-1111')
+        stranger = as_writer(User.objects.create_user('wstranger', password='pw-wstranger-1111'))
         UserProfile.objects.update_or_create(user=stranger, defaults={'department': self.kh})
         c = self._as(stranger)
         self.assertEqual(c.get(reverse('book_edit', args=[self.unit_book.pk])).status_code, 404)

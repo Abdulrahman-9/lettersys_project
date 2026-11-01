@@ -22,6 +22,7 @@ from core.models import (Book, BookHistory, BookReferral, Department, Entity,
 from core.referral_service import (ACTION_NEEDS_DUE, mark_done, reply_matrix,
                                    send_circular, send_reminder)
 from core.registration_service import register_reply
+from core.testing import as_writer
 
 
 class CircularTestCase(TestCase):
@@ -40,7 +41,7 @@ class CircularTestCase(TestCase):
         cls.ministry = Entity.objects.create(name='وزارة النفط')   # خارجيّةٌ بلا قسم
 
         def member(name, dept):
-            u = User.objects.create_user(name, password='pw-%s-11111' % name)
+            u = as_writer(User.objects.create_user(name, password='pw-%s-11111' % name))
             UserProfile.objects.create(user=u, department=dept)
             return u
 

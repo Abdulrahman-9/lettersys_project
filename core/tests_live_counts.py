@@ -21,6 +21,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Book, BookHistory, Department, UserProfile
+from core.testing import as_writer
 
 
 class LiveCountsTestCase(TestCase):
@@ -31,7 +32,7 @@ class LiveCountsTestCase(TestCase):
     def setUpTestData(cls):
         cls.today = timezone.localdate()
         cls.dept = Department.objects.create(name='قسمُ العدّ', code='ع.ق')
-        cls.clerk = User.objects.create_user('lclerk', password='pw-lclerk-1111')
+        cls.clerk = as_writer(User.objects.create_user('lclerk', password='pw-lclerk-1111'))
         UserProfile.objects.update_or_create(user=cls.clerk, defaults={'department': cls.dept})
 
         def book(num, *, kind='incoming_internal', due=None, **kw):
@@ -192,7 +193,7 @@ class LegacyLineTests(LiveCountsTestCase):
 
     def test_no_paper_no_line(self):
         other = Department.objects.create(name='قسمٌ بلا ورق', code='ب.و')
-        newcomer = User.objects.create_user('lnew', password='pw-lnew-1111')
+        newcomer = as_writer(User.objects.create_user('lnew', password='pw-lnew-1111'))
         UserProfile.objects.update_or_create(user=newcomer, defaults={'department': other})
         Book.objects.create(kind='incoming_internal', title='كتابٌ حيّ', our_number='8001',
                             created_by=newcomer, department=other, date=self.today)

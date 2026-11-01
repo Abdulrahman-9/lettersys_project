@@ -16,6 +16,7 @@ from django.utils import timezone
 from core.custody_service import record_custody
 from core.models import Book, BookRegistration, CustodyEvent, Department, Entity, UserProfile
 from core.roles import CONTROLLER_GROUP_NAME
+from core.testing import as_writer
 
 
 class BookDetailPageTestCase(TestCase):
@@ -25,8 +26,8 @@ class BookDetailPageTestCase(TestCase):
         cls.today = timezone.localdate()
         cls.dept = Department.objects.create(name='قسمُ الملفّ', code='م.ق')
         cls.admin = User.objects.create_superuser('mroot', 'm@x.co', 'pw-mroot-1111')
-        cls.clerk = User.objects.create_user('mclerk', password='pw-mclerk-1111',
-                                             first_name='كاتبةُ', last_name='الملفّ')
+        cls.clerk = as_writer(User.objects.create_user('mclerk', password='pw-mclerk-1111',
+                                             first_name='كاتبةُ', last_name='الملفّ'))
         UserProfile.objects.update_or_create(user=cls.clerk, defaults={'department': cls.dept})
         cls.sender = Entity.objects.create(name='جهةُ الملفّ المُرسِلة')
         cls.book = Book.objects.create(
@@ -130,8 +131,8 @@ class SecretOpenersLineTests(BookDetailPageTestCase):
     """Q5: «مَن يفتحه» للسرّيّ وحدَه — بالأسماء ومن توأم ``secret_access``."""
 
     def test_the_line_names_who_opens_a_secret_and_is_absent_otherwise(self):
-        officer = User.objects.create_user('mofficer', password='pw-mofficer-1111',
-                                           first_name='مختصُّ', last_name='البريد')
+        officer = as_writer(User.objects.create_user('mofficer', password='pw-mofficer-1111',
+                                           first_name='مختصُّ', last_name='البريد'))
         UserProfile.objects.update_or_create(user=officer, defaults={'department': self.dept})
         officer.groups.add(Group.objects.get_or_create(name=CONTROLLER_GROUP_NAME)[0])
         secret = Book.objects.create(kind='incoming_internal', title='سرّيُّ الملفّ',

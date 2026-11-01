@@ -20,6 +20,7 @@ from core.models import (Book, BookReferral, BookRegistration, CustodyEvent, Dep
 from core.referral_service import distribute
 from core.registration_service import register_book_here
 from core.roles import CONTROLLER_GROUP_NAME
+from core.testing import as_writer
 
 
 class DeskTestCase(TestCase):
@@ -34,7 +35,7 @@ class DeskTestCase(TestCase):
         cls.other = Department.objects.create(name='العقود', code='ط-ش5')
 
         def member(name, dept, *, head=False, controller=False):
-            u = User.objects.create_user(name, password='pw-%s-11111' % name)
+            u = as_writer(User.objects.create_user(name, password='pw-%s-11111' % name))
             UserProfile.objects.create(user=u, department=dept, is_department_head=head)
             if controller:
                 group, _ = Group.objects.get_or_create(name=CONTROLLER_GROUP_NAME)

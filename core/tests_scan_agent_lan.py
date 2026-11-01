@@ -25,6 +25,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
+from core.testing import as_writer
 
 # عنوانٌ محجوزٌ للتوثيق (RFC 5737) — والمستودعُ عامّ فلا عنوانَ شركةٍ فيه. وهو
 # يخدم القياسَ كما هو: ``ipaddress`` يَعُدّ 192.0.2.0/24 شبكةً خاصّةً، فبقي
@@ -41,7 +42,7 @@ _PROXY = ('HTTP_X_FORWARDED_PROTO', 'https')
 class ScanAgentInfoTests(TestCase):
     def setUp(self):
         self.client = Client()
-        User.objects.create_user('u', password='p')
+        as_writer(User.objects.create_user('u', password='p'))
         self.client.login(username='u', password='p')
         self.url = reverse('scan_agent_info')
 
@@ -98,7 +99,7 @@ class ScanAgentInfoTests(TestCase):
 class ScanAgentStartTests(TestCase):
     def setUp(self):
         self.client = Client()
-        User.objects.create_user('u', password='p')
+        as_writer(User.objects.create_user('u', password='p'))
         self.client.login(username='u', password='p')
         self.url = reverse('scan_agent_start')
 

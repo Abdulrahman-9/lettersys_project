@@ -16,7 +16,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 
 from .. import numbering
-from ..scoping import can_manage_accounts, can_manage_mail
+from ..scoping import can_manage_accounts, can_manage_mail, can_write
 
 
 def apply_search_filters(queryset, search_text):
@@ -266,3 +266,27 @@ def privileged_required(view_func):
 def mail_manager_required(view_func):
     """حارسُ إدارة البريد: مسؤول البريد أو موظّف الإدارة أو مدير النظام."""
     return _guarded(view_func, can_manage_mail, 'هذه الصفحةُ لمسؤول البريد.')
+
+
+#: ردُّ «قارئ فقط» — واحدٌ للصفحة ولنقطة JSON.
+READ_ONLY_DENIAL = 'حسابُك للقراءة والتعليق فقط.'
+
+
+def writer_required(view_func):
+    """صفحاتُ الإنشاء والإرسال لمَن يكتب (``scoping.can_write``) — توأمُ الحرّاس أعلاه."""
+    return _guarded(view_func, can_write, READ_ONLY_DENIAL)
+
+
+def writer_required_api(view_func):
+    """توأمُ ``writer_required`` لنقاط JSON: 403 بجسمٍ يقرؤه سطحُ الاستدعاء.
+
+    يُرفض **قبل أيّ بحث** — الجوابُ واحدٌ لكلّ معرّف، فلا يكشف وجودَ شيء."""
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not can_write(request.user):
+            from django.http import JsonResponse
+
+            return JsonResponse({'success': False, 'message': READ_ONLY_DENIAL,
+                                 'error_code': 'READ_ONLY'}, status=403)
+        return view_func(request, *args, **kwargs)
+    return _wrapped

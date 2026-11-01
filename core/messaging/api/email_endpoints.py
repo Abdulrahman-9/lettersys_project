@@ -23,6 +23,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from core.decorators import rate_limit
+from core.views.helpers import writer_required_api
 
 logger = logging.getLogger('lettersys')
 
@@ -48,6 +49,7 @@ def _json_body(request) -> dict:
 
 # ── 1. Manual email send ────────────────────────────────────────
 @login_required
+@writer_required_api
 @require_http_methods(['POST'])
 @rate_limit('email_send', max_attempts=20, window_seconds=300, by='user')
 def send_email(request):
@@ -300,6 +302,7 @@ def book_email_preview(request, book_id):
 
 
 @login_required
+@writer_required_api
 @require_http_methods(['POST'])
 @rate_limit('send_book_to_entity', max_attempts=20, window_seconds=300, by='user')
 def send_book_to_entity(request, book_id):

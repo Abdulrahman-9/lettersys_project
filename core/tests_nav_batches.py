@@ -5,12 +5,13 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from core.models import Book, Entity, Notification
+from core.testing import as_writer
 
 
 class BackLandsWhereYouCameFromTests(TestCase):
 
     def setUp(self):
-        self.staff = User.objects.create_user('navb', password='pw-navb-11', is_staff=True)
+        self.staff = as_writer(User.objects.create_user('navb', password='pw-navb-11', is_staff=True))
         self.client.force_login(self.staff)
 
     def test_desk_print_pages_go_back_to_the_desk_board(self):
@@ -55,7 +56,7 @@ class BackLandsWhereYouCameFromTests(TestCase):
 class NoMutationOverGetTests(TestCase):
 
     def test_mark_read_rejects_get_and_accepts_post(self):
-        u = User.objects.create_user('navn', password='pw-navn-11')
+        u = as_writer(User.objects.create_user('navn', password='pw-navn-11'))
         n = Notification.objects.create(user=u, title='ت', message='م')
         self.client.force_login(u)
         self.assertEqual(self.client.get(reverse('notification_mark_read', args=[n.pk])).status_code, 405)
@@ -69,7 +70,7 @@ class NoMutationOverGetTests(TestCase):
 class ErrorPagesInsideTheShellTests(TestCase):
 
     def test_404_carries_the_shell_and_a_way_back(self):
-        u = User.objects.create_user('nav4', password='pw-nav4-11')
+        u = as_writer(User.objects.create_user('nav4', password='pw-nav4-11'))
         self.client.force_login(u)
         r = self.client.get(reverse('book_detail', args=[999999]))
         self.assertEqual(r.status_code, 404)
@@ -79,7 +80,7 @@ class ErrorPagesInsideTheShellTests(TestCase):
     def test_403_carries_the_shell(self):
         # كان المصدرُ تعديلَ كتابِ غيرك — وصار 404 (تقريرُ فيبل، P0 البند 12:
         # «ممنوع» يُثبت وجودَ الكتاب). والـ403 الباقي: صفحةُ إدارةٍ لغير الإداريّ.
-        other = User.objects.create_user('nav3a', password='pw-nav3a-11')
+        other = as_writer(User.objects.create_user('nav3a', password='pw-nav3a-11'))
         self.client.force_login(other)
         r = self.client.get(reverse('settings_hub'))
         self.assertEqual(r.status_code, 403)
@@ -90,7 +91,7 @@ class LifecycleRefreshInPlaceTests(TestCase):
     """ح1: أفعالُ الدورة تُعيد رسمَ مناطقَ موسومةٍ في المكان — لا إعادةَ تحميلٍ للصفحة."""
 
     def test_the_page_marks_the_regions_the_script_swaps(self):
-        u = User.objects.create_user('navlc', password='pw-navlc-11', is_staff=True)
+        u = as_writer(User.objects.create_user('navlc', password='pw-navlc-11', is_staff=True))
         b = Book.objects.create(kind='incoming_internal', title='دورة', created_by=u)
         self.client.force_login(u)
         r = self.client.get(reverse('book_detail', args=[b.pk]))
@@ -111,7 +112,7 @@ class EyeOpensFullDetailTests(TestCase):
     لا الحوارَ السريع (الحوارُ لا يحمل دورةَ الحياة ولا التعليقات ولا السجلّ)."""
 
     def setUp(self):
-        self.u = User.objects.create_user('eyev', password='pw-eyev-11', is_staff=True)
+        self.u = as_writer(User.objects.create_user('eyev', password='pw-eyev-11', is_staff=True))
         self.book = Book.objects.create(kind='incoming_internal', title='للعرض', created_by=self.u)
         self.client.force_login(self.u)
 
@@ -131,8 +132,8 @@ class SettingsHubStructureTests(TestCase):
     """هيكلُ مركز الإعدادات (مراجعة 2026‑09‑13): حارسٌ واحدٌ لكلّ تبويب، ولا مساراتٍ حرفيّة."""
 
     def setUp(self):
-        self.plain = User.objects.create_user('shp', password='pw-shp-11')
-        self.staff = User.objects.create_user('shs', password='pw-shs-11', is_staff=True)
+        self.plain = as_writer(User.objects.create_user('shp', password='pw-shp-11'))
+        self.staff = as_writer(User.objects.create_user('shs', password='pw-shs-11', is_staff=True))
 
     def test_every_embedded_tab_is_guarded_like_the_hub(self):
         """كانت صفحةُ إعدادات الماسح بـlogin_required وحدَها: أيُّ مستخدمٍ يفتحها بالمسار."""

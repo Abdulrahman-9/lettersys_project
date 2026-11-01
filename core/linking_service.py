@@ -26,14 +26,14 @@ def add_link(from_book, to_book, relation, *, by, note=''):
     لا تراه يكشف وجودَه ورقمَه لصاحب الطرف الآخر.
     """
     from core.models import BookHistory, BookLink
-    from core.scoping import can_open_content
+    from core.scoping import can_act_on_book
 
     if from_book.pk == to_book.pk:
         raise ValidationError('لا يُربط الكتاب بنفسه.')
     if relation not in dict(BookLink.RELATION_CHOICES):
         raise ValidationError('نوعُ علاقةٍ غير معروف.')
     for book in (from_book, to_book):
-        if not can_open_content(book, by):
+        if not can_act_on_book(book, by):
             raise PermissionDenied('لا تملك صلاحيةَ الربط بهذا الكتاب.')
 
     label = dict(BookLink.RELATION_CHOICES)[relation]
@@ -58,10 +58,10 @@ def add_link(from_book, to_book, relation, *, by, note=''):
 def remove_link(link, *, by):
     """يفكّ ربطاً ويكتب الأثر في تاريخ الطرفين."""
     from core.models import BookLink
-    from core.scoping import can_open_content
+    from core.scoping import can_act_on_book
 
     from_book, to_book = link.from_book, link.to_book
-    if not can_open_content(from_book, by):
+    if not can_act_on_book(from_book, by):
         raise PermissionDenied('لا تملك صلاحيةَ فكّ هذا الربط.')
 
     label = dict(BookLink.RELATION_CHOICES)[link.relation]

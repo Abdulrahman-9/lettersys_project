@@ -23,7 +23,7 @@ import re
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
-from core.views.helpers import mail_manager_required
+from core.views.helpers import mail_manager_required, writer_required
 from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
@@ -244,6 +244,7 @@ def _reply_address(thread):
 
 
 @login_required
+@writer_required
 def mail_compose(request, book_id=None):
     from core.models import Entity, EmailTemplate, EmailSettings
     from core.messaging.scoping import mailable_book, repliable_thread

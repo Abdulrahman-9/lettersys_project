@@ -14,6 +14,7 @@ from django.test import TestCase
 from core.linking_service import add_link, links_of, remove_link
 from core.models import Attachment, Book, BookHistory, BookLink, Department, OCRResult, UserProfile
 from core.roles import CONTROLLER_GROUP_NAME
+from core.testing import as_writer
 
 
 class LinkingTestCase(TestCase):
@@ -23,9 +24,9 @@ class LinkingTestCase(TestCase):
         cls.dept = Department.objects.create(name='المتابعة', code='ل-ش13')
         cls.other = Department.objects.create(name='العقود', code='ل-ش5')
 
-        cls.clerk = User.objects.create_user('lclerk', password='pw-lclerk-1')
+        cls.clerk = as_writer(User.objects.create_user('lclerk', password='pw-lclerk-1'))
         UserProfile.objects.create(user=cls.clerk, department=cls.dept)
-        cls.outsider = User.objects.create_user('lout', password='pw-lout-111')
+        cls.outsider = as_writer(User.objects.create_user('lout', password='pw-lout-111'))
         UserProfile.objects.create(user=cls.outsider, department=cls.other)
 
         cls.original = Book.objects.create(

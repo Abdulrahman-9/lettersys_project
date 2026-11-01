@@ -35,6 +35,7 @@ from django.utils.dateparse import parse_date
 from core.tasks import process_attachment_extraction
 from core.extraction.pipeline import AIExtractionService, slim_entity_matches
 from core.decorators import rate_limit_scan, rate_limit
+from core.views.helpers import writer_required_api
 from core.models import (
     Attachment,
     DataExtractionResult,
@@ -309,6 +310,7 @@ def _mint_scan_token(result) -> str:
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@writer_required_api
 @rate_limit_scan(max_attempts=20, window_seconds=300)
 def smart_extract_direct(request):
     """Synchronous extraction for the smart desktop UI (handles direct file uploads)."""
@@ -462,6 +464,7 @@ _STAGE_LABELS = {
 
 
 @login_required
+@writer_required_api
 @require_http_methods(['POST'])
 def smart_extract_stream(request):
     """بثّ الاستخراج تدريجياً (NDJSON): سطرٌ لكل مرحلة بحقولها المكتملة ثم سطر نهائي.
@@ -633,6 +636,7 @@ def subject_box_read(request):
 
 
 @login_required
+@writer_required_api
 @require_http_methods(['POST'])
 @rate_limit('subject_box_confirm', max_attempts=60, window_seconds=60, by='user')
 def subject_box_confirm(request):

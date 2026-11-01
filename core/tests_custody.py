@@ -21,6 +21,7 @@ from core.custody_service import (custody_chain, held_by,
 from core.models import (Book, BookHistory, BookReferral, CustodyEvent, Department,
                          Entity, UserProfile)
 from core.referral_service import distribute
+from core.testing import as_writer
 
 
 class CustodyTestCase(TestCase):
@@ -35,7 +36,7 @@ class CustodyTestCase(TestCase):
         cls.other = Department.objects.create(name='العقود', code='ع-ش5')
 
         def member(name, dept):
-            u = User.objects.create_user(name, password='pw-%s-11111' % name)
+            u = as_writer(User.objects.create_user(name, password='pw-%s-11111' % name))
             UserProfile.objects.create(user=u, department=dept)
             return u
 

@@ -11,6 +11,7 @@ from django.urls import reverse
 from PIL import Image, ImageDraw
 
 from core.extraction import subject_crop as sc
+from core.testing import as_writer
 
 
 def _lines(*items):
@@ -162,7 +163,7 @@ class StoreAndGateTests(TestCase):
         self.assertIsNone(sc.learned_fill(img, 12345, ocr=lambda r: 'أيّ شيء'), 'جهةٌ بلا عيّنات مُلئت')
 
     def test_edited_text_never_teaches(self):
-        u = User.objects.create_user('sbx', password='pw-sbx-11')
+        u = as_writer(User.objects.create_user('sbx', password='pw-sbx-11'))
         self.client.force_login(u)
         cache.set('subject_lines:tok1', [], 900)
         r = self.client.post(reverse('ai_subject_box_confirm'), data=json.dumps({
@@ -178,7 +179,7 @@ class StoreAndGateTests(TestCase):
 
     def test_read_endpoint_uses_the_cached_page_and_expires(self):
         import io
-        u = User.objects.create_user('sbr', password='pw-sbr-11')
+        u = as_writer(User.objects.create_user('sbr', password='pw-sbr-11'))
         self.client.force_login(u)
         buf = io.BytesIO(); _page().save(buf, format='JPEG')
         cache.set('subject_page:tok2', buf.getvalue(), 900)
@@ -342,7 +343,7 @@ class PipelineHookTests(TestCase):
         self.assertEqual(res.subject_box_proposal['source'], 'learned-filled')
 
     def test_the_input_page_carries_the_card_and_the_script(self):
-        u = User.objects.create_user('sbp', password='pw-sbp-11')
+        u = as_writer(User.objects.create_user('sbp', password='pw-sbp-11'))
         self.client.force_login(u)
         r = self.client.get(reverse('extraction-smart-desktop'))
         self.assertContains(r, 'id="subjectLocate"')
@@ -380,7 +381,7 @@ class AttachmentPagesAndMergeLogTests(TestCase):
     def setUp(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
         from core.models import Attachment, Book
-        self.user = User.objects.create_user('mrg', password='pw-mrg-11', is_staff=True)
+        self.user = as_writer(User.objects.create_user('mrg', password='pw-mrg-11', is_staff=True))
         self.book = Book.objects.create(kind='incoming_internal', title='مرفقات', created_by=self.user)
         self.att = Attachment.objects.create(
             book=self.book, file=SimpleUploadedFile('a.pdf', self._pdf(2), content_type='application/pdf'))
@@ -432,7 +433,7 @@ class DocViewerToolsTests(TestCase):
     """عارضُ الصور (تكبير/تدوير/سحب) والتنقّلُ بين المرفقات داخل الحوار (2026‑09‑13)."""
 
     def test_the_dialog_carries_image_tools_and_navigation(self):
-        u = User.objects.create_user('dvt', password='pw-dvt-11')
+        u = as_writer(User.objects.create_user('dvt', password='pw-dvt-11'))
         self.client.force_login(u)
         r = self.client.get(reverse('book_unified'))
         for marker in ('id="docPreviewZoomIn"', 'id="docPreviewRotate"', 'id="docPreviewReset"',
@@ -449,7 +450,7 @@ class DocViewerToolsTests(TestCase):
     def test_the_detail_page_publishes_its_attachment_series(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
         from core.models import Attachment, Book
-        u = User.objects.create_user('dvs', password='pw-dvs-11', is_staff=True)
+        u = as_writer(User.objects.create_user('dvs', password='pw-dvs-11', is_staff=True))
         b = Book.objects.create(kind='incoming_internal', title='سلسلة', created_by=u)
         for n in ('p1.pdf', 'p2.pdf'):
             Attachment.objects.create(book=b, file=SimpleUploadedFile(n, b'%PDF-1.4'))

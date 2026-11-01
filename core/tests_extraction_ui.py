@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import Book
+from core.testing import as_writer
 
 URL = "extraction-smart-desktop"
 
@@ -17,8 +18,8 @@ URL = "extraction-smart-desktop"
 class RecentBooksWidgetTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser("a", "a@x.com", "pass1234")
-        self.clerk = User.objects.create_user("c", "c@x.com", "pass1234")
-        self.other = User.objects.create_user("o", "o@x.com", "pass1234")
+        self.clerk = as_writer(User.objects.create_user("c", "c@x.com", "pass1234"))
+        self.other = as_writer(User.objects.create_user("o", "o@x.com", "pass1234"))
         self.today = timezone.now().date()
 
     def _book(self, num, owner):
@@ -89,7 +90,7 @@ class SmartExtractStreamTests(TestCase):
     """نقطة البثّ التدريجي: سطر NDJSON لكل مرحلة بحقولها المكتملة، ثم سطر نهائي."""
 
     def setUp(self):
-        self.user = User.objects.create_user("streamer", "s@x.com", "pass1234")
+        self.user = as_writer(User.objects.create_user("streamer", "s@x.com", "pass1234"))
         self.client.force_login(self.user)
 
     @staticmethod
@@ -184,7 +185,7 @@ class SmartDesktopEditGateTests(TestCase):
         cls.other = Department.objects.create(name='قسمٌ بعيد', code='ذ.ب')
 
         def member(name, dept, *, archivist=False):
-            user = User.objects.create_user(name, name + '@x.co', 'pass1234')
+            user = as_writer(User.objects.create_user(name, name + '@x.co', 'pass1234'))
             UserProfile.objects.update_or_create(user=user,
                                                  defaults={'department': dept})
             if archivist:
@@ -241,7 +242,7 @@ class SmartDesktopEditGateTests(TestCase):
         Book.objects.create(kind='incoming_external', title='مناقصةٌ سرّيّة',
                             our_number='7101', secret_level='secret',
                             department=self.dept, created_by=self.clerk)
-        plain = User.objects.create_user('sd-plain', 'p@x.co', 'pass1234')
+        plain = as_writer(User.objects.create_user('sd-plain', 'p@x.co', 'pass1234'))
         UserProfile.objects.update_or_create(user=plain,
                                              defaults={'department': self.dept})
         self.client.force_login(plain)

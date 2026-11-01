@@ -30,6 +30,7 @@ from core.extraction.kinds import (
 from core.document_types import DEFAULT_DOCUMENT_TYPE_BY_KIND, DOCUMENT_TYPE_OPTIONS_BY_KIND
 from core.models import Book, BookSequence, DataExtractionResult
 from core.scoping import can_open_extraction
+from core.views.helpers import writer_required
 
 
 def _confidence_percent(value):
@@ -73,6 +74,7 @@ def extraction_wizard(request):
 
 
 @login_required
+@writer_required
 def extraction_smart_desktop(request):
     """نظام الاستخراج الذكي المحسّن للـ Desktop — يدعم وضع التعديل عبر edit_pk"""
     from django.core.exceptions import PermissionDenied

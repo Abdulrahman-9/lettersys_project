@@ -370,6 +370,39 @@ def can_open_content(book, user) -> bool:
     return can_view_book(book, user) and secret_access(user, book) == ACCESS_FULL
 
 
+def _writer_group_names():
+    """مجموعاتُ الأدوار التي تكتب — **قائمةُ سماحٍ صريحة** لا «كلُّ مجموعةِ دور»:
+    مجموعةٌ جديدةٌ تولد للقراءة حتى يُقرَّر لها، وحارسُ التطابق يُلزم بالقرار."""
+    from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
+                            CONTROLLER_GROUP_NAME, ENTRY_GROUP_NAME)
+
+    return frozenset({ENTRY_GROUP_NAME, CONTROLLER_GROUP_NAME,
+                      ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME})
+
+
+def can_write(user) -> bool:
+    """أيكتب أصلاً؟ — ما عدا «قارئ فقط».
+
+    قرارُ المالك 2026‑11‑01: **القارئُ يقرأ ويعلّق** — لا يُنشئ ولا يعدّل ولا يحذف ولا
+    يغيّر حالةً ولا يفرّق ولا يرسل. كان الدورُ تسميةَ عرضٍ (``roles.get_user_role``)
+    لا تمنع شيئاً. والسؤالُ هنا عن **العضويّة** لا التسمية — كأختَيها
+    ``is_mail_officer`` و``is_archivist``: التسميةُ سلسلةُ أولويّةٍ للعرض.
+
+    والنطاقُ فوقه لا تحته: مَن يكتب يكتب على ما يحقّ له (``can_edit_book``) لا على كلّ شيء.
+    """
+    if not (getattr(user, 'is_authenticated', False) and user.is_active):
+        return False
+    if is_privileged(user) or is_department_head(user):
+        return True
+    return user.groups.filter(name__in=_writer_group_names()).exists()
+
+
+def can_act_on_book(book, user) -> bool:
+    """أفعالُ الصفّ على كتابٍ يُفتح محتواه: التفريقُ وأفعالُ الإحالة والعهدةُ والقيدُ
+    عندنا والربط. الوحدةُ المُحالُ إليها تفعلها ولا تعدّل الكتاب — والقارئُ لا يفعلها."""
+    return can_write(user) and can_open_content(book, user)
+
+
 def can_edit_book(book, user) -> bool:
     """أيحقّ له **الكتابةُ على الكتاب نفسِه**: حقولِه وهامشِه ومرفقاته وحالةِ
     متابعته — أو حذفُه واستعادتُه؟
@@ -381,9 +414,9 @@ def can_edit_book(book, user) -> bool:
     عنوانَ القسم وتحذف كتابَه وتكتب فوق هامش مديره.
 
     مَن بلا قسمٍ (تنصيبٌ لم تُبذَر أقسامُه) وكتابٌ بلا قسم: يكتب عليه مُنشئُه —
-    كما يراه وحدَه في ``scope_books_for``.
+    كما يراه وحدَه في ``scope_books_for``. و«قارئ فقط» لا يكتب على شيء (``can_write``).
     """
-    if not can_open_content(book, user):
+    if not can_write(user) or not can_open_content(book, user):
         return False
     if is_privileged(user):
         return True

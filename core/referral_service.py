@@ -43,9 +43,9 @@ def distribute(book, targets, *, purpose=None, margin='', margin_crop=None,
     تفريقٍ مكرَّرٍ فوق التزامٍ ما زال مفتوحاً.
     """
     from core.models import BookReferral, Department, Entity
-    from core.scoping import can_open_content
+    from core.scoping import can_act_on_book
 
-    if not can_open_content(book, by):
+    if not can_act_on_book(book, by):
         raise PermissionDenied('لا تملك صلاحيةَ تفريق هذا الكتاب.')
 
     items = [_normalise(t) for t in targets]
@@ -105,9 +105,9 @@ def activate_followup(referral, *, due_date, by, margin='', assignee=None):
     الصفُّ نفسُه يتحوّل، فيبقى تاريخُ الذكر متّصلاً بتاريخ المطاردة.
     مَن يفعّل هو مَن يملك محتوى الكتاب (مسؤولُ البريد/مدير القسم) لا الهدف."""
     from core.models import BookReferral
-    from core.scoping import can_open_content
+    from core.scoping import can_act_on_book
 
-    if not can_open_content(referral.book, by):
+    if not can_act_on_book(referral.book, by):
         raise PermissionDenied('لا تملك صلاحيةَ تفعيل المتابعة على هذا الكتاب.')
     if referral.status not in (BookReferral.SENT, BookReferral.RECEIVED):
         raise ValidationError('الإحالةُ مُقفلةٌ؛ لا متابعةَ على ما أُنجز أو أُعيد.')
@@ -239,10 +239,10 @@ def reply_matrix(book, user):
     **«للعلم» لا يُعدّ متأخّراً أبداً**: المطاردةُ على «للتنفيذ» فقط، وإلّا
     امتلأ الطابورُ بما لا إجابةَ له فأهمله قارئُه.
     """
-    from core.scoping import can_open_content, scope_referrals_for
+    from core.scoping import can_act_on_book, scope_referrals_for
 
     # بوّابةُ الكتاب (`_open_gate`) واحدةٌ لكلّ الصفوف — تُحسب مرّةً لا لكلّ صفّ.
-    opens = can_open_content(book, user)
+    opens = can_act_on_book(book, user)
     rows = scope_referrals_for(user, book.referrals.select_related(
         'to_department', 'to_entity', 'assignee', 'created_by',
         'closed_by_link__from_book',
@@ -435,9 +435,9 @@ def _advance(referral, status, action, by, detail):
 
 def _open_gate(referral, by):
     """بوّابةُ الكتاب — شرطٌ لازمٌ لكلّ فعلٍ على الصفّ، لا كافٍ لأيٍّ منها."""
-    from core.scoping import can_open_content
+    from core.scoping import can_act_on_book
 
-    if not can_open_content(referral.book, by):
+    if not can_act_on_book(referral.book, by):
         raise PermissionDenied('لا تملك صلاحيةً على هذه الإحالة.')
 
 

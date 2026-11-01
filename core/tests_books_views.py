@@ -21,6 +21,7 @@ from django.utils import timezone
 from .models import (
     Attachment, Book, BookComment, BookHistory, BookSequence, Entity, OCRResult,
 )
+from core.testing import as_writer
 
 
 # ---------------------------------------------------------------------------
@@ -34,13 +35,13 @@ class BookViewsBase(TestCase):
         self.client = Client()
 
         # owner user  — creates books
-        self.user = User.objects.create_user(
+        self.user = as_writer(User.objects.create_user(
             username='owner', password='pass1234'
-        )
+        ))
         # other user  — must NOT see owner's books
-        self.other = User.objects.create_user(
+        self.other = as_writer(User.objects.create_user(
             username='other', password='pass1234'
-        )
+        ))
         # superuser   — sees everything
         self.superuser = User.objects.create_superuser(
             username='admin', password='pass1234', email='admin@test.com'
@@ -1280,7 +1281,7 @@ class UndoDeleteWiringTests(TestCase):
     `data-undo-url` بالاسم، والمسارُ يُعيد الكتابَ ومرفقاتِه ويردّ 403 لغير المخوَّل."""
 
     def setUp(self):
-        self.user = User.objects.create_user('undo_u', password='pw-undo-11', is_staff=True)
+        self.user = as_writer(User.objects.create_user('undo_u', password='pw-undo-11', is_staff=True))
         self.book = Book.objects.create(kind='incoming_internal', title='للتراجع', created_by=self.user)
 
     def test_the_row_carries_the_undo_url_next_to_the_delete_url(self):

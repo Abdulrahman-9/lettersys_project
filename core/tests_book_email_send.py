@@ -24,6 +24,7 @@ from core.attachment_sharing import (
     read_share_token,
 )
 from core.models import Attachment, Book, EmailSettings, Entity
+from core.testing import as_writer
 
 
 def _make_attachment(book, name, size):
@@ -51,7 +52,7 @@ class SharedDownloadViewTests(TestCase):
     """نقطة التحميل العامّة — المسار الوحيد المفتوح على المرفقات."""
 
     def setUp(self):
-        user = get_user_model().objects.create_user(username='dl', password='pw-dl-12345')
+        user = as_writer(get_user_model().objects.create_user(username='dl', password='pw-dl-12345'))
         self.book = Book.objects.create(
             title='كتاب', kind='outgoing_external', our_number='20260001',
             date=timezone.now().date(), created_by=user,
@@ -80,7 +81,7 @@ class AttachmentBudgetTests(TestCase):
     """ميزانية الإرفاق: الأصغر أولاً، وما يتجاوزها يصير رابطاً — بلا اقتطاع صامت."""
 
     def setUp(self):
-        user = get_user_model().objects.create_user(username='bud', password='pw-bud-12345')
+        user = as_writer(get_user_model().objects.create_user(username='bud', password='pw-bud-12345'))
         self.book = Book.objects.create(
             title='كتاب', kind='outgoing_external', our_number='20260002',
             date=timezone.now().date(), created_by=user,
@@ -149,9 +150,9 @@ class SendBookToEntityTests(TestCase):
     """نقطة الإرسال: ترفض بصدق حين لا تستطيع، وتُمرّر المرفقات حين تستطيع."""
 
     def setUp(self):
-        self.user = get_user_model().objects.create_user(
+        self.user = as_writer(get_user_model().objects.create_user(
             username='sender', password='pw-send-12345', is_staff=True,
-        )
+        ))
         self.client.force_login(self.user)
 
         self.entity = Entity.objects.create(name='وزارة الاختبار', email='dest@example.com')

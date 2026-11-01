@@ -15,6 +15,7 @@ from core.models import Book, CustodyEvent, Department, SecretAccessGrant, UserP
 from core.roles import CONTROLLER_GROUP_NAME
 from core.scoping import ACCESS_FULL, ACCESS_STUB, secret_access, secret_openers
 from core.views.book_state import citation, due_pill, journey, primary_action
+from core.testing import as_writer
 
 
 def _states(steps):
@@ -27,7 +28,7 @@ class BookStateTestCase(TestCase):
     def setUpTestData(cls):
         cls.today = timezone.localdate()
         cls.dept = Department.objects.create(name='قسمُ الحال', code='ح.ق')
-        cls.clerk = User.objects.create_user('sclerk', password='pw-sclerk-1111')
+        cls.clerk = as_writer(User.objects.create_user('sclerk', password='pw-sclerk-1111'))
         UserProfile.objects.update_or_create(user=cls.clerk, defaults={'department': cls.dept})
 
     def _book(self, **kw):
@@ -123,7 +124,7 @@ class SecretOpenersParityTests(BookStateTestCase):
 
     def test_everyone_named_opens_and_a_plain_colleague_does_not(self):
         def member(name, *, head=False, desk=False):
-            u = User.objects.create_user(name, password=f'pw-{name}-1111')
+            u = as_writer(User.objects.create_user(name, password=f'pw-{name}-1111'))
             UserProfile.objects.update_or_create(
                 user=u, defaults={'department': self.dept, 'is_department_head': head})
             if desk:
@@ -131,7 +132,7 @@ class SecretOpenersParityTests(BookStateTestCase):
             return u
 
         head, desk, colleague = member('shead', head=True), member('sdesk', desk=True), member('scolleague')
-        grantee = User.objects.create_user('sgrantee', password='pw-sgrantee-1111')
+        grantee = as_writer(User.objects.create_user('sgrantee', password='pw-sgrantee-1111'))
         gone = member('sgone', head=True)
         gone.is_active = False
         gone.save(update_fields=['is_active'])

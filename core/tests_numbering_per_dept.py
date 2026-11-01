@@ -15,6 +15,7 @@ from core.models import (
     Book, BookNumberReservation, BookSequence, Department, UserProfile,
 )
 from core.reservation_service import reservation_client_key, reserve_number
+from core.testing import as_writer
 
 
 class SequencePerDepartmentTests(TestCase):
@@ -23,7 +24,7 @@ class SequencePerDepartmentTests(TestCase):
     def setUpTestData(cls):
         cls.d1 = Department.objects.create(name='المتابعة', code='ن-ش13')
         cls.d2 = Department.objects.create(name='العقود', code='ن-ش5')
-        cls.user = User.objects.create_user('numbering-clerk', password='pw-test-333')
+        cls.user = as_writer(User.objects.create_user('numbering-clerk', password='pw-test-333'))
 
     def test_each_department_has_its_own_counter(self):
         a = BookSequence.consume_next('incoming_internal', department=self.d1)
@@ -77,8 +78,8 @@ class ReservationPerDepartmentTests(TestCase):
             code='ش13', defaults={'name': 'المتابعة'})
         cls.licensing, _ = Department.objects.get_or_create(
             code='ش4', defaults={'name': 'التراخيص'})
-        cls.followup_user = User.objects.create_user('followup-clerk', password='pw-test-111')
-        cls.licensing_user = User.objects.create_user('licensing-clerk', password='pw-test-222')
+        cls.followup_user = as_writer(User.objects.create_user('followup-clerk', password='pw-test-111'))
+        cls.licensing_user = as_writer(User.objects.create_user('licensing-clerk', password='pw-test-222'))
         UserProfile.objects.update_or_create(
             user=cls.followup_user, defaults={'department': cls.followup})
         UserProfile.objects.update_or_create(
@@ -326,7 +327,7 @@ class UniquenessIsScopedToDepartmentTests(TestCase):
     def setUpTestData(cls):
         cls.d1 = Department.objects.create(name='المتابعة', code='ق-ش13')
         cls.d2 = Department.objects.create(name='العقود', code='ق-ش5')
-        cls.user = User.objects.create_user('clerk', password='pw-clerk-111')
+        cls.user = as_writer(User.objects.create_user('clerk', password='pw-clerk-111'))
 
     def _book(self, dept, number='2433'):
         return Book.objects.create(kind='incoming_internal', title='كتاب',

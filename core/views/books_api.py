@@ -24,6 +24,7 @@ from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError
 from ..attachment_service import create_attachment, validate_attachment_file
 from ..decorators import rate_limit
+from .helpers import writer_required_api
 from ..document_types import resolve_document_type
 from ..extraction.kinds import normalize_book_kind
 from ..models import (
@@ -36,7 +37,7 @@ from ..reservation_service import (
     claim_reservation_for_client,
 )
 from ..reservation_identity import request_client_key
-from core.scoping import can_edit_book, can_open_content, is_privileged, scope_books_for
+from core.scoping import can_edit_book, can_open_content, can_write, is_privileged, scope_books_for
 from .books_helpers import (
     _normalize_secret_level_value,
     _resolve_entities,
@@ -133,6 +134,7 @@ def _duplicate_guard(request, data, *, department, kind, title, party_number,
 
 
 @login_required
+@writer_required_api
 @rate_limit('save_book', max_attempts=30, window_seconds=60, by='user')
 def save_book_api(request):
     """
@@ -579,6 +581,8 @@ def _editable_ids(user, ids):
     (Q1‑ج): فيحذف المُنشئُ جماعيّاً كتاباً صار لقسمٍ آخر، ويُترك كتابُ زميل
     القسم صامتاً بينما تمحوه الواجهةُ من القائمة.
     """
+    if not can_write(user):
+        return []   # «قارئ فقط» — لا حاجةَ لسؤالٍ عن كلّ كتاب (can_edit_book يرفضه أيضاً)
     books = scope_books_for(user, Book.objects.filter(id__in=ids))
     return [b.id for b in books if can_edit_book(b, user)]
 

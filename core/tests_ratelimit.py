@@ -14,6 +14,7 @@ from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.test import Client, TestCase
 from django.urls import reverse
+from core.testing import as_writer
 
 
 class RateLimitBaseTest(TestCase):
@@ -21,9 +22,9 @@ class RateLimitBaseTest(TestCase):
 
     def setUp(self):
         cache.clear()
-        self.user = User.objects.create_user(
+        self.user = as_writer(User.objects.create_user(
             username='rltestuser', password='testpass123'
-        )
+        ))
         self.client = Client()
         self.client.login(username='rltestuser', password='testpass123')
 
@@ -233,7 +234,7 @@ class LoginRateLimitTests(TestCase):
 
     def setUp(self):
         cache.clear()
-        User.objects.create_user(username='loginuser', password='testpass123')
+        as_writer(User.objects.create_user(username='loginuser', password='testpass123'))
 
     def tearDown(self):
         cache.clear()

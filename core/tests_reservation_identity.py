@@ -11,6 +11,7 @@ from core.models import Book, BookNumberReservation, BookSequence, Department
 from core.reservation_service import reservation_client_key, reserve_number
 from core import reservation_api
 from core.reservation_identity import COOKIE_NAME, browser_key
+from core.testing import as_writer
 
 
 KIND = 'incoming_internal'
@@ -26,7 +27,7 @@ urlpatterns = [
 @override_settings(ROOT_URLCONF=__name__)
 class ReservationBrowserIdentityTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user('reservation-writer', password='p')
+        self.user = as_writer(User.objects.create_user('reservation-writer', password='p'))
         self.client.force_login(self.user)
 
     def reserve(self, client=None):
@@ -171,7 +172,7 @@ class ReservationBrowserIdentityTests(TestCase):
 
     def test_same_browser_different_account_does_not_claim_original_users_hold(self):
         first = self.reserve()['reservation']
-        another = User.objects.create_user('another-writer')
+        another = as_writer(User.objects.create_user('another-writer'))
         self.client.force_login(another)
         second = self.reserve()['reservation']
         self.assertNotEqual(first['id'], second['id'])

@@ -23,6 +23,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import BookNumberReservation, SystemSettings
+from core.testing import as_writer
 
 KIND = 'incoming_internal'
 
@@ -35,8 +36,8 @@ class ReservationTtlContractTests(TestCase):
     """المصدرُ الوحيد للمدّة هو ``SystemSettings.reservation_expire_minutes``."""
 
     def setUp(self):
-        self.staff = User.objects.create_user('boss', password='p', is_staff=True)
-        self.clerk = User.objects.create_user('clerk', password='p')
+        self.staff = as_writer(User.objects.create_user('boss', password='p', is_staff=True))
+        self.clerk = as_writer(User.objects.create_user('clerk', password='p'))
         self.c = Client()
         self.c.force_login(self.staff)
 
@@ -194,7 +195,7 @@ class DbIsTheOnlyChannelTests(TestCase):
     """
 
     def setUp(self):
-        self.clerk = User.objects.create_user('clerk2', password='p')
+        self.clerk = as_writer(User.objects.create_user('clerk2', password='p'))
         self.c = Client()
         cache.delete(SystemSettings.CACHE_KEY)
 
@@ -236,7 +237,7 @@ class DbIsTheOnlyChannelTests(TestCase):
         كلّ عمليّةٍ أخرى. نُسخّن الكاشَ بطلبٍ حقيقيّ (يمرّ بـ
         ``context_processors.system_settings``) ثمّ نكتب في القاعدة وحدَها.
         """
-        staff = User.objects.create_user('boss3', password='p', is_staff=True)
+        staff = as_writer(User.objects.create_user('boss3', password='p', is_staff=True))
         warm = Client()
         warm.force_login(staff)
         self.assertEqual(warm.get(reverse('sequence_settings')).status_code, 200)
@@ -271,8 +272,8 @@ class EveryReservationPathUsesTheStoredTtlTests(TestCase):
     """
 
     def setUp(self):
-        self.a = User.objects.create_user('clerk_a', password='p')
-        self.b = User.objects.create_user('clerk_b', password='p')
+        self.a = as_writer(User.objects.create_user('clerk_a', password='p'))
+        self.b = as_writer(User.objects.create_user('clerk_b', password='p'))
         SystemSettings.get()
         SystemSettings.objects.filter(singleton=1).update(
             reservation_expire_minutes=15)

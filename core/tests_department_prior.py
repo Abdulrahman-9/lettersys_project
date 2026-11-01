@@ -14,6 +14,7 @@ from django.test import TestCase
 
 from core.extraction import pipeline as P
 from core.models import Book, Department, Entity, UserProfile
+from core.testing import as_writer
 
 import base64
 
@@ -24,7 +25,7 @@ PNG_1x1 = base64.b64decode(
 class DepartmentPriorTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user('kaatib_dp', password='pw-dp-123')
+        cls.user = as_writer(User.objects.create_user('kaatib_dp', password='pw-dp-123'))
         cls.e_dept = Entity.objects.create(name='قسم المتابعة (اختبار)', code='ش77', etype='both')
         cls.e1 = Entity.objects.create(name='وحدة التقارير (اختبار)', code='و.ت7', etype='both')
         cls.e2 = Entity.objects.create(name='اللجان (اختبار)', code='ل7', etype='both')

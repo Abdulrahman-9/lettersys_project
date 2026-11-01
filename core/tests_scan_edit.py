@@ -18,6 +18,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from core.tests_attachment_pdf import _png_bytes, _pdf_mixed_blank
+from core.testing import as_writer
 
 
 def _make_pdf(pages=3):
@@ -35,7 +36,7 @@ def _make_pdf(pages=3):
 class ScanEditPageTests(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user("u", password="p")
+        self.user = as_writer(User.objects.create_user("u", password="p"))
         self.client.login(username="u", password="p")
         self._paths = []
 
@@ -221,7 +222,7 @@ class ProcessUploadPipelineTests(TestCase):
 
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user("u", password="p")
+        self.user = as_writer(User.objects.create_user("u", password="p"))
         self.client.login(username="u", password="p")
 
     def _upload(self, name, content, ctype, **extra):
@@ -278,7 +279,7 @@ class ProcessUploadPipelineTests(TestCase):
         prev_url = reverse("scan_preview_page", args=[token]) + "?page=1&dpi=72"
 
         intruder = Client()
-        User.objects.create_user("intruder", password="p")
+        as_writer(User.objects.create_user("intruder", password="p"))
         intruder.login(username="intruder", password="p")
         self.assertEqual(intruder.get(prev_url).status_code, 404)        # ليس صاحبه
 
@@ -293,7 +294,7 @@ class StageAttachmentTests(TestCase):
         from core.attachment_service import create_attachment
         from core.models import Book
         self.client = Client()
-        self.user = User.objects.create_user("u", password="p")
+        self.user = as_writer(User.objects.create_user("u", password="p"))
         self.client.login(username="u", password="p")
         self.book = Book.objects.create(
             our_number="2026100009", kind="incoming_internal", title="ك",
@@ -328,7 +329,7 @@ class StageAttachmentTests(TestCase):
         self.assertEqual(r.status_code, 403)
 
     def test_stage_requires_ownership(self):
-        other = User.objects.create_user("other", password="p")
+        other = as_writer(User.objects.create_user("other", password="p"))
         c2 = Client(); c2.login(username="other", password="p")
         r = c2.get(reverse("scan_stage_attachment", args=[self.att.id]))
         self.assertEqual(r.status_code, 403)
@@ -362,7 +363,7 @@ class ScanAutoOcrToggleTests(TestCase):
 
     def setUp(self):
         self.client = Client()
-        User.objects.create_user("ocr_u", password="p")
+        as_writer(User.objects.create_user("ocr_u", password="p"))
         self.client.login(username="ocr_u", password="p")
 
     def _upload(self, **extra):

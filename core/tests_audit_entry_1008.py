@@ -19,6 +19,7 @@ from django.urls import reverse
 
 from core.models import Attachment, Book, DataExtractionResult, ExtractionFeedback
 from core.scoping import can_open_extraction, can_review_extraction
+from core.testing import as_writer
 
 ROOT = Path(__file__).resolve().parent.parent
 User = get_user_model()
@@ -29,8 +30,8 @@ class ExtractionScopeTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user('ex_owner', password='pw-ex-owner-1')
-        cls.stranger = User.objects.create_user('ex_stranger', password='pw-ex-stranger-1')
+        cls.owner = as_writer(User.objects.create_user('ex_owner', password='pw-ex-owner-1'))
+        cls.stranger = as_writer(User.objects.create_user('ex_stranger', password='pw-ex-stranger-1'))
         cls.boss = User.objects.create_superuser('ex_boss', 'b@x.co', 'pw-ex-boss-1')
         cls.book = Book.objects.create(kind='incoming_external', our_number='7301',
                                        title='عنوانٌ لا يراه الغريب', created_by=cls.owner)
@@ -88,7 +89,7 @@ class ExtractionScopeTests(TestCase):
 
         mine = Department.objects.create(name='قسم الكاتب', code='ك.ت')
         other = Department.objects.create(name='قسم المالك', code='م.ل')
-        writer = User.objects.create_user('ex_writer', password='pw-ex-writer-1')
+        writer = as_writer(User.objects.create_user('ex_writer', password='pw-ex-writer-1'))
         UserProfile.objects.update_or_create(user=writer, defaults={'department': mine})
         book = Book.objects.create(kind='incoming_external', our_number='7302', title='انتقل',
                                    department=other, created_by=writer)

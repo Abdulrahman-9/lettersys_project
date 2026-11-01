@@ -19,13 +19,14 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from core.models import Book, Department, UserProfile
+from core.testing import as_writer
 
 ROOT = Path(__file__).resolve().parent.parent
 User = get_user_model()
 
 
 def _member(name, department):
-    user = User.objects.create_user(name, name + '@x.co', 'pw-' + name + '-1008')
+    user = as_writer(User.objects.create_user(name, name + '@x.co', 'pw-' + name + '-1008'))
     UserProfile.objects.update_or_create(user=user, defaults={'department': department})
     return user
 

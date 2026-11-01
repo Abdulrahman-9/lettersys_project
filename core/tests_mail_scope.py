@@ -17,6 +17,7 @@ from core.models import (
     SecretAccessGrant, UserProfile,
 )
 from core.roles import CONTROLLER_GROUP_NAME
+from core.testing import as_writer
 
 
 class MailScopeTestCase(TestCase):
@@ -24,8 +25,8 @@ class MailScopeTestCase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.alice = User.objects.create_user('alice', password='pw-alice-1')
-        cls.bob   = User.objects.create_user('bob',   password='pw-bob-111')
+        cls.alice = as_writer(User.objects.create_user('alice', password='pw-alice-1'))
+        cls.bob   = as_writer(User.objects.create_user('bob',   password='pw-bob-111'))
         # مدير النظام هو من يرى الكلّ الآن — `is_staff` صارت صفةً إداريّةً
         # لواجهات الإدارة لا توسيعاً للرؤية (المرحلة أ).
         cls.staff = User.objects.create_superuser('boss', 'boss@x.com', 'pw-boss-11')
@@ -70,9 +71,9 @@ class DepartmentMailOfficerScopeTests(TestCase):
         cls.department = Department.objects.create(name='قسم البريد', code='ب.ق')
         cls.other_department = Department.objects.create(
             name='قسم آخر', code='ب.خ')
-        cls.officer = User.objects.create_user('mail_officer', password='pw-mail-officer')
-        cls.colleague = User.objects.create_user('mail_colleague', password='pw-mail-colleague')
-        cls.outsider = User.objects.create_user('mail_outsider', password='pw-mail-outsider')
+        cls.officer = as_writer(User.objects.create_user('mail_officer', password='pw-mail-officer'))
+        cls.colleague = as_writer(User.objects.create_user('mail_colleague', password='pw-mail-colleague'))
+        cls.outsider = as_writer(User.objects.create_user('mail_outsider', password='pw-mail-outsider'))
         for user, department in (
                 (cls.officer, cls.department),
                 (cls.colleague, cls.department),
@@ -563,7 +564,7 @@ class SecretBookMailTests(TestCase):
         dept = Department.objects.create(name='المتابعة', code='ش13-mail')
 
         def member(name, head=False):
-            u = User.objects.create_user(name, password=f'pw-{name}-1111')
+            u = as_writer(User.objects.create_user(name, password=f'pw-{name}-1111'))
             UserProfile.objects.create(user=u, department=dept, is_department_head=head)
             return u
 

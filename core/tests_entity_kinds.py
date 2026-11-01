@@ -7,6 +7,7 @@ from django.urls import reverse
 
 from core.entity_kinds import EXTERNAL, INTERNAL, KINDS, UNIT, suggest_kind
 from core.models import Department, Entity
+from core.testing import as_writer
 
 
 class SuggestKindTests(TestCase):
@@ -42,7 +43,7 @@ class EntityKindWriteTests(TestCase):
     """نقلُ المحدَّد إلى تبويب — الأداةُ التي يشكّل بها المالكُ مجموعاته."""
 
     def setUp(self):
-        self.staff = User.objects.create_user('clerk', 'c@x.co', 'pw', is_staff=True)
+        self.staff = as_writer(User.objects.create_user('clerk', 'c@x.co', 'pw', is_staff=True))
         self.client.force_login(self.staff)
         self.a = Entity.objects.create(name='جهة أ', kind=EXTERNAL)
         self.b = Entity.objects.create(name='جهة ب', kind=EXTERNAL)
@@ -79,7 +80,7 @@ class EntityKindWriteTests(TestCase):
 
     def test_ordinary_user_cannot_move(self):
         """التبويبُ يُعيد تشكيل صفحةٍ يراها الجميع — فالكتابةُ للموظّفين."""
-        self.client.force_login(User.objects.create_user('nobody', 'n@x.co', 'pw'))
+        self.client.force_login(as_writer(User.objects.create_user('nobody', 'n@x.co', 'pw')))
 
         self.client.post(reverse('entity_set_kind'),
                          {'kind': UNIT, 'selected': [self.a.pk]})
@@ -117,9 +118,9 @@ class EntityFormKindTests(TestCase):
 
 class EntityNameCheckTests(TestCase):
     def setUp(self):
-        self.staff = User.objects.create_user(
+        self.staff = as_writer(User.objects.create_user(
             'entity_check_staff', password='pw-entity-check-111', is_staff=True
-        )
+        ))
         self.client.force_login(self.staff)
         self.active = Entity.objects.create(name='وزارة النفط')
         self.inactive = Entity.objects.create(name='هيئة قديمة', is_active=False)
@@ -173,7 +174,7 @@ class ExtractionNewEntityTests(TestCase):
                                             merged_into=self.parent)
 
     def test_entity_picker_exposes_combobox_and_live_status_semantics(self):
-        staff = User.objects.create_user('entity_picker_staff', password='pw-picker', is_staff=True)
+        staff = as_writer(User.objects.create_user('entity_picker_staff', password='pw-picker', is_staff=True))
         self.client.force_login(staff)
 
         response = self.client.get(reverse('extraction-smart-desktop'))
@@ -255,7 +256,7 @@ class EntityCacheBumpTests(TestCase):
         from django.core.cache import cache
         from core.signals import ENTITY_CACHE_VERSION_KEY
 
-        staff = User.objects.create_user('clerk2', 'c2@x.co', 'pw', is_staff=True)
+        staff = as_writer(User.objects.create_user('clerk2', 'c2@x.co', 'pw', is_staff=True))
         self.client.force_login(staff)
         e = Entity.objects.create(name='جهة للنقل')
         before = cache.get(ENTITY_CACHE_VERSION_KEY)
@@ -267,7 +268,7 @@ class EntityCacheBumpTests(TestCase):
 
 class EntityDossierLinkTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user('u1', 'u1@x.co', 'pw')
+        self.user = as_writer(User.objects.create_user('u1', 'u1@x.co', 'pw'))
         self.client.force_login(self.user)
         self.entity = Entity.objects.create(name='جهة مرتبطة', kind=INTERNAL)
 

@@ -16,7 +16,7 @@ import subprocess
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 
-from .helpers import staff_required
+from .helpers import staff_required, writer_required_api
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
@@ -407,6 +407,7 @@ def scan_agent_info(request):
 
 
 @login_required
+@writer_required_api
 @require_http_methods(['POST'])
 def scan_agent_start(request):
     """يشغّل وكيل المسح المحلي (حزمة scan_agent في جذر المشروع، نفس جهاز الخادم) بصمت.
@@ -452,6 +453,7 @@ def scan_agent_start(request):
 
 
 @login_required
+@writer_required_api
 @require_http_methods(['POST'])
 def scan_process_upload(request):
     """يستقبل مستنداً مرفوعاً (PDF من وكيل المسح، أو PDF/صورة من زر الرفع)،

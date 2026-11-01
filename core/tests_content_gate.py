@@ -17,6 +17,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from core.models import Attachment, Book, Department, OCRResult, UserProfile
+from core.testing import as_writer
 
 
 class ContentGateTestCase(TestCase):
@@ -26,7 +27,7 @@ class ContentGateTestCase(TestCase):
         cls.dept = Department.objects.create(name='المتابعة', code='ح-ش13')
 
         def member(name, **flags):
-            u = User.objects.create_user(name, password='pw-%s-11111' % name, **flags)
+            u = as_writer(User.objects.create_user(name, password='pw-%s-11111' % name, **flags))
             UserProfile.objects.create(user=u, department=cls.dept)
             return u
 
@@ -100,8 +101,8 @@ class StaffIsNotAContentKeyTests(ContentGateTestCase):
     def setUpTestData(cls):
         super().setUpTestData()
         elsewhere = Department.objects.create(name='الحسابات', code='ح-ش14')
-        cls.outsider = User.objects.create_user(
-            'houtsider', password='pw-houtsider-11111', is_staff=True)
+        cls.outsider = as_writer(User.objects.create_user(
+            'houtsider', password='pw-houtsider-11111', is_staff=True))
         UserProfile.objects.create(user=cls.outsider, department=elsewhere)
 
         cls.secret_att = Attachment.objects.create(book=cls.secret)

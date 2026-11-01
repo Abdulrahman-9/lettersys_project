@@ -19,6 +19,7 @@ from core.models import (Book, BookHistory, BookReferral, CustodyEvent,
 from core.roles import (ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME,
                         get_user_role)
 from core.scoping import is_archivist, is_mail_officer
+from core.testing import as_writer
 
 
 def _member(name, department, *, head=False, controller=False,
@@ -26,7 +27,7 @@ def _member(name, department, *, head=False, controller=False,
     if admin:
         user = User.objects.create_superuser(name, name + '@x.co', 'pw')
     else:
-        user = User.objects.create_user(name, name + '@x.co', 'pw')
+        user = as_writer(User.objects.create_user(name, name + '@x.co', 'pw'))
     UserProfile.objects.update_or_create(
         user=user, defaults={'department': department, 'is_department_head': head})
     for wanted, group_name in ((controller, CONTROLLER_GROUP_NAME),

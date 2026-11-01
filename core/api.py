@@ -14,6 +14,7 @@ from django.core.cache import cache
 from django.utils.text import slugify
 from .models import Entity
 from .decorators import rate_limit
+from .views.helpers import writer_required_api
 from .scoping import content_authorized_books, is_privileged, scope_books_for, user_department_id
 import json
 import logging
@@ -308,6 +309,7 @@ def title_words_api(request):
     cache.set(cache_key, result, 3600)
     return JsonResponse(result)
 @login_required
+@writer_required_api
 @require_http_methods(["POST"])
 @rate_limit('add_entity', max_attempts=30, window_seconds=60, by='user')
 def add_new_entity(request):

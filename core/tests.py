@@ -25,6 +25,7 @@ from .models import (
 )
 from .extraction.pipeline import AIExtractionService
 from .extraction.helpers import ExtractionWorkflow, ConfidenceAnalyzer, QuickFillAssistant
+from core.testing import as_writer
 
 
 class ModelTests(TestCase):
@@ -32,10 +33,10 @@ class ModelTests(TestCase):
     
     def setUp(self):
         """إعداد البيانات الأساسية"""
-        self.user = User.objects.create_user(
+        self.user = as_writer(User.objects.create_user(
             username='testuser',
             password='testpass123'
-        )
+        ))
         
         self.entity = Entity.objects.create(
             name='وزارة الداخلية',
@@ -128,7 +129,7 @@ class ExtractionCaptureTests(TestCase):
     """حلقة التقاط التدريب: persist_extraction_capture (الأساس لتدريب النماذج)."""
 
     def setUp(self):
-        self.user = User.objects.create_user(username='cap', password='p')
+        self.user = as_writer(User.objects.create_user(username='cap', password='p'))
         self.book = Book.objects.create(
             our_number='2025-1-0009', title='العنوان النهائي',
             date=timezone.now().date(), created_by=self.user,
@@ -295,10 +296,10 @@ class ExtractionWorkflowTests(TestCase):
     
     def setUp(self):
         """إعداد البيانات"""
-        self.user = User.objects.create_user(
+        self.user = as_writer(User.objects.create_user(
             username='testuser',
             password='testpass123'
-        )
+        ))
         
         self.entity = Entity.objects.create(
             name='وزارة التربية',
@@ -400,7 +401,7 @@ class ConfidenceAnalyzerTests(TestCase):
     def test_get_extraction_quality_score(self):
         """اختبار درجة الجودة الكلية"""
         # تجهيز نتيجة استخراج صالحة
-        user = User.objects.create_user(username='qa', password='p')
+        user = as_writer(User.objects.create_user(username='qa', password='p'))
         entity = Entity.objects.create(name='جهة', code='G', etype='both', is_active=True)
         book = Book.objects.create(our_number='2024-004', title='اختبار', date=timezone.now().date(),
                                    created_by=user)
@@ -461,7 +462,7 @@ class QuickFillAssistantTests(TestCase):
     
     def test_extract_confidence_summary(self):
         """اختبار استخراج ملخص الثقة"""
-        user = User.objects.create_user(username='qa2', password='p')
+        user = as_writer(User.objects.create_user(username='qa2', password='p'))
         entity = Entity.objects.create(name='جهة 2', code='G2', etype='both', is_active=True)
         book = Book.objects.create(our_number='2024-005', title='اختبار', date=timezone.now().date(),
                                    created_by=user)
@@ -766,10 +767,10 @@ class APITests(TestCase):
     def setUp(self):
         """إعداد البيانات"""
         self.client = Client()
-        self.user = User.objects.create_user(
+        self.user = as_writer(User.objects.create_user(
             username='testuser',
             password='testpass123'
-        )
+        ))
         self.client.login(username='testuser', password='testpass123')
         
         self.entity = Entity.objects.create(
@@ -1155,10 +1156,10 @@ class IntegrationTests(TestCase):
     
     def setUp(self):
         """إعداد البيانات"""
-        self.user = User.objects.create_user(
+        self.user = as_writer(User.objects.create_user(
             username='testuser',
             password='testpass123'
-        )
+        ))
         
         self.entity = Entity.objects.create(
             name='جهة تكامل',

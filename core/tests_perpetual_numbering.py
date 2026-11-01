@@ -18,6 +18,7 @@ from .models import Book, BookSequence, Department, Entity, UserProfile
 from .views.filter_helpers import BookSortEngine
 from .views.helpers import apply_search_filters
 from .views.books_helpers import find_duplicate_candidates
+from core.testing import as_writer
 
 
 class BookSequenceFormatTests(TestCase):
@@ -64,7 +65,7 @@ class BookNumberDisplayTests(TestCase):
     """خصائص العرض — كلّها واجهةٌ رفيعة فوق `core/numbering.py`."""
 
     def setUp(self):
-        self.user = User.objects.create_user('u', password='p')
+        self.user = as_writer(User.objects.create_user('u', password='p'))
 
     def _book(self, our_number, kind='incoming_internal', **kw):
         return Book.objects.create(our_number=our_number, title='ع', kind=kind,
@@ -178,7 +179,7 @@ class SearchFormatTests(TestCase):
     """كتابة الرقم المجرّد تجده في كل صيغه المخزَّنة — ولا تجد ما يشبهه."""
 
     def setUp(self):
-        self.user = User.objects.create_user('u', password='p')
+        self.user = as_writer(User.objects.create_user('u', password='p'))
         mk = lambda o, k='incoming_internal': Book.objects.create(
             our_number=o, title='ع', kind=k, created_by=self.user)
         self.cur = mk('825')             # السلسلة الجارية
@@ -242,7 +243,7 @@ class SearchRankingTests(TestCase):
     """الترتيب حين يتكرّر الرقم بين السلسلة الجارية والموسوم بسنته."""
 
     def setUp(self):
-        self.user = User.objects.create_user('u', password='p')
+        self.user = as_writer(User.objects.create_user('u', password='p'))
         self.tagged = Book.objects.create(
             our_number='20250089', title='موسوم', date=date(2025, 3, 1),
             kind='incoming_internal', created_by=self.user)
@@ -281,7 +282,7 @@ class NumericSortTests(TestCase):
     """الفرز بالرقم رقميّ لا نصّيّ — وإلا جاء '10' قبل '9'."""
 
     def setUp(self):
-        self.user = User.objects.create_user('u', password='p')
+        self.user = as_writer(User.objects.create_user('u', password='p'))
         for n in ('9', '10', '100', '20250009', '20259999'):
             Book.objects.create(our_number=n, title='ع', kind='incoming_internal',
                                 date=date(2026, 1, 1), created_by=self.user)
@@ -380,7 +381,7 @@ class DailySequenceSortTests(TestCase):
 
 class DuplicateDetectionTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user('u', password='p')
+        self.user = as_writer(User.objects.create_user('u', password='p'))
         self.department = Department.objects.create(name='المتابعة', code='dup-followup')
         self.other_department = Department.objects.create(
             name='شؤون التراخيص', code='dup-licensing')
@@ -452,7 +453,7 @@ class DuplicateGuardApiTests(TestCase):
 
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user('owner', password='pass1234')
+        self.user = as_writer(User.objects.create_user('owner', password='pass1234'))
         self.admin = User.objects.create_superuser('boss', password='pass1234', email='b@t.com')
         self.department = Department.objects.create(name='المتابعة', code='api-followup')
         self.other_department = Department.objects.create(
