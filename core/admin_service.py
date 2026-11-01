@@ -38,7 +38,8 @@ def create_department(*, name, code, parent=None, by, entity=None):
     from core.models import Department, Entity
 
     _guard_department_parent(by, parent)
-    if not _is_superuser(by) and entity is not None:
+    is_admin = _is_account_admin(by)
+    if not is_admin and entity is not None:
         raise PermissionDenied('رئيسُ القسم لا يربط جهاتٍ عامةً بأقسامه.')
     name = (name or '').strip()
     code = (code or '').strip()
@@ -49,10 +50,16 @@ def create_department(*, name, code, parent=None, by, entity=None):
 
     with transaction.atomic():
         if entity is None:
-            entity, _ = Entity.objects.get_or_create(
+            entity, created = Entity.objects.get_or_create(
                 name=name,
                 defaults={'kind': Entity.KIND_UNIT if parent else Entity.KIND_INTERNAL},
             )
+            # التوأمةُ بالاسم تُورث الوحدةَ ماضيها في الأضبارة (الدليلُ يحمل
+            # الوحدات منذ سنوات) — لكنّ رئيسَ القسم لا يربط جهةً **خارجيّة**:
+            # تعديلُ اسم قسمه يُعيد تسمية توأمه على كلّ كتابٍ قديم.
+            if not created and not is_admin and entity.kind == Entity.KIND_EXTERNAL:
+                raise ValidationError(
+                    'الاسمُ يطابق جهةً خارجيّةً في الدليل — اختر اسماً آخر أو اطلب الربطَ من مدير النظام.')
         elif Department.objects.filter(entity=entity).exists():
             raise ValidationError('هذه الجهةُ مرتبطةٌ بقسمٍ آخر.')
 
@@ -116,8 +123,7 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
     """
     from django.contrib.auth.models import Group
 
-    from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
-                            CONTROLLER_GROUP_NAME, ENTRY_GROUP_NAME)
+    from core.roles import ROLE_GROUP_NAMES
     from core.scoping import ensure_profile
 
     _guard_user_target(by, user)
@@ -129,10 +135,14 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
             if department is not None and not department.is_active:
                 raise ValidationError('لا يُسند موظّفٌ إلى قسمٍ معطَّل.')
             if department is None:
-                if not _is_superuser(by):
+                if not _is_account_admin(by):
                     raise PermissionDenied('لا يمكن لرئيس القسم إزالة موظّفٍ من نطاقه.')
             else:
                 _guard_department(by, department)
+            # نقلُ رئيسٍ منحُ رئاسةٍ في مكانٍ جديد: رئيسُ وحدةٍ يُنقل إلى قسم ناقله
+            # فيصير رئيساً نظيراً على شجرته كلّها ولا يُدار بعدها إلّا من المدير
+            if profile.is_department_head:
+                _guard_admin(by)
             changes['department'] = department.code if department else None
             profile.department = department
         if job_title is not None:
@@ -169,31 +179,25 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
         if user_fields:
             user.save(update_fields=user_fields)
         if is_department_head is not None and is_department_head != profile.is_department_head:
-            _guard_admin(by)
+            _guard_grant(by, 'department_head')
             changes['is_department_head'] = profile.is_department_head = is_department_head
         if changes:
             profile.save()
 
-        # الدوران مستقلّان ويُجمعان في شخصٍ واحد: كتلتان لا سلسلةٌ واحدة.
-        for flag, name, key in (
-                (is_controller, CONTROLLER_GROUP_NAME, 'is_controller'),
-                (is_archivist, ARCHIVIST_GROUP_NAME, 'is_archivist'),
-                (is_company_archivist, ARCHIVE_ALL_GROUP_NAME, 'is_company_archivist')):
+        # الأدوارُ مستقلّةٌ وتُجمع في شخصٍ واحد؛ ومن يمنح ماذا: ``grantable_roles``.
+        for flag, role, key in (
+                (is_entry, 'entry', 'is_entry'),
+                (is_controller, 'controller', 'is_controller'),
+                (is_archivist, 'archivist', 'is_archivist'),
+                (is_company_archivist, 'company_archivist', 'is_company_archivist')):
             if flag is None:
                 continue
-            _guard_admin(by)
-            group, _ = Group.objects.get_or_create(name=name)
+            _guard_grant(by, role)
+            group, _ = Group.objects.get_or_create(name=ROLE_GROUP_NAMES[role])
             had = user.groups.filter(pk=group.pk).exists()
             if flag != had:
                 (user.groups.add if flag else user.groups.remove)(group)
                 changes[key] = flag
-
-        if is_entry is not None:
-            group, _ = Group.objects.get_or_create(name=ENTRY_GROUP_NAME)
-            had = user.groups.filter(pk=group.pk).exists()
-            if is_entry != had:
-                (user.groups.add if is_entry else user.groups.remove)(group)
-                changes['is_entry'] = is_entry
 
         if is_active is not None and is_active != user.is_active:
             if user.pk == getattr(by, 'pk', None) and not is_active:
@@ -211,13 +215,15 @@ def create_department_user(*, by, department, username, first_name='',
                            last_name='', email='', job_title='', role='viewer'):
     """ينشئ حساباً محلياً بكلمة مؤقتة عشوائية ويُعيدها لعرضٍ واحد."""
     from core.models import SecuritySettings, UserPassword, UserProfile
-    from core.roles import ENTRY_GROUP_NAME, ensure_role_groups
+    from core.roles import ROLE_GROUP_NAMES, ensure_role_groups
+    from core.scoping import ADMIN_ONLY_ROLES, HEAD_GRANTABLE_ROLES
 
     _guard_department(by, department)
     if not department.is_active:
         raise ValidationError('لا يمكن إنشاء حسابٍ في قسمٍ معطَّل.')
-    if role not in ('viewer', 'entry'):
-        raise PermissionDenied('هذا الدورُ لا يُمنح إلا من مدير النظام.')
+    if role not in HEAD_GRANTABLE_ROLES | ADMIN_ONLY_ROLES:
+        raise ValidationError('دورٌ غير معروف.')
+    _guard_grant(by, role)
 
     username = (username or '').strip()
     first_name = (first_name or '').strip()
@@ -251,10 +257,13 @@ def create_department_user(*, by, department, username, first_name='',
             raise ValidationError('اسم المستخدم مستعملٌ سلفاً.') from exc
         UserProfile.objects.create(
             user=user, department=department, job_title=job_title,
-            must_change_password=True)
-        if role == 'entry':
+            must_change_password=True,
+            is_department_head=(role == 'department_head'))
+        group_name = ROLE_GROUP_NAMES.get(role)
+        if group_name:
             ensure_role_groups()
-            user.groups.add(Group.objects.get(name=ENTRY_GROUP_NAME))
+            group, _ = Group.objects.get_or_create(name=group_name)
+            user.groups.add(group)
         temporary = UserPassword(
             user=user,
             expires_at=timezone.now() + timedelta(hours=24),
@@ -267,6 +276,48 @@ def create_department_user(*, by, department, username, first_name='',
             'job_title': job_title, 'role': role,
         })
     return user, password
+
+
+def reset_department_user_password(*, by, user):
+    """كلمةُ مرورٍ مؤقّتةٌ جديدة لموظّفٍ في شجرة الرئيس — تُعرض مرّةً واحدة (دفعة 10‑28).
+
+    الحرّاسُ حرّاسُ التعديل (``can_manage_user``: لا حسابَك ولا إداريَّ ولا نظيراً ولا
+    خارجَ الشجرة)، وفوقها: **لا حسابٌ حسّاس** لغير المدير — الكلمةُ المؤقّتة تُعرض
+    للرئيس، فإعادتُها لرئيس وحدةٍ أو أرشيفيٍّ دخولٌ بحسابه إلى ما لا يفتحه الرئيسُ نفسُه
+    (السرّيُّ لقسمه بعينه لا لشجرته). ولا حسابٌ معطَّل (يُفعَّل أوّلاً).
+    و``must_change_password`` يُجبر صاحبَها على تغييرها، و``set_password`` يُسقط جلساتِه.
+    """
+    from core.models import SecuritySettings, UserPassword, UserProfile
+    from core.scoping import can_manage_accounts, is_sensitive_account
+
+    if by is None or user.pk == by.pk:
+        raise PermissionDenied('كلمةُ مرورك أنت تُغيَّر من صفحة «تغيير كلمة المرور».')
+    _guard_user_target(by, user)
+    if not can_manage_accounts(by) and is_sensitive_account(user):
+        raise PermissionDenied('كلمةُ مرور حسابٍ حسّاس تُعاد من مدير النظام.')
+    if not user.is_active:
+        raise ValidationError('الحسابُ معطَّل — فعِّله أوّلاً ثم أعِد تعيينَ كلمته.')
+
+    password = secrets.token_urlsafe(max(24, SecuritySettings.get().password_min_length))
+    with transaction.atomic():
+        user.set_password(password)
+        user.save(update_fields=['password'])
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.must_change_password = True
+        profile.save(update_fields=['must_change_password'])
+        UserPassword.objects.filter(user=user).delete()
+        temporary = UserPassword(
+            user=user,
+            expires_at=timezone.now() + timedelta(hours=24),
+            is_viewed=True,
+        )
+        temporary.set_password(password)
+        temporary.save()
+        _log(by, 'PASSWORD_RESET', {
+            'user': user.get_username(),
+            'department': profile.department.code if profile.department_id else '',
+        })
+    return password
 
 
 def save_group(*, by, name, member_ids=None, auto_rule='', group=None, is_active=None):
@@ -341,8 +392,10 @@ def _guard_admin(by):
         raise PermissionDenied('لوحةُ الإدارة لمدير النظام.')
 
 
-def _is_superuser(user):
-    return bool(getattr(user, 'is_superuser', False))
+def _is_account_admin(user):
+    from core.scoping import can_manage_accounts
+
+    return can_manage_accounts(user)
 
 
 def _guard_department_parent(by, parent):
@@ -362,24 +415,18 @@ def _guard_department(by, department):
 
 
 def _guard_user_target(by, user):
-    from core.scoping import can_manage_accounts, can_manage_department
+    from core.scoping import can_manage_user
 
-    if can_manage_accounts(by):
-        return
-    profile = getattr(user, 'profile', None)
-    from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
-                            CONTROLLER_GROUP_NAME)
+    if not can_manage_user(by, user):
+        raise PermissionDenied('هذا الحسابُ يُدار من مدير النظام: حسابُك أنت، أو حسابٌ إداريّ، '
+                               'أو دورٌ حسّاس، أو خارج شجرتك.')
 
-    sensitive_groups = (
-        ARCHIVE_ALL_GROUP_NAME,
-        ARCHIVIST_GROUP_NAME,
-        CONTROLLER_GROUP_NAME,
-    )
-    if (user.is_superuser or user.is_staff or profile is None
-            or profile.is_department_head
-            or user.groups.filter(name__in=sensitive_groups).exists()
-            or not can_manage_department(by, profile.department_id)):
-        raise PermissionDenied('يمكن لرئيس القسم إدارة مستخدمي شجرته فقط، دون الحسابات الإدارية.')
+
+def _guard_grant(by, role):
+    from core.scoping import grantable_roles
+
+    if role not in grantable_roles(by):
+        raise PermissionDenied('هذا الدورُ لا يُمنح إلا من مدير النظام.')
 
 
 def _guard_no_cycle(department, parent):

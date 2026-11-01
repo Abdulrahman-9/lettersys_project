@@ -8,6 +8,15 @@ ARCHIVIST_GROUP_NAME = 'مسؤول الأرشفة'
 #: كي لا توجد حالٌ ميّتة: «أرشيفُ شركةٍ» بلا صلاحيّةِ أرشفة.
 ARCHIVE_ALL_GROUP_NAME = 'أرشيف الشركة'
 
+#: دورُ الإنشاء ⟵ مجموعتُه. «قارئ» و«رئيس قسم» بلا مجموعة (الثاني علمٌ في الملفّ
+#: الشخصيّ). ومن يمنح ماذا: ``core.scoping.grantable_roles``.
+ROLE_GROUP_NAMES = {
+    'entry': ENTRY_GROUP_NAME,
+    'archivist': ARCHIVIST_GROUP_NAME,
+    'controller': CONTROLLER_GROUP_NAME,
+    'company_archivist': ARCHIVE_ALL_GROUP_NAME,
+}
+
 ROLE_DEFINITIONS = {
     'entry': {
         'label': ENTRY_GROUP_NAME,

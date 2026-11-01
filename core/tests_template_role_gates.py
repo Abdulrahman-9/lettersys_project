@@ -17,8 +17,6 @@ PATTERN = re.compile(
 
 #: (الملفّ نسبةً إلى templates/، نصُّ السطر بعد strip) ⟵ السبب.
 ALLOWED = {
-    ('core/admin_panel.html', '{% if row.user.is_superuser %}'):
-        'شارةُ «مدير نظام» بجانب الاسم — عرضُ حقيقةٍ لا حراسةُ فعلٍ أو تنقّل',
     ('base.html', '<span>{% if request.user.is_superuser %}إدارة النظام{% else %}إدارة القسم{% endif %}</span>'):
         'تسميةُ رابط الإدارة المشترك بحسب الدور — عرضٌ لا بوابة وصول',
 }

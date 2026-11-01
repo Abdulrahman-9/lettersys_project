@@ -165,7 +165,10 @@ def scope_activity_for(user, qs=None):
     mine = subtree_ids(user_department_id(user))
     if not mine:
         return qs.none()
-    return qs.filter(Q(department_id__in=mine) | Q(book__department_id__in=mine))
+    # أفعالُ مدير النظام الإداريّة (إعادةُ كلمة سرّ، فتحُ السجلّ…) تحمل لقطةَ قسمه
+    # فكانت تظهر لرئيس ذلك القسم؛ ويبقى ظاهراً ما مسَّ **كتاباً** من شجرته (دفعة 10‑28)
+    return qs.filter((Q(department_id__in=mine) & ~Q(user__is_superuser=True))
+                     | Q(book__department_id__in=mine))
 
 
 def can_manage_system(user) -> bool:
@@ -535,6 +538,67 @@ def can_manage_department(user, department) -> bool:
         and department_id is not None
         and department_id in subtree_ids(user_department_id(user))
     )
+
+
+#: ما يمنحه رئيسُ القسم لمن في شجرته (قرارُ المالك 2026‑10‑26)، وما فوقه لمدير
+#: النظام وحدَه. **مصدرٌ واحد** لخدمة الإدارة وقراءتِها ونموذجِ الإنشاء — كانت
+#: القاعدةُ في ثلاثة مواضع، والقالبُ يقرأ ``grantable_roles`` لا شرطَ دور.
+HEAD_GRANTABLE_ROLES = frozenset({'viewer', 'entry', 'archivist', 'controller'})
+ADMIN_ONLY_ROLES = frozenset({'department_head', 'company_archivist'})
+
+
+def grantable_roles(user) -> frozenset:
+    """الأدوارُ التي يمنحها هذا المستخدم — فارغةٌ لمن لا يدير أحداً."""
+    if can_manage_accounts(user):
+        return HEAD_GRANTABLE_ROLES | ADMIN_ONLY_ROLES
+    if can_manage_departments(user):
+        return HEAD_GRANTABLE_ROLES
+    return frozenset()
+
+
+def _group_names(user, group_names):
+    return set(group_names if group_names is not None
+               else user.groups.values_list('name', flat=True))
+
+
+def is_sensitive_account(user, group_names=None) -> bool:
+    """حسابٌ يفتح السرّيّ أو يدير غيرَه: مديرٌ، أو أمينُ ورقِ قسمه
+    (``_department_custodian``: رئيسٌ · مختصُّ بريد · أرشيفيّ)، أو أرشيفُ الشركة.
+
+    ``group_names`` من صفوفٍ مُسبقةِ الجلب — دوالُّ ``is_*`` تسأل القاعدةَ لكلّ صفّ.
+    """
+    from core.roles import ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME
+
+    if user.is_superuser or is_department_head(user):
+        return True
+    return bool(_group_names(user, group_names)
+                & {CONTROLLER_GROUP_NAME, ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME})
+
+
+def can_manage_user(by, user, *, group_names=None, managed_ids=None) -> bool:
+    """أيُدير ``by`` حسابَ ``user``؟ — قاعدةٌ واحدة لحارس الخدمة ولصفّ اللوحة.
+
+    رئيسُ القسم يدير مستخدمي شجرته، **إلّا**: حسابَه هو (كان يمنح نفسَه البريدَ
+    فيملك إعداداتِ الشركة، والأرشفةَ — مراجعةُ 2026‑10‑27)، والحساباتِ الإداريّة،
+    وأرشيفَ الشركة (يمنحه المديرُ وحدَه)، ورئيساً نظيراً في قسمه نفسِه.
+    ``managed_ids``: شجرةُ ``by`` محسوبةً سلفاً لصفوف الجدول (لا ``subtree_ids`` لكلّ صفّ).
+    """
+    from core.roles import ARCHIVE_ALL_GROUP_NAME
+
+    if can_manage_accounts(by):
+        return True
+    profile = getattr(user, 'profile', None)
+    if (user.pk == getattr(by, 'pk', None) or user.is_superuser or user.is_staff
+            or profile is None or profile.department_id is None):
+        return False
+    in_tree = (profile.department_id in managed_ids if managed_ids is not None
+               else can_manage_department(by, profile.department_id))
+    if not in_tree:
+        return False
+    if ARCHIVE_ALL_GROUP_NAME in _group_names(user, group_names):
+        return False
+    return not (profile.is_department_head
+                and profile.department_id == user_department_id(by))
 
 
 def _referred_to(department_id):
