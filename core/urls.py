@@ -53,7 +53,8 @@ urlpatterns = [
     path("<int:pk>/report/", views.book_report, name="book_report"),
     path("<int:pk>/edit/", views.book_edit, name="book_edit"),
     path("<int:pk>/status/", views.book_change_status, name="book_change_status"),
-    path("users/", views.user_roles, name="user_roles"),
+    # الحساباتُ بابٌ واحد: تبويبُ لوحة الإدارة. العنوانُ القديم يبقى للروابط المحفوظة.
+    path("users/", RedirectView.as_view(url='/books/admin/?tab=users')),
     path("api/book-notes/<int:book_id>/", views.update_book_notes, name="update_book_notes"),
     path("api/attachment/<int:att_id>/ocr/", views.attachment_ocr_text, name="attachment_ocr_text"),
     path("api/book-comments/<int:book_id>/add/", views.add_book_comment, name="add_book_comment"),

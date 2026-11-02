@@ -69,11 +69,7 @@ class UsersPageTests(TestCase):
     def test_the_dead_show_password_feature_is_gone(self):
         with self.assertRaises(NoReverseMatch):
             reverse('get_user_password', args=[1])
-        self.assertNotContains(self.client.get(reverse('user_roles')), 'عرض كلمة المرور')
-
-    def test_the_form_asks_for_the_servers_minimum(self):
-        min_len = SecuritySettings.get().password_min_length
-        self.assertContains(self.client.get(reverse('user_roles')), 'minlength="%d"' % min_len)
+        self.assertNotContains(self.client.get('/books/admin/?tab=users'), 'عرض كلمة المرور')
 
 
 class RolesGateTests(TestCase):

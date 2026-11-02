@@ -52,6 +52,10 @@ class UserActivityLog(models.Model):
         ('CREATE_USER', 'إنشاء حساب محلي'),
         ('CREATE_GROUP', 'إنشاء عنقود'),
         ('EDIT_GROUP', 'تعديل عنقود'),
+        ('DELETE_GROUP', 'حذف عنقود'),
+        ('DELETE_USER', 'حذف حساب'),
+        ('PASSWORD_RESET', 'إعادة تعيين كلمة مرور'),
+        ('EDIT_SETTINGS', 'تعديل إعدادات'),
         # ── حسابات ──
         ('LOGIN', 'تسجيل دخول'),
         ('LOGOUT', 'تسجيل خروج'),

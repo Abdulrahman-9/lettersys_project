@@ -19,7 +19,6 @@ email_urlpatterns = [
     path('send/',                email_endpoints.send_email,          name='email-send'),
     path('logs/<int:book_id>/',  email_endpoints.book_email_logs,     name='email-logs'),
     path('test-smtp/',           email_endpoints.test_smtp,           name='email-test-smtp'),
-    path('settings/',            email_endpoints.email_settings,      name='email-settings'),
     path('entity/<int:entity_id>/',        email_endpoints.entity_email_info,    name='entity-email-info'),
     # إرسال الكتاب بمرفقاته إلى جهته المعنيّة (معاينة ثم إرسال)
     path('book/<int:book_id>/preview/',    email_endpoints.book_email_preview,   name='book-email-preview'),

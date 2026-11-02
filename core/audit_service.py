@@ -57,6 +57,50 @@ def record_event(request, action, *, book=None, metadata=None):
         return None
 
 
+def settings_snapshot(obj, fields):
+    """قيمُ حقولِ إعدادٍ قبل تغييرها — لتقارنها ``record_settings_change`` بعد الحفظ."""
+    return {name: getattr(obj, name) for name in fields}
+
+
+def record_settings_change(request, section, obj, before, *, secret=()):
+    """يسجّل تغييرَ إعدادٍ: **ما تغيّر فعلاً** وقيمتَيه — ولا صفَّ إن لم يتغيّر شيء.
+
+    الحقلُ في ``secret`` (كلمةُ مرورٍ ومفتاحٌ) يُذكر اسمُه وحدَه: سجلٌّ يحمل
+    الأسرار نسخةٌ ثانيةٌ منها تدخل كلَّ نسخةٍ احتياطيّة. و``summary`` هو ما يُعرض
+    في صفحة السجلّ — الأسماءُ من ``verbose_name`` لا أسماءُ الأعمدة.
+    """
+    changes, parts = {}, []
+    for name, old in before.items():
+        new = getattr(obj, name)
+        if old == new:
+            continue
+        label = str(obj._meta.get_field(name).verbose_name)
+        if name in secret:
+            changes[label] = 'changed'
+            parts.append(label)
+        else:
+            changes[label] = {'from': _plain(old), 'to': _plain(new)}
+            parts.append(f'{label}: {_shown(old)} ⟵ {_shown(new)}')
+    if not changes:
+        return None
+    return record_event(request, 'EDIT_SETTINGS', metadata={
+        'section': section, 'changes': changes,
+        'summary': f"{section} — {' · '.join(parts)}"[:500],
+    })
+
+
+def _shown(value):
+    """القيمةُ كما يقرؤها مديرُ النظام في الصفحة — لا ``True`` ولا فراغ."""
+    if isinstance(value, bool):
+        return 'نعم' if value else 'لا'
+    return '(فارغ)' if value in ('', None) else _plain(value)
+
+
+def _plain(value):
+    """قيمةٌ تقبلها JSONField — ما عدا الأنواع الأوّليّة يُكتب نصّاً."""
+    return value if isinstance(value, (str, int, float, bool, type(None))) else str(value)
+
+
 def record_login(user, request, *, action='LOGIN', username=''):
     """دخولٌ وخروجٌ وفشلُ دخول — والفاشلُ يحمل الاسمَ المُحاوَل لا كلمةَ السرّ.
 

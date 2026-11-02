@@ -90,9 +90,7 @@ engine.mark_as_read(imap_uid=42)        # → bool
 | POST | `/books/api/email/send/` | `send_email` | Manual send |
 | GET | `/books/api/email/logs/<book_id>/` | `book_email_logs` | Email logs for book |
 | POST | `/books/api/email/test-smtp/` | `test_smtp` | **Canonical** SMTP test |
-| GET/POST | `/books/api/email/settings/` | `email_settings` | Read/update settings |
 | GET | `/books/api/email/entity/<id>/` | `entity_email_info` | Entity email info |
-| POST | `/books/api/email/entity/<id>/update/` | `update_entity_email` | Update entity email |
 
 ### Thread-based (`/mail/api/`)
 

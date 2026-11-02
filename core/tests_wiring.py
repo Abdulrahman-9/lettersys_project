@@ -70,7 +70,6 @@ KNOWN_UNWIRED = {
     'mail-api-stats':           'API إحصاءِ بريدٍ بلا مستهلك',
     'mail-api-bulk-send':       'إرسالٌ جماعيٌّ بلا واجهة',
     'email-test-smtp':          'الصفحةُ تستعمل mail-api-test-smtp لا هذا',
-    'email-settings':           'واجهةُ إعداداتٍ قديمة؛ الحيّةُ mail_settings',
     'entity-email-info':        'واجهةٌ قديمةٌ لبريد الجهة بلا مستهلك',
     'network-ping':             'المفردُ بلا مستهلك؛ الجارُ network-ping-all موصول',
     'extraction-quick-start':   'مدخلٌ قديمٌ يُعيد التوجيه — يبقى للروابط المحفوظة',

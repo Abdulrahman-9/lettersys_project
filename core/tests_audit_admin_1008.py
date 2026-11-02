@@ -17,6 +17,8 @@ from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
+from core.models import Department
+
 ROOT = Path(__file__).resolve().parent.parent
 User = get_user_model()
 
@@ -31,25 +33,29 @@ class UserRolesTests(TestCase):
         self.client.force_login(self.boss)
 
     def html(self):
-        return self.client.get(reverse('user_roles')).content.decode('utf-8')
+        return self.client.get(reverse('admin_panel') + '?tab=users').content.decode('utf-8')
+
+    def create(self, username):
+        dept, _ = Department.objects.get_or_create(code='ق-1008', defaults={'name': 'قسم 1008'})
+        return self.client.post(reverse('admin_panel'), {
+            'action': 'create_department_user', 'tab': 'users', 'department': dept.pk,
+            'username': username, 'role': 'viewer'})
 
     def test_delete_is_a_confirmed_form_and_not_on_my_row(self):
         html = self.html()
         self.assertNotIn('deleteUser(', html)
-        forms = re.findall(r'<form method="post" class="d-inline" data-confirm="سيُحذف المستخدم «([^»]+)»', html)
+        forms = re.findall(r'data-confirm="حذف حساب «([^»]+)»', html)
         self.assertIn('roles_other', forms)
         self.assertNotIn('roles_boss', forms)
 
     def test_bad_usernames_are_refused(self):
         for bad in ('a b', "x');alert(1);('", '<b>x</b>'):
             with self.subTest(username=bad):
-                self.client.post(reverse('user_roles'), {'action': 'create', 'username': bad,
-                                                         'password': 'Pw-long-enough-1', 'password2': 'Pw-long-enough-1'})
+                self.create(bad)
                 self.assertFalse(User.objects.filter(username=bad).exists())
 
     def test_an_arabic_username_is_fine(self):
-        self.client.post(reverse('user_roles'), {'action': 'create', 'username': 'كاتب_الوارد',
-                                                 'password': 'Pw-long-enough-1', 'password2': 'Pw-long-enough-1'})
+        self.create('كاتب_الوارد')
         self.assertTrue(User.objects.filter(username='كاتب_الوارد').exists())
 
 

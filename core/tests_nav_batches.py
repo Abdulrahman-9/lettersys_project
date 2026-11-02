@@ -138,7 +138,7 @@ class SettingsHubStructureTests(TestCase):
     def test_every_embedded_tab_is_guarded_like_the_hub(self):
         """كانت صفحةُ إعدادات الماسح بـlogin_required وحدَها: أيُّ مستخدمٍ يفتحها بالمسار."""
         self.client.force_login(self.plain)
-        for name in ('settings_hub', 'scan_settings', 'sequence_settings', 'network_settings', 'user_roles'):
+        for name in ('settings_hub', 'scan_settings', 'sequence_settings', 'network_settings'):
             r = self.client.get(reverse(name))
             self.assertIn(r.status_code, (302, 403), f'{name} مفتوحٌ لغير الموظّف ({r.status_code})')
         self.client.force_login(self.staff)

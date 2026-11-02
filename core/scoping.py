@@ -204,6 +204,15 @@ def can_manage_accounts(user) -> bool:
     return is_privileged(user)
 
 
+def can_delete_account(by, user) -> bool:
+    """أيحذف ``by`` حسابَ ``user`` نهائيّاً؟ — مديرُ النظام وحدَه، ولا حسابَه الذي يعمل به.
+
+    وآخرُ مديرٍ نشطٍ محميٌّ بهذا الشرط نفسِه: الفاعلُ مديرٌ نشط، فالهدفُ غيرُه
+    لا يكون آخرَهم أبداً.
+    """
+    return can_manage_accounts(by) and getattr(by, 'pk', None) != user.pk
+
+
 def can_enroll_workstation(user) -> bool:
     return bool(user.is_authenticated and user.is_active)
 

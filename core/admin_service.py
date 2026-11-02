@@ -218,6 +218,9 @@ def create_department_user(*, by, department, username, first_name='',
     from core.roles import ROLE_GROUP_NAMES, ensure_role_groups
     from core.scoping import ADMIN_ONLY_ROLES, HEAD_GRANTABLE_ROLES
 
+    # القسمُ يُختار صراحةً: هو نطاقُ ما سيراه صاحبُ الحساب، فلا يُخمَّن له.
+    if department is None:
+        raise ValidationError('اختر قسمَ الحساب الجديد.')
     _guard_department(by, department)
     if not department.is_active:
         raise ValidationError('لا يمكن إنشاء حسابٍ في قسمٍ معطَّل.')
@@ -276,6 +279,28 @@ def create_department_user(*, by, department, username, first_name='',
             'job_title': job_title, 'role': role,
         })
     return user, password
+
+
+def delete_user(*, by, user):
+    """يحذف حساباً نهائيّاً — وأثرُه يبقى بعد ذهابه (``username_snapshot``).
+
+    مَن له كتبٌ أو تواقيع لا يُحذف (``PROTECT``): يُعطَّل، فتبقى نسبةُ عمله إليه.
+    والأثرُ والحذفُ في معاملةٍ واحدة: حذفٌ مرفوضٌ لا يترك صفّاً يقول إنّه تمّ.
+    """
+    from django.db.models import ProtectedError
+
+    from core.scoping import can_delete_account
+
+    if not can_delete_account(by, user):
+        raise PermissionDenied('حذفُ الحسابات لمدير النظام، ولا يُحذف حسابُك الذي تعمل به.')
+    username = user.get_username()
+    try:
+        with transaction.atomic():
+            _log(by, 'DELETE_USER', {'user': username, 'summary': f'حساب «{username}»'})
+            user.delete()
+    except ProtectedError as exc:
+        raise ValidationError(
+            f'لا يُحذف «{username}» لأنّ له كتباً أو تواقيع مسجَّلة — عطِّله بدل ذلك.') from exc
 
 
 def reset_department_user_password(*, by, user):

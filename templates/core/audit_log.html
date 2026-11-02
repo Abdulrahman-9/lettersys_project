@@ -78,7 +78,7 @@
                 <th style="width:11rem">مَن</th>
                 <th style="width:9rem">القسم</th>
                 <th style="width:10rem">الحركة</th>
-                <th>الكتاب</th>
+                <th>{% if tab == 'users' %}الكتاب / التفصيل{% else %}الكتاب{% endif %}</th>
                 {% if tab == 'users' %}
                   <th style="width:5rem">مرات</th>
                   <th style="width:8rem">عنوان IP</th>
@@ -108,7 +108,7 @@
                         <span class="text-muted fst-italic">— {{ row.book_title }}</span>
                       {% endif %}
                     {% else %}
-                      <span class="text-muted">—</span>
+                      <span class="text-muted">{{ row.note|default:"—" }}</span>
                     {% endif %}
                   </td>
                   {% if tab == 'users' %}

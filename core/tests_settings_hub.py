@@ -37,7 +37,7 @@ class SettingsHubTabstripTests(TestCase):
     def test_every_section_is_present_as_a_tab(self):
         html = self.client.get(reverse('settings_hub')).content.decode()
         for key in ('general', 'email', 'notifications', 'security', 'backup',
-                    'sequences', 'network', 'scan', 'users', 'trash', 'ai'):
+                    'sequences', 'network', 'scan', 'trash', 'ai'):
             self.assertIn(f'data-tab="{key}"', html, f'التبويب {key} مفقود من الشريط')
 
     def test_heavy_tools_load_embedded_not_by_leaving(self):

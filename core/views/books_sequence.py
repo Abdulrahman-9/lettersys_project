@@ -11,6 +11,7 @@ from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
+from ..audit_service import record_settings_change, settings_snapshot
 from ..extraction.kinds import BOOK_KIND_CHOICES, normalize_book_kind
 from ..models import Book, BookSequence, SystemSettings
 from ..numbering import MANUAL_KINDS, max_series_seq
@@ -103,6 +104,7 @@ def sequence_settings(request):
                 new_prefix = request.POST.get(prefix_key, seq['obj'].prefix).strip()
                 new_number = _parse_int(request.POST.get(number_key, '').strip())
                 update_fields = []
+                before = settings_snapshot(seq['obj'], ('prefix', 'next_number'))
                 if new_prefix != seq['obj'].prefix:
                     seq['obj'].prefix = new_prefix
                     update_fields.append('prefix')
@@ -118,6 +120,7 @@ def sequence_settings(request):
                 if update_fields:
                     seq['obj'].save(update_fields=update_fields + ['updated_at'])
                     saved = True
+                    record_settings_change(request, f"العدّادات — {seq['label']}", seq['obj'], before)
 
             # المدى من ثوابت النموذج — لا رقمَ مكتوباً بيدٍ هنا ولا في القالب.
             raw_expire = request.POST.get('reservation_expire_minutes', '').strip()
@@ -140,9 +143,11 @@ def sequence_settings(request):
             elif minutes is not None:
                 # بلا ``except`` واسع: إن فشل الحفظُ فليظهر. الرسالةُ كانت تُطلَق
                 # دائماً حتّى حين تفشل الكتابةُ بصمت — «حُفظ» صار يعني حُفظ.
+                before = settings_snapshot(cfg, ('reservation_expire_minutes',))
                 cfg.reservation_expire_minutes = minutes
                 cfg.save(update_fields=['reservation_expire_minutes', 'updated_at'])
                 saved = True
+                record_settings_change(request, 'مدّة حجز الرقم', cfg, before)
                 logger.info(
                     '[SequenceSettings] reservation_expire_minutes=%s by %s',
                     minutes, request.user.username,

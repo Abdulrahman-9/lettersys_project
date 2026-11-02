@@ -34,6 +34,7 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
+from .audit_service import record_settings_change, settings_snapshot
 from .models import NetworkNode, NetworkSettings
 from .decorators import rate_limit
 from .netaddr import is_lan_peer
@@ -318,6 +319,8 @@ def network_save_config(request):
         return JsonResponse({'ok': False, 'error': 'بيانات غير صالحة'}, status=400)
 
     cfg = NetworkSettings.get()
+    before = settings_snapshot(cfg, ('role', 'device_name', 'this_host', 'app_port', 'master_host',
+                                     'master_db_port', 'master_db_name', 'master_db_user'))
     role = data.get('role', 'standalone')
     cfg.role        = role
     # اسم الجهاز يُخزَّن محلياً (لكل جهاز) — المصدر الموثوق؛ ونُبقي نسخة في cfg للتوافق.
@@ -388,6 +391,7 @@ def network_save_config(request):
     cfg.configured_at = timezone.now()
     cfg.configured_by = request.user
     cfg.save()
+    record_settings_change(request, 'الربط الشبكي', cfg, before)
 
     _register_self(cfg)
     logger.info('[NetworkSettings] saved by %s — role=%s', request.user.username, role)

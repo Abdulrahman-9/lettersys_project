@@ -10,9 +10,7 @@ from django.urls import reverse
 
 from core.context_processors import nav_gates
 from core.logging_models import UserActivityLog
-from core.models import SecuritySettings
 from core.scoping import can_manage_accounts
-from core.views.users import PASSWORD_RESET_ACTION
 
 
 class AccountsGateTests(TestCase):
@@ -24,9 +22,9 @@ class AccountsGateTests(TestCase):
 
     def test_staff_cannot_open_or_post_to_the_accounts_page(self):
         self.client.force_login(self.staff)
-        self.assertEqual(self.client.get(reverse('user_roles')).status_code, 403)
-        resp = self.client.post(reverse('user_roles'), {
-            'action': 'create', 'username': 'intruder', 'password': 'x' * 12, 'password2': 'x' * 12})
+        self.assertEqual(self.client.get(reverse('admin_panel') + '?tab=users').status_code, 403)
+        resp = self.client.post(reverse('admin_panel'), {
+            'action': 'create_department_user', 'tab': 'users', 'username': 'intruder'})
         self.assertEqual(resp.status_code, 403)
         self.assertFalse(User.objects.filter(username='intruder').exists())
 
@@ -36,7 +34,6 @@ class AccountsGateTests(TestCase):
                     reverse('book_unified')):
             body = self.client.get(url).content.decode('utf-8')
             with self.subTest(url=url):
-                self.assertNotIn(reverse('user_roles'), body)
                 self.assertNotIn(reverse('admin_panel'), body)
                 # رابطٌ لا حقلٌ مخفيّ: نموذجُ الإجراءات الجماعيّة يحمل الاستعلامَ الحاليّ في «back»
                 self.assertNotRegex(body, r'href="[^"]*view=groups')
@@ -45,9 +42,9 @@ class AccountsGateTests(TestCase):
         self.client.force_login(self.boss)
         hub = self.client.get(reverse('settings_hub')).content.decode('utf-8')
         entities = self.client.get(reverse('entity_list')).content.decode('utf-8')
-        self.assertIn(reverse('user_roles'), hub)
+        self.assertIn(reverse('admin_panel'), hub)
         self.assertRegex(entities, r'href="[^"]*view=groups')
-        self.assertEqual(self.client.get(reverse('user_roles')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('admin_panel') + '?tab=users').status_code, 200)
 
     def test_the_nav_gate_is_the_page_gate(self):
         plain = User.objects.create_user('gplain', password='pw-gplain-1111111')
@@ -64,53 +61,40 @@ class PasswordResetTests(TestCase):
     def setUp(self):
         self.boss = User.objects.create_superuser('rboss', 'r@x.invalid', 'pw-rboss-1111111')
         self.clerk = User.objects.create_user('rclerk', password='old-pass-1234567')
-        self.min_len = SecuritySettings.get().password_min_length
-        self.new = 'New-Pass-' + '7' * self.min_len
 
-    def _reset(self, who, target, pw, pw2=None):
+    def _reset(self, who, target):
         self.client.force_login(who)
-        return self.client.post(reverse('user_roles'), {
-            'action': 'reset_password', 'user_id': target.pk, 'password': pw,
-            'password2': pw if pw2 is None else pw2}, follow=True)
+        return self.client.post(reverse('admin_panel'), {
+            'action': 'reset_user_password', 'tab': 'users', 'user_id': target.pk})
 
     def test_a_non_superuser_cannot_reset(self):
         staff = User.objects.create_user('rstaff', password='pw-rstaff-1111111', is_staff=True)
-        self.client.force_login(staff)
-        resp = self.client.post(reverse('user_roles'), {
-            'action': 'reset_password', 'user_id': self.clerk.pk, 'password': self.new, 'password2': self.new})
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(self._reset(staff, self.clerk).status_code, 403)
         self.clerk.refresh_from_db()
         self.assertTrue(self.clerk.check_password('old-pass-1234567'))
 
-    def test_short_or_mismatched_changes_nothing_and_never_echoes_the_password(self):
-        for pw, pw2 in (('x' * (self.min_len - 1), None), (self.new, self.new + 'X')):
-            resp = self._reset(self.boss, self.clerk, pw, pw2)
-            texts = ' '.join(m.message for m in resp.context['messages'])
-            with self.subTest(pw=pw):
-                self.assertNotIn(pw, texts)
-                self.clerk.refresh_from_db()
-                self.assertTrue(self.clerk.check_password('old-pass-1234567'))
-
-    def test_success_sets_the_password_logs_it_and_ends_the_targets_sessions(self):
+    def test_success_rotates_the_password_logs_it_and_ends_the_targets_sessions(self):
         other = self.client_class()
         other.force_login(self.clerk)
         self.assertEqual(other.get(reverse('dashboard')).status_code, 200)
 
-        resp = self._reset(self.boss, self.clerk, self.new)
+        self._reset(self.boss, self.clerk)
 
         self.clerk.refresh_from_db()
-        self.assertTrue(self.clerk.check_password(self.new))
-        texts = ' '.join(m.message for m in resp.context['messages'])
-        self.assertNotIn(self.new, texts)
-        log = UserActivityLog.objects.get(action=PASSWORD_RESET_ACTION)
+        self.assertFalse(self.clerk.check_password('old-pass-1234567'))
+        self.assertTrue(self.clerk.profile.must_change_password)
+        log = UserActivityLog.objects.get(action='PASSWORD_RESET')
         self.assertEqual(log.metadata.get('user'), 'rclerk')
-        self.assertNotIn(self.new, str(log.metadata))
         self.assertEqual(other.get(reverse('dashboard')).status_code, 302)
 
-    def test_your_own_account_goes_to_the_change_page(self):
-        self.client.force_login(self.boss)
-        resp = self.client.post(reverse('user_roles'), {
-            'action': 'reset_password', 'user_id': self.boss.pk, 'password': self.new, 'password2': self.new})
-        self.assertRedirects(resp, reverse('password_change'), fetch_redirect_response=False)
+    def test_another_admins_password_can_be_reset(self):
+        """المديرُ الذي نسي كلمته يُنقذه مديرٌ آخر — كانت الصفحةُ القديمة تتيحه."""
+        second = User.objects.create_superuser('rboss2', 'r2@x.invalid', 'pw-rboss2-111111')
+        self._reset(self.boss, second)
+        second.refresh_from_db()
+        self.assertFalse(second.check_password('pw-rboss2-111111'))
+
+    def test_your_own_account_is_not_reset_from_here(self):
+        self._reset(self.boss, self.boss)
         self.boss.refresh_from_db()
         self.assertTrue(self.boss.check_password('pw-rboss-1111111'))

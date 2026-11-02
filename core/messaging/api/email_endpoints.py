@@ -7,7 +7,6 @@ Routes (book-centric):
   POST /books/api/email/send/               — manual email send
   GET  /books/api/email/logs/<book_id>/     — book email logs
   POST /books/api/email/test-smtp/          — SMTP connection test (canonical)
-  GET|POST /books/api/email/settings/       — read/update email settings
   GET  /books/api/email/entity/<id>/        — entity email info
 
 Entity contact fields (email, CC, notify flags) are edited in one place only:
@@ -170,61 +169,6 @@ def test_smtp(request):
     cfg = EmailSettings.get()
     result = test_smtp_connection(cfg)
     return JsonResponse(result)
-
-
-# ── 4. Read/update email settings ──────────────────────────────
-@login_required
-@require_http_methods(['GET', 'POST'])
-def email_settings(request):
-    from core.models import EmailSettings
-    from core.scoping import can_manage_mail
-
-    if not can_manage_mail(request.user):
-        return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
-
-    cfg = EmailSettings.get()
-
-    if request.method == 'GET':
-        return JsonResponse({
-            'success': True,
-            'settings': {
-                'org_name':        cfg.org_name,
-                'org_email':       cfg.org_email,
-                'reply_to':        cfg.reply_to,
-                'email_signature': cfg.email_signature,
-                'smtp_host':       cfg.smtp_host,
-                'smtp_port':       cfg.smtp_port,
-                'smtp_use_tls':    cfg.smtp_use_tls,
-                'smtp_use_ssl':    cfg.smtp_use_ssl,
-                'smtp_user':       cfg.smtp_user,
-                # Password intentionally excluded from response
-                'is_active':       cfg.is_active,
-                'send_on_save':    cfg.send_on_save,
-            }
-        })
-
-    # POST — update settings
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({'success': False, 'message': 'بيانات غير صالحة'}, status=400)
-
-    allowed_fields = [
-        'org_name', 'org_email', 'reply_to', 'email_signature',
-        'smtp_host', 'smtp_port', 'smtp_use_tls', 'smtp_use_ssl',
-        'smtp_user', 'smtp_password', 'is_active', 'send_on_save',
-    ]
-    update_fields = []
-    for field in allowed_fields:
-        if field in data:
-            setattr(cfg, field, data[field])
-            update_fields.append(field)
-
-    if update_fields:
-        cfg.save(update_fields=update_fields)
-        logger.info(f'[EmailSettings] Updated by {request.user.username}: {update_fields}')
-
-    return JsonResponse({'success': True, 'message': 'تم حفظ الإعدادات'})
 
 
 # ── 4b. إرسال الكتاب بمرفقاته إلى الجهة المعنيّة ────────────────

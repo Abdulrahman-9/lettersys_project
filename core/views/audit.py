@@ -142,7 +142,7 @@ def _present(row, user, tab):
             'book_title': (STUB_TITLE if restricted else book.title) if book else '',
             'count': row.count,
             'ip': row.ip_address or '',
-            'note': '',
+            'note': (row.metadata or {}).get('summary', ''),
         }
 
     who = (row.by.get_full_name() if row.by_id else '') or row.by_snapshot

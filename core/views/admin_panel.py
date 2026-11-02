@@ -23,22 +23,23 @@ from django.utils import timezone
 from django.views.decorators.cache import never_cache
 
 from core.admin_service import (UNSET, assign_user, create_department,
-                                create_department_user, delete_group,
+                                create_department_user, delete_group, delete_user,
                                 reset_department_user_password, save_group,
                                 update_department)
 from core.logging_models import UserActivityLog
 from core.models import BookNumberReservation, Department, Entity, EntityGroup
 from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
                         CONTROLLER_GROUP_NAME, ENTRY_GROUP_NAME)
-from core.scoping import (can_manage_accounts, can_manage_departments, can_manage_user,
+from core.scoping import (can_delete_account, can_manage_accounts, can_manage_departments,
+                          can_manage_user,
                           grantable_roles, is_sensitive_account, managed_department_ids,
                           user_department_id)
 
 TABS = ('overview', 'departments', 'users', 'groups', 'reservations', 'audit', 'settings')
 ADMIN_TABS = ('groups', 'reservations', 'audit')
 ADMIN_ACTIONS = ('CREATE_DEPARTMENT', 'EDIT_DEPARTMENT', 'ASSIGN_USER',
-                 'CREATE_USER', 'CREATE_GROUP', 'EDIT_GROUP', 'DELETE_GROUP',
-                 'PASSWORD_RESET')
+                 'CREATE_USER', 'DELETE_USER', 'CREATE_GROUP', 'EDIT_GROUP', 'DELETE_GROUP',
+                 'PASSWORD_RESET', 'EDIT_SETTINGS')
 RESERVATION_REPORT_DAYS = (7, 30, 90)
 RESERVATION_REPORT_PAGE_SIZE = 50
 
@@ -449,6 +450,15 @@ def _toggle_user_active(request):
     return 'حُدِّثت حالة حساب «%s».' % user.get_username()
 
 
+def _delete_user(request):
+    user = User.objects.filter(pk=request.POST.get('user_id')).first()
+    if user is None:
+        raise ValidationError('المستخدمُ غير موجود.')
+    username = user.get_username()
+    delete_user(by=request.user, user=user)
+    return 'حُذف حساب «%s».' % username
+
+
 def _create_department_user(request):
     return create_department_user(
         by=request.user,
@@ -494,6 +504,7 @@ _HANDLERS = {
     'update_department': _update_department,
     'assign_user': _assign_user,
     'toggle_user_active': _toggle_user_active,
+    'delete_user': _delete_user,
     'save_group': _save_group,
     'delete_group': _delete_group,
 }
@@ -609,6 +620,7 @@ def _user_rows(department_ids=None, actor=None):
         # حارسُ ``reset_department_user_password`` نفسُه: لا حسابَك ولا معطَّلاً ولا حسّاساً لغير المدير
         row['can_reset'] = (row['can_edit'] and u.is_active and not row['is_self']
                             and (actor_is_admin or not row['is_sensitive']))
+        row['can_delete'] = actor is not None and can_delete_account(actor, u)
         row['search'] = ' '.join(filter(None, (
             u.username, u.get_full_name(), u.email, row['job_title'],
             department.code if department else '', department.name if department else '')))

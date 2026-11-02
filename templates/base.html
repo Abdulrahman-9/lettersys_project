@@ -180,7 +180,7 @@
             </a>
             {# الحسابات العامة لمدير النظام وحده؛ إدارة القسم لها رابط مستقل أدناه. #}
             {% if nav.roles %}
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'user_roles' %} active{% endif %}" href="{% url 'user_roles' %}" title="المستخدمون">
+            <a class="app-sidebar-link" href="{% url 'admin_panel' %}?tab=users" title="المستخدمون">
               <i class="bi bi-person-gear"></i>
               <span>المستخدمون</span>
             </a>
@@ -362,7 +362,7 @@
       // شريطٍ داخل لوحة الإعدادات (تدقيقُ الانتقالات §ج).
       var EMBED_SCOPE = [
         '/books/settings/', '/books/mail/settings/', '/books/mail/templates/',
-        '/books/mail/api/', '/books/api/', '/books/users/', '/books/trash/',
+        '/books/mail/api/', '/books/api/', '/books/trash/',
         '/books/backup/', '/books/restore-data/', '/books/restore-system/',   // كان إرسالُهما يغادر المركز (تدقيقُ نيلسن F#10)
         '/media/', '/static/'
       ];

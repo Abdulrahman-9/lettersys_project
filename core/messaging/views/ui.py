@@ -23,6 +23,7 @@ import re
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
+from core.audit_service import record_settings_change, settings_snapshot
 from core.views.helpers import mail_manager_required, writer_required
 from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied
@@ -366,7 +367,10 @@ def mail_settings(request):
     cfg = EmailSettings.get()
 
     if request.method == 'POST':
+        before = settings_snapshot(cfg, _EMAIL_SETTING_FIELDS)
         _update_email_settings(cfg, request.POST)
+        record_settings_change(request, 'البريد الإلكتروني', cfg, before,
+                               secret=('smtp_password', 'imap_password'))
         messages.success(request, "تم حفظ الإعدادات بنجاح")
         return redirect('mail_settings')
 
@@ -376,33 +380,35 @@ def mail_settings(request):
     })
 
 
+_EMAIL_STR_FIELDS = (
+    'org_name', 'org_section', 'org_unit', 'org_email', 'reply_to', 'email_signature',
+    'smtp_host', 'smtp_user', 'smtp_password',
+    'imap_host', 'imap_user', 'imap_password', 'imap_folder',
+)
+_EMAIL_INT_FIELDS = ('smtp_port', 'imap_port')
+_EMAIL_BOOL_FIELDS = (
+    'smtp_use_tls', 'smtp_use_ssl', 'imap_use_ssl',
+    'is_active', 'send_on_save', 'imap_sync_enabled',
+)
+_EMAIL_SETTING_FIELDS = _EMAIL_STR_FIELDS + _EMAIL_INT_FIELDS + _EMAIL_BOOL_FIELDS
+
+
 def _update_email_settings(cfg, data):
     """Update EmailSettings fields from POST data."""
-    str_fields  = [
-        'org_name', 'org_section', 'org_unit', 'org_email', 'reply_to', 'email_signature',
-        'smtp_host', 'smtp_user', 'smtp_password',
-        'imap_host', 'imap_user', 'imap_password', 'imap_folder',
-    ]
-    int_fields  = ['smtp_port', 'imap_port']
-    bool_fields = [
-        'smtp_use_tls', 'smtp_use_ssl', 'imap_use_ssl',
-        'is_active', 'send_on_save', 'imap_sync_enabled',
-    ]
-
-    for f in str_fields:
+    for f in _EMAIL_STR_FIELDS:
         val = data.get(f, '').strip()
         # Do not clear password if empty value submitted
         if f in ('smtp_password', 'imap_password') and not val:
             continue
         setattr(cfg, f, val)
 
-    for f in int_fields:
+    for f in _EMAIL_INT_FIELDS:
         try:
             setattr(cfg, f, int(data.get(f, getattr(cfg, f))))
         except (ValueError, TypeError):
             pass
 
-    for f in bool_fields:
+    for f in _EMAIL_BOOL_FIELDS:
         setattr(cfg, f, f in data)  # checkbox present → True
 
     cfg.save()

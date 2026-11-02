@@ -204,19 +204,12 @@ class DepartmentMailOfficerScopeTests(TestCase):
                 if url == '/books/mail/templates/':
                     self.assertContains(response, 'href="/books/mail/settings/"')
 
-        response = self.client.get('/books/api/email/settings/')
-        self.assertEqual(response.status_code, 200)
-        self.assertNotIn('smtp_password', response.json()['settings'])
-
         inbox = self.client.get('/books/mail/inbox/')
         self.assertTrue(inbox.context['can_sync_mail'])
 
-        response = self.client.post(
-            '/books/api/email/settings/',
-            data='{"smtp_host":"smtp.department.test","smtp_password":"test-secret"}',
-            content_type='application/json',
-        )
-        self.assertEqual(response.status_code, 200)
+        response = self.client.post('/books/mail/settings/', {
+            'smtp_host': 'smtp.department.test', 'smtp_password': 'test-secret'})
+        self.assertEqual(response.status_code, 302)
         settings = EmailSettings.get()
         self.assertEqual(settings.smtp_host, 'smtp.department.test')
         self.assertEqual(settings.smtp_password, 'test-secret')
@@ -243,8 +236,7 @@ class DepartmentMailOfficerScopeTests(TestCase):
         self.client.force_login(self.colleague)
         inbox = self.client.get('/books/mail/inbox/')
         self.assertFalse(inbox.context['can_sync_mail'])
-        for url in ('/books/mail/settings/', '/books/mail/templates/',
-                    '/books/api/email/settings/'):
+        for url in ('/books/mail/settings/', '/books/mail/templates/'):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 403)
         self.assertEqual(

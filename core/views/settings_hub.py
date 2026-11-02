@@ -23,7 +23,8 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
-from ..models import (AIIntegrationSettings, BackupSettings, NotificationSettings,
+from ..audit_service import record_settings_change, settings_snapshot
+from ..models import (AIIntegrationSettings, BackupSettings, BookSequence, NotificationSettings,
                       SecuritySettings, SystemSettings)
 from .helpers import staff_required
 
@@ -43,6 +44,7 @@ def settings_hub(request):
     last_overdue = BookHistory.objects.filter(action='overdue').aggregate(m=Max('created_at'))['m']
     return render(request, 'core/settings/hub.html', {
         'last_overdue_notice': last_overdue,
+        'default_department': BookSequence.resolve_department(),
         'notif_settings': NotificationSettings.get(),
         'sec_settings': SecuritySettings.get(),
         'backup_settings': BackupSettings.get(),
@@ -62,9 +64,11 @@ def settings_general_save(request):
         return redirect(back)
 
     obj = SystemSettings.get()
+    before = settings_snapshot(obj, ('app_name', 'brand_subtitle'))
     obj.app_name = app_name[:100]
     obj.brand_subtitle = (request.POST.get('brand_subtitle') or '').strip()[:200]
     obj.save(update_fields=['app_name', 'brand_subtitle', 'updated_at'])
+    record_settings_change(request, 'هوية النظام', obj, before)
     messages.success(request, 'تم حفظ إعدادات النظام.')
     return redirect(back)
 
@@ -75,12 +79,15 @@ def settings_general_save(request):
 def settings_notifications_save(request):
     """يحفظ تبويب «سياسة الإشعارات» — مفاتيح تتحكّم في أمر notify_overdue_books."""
     cfg = NotificationSettings.get()
+    before = settings_snapshot(cfg, ('overdue_enabled', 'notify_admins', 'notify_creator',
+                                     'email_admins'))
     cfg.overdue_enabled = 'overdue_enabled' in request.POST
     cfg.notify_admins = 'notify_admins' in request.POST
     cfg.notify_creator = 'notify_creator' in request.POST
     cfg.email_admins = 'email_admins' in request.POST
     cfg.save(update_fields=['overdue_enabled', 'notify_admins', 'notify_creator',
                             'email_admins', 'updated_at'])
+    record_settings_change(request, 'سياسة الإشعارات', cfg, before)
     messages.success(request, 'تم حفظ سياسة الإشعارات.')
     return redirect(f"{reverse('settings_hub')}?tab=notifications")
 
@@ -97,8 +104,10 @@ def settings_security_save(request):
         return redirect(back)
 
     cfg = SecuritySettings.get()
+    before = settings_snapshot(cfg, ('password_min_length',))
     cfg.password_min_length = max(4, min(64, int(raw)))  # نطاق آمن
     cfg.save(update_fields=['password_min_length', 'updated_at'])
+    record_settings_change(request, 'الأمان', cfg, before)
     messages.success(request, 'تم حفظ إعدادات الأمان.')
     return redirect(back)
 
@@ -110,6 +119,7 @@ def settings_backup_save(request):
     """يحفظ تبويب «النسخ الاحتياطي» — إعدادات الجدولة التي تقرؤها مهمة scheduled_backup."""
     back = f"{reverse('settings_hub')}?tab=backup"
     cfg = BackupSettings.get()
+    before = settings_snapshot(cfg, ('enabled', 'frequency', 'hour', 'retention_days'))
 
     frequency = request.POST.get('frequency', cfg.frequency)
     valid_freqs = {c for c, _ in BackupSettings.FREQUENCY_CHOICES}
@@ -124,6 +134,7 @@ def settings_backup_save(request):
     cfg.hour = max(0, min(23, int(hour_raw))) if hour_raw.isdigit() else cfg.hour
     cfg.retention_days = max(1, min(3650, int(retention_raw))) if retention_raw.isdigit() else cfg.retention_days
     cfg.save(update_fields=['enabled', 'frequency', 'hour', 'retention_days', 'updated_at'])
+    record_settings_change(request, 'النسخ الاحتياطي', cfg, before)
     messages.success(request, 'تم حفظ إعدادات النسخ الاحتياطي.')
     return redirect(back)
 
@@ -139,6 +150,8 @@ def settings_ai_save(request):
     """
     cfg = AIIntegrationSettings.objects.first() or AIIntegrationSettings()
     back = f"{reverse('settings_hub')}?tab=ai"
+    before = settings_snapshot(cfg, ('enabled', 'provider', 'fallback_on_low_confidence',
+                                     'low_confidence_threshold', 'azure_endpoint', 'azure_key'))
     cfg.enabled = 'enabled' in request.POST
     cfg.provider = (request.POST.get('provider') or 'offline').strip()[:20]
     cfg.fallback_on_low_confidence = 'fallback_on_low_confidence' in request.POST
@@ -155,5 +168,6 @@ def settings_ai_save(request):
     elif new_key:
         cfg.azure_key = new_key
     cfg.save()
+    record_settings_change(request, 'الاستخراج الخارجيّ', cfg, before, secret=('azure_key',))
     messages.success(request, 'حُفظت إعداداتُ الاستخراج الخارجيّ.')
     return redirect(back)

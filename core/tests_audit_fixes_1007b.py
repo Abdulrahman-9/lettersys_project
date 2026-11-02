@@ -17,17 +17,18 @@ class UserDeleteGuardTests(TestCase):
         self.client.force_login(self.admin)
 
     def _delete(self, user):
-        return self.client.post(reverse('user_roles'), {'action': 'delete', 'user_id': user.pk})
+        return self.client.post(reverse('admin_panel'), {
+            'action': 'delete_user', 'tab': 'users', 'user_id': user.pk})
 
     def test_an_admin_cannot_delete_the_account_in_use(self):
         User.objects.create_superuser('gadmin2', 'g2@x.co', 'pw-gadmin2-1111')
         self._delete(self.admin)
         self.assertTrue(User.objects.filter(pk=self.admin.pk).exists())
 
-    def test_the_last_active_admin_is_kept(self):
+    def test_staff_cannot_delete_an_admin(self):
         staff = User.objects.create_user('gstaff', password='pw-gstaff-1111', is_staff=True)
         self.client.force_login(staff)
-        self._delete(self.admin)
+        self.assertEqual(self._delete(self.admin).status_code, 403)
         self.assertTrue(User.objects.filter(pk=self.admin.pk).exists())
 
     def test_a_book_author_is_refused_not_a_500(self):

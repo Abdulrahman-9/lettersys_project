@@ -425,7 +425,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
           <span class="ic {% if 'CREATE' in entry.action %}g{% elif entry.action == 'PASSWORD_RESET' or 'DELETE' in entry.action %}r{% else %}b{% endif %}">
             <i class="bi {% if 'CREATE' in entry.action %}bi-plus{% elif 'ASSIGN' in entry.action %}bi-person-badge{% elif entry.action == 'PASSWORD_RESET' %}bi-key{% else %}bi-pencil{% endif %}"></i>
           </span>
-          <span><b>{{ entry.user.get_full_name|default:entry.username_snapshot|default:"مجهول" }}</b> — {% if entry.action == 'PASSWORD_RESET' %}إعادة تعيين كلمة مرور{% else %}{{ entry.get_action_display }}{% endif %}</span>
+          <span><b>{{ entry.user.get_full_name|default:entry.username_snapshot|default:"مجهول" }}</b> — {{ entry.get_action_display }}</span>
           <time datetime="{{ entry.timestamp|date:'c' }}">{{ entry.timestamp|date:"m/d H:i" }}</time>
         </li>
         {% empty %}
@@ -744,6 +744,18 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
                 </button>
               </form>
               {% endif %}
+              {% if row.can_delete %}
+              <form method="post" style="margin-top:.3rem"
+                data-confirm="حذف حساب «{{ row.user.username }}» نهائيّاً؟ لا رجوع عنه — ومَن له كتبٌ لا يُحذف، فعطِّله." data-confirm-ok="احذف">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete_user">
+                <input type="hidden" name="tab" value="users">
+                <input type="hidden" name="user_id" value="{{ row.user.pk }}">
+                <button type="submit" class="btn sm danger" aria-label="حذف حساب {{ row.user.username }}">
+                  <i class="bi bi-trash3" aria-hidden="true"></i> حذف
+                </button>
+              </form>
+              {% endif %}
             </td>
             <td>
               {% if row.can_edit %}
@@ -943,7 +955,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
             <td><span style="font-size:.8rem">{{ entry.department.code|default:"—" }}</span></td>
             <td>
               <span class="badge {% if 'CREATE' in entry.action %}ok{% elif 'FAILED' in entry.action or 'DELETE' in entry.action or entry.action == 'PASSWORD_RESET' %}off{% elif 'SECRET' in entry.action %}v{% else %}b{% endif %}">
-                {% if entry.action == 'PASSWORD_RESET' %}إعادة تعيين كلمة مرور{% else %}{{ entry.get_action_display }}{% endif %}
+                {{ entry.get_action_display }}
               </span>
             </td>
           </tr>
