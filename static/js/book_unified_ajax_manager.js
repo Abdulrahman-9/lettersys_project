@@ -273,7 +273,6 @@
         dateTo: '',
         entityId: '',
         status: '',
-        legacy: '',
         page: 1,
         sort: ''   // فارغٌ = ترتيبُ الخادم: الأحدثُ، ومع البحث الصلةُ
       };
@@ -495,56 +494,6 @@
       // Enter في حقل تاريخٍ كان يُرسل النموذجَ أصليّاً فيُسقط التبويبَ والبحثَ والمتابعة
       const advanced = document.getElementById('advancedFiltersForm');
       if (advanced) advanced.addEventListener('submit', e => e.preventDefault());
-      // «يشمل الورق القديم» صندوقُ تأشير: الحالةُ من ``checked`` لا من ``value``
-      // (قيمتُه «1» دائماً) — قرارُ المالك 2026‑10‑06، الحيُّ وحدَه افتراضاً.
-      const legacy = document.querySelector('[name="legacy"]');
-      if (legacy) {
-        legacy.addEventListener('change', e => {
-          self.currentState.legacy = e.target.checked ? '1' : '';
-          self.currentState.page = 1;
-          self.updateUrlAndLoadData();
-        });
-      }
-      // زرُّ سطر الورق القديم يقلب الصندوقَ نفسَه — مسارٌ واحدٌ للحالة لا نسختان
-      const legacyToggle = document.getElementById('legacyHintToggle');
-      if (legacy && legacyToggle) {
-        legacyToggle.addEventListener('click', () => {
-          legacy.checked = !legacy.checked;
-          legacy.dispatchEvent(new Event('change'));
-        });
-      }
-    }
-
-    // المفتاحُ والتلميحُ يتبعان الحالةَ بعد الرجوع/التقدّم والمسح وكلِّ جلب
-    syncLegacyControls(widened, counts) {
-      const legacy = document.querySelector('[name="legacy"]');
-      if (legacy) legacy.checked = this.currentState.legacy === '1';
-      const searching = typeof widened === 'boolean'
-        ? widened
-        : !!(this.currentState.search && this.currentState.legacy !== '1');
-      const hint = document.getElementById('searchWidenedHint');
-      if (hint) hint.hidden = !searching;
-      this.syncLegacyHint(searching, counts);
-    }
-
-    // سطرُ الورق القديم: الحالةُ من المفتاح، والأعدادُ من آخر جلب — لا تتبع التبويبَ ولا البحث
-    syncLegacyHint(searching, counts) {
-      const line = document.getElementById('legacyHint');
-      if (!line) return;
-      if (counts) {
-        line.querySelectorAll('[data-legacy-count]').forEach(el => {
-          el.textContent = counts[el.dataset.legacyCount];
-        });
-        line.dataset.paper = counts.paper;
-      }
-      const on = this.currentState.legacy === '1';
-      line.hidden = !Number(line.dataset.paper) || searching;
-      line.classList.toggle('is-on', on);
-      line.querySelectorAll('[data-legacy-state]').forEach(el => {
-        el.hidden = el.dataset.legacyState !== (on ? 'on' : 'off');
-      });
-      const btn = document.getElementById('legacyHintToggle');
-      if (btn) btn.textContent = on ? btn.dataset.labelOn : btn.dataset.labelOff;
     }
 
     // ─── 5. Sort handlers ──────────────────────────────────────────────────────
@@ -600,7 +549,6 @@
       if (this.currentState.dateTo)    params.date_to    = this.currentState.dateTo;
       if (this.currentState.entityId)  params.entity_id  = this.currentState.entityId;
       if (this.currentState.status)    params.followup   = this.currentState.status;
-      if (this.currentState.legacy)    params.legacy     = this.currentState.legacy;
       if (this.currentState.page > 1)  params.page       = this.currentState.page;
       if (this.currentState.sort)      params.sort       = this.currentState.sort;
 
@@ -639,7 +587,6 @@
         renderPagination(data.pagination, params);
         renderFilterBadges(data.active_filters);
         renderBadgeCounts(data.badges);
-        this.syncLegacyControls(data.search_widened, data.legacy_counts);
         this.updateSearchResultsDisplay();
 
         // Empty state visibility
@@ -686,10 +633,8 @@
       this.currentState.dateTo     = p.get('date_to')    || '';
       this.currentState.entityId   = p.get('entity_id')  || '';
       this.currentState.status     = p.get('followup') || p.get('status') || p.get('due_status') || '';
-      this.currentState.legacy     = p.get('legacy') === '1' ? '1' : '';
       this.currentState.page       = parseInt(p.get('page')) || 1;
       this.currentState.sort       = p.get('sort')       || '';
-      this.syncLegacyControls();
       this.syncSortIndicators();
       this.applyTheme();
     }
@@ -710,8 +655,7 @@
     clearAllFilters() {
       // التبويبُ ليس فلتراً: المسحُ من «صادر» كان يقفز إلى «وارد» (تدقيقُ نيلسن A#15)
       this.currentState = { tab: this.currentState.tab || 'incoming', search: '', dateFrom: '', dateTo: '',
-                            entityId: '', status: '', legacy: '', page: 1, sort: '' };
-      this.syncLegacyControls(false);
+                            entityId: '', status: '', page: 1, sort: '' };
       this.updateUrlAndLoadData();   // يدفع الرابطَ الممسوح — دفعٌ ثانٍ هنا كان مدخلاً مكرَّراً
     }
   }

@@ -174,10 +174,10 @@ def _render_panel(request, tab, created_credentials=None, create_form_values=Non
 
 def _overview(user, department_rows, people, department_ids):
     """متأخّراتُ كلّ قسم (للشجرتين) وصحّةُ الأقسام وآخرُ الحركات الإداريّة في النطاق."""
-    from core.scoping import books_in_scope, scope_activity_for
+    from core.scoping import listed_books, scope_activity_for
     from core.views.filter_helpers import followup_q
 
-    books = books_in_scope(user)
+    books = listed_books(user)
     if department_ids is not None:
         books = books.filter(department_id__in=department_ids)
     overdue = dict(

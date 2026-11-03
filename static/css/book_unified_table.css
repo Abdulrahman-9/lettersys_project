@@ -99,6 +99,19 @@
 }
 
 
+.num-paper {
+  display: inline-block;
+  margin-inline-start: 0.35rem;
+  padding: 0 0.35rem;
+  border: 1px solid #d6cfc4;
+  border-radius: 0.35rem;
+  color: #6f5b4b;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+
 .num-year {
   font-size: 0.7rem;
   font-weight: 600;

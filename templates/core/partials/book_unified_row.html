@@ -36,6 +36,7 @@
           <span class="num-sequence">{{ book.our_number_sequence }}</span>{% if book.our_number_year %}<span class="num-year">/{{ book.our_number_year }}</span>{% endif %}
         </span>
       {% endif %}
+      {% if book.source_ref %}<span class="num-paper" title="منقولٌ من الدفتر الورقيّ">ورق</span>{% endif %}
     </div>
   </td>
 

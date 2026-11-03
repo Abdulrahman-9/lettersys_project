@@ -7,7 +7,6 @@
 بمفتاح «يشمل الورق القديم»، **والبحثُ يجد الكلّ** والعدّاداتُ تتبع المفتاح لا النصّ.
 (مراجعةُ فيبل 2026‑10‑06: D:/migration/fable_live_counts_20261006.md.)
 """
-import csv
 import inspect
 import io
 from datetime import date, timedelta
@@ -87,118 +86,67 @@ class TileEqualsListTests(LiveCountsTestCase):
             with self.subTest(tile=key):
                 self.assertEqual(dash[key], self._list(**params)['total_count'])
 
-    def test_the_numbers_count_live_books_only(self):
-        """أعدادٌ مطلقة — ولا يكفي التساوي: لو عدّ الطرفان التدريبَ معاً لتساويا."""
+    def test_the_numbers_count_paper_books_too_but_not_training(self):
+        """أعدادٌ مطلقة: حيّ 4 + ورق 2، وكتابُ التدريب خارجها."""
         self.client.force_login(self.clerk)
         dash = self.client.get(reverse('dashboard')).context
-        self.assertEqual((dash['total'], dash['overdue'], dash['incoming_pending'],
-                          dash['today_count']), (4, 1, 2, 4))
+        self.assertEqual((dash['total'], dash['overdue'], dash['incoming_pending']), (6, 2, 3))
 
-    def test_the_switch_brings_the_paper_and_training_back(self):
-        self.assertEqual(self._list(tab='all', followup='overdue', legacy='1')['total_count'], 2)
-        self.assertEqual(self._list(tab='all', legacy='1')['total_count'], 7)
+    def test_an_old_link_with_the_retired_switch_changes_nothing(self):
+        self.assertEqual(self._list(tab='all', legacy='1')['total_count'], 6)
+        self.assertEqual(self._list(tab='all', legacy='0')['total_count'], 6)
 
 
-class SearchFindsEverythingTests(LiveCountsTestCase):
-    """أرقامُ الدفتر القديم أوّلُ ما يُبحث عنه — والمفتاحُ مطفأ."""
+class OneViewTests(LiveCountsTestCase):
+    """قرارُ المالك 2026‑11‑03: «كلّ الكتب» عرضٌ واحدٌ للقديم والجديد."""
+
+    def test_the_list_shows_old_and_new_together(self):
+        shown = {b['id'] for b in self._api(tab='all')['books']}
+        self.assertIn(self.paper_today.pk, shown)
+        self.assertIn(self.live_pending.pk, shown)
+        self.assertEqual(self._list(tab='all')['total_count'], 6)
+
+    def test_training_books_stay_out(self):
+        self.assertNotIn(self.training.pk, {b['id'] for b in self._api(tab='all')['books']})
+        self.assertEqual(self._list(tab='all', q='T131')['total_count'], 0)
 
     def test_a_tagged_number_and_a_legacy_number_find_the_paper_book(self):
-        for q, book in (('825', self.paper_overdue), ('قديم-544', self.paper_today)):
-            with self.subTest(q=q):
-                ctx = self._list(tab='all', q=q)
-                self.assertIn(book.pk, [b.pk for b in ctx['books']])
-                self.assertTrue(ctx['search_widened'])
-                data = self._api(tab='all', q=q)
-                self.assertIn(book.pk, [b['id'] for b in data['books']])
-                self.assertTrue(data['search_widened'])
-
-    def test_without_a_search_the_paper_book_stays_out(self):
-        ctx = self._list(tab='all')
-        self.assertNotIn(self.paper_overdue.pk, [b.pk for b in ctx['books']])
-        self.assertFalse(ctx['search_widened'])
+        for query in ('825', 'قديم-544'):
+            with self.subTest(query=query):
+                self.assertGreaterEqual(self._list(tab='all', q=query)['total_count'], 1)
 
     def test_the_export_follows_the_same_rule(self):
         self.client.force_login(self.clerk)
+        resp = self.client.get(reverse('api_export_csv'), {'tab': 'all'})
+        body = b''.join(resp.streaming_content) if resp.streaming else resp.content
+        self.assertIn('منقولٌ بتاريخ اليوم', body.decode('utf-8-sig'))
 
-        def numbers(**params):
-            resp = self.client.get(reverse('api_export_csv'), params)
-            body = b''.join(resp.streaming_content).decode('utf-8')
-            # BOM \u0648\u0627\u062d\u062f\u064c \u0641\u064a \u0623\u0648\u0651\u0644 \u0627\u0644\u0645\u0644\u0641\u0651 \u0644\u0627 \u0641\u064a \u0623\u0648\u0651\u0644 \u0643\u0644\u0651 \u0635\u0641\u0651 (\u0643\u0627\u0646 ``utf-8-sig`` \u064a\u064f\u0644\u0635\u0642\u0647 \u0628\u0643\u0644\u0651 \u062f\u0641\u0639\u0629)
-            self.assertEqual(body.count('\ufeff'), 1)
-            return [r[0] for r in list(csv.reader(io.StringIO(body.lstrip('\ufeff'))))[1:]]
+    def test_the_badges_equal_the_rows(self):
+        self.assertEqual(self._api(tab='all')['badges']['all'], 6)
 
-        # تصديرُ القائمة يكتب الرقمَ المخزَّن كما هو (``our_number``)
-        self.assertNotIn(self.paper_overdue.our_number, numbers(tab='all'))
-        self.assertIn(self.paper_overdue.our_number, numbers(tab='all', q='825'))
-
-    def test_the_counters_follow_the_switch_not_the_search(self):
-        live = self._api(tab='all')['badges']
-        self.assertEqual(self._api(tab='all', q='825')['badges'], live)
-        self.assertEqual(self._api(tab='all', legacy='1')['badges']['overdue'], live['overdue'] + 1)
-
-    def test_the_hint_says_it(self):
+    def test_the_switch_and_its_lines_are_gone(self):
         self.client.force_login(self.clerk)
-        html = self.client.get(reverse('book_unified'), {'q': '825'}).content.decode('utf-8')
-        self.assertRegex(html, r'id="searchWidenedHint" role="status">')
         html = self.client.get(reverse('book_unified')).content.decode('utf-8')
-        self.assertRegex(html, r'id="searchWidenedHint" role="status" hidden>')
+        for gone in ('filterLegacy', 'legacyHint', 'searchWidenedHint', 'يشمل الورق القديم'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, html)
 
+    def test_clearing_filters_keeps_every_book(self):
+        """كان «مسح الفلاتر» يُطفئ المفتاح فتفرغ القائمة."""
+        data = self._api(tab='all', q='', entity='', legacy='')
+        self.assertEqual(len(data['books']), 6)
 
-class LegacyLineTests(LiveCountsTestCase):
-    """سطرُ «الورق القديم مخفيّ: N» (موافقةُ المالك 2026‑10‑26) — كان المفتاحُ في «متقدم»
-    وحدَه، فبدت القائمةُ الحيّةُ (22 من 13 ألفاً) عطلاً في الصلاحيّات."""
+    def test_an_old_book_is_marked_paper_in_its_row(self):
+        self.client.force_login(self.clerk)
+        html = self.client.get(reverse('book_unified'), {'tab': 'all', 'q': 'قديم-544'}).content.decode('utf-8')
+        self.assertIn('num-paper', html)
+        new_only = self.client.get(reverse('book_unified'), {'tab': 'all', 'q': '7001'}).content.decode('utf-8')
+        self.assertNotIn('class="num-paper"', new_only)
 
-    WHOLE = {'live': 4, 'paper': 3, 'total': 7}  # الورقُ اثنان + التدريبُ: ما يُضيفه المفتاح
-
-    def _html(self, user=None, **params):
-        self.client.force_login(user or self.clerk)
-        return self.client.get(reverse('book_unified'), params).content.decode('utf-8')
-
-    def test_the_line_says_what_is_shown_and_what_is_hidden(self):
-        for tab in ('all', 'incoming'):  # أعدادُ النطاق — لا تتبع التبويب
-            with self.subTest(tab=tab):
-                self.assertEqual(self._list(tab=tab)['legacy_counts'], self.WHOLE)
-        html = self._html(tab='all')
-        self.assertRegex(html, r'id="legacyHint" role="status" data-paper="3">')
-        self.assertIn('اعرض الورق القديم</button>', html)
-
-    def test_after_the_switch_it_reports_the_whole(self):
-        self.assertEqual(self._list(tab='all', legacy='1')['legacy_counts'], self.WHOLE)
-        html = self._html(tab='all', legacy='1')
-        self.assertIn('fb-legacy-hint is-on', html)
-        self.assertIn('أخفِ الورق القديم</button>', html)
-
-    def test_the_refresh_carries_the_same_counts(self):
-        for legacy in ('', '1'):
-            with self.subTest(legacy=legacy):
-                self.assertEqual(self._api(tab='all', legacy=legacy)['legacy_counts'], self.WHOLE)
-
-    def test_the_line_does_not_claim_the_tab_shows_it(self):
-        """الأعدادُ للنطاق كلِّه — «تعرض 4» فوق تبويبٍ يعرض 3 كان ادّعاءً خاطئاً."""
-        html = self._html(tab='incoming')
-        self.assertIn('كتبُ النظام: <b data-legacy-count="live">4</b>', html)
-        self.assertIn('الكتبُ كلُّها: <b data-legacy-count="total">7</b>', html)
-        self.assertNotIn('تعرض كتبَ النظام', html)
-
-    def test_the_search_hint_speaks_alone(self):
-        """البحثُ يشمل الورقَ سلفاً — فـ«مخفيّ» بجواره تناقض."""
-        self.assertRegex(self._html(q='825'), r'id="legacyHint"[^>]*\shidden>')
-
-    def test_a_widening_search_does_not_count(self):
-        """السطرُ مخفيٌّ مع البحث، والجلبُ مع كلّ حرف — فلا عدَّ لا يُعرض."""
-        self.assertIsNone(self._list(tab='all', q='825')['legacy_counts'])
-        self.assertIsNone(self._api(tab='all', q='825')['legacy_counts'])
-        # والمفتاحُ مشغولٌ: البحثُ لا يوسّع شيئاً، والسطرُ يُعرض بأعداده
-        self.assertEqual(self._api(tab='all', q='825', legacy='1')['legacy_counts'], self.WHOLE)
-
-    def test_no_paper_no_line(self):
-        other = Department.objects.create(name='قسمٌ بلا ورق', code='ب.و')
-        newcomer = as_writer(User.objects.create_user('lnew', password='pw-lnew-1111'))
-        UserProfile.objects.update_or_create(user=newcomer, defaults={'department': other})
-        Book.objects.create(kind='incoming_internal', title='كتابٌ حيّ', our_number='8001',
-                            created_by=newcomer, department=other, date=self.today)
-        self.assertRegex(self._html(newcomer, tab='all'), r'id="legacyHint"[^>]*\shidden>')
-
+    def test_work_queues_stay_on_new_books(self):
+        from core.scoping import listed_books
+        self.assertIn(self.paper_today, listed_books(self.clerk))
+        self.assertNotIn(self.paper_today, Book.objects.live())
 
 
 class OtherCountersTests(LiveCountsTestCase):
@@ -240,13 +188,9 @@ class OneSourceTests(SimpleTestCase):
             with self.subTest(view=fn.__name__):
                 self.assertIn('_list_scope(request)', inspect.getsource(fn))
 
-    def test_the_list_script_keeps_the_switch(self):
+    def test_the_list_script_no_longer_knows_the_switch(self):
         src = (Path(settings.BASE_DIR) / 'static' / 'js' / 'book_unified_ajax_manager.js').read_text(encoding='utf-8')
-        self.assertIn("legacy: '',", src)                                   # الحالةُ الأولى
-        self.assertIn('params.legacy     = this.currentState.legacy', src)  # الرابطُ والجلب
-        self.assertIn("p.get('legacy') === '1'", src)                       # الاستعادةُ من الرابط
-        self.assertIn("e.target.checked ? '1' : ''", src)                   # التأشيرُ لا القيمة
-        self.assertRegex(src, r"entityId: '', status: '', legacy: '',")     # المسحُ يُطفئه
+        self.assertNotIn('legacy', src.lower())
 
     def test_the_list_script_keeps_its_state_honest(self):
         """مراجعةُ 2026‑10‑27: مؤشّرُ الفرز يُزامَن بعد الاستعادة، والجلبُ أثناء جلبٍ لا يُرمى،

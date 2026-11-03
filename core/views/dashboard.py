@@ -29,7 +29,7 @@ from ..logging_models import UserActivityLog
 from .filter_helpers import (_FOLLOWUP_STATES, FOLLOWUP_LABELS, days_ar, followup_phrase,
                              followup_q)
 from .helpers import staff_required
-from core.scoping import (STUB_TITLE, books_in_scope, can_edit_book, can_view_reports,
+from core.scoping import (STUB_TITLE, books_in_scope, can_edit_book, can_view_reports, listed_books,
                           is_privileged, report_departments, restricted_flag_sql,
                           can_manage_departments, managed_department_ids,
                           scope_activity_for, subtree_ids)
@@ -55,10 +55,9 @@ def dashboard(request):
     الرؤية («المشرف الكلّ، وغيرُه كتبَه فقط») سبقت بُعدَ القسم ولم تلحق به —
     فلوحةُ موظّفِ الوحدة كانت تُظهر أصفاراً وهو يعمل كلَّ يوم.
 
-    **والحيُّ وحدَه** (``books_in_scope``، قرارُ المالك 2026‑10‑06): كلُّ رقمٍ هنا
-    رابطٌ إلى القائمة، والقائمةُ تعرض الحيَّ افتراضاً — فالرقمُ عددُ ما يفتحه.
+    وتعدّ ما تعرضه «كلّ الكتب» (``listed_books``): كلُّ رقمٍ رابطٌ إليها فلا ينحرفان.
     """
-    books = books_in_scope(request.user)
+    books = listed_books(request.user)
     today = timezone.localdate()
 
     # «جارية» من المصدر الوحيد: الرقمُ هنا والقائمةُ التي يفتحها (`followup=active`)
