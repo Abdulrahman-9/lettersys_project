@@ -56,6 +56,7 @@ class UserActivityLog(models.Model):
         ('DELETE_USER', 'حذف حساب'),
         ('PASSWORD_RESET', 'إعادة تعيين كلمة مرور'),
         ('EDIT_SETTINGS', 'تعديل إعدادات'),
+        ('EDIT_PERMISSIONS', 'تعديل صلاحيّات'),
         # ── حسابات ──
         ('LOGIN', 'تسجيل دخول'),
         ('LOGOUT', 'تسجيل خروج'),

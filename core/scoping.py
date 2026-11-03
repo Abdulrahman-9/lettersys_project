@@ -22,6 +22,7 @@
 بشجرة رئيس القسم عبر ``can_manage_departments`` و``can_manage_department``.
 """
 
+from typing import NamedTuple
 from django.db.models import Q
 from django.utils import timezone
 
@@ -878,3 +879,163 @@ def present_book_payload(payload, book, user):
         payload['is_secret_stub'] = False
         return payload
     return stub_book_payload(payload)
+
+# ══════════════════════════════════════════════════════════════════
+#  محلِّلُ الصلاحيّات — «الفعلُ» قاعدةٌ قابلةٌ للتعديل، و«النطاقُ» كود
+#  ─────────────────────────────────────────────────────────────────
+#  ``can_X(book, user) = في_النطاق(book, user) AND has_capability(user, 'X')``.
+#  الصلاحيّةُ تقرّر ماذا يفعل الموظّف، والهيكلُ يقرّر على أيّ كتب: فلا يصل منحٌ
+#  إلى كتب قسمٍ آخر ولا إلى السرّيّ. والمصفوفةُ قراراتُ المالك للمستوى 3 (2026‑11‑02)
+#  بتعديلات مراجعة 2026‑11‑03. الحرّاسُ توصل بها شريحةً شريحة.
+# ══════════════════════════════════════════════════════════════════
+
+ROLE_HEAD, ROLE_MAIL, ROLE_ARCHIVIST, ROLE_ENTRY = 'head', 'mail', 'archivist', 'entry'
+ROLE_UNIT, ROLE_EXECUTOR, ROLE_READER = 'unit', 'executor', 'reader'
+ROLE_LABELS = {
+    ROLE_HEAD: 'رئيس قسم', ROLE_MAIL: 'مختصّ البريد', ROLE_ARCHIVIST: 'مسؤول الأرشفة',
+    ROLE_ENTRY: 'مدخل', ROLE_UNIT: 'مسؤول شعبة أو وحدة', ROLE_EXECUTOR: 'موظّف تنفيذ', ROLE_READER: 'قارئ',
+}
+_EVERYONE = frozenset(ROLE_LABELS)
+_WRITERS = frozenset({ROLE_HEAD, ROLE_MAIL, ROLE_ARCHIVIST, ROLE_ENTRY})
+_CUSTODIANS = frozenset({ROLE_HEAD, ROLE_MAIL, ROLE_ARCHIVIST})
+_DESK = frozenset({ROLE_HEAD, ROLE_MAIL})
+_OVERSEERS = frozenset({ROLE_HEAD, ROLE_UNIT})
+
+
+class Capability(NamedTuple):
+    label: str
+    group: str
+    holders: frozenset
+    locked: bool = False
+
+
+CAPABILITIES = {
+    'book.read': Capability('قراءة كتب نطاقه', 'الكتب', _EVERYONE, locked=True),
+    'book.comment': Capability('التعليق', 'الكتب', _EVERYONE),
+    'book.enter': Capability('الإدخال', 'الكتب', _WRITERS),
+    'book.edit': Capability('التعديل', 'الكتب', _WRITERS),
+    'number.reserve': Capability('حجز رقم', 'الكتب', _WRITERS),
+    'entity.add': Capability('إضافة جهة جديدة', 'الكتب', _WRITERS),
+    'book.trash': Capability('الحذف إلى السلّة', 'الكتب', _DESK),
+    'book.restore': Capability('الاسترجاع من السلّة', 'الكتب', _CUSTODIANS),
+    'secret.own': Capability('فتح سرّيّ قسمه', 'الكتب', _CUSTODIANS, locked=True),
+    'secret.other': Capability('فتح سرّيّ الأقسام الأخرى', 'الكتب', frozenset(), locked=True),
+    'referral.send': Capability('الإحالة', 'الإحالة والإنجاز', frozenset({ROLE_HEAD, ROLE_MAIL, ROLE_UNIT})),
+    'referral.receive': Capability('استلام المُحال وإنجازه', 'الإحالة والإنجاز',
+                                   frozenset({ROLE_HEAD, ROLE_MAIL, ROLE_UNIT, ROLE_EXECUTOR})),
+    'custody.link': Capability('العهدة والربط', 'الإحالة والإنجاز', _WRITERS),
+    'book.sign': Capability('التوقيع', 'الإحالة والإنجاز', frozenset({ROLE_HEAD}), locked=True),
+    'archive.complete': Capability('تمام الأرشفة', 'الإحالة والإنجاز', frozenset({ROLE_ARCHIVIST})),
+    'desk.board': Capability('طاولة البريد والدفتر وكشف التسليم', 'الطاولات', _DESK),
+    'desk.mine': Capability('طاولتي', 'الطاولات', frozenset({ROLE_UNIT})),
+    'work.mine': Capability('ما يخصّني', 'الطاولات', _WRITERS | {ROLE_EXECUTOR}),
+    'report.view': Capability('التقارير', 'الرقابة', _OVERSEERS),
+    'audit.view': Capability('سجلّ الحركات', 'الرقابة', _OVERSEERS),
+    'mail.operate': Capability('تشغيل البريد', 'البريد', frozenset({ROLE_MAIL})),
+    'mail.send_book': Capability('إرسال الكتاب بالبريد', 'البريد', frozenset({ROLE_MAIL})),
+    'mail.settings': Capability('إعدادات بريد الشركة', 'البريد', frozenset(), locked=True),
+    'staff.manage': Capability('إدارة موظّفي نطاقه', 'الإدارة', _OVERSEERS, locked=True),
+    'grant.office': Capability('منح مختصّ البريد والأرشفة والمدخل', 'الإدارة', frozenset({ROLE_HEAD}), locked=True),
+    'grant.basic': Capability('منح موظّف التنفيذ والقارئ', 'الإدارة', _OVERSEERS, locked=True),
+    'unit.add': Capability('إضافة الوحدات', 'الإدارة', frozenset({ROLE_HEAD}), locked=True),
+    'account.manage': Capability('إنشاء الحسابات وحذفها', 'الإدارة', frozenset(), locked=True),
+}
+
+# القارئُ احتياطيُّ كلِّ حسابٍ بلا دور: منحُ الكتابة له على مستوى الدور يمنحها للجميع،
+# فتُجمَّد خليّتُه هو والمنفِّذ في المصفوفة، وتبقى ممكنةً باستثناءٍ لشخصٍ بعينه.
+_FROZEN_ROLES = frozenset({ROLE_EXECUTOR, ROLE_READER})
+_FROZEN_FOR_THEM = frozenset({'book.enter', 'book.edit', 'number.reserve', 'entity.add', 'book.trash',
+                              'book.restore', 'custody.link', 'mail.send_book'})
+
+
+def role_cell_frozen(key, role) -> bool:
+    return key in _FROZEN_FOR_THEM and role in _FROZEN_ROLES
+
+
+def role_of(user) -> str:
+    """الدورُ الواحد لهذا الحساب، مشتقٌّ من العلَم والمجموعات ومستوى الوحدة بلا تخزين."""
+    from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME,
+                            ENTRY_GROUP_NAME, EXECUTOR_GROUP_NAME)
+
+    profile = getattr(user, 'profile', None)
+    if profile is not None and profile.is_department_head:
+        department = profile.department
+        return ROLE_HEAD if department is None or department.holds_register else ROLE_UNIT
+    names = set(user.groups.values_list('name', flat=True))
+    if CONTROLLER_GROUP_NAME in names:
+        return ROLE_MAIL
+    if names & {ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME}:
+        return ROLE_ARCHIVIST
+    if ENTRY_GROUP_NAME in names:
+        return ROLE_ENTRY
+    if EXECUTOR_GROUP_NAME in names:
+        return ROLE_EXECUTOR
+    return ROLE_READER
+
+
+def role_capability(role, key) -> bool:
+    """ما يملكه الدورُ كما هو الآن: الافتراضُ أو تجاوزُه، بلا استثناءات الأشخاص."""
+    from core.models import RoleCapabilityOverride
+
+    capability = CAPABILITIES[key]
+    default = role in capability.holders
+    if capability.locked or role_cell_frozen(key, role):
+        return default
+    row = RoleCapabilityOverride.objects.filter(role=role, capability=key).first()
+    return row.allowed if row else default
+
+
+def _capability_rows(user):
+    """الدورُ وصفوفُ التجاوز، مرّةً لكلّ كائن مستخدم (كائنٌ جديدٌ لكلّ طلب)."""
+    rows = getattr(user, '_capability_rows_cache', None)
+    if rows is None:
+        from core.models import RoleCapabilityOverride, UserCapabilityOverride
+
+        role = role_of(user)
+        rows = (role,
+                dict(RoleCapabilityOverride.objects.filter(role=role).values_list('capability', 'allowed')),
+                dict(UserCapabilityOverride.objects.filter(user=user).values_list('capability', 'allowed')))
+        user._capability_rows_cache = rows
+    return rows
+
+
+def clear_capability_cache(user) -> None:
+    user.__dict__.pop('_capability_rows_cache', None)
+
+
+def has_capability(user, key) -> bool:
+    """أيملك هذا الفعل؟ سوبر ⟵ مقفل ⟵ استثناءُ الشخص ⟵ تجاوزُ الدور ⟵ الافتراض.
+
+    مفتاحٌ مجهولٌ خطأٌ برمجيّ فيرفع ``KeyError``: بوّابةٌ تسأل عن شيءٍ غير مسجَّل لا تُفتح ولا تُغلق بصمت.
+    """
+    capability = CAPABILITIES[key]
+    if not (getattr(user, 'is_authenticated', False) and user.is_active):
+        return False
+    if is_privileged(user):
+        return True
+    role, role_rows, user_rows = _capability_rows(user)
+    default = role in capability.holders
+    if capability.locked:
+        return default
+    if key in user_rows:
+        return user_rows[key]
+    if key in role_rows and not role_cell_frozen(key, role):
+        return role_rows[key]
+    return default
+
+
+def can_edit_role_matrix(user) -> bool:
+    """مصفوفةُ الأدوار العامّة: «يعدّلها مدير النظام وحده» (قرارُ المالك 2026‑11‑03)."""
+    return is_privileged(user)
+
+
+def can_edit_exception(by, target, key) -> bool:
+    """استثناءُ شخص: السوبر، أو رئيسُ القسم لموظّفيه فقط «وضمن ما يملكه هو». ولا أحدَ لنفسه.
+
+    مسؤولُ الشعبة والوحدة مغلقٌ بقرار المالك 2026‑11‑03.
+    """
+    if by.pk == target.pk or CAPABILITIES[key].locked:
+        return False
+    if is_privileged(by):
+        return True
+    return role_of(by) == ROLE_HEAD and can_manage_user(by, target) and has_capability(by, key)

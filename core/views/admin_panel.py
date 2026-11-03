@@ -39,7 +39,7 @@ TABS = ('overview', 'departments', 'users', 'groups', 'reservations', 'audit', '
 ADMIN_TABS = ('groups', 'reservations', 'audit')
 ADMIN_ACTIONS = ('CREATE_DEPARTMENT', 'EDIT_DEPARTMENT', 'ASSIGN_USER',
                  'CREATE_USER', 'DELETE_USER', 'CREATE_GROUP', 'EDIT_GROUP', 'DELETE_GROUP',
-                 'PASSWORD_RESET', 'EDIT_SETTINGS')
+                 'PASSWORD_RESET', 'EDIT_SETTINGS', 'EDIT_PERMISSIONS')
 RESERVATION_REPORT_DAYS = (7, 30, 90)
 RESERVATION_REPORT_PAGE_SIZE = 50
 

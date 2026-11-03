@@ -3017,3 +3017,39 @@ class NetworkNode(models.Model):
         if ping_ms is not None:
             self.last_ping_ms = ping_ms
         self.save(update_fields=['is_online', 'last_seen', 'last_ping_ms'])
+
+
+class RoleCapabilityOverride(models.Model):
+    """خليّةٌ معدَّلة في مصفوفة الأدوار. يكتبها ``permission_service`` وحدَه."""
+
+    role = models.CharField('الدور', max_length=20)
+    capability = models.CharField('الصلاحيّة', max_length=40)
+    allowed = models.BooleanField('مسموح')
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    changed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'تعديل صلاحيّة دور'
+        verbose_name_plural = 'تعديلات صلاحيّات الأدوار'
+        constraints = [models.UniqueConstraint(fields=['role', 'capability'], name='uniq_role_capability')]
+
+    def __str__(self):
+        return f'{self.role}:{self.capability}={self.allowed}'
+
+
+class UserCapabilityOverride(models.Model):
+    """استثناءٌ لشخصٍ فوق دوره. يكتبه ``permission_service`` وحدَه."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='capability_overrides')
+    capability = models.CharField('الصلاحيّة', max_length=40)
+    allowed = models.BooleanField('مسموح')
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    changed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'استثناء صلاحيّة'
+        verbose_name_plural = 'استثناءات الصلاحيّات'
+        constraints = [models.UniqueConstraint(fields=['user', 'capability'], name='uniq_user_capability')]
+
+    def __str__(self):
+        return f'{self.user_id}:{self.capability}={self.allowed}'
