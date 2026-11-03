@@ -65,7 +65,8 @@ def create_department(*, name, code, parent=None, by, entity=None):
 
         try:
             department = Department.objects.create(
-                name=name, code=code, parent=parent, entity=entity)
+                name=name, code=code, parent=parent, entity=entity,
+                holds_register=Department.default_holds_register(name, parent))
         except IntegrityError as exc:
             raise ValidationError('الاسمُ أو الرمزُ مستعملٌ سلفاً.') from exc
 

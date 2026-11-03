@@ -530,6 +530,7 @@ def _notify(referrals, book, by, *, urgent=False, lead='كتابٌ فُرِّق 
     from django.contrib.auth.models import User
 
     from core.models import Notification
+    from core.scoping import RESTRICTED_SECRET_LEVELS, STUB_TITLE
 
     dept_ids = {r.to_department_id for r in referrals if r.to_department_id}
     if not dept_ids:
@@ -540,12 +541,16 @@ def _notify(referrals, book, by, *, urgent=False, lead='كتابٌ فُرِّق 
     ).exclude(pk=by.pk if by else None).values_list('pk', flat=True)
 
     number = book.our_number_display or '(بلا رقم)'
+    # عنوانُ السرّيّ محتوى: الوحدةُ تسجّل ولا تفتح (قرارُ المالك 2026‑11‑02)، والتنبيهُ
+    # يصل كلَّ موظّفيها — كان يكشف العنوانَ لمن لا يفتح الكتاب.
+    message = (STUB_TITLE if book.secret_level in RESTRICTED_SECRET_LEVELS
+               else (book.title or ''))
     Notification.objects.bulk_create([
         Notification(
             user_id=uid, category='book',
             priority=Notification.PRIORITY_URGENT if urgent else Notification.PRIORITY_INFO,
             title='%s: %s' % (lead, number),
-            message=book.title or '',
+            message=message,
             link_url='/books/%d/' % book.pk,
         )
         for uid in recipients

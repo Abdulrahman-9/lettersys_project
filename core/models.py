@@ -127,6 +127,11 @@ class Department(models.Model):
     entity     = models.OneToOneField('Entity', null=True, blank=True, on_delete=models.SET_NULL,
                                       related_name='department', verbose_name="الجهة المقابلة")
     is_active  = models.BooleanField("نشط", default=True)
+    #: الوحدةُ غيرُ السجلّ (قرارُ المالك 2026‑11‑02): ماسكةُ السجلّ لها ديوانٌ وعدّادٌ
+    #: وإدخال، والشعبةُ والوحدةُ تحتها تستلمان بالإحالة وتُنجزان.
+    holds_register = models.BooleanField(
+        "يمسك سجلّاً", default=True,
+        help_text="له ديوانُ بريدٍ وعدّادُ أرقامٍ ويُدخل الكتب.")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -136,6 +141,16 @@ class Department(models.Model):
 
     def __str__(self):
         return f"{self.code} — {self.name}"
+
+    #: شعبةٌ أو وحدةٌ **تحت أبٍ** تعمل على سجلّ من فوقها. والجذرُ يبقى ماسكاً وإن سُمّي
+    #: شعبة («شعبة ادارة الجودة» جذرٌ مستقلّ)، و«قسم المتابعة» ماسكٌ وله أب.
+    NO_REGISTER_WORDS = ('شعبة', 'وحدة')
+
+    @classmethod
+    def default_holds_register(cls, name, parent):
+        """افتراضُ الوحدة الجديدة — يغيّره مديرُ النظام إن خالفه الواقع."""
+        first = ((name or '').split() or [''])[0]
+        return not (parent is not None and first in cls.NO_REGISTER_WORDS)
 
     #: المستوى من **اسم القسم نفسه** — الشجرةُ الحيّة لا تطابق العمق: «مكتب المدير
     #: العام» جذرٌ و«قسم المتابعة» تحته، فالعمقُ وحده سمّى القسمَ شعبةً والشعبةَ وحدة.
