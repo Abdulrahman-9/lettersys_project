@@ -362,26 +362,31 @@ def _backup_is_due(cfg, now):
     """
     يقرّر إن كان النسخ المجدول مستحقّاً الآن — دالة نقية قابلة للاختبار.
     ``cfg``: BackupSettings، ``now``: datetime محلي.
+
+    ``cfg.hour`` أوّلُ وقتٍ للتنفيذ لا وقتُه الوحيد: الجهاز قد يكون مطفأً عندها،
+    فتعوّض المهمّة الساعيّة عند أوّل تشغيلٍ بعدها. اشتراطُ مطابقة الساعة جعل نسخ
+    «يوميّ» الحيّ 10-22 · 10-27 · 11-01 · 11-02، ومهمّتُه تنتهي بـrc=0 في كلّ مرّة.
     """
     if not cfg.enabled:
         return False
-    if now.hour != cfg.hour:
-        return False
 
-    today = now.date()
     last = cfg.last_run_at
     if last is None:
-        return True
+        return True  # لا نسخة أصلاً — أشدُّ الحالات تأخّراً
+    today = now.date()
     last_date = timezone.localtime(last).date() if timezone.is_aware(last) else last.date()
     if last_date >= today:
         return False  # نُفِّذ اليوم بالفعل
 
+    hour_passed = now.hour >= cfg.hour
+    days = (today - last_date).days
     if cfg.frequency == cfg.FREQ_DAILY:
-        return True
+        return hour_passed or days > 1
     if cfg.frequency == cfg.FREQ_WEEKLY:
-        return (today - last_date).days >= 7
+        return days >= 7 and (hour_passed or days >= 8)
     if cfg.frequency == cfg.FREQ_MONTHLY:
-        return (last_date.year, last_date.month) != (today.year, today.month)
+        month_changed = (last_date.year, last_date.month) != (today.year, today.month)
+        return month_changed and (hour_passed or today.day > 1)
     return False
 
 
