@@ -405,6 +405,16 @@ class LogReadingTests(OpsCase):
         self.write('X' * (system_ops.LOG_TAIL_BYTES + 100) + '\nlast\n')
         self.assertEqual(len(system_ops.read_log('tasks')[0]), 1)  # لا فرقَ نصّيّ بربع ميغا عند الإخفاق
 
+    def test_a_very_long_line_is_cut_for_display(self):
+        self.write('a' * (system_ops.LOG_MAX_LINE_CHARS + 500) + '\n')
+        self.assertEqual(len(system_ops.read_log('tasks')[0][0]['text']), system_ops.LOG_MAX_LINE_CHARS)
+
+    def test_masking_a_long_word_stays_fast(self):
+        """كان التعبيرُ تربيعيّاً فيعلّق الصفحة؛ كشفته طفرةٌ لا قارئ."""
+        started = time.perf_counter()
+        system_ops.mask('a' * 30000)
+        self.assertLess(time.perf_counter() - started, 2)
+
     def test_a_bom_is_stripped(self):
         (self.logs / 'task_backup.log').write_bytes('﻿hello\n'.encode('utf-8'))
         self.assertEqual(system_ops.read_log('tasks')[0][0]['text'], 'hello')

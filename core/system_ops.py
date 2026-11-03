@@ -27,6 +27,7 @@ BACKUP_MAX_AGE_HOURS = 26
 # مفتاحٌ ⟵ ملفّ: الاسمُ لا يأتي من الطلب أبداً.
 LOG_TAIL_BYTES = 256 * 1024
 LOG_MAX_LINES = 500
+LOG_MAX_LINE_CHARS = 2000
 LOG_SOURCES = {
     'system': ('النظام', lambda: Path(settings.BASE_DIR) / 'logs' / 'lettersys.log'),
     'server': ('الخادم', lambda: ops_log_dir() / 'waitress.err.log'),
@@ -38,7 +39,8 @@ _MASKS = (
     (re.compile(r'(/share/attachment/)[^/\s]+'), r'\1•••'),
     (re.compile(r'(/api/scan/(?:serve|preview|manifest|edit)/)[^/\s]+'), r'\1•••'),
     (re.compile(r'((?:token|signature|sig|password|passwd|secret|key)=)[^&\s]+', re.I), r'\1•••'),
-    (re.compile(r'[\w.+-]+@[\w-]+(?:\.[\w-]+)+'), '•••@•••'),
+    # النظرةُ الخلفيّة تجعله خطّيّاً: بدونها يعلّق سطرٌ طويلٌ بلا مسافات صفحةَ التشغيل كلَّها.
+    (re.compile(r'(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+'), '•••@•••'),
 )
 # بادئةُ المسجِّل ⟵ اسمُ الخدمة في سطر الأخطاء.
 _SERVICES = (('core.messaging', 'مزامنة البريد'), ('core.extraction', 'الاستخراج'),
@@ -174,6 +176,7 @@ def read_log(key, *, errors_only=False, query=''):
         return [], f'تعذّرت قراءة الملفّ: {exc.strerror or exc}'
     out = []
     for raw in reversed(lines):
+        raw = raw[:LOG_MAX_LINE_CHARS]
         if not raw.strip():
             continue
         match = _LEVEL_RE.search(raw)
