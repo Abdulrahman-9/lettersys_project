@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}مركز الأقسام{% endblock %}
+{% block content %}
+<div class="sa-page">
+  <div class="sa-head">
+    <div><h1>مركز الأقسام</h1><p>كلُّ قسمٍ بكتبه ونشاطه. ادخل قسماً لتعمل داخله.</p></div>
+    <a class="sa-btn" href="{% url 'admin_panel' %}?tab=departments"><i class="bi bi-bezier2" aria-hidden="true"></i>تعديل الهيكل</a>
+  </div>
+
+  <div class="sa-sysbar">
+    <span><span class="sa-dot{% if backup.state == 'stale' %} bad{% endif %}"></span>النسخ الاحتياطيّ: <b>{{ backup.note }}</b></span>
+    <span><span class="sa-dot"></span>موعده اليوميّ: <b>{{ backup_hour }}:00</b> ويُعوَّض إن فات</span>
+    {% if disk is not None %}<span><span class="sa-dot{% if disk >= 90 %} bad{% elif disk >= 80 %} warn{% endif %}"></span>القرص: <b>{{ disk }}%</b></span>{% endif %}
+    <span><span class="sa-dot{% if failing %} bad{% endif %}"></span>مهامّ فاشلة: <b>{{ failing }}</b></span>
+    <a href="{% url 'system_ops' %}">تشغيل النظام <i class="bi bi-arrow-left" aria-hidden="true"></i></a>
+  </div>
+
+  <section class="sa-card">
+    <form class="sa-toolbar" method="get">
+      <input type="hidden" name="show" value="{{ show }}">
+      <input type="search" name="q" value="{{ query }}" placeholder="ابحث باسم القسم أو رمزه" aria-label="بحث باسم القسم أو رمزه">
+      <div class="sa-seg" role="group" aria-label="تصفية الأقسام">
+        {% for f in filters %}<a class="{% if f.on %}on{% endif %}" href="?show={{ f.key }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}"{% if f.on %} aria-current="true"{% endif %}>{{ f.label }} ({{ f.count }})</a>{% endfor %}
+      </div>
+    </form>
+
+    <div class="sa-scroll">
+      <table class="sa-reg">
+        <thead><tr>
+          <th scope="col">القسم<small>يشمل شُعبه ووحداته</small></th>
+          <th scope="col">الكتب<small>التي يملكها</small></th>
+          <th scope="col">الأضبارة<small>الكتب التي تذكره</small></th>
+          <th scope="col">متأخّر</th><th scope="col">نشاط 7 أيام</th><th scope="col">موظّفون نشطون</th><th scope="col">آخر حركة</th><th scope="col"><span class="visually-hidden">الدخول</span></th>
+        </tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td><div class="sa-who" style="padding-inline-start:{% widthratio r.depth 1 24 %}px">
+              <span class="sa-stamp{% if r.depth %} small{% endif %}">{{ r.unit.code }}</span>
+              <div><b>{{ r.unit.name }}</b>{% if not r.unit.is_active %} <span class="sa-chip warn">معطَّلة</span>{% endif %}
+                <small>{% if r.head %}المسؤول: {{ r.head }}{% elif r.parent_name %}يتبع {{ r.parent_name }}{% else %}وحدة رئيسة{% endif %}</small></div>
+            </div></td>
+            <td class="sa-num">{% if r.books %}<a href="{% url 'book_unified' %}?tab=all&amp;dept={{ r.unit.id }}">{{ r.books|intcomma }}</a><small>جديد {{ r.live|intcomma }} · ورق {{ r.paper|intcomma }}</small>{% else %}<span class="sa-zero">0</span>{% endif %}</td>
+            <td class="sa-num">{% if r.dossier and r.dossier_id %}<a href="{% url 'dossier_detail' r.dossier_id %}">{{ r.dossier|intcomma }}</a>{% elif r.dossier %}{{ r.dossier|intcomma }}{% else %}<span class="sa-zero">0</span>{% endif %}</td>
+            <td>{% if r.late %}<span class="sa-late">{{ r.late|intcomma }}</span>{% else %}<span class="sa-zero">0</span>{% endif %}</td>
+            <td><span class="sa-spark" role="img" aria-label="{{ r.act7 }} حركة في آخر 7 أيام">{% for h in r.bars %}<i style="height:{{ h }}px"></i>{% endfor %}</span></td>
+            <td class="sa-num">{% if r.staff_total %}{{ r.staff_active }} من {{ r.staff_total }}{% else %}<span class="sa-zero">0</span>{% endif %}</td>
+            <td class="sa-when">{{ r.last|default:'—' }}</td>
+            <td><a class="sa-btn sm" href="{% url 'system_department' r.unit.id %}" aria-label="ادخل {{ r.unit.name }}"><i class="bi bi-box-arrow-in-left" aria-hidden="true"></i>ادخل</a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="sa-empty">لا قسم يطابق هذا البحث. جرّب مرشِّح «الكلّ» أو كلمةً أخرى.</td></tr>
+          {% endfor %}
+          {% if show == 'all' or orphan.books or orphan.act7 %}
+          <tr class="warn"><td><div class="sa-who"><span class="sa-stamp none">—</span><div><b>بلا قسم</b><small>{% if orphan.books %}كتب يجب نسبتها إلى قسم{% else %}حسابات لا قسم لها، ولا كتب بلا قسم{% endif %}</small></div></div></td>
+            <td class="sa-num">{% if orphan.books %}<span class="sa-late">{{ orphan.books|intcomma }}</span>{% else %}<span class="sa-zero">0</span>{% endif %}</td>
+            <td class="sa-zero">0</td><td class="sa-zero">0</td>
+            <td><span class="sa-spark" role="img" aria-label="{{ orphan.act7 }} حركة في آخر 7 أيام">{% for h in orphan.bars %}<i style="height:{{ h }}px"></i>{% endfor %}</span></td>
+            <td class="sa-num">{{ orphan.staff_active }}</td><td class="sa-when">{{ orphan.last|default:'—' }}</td>
+            <td><a class="sa-btn sm" href="{% url 'admin_panel' %}?tab=users">الحسابات</a></td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if matched > rows|length %}
+    <div class="sa-more"><span>تُعرض {{ rows|length }} من {{ matched }}</span><a class="sa-btn sm" href="?show={{ show }}&amp;more=1{% if query %}&amp;q={{ query|urlencode }}{% endif %}">إظهار الباقي</a></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

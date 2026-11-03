@@ -139,7 +139,7 @@ class OneViewTests(LiveCountsTestCase):
     def test_an_old_book_is_marked_paper_in_its_row(self):
         self.client.force_login(self.clerk)
         html = self.client.get(reverse('book_unified'), {'tab': 'all', 'q': 'قديم-544'}).content.decode('utf-8')
-        self.assertIn('num-paper', html)
+        self.assertGreaterEqual(html.count('class="num-paper"'), 2)  # الصفّ وبطاقةُ الهاتف
         new_only = self.client.get(reverse('book_unified'), {'tab': 'all', 'q': '7001'}).content.decode('utf-8')
         self.assertNotIn('class="num-paper"', new_only)
 

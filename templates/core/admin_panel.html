@@ -8,6 +8,7 @@
 <meta name="csrf-token" content="{{ csrf_token }}">
 <title>{% if is_superadmin %}إدارة النظام{% else %}إدارة القسم{% endif %} — نظام الكتب</title>
 <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}">
+{% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261103-centre">{% endif %}
 <style>
 @font-face{font-family:Cairo;font-weight:200 1000;font-display:swap;
   src:url("{% static 'vendor/cairo/cairo-v31-SLXVc1nY6HkvangtZmpQdkhzfH5lkSscRiyS.woff2' %}") format("woff2")}
@@ -284,9 +285,9 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
 {# شريط علوي #}
 <header class="top">
   <button class="burger" id="burger" aria-label="فتح القائمة"><i class="bi bi-list"></i></button>
-  <a class="brand" href="{% url 'admin_panel' %}">
+  <a class="brand" href="{% if nav.system_admin %}{% url 'system_centre' %}{% else %}{% url 'admin_panel' %}{% endif %}">
     <img src="{% static 'img/md-o-c-logo.png' %}" alt="" width="34" height="34" onerror="this.style.display='none'">
-    <div>نظام الكتب<small>أرشفة موحّدة ومتابعة تشغيلية</small></div>
+    <div>{% if nav.system_admin %}إدارة النظام{% else %}نظام الكتب{% endif %}<small>أرشفة موحّدة ومتابعة تشغيلية</small></div>
   </a>
   <span class="sp"></span>
   <a class="pill" href="{% url 'dashboard' %}"><i class="bi bi-arrow-return-right"></i><span>الرئيسية</span></a>
@@ -308,7 +309,8 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
 <div class="shell">
 
 {# شريط جانبي #}
-<aside class="side" id="side" aria-label="التنقل الرئيسي">
+<aside class="side{% if nav.system_admin %} sa-side{% endif %}" id="side" aria-label="{% if nav.system_admin %}إدارة النظام{% else %}التنقل الرئيسي{% endif %}">
+  {% if nav.system_admin %}{% include 'core/partials/system_admin_nav.html' %}{% else %}
   <nav class="nav">
     <a href="{% url 'dashboard' %}"><i class="bi bi-grid-1x2-fill"></i>لوحة التحكم</a>
     <a href="{% url 'book_unified' %}"><i class="bi bi-list-ul"></i>قائمة الكتب</a>
@@ -338,6 +340,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
       <a href="?tab=settings" data-v="set" {% if tab == 'settings' %}class="on" aria-current="page"{% endif %}><i class="bi bi-sliders2"></i>إعدادات النظام</a>
     </div>
   </nav>
+  {% endif %}
 </aside>
 
 <main>

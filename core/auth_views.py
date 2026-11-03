@@ -3,6 +3,7 @@
 دعم نظام "تذكرني" في تسجيل الدخول
 """
 
+from django.shortcuts import resolve_url
 from django.contrib.auth.views import LoginView
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
@@ -24,6 +25,14 @@ class CustomLoginView(LoginView):
     
     template_name = 'core/login.html'
     redirect_authenticated_user = True
+
+    def get_default_redirect_url(self):
+        """مديرُ النظام يصل إلى مركز الأقسام؛ و``?next=`` يغلب، و``/`` يبقى اللوحة."""
+        from core.scoping import can_use_system_admin
+
+        if can_use_system_admin(self.request.user):
+            return resolve_url('system_centre')
+        return super().get_default_redirect_url()
     
     def form_valid(self, form):
         """

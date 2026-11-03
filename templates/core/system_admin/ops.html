@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}تشغيل النظام{% endblock %}
+{% block content %}
+<div class="sa-page">
+  <div class="sa-head"><div><h1>تشغيل النظام</h1><p>المهامّ المجدولة وأخطاء الخادم. أفعال الموظّفين في <a href="{% url 'audit_log' %}">سجلّ الحركات</a>.</p></div></div>
+
+  <section>
+    <div class="sa-card-head"><h2>المهامّ المجدولة</h2><small>الحالة من عمر النتيجة وملفّ التنبيه، لا من رمز الخروج</small></div>
+    <div class="sa-jobs">
+      {% for j in jobs %}
+      <div class="sa-job {{ j.state }}"><b>{{ j.name }}</b><small>{{ j.note }}</small>
+        {% if j.state == 'ok' %}<span class="ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> سليمة</span>
+        {% elif j.state == 'stale' %}<span class="bad"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> متأخّرة</span>
+          {% if j.next_step == 'settings_backup' %}<a href="{% url 'settings_hub' %}?tab=backup">افتح إعدادات النسخ</a>{% else %}<small>افتحها في مجدول المهامّ على الخادم وشغّلها.</small>{% endif %}
+        {% else %}<span class="muted"><i class="bi bi-dash-circle" aria-hidden="true"></i> غير معروفة</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% if services %}
+  <div class="sa-sysbar"><span><span class="sa-dot bad"></span>أخطاء الخدمات في آخر 24 ساعة: {% for s in services %}{{ s.label }} <b>{{ s.count }}</b>{% if not forloop.last %} · {% endif %}{% endfor %}</span></div>
+  {% endif %}
+
+  <section class="sa-card">
+    <form class="sa-toolbar" method="get">
+      <input type="hidden" name="log" value="{{ source }}">{% if not errors_only %}<input type="hidden" name="all" value="1">{% endif %}
+      <div class="sa-seg" role="group" aria-label="الملفّ">{% for s in sources %}<a class="{% if s.on %}on{% endif %}" href="?log={{ s.key }}{% if not errors_only %}&amp;all=1{% endif %}"{% if s.on %} aria-current="true"{% endif %}>{{ s.label }}</a>{% endfor %}</div>
+      <div class="sa-seg" role="group" aria-label="الشدّة"><a class="{% if errors_only %}on{% endif %}" href="?log={{ source }}">أخطاء وتحذيرات</a><a class="{% if not errors_only %}on{% endif %}" href="?log={{ source }}&amp;all=1">الكلّ</a></div>
+      <input type="search" name="q" value="{{ query }}" placeholder="ابحث في الأسطر المعروضة" aria-label="بحث في السجلّ">
+      <span class="sa-grow"></span><small>آخر {{ tail_kb }} ك.ب · الروابط الموقَّعة مخفيّة</small>
+    </form>
+    {% if log_error %}<p class="sa-empty">{{ log_error }}</p>
+    {% elif lines %}<div class="sa-log" tabindex="0" role="region" aria-label="أسطر السجلّ">{% for l in lines %}<div dir="auto" class="{{ l.level }}">{{ l.text }}</div>{% endfor %}</div>
+    {% else %}<p class="sa-empty">{% if errors_only %}لا أخطاء ولا تحذيرات في الأسطر الأخيرة.{% else %}لا أسطر مطابقة.{% endif %}</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

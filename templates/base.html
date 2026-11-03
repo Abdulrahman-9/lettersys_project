@@ -51,11 +51,12 @@
     </style>
     
     {# Optional per-page CSS block (for legacy templates) #}
+    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261103-centre">{% endif %}
     {% block extra_css %}{% endblock %}
 
     {% block extra_head %}{% endblock %}
   </head>
-  <body data-device-setup-url="{% url 'device_setup' %}" class="{% if is_embed %}settings-embed-body{% elif request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %}app-shell-body{% endif %}{% block body_class %}{% endblock %}">
+  <body data-device-setup-url="{% url 'device_setup' %}" class="{% if nav.system_admin %}is-system-admin {% endif %}{% if is_embed %}settings-embed-body{% elif request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'offline' %}app-shell-body{% endif %}{% block body_class %}{% endblock %}">
     {% if not is_embed %}<a class="visually-hidden-focusable skip-link" href="#main">تخطَّ إلى المحتوى</a>{% endif %}
     {% if is_embed %}
     <main class="app-embed-main" id="main">
@@ -66,7 +67,7 @@
       <div class="app-topbar-brand">
         <button type="button" class="app-topbar-menu d-xl-none" data-bs-toggle="offcanvas" data-bs-target="#appNav" aria-controls="appNav" aria-haspopup="dialog"><i class="bi bi-list" aria-hidden="true"></i><span>القائمة</span></button>
         <a class="navbar-brand d-flex align-items-center gap-2"
-           href="{% if nav.password_change_required %}{% url 'password_change' %}{% else %}{% url 'dashboard' %}{% endif %}">
+           href="{% if nav.system_admin %}{% url 'system_centre' %}{% elif nav.password_change_required %}{% url 'password_change' %}{% else %}{% url 'dashboard' %}{% endif %}">
           <img src="{% static 'img/md-o-c-logo.png' %}" alt="الشركة" style="height: 40px; width: auto;">
           <span class="brand-text">{{ system_settings.app_name|default:'نظام الكتب' }}</span>
         </a>
@@ -102,9 +103,10 @@
                     title="طي القائمة" aria-label="طي القائمة" aria-controls="appNav" aria-expanded="true">
               <i class="bi bi-layout-sidebar-reverse"></i>
             </button>
-            <span class="sidebar-title-text" id="appNavTitle">التنقل الرئيسي</span>
+            <span class="sidebar-title-text" id="appNavTitle">{% if nav.system_admin %}إدارة النظام{% else %}التنقل الرئيسي{% endif %}</span>
             <button type="button" class="btn-close d-xl-none ms-auto" data-bs-dismiss="offcanvas" data-bs-target="#appNav" aria-label="إغلاق القائمة"></button>
           </div>
+          {% if nav.system_admin %}{% include 'core/partials/system_admin_nav.html' %}{% else %}
           <nav class="app-sidebar-nav" aria-label="التنقل الرئيسي">
             {% if nav.password_change_required %}
             <a class="app-sidebar-link active" href="{% url 'password_change' %}" aria-current="page">
@@ -218,6 +220,7 @@
             {% endif %}
             {% endif %}
           </nav>
+          {% endif %}
         </div>
 
         {% block page_sidebar %}{% endblock %}

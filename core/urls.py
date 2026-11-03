@@ -8,6 +8,7 @@ from . import logging_views
 from . import api as api_views
 from . import reservation_api
 from . import network_views
+from .views import system_admin
 from core.views import device_setup as device_setup_views
 from django.conf import settings
 from rest_framework.routers import DefaultRouter
@@ -77,6 +78,9 @@ urlpatterns = [
     path("api/book/<int:pk>/register-here/", lifecycle_api.api_register_here, name="api_register_here"),
     # لوحةُ الإدارة — الأقسام والأدوار والعناقيد (مديرُ النظام)
     path("admin/", admin_panel.admin_panel, name="admin_panel"),
+    path("system/", system_admin.system_centre_view, name="system_centre"),
+    path("system/department/<int:pk>/", system_admin.system_department_view, name="system_department"),
+    path("system/ops/", system_admin.system_ops_view, name="system_ops"),
     # سجلُّ الحركات — رئيسُ القسم ومديرُ النظام حصراً
     path("audit/", audit.audit_log, name="audit_log"),
     # التواقيع — والتحقّقُ **عامٌّ بلا تسجيل دخول**: الورقةُ تخرج من الشركة

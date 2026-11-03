@@ -126,9 +126,25 @@ def _serialize_book(book):
     }
 
 
+def _lens_department(request):
+    """قسمُ العدسة من ``?dept=``. لمدير النظام وحده؛ وغيره يبقى على نطاقه بلا رسالة."""
+    from core.models import Department
+    from core.scoping import can_use_system_admin
+
+    raw = (request.GET.get('dept') or '').strip()
+    if not raw.isdigit() or not can_use_system_admin(request.user):
+        return None
+    return Department.objects.filter(pk=raw).first()
+
+
 def _list_scope(request):
-    """أساسُ القائمة — **قاعدةٌ واحدة** للصفحة وتحديثها والتصدير والعدّادات (``listed_books``)."""
-    return listed_books(request.user)
+    """أساسُ القائمة — **قاعدةٌ واحدة** للصفحة وتحديثها والتصدير والعدّادات (``listed_books``)،
+    مقصورةً على شجرة قسم العدسة إن وُجدت، كما يجمعها مركزُ الأقسام."""
+    from core.scoping import subtree_ids
+
+    books = listed_books(request.user)
+    lens = _lens_department(request)
+    return books.filter(department_id__in=subtree_ids(lens.id)) if lens else books
 
 
 @login_required
@@ -232,6 +248,7 @@ def book_unified(request):
         "base_querystring": base_querystring,
         "current_tab": tab,
         "search_query": search_text,
+        "lens_department": _lens_department(request),
         "date_from": date_from_str,
         "date_to": date_to_str,
         "entity_id": entity_id,

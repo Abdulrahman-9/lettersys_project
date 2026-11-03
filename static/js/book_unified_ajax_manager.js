@@ -273,6 +273,7 @@
         dateTo: '',
         entityId: '',
         status: '',
+        dept: new URLSearchParams(location.search).get('dept') || '',
         page: 1,
         sort: ''   // فارغٌ = ترتيبُ الخادم: الأحدثُ، ومع البحث الصلةُ
       };
@@ -549,6 +550,7 @@
       if (this.currentState.dateTo)    params.date_to    = this.currentState.dateTo;
       if (this.currentState.entityId)  params.entity_id  = this.currentState.entityId;
       if (this.currentState.status)    params.followup   = this.currentState.status;
+      if (this.currentState.dept)      params.dept       = this.currentState.dept;
       if (this.currentState.page > 1)  params.page       = this.currentState.page;
       if (this.currentState.sort)      params.sort       = this.currentState.sort;
 
@@ -632,6 +634,7 @@
       this.currentState.dateFrom   = p.get('date_from')  || '';
       this.currentState.dateTo     = p.get('date_to')    || '';
       this.currentState.entityId   = p.get('entity_id')  || '';
+      this.currentState.dept       = p.get('dept')       || '';
       this.currentState.status     = p.get('followup') || p.get('status') || p.get('due_status') || '';
       this.currentState.page       = parseInt(p.get('page')) || 1;
       this.currentState.sort       = p.get('sort')       || '';
@@ -655,7 +658,7 @@
     clearAllFilters() {
       // التبويبُ ليس فلتراً: المسحُ من «صادر» كان يقفز إلى «وارد» (تدقيقُ نيلسن A#15)
       this.currentState = { tab: this.currentState.tab || 'incoming', search: '', dateFrom: '', dateTo: '',
-                            entityId: '', status: '', page: 1, sort: '' };
+                            entityId: '', status: '', dept: this.currentState.dept, page: 1, sort: '' };
       this.updateUrlAndLoadData();   // يدفع الرابطَ الممسوح — دفعٌ ثانٍ هنا كان مدخلاً مكرَّراً
     }
   }

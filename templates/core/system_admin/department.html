@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}{{ unit.name }}{% endblock %}
+{% block content %}
+<div class="sa-page">
+  <nav class="sa-crumb" aria-label="مسار الصفحة"><a href="{% url 'system_centre' %}">مركز الأقسام</a> / <span aria-current="page">{{ unit.name }}</span></nav>
+  <div class="sa-head">
+    <span class="sa-stamp big">{{ unit.code }}</span>
+    <div><h1>{{ unit.name }}</h1>
+      <p>{% if row.head %}المسؤول: {{ row.head }}{% else %}بلا مسؤول مسند{% endif %} · {% if unit.holds_register %}تمسك سجلّها{% else %}لا تمسك سجلّاً{% endif %}{% if tree_size %} · {{ tree_size }} وحدة تابعة{% endif %} · {{ row.staff_active }} من {{ row.staff_total }} حسابات نشطة{% if row.last %} · آخر حركة {{ row.last }}{% endif %}</p></div>
+    <span class="sa-grow"></span>
+    <form method="get" action="{% url 'system_centre' %}" class="sa-jump">
+      <label class="visually-hidden" for="saJump">الانتقال إلى قسم آخر</label>
+      <select id="saJump" name="go" class="sa-select">{% for id, name in all_units %}<option value="{{ id }}"{% if id == unit.id %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+      <button type="submit" class="sa-btn">انتقل</button>
+    </form>
+    {% if unit.holds_register %}<a class="sa-btn" href="{% url 'desk_board' %}"><i class="bi bi-inbox" aria-hidden="true"></i>طاولة البريد</a>{% endif %}
+  </div>
+
+  <nav class="sa-tabs" aria-label="أقسام الصفحة">
+    <a class="on" href="#" aria-current="page">نظرة</a>
+    <a href="{{ lens_url }}">الكتب<em>{{ row.books|intcomma }}</em></a>
+    {% if row.dossier_id %}<a href="{% url 'dossier_detail' row.dossier_id %}">الأضبارة<em>{{ row.dossier|intcomma }}</em></a>{% endif %}
+    <a href="#saFeed">النشاط</a><a href="#saStaff">الموظّفون<em>{{ row.staff_total }}</em></a><a href="#saCounters">العدّادات</a>
+  </nav>
+
+  <div class="sa-kpis">
+    <div class="sa-kpi"><b>{{ row.live|intcomma }}</b><span>كتب جديدة</span><small>و{{ row.paper|intcomma }} من الورق القديم</small></div>
+    <div class="sa-kpi"><b class="{% if late_count %}sa-late{% endif %}">{{ late_count|intcomma }}</b><span>متأخّرة</span><small>{% if late_count %}أقدمها منذ {{ late_days }} يوماً{% else %}لا متأخّرات{% endif %}</small></div>
+    <div class="sa-kpi"><b>{{ open_referrals|intcomma }}</b><span>إحالات مفتوحة</span><small>في هذا القسم وما يتبعه</small></div>
+    <div class="sa-kpi"><b>{{ secret_count|intcomma }}</b><span>كتب سرّيّة</span><small>{% if secret_count %}يفتحها {{ openers }} موظّفين{% else %}لا كتب سرّيّة{% endif %}</small></div>
+  </div>
+
+  <div class="sa-two">
+    <div class="sa-stack">
+      <section class="sa-card"><div class="sa-card-head"><h2>آخر الكتب</h2><a href="{{ lens_url }}">كلّ كتب القسم</a></div>
+        <div class="sa-rows">{% for b in recent %}
+          <a href="{% url 'book_unified' %}?tab=all&amp;dept={{ unit.id }}&amp;q={{ b.our_number|urlencode }}"><code>{{ b.our_number_sequence|default:'—' }}{% if b.our_number_year %}/{{ b.our_number_year }}{% endif %}</code><span>{{ b.title|truncatechars:70 }} <small>· {{ b.get_kind_display }}{% if b.source_ref %} · ورق{% endif %}</small></span>{% if b.is_late %}<span class="sa-chip bad">متأخّر</span>{% elif b.is_archived %}<span class="sa-chip ok">منجز</span>{% else %}<span class="sa-chip">جارٍ</span>{% endif %}</a>
+        {% empty %}<p class="sa-empty">لا كتب في هذا القسم بعد.</p>{% endfor %}</div></section>
+      <section class="sa-card" id="saFeed"><div class="sa-card-head"><h2>نشاط القسم</h2><a href="{% url 'audit_log' %}">السجلّ كاملاً</a></div>
+        <div class="sa-rows">{% for e in feed %}
+          <div class="row"><i class="bi bi-dot" aria-hidden="true"></i><span><b>{{ e.row.user.get_full_name|default:e.row.user.username|default:'النظام' }}</b> — {{ e.row.get_action_display }}{% if e.row.book %} <small>· الكتاب {{ e.row.book.our_number_sequence }}</small>{% endif %}</span><small>{{ e.when }}</small></div>
+        {% empty %}<p class="sa-empty">لا حركة مسجَّلة لموظّفي هذا القسم بعد.</p>{% endfor %}</div></section>
+    </div>
+    <div class="sa-stack">
+      <section class="sa-card"><div class="sa-card-head"><h2>الشُّعب والوحدات</h2><a href="{% url 'admin_panel' %}?tab=departments">تعديل الهيكل</a></div>
+        <div class="sa-rows">{% for c in children %}
+          <a href="{% url 'system_department' c.unit.id %}"><span class="sa-stamp small">{{ c.unit.code }}</span><span>{{ c.unit.name }} <small>· {% if c.unit.holds_register %}تمسك سجلّها{% else %}لا تمسك سجلّاً{% endif %}</small></span><span class="{% if c.late %}sa-late{% else %}sa-zero{% endif %}">{{ c.late }}</span></a>
+        {% empty %}<p class="sa-empty">لا وحدات تابعة.</p>{% endfor %}</div></section>
+      <section class="sa-card" id="saStaff"><div class="sa-card-head"><h2>الموظّفون</h2><a href="{% url 'admin_panel' %}?tab=users">إدارتهم</a></div>
+        <div class="sa-rows">{% for p in staff %}
+          <div class="row"><i class="bi bi-person" aria-hidden="true"></i><span>{{ p.name }} <small>· {{ p.role }}{% if not p.active %} · معطَّل{% endif %}</small></span><small>{{ p.last|default:'—' }}</small></div>
+        {% empty %}<p class="sa-empty">لا حسابات في هذا القسم.</p>{% endfor %}</div></section>
+      <section class="sa-card" id="saCounters"><div class="sa-card-head"><h2>العدّادات</h2></div>
+        <div class="sa-ctr">{% for s in sequences %}<span>{{ s.get_kind_display }}</span><b>{{ s.next_number }}</b>{% empty %}<p class="sa-empty">لا عدّادات لهذا القسم.</p>{% endfor %}</div></section>
+    </div>
+  </div>
+</div>
+{% endblock %}

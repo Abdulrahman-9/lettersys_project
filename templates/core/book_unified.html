@@ -19,6 +19,7 @@
      data-bulk-delete-url="{% url 'api_bulk_delete_books' %}"
      data-bulk-status-url="{% url 'api_bulk_update_status_books' %}"
      data-ajax-data-url="{% url 'api_unified_data' %}">
+  {% if lens_department %}<div class="sa-lens" role="status"><span>تعرض كتب <b>{{ lens_department.name }}</b> وما يتبعه.</span><a href="{% url 'system_department' lens_department.id %}">رجوع إلى القسم</a><a href="{% url 'book_unified' %}?tab=all">كلّ الأقسام</a></div>{% endif %}
 
   <div class="visually-hidden" aria-live="polite" id="bookUnifiedLiveRegion"></div>
 
@@ -151,7 +152,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20261103-one-view"></script>
+<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20261103-lens"></script>
 <script src="{% static 'js/book_unified_actions.js' %}?v=20261008"></script>
 <script src="{% static 'js/book_unified_api.js' %}?v=20261008"></script>
 <script src="{% static 'js/book_column_resize.js' %}?v=20260707c"></script>

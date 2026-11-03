@@ -84,8 +84,14 @@ def nav_gates(request):
     from core.scoping import (can_archive, can_manage_accounts, can_manage_departments,
                               can_manage_mail,
                               can_manage_system, can_restore_system, can_use_desk,
-                              can_view_audit, can_view_reports)
+                              can_use_system_admin, can_view_audit, can_view_reports)
     profile = getattr(user, 'profile', None)
+    must_change = bool(profile and profile.must_change_password)
+    system_admin = can_use_system_admin(user) and not must_change
+    ops_failures = 0
+    if system_admin:
+        from core.system_ops import failing_job_count
+        ops_failures = failing_job_count()
 
     return {'nav': {
         'desk': can_use_desk(user),
@@ -104,7 +110,10 @@ def nav_gates(request):
         # لا يظهر رابط الحسابات العامة لمن يلقى 403.
         'roles': can_manage_accounts(user),
         'department_admin': can_manage_departments(user),
-        'password_change_required': bool(profile and profile.must_change_password),
+        'password_change_required': must_change,
+        # شريطُ الإدارة بدل شريط الموظّف، وشارتُه للمهامّ الفاشلة فقط.
+        'system_admin': system_admin,
+        'ops_failures': ops_failures,
         # استعادةُ نسخة النظام إلى قاعدةٍ جديدة — حارسُ صفحتها نفسُه (قرارُ المالك 2026‑10‑07، البند 3)
         'restore_system': can_restore_system(user),
     }}

@@ -46,6 +46,11 @@ def user_department_id(user):
     return profile.department_id if profile else None
 
 
+def can_use_system_admin(user) -> bool:
+    """شريطُ «إدارة النظام» وصفحاتُ المركز والقسم والتشغيل — لمدير النظام وحده."""
+    return is_privileged(user)
+
+
 def is_department_head(user) -> bool:
     profile = getattr(user, 'profile', None)
     return bool(profile and profile.is_department_head)
