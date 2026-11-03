@@ -21,3 +21,9 @@ def day_unit_ar(n):
 def days_ar(n):
     """``{{ 2|days_ar }}`` ⟵ «يومان» · ``{{ 9|days_ar }}`` ⟵ «9 أيّام»."""
     return _days_ar(int(n))
+
+
+@register.filter
+def grouped(value):
+    """رقمٌ بفواصل الآلاف (15,703) — ``intcomma`` لا يفصل بلغة ar."""
+    return f'{int(value or 0):,}'

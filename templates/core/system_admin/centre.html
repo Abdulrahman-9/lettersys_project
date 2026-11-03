@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load humanize %}
+{% load ar_counts %}
 {% block title %}مركز الأقسام{% endblock %}
 {% block content %}
 <div class="sa-page">
@@ -9,7 +9,7 @@
   </div>
 
   <div class="sa-sysbar">
-    <span><span class="sa-dot{% if backup.state == 'stale' %} bad{% endif %}"></span>النسخ الاحتياطيّ: <b>{{ backup.note }}</b></span>
+    <span><span class="sa-dot{% if backup.state == 'stale' %} bad{% elif backup.state == 'unknown' %} warn{% endif %}"></span>النسخ الاحتياطيّ: <b>{{ backup.note }}</b></span>
     <span><span class="sa-dot"></span>موعده اليوميّ: <b>{{ backup_hour }}:00</b> ويُعوَّض إن فات</span>
     {% if disk is not None %}<span><span class="sa-dot{% if disk >= 90 %} bad{% elif disk >= 80 %} warn{% endif %}"></span>القرص: <b>{{ disk }}%</b></span>{% endif %}
     <span><span class="sa-dot{% if failing %} bad{% endif %}"></span>مهامّ فاشلة: <b>{{ failing }}</b></span>
@@ -41,9 +41,9 @@
               <div><b>{{ r.unit.name }}</b>{% if not r.unit.is_active %} <span class="sa-chip warn">معطَّلة</span>{% endif %}
                 <small>{% if r.head %}المسؤول: {{ r.head }}{% elif r.parent_name %}يتبع {{ r.parent_name }}{% else %}وحدة رئيسة{% endif %}</small></div>
             </div></td>
-            <td class="sa-num">{% if r.books %}<a href="{% url 'book_unified' %}?tab=all&amp;dept={{ r.unit.id }}">{{ r.books|intcomma }}</a><small>جديد {{ r.live|intcomma }} · ورق {{ r.paper|intcomma }}</small>{% else %}<span class="sa-zero">0</span>{% endif %}</td>
-            <td class="sa-num">{% if r.dossier and r.dossier_id %}<a href="{% url 'dossier_detail' r.dossier_id %}">{{ r.dossier|intcomma }}</a>{% elif r.dossier %}{{ r.dossier|intcomma }}{% else %}<span class="sa-zero">0</span>{% endif %}</td>
-            <td>{% if r.late %}<span class="sa-late">{{ r.late|intcomma }}</span>{% else %}<span class="sa-zero">0</span>{% endif %}</td>
+            <td class="sa-num">{% if r.books %}<a href="{% url 'book_unified' %}?tab=all&amp;dept={{ r.unit.id }}">{{ r.books|grouped }}</a><small>جديد {{ r.live|grouped }} · ورق {{ r.paper|grouped }}</small>{% else %}<span class="sa-zero">0</span>{% endif %}</td>
+            <td class="sa-num">{% if r.dossier and r.dossier_id %}<a href="{% url 'dossier_detail' r.dossier_id %}">{{ r.dossier|grouped }}</a>{% elif r.dossier %}{{ r.dossier|grouped }}{% else %}<span class="sa-zero">0</span>{% endif %}</td>
+            <td>{% if r.late %}<span class="sa-late">{{ r.late|grouped }}</span>{% else %}<span class="sa-zero">0</span>{% endif %}</td>
             <td><span class="sa-spark" role="img" aria-label="{{ r.act7 }} حركة في آخر 7 أيام">{% for h in r.bars %}<i style="height:{{ h }}px"></i>{% endfor %}</span></td>
             <td class="sa-num">{% if r.staff_total %}{{ r.staff_active }} من {{ r.staff_total }}{% else %}<span class="sa-zero">0</span>{% endif %}</td>
             <td class="sa-when">{{ r.last|default:'—' }}</td>
@@ -54,7 +54,7 @@
           {% endfor %}
           {% if show == 'all' or orphan.books or orphan.act7 %}
           <tr class="warn"><td><div class="sa-who"><span class="sa-stamp none">—</span><div><b>بلا قسم</b><small>{% if orphan.books %}كتب يجب نسبتها إلى قسم{% else %}حسابات لا قسم لها، ولا كتب بلا قسم{% endif %}</small></div></div></td>
-            <td class="sa-num">{% if orphan.books %}<span class="sa-late">{{ orphan.books|intcomma }}</span>{% else %}<span class="sa-zero">0</span>{% endif %}</td>
+            <td class="sa-num">{% if orphan.books %}<span class="sa-late">{{ orphan.books|grouped }}</span>{% else %}<span class="sa-zero">0</span>{% endif %}</td>
             <td class="sa-zero">0</td><td class="sa-zero">0</td>
             <td><span class="sa-spark" role="img" aria-label="{{ orphan.act7 }} حركة في آخر 7 أيام">{% for h in orphan.bars %}<i style="height:{{ h }}px"></i>{% endfor %}</span></td>
             <td class="sa-num">{{ orphan.staff_active }}</td><td class="sa-when">{{ orphan.last|default:'—' }}</td>

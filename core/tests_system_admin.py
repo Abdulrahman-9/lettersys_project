@@ -428,3 +428,16 @@ class AgeTextTests(SimpleTestCase):
         for hours, text in cases:
             with self.subTest(hours=hours):
                 self.assertEqual(system_ops.age_text(hours), text)
+
+
+class CountingTests(SimpleTestCase):
+    def test_arabic_counting_of_people(self):
+        from core.views.system_admin import count_ar
+        forms = ('موظّف واحد', 'موظّفان', 'موظّفين', 'موظّفاً')
+        for n, text in ((1, 'موظّف واحد'), (2, 'موظّفان'), (3, '3 موظّفين'), (10, '10 موظّفين'), (11, '11 موظّفاً')):
+            with self.subTest(n=n):
+                self.assertEqual(count_ar(n, *forms), text)
+
+    def test_numbers_are_grouped_whatever_the_language(self):
+        from core.templatetags.ar_counts import grouped
+        self.assertEqual((grouped(15703), grouped(0), grouped(None)), ('15,703', '0', '0'))

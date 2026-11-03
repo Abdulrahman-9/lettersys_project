@@ -8,7 +8,7 @@
 <meta name="csrf-token" content="{{ csrf_token }}">
 <title>{% if is_superadmin %}إدارة النظام{% else %}إدارة القسم{% endif %} — نظام الكتب</title>
 <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}">
-{% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261103-centre">{% endif %}
+{% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261103-centre4">{% endif %}
 <style>
 @font-face{font-family:Cairo;font-weight:200 1000;font-display:swap;
   src:url("{% static 'vendor/cairo/cairo-v31-SLXVc1nY6HkvangtZmpQdkhzfH5lkSscRiyS.woff2' %}") format("woff2")}
@@ -283,7 +283,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
 <body>
 
 {# شريط علوي #}
-<header class="top">
+<header class="top{% if nav.system_admin %} sa-top{% endif %}">
   <button class="burger" id="burger" aria-label="فتح القائمة"><i class="bi bi-list"></i></button>
   <a class="brand" href="{% if nav.system_admin %}{% url 'system_centre' %}{% else %}{% url 'admin_panel' %}{% endif %}">
     <img src="{% static 'img/md-o-c-logo.png' %}" alt="" width="34" height="34" onerror="this.style.display='none'">

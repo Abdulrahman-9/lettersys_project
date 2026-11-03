@@ -15,13 +15,22 @@ from core.logging_models import UserActivityLog
 from core.models import Book, BookReferral, BookSequence, Department, UserProfile
 from core.roles import get_user_role
 from core.scoping import can_use_system_admin, secret_openers, subtree_ids
-from core.views.filter_helpers import followup_q
+from core.views.filter_helpers import days_ar, followup_q
 
 ROLE_LABELS = {
     'dept_head': 'رئيس قسم', 'department_head': 'رئيس قسم', 'controller': 'مختصّ البريد',
     'archivist': 'مسؤول أرشفة', 'entry': 'مدخل', 'executor': 'موظّف تنفيذ', 'viewer': 'قارئ',
     'superuser': 'مدير النظام', 'admin': 'مدير النظام',
 }
+
+
+def count_ar(n, one, two, few, many):
+    """العددُ والمعدودُ بقاعدة العربيّة: موظّفٌ واحد، موظّفان، 3 موظّفين، 11 موظّفاً."""
+    if n == 1:
+        return one
+    if n == 2:
+        return two
+    return f'{n} {few}' if 3 <= n <= 10 else f'{n} {many}'
 
 
 def system_admin_required(view):
@@ -92,9 +101,11 @@ def system_department_view(request, pk):
               'last': system_centre.human_when(last_seen.get(p.user_id), now)} for p in profiles]
     return render(request, 'core/system_admin/department.html', {
         'unit': unit, 'row': row, 'tree_size': len(tree) - 1,
-        'late_count': late_qs.count(), 'late_days': (today - oldest).days if oldest else 0,
+        'tree_text': count_ar(len(tree) - 1, 'وحدة تابعة', 'وحدتان تابعتان', 'وحدات تابعة', 'وحدة تابعة'),
+        'late_count': late_qs.count(), 'late_age': days_ar((today - oldest).days, after_preposition=True) if oldest else '',
         'open_referrals': BookReferral.objects.filter(book__in=books, status__in=BookReferral.OPEN_STATUSES).count(),
-        'secret_count': secret_qs.count(), 'openers': openers,
+        'secret_count': secret_qs.count(),
+        'openers_text': (f"يفتحها {count_ar(openers, 'موظّف واحد', 'موظّفان', 'موظّفين', 'موظّفاً')}" if openers else 'لا يفتحها موظّف نشط الآن'),
         'recent': recent, 'feed': [{'row': e, 'when': system_centre.human_when(e.timestamp, now)} for e in feed],
         'children': [by_id[c.id] for c in unit.children.order_by('code') if c.id in by_id],
         'staff': staff, 'sequences': BookSequence.objects.filter(department=unit).order_by('kind'),

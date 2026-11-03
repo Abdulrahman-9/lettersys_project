@@ -36,7 +36,6 @@
           <span class="num-sequence">{{ book.our_number_sequence }}</span>{% if book.our_number_year %}<span class="num-year">/{{ book.our_number_year }}</span>{% endif %}
         </span>
       {% endif %}
-      {% if book.source_ref %}<span class="num-paper" title="منقولٌ من الدفتر الورقيّ">ورق</span>{% endif %}
     </div>
   </td>
 
@@ -81,6 +80,7 @@
         {% else %}
           <span class="kind-mini-badge badge-kind-outgoing">{{ book.kind_label }}</span>
         {% endif %}
+        {% if book.source_ref %}<span class="num-paper" title="منقولٌ من الدفتر الورقيّ">ورق</span>{% endif %}
         {% if book.attachment %}
           <span class="title-attach-badge" title="يوجد مرفق"><i class="bi bi-paperclip"></i></span>
         {% endif %}
