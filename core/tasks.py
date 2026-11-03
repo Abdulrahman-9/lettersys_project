@@ -449,8 +449,10 @@ def scheduled_backup():
         logger.error('[scheduled_backup] .encryption_key مفقود — النسخ المشفّرة لن تُفتح!')
 
     report['pruned'] = prune_old_backups(directory, cfg.retention_days)
-    cfg.last_run_at = timezone.now()
-    cfg.save(update_fields=['last_run_at', 'updated_at'])
+    # فشلُ نسخ القاعدة لا يُحسب تنفيذاً لليوم: تعيد المهمّةُ الساعيّة المحاولةَ.
+    if 'database' in report:
+        cfg.last_run_at = timezone.now()
+        cfg.save(update_fields=['last_run_at', 'updated_at'])
     logger.info('[scheduled_backup] %s', report)
     return report
 

@@ -160,3 +160,14 @@ class ScheduledTaskTests(TestCase):
         self.assertEqual(self.run_at(at(2026, 11, 3, 8)), {'skipped': True})
         self.create_encrypted_pg_backup.assert_not_called()
         self.assertEqual(BackupSettings.get().last_run_at, self.last)
+
+    def test_a_failed_database_dump_is_retried_next_hour(self):
+        self.create_encrypted_pg_backup.side_effect = RuntimeError('pg_dump failed')
+        report = self.run_at(at(2026, 11, 3, 16))
+        self.assertIn('database_error', report)
+        self.assertEqual(BackupSettings.get().last_run_at, self.last)
+
+        self.create_encrypted_pg_backup.side_effect = None
+        retried = at(2026, 11, 3, 17)
+        self.assertEqual(self.run_at(retried)['database'], 'db.enc')
+        self.assertEqual(BackupSettings.get().last_run_at, retried)
