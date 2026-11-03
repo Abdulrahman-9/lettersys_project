@@ -148,6 +148,12 @@ class CentreNumbersTests(SystemAdminCase):
         self.assertEqual((rows['ت13']['books'], rows['ت13']['paper'], rows['ت13']['live']), (3, 1, 2))
         self.assertEqual((rows['ت.ش']['books'], rows['ت.ش']['paper']), (1, 0))
 
+    def test_paper_rolls_up_with_the_books(self):
+        Book.objects.create(kind='incoming_internal', title='ورق الشعبة', our_number='20250900', created_by=self.clerk,
+                            department=self.s, date=self.today, source_ref='IIMAIL_2025#9', is_archived=True)
+        row = self.rows()[0]['ت13']
+        self.assertEqual((row['books'], row['paper'], row['live']), (4, 2, 2))
+
     def test_a_book_naming_parent_and_child_counts_once(self):
         rows, _ = self.rows()
         self.assertEqual(rows['ت13']['dossier'], 1)
@@ -394,6 +400,10 @@ class LogReadingTests(OpsCase):
         lines, _ = system_ops.read_log('tasks')
         self.assertEqual(len(lines), system_ops.LOG_MAX_LINES)
         self.assertFalse(any(l['text'].startswith('AAA') for l in lines))
+
+    def test_the_line_cut_by_the_tail_is_dropped(self):
+        self.write('X' * (system_ops.LOG_TAIL_BYTES + 100) + '\nlast\n')
+        self.assertEqual(len(system_ops.read_log('tasks')[0]), 1)  # لا فرقَ نصّيّ بربع ميغا عند الإخفاق
 
     def test_a_bom_is_stripped(self):
         (self.logs / 'task_backup.log').write_bytes('﻿hello\n'.encode('utf-8'))
