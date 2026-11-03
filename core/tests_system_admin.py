@@ -169,6 +169,13 @@ class CentreNumbersTests(SystemAdminCase):
         rows, _ = self.rows()
         self.assertEqual((rows['ت13']['late'], rows['ت.ش']['late'], rows['ت4']['late']), (1, 0, 0))
 
+    def test_a_late_book_in_a_child_counts_for_its_parent(self):
+        Book.objects.create(kind='incoming_internal', title='متأخّر الشعبة', our_number='104', created_by=self.clerk,
+                            department=self.s, date=self.today, is_archived=False,
+                            due_date=self.today - timedelta(days=2))
+        rows, _ = self.rows()
+        self.assertEqual((rows['ت13']['late'], rows['ت.ش']['late']), (2, 1))
+
     def test_activity_belongs_to_the_actors_department(self):
         rows, orphan = self.rows()
         self.assertEqual((rows['ت.ش']['act7'], rows['ت13']['act7'], rows['ت13']['tree_activity']), (1, 0, 1))
