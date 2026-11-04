@@ -139,6 +139,12 @@ class WhereToTests(ReferralCase):
             rs.distribute(book, [self.unit, self.far], by=self.fresh(self.section_head), purpose=BookReferral.INFO)
         self.assertFalse(BookReferral.objects.filter(book=book).exists())
 
+    def test_the_system_admin_in_a_unit_still_refers_anywhere(self):
+        admin = User.objects.create_superuser('r_root2', password='x')
+        UserProfile.objects.update_or_create(user=admin, defaults={'department': self.unit})
+        self.assertTrue(s.can_refer_to(self.fresh(admin), self.far))
+        self.assertTrue(s.can_refer_to(self.fresh(admin), None))
+
     def test_the_system_admin_refers_anywhere(self):
         self.assertTrue(self.send(self.admin, to=self.far))
 
@@ -207,6 +213,14 @@ class ChaseTests(ReferralCase):
     def test_the_sender_side_chases(self):
         referral = self.refer()
         rs.send_reminder(referral, by=self.fresh(self.mail))
+
+    def test_the_committed_side_cannot_chase_itself(self):
+        """مسؤولُ الوحدة يملك الإرسال ويفتح الكتاب، لكنّ الالتزام عليه فلا يطارد نفسه."""
+        user = self.fresh(self.unit_head)
+        referral = self.refer()
+        self.assertTrue(s.can_send_referral(self.book, user))
+        with self.assertRaises(PermissionDenied):
+            rs.send_reminder(referral, by=user)
 
     def test_the_executor_cannot_chase(self):
         with self.assertRaises(PermissionDenied):
