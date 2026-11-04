@@ -176,8 +176,8 @@ EXPECTED_BOOKS = {
     'secret_w':          'VOEAS VOEAS V V V V V V V V VOEAS V V V -',
     'normal_w2':         'VOEAS VOEAS VOEA VOEA VOEA VOEA VOEA VO VOEA VOEA - - - - -',
     'normal_far':        'VOEAS VOEAS - - - - - - - - - - - - VOEA',
-    'referred_w':        'VOEAS VOEAS VOEA VOEAS VOEA VOEA VOEA VO - - VOA VOA VO VO -',
-    'referred_secret_w': 'VOEAS VOEAS V VOEAS VOEA VOEA V V - - V V V V -',
+    'referred_w':        'VOEAS VOEAS VOEA VOEAS VOEA VOEA VOEA VO VOA VOA VOA VOA VO VO -',
+    'referred_secret_w': 'VOEAS VOEAS V VOEAS VOEA VOEA V V V V V V V V -',
     'referred_far':      'VOEAS VOEAS VOEA VOEAS VOEA VOEA VOEA VO - - - - - - VOA',
 }
 

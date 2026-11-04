@@ -22,7 +22,7 @@ from core.models import (Book, BookHistory, BookLink, BookReferral, BookRegistra
 from core.referral_service import distribute
 from core.registration_service import (register_book_here, register_reply,
                                        registrations_of)
-from core.testing import as_writer
+from core.testing import as_referrer
 
 
 class RegistrationTestCase(TestCase):
@@ -34,7 +34,7 @@ class RegistrationTestCase(TestCase):
         cls.contracts = Department.objects.create(name='العقود', code='ق-ش5')
 
         def member(name, dept):
-            u = as_writer(User.objects.create_user(name, password='pw-%s-11111' % name))
+            u = as_referrer(User.objects.create_user(name, password='pw-%s-11111' % name))
             UserProfile.objects.create(user=u, department=dept)
             return u
 

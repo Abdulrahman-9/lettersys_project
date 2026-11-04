@@ -43,9 +43,9 @@ def distribute(book, targets, *, purpose=None, margin='', margin_crop=None,
     تفريقٍ مكرَّرٍ فوق التزامٍ ما زال مفتوحاً.
     """
     from core.models import BookReferral, Department, Entity
-    from core.scoping import can_act_on_book
+    from core.scoping import can_refer_to, can_send_referral
 
-    if not can_act_on_book(book, by):
+    if not can_send_referral(book, by):
         raise PermissionDenied('لا تملك صلاحيةَ تفريق هذا الكتاب.')
 
     items = [_normalise(t) for t in targets]
@@ -65,6 +65,9 @@ def distribute(book, targets, *, purpose=None, margin='', margin_crop=None,
             keys = {'to_entity': target}
         else:
             raise ValidationError('هدفُ تفريقٍ غيرُ معروف: %r' % (target,))
+
+        if not can_refer_to(by, target if isinstance(target, Department) else None):
+            raise PermissionDenied('وحدتك تُحيل إلى الوحدات التابعة لها فقط.')
 
         # قيمُ الصفّ الفعليّة — ما يخصّ الهدفَ يغلب المشترك. تُحسم مرّةً هنا فيقرأ
         # الحارسُ ما سيُكتب حرفاً، لا نسخةً ثانيةً من قاعدة الافتراض.
@@ -105,9 +108,9 @@ def activate_followup(referral, *, due_date, by, margin='', assignee=None):
     الصفُّ نفسُه يتحوّل، فيبقى تاريخُ الذكر متّصلاً بتاريخ المطاردة.
     مَن يفعّل هو مَن يملك محتوى الكتاب (مسؤولُ البريد/مدير القسم) لا الهدف."""
     from core.models import BookReferral
-    from core.scoping import can_act_on_book
+    from core.scoping import can_send_referral
 
-    if not can_act_on_book(referral.book, by):
+    if not can_send_referral(referral.book, by):
         raise PermissionDenied('لا تملك صلاحيةَ تفعيل المتابعة على هذا الكتاب.')
     if referral.status not in (BookReferral.SENT, BookReferral.RECEIVED):
         raise ValidationError('الإحالةُ مُقفلةٌ؛ لا متابعةَ على ما أُنجز أو أُعيد.')
@@ -239,10 +242,10 @@ def reply_matrix(book, user):
     **«للعلم» لا يُعدّ متأخّراً أبداً**: المطاردةُ على «للتنفيذ» فقط، وإلّا
     امتلأ الطابورُ بما لا إجابةَ له فأهمله قارئُه.
     """
-    from core.scoping import can_act_on_book, scope_referrals_for
+    from core.scoping import can_send_referral, has_capability, scope_referrals_for
 
-    # بوّابةُ الكتاب (`_open_gate`) واحدةٌ لكلّ الصفوف — تُحسب مرّةً لا لكلّ صفّ.
-    opens = can_act_on_book(book, user)
+    receives = has_capability(user, 'referral.receive')
+    chases = can_send_referral(book, user)
     rows = scope_referrals_for(user, book.referrals.select_related(
         'to_department', 'to_entity', 'assignee', 'created_by',
         'closed_by_link__from_book',
@@ -264,8 +267,8 @@ def reply_matrix(book, user):
             'reply_number': reply.our_number_display if reply else '',
             # أزرارُ الصفّ لمن يقبلها الخادم — **الحارسان نفسُهما** (بوّابةُ الكتاب
             # + مسندُ الطرف) لا شرطُ دورٍ في القالب. كانت تُعرض لكلّ ناظرٍ ثمّ تُرفض.
-            'can_act': opens and row.is_open and _target_side(row, user),
-            'can_chase': opens and row.is_open and _chaser_side(row, user),
+            'can_act': receives and row.is_open and _target_side(row, user),
+            'can_chase': chases and row.is_open and _chaser_side(row, user),
         })
     return matrix
 
@@ -433,14 +436,6 @@ def _advance(referral, status, action, by, detail):
     return referral
 
 
-def _open_gate(referral, by):
-    """بوّابةُ الكتاب — شرطٌ لازمٌ لكلّ فعلٍ على الصفّ، لا كافٍ لأيٍّ منها."""
-    from core.scoping import can_act_on_book
-
-    if not can_act_on_book(referral.book, by):
-        raise PermissionDenied('لا تملك صلاحيةً على هذه الإحالة.')
-
-
 def _desk_of(referral, by):
     """أهو مختصُّ بريد قسمِ الكتاب أو رئيسُه؟
 
@@ -474,7 +469,12 @@ def _guard_target(referral, by):
     والقسمُ المُرسِل **ليس** منهم: إقفالُ عملٍ لم يُنجَز بعدُ ليس حقّاً للمُرسِل
     — وله بابُه في ``_guard_chaser``.
     """
-    _open_gate(referral, by)
+    from core.scoping import has_capability
+
+    # بلا شرط فتح المحتوى: السرّيُّ المُحال تسجّل الوحدةُ استلامَه وإنجازَه ولا تفتحه،
+    # والورقةُ باليد (قرارُ المالك للمستوى 2).
+    if not has_capability(by, 'referral.receive'):
+        raise PermissionDenied('لا تملك صلاحيةَ استلام الإحالات وإنجازها.')
     if not _target_side(referral, by):
         raise PermissionDenied('هذه الإحالةُ ليست لك — الالتزامُ على وحدةٍ أخرى.')
 
@@ -501,7 +501,10 @@ def _guard_chaser(referral, by):
     الجواب. توحيدُ الحارسين منع موظّفَ البريد من التنبيه على وحدةٍ تأخّرت —
     وهو الاستعمالُ الذي بُنيت الدالّةُ لأجله (كشفه اختبارٌ قائم).
     """
-    _open_gate(referral, by)
+    from core.scoping import can_send_referral
+
+    if not can_send_referral(referral.book, by):
+        raise PermissionDenied('لا تملك صلاحيةً على هذه الإحالة.')
     if not _chaser_side(referral, by):
         raise PermissionDenied('التنبيهُ لمن ينتظر الجواب — لا لمن عليه.')
 

@@ -8,7 +8,7 @@ from django.test import TestCase
 from core.models import Book, BookReferral, Department, Entity, UserProfile
 from core.referral_service import mark_done, mark_received
 from core.roles import CONTROLLER_GROUP_NAME
-from core.testing import as_writer
+from core.testing import as_referrer
 
 
 class ReferralRowGuardTests(TestCase):
@@ -34,7 +34,7 @@ class ReferralRowGuardTests(TestCase):
             status=BookReferral.SENT, created_by=self.boss)
 
     def _user(self, name, department, *, head=False, controller=False):
-        user = as_writer(User.objects.create_user(name, name + '@x.co', 'pw'))
+        user = as_referrer(User.objects.create_user(name, name + '@x.co', 'pw'))
         UserProfile.objects.update_or_create(
             user=user, defaults={'department': department, 'is_department_head': head})
         if controller:
@@ -107,7 +107,7 @@ class ReferralRowGuardTests(TestCase):
             mark_done(self.referral, by=stranger)
 
     def test_a_user_without_a_department_is_refused(self):
-        loose = as_writer(User.objects.create_user('loose', 'l@x.co', 'pw'))
+        loose = as_referrer(User.objects.create_user('loose', 'l@x.co', 'pw'))
         UserProfile.objects.update_or_create(user=loose,
                                              defaults={'department': None})
 

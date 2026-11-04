@@ -21,7 +21,7 @@ from core.models import (Book, BookReferral, BookSequence, CustodyEvent, Departm
                          Entity, EntityGroup, UserProfile)
 from core.referral_service import ACTION_NEEDS_DUE, distribute
 from core.roles import CONTROLLER_GROUP_NAME
-from core.testing import as_writer
+from core.testing import as_referrer
 
 
 class LifecycleApiTestCase(TestCase):
@@ -37,7 +37,7 @@ class LifecycleApiTestCase(TestCase):
         cls.ministry = Entity.objects.create(name='وزارة النفط')
 
         def member(name, dept, *, controller=False):
-            u = as_writer(User.objects.create_user(name, password='pw-%s-11111' % name))
+            u = as_referrer(User.objects.create_user(name, password='pw-%s-11111' % name))
             UserProfile.objects.create(user=u, department=dept)
             if controller:
                 u.groups.add(Group.objects.get_or_create(name=CONTROLLER_GROUP_NAME)[0])
@@ -347,7 +347,7 @@ class RegisterHereButtonTests(LifecycleApiTestCase):
         self.assertIn('data-ledger="المتابعة"', body)
 
     def test_no_button_for_a_user_without_a_department(self):
-        loner = as_writer(User.objects.create_user('nlloner', password='pw-nlloner-111'))
+        loner = as_referrer(User.objects.create_user('nlloner', password='pw-nlloner-111'))
         mine = Book.objects.create(kind='incoming_internal', title='كتابي',
                                    created_by=loner, our_number='3001')
         self.client.force_login(loner)

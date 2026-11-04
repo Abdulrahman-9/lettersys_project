@@ -21,7 +21,7 @@ from ..forms import AttachmentForm
 from ..models import Attachment, Book, BookEmailLog, BookHistory
 from .comments import can_edit_comment
 from core.scoping import (
-    ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_act_on_book, can_edit_book, can_open_content,
+    ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_send_referral, can_edit_book, can_open_content,
     can_view_book,
     is_privileged, secret_access, secret_openers,
 )
@@ -272,7 +272,7 @@ def _lifecycle_context(book, user):
         # الأرشفة: الحالُ من الخدمة والحقُّ من البوّابة — والقالبُ يعرض ولا يقرّر.
         "can_archive_book": can_archive(user),
         # «فعِّل متابعة» و«تفريق» لمن يملك المحتوى — الحارسُ نفسُه في referral_service
-        "can_distribute": can_act_on_book(book, user),
+        "can_distribute": can_send_referral(book, user),
         # «قيِّده عندنا»: الزرُّ لمن يقبله الخادم، والتأكيدُ يسمّي الدفترَ الذي
         # سيُستهلك عدّادُه — من الخدمة نفسِها لا من القالب.
         "can_register_here": ledger is not None,

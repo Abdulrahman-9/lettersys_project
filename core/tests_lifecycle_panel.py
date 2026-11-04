@@ -18,7 +18,7 @@ from core.models import (Book, BookLink, CustodyEvent, Department, Entity,
                          UserProfile)
 from core.referral_service import distribute
 from core.registration_service import register_book_here
-from core.testing import as_writer
+from core.testing import as_referrer
 
 
 class LifecyclePanelTestCase(TestCase):
@@ -32,7 +32,7 @@ class LifecyclePanelTestCase(TestCase):
         )
         cls.gm = Department.objects.create(name='مكتب المدير العام', code='ل-م')
 
-        cls.clerk = as_writer(User.objects.create_user('lpclerk', password='pw-lp-11111'))
+        cls.clerk = as_referrer(User.objects.create_user('lpclerk', password='pw-lp-11111'))
         UserProfile.objects.create(user=cls.clerk, department=cls.dept)
 
         cls.book = Book.objects.create(
@@ -142,7 +142,7 @@ class RowButtonsFollowTheGuardsTests(TestCase):
         cls.contracts = Department.objects.create(name='العقود', code='ز-ش5')
 
         def member(name, dept, desk=False):
-            u = as_writer(User.objects.create_user(name, password='pw-%s-11111' % name))
+            u = as_referrer(User.objects.create_user(name, password='pw-%s-11111' % name))
             UserProfile.objects.create(user=u, department=dept)
             if desk:
                 u.groups.add(Group.objects.get_or_create(name=CONTROLLER_GROUP_NAME)[0])

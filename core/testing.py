@@ -17,3 +17,17 @@ def as_writer(user):
     group, _ = Group.objects.get_or_create(name=ENTRY_GROUP_NAME)
     user.groups.add(group)
     return user
+
+
+def as_referrer(user):
+    """كاتبٌ يُحيل ويستلم باستثناءٍ شخصيّ — لاختبارات آليّة الإحالة.
+
+    منذ شريحة الإحالات (2026‑11‑04) لا يُحيل المدخلُ ولا يستلم. وهذه الاختباراتُ تحرس
+    الآليّةَ لا الدور، والدورُ محروسٌ في ``tests_referral_gates`` و``tests_capabilities``.
+    """
+    from core.models import UserCapabilityOverride
+
+    as_writer(user)
+    for key in ('referral.send', 'referral.receive'):
+        UserCapabilityOverride.objects.update_or_create(user=user, capability=key, defaults={'allowed': True})
+    return user

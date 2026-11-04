@@ -366,7 +366,7 @@ def can_view_book(book, user) -> bool:
     # فكانت الوحدةُ ترى كتابَ أضبارتها في القائمة ولا تفتحه. الحارسُ الآن
     # بنيويّ: `tests_scope_parity` يقارن الدالّتين على مصفوفة حالات.
     mine = subtree_ids(dept_id)
-    if (_referred_to(dept_id).filter(book_id=book.pk).exists()
+    if (_referred_to(mine).filter(book_id=book.pk).exists()
             or _mentioned_in(mine).filter(pk=book.pk).exists()):
         return True
     return (
@@ -510,7 +510,7 @@ def scope_books_for(user, qs=None):
     return qs.filter(
         Q(department_id__in=mine)
         | Q(created_by=user)
-        | Q(pk__in=_referred_to(dept_id))
+        | Q(pk__in=_referred_to(mine))
         | Q(pk__in=_mentioned_in(mine))
         | Q(
             secret_level__in=RESTRICTED_SECRET_LEVELS,
@@ -662,7 +662,7 @@ def can_manage_user(by, user, *, group_names=None, managed_ids=None) -> bool:
                 and profile.department_id == user_department_id(by))
 
 
-def _referred_to(department_id):
+def _referred_to(department_ids):
     """معرِّفاتُ الكتب المُفرَّقة إلى قسمٍ بعينه — أيّاً كانت حالةُ الالتزام.
 
     **حتى المنجَزة**: الوحدةُ التي نفّذت كتاباً قبل شهرٍ يجب أن تجده حين تُسأل
@@ -671,7 +671,7 @@ def _referred_to(department_id):
     from core.models import BookReferral
 
     return BookReferral.objects.filter(
-        to_department_id=department_id
+        to_department_id__in=department_ids
     ).values('book_id')
 
 
@@ -926,9 +926,10 @@ CAPABILITIES = {
     'custody.link': Capability('العهدة والربط', 'الإحالة والإنجاز', _WRITERS),
     'book.sign': Capability('التوقيع', 'الإحالة والإنجاز', frozenset({ROLE_HEAD}), locked=True),
     'archive.complete': Capability('تمام الأرشفة', 'الإحالة والإنجاز', frozenset({ROLE_ARCHIVIST})),
-    'desk.board': Capability('طاولة البريد والدفتر وكشف التسليم', 'الطاولات', _DESK),
+    # الطاولةُ للمنفِّذ مقصورةً على وحدته (قرارُ المالك 2026‑11‑04)، والدفترُ والكشفُ ليسا له.
+    'desk.board': Capability('طاولة البريد', 'الطاولات', _DESK | {ROLE_EXECUTOR}),
+    'desk.ledger': Capability('الدفتر وكشف التسليم', 'الطاولات', _DESK),
     'desk.mine': Capability('طاولتي', 'الطاولات', frozenset({ROLE_UNIT})),
-    'work.mine': Capability('ما يخصّني', 'الطاولات', _WRITERS | {ROLE_EXECUTOR}),
     'report.view': Capability('التقارير', 'الرقابة', _OVERSEERS),
     'audit.view': Capability('سجلّ الحركات', 'الرقابة', _OVERSEERS),
     'mail.operate': Capability('تشغيل البريد', 'البريد', frozenset({ROLE_MAIL})),
@@ -1039,3 +1040,20 @@ def can_edit_exception(by, target, key) -> bool:
     if is_privileged(by):
         return True
     return role_of(by) == ROLE_HEAD and can_manage_user(by, target) and has_capability(by, key)
+
+
+def can_send_referral(book, user) -> bool:
+    """أيُحيل هذا الكتاب أو يطارد إحالتَه؟ الفعلُ من المحلِّل، ومحتوى الكتاب شرطٌ لا يوسّعه منح."""
+    return has_capability(user, 'referral.send') and can_open_content(book, user)
+
+
+def can_refer_to(user, department=None) -> bool:
+    """إلى أين يُحيل؟ نطاقٌ لا صلاحيّة: ديوانُ قسمٍ يمسك سجلّاً يُحيل حيث شاء،
+    والشعبةُ والوحدةُ إلى ما تحتهما فقط، و``None`` (جهةٌ خارجيّة) خارجُ يدهما."""
+    if is_privileged(user):
+        return True
+    profile = getattr(user, 'profile', None)
+    own = profile.department if profile is not None else None
+    if own is None or own.holds_register:
+        return True
+    return department is not None and getattr(department, 'pk', department) in subtree_ids(own.pk)

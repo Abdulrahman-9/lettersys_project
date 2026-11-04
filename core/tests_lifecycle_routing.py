@@ -10,7 +10,7 @@ from django.urls import reverse
 
 from core.models import Book, BookReferral, Department, Entity, UserProfile
 from core.referral_service import auto_route_from_receivers
-from core.testing import as_writer
+from core.testing import as_referrer
 
 
 class RoutingTestCase(TestCase):
@@ -27,7 +27,7 @@ class RoutingTestCase(TestCase):
         cls.legal = Department.objects.create(
             name='القانوني', code='ر-ش7', entity=Entity.objects.create(name='القسم القانوني'))
         cls.ebs = Entity.objects.create(name='EBS')
-        cls.clerk = as_writer(User.objects.create_user('lclerk', password='pw-lclerk-11'))
+        cls.clerk = as_referrer(User.objects.create_user('lclerk', password='pw-lclerk-11'))
         UserProfile.objects.create(user=cls.clerk, department=cls.dept)
 
     def _book(self, **kw):
@@ -54,7 +54,7 @@ class AutoRouteTests(RoutingTestCase):
         b = self._book()
         b.receiving_entities.set([self.legal.entity])
         self.assertEqual(auto_route_from_receivers(b, by=self.clerk), [])
-        u = as_writer(User.objects.create_user('llegal', password='pw-llegal-11'))
+        u = as_referrer(User.objects.create_user('llegal', password='pw-llegal-11'))
         UserProfile.objects.create(user=u, department=self.legal)
         rows = auto_route_from_receivers(b, by=self.clerk)
         self.assertEqual([r.to_department_id for r in rows], [self.legal.id])
@@ -117,7 +117,7 @@ class ActivateFollowupTests(RoutingTestCase):
         b, row = self._info_row()
         with self.assertRaises(ValidationError):
             activate_followup(row, due_date=None, by=self.clerk)
-        outsider = as_writer(User.objects.create_user('lout', password='pw-lout-11'))
+        outsider = as_referrer(User.objects.create_user('lout', password='pw-lout-11'))
         UserProfile.objects.create(user=outsider, department=self.legal)
         with self.assertRaises(PermissionDenied):
             activate_followup(row, due_date=date(2026, 9, 30), by=outsider)
