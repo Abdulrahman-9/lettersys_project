@@ -763,7 +763,7 @@
       <div class="thread-msg {{ item.type }}">
         <div class="thread-msg-meta">
           {% if item.type == 'sent' %}
-          <i class="bi bi-send me-1"></i>أرسله: {{ item.obj.sent_by.get_full_name|default:item.obj.sent_by.username }}
+          <i class="bi bi-send me-1"></i>أرسله: {% firstof item.obj.sent_by.get_full_name item.obj.sent_by.username %}
           &nbsp;—&nbsp; {{ item.at|date:"Y/m/d H:i" }}
           &nbsp;&mdash;&nbsp; إلى: <span style="direction:ltr;display:inline">{{ item.obj.to_address }}</span>
           &nbsp;<span class="mail-status {{ item.obj.status }}">{{ item.obj.get_status_display }}</span>

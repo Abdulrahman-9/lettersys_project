@@ -82,7 +82,7 @@
     <div class="bd">
       <dl>
         <dt>الموقِّع</dt>
-        <dd>{{ signature.signer.get_full_name|default:signature.signer.username }}</dd>
+        <dd>{% firstof signature.signer.get_full_name signature.signer.username %}</dd>
 
         <dt>الصفة</dt>
         <dd>{{ signature.get_capacity_display }}</dd>

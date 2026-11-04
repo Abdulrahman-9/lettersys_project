@@ -210,7 +210,7 @@
           <div class="field"><div class="k">الحالة الحالية</div><div class="v">{{ book.followup_label }}</div></div>
           <div class="field"><div class="k">أُنشئ في النظام</div><div class="v">{{ book.created_at|date:"d/m/Y H:i" }}</div></div>
           <div class="field"><div class="k">آخر تحديث</div><div class="v">{{ book.updated_at|date:"d/m/Y H:i" }}</div></div>
-          <div class="field"><div class="k">أنشأه</div><div class="v">{% if book.created_by %}{{ book.created_by.get_full_name|default:book.created_by.username }}{% else %}—{% endif %}</div></div>
+          <div class="field"><div class="k">أنشأه</div><div class="v">{% if book.created_by %}{% firstof book.created_by.get_full_name book.created_by.username %}{% else %}—{% endif %}</div></div>
         </div>
       </div>
     </div>
@@ -227,7 +227,7 @@
           <tbody>
             {% for row in referrals %}
             <tr>
-              <td>{{ row.target }}{% if row.referral.created_by %}<div class="extra">فرّقه {{ row.referral.created_by.get_full_name|default:row.referral.created_by.username }}</div>{% endif %}{% if row.referral.margin %}<div class="extra">↩ {{ row.referral.margin }}</div>{% endif %}</td>
+              <td>{{ row.target }}{% if row.referral.created_by %}<div class="extra">فرّقه {% firstof row.referral.created_by.get_full_name row.referral.created_by.username %}</div>{% endif %}{% if row.referral.margin %}<div class="extra">↩ {{ row.referral.margin }}</div>{% endif %}</td>
               <td>{{ row.purpose }}</td>
               <td>{% if row.is_overdue %}<span class="badge b-overdue">متأخّر</span>{% else %}{{ row.status }}{% endif %}</td>
               <td style="white-space:nowrap">{{ row.due_date|date:"d/m/Y"|default:"—" }}{% if row.reminded_at %}<div class="extra">نُبِّه {{ row.reminded_at|date:"d/m/Y" }}</div>{% endif %}</td>
@@ -253,7 +253,7 @@
               <td style="white-space:nowrap">{{ ev.signed_at|date:"d/m/Y H:i" }}</td>
               <td>{{ ev.get_event_display }}</td>
               <td>{{ ev.holder_name }}</td>
-              <td>{% if ev.recorded_by %}{{ ev.recorded_by.get_full_name|default:ev.recorded_by.username }}{% else %}—{% endif %}</td>
+              <td>{% if ev.recorded_by %}{% firstof ev.recorded_by.get_full_name ev.recorded_by.username %}{% else %}—{% endif %}</td>
               <td>{{ ev.get_signature_mode_display }}</td>
               <td>{{ ev.note|default:"—" }}</td>
             </tr>
@@ -297,7 +297,7 @@
           <tbody>
             {% for sg in signatures %}
             <tr>
-              <td>{{ sg.signer.get_full_name|default:sg.signer.username }}</td>
+              <td>{% firstof sg.signer.get_full_name sg.signer.username %}</td>
               <td>{{ sg.get_capacity_display }}</td>
               <td style="white-space:nowrap">{{ sg.signed_at|date:"d/m/Y H:i" }}</td>
               <td>{% if sg.is_valid %}<span class="badge b-normal">سارٍ</span>{% else %}<span class="badge b-overdue">مُبطَل</span>{% if sg.revoke_reason %}<div class="extra">{{ sg.revoke_reason }}</div>{% endif %}{% endif %}</td>
@@ -329,7 +329,7 @@
       <div class="body">
         {% for c in comments %}
           <div class="comment">
-            <div class="meta"><span class="who">{{ c.created_by.get_full_name|default:c.created_by.username }}</span> · {{ c.created_at|date:"d/m/Y H:i" }}{% if c.is_edited %} · (معدّل){% endif %}</div>
+            <div class="meta"><span class="who">{% firstof c.created_by.get_full_name c.created_by.username %}</span> · {{ c.created_at|date:"d/m/Y H:i" }}{% if c.is_edited %} · (معدّل){% endif %}</div>
             <div class="txt">{{ c.content }}</div>
           </div>
         {% empty %}<div class="empty">لا توجد تعليقات.</div>{% endfor %}
@@ -399,7 +399,7 @@
 
     <!-- التذييل -->
     <div class="rpt-foot">
-      <span>أصدر التقرير: {{ generated_by.get_full_name|default:generated_by.username }} · {{ generated_at|date:"d/m/Y H:i" }}</span>
+      <span>أصدر التقرير: {% firstof generated_by.get_full_name generated_by.username %} · {{ generated_at|date:"d/m/Y H:i" }}</span>
       <span>LetterSys — تقرير دورة حياة الكتاب {{ book.our_number_display }}</span>
     </div>
   </div>

@@ -138,7 +138,7 @@
           {% for activity in command_center.recent_activity %}
           <li>
             <strong>{{ activity.get_action_display }}</strong>
-            <span>{{ activity.username_snapshot|default:activity.user.username|default:"مستخدم محذوف" }}</span>
+            <span>{% firstof activity.username_snapshot activity.user.username "مستخدم محذوف" %}</span>
             <time datetime="{{ activity.timestamp|date:'c' }}">{{ activity.timestamp|date:"j F · H:i" }}</time>
           </li>
           {% endfor %}

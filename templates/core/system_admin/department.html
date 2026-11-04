@@ -39,7 +39,7 @@
         {% empty %}<p class="sa-empty">لا كتب في هذا القسم بعد.</p>{% endfor %}</div></section>
       <section class="sa-card" id="saFeed"><div class="sa-card-head"><h2>نشاط القسم</h2><a href="{% url 'audit_log' %}">السجلّ كاملاً</a></div>
         <div class="sa-rows">{% for e in feed %}
-          <div class="row"><i class="bi bi-dot" aria-hidden="true"></i><span><b>{{ e.row.user.get_full_name|default:e.row.user.username|default:'النظام' }}</b> — {{ e.row.get_action_display }}{% if e.row.book %} <small>· الكتاب {{ e.row.book.our_number_sequence }}</small>{% endif %}</span><small>{{ e.when }}</small></div>
+          <div class="row"><i class="bi bi-dot" aria-hidden="true"></i><span><b>{% firstof e.row.user.get_full_name e.row.user.username 'النظام' %}</b> — {{ e.row.get_action_display }}{% if e.row.book %} <small>· الكتاب {{ e.row.book.our_number_sequence }}</small>{% endif %}</span><small>{{ e.when }}</small></div>
         {% empty %}<p class="sa-empty">لا حركة مسجَّلة لموظّفي هذا القسم بعد.</p>{% endfor %}</div></section>
     </div>
     <div class="sa-stack">

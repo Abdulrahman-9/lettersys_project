@@ -678,7 +678,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
                 <input type="hidden" name="user_id" value="{{ row.user.pk }}">
               </form>
               {% endif %}
-              <span style="font-weight:600">{{ row.user.get_full_name|default:row.user.username }}</span>
+              <span style="font-weight:600">{% firstof row.user.get_full_name row.user.username %}</span>
               {% if row.is_admin_account %}<span class="badge v" style="font-size:.65rem">مدير نظام</span>{% endif %}
               {% if row.is_self %}<span class="badge b" style="font-size:.65rem">أنت</span>{% endif %}
               {% if row.is_head and not row.department %}<span class="badge warn" style="font-size:.62rem" title="رئيس قسم بلا قسم مسنَد — يرى كتبه هو فقط">⚠ بلا قسم</span>{% endif %}

@@ -53,7 +53,7 @@
         <tr>
           <td class="bx-unit">
             <b>{{ row.target }}</b>
-            <small>{% if row.referral.created_by %}فرّقه {{ row.referral.created_by.get_full_name|default:row.referral.created_by.username }}{% endif %}{% if row.referral.assignee %} — {{ row.referral.assignee.get_full_name|default:row.referral.assignee.username }}{% endif %}</small>
+            <small>{% if row.referral.created_by %}فرّقه {% firstof row.referral.created_by.get_full_name row.referral.created_by.username %}{% endif %}{% if row.referral.assignee %} — {% firstof row.referral.assignee.get_full_name row.referral.assignee.username %}{% endif %}</small>
             {% if row.referral.margin %}<small class="bx-unit-margin">↩ {{ row.referral.margin }}</small>{% endif %}
             {% if row.referral.margin_crop %}
               {% with c=row.referral.margin_crop %}
@@ -127,7 +127,7 @@
       <li>
         <span><b>{{ event.holder_name }}</b> — {{ event.get_event_display }}{% if event.note %} · {{ event.note }}{% endif %}
           {% comment %}**مَن قيّد** لا مَن استلم: الحاملُ صارت العهدةُ إليه، وهذا مَن أثبتها — والسؤالُ بعد شهرٍ عن الثاني.{% endcomment %}
-          {% if event.recorded_by %}<small class="bx-tl-note">قيّده {{ event.recorded_by.get_full_name|default:event.recorded_by.username }}{% if event.signature_mode == 'paper' %} · توقيعٌ ورقيّ{% endif %}</small>{% endif %}</span>
+          {% if event.recorded_by %}<small class="bx-tl-note">قيّده {% firstof event.recorded_by.get_full_name event.recorded_by.username %}{% if event.signature_mode == 'paper' %} · توقيعٌ ورقيّ{% endif %}</small>{% endif %}</span>
         <span class="w num">{{ event.signed_at|date:"d/m/Y H:i" }}</span>
       </li>
       {% endfor %}

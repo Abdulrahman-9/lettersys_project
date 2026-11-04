@@ -160,12 +160,12 @@
           <div><dt>نوع المستند</dt><dd>{{ book.document_type|default:"—" }}</dd></div>
           <div><dt>السرّيّة</dt><dd>{{ book.get_secret_level_display }}
             {% if secret_openers is not None %}{# Q5: «مَن يفتحه» — من توأم secret_access #}
-            <small class="bx-openers">يفتحه: مديرُ النظام{% for u in secret_openers %} · {{ u.get_full_name|default:u.username }}{% endfor %}</small>{% endif %}</dd></div>
+            <small class="bx-openers">يفتحه: مديرُ النظام{% for u in secret_openers %} · {% firstof u.get_full_name u.username %}{% endfor %}</small>{% endif %}</dd></div>
           <div><dt>القسم</dt><dd>{% if book.department %}<span class="bx-code">{{ book.department.code }}</span> {{ book.department.name }}{% else %}—{% endif %}</dd></div>
           <div><dt>الاستحقاق</dt><dd class="num">{% if book.due_date %}{{ book.due_date|date:"d/m/Y" }}{% if due %} <small>· {{ due.text }}</small>{% endif %}{% else %}<span class="bx-muted">بلا متابعة</span>{% endif %}</dd></div>
           {# «المستندُ واحدٌ والقيدُ متعدّد» — موسومٌ للإنعاش بعد «قيِّده عندنا» ولو كان فارغاً #}
           <div><dt>القيد في الدفاتر</dt><dd id="bookRegsBar" data-lifecycle-refresh>{% for reg in registrations %}<span class="bx-reg">{{ reg.department.name }} <span class="num">{{ reg.number|default:"بلا رقم" }}</span>{% if reg.registered_at %} <small class="num">· {{ reg.registered_at|date:"d/m" }}</small>{% endif %}</span>{% empty %}<span class="bx-muted">في دفتر قسمه وحده</span>{% endfor %}</dd></div>
-          <div><dt>أدخله</dt><dd>{{ book.created_by.get_full_name|default:book.created_by.username|default:"—" }} <small class="num">· {{ book.created_at|date:"d/m/Y" }}</small></dd></div>
+          <div><dt>أدخله</dt><dd>{% firstof book.created_by.get_full_name book.created_by.username "—" %} <small class="num">· {{ book.created_at|date:"d/m/Y" }}</small></dd></div>
         </dl>
       </section>
 
@@ -238,7 +238,7 @@
             <div>
               {% if sg.is_valid %}<span class="lc-state lc-state-done"><i class="bi bi-patch-check-fill"></i>سارٍ</span>
               {% else %}<span class="lc-state lc-state-late"><i class="bi bi-x-circle"></i>مُبطَل</span>{% endif %}
-              <b>{{ sg.signer.get_full_name|default:sg.signer.username }}</b>
+              <b>{% firstof sg.signer.get_full_name sg.signer.username %}</b>
               <span class="bx-muted">— {{ sg.get_capacity_display }}</span>
             </div>
             <small class="bx-muted num">{{ sg.signed_at|date:"d/m/Y H:i" }} ·
@@ -355,7 +355,7 @@
             <div class="comment-who">
               <span class="comment-avatar" aria-hidden="true"><i class="bi bi-person"></i></span>
               <div>
-                <div class="comment-author">{{ comment.created_by.get_full_name|default:comment.created_by.username }}{% if comment.created_by == request.user %} <span class="comment-you">أنت</span>{% endif %}</div>
+                <div class="comment-author">{% firstof comment.created_by.get_full_name comment.created_by.username %}{% if comment.created_by == request.user %} <span class="comment-you">أنت</span>{% endif %}</div>
                 <small class="comment-date num">{{ comment.created_at|date:"d/m/Y H:i" }}{% if comment.is_edited %} <span class="comment-edited-flag">(معدّل)</span>{% endif %}</small>
               </div>
             </div>

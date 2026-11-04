@@ -145,7 +145,7 @@
             <td>
               {{ row.purpose }}
               {% if row.due_date %}<span class="ho-sub">الإنجاز قبل <span class="num">{{ row.due_date|date:"Y/m/d" }}</span></span>{% endif %}
-              {% if row.assignee %}<span class="ho-sub">المكلَّف: {{ row.assignee.get_full_name|default:row.assignee.username }}</span>{% endif %}
+              {% if row.assignee %}<span class="ho-sub">المكلَّف: {% firstof row.assignee.get_full_name row.assignee.username %}</span>{% endif %}
             </td>
             <td class="sign-cell"><span class="ho-date-guide">التاريخ:&nbsp;&nbsp;&nbsp;&nbsp;/&nbsp;&nbsp;&nbsp;&nbsp;/</span></td>
           </tr>
