@@ -357,6 +357,27 @@ def _degarble_date_zone(text: str) -> str:
     return ''.join(out)
 
 
+# سطرُ تاريخٍ قائمٌ بذاته في أيّ موضعٍ من النصّ: للاقتراح وحده، لأنّ موضعه غير مضمون. والقيمةُ
+# محروسةٌ بـ_DATE_VALUE_RE (تاريخٌ صريحٌ بسنةٍ رباعيّة)، فـ«Date: May 2025» لا تمرّ.
+_DATE_LINE_RE = re.compile(r'^[ \t]*(?:dated?|الت[أا]ريخ|تاريخ)[ \t]*[:;][ \t]*(\S[^\n]{4,30}?)[ \t]*$',
+                           re.IGNORECASE | re.MULTILINE)
+
+
+def find_date_line(text):
+    """أوّلُ سطرِ تاريخٍ يُحلَّل إلى تاريخٍ معقول: `(النصّ, datetime)` أو `(None, None)`."""
+    for match in _DATE_LINE_RE.finditer(text or ''):
+        cand = _DAY_SUFFIX_RE.sub('', match.group(1).translate(_AR_DIGITS)).strip()
+        if not _DATE_VALUE_RE.search(cand):
+            continue
+        try:
+            date_obj = date_parser.parse(cand, dayfirst=True)
+        except (ValueError, TypeError, OverflowError):
+            continue
+        if _is_plausible_date(date_obj):
+            return cand, date_obj
+    return None, None
+
+
 class PatternMatcher:
     """
     استخراج البيانات باستخدام Pattern Matching

@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261019-integrated-duplicate-document">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261104-xp6">
 <style>
 .scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
 .scan-agent-status:hover{filter:brightness(.97)}
@@ -59,6 +59,11 @@
    الحالة نقطةٌ فقط (اللون يكفي، والنصّ في التلميح)، والوضع التلقائي أيقونةٌ فقط. */
 .preview-scan-status{display:inline-flex;align-items:center;gap:6px;margin-inline-start:auto;flex:none}
 .preview-scan-status .scan-agent-status{font-size:0;gap:0;padding:.34rem;background:rgba(255,255,255,.15);color:#f0fdfa}
+.preview-scan-status .auto-extract-toggle{width:30px;height:30px;padding:0;justify-content:center;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3)}
+.preview-scan-status .auto-extract-toggle.is-on{color:#ccfbf1;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3)}
+.preview-scan-status .auto-extract-toggle.is-on:hover{background:rgba(255,255,255,.26)}
+.preview-scan-status .auto-extract-toggle.is-off,.preview-scan-status .auto-extract-toggle.is-off:hover{color:rgba(255,255,255,.6);background:transparent;border-color:rgba(255,255,255,.25)}
+.preview-scan-status .aet-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .preview-scan-status .scan-agent-status::before{width:10px;height:10px;background:#e2e8f0}
 .preview-scan-status .scan-agent-status[data-state=ready]::before{background:#6ee7b7}
 .preview-scan-status .scan-agent-status[data-state=scanning]::before{background:#fcd34d}
@@ -69,6 +74,9 @@
 .preview-scan-status .scan-agent-status[data-state=no_device]::before{background:#fca5a5}
 .preview-scan-status .scan-auto-badge{font-size:0;gap:0;color:#f0fdfa;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);padding:.28rem .5rem}
 .preview-scan-status .scan-auto-badge .bi{font-size:.85rem}
+/* مستندٌ متعدّد الصفحات: يدخل الترقيم إلى الرأس، فيُخلى له مكان ليبقى اسم الملف ظاهراً */
+.modal-header:has(#previewPager:not([style*="none"])) .scan-auto-badge,
+.modal-header:has(#previewPager:not([style*="none"])) .modal-header-title span{display:none}
 </style>
 <link rel="stylesheet" href="{% static 'css/doc_canvas.css' %}?v=20260705a">
 <link rel="stylesheet" href="{% static 'css/document_manager.css' %}?v=20260702b">
@@ -277,6 +285,19 @@
                             <div class="input-hint" id="senderNumberHint">
                                 <strong>العدد المطبوع على الورقة</strong> — كما يظهر على كتاب الجهة بعد «العدد /». يُنقَل كما هو، ولا علاقة له برقم قيدنا.
                             </div>
+                            <div class="title-suggest" id="numberNotice" role="status" hidden>
+                                <div class="title-suggest__head"><span class="title-suggest__label">لم يُقرأ العدد</span></div>
+                                <bdi class="title-suggest__value" id="numberNoticeValue" hidden></bdi>
+                                <div class="title-suggest__warn" id="numberNoticeText"></div>
+                                <div class="title-suggest__actions" id="numberNoticeActions" hidden>
+                                    <button type="button" class="title-suggest__btn" id="numberNoticeApply">
+                                        <i class="bi bi-check2" aria-hidden="true"></i> استعمِله
+                                    </button>
+                                    <button type="button" class="title-suggest__btn title-suggest__btn--ghost" id="numberNoticeDismiss">
+                                        <i class="bi bi-x" aria-hidden="true"></i> تجاهُل
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="form-group-smart" id="senderDateGroup">
@@ -352,9 +373,11 @@
                                 <span class="subject-locate__src" id="subjectLocateSrc"></span>
                             </div>
                             <div class="subject-locate__stage" id="subjectLocateStage" data-tip="انقر سطراً مقترَحاً أو اسحب مستطيلاً">
-                                <img id="subjectLocateImg" alt="صورة الصفحة الأولى" draggable="false">
-                                <div class="subject-locate__rect" id="subjectLocateRect" hidden></div>
-                                <div id="subjectLocateCands"></div>
+                                <div class="subject-locate__canvas">
+                                    <img id="subjectLocateImg" alt="صورة الصفحة الأولى" draggable="false">
+                                    <div class="subject-locate__rect" id="subjectLocateRect" hidden></div>
+                                    <div id="subjectLocateCands"></div>
+                                </div>
                             </div>
                             <div class="subject-locate__read" id="subjectLocateRead" hidden>
                                 <bdi id="subjectLocateText"></bdi>
@@ -525,24 +548,30 @@
 
         <!-- شريط الإجراءات الثابت -->
         <div class="action-bar">
-            <div class="validation-indicator" id="validationIndicator" style="margin-inline-end:auto;">
+            <div class="validation-indicator" id="validationIndicator">
                 <span class="validation-dot"></span>
                 <span id="validationText">ملء الحقول المطلوبة...</span>
             </div>
+            {% if edit_book_json == 'null' %}
+            <details class="action-more" id="actionMore">
+                <summary class="action-more-toggle" title="إجراءات أخرى" aria-label="إجراءات أخرى"><i class="bi bi-three-dots" aria-hidden="true"></i></summary>
+                <div class="action-more-menu">
+                    <button type="button" class="action-more-item is-warn" id="clearFormButton" title="تفريغ كل الحقول المُدخَلة أو المستخرَجة (لا يحذف الصورة الممسوحة)">
+                        <i class="bi bi-eraser" aria-hidden="true"></i> تفريغ الحقول
+                    </button>
+                    <button type="button" class="action-more-item" id="cancelEditButton" data-back-url="{{ back_url|default:'' }}" title="إلغاء والعودة لمكان البدء">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i> إلغاء والعودة
+                    </button>
+                </div>
+            </details>
+            {% else %}
             <button type="button" class="btn-action-neutral" id="cancelEditButton" data-back-url="{{ back_url|default:'' }}" title="إلغاء والعودة لمكان البدء">
                 <i class="bi bi-x-lg" aria-hidden="true"></i> إلغاء
-            </button>
-            {% if edit_book_json == 'null' %}
-            <button type="button" class="btn-action-warn" id="clearFormButton" title="تفريغ كل الحقول المُدخَلة أو المستخرَجة (لا يحذف الصورة الممسوحة)">
-                <i class="bi bi-eraser" aria-hidden="true"></i> تفريغ الحقول
-            </button>
-            <button type="button" class="btn-action-secondary" id="extractButton" title="إعادة استخراج البيانات من الملف يدوياً">
-                <i class="bi bi-search" aria-hidden="true"></i> استخراج
             </button>
             {% endif %}
             <button type="button" class="btn-action-secondary" id="saveAndSendButton"
                     title="حفظ الكتاب ثم إرساله بالبريد إلى الجهة المعنيّة مع مرفقاته">
-                <i class="bi bi-envelope" aria-hidden="true"></i> {% if edit_book_json == 'null' %}حفظ وإرسال للجهة{% else %}حفظ وإرسال{% endif %}
+                <i class="bi bi-envelope" aria-hidden="true"></i> حفظ وإرسال
             </button>
             <button type="button" class="btn-action-primary" id="saveButton" title="حفظ الكتاب في النظام (Ctrl+S)" aria-keyshortcuts="Control+S">
                 <i class="bi bi-check-lg" aria-hidden="true"></i> حفظ الكتاب
@@ -592,6 +621,11 @@
             {% comment %}حالة الوكيل + التلقائي في رأس المعاينة (الإدخال فقط) — أيقونات تُقرأ بلمحة والنصّ في التلميح؛ scanProgress والأزرار تبقى أسفل.{% endcomment %}
             {% if edit_book_json == 'null' %}
             <div class="preview-scan-status">
+            {# مفتاح الاستخراج التلقائي: مفعّلاً يُستخرَج فور رفع الملف؛ مطفأً تُدخِل يدوياً بلا انتظار (يُخزَّن) #}
+            <button type="button" id="autoExtractToggle" class="auto-extract-toggle is-on" role="switch" aria-checked="true"
+                    title="الاستخراج التلقائي بعد رفع الملف — أطفئه لتُدخِل الحقول يدوياً بلا انتظار، ويبقى زرّ «استخراج» متاحاً وقتما تشاء">
+                <i class="bi bi-lightning-charge-fill"></i><span class="aet-label">استخراج تلقائي</span>
+            </button>
                 <div class="scan-agent-wrap">
                 <button type="button" id="scanAgentStatus" class="scan-agent-status" data-state="checking"
                         title="حالة وكيل المسح — انقر للفحص والتعليمات"
@@ -603,6 +637,16 @@
                 </span>
             </div>
             {% endif %}
+        </div>
+        <div class="xp" id="extractProgress" hidden>
+            <div class="xp-head">
+                <span class="xp-pct" id="xpPct">0%</span>
+                <span class="xp-stage" id="xpStage" aria-live="polite"></span>
+                <span class="xp-eta" id="xpEta"></span>
+                <button type="button" class="xp-stop" id="xpStop"><i class="bi bi-stop-circle" aria-hidden="true"></i> إيقاف الاستخراج</button>
+            </div>
+            <div class="xp-track" id="xpTrack" role="progressbar" aria-label="تقدّم الاستخراج" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+            <div class="xp-steps" id="xpSteps"></div>
         </div>
         <div class="modal-body" id="modalBody">
             <div class="empty-state" id="dropZone" title="اضغط أو اسحب الملف هنا">
@@ -621,25 +665,25 @@
         <!-- شريط أزرار المسح الضوئي (محاذٍ لشريط الإجراءات في اللوحة اليسرى) -->
         <div class="scan-action-bar"{% if edit_book_json != 'null' %} style="display:none"{% endif %}>
             <select id="scanDeviceSelect" class="form-select form-select-sm" style="display:none;max-width:220px" title="اختر الماسح الضوئي"></select>
-            {# مفتاح الاستخراج التلقائي: مفعّلاً يُستخرَج فور رفع الملف؛ مطفأً تُدخِل يدوياً بلا انتظار (يُخزَّن) #}
-            <button type="button" id="autoExtractToggle" class="auto-extract-toggle is-on" role="switch" aria-checked="true"
-                    title="الاستخراج التلقائي بعد رفع الملف — أطفئه لتُدخِل الحقول يدوياً بلا انتظار، ويبقى زرّ «استخراج» متاحاً وقتما تشاء">
-                <i class="bi bi-lightning-charge-fill"></i><span class="aet-label">استخراج تلقائي</span>
-            </button>
             <div class="scan-progress-inline" id="scanProgress" style="display: none;">
                 <div class="spinner-border spinner-border-sm" role="status"></div>
                 <span class="progress-message">جاري المسح...</span>
             </div>
-            {# الترتيب (RTL: الأول = أقصى اليمين): مسح من السكانر ← رفع ملف ← حذف الصورة #}
+            {# الترتيب (RTL): مسح ← رفع ← استخراج ← حذف الملف كلّه (أيقونة؛ سلّة العارض تحذف صفحةً واحدة) #}
             <div class="scan-action-bar-buttons">
                 <button type="button" class="btn-scan-action btn-scan-action-primary {% if initial_kind_direction == 'incoming' %}is-incoming{% else %}is-outgoing{% endif %}" id="startScanButton" title="بدء المسح من السكانر">
                     <i class="bi bi-upc-scan me-1"></i>مسح من السكانر
                 </button>
                 <button type="button" class="btn-scan-action btn-scan-action-upload" id="uploadFileButton" title="رفع ملف من جهازك (PDF أو صورة)">
-                    <i class="bi bi-cloud-arrow-up me-1"></i>رفع ملف
+                    <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i><span class="bsa-label">رفع ملف</span>
                 </button>
+                {% if edit_book_json == 'null' %}
+                <button type="button" class="btn-scan-action btn-scan-action-upload" id="extractButton" title="إعادة استخراج البيانات من الملف يدوياً">
+                    <i class="bi bi-search me-1" aria-hidden="true"></i>استخراج
+                </button>
+                {% endif %}
                 <button type="button" class="btn-scan-action btn-scan-action-danger" id="clearScannedButton" style="display: none;" title="حذف الصورة/الملف الممسوح فقط — لا يمسّ الحقول (لتفريغها استخدم «تفريغ الحقول»)">
-                    <i class="bi bi-trash3 me-1"></i>حذف الصورة
+                    <i class="bi bi-trash3" aria-hidden="true"></i><span class="bsa-label">حذف الصورة</span>
                 </button>
             </div>
         </div>
@@ -652,7 +696,9 @@
 <script id="editBookData" type="application/json">{{ edit_book_json|safe }}</script>
 
 <script src="{% static 'js/subject_locate.js' %}?v=20260929exc"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20261019-integrated-duplicate-document"></script>
+<script src="{% static 'js/date_dmy.js' %}?v=20261104-xp6"></script>
+<script src="{% static 'js/extraction_progress.js' %}?v=20261104-xp6"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20261104-xp6"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20261007"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
 
@@ -1324,6 +1370,19 @@
   // (أزرار التكبير/التصغير/الملاءمة أُزيلت — يكفي زر التنزيل في تذييل المعاينة)
 
   // Form validation and indicator
+  const actionMore = document.getElementById('actionMore');
+  if (actionMore) {
+    document.addEventListener('click', (e) => {
+      if (actionMore.open && (!actionMore.contains(e.target) || e.target.closest('.action-more-item'))) actionMore.open = false;
+    });
+    actionMore.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && actionMore.open) {
+        actionMore.open = false;
+        actionMore.querySelector('summary').focus();
+      }
+    });
+  }
+
   function updateValidationIndicator() {
     const bookNumber = document.getElementById('bookNumber')?.value?.trim();
     const title = document.getElementById('title')?.value?.trim();
@@ -1362,6 +1421,7 @@
     const indicator = document.getElementById('validationIndicator');
     const text = document.getElementById('validationText');
     const saveBtn = document.getElementById('saveButton');
+    saveBtn.classList.toggle('is-ready', isFilled);
     
     if (isFilled) {
       indicator.classList.add('success');
@@ -1373,11 +1433,22 @@
       indicator.classList.add('pending');
       // اسمُ الناقص لا عددُه: «4/6» وزرٌّ معطَّل لا يقولان أيَّ حقلٍ ينقص (تدقيقُ نيلسن C#4).
       const missing = [
-        [bookNumber, 'رقمنا'], [date, 'تاريخنا'], [titleOk, 'العنوان'],
-        [issuingOk, 'جهة الإصدار'], [receivingOk, 'جهة الاستقبال'],
-        [!requireDocType || docTypeOk, 'نوع المستند'],
-      ].filter(([ok]) => !ok).map(([, name]) => name);
-      text.textContent = `ينقص: ${missing.join('، ')}`;
+        [bookNumber, 'رقمنا', 'bookNumber'], [date, 'تاريخنا', 'date'], [titleOk, 'العنوان', 'title'],
+        [issuingOk, 'جهة الإصدار', 'issuingEntity'], [receivingOk, 'جهة الاستقبال', 'receivingEntity'],
+        [!requireDocType || docTypeOk, 'نوع المستند', 'documentTypeSelect'],
+      ].filter(([ok]) => !ok);
+      text.replaceChildren('ينقص: ', ...missing.flatMap(([, name, fieldId], i) => {
+        const link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'vi-link';
+        link.textContent = name;
+        link.addEventListener('click', () => {
+          const field = document.getElementById(fieldId);
+          field?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          field?.focus({ preventScroll: true });
+        });
+        return i ? ['، ', link] : [link];
+      }));
       // يبقى الحفظ متاحاً كي تعرض الضغطةُ الخطأ عند الحقل نفسه وتنقل التركيز إليه.
       saveBtn.disabled = false;
     }

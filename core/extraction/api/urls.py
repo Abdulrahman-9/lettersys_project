@@ -13,12 +13,14 @@ from .endpoints import (
     extraction_statistics,
     smart_extract_direct,
     smart_extract_stream,
+    smart_extract_progress,
     scan_token_retrieve,
     suggestions_api, subject_box_read, subject_box_confirm)
 
 urlpatterns = [
     path('extract/smart/',                         smart_extract_direct,    name='ai_smart_extract'),
     path('extract/smart/stream/',                  smart_extract_stream,    name='ai_smart_extract_stream'),
+    path('extract/smart/progress/<str:progress_id>/', smart_extract_progress, name='ai_smart_extract_progress'),
     path('extract/scan-token/<str:token>/',        scan_token_retrieve,     name='ai_scan_token'),
     path('extract/subject-box/read/',              subject_box_read,        name='ai_subject_box_read'),
     path('extract/subject-box/confirm/',           subject_box_confirm,     name='ai_subject_box_confirm'),
