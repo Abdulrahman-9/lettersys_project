@@ -101,10 +101,16 @@ if os.path.exists(MANIFEST):
             pass
 done = attempted
 
+# ما ملأته الواجهة وحُفظ بلا لمسٍ لا يعود وسماً يدرّب القارئَ على مخرجه (كما في harvest_dates).
+from core.models import DataExtractionResult  # noqa: E402
+autofilled_numbers = set(DataExtractionResult.objects
+                         .filter(additional_data__sender_number_provenance='autofilled')
+                         .values_list('book_id', flat=True))
+
 inc = ('incoming_internal', 'incoming_external')
 qs = (Book.objects.filter(kind__in=inc, is_deleted=False, attachments__isnull=False)
       .exclude(sender_number='').exclude(sender_number=None)
-      .exclude(id__in=sealed).order_by('id').distinct())
+      .exclude(id__in=sealed).exclude(id__in=autofilled_numbers).order_by('id').distinct())
 todo = [b for b in qs.values_list('id', 'sender_number') if b[0] not in done][:CHUNK]
 print('مؤهَّلون %d · منجَز %d · هذه الدفعة %d' % (qs.count(), len(done), len(todo)), flush=True)
 

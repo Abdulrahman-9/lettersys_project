@@ -15,6 +15,7 @@ Routes (all mounted under /books/ or /api/ in core/urls.py):
 """
 import logging
 import os
+import re
 import tempfile
 from pathlib import Path
 import uuid
@@ -25,6 +26,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.http import JsonResponse, StreamingHttpResponse
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -47,6 +49,25 @@ from core.models import (
 from core.scoping import can_edit_book, can_open_content, can_review_extraction, user_department_id
 from core.extraction.kinds import BOOK_KIND_LABELS, DEFAULT_BOOK_KIND, get_kind_label, normalize_book_kind
 logger = logging.getLogger(__name__)
+
+
+# اللاحقة من نوع المحتوى لا من الاسم: الرفعُ يوحَّد PDF ويبقى الاسم القديم (letter.png)،
+# فتُعامَل بايتات PDF صورةً ويفشل الاستخراج.
+_UPLOAD_SUFFIXES = {'image/jpeg': '.jpg', 'image/png': '.png', 'application/pdf': '.pdf'}
+
+_PROGRESS_ID_RE = re.compile(r'^[a-z0-9-]{8,64}$')
+_PROGRESS_TTL_SECONDS = 180
+
+
+def _upload_suffix(upload):
+    return _UPLOAD_SUFFIXES.get(upload.content_type) or Path(upload.name).suffix or '.tmp'
+
+
+def _progress_key(user_id, progress_id):
+    """مفتاح آخر مرحلة، لكلّ مستخدم على حدة فلا يقرأ أحدٌ تقدّم غيره. None لمعرّفٍ غير صالح."""
+    if not _PROGRESS_ID_RE.match(progress_id or ''):
+        return None
+    return f'extract_progress:{user_id}:{progress_id}'
 
 
 def _request_id():
@@ -341,7 +362,7 @@ def smart_extract_direct(request):
 
     temp_path = None
     try:
-        suffix = Path(upload.name).suffix or '.tmp'
+        suffix = _upload_suffix(upload)
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             for chunk in upload.chunks():
                 tmp.write(chunk)
@@ -480,6 +501,7 @@ def smart_extract_stream(request):
     # نوعُ الكتاب من التبويب — بدونه تعمل خطّةُ اتّجاه الجهات عمياء (E‑100)
     _book_kind = normalize_book_kind(request.POST.get('book_kind'), default=None) or ''
     _dept = user_department_id(request.user)   # افتراضُ القسم لجهة الصادر
+    _progress_cache_key = _progress_key(request.user.id, request.POST.get('progress_id'))
     if not upload:
         return JsonResponse({'ok': False, 'error': 'file مطلوب'}, status=400)
     if upload.content_type not in {'image/jpeg', 'image/png', 'application/pdf'}:
@@ -487,7 +509,7 @@ def smart_extract_stream(request):
     if upload.size > 10 * 1024 * 1024:
         return JsonResponse({'ok': False, 'error': 'حجم الملف يتجاوز 10MB'}, status=400)
 
-    suffix = Path(upload.name).suffix or '.tmp'
+    suffix = _upload_suffix(upload)
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         for chunk in upload.chunks():
             tmp.write(chunk)
@@ -503,8 +525,11 @@ def smart_extract_stream(request):
         box = {}
 
         def _on_progress(stage, fields):
-            events.put({'type': 'stage', 'stage': stage,
-                        'label': _STAGE_LABELS.get(stage, stage), 'fields': fields})
+            event = {'type': 'stage', 'stage': stage,
+                     'label': _STAGE_LABELS.get(stage, stage), 'fields': fields}
+            events.put(event)
+            if _progress_cache_key:
+                cache.set(_progress_cache_key, event, _PROGRESS_TTL_SECONDS)
 
         def _work():
             try:
@@ -551,6 +576,22 @@ def smart_extract_stream(request):
     resp['Cache-Control'] = 'no-cache'
     resp['X-Accel-Buffering'] = 'no'      # امنع التخزين الوسيط (nginx) كي يصل التقدّم فوراً
     return resp
+
+
+@login_required
+@writer_required_api
+@require_http_methods(['GET'])
+def smart_extract_progress(request, progress_id):
+    """آخر مرحلة بلغها استخراجٌ جارٍ.
+
+    البثّ قد يُحتجَز حتى نهايته في طريقه إلى المتصفّح (مقيس 2026-11-03: Chromium وEdge على
+    جهاز التطوير استلما استجابة خادمٍ تجريبيّ كاملةً في آخرها، وعميل بايثون تباعاً)،
+    فتسأل الواجهة هنا بطلباتٍ قصيرة لا يمكن احتجازها.
+    """
+    key = _progress_key(request.user.id, progress_id)
+    response = JsonResponse({'event': cache.get(key) if key else None})
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 @api_view(['GET'])

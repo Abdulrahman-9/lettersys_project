@@ -67,7 +67,7 @@ class CancelButtonStructureTests(TestCase):
 
     def test_button_and_guards_present(self):
         body = self.client.get(reverse(URL)).content.decode()
-        self.assertIn('<button type="button" class="btn-action-neutral" id="cancelEditButton"', body)
+        self.assertIn('<button type="button" class="action-more-item" id="cancelEditButton"', body)
         self.assertIn("bi bi-x-lg", body)
         self.assertNotIn("✕ إلغاء", body)
         self.assertIn("new URL(ref).origin === window.location.origin", body)   # backTarget مُصلَّب
@@ -275,7 +275,7 @@ class StaleExtractionGuardTests(SimpleTestCase):
         self.assertIn('async _streamExtract(gen) {', self.src)
 
     def test_clearing_the_file_or_the_form_cancels_the_running_extraction(self):
-        for fn in ('clearFile() {', 'clearForm() {'):
+        for fn in ('_replaceDocument() {', 'clearForm() {'):
             i = self.src.index(fn)
             body = self.src[i:i + 900]
             self.assertIn('_cancelRunningExtraction()', body,
@@ -393,7 +393,7 @@ class ExtractionClosureSourceGuardTests(SimpleTestCase):
 
     def test_previous_suggestions_are_reset_on_every_clear_path(self):
         """نيلسن 2: موضعٌ واحد يُفرغ سطوحَ الاقتراح، ويستدعيه التفريغُ والحذفُ والحفظ."""
-        for header in ('    clearForm() {', '    clearFile() {', '    smartClearAndStay(kind) {'):
+        for header in ('    clearForm() {', '    _replaceDocument() {', '    smartClearAndStay(kind) {'):
             self.assertIn('this.resetSuggestionSurfaces()', self._method(header), header)
         reset = self._method('    resetSuggestionSurfaces() {')
         for part in ('senderDateCrop', '_hideSenderDateSuggestion()', '.entity-candidates', 'titleSuggest',
@@ -434,18 +434,19 @@ class ExtractionClosureSourceGuardTests(SimpleTestCase):
         for part in ("'issuingEntity'", "'receivingEntity'", 'resetCaptureProvenance('):
             self.assertIn(part, reset)
 
-    def test_a_new_document_releases_the_old_documents_confirmations(self):
-        """C3: بعد حذف الملف كانت تأكيداتُ قراءاته تحجب قيمَ الملف الجديد بصمت (خلطُ مستندين،
-        بلاغ 09‑15). `confirmed` ينزل إلى `autofilled` — لا حذفُ الوسم (فراغُه يُقرأ `typed`)."""
-        release = self._fn('function _releaseDocBoundOwnership() {')
-        self.assertIn('=== PROV_CONFIRMED', release)
-        self.assertIn('= PROV_AUTOFILLED', release)
-        self.assertNotIn('delete ', release)
-        self.assertNotIn('PROV_TYPED', release)                            # يدُ الكاتب تبقى ملكاً
-        self.assertIn('_releaseDocBoundOwnership();', self._method('    clearFile() {'))
-        self.assertIn('_releaseDocBoundOwnership();', self._method('    processFile(file) {'))
+    def test_a_new_document_clears_what_was_read_from_the_old_one(self):
+        """C3 ثمّ بلاغ 11‑04: ما قرأته الآلة من الملف السابق يذهب معه ولو أكّده الكاتب، فلا تختلط
+        قيمُ مستندين حين لا يجد الملفُّ الجديد قيمةً لحقله. وما كتبه بيده في حقلٍ فارغ يبقى."""
+        body = self._method('    _replaceDocument() {')
+        self.assertIn('=== PROV_AUTOFILLED', body)
+        self.assertIn('=== PROV_CONFIRMED', body)
+        self.assertNotIn('PROV_TYPED', body)                               # يدُ الكاتب تبقى ملكاً
+        self.assertIn('this._cancelRunningExtraction();', body)            # لا يكتب استخراجٌ قديم بعده
+        self.assertIn('this._replaceDocument();', self._method('    clearFile() {'))
+        self.assertIn('this._replaceDocument();', self._method('    processFile(file) {'))
         i = self.src.index('this._loadScanToken(ud.token')
-        self.assertIn('_releaseDocBoundOwnership();', self.src[i - 200:i])   # مسحٌ جديد لا إلحاق
+        self.assertIn('this._replaceDocument();', self.src[i - 200:i])     # مسحٌ جديد لا إلحاق
+        self.assertIn("el.dataset.machineFilled = '1';", self._fn('function noteSuggestionFilled(id, value) {'))
 
     def test_det2_card_never_shows_the_box_score_as_a_reading_confidence(self):
         """F4: ثقةُ صندوق الكاشف تموضعٌ لا قراءة — كانت تُعرض «87%» تحت «قراءةٌ ضعيفة»."""
@@ -467,3 +468,212 @@ class ExtractionClosureSourceGuardTests(SimpleTestCase):
         عليه تصير `confirmed` في ذهب التدريب. الواجهةُ تُسقطه بتاريخ القيد الذي في الحقل الآن."""
         body = self._fn('function applySenderDateSuggestion(data) {')
         self.assertIn('const g = _senderDateGap(iso); return g === null || g >= 0;', body)
+
+
+class ExtractionProgressTests(TestCase):
+    """آخر مرحلة تُقرأ بطلبٍ قصير (البثّ قد يُحتجَز في طريقه)، لصاحبها وحده."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.owner = as_writer(User.objects.create_user("owner", "o@x.com", "pass1234"))
+        self.client.force_login(self.owner)
+
+    def _extract(self, progress_id="run-12345678", name="a.pdf", content_type="application/pdf"):
+        from pathlib import Path
+        from unittest import mock
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.extraction.pipeline import AIExtractionResult
+        seen = {}
+
+        def fake_process(path, on_progress=None, **kwargs):
+            seen["suffix"] = Path(path).suffix
+            if on_progress:
+                on_progress("ocr", {"title": "موضوع"})
+            result = AIExtractionResult()
+            result.status = "completed"
+            result.overall_confidence = 0.7
+            return result
+
+        with mock.patch("core.extraction.api.endpoints.AIExtractionService") as svc:
+            svc.return_value.process_image.side_effect = fake_process
+            resp = self.client.post(reverse("ai_smart_extract_stream"), data={
+                "file": SimpleUploadedFile(name, b"%PDF-1.4 body", content_type=content_type),
+                "progress_id": progress_id,
+            })
+            b"".join(resp.streaming_content)
+        return seen
+
+    def _progress(self, progress_id="run-12345678"):
+        return self.client.get(reverse("ai_smart_extract_progress", args=[progress_id]))
+
+    def test_owner_reads_latest_stage(self):
+        self._extract()
+        resp = self._progress()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Cache-Control"], "no-store")
+        event = resp.json()["event"]
+        self.assertEqual(event["stage"], "ocr")
+        self.assertEqual(event["label"], "قراءة النص")
+        self.assertEqual(event["fields"], {"title": "موضوع"})
+
+    def test_unknown_run_has_no_event(self):
+        self.assertIsNone(self._progress().json()["event"])
+
+    def test_other_user_cannot_read_progress(self):
+        self._extract()
+        self.client.force_login(as_writer(User.objects.create_user("other", "x@x.com", "pass1234")))
+        self.assertIsNone(self._progress().json()["event"])
+
+    def test_invalid_progress_id_is_not_stored(self):
+        self._extract(progress_id="BAD ID!")
+        self.assertIsNone(self._progress("BAD ID!").json()["event"])
+
+    def test_anonymous_is_turned_away(self):
+        self.client.logout()
+        self.assertEqual(self._progress().status_code, 302)
+
+    def test_pdf_named_like_an_image_is_processed_as_pdf(self):
+        """الرفعُ يوحَّد PDF ويبقى الاسم letter.png: بغير هذا تفشل كلّ صورةٍ تُرفع."""
+        seen = self._extract(name="letter.png", content_type="application/pdf")
+        self.assertEqual(seen["suffix"], ".pdf")
+
+    def test_real_image_keeps_image_suffix(self):
+        seen = self._extract(name="letter.PNG", content_type="image/png")
+        self.assertEqual(seen["suffix"], ".png")
+
+
+class ExtractionLayoutTests(TestCase):
+    def setUp(self):
+        self.client.force_login(User.objects.create_superuser("a", "a@x.com", "pass1234"))
+        self.body = self.client.get(reverse(URL)).content.decode()
+
+    def test_progress_script_loads_before_the_page_script(self):
+        self.assertLess(self.body.index("js/extraction_progress.js"), self.body.index("extraction_smart.js"))
+        self.assertIn('id="extractProgress" hidden', self.body)
+
+    def test_extract_lives_with_the_document_not_the_form(self):
+        self.assertLess(self.body.index('class="scan-action-bar"'), self.body.index('id="extractButton"'))
+        self.assertLess(self.body.index('id="actionMore"'), self.body.index('id="clearFormButton"'))
+        self.assertLess(self.body.index('id="clearFormButton"'), self.body.index('id="saveAndSendButton"'))
+
+    def test_auto_extract_switch_lives_in_the_preview_header(self):
+        self.assertLess(self.body.index('class="preview-scan-status"'), self.body.index('id="autoExtractToggle"'))
+        self.assertLess(self.body.index('id="autoExtractToggle"'), self.body.index('id="modalBody"'))
+
+
+class NumberSuggestionTests(SimpleTestCase):
+    """حين يصمت حقل العدد: اقتراحٌ من سطر تسميةٍ صريح، لا يملأ الحقل."""
+
+    def _suggest(self, text):
+        from core.extraction.pipeline import suggest_sender_number
+        return suggest_sender_number(text)
+
+    def test_letter_no_line_gives_its_trailing_digits(self):
+        got = self._suggest("From: SLB\nLetter No: MdOC-E-25097-SLB-AKA{ET-0128\nDate: 27 August")
+        self.assertEqual(got["value"], "128")
+        self.assertEqual(got["source_text"], "Letter No: MdOC-E-25097-SLB-AKA{ET-0128")
+
+    def test_letter_reference_hash_form(self):
+        self.assertEqual(self._suggest("Letter Reference #182")["value"], "182")
+
+    def test_mid_line_mention_of_an_older_letter_is_not_ours(self):
+        self.assertIsNone(self._suggest("Reference: Letter No. 1t1037 dated 11 August"))
+
+    def test_no_label_or_no_digits_gives_nothing(self):
+        self.assertIsNone(self._suggest("Dear Sir, with reference to Annex No. 2"))
+        self.assertIsNone(self._suggest("Letter No: pending"))
+        self.assertIsNone(self._suggest(""))
+        self.assertIsNone(self._suggest(None))
+
+    def test_payload_offers_it_only_when_the_number_is_silent(self):
+        from core.extraction.pipeline import AIExtractionResult, result_to_scan_data
+        result = AIExtractionResult()
+        result.raw_text = "Letter No: ABC-0128"
+        self.assertEqual(result_to_scan_data(result)["number_suggestion"]["value"], "128")
+        result.sender_number = "77"
+        self.assertIsNone(result_to_scan_data(result)["number_suggestion"])
+
+
+class NumberNoticeLayoutTests(TestCase):
+    def test_notice_sits_in_the_number_group_hidden_until_needed(self):
+        self.client.force_login(User.objects.create_superuser("a", "a@x.com", "pass1234"))
+        body = self.client.get(reverse(URL)).content.decode()
+        self.assertIn('id="numberNotice" role="status" hidden', body)
+        self.assertLess(body.index('id="senderNumberGroup"'), body.index('id="numberNotice"'))
+
+    def test_crop_rectangle_shares_the_image_coordinate_box(self):
+        """نِسبُ المستطيل تُحسب من صورة الصفحة: لو عادت إلى إطار التمرير انزاح عن المؤشّر."""
+        self.client.force_login(User.objects.create_superuser("b", "b@x.com", "pass1234"))
+        body = self.client.get(reverse(URL)).content.decode()
+        canvas = body.index('class="subject-locate__canvas"')
+        self.assertLess(body.index('id="subjectLocateStage"'), canvas)
+        self.assertLess(canvas, body.index('id="subjectLocateImg"'))
+        self.assertLess(canvas, body.index('id="subjectLocateRect"'))
+
+
+class TextDateSuggestionTests(SimpleTestCase):
+    """سطرُ «Date:» خارج منطقة الرأس (كتابٌ بعمودين): اقتراحٌ يؤكّده الكاتب، لا ملء."""
+
+    def _suggest(self, text):
+        from core.extraction.pipeline import suggest_sender_date
+        return suggest_sender_date(text)
+
+    def test_ordinal_marred_by_ocr_is_read(self):
+        got = self._suggest('Reference: Letter No. 14037\nDate: 27" August 2026\nDear Sir')
+        self.assertEqual(got["iso"], "2026-08-27")
+        self.assertEqual(got["raw"], "27 August 2026")
+
+    def test_unreadable_line_does_not_hide_a_later_readable_one(self):
+        self.assertEqual(self._suggest("تاريخ: 27 أغسطس 2026\nDate: 27th August 2026")["iso"], "2026-08-27")
+
+    def test_day_comes_first_in_numeric_dates(self):
+        self.assertEqual(self._suggest("التاريخ: 4/11/2026")["iso"], "2026-11-04")
+
+    def test_body_mentions_and_vague_values_are_not_dates(self):
+        self.assertIsNone(self._suggest("Contract Effective Date of 29 July 2026"))
+        self.assertIsNone(self._suggest("Date: May 2025"))
+        self.assertIsNone(self._suggest("Date:\n22/10/2026"))
+        self.assertIsNone(self._suggest(None))
+
+    def test_it_can_never_autofill_the_field(self):
+        got = self._suggest("Date: 27 August 2026")
+        self.assertLess(got["confidence"], 0.98)    # عتبةُ الملء في _sdAutofillEligible
+        self.assertEqual(got["source"], "text_line")
+
+    def test_number_suggestion_does_not_cross_lines(self):
+        from core.extraction.pipeline import suggest_sender_number
+        self.assertIsNone(suggest_sender_number("Letter No:\n22/10/2026"))
+
+
+class ReviewFindingGuards(TestCase):
+    """حرّاسُ مصدرٍ لما كشفته مراجعةُ ما قبل النشر (2026-11-04)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from pathlib import Path
+        from django.conf import settings
+        cls.src = (Path(settings.BASE_DIR) / "static" / "extraction_smart.js").read_text(encoding="utf-8")
+
+    def _method(self, header):
+        i = self.src.index(header)
+        return self.src[i:self.src.index("\n    }\n", i) if "\n    }\n" in self.src[i:] else None]
+
+    def test_tab_skips_buttons_inside_a_closed_menu(self):
+        self.assertIn("details:not([open])", self._method("    isElementNavigable(element) {"))
+
+    def test_enter_presses_standalone_buttons_instead_of_jumping(self):
+        self.assertIn(".xp, #numberNotice, #actionMore, .vi-link", self._method("    getNavigationFieldId(target) {"))
+
+    def test_a_stale_stream_aborts_its_own_controller_not_the_new_one(self):
+        body = self.src[self.src.index("    async _streamExtract(gen) {"):self.src.index("    _onExtractStage(ev, gen) {")]
+        self.assertIn("streamAbort.abort()", body)
+        self.assertNotIn("this._extractAbort?.abort()", body)
+
+    def test_extract_shortcut_does_not_interrupt_a_running_extraction(self):
+        self.assertIn("this._extractProgress.running", self._method("    extractData() {"))
+
+    def test_date_script_loads_before_the_page_script_reads_the_fields(self):
+        self.client.force_login(User.objects.create_superuser("c", "c@x.com", "pass1234"))
+        body = self.client.get(reverse(URL)).content.decode()
+        self.assertLess(body.index("js/date_dmy.js"), body.index("extraction_smart.js"))

@@ -35,7 +35,8 @@ class Command(BaseCommand):
             if (ad.get('book_kind') or '') not in _INCOMING:
                 continue
             has_box = bool(ad.get('sender_number_bbox'))
-            has_val = bool((ad.get('sender_number_final') or '').strip())
+            has_val = (bool((ad.get('sender_number_final') or '').strip())
+                       and ad.get('sender_number_provenance') != 'autofilled')
             if has_box and has_val:
                 confirmed += 1
                 # المحجوزُ للتقييم يُعدّ ولا يُدرَّب عليه — عرضُه هنا يمنع مفاجأةَ

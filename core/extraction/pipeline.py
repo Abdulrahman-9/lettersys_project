@@ -47,6 +47,7 @@ from core.models import AIIntegrationSettings
 from core.extraction.matchers.pattern import PatternMatcher, DateParser
 from core.extraction.matchers.entity import EntityMatcher
 from core.extraction.matchers.profile import SenderNumberProfiles
+from core.extraction.matchers.pattern import find_date_line
 from core.extraction.matchers.strict_ref import (APPROVED_PREFIXES, canonical_sender_number,
                                                  strict_ref_match)
 from core.extraction import degrade
@@ -476,6 +477,39 @@ def sanitize_printed_anchor(raw):
     if any(raw.upper().startswith(p) for p in APPROVED_PREFIXES):
         return digits
     return raw
+
+
+TEXT_DATE_SUGGESTION_CONFIDENCE = 0.70
+# «Letter No:» في أوّل سطرها هي عددُ الجهة؛ وفي وسطه تعني كتاباً سابقاً («Reference: Letter No. 1037»).
+_LETTER_NO_LINE_RE = re.compile(r'^[ \t]*letter[ \t]*(?:no|number|ref(?:erence)?)\b\.?[ \t]*[:#.]?[ \t]*(\S+)',
+                                re.IGNORECASE | re.MULTILINE)
+
+
+def suggest_sender_date(raw_text):
+    """اقتراحُ تاريخٍ من سطر «Date:» حين يقع خارج منطقة الرأس (كتابٌ بعمودين يُقرأ عمودُه العربيّ أوّلاً).
+
+    لا يُكتب في `sender_date`: ثقتُه تحت عتبة الملء فيبقى بطاقةً يؤكّدها الكاتب.
+    """
+    raw, date_obj = find_date_line(raw_text)
+    if not date_obj:
+        return None
+    return {'raw': raw, 'iso': date_obj.date().isoformat(), 'parse': 'ok', 'candidates': [],
+            'confidence': TEXT_DATE_SUGGESTION_CONFIDENCE, 'source': 'text_line'}
+
+
+def suggest_sender_number(raw_text):
+    """اقتراحٌ للكاتب حين يصمت حقل العدد: لا يملأ الحقل ولا يدخل التدريب.
+
+    مسارُ النصّ العامّ مكتومٌ بقياسٍ (2 صواب مقابل 17 خطأً)، فلا يُفتح هنا. هذا سطرُ تسميةٍ
+    صريحةٍ واحدٌ يُعرض مع نصّه الأصليّ ليطابقه الكاتب بالورقة. العددُ آخرُ مجموعة خاناتٍ فيه:
+    `MdOC-E-25097-SLB-AKA/ET-0128` ⟵ 128.
+    """
+    match = _LETTER_NO_LINE_RE.search(raw_text or '')
+    trailing = re.search(r'(\d{2,8})$', match.group(1)) if match else None
+    if not trailing:
+        return None
+    return {'value': trailing.group(1).lstrip('0') or trailing.group(1),
+            'source_text': match.group(0).strip()[:80]}
 
 
 def pdf_first_page_text(path: str) -> str:
@@ -1966,6 +2000,9 @@ class AIExtractionService:
                     # `overall_confidence` فتقلب كتباً إلى manual_review صامتاً.
                     result.sender_date_suggestion = date_suggestion
 
+            if not result.sender_date and not result.sender_date_suggestion:
+                result.sender_date_suggestion = suggest_sender_date(result.raw_text)
+
             # Step 6: حساب الثقة الإجمالية
             _progress('confidence')
             result.field_confidences = {
@@ -2363,6 +2400,7 @@ def result_to_scan_data(result: 'AIExtractionResult') -> Dict[str, Any]:
         # اقتراحُ الموضوع ضعيفِ المسار — منفصلاً عن `title` بالبناء: الواجهةُ
         # القديمة تتجاهله فلا تملأ به حقلاً (نفسُ عقد `sender_date_suggestion`).
         'title_suggestion': getattr(result, 'title_suggestion', None),
+        'number_suggestion': None if result.sender_number else suggest_sender_number(result.raw_text),
         'subject_box_proposal': getattr(result, 'subject_box_proposal', None),
         'issuing_entity': result.issuing_entity_name,
         'issuing_entity_confidence': result.issuing_entity_confidence,

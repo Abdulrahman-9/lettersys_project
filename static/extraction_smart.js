@@ -106,13 +106,16 @@ function codeFill(fn) {
 function markSuggestionDisplayed(field) { if (field) _displayedSuggestions.add(field); }
 function unmarkSuggestionDisplayed(field) { _displayedSuggestions.delete(field); }
 function displayedFieldsList() { return Array.from(_displayedSuggestions); }
-function resetCaptureProvenance(el) { if (el && el.dataset) delete el.dataset.provenance; }
+function resetCaptureProvenance(el) {
+    if (el && el.dataset) { delete el.dataset.provenance; delete el.dataset.machineFilled; }
+}
 
 /** يُستدعى من مسارات الملء الثلاثة بعد كتابة قيمةٍ مُقترَحة في حقل. */
 function noteSuggestionFilled(id, value) {
     if (value === undefined || value === null || String(value).trim() === '') return;
     const el = document.getElementById(id);
     if (!el) return;
+    el.dataset.machineFilled = '1';   // يربط القيمةَ بالملف: تذهب معه (_clearDocBoundFields)
     const group = el.closest ? el.closest('.form-group-smart') : null;
     if (group && group.classList.contains('is-hidden')) return;   // مخفيٌّ = لم يُعرَض
     markSuggestionDisplayed(CAPTURE_FIELD_BY_ID[id]);
@@ -132,17 +135,9 @@ function _clerkOwnsField(el) {
     return p === PROV_TYPED || p === PROV_CONFIRMED;
 }
 
-/** الملفُّ تغيّر (حُذف، أو أُسقط غيرُه فوقه، أو وصل مسحٌ جديد) ⟵ `confirmed` ينزل إلى
- *  `autofilled`: القيمةُ مشتقّةٌ من قراءة آلةٍ لملفٍّ ذهب، فلا تبقى «ملكَ الكاتب» تحجب قيمَ
- *  الملف الجديد بصمت (خلطُ مستندين — بلاغ المالك 09‑15). **لا حذفُ الوسم**: فراغُه يُقرأ
- *  `typed`، أقوى ذهبٍ لقيمةٍ لم يكتبها أحد. `typed` يبقى ملكاً. الثمنُ الموثَّق: تصحيحٌ ثمّ
- *  إعادةُ رفعِ **الملفّ نفسه** يُكتب فوقه. */
-function _releaseDocBoundOwnership() {
-    PROVENANCE_FIELD_IDS.forEach((id) => {
-        const el = document.getElementById(id);
-        if (el && el.dataset && el.dataset.provenance === PROV_CONFIRMED) el.dataset.provenance = PROV_AUTOFILLED;
-    });
-}
+/** حقولٌ لا تتبع الملف: التبويب، ورقمُنا ومحجوزه، وتاريخُ قيدنا. */
+const DOC_INDEPENDENT_FIELDS = ['bookKind', 'bookNumber', 'date'];
+const ENTITY_MANAGER_BY_FIELD = { issuingEntity: 'issuing', receivingEntity: 'receiving' };
 
 function _onHumanTouch(ev) {
     if (_codeFillDepth) return;
@@ -387,6 +382,41 @@ window.applySenderDateSuggestion = applySenderDateSuggestion;
  */
 function _tsEl(id) { return document.getElementById(id); }
 
+/** حقل العدد لا يسكت: إن لم يُقرأ يقول ذلك، ويقترح ما وجده في نصّ الكتاب بلا ملء. null يخفي البطاقة. */
+function applyNumberNotice(data) {
+    const card = document.getElementById('numberNotice');
+    const field = document.getElementById('senderNumber');
+    if (!card || !field) return;
+    const silent = !!data && !String(field.value || '').trim() && field.offsetParent !== null;
+    card.hidden = !silent;
+    if (!silent) return;
+    const sug = data.number_suggestion;
+    const value = document.getElementById('numberNoticeValue');
+    card.dataset.value = sug ? sug.value : '';
+    value.hidden = !sug;
+    value.textContent = sug ? sug.value : '';
+    document.getElementById('numberNoticeActions').hidden = !sug;
+    document.getElementById('numberNoticeText').textContent = sug
+        ? `وُجد في نصّ الكتاب: «⁨${sug.source_text}⁩». طابِقه بالورقة قبل استعماله.`
+        : 'اكتبه من الورقة إن وُجد، أو اتركه فارغاً.';
+}
+
+function useNumberSuggestion() {
+    const card = document.getElementById('numberNotice');
+    const field = document.getElementById('senderNumber');
+    const value = card && card.dataset.value;
+    if (!value || !field) return;
+    field.value = value;
+    codeFill(() => field.dispatchEvent(new Event('input', { bubbles: true })));
+    noteSuggestionFilled('senderNumber', value);   // يبقى autofilled: اقتراحٌ لا يدخل التدريب
+    card.hidden = true;
+    field.focus();
+}
+
+document.addEventListener('input', (e) => {
+    if (e.target && e.target.id === 'senderNumber' && e.target.value.trim()) applyNumberNotice(null);
+});
+
 function applyTitleSuggestion(data) {
     // «أين الموضوع؟» — عند الصمت (لا موضوعَ مُلئ) يعرض السطحُ اقتراحَ الموضع؛ وعند
     // الملء (ولو من الصندوق المتعلَّم) تُخفى البطاقة (قرارُ المالك 2026‑09‑11).
@@ -445,6 +475,8 @@ function _confirmTitleSuggestion() {
 
 document.addEventListener('click', (e) => {
     if (!e.target || !e.target.closest) return;
+    if (e.target.closest('#numberNoticeApply')) { useNumberSuggestion(); return; }
+    if (e.target.closest('#numberNoticeDismiss')) { applyNumberNotice(null); return; }
     if (e.target.closest('#titleSuggestApply')) {
         e.preventDefault();
         _confirmTitleSuggestion();
@@ -459,6 +491,7 @@ window.applyTitleSuggestion = applyTitleSuggestion;
 
 class ExtractionSmartSystem {
     constructor() {
+        this._extractProgress = new ExtractionProgress({ onStop: () => this._stopExtraction() });
         this.currentFile = null;
         this.scannedFiles = [];   // مصفوفة الصفحات الممسوحة (للدمج مع "مسح المزيد")
         // معاينة المستند الممسوح عبر صور الخادم (PyMuPDF) — تلائم اللوحة دائماً
@@ -496,7 +529,6 @@ class ExtractionSmartSystem {
                 extractFail: 'تعذر الاستخراج',
                 saveFail: 'تعذّر الحفظ — لم يُحفظ شيء. تحقّق من الاتصال ثمّ أعد الحفظ؛ ما أدخلتَه باقٍ في الصفحة',
                 saveSuccess: 'تم حفظ الكتاب بنجاح ✓',
-                extractSuccess: 'تم استخراج البيانات بنجاح ✓',
                 invalidFields: 'يرجى ملء جميع الحقول المطلوبة',
                 fileType: 'نوع الملف غير مدعوم (صورة أو PDF فقط)',
                 fileSize: 'حجم الملف أكبر من 10MB',
@@ -508,7 +540,6 @@ class ExtractionSmartSystem {
                 extractFail: 'Extraction failed',
                 saveFail: 'Save failed',
                 saveSuccess: 'Book saved successfully ✓',
-                extractSuccess: 'Extraction completed successfully ✓',
                 invalidFields: 'Please fill all required fields',
                 fileType: 'Unsupported file type',
                 fileSize: 'File size exceeds 10MB',
@@ -525,6 +556,7 @@ class ExtractionSmartSystem {
 
         return {
             smartExtractStream: dataset.smartExtractStreamEndpoint || '/books/api/extract/smart/stream/',
+            smartExtractProgress: '/books/api/extract/smart/progress/',
             entityList: dataset.entityListEndpoint || '/books/api/entity-list/',
             suggestions: dataset.suggestionsEndpoint || '/books/api/suggestions/',
             saveBook: dataset.saveBookEndpoint || '/books/api/book/save/',
@@ -1339,8 +1371,8 @@ class ExtractionSmartSystem {
     _fillExtractionFields(data) {
         this.beginTextUndoBatch?.();   // لقطة قبل التعبئة → يصير الاستخراج خطوة تراجع واحدة
         // نيلسن 3 على مسار الماسح أيضاً (قرارُ المالك 2026‑09‑29): ما كتبته الكاتبةُ أثناء المسح
-        // يبقى — كان هذا المسارُ وحدَه يكتب فوقه. (`confirmed` من مستندٍ سابق نزل إلى `autofilled`
-        // قبل الوصول هنا عبر `_releaseDocBoundOwnership`، فلا يحجب المسحَ الجديد.)
+        // يبقى — كان هذا المسارُ وحدَه يكتب فوقه. (ما قُرئ من مستندٍ سابق أُفرغ
+        // قبل الوصول هنا عبر `_replaceDocument`، فلا يحجب المسحَ الجديد.)
         const setVal = (id, val) => {
             const el = document.getElementById(id);
             if (el && val != null && val !== '' && !_clerkOwnsField(el)) {
@@ -1367,6 +1399,7 @@ class ExtractionSmartSystem {
         setVal('senderNumber', data.sender_number);
         setVal('title', data.title);
         applyTitleSuggestion(data);
+        applyNumberNotice(data);
         setVal('secretLevel', data.secret_level);
         if (data.book_kind) {
             setVal('bookKind', data.book_kind);
@@ -2456,6 +2489,10 @@ class ExtractionSmartSystem {
         if (!target) {
             return null;
         }
+        // أزرارٌ قائمةٌ بذاتها: Enter يضغطها، ولا يقفز منها إلى حقلٍ تالٍ.
+        if (target.closest('.xp, #numberNotice, #actionMore, .vi-link')) {
+            return null;
+        }
         if (target.id) {
             return target.id;
         }
@@ -2500,6 +2537,10 @@ class ExtractionSmartSystem {
 
     isElementNavigable(element) {
         if (!element) {
+            return false;
+        }
+        // زرٌّ في قائمةٍ مغلقة له أبعادٌ لكنّه لا يقبل التركيز، فيعلق عنده Tab.
+        if (element.closest('details:not([open])')) {
             return false;
         }
         if (element.disabled) {
@@ -3089,7 +3130,7 @@ class ExtractionSmartSystem {
                 await this.appendFromSourceToken(ud.token);   // مسح وإلحاق: يُدرج بنهاية المستند القائم
                 this._hideExtractionOverlay();
             } else {
-                _releaseDocBoundOwnership();   // مسحٌ جديد (لا إلحاقٌ ولا إعادةُ تجهيز) = مستندٌ جديد
+                this._replaceDocument();   // مسحٌ جديد (لا إلحاقٌ ولا إعادةُ تجهيز) = مستندٌ جديد
                 this._loadScanToken(ud.token, { notice: ud.warning || null });
             }
         } catch (err) {
@@ -3166,7 +3207,11 @@ class ExtractionSmartSystem {
                     finalBlob = blob.slice(0, blob.size, mimeType);
                 }
 
-                const safeName = fileName || 'scanned-document';
+                // الرفعُ يوحَّد PDF على الخادم: الاسمُ يتبع المحتوى، وإلا حُفظت بايتات PDF باسم صورة.
+                const baseName = fileName || 'scanned-document';
+                const safeName = finalBlob.type === 'application/pdf'
+                    ? baseName.replace(/\.[^.\\/]+$/, '') + '.pdf'
+                    : baseName;
                 const fileObject = new File([finalBlob], safeName, { type: finalBlob.type || 'application/octet-stream' });
 
                 // مسح/تحميل جديد يستبدل الملف الحالي — دمج الصفحات المتعددة يقع خادمياً
@@ -3180,7 +3225,6 @@ class ExtractionSmartSystem {
                 this._updateScanState();
                 if (!noAutoExtract) {
                     if (this._autoExtractEnabled()) {
-                        this.showToast('✓ تم المسح — جاري الاستخراج...', 'info');
                         // استخراج تلقائي بعد المسح الضوئي
                         setTimeout(() => this.extractData(), 400);
                     } else {
@@ -3989,7 +4033,7 @@ class ExtractionSmartSystem {
         }
 
         this.displayFileName(file.name);
-        _releaseDocBoundOwnership();         // ملفٌّ جديد فوق القديم: تأكيداتُ قراءات القديم لا تحجبه
+        this._replaceDocument();             // ملفٌّ جديد فوق القديم: ما قُرئ من القديم لا يبقى
         // المسار الموحّد: نُجهّز الملف على الخادم (صورة→PDF) ونحصل على token كي تعمل
         // معاينة الصفحات وأدوات التحرير (تدوير/حذف/إعادة ترتيب) على الرفع كما المسح.
         this.stageAndPreview(file).catch(err => {
@@ -4160,20 +4204,59 @@ class ExtractionSmartSystem {
         if (filePreview) filePreview.style.display = 'none';
     }
 
+    /** الملفُّ تغيّر: ما قرأته الآلةُ منه يذهب معه ولو عدّله الكاتبُ أو أكّده، وما كتبه بيده في حقلٍ
+     *  فارغٍ يبقى (نيلسن 3). كان القديمُ يبقى حين لا يجد الملفُّ الجديد قيمةً لحقله، فتختلط قيمُ
+     *  مستندين (بلاغا المالك 09‑15 و11‑04). موضعٌ واحدٌ لمسارات الحذف والرفع والمسح. */
+    _replaceDocument() {
+        this._cancelRunningExtraction();   // استخراجُ الملف السابق لا يكتب بعد تغييره
+        let cleared = 0;
+        this.beginTextUndoBatch?.();   // Ctrl+Z يعيد النصوص إن فُرّغت بغير قصد
+        document.querySelectorAll('[data-machine-filled], [data-provenance]').forEach((el) => {
+            const bound = el.dataset.machineFilled === '1'
+                || el.dataset.provenance === PROV_AUTOFILLED || el.dataset.provenance === PROV_CONFIRMED;
+            if (!bound || DOC_INDEPENDENT_FIELDS.includes(el.id)) return;
+            cleared += 1;
+            const manager = window.entityTagManagers?.[ENTITY_MANAGER_BY_FIELD[el.id]];
+            if (manager) manager.clear();
+            codeFill(() => {
+                el.value = el.id === 'secretLevel' ? (el.dataset.default || 'normal') : '';
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            el.classList.remove('has-error', 'is-valid');
+            resetCaptureProvenance(el);
+            const group = el.closest('.form-group-smart');
+            if (group) { delete group.dataset.conf; delete group.dataset.machineConf; }
+            const badge = document.getElementById(`${el.id}Confidence`);
+            if (badge) badge.style.display = 'none';
+        });
+        this.endTextUndoBatch?.();
+        this._origExtracted = {};
+        _displayedSuggestions.clear();
+        if (this._docTypeFromFile) {
+            this._docTypeFromFile = false;
+            this.documentTypeSelectionByKind = {};
+            this.syncKindUI(this.getCurrentKind());
+        }
+        this.resetSuggestionSurfaces();
+        applyNumberNotice(null);
+        const qualityHero = document.getElementById('qualityHero');
+        if (qualityHero) qualityHero.style.display = 'none';
+        const needsReviewCard = document.getElementById('needsReviewCard');
+        if (needsReviewCard) needsReviewCard.style.display = 'none';
+        if (typeof updateValidationIndicator === 'function') updateValidationIndicator();
+        if (cleared) this.showToast('أُفرغ ما قُرئ من الملف السابق، وبقي ما كتبته بيدك.', 'info', 5000);
+    }
+
     clearFile() {
         console.log('[ExtractionSmart] clearFile() called');
-        // حذفُ الصورة يُنهي استخراجَها: كان البثُّ يواصل ملءَ الحقول بعد الحذف
-        // (بلاغُ المالك 2026‑09‑15) فتختلط قيمُ مستندين.
-        this._cancelRunningExtraction();
-        this.resetSuggestionSurfaces();      // نيلسن 2: قصاصةُ الصورة المحذوفة واقتراحاتُها تذهب معها
-        _releaseDocBoundOwnership();         // وتأكيداتُ قراءاتها لا تحجب الملفَّ التالي
+        this._replaceDocument();             // نيلسن 2: قصاصةُ الصورة واقتراحاتُها وما قُرئ منها يذهب معها
         this.currentFile = null;
         this.scannedFiles = [];
         // أخفِ بانر التحذير عند تفريغ الملف
         this._hideFallbackBanner();
         // أعد نص زر الاستخراج للحالة الافتراضية
         const extractBtn = document.getElementById('extractButton');
-        if (extractBtn) extractBtn.innerHTML = '🔍 استخراج';
+        if (extractBtn) extractBtn.innerHTML = '<i class="bi bi-search me-1" aria-hidden="true"></i>استخراج';
         // حرّر أي Object URLs عالقة
         this._revokeLastPreviewUrls();
         // نظّف حالة المعاينة (شريط المصغّرات + المرقّم + الرمز) — كانت تبقى ظاهرة أسفل
@@ -4297,13 +4380,15 @@ class ExtractionSmartSystem {
         this._extractStopped = true;
         this._streamFilled = new Set();
         try { this._hideExtractionOverlay?.(); } catch (_) {}
+        this._extractProgress.end('cancel');
+        applyNumberNotice(null);
         try { _displayedSuggestions.clear(); } catch (_) {}
         this.scanToken = null;
         try { window.__subjectSample = null; window.SubjectLocate?.hide?.(); } catch (_) {}
         const card = document.getElementById('titleSuggest');
         if (card) card.hidden = true;
         const btn = document.getElementById('extractButton');
-        if (btn) { btn.disabled = false; btn.innerHTML = '🔍 استخراج'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-search me-1" aria-hidden="true"></i>استخراج'; }
         return running;
     }
 
@@ -4313,6 +4398,8 @@ class ExtractionSmartSystem {
             return;
         }
 
+        if (this._extractProgress.running) return;   // Ctrl+E أثناء جولةٍ جارية لا يقطعها
+        applyNumberNotice(null);
         const extractBtn = document.getElementById('extractButton');
         const originalText = extractBtn ? extractBtn.innerHTML : '';
         if (extractBtn) {
@@ -4324,10 +4411,8 @@ class ExtractionSmartSystem {
         this._extractStopped = false;
         this._extractAbort = new AbortController();
         const gen = this._bumpExtractGen();
-        this._showExtractionOverlay(
-            'جارٍ تجهيز المستند…',
-            'ستُملأ الحقول تِباعاً فور استخراج كلٍّ منها',
-            () => this._stopExtraction());
+        this._hideExtractionOverlay();          // غطاء الرفع — الورقة تبقى مكشوفة طوال الاستخراج
+        const progressRun = this._extractProgress.start();
 
         this._streamExtract(gen)
             .then((data) => {
@@ -4348,22 +4433,23 @@ class ExtractionSmartSystem {
                 const extractedCount = this._countExtractedFields(data);
                 if (extractedCount === 0) {
                     this.showToast('تعذّرت قراءة بيانات المستند تلقائياً — أدخِل الحقول يدوياً. المستند محفوظ ومعروض للمراجعة.', 'warning', 8000);
-                    if (extractBtn) extractBtn.innerHTML = '↺ إعادة المحاولة';
+                    if (extractBtn) extractBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>إعادة المحاولة';
                 } else {
-                    this.showToast(`${this.t('extractSuccess')} (${extractedCount} حقل)`, 'success');
-                    if (extractBtn) extractBtn.innerHTML = '↺ إعادة الاستخراج';
+                    if (extractBtn) extractBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>إعادة الاستخراج';
                 }
+                this._extractProgress.end(extractedCount ? 'done' : 'empty', extractedCount, progressRun);
                 // ركّز على أول حقل يحتاج مراجعة/إدخال — إرشادٌ بصريّ لما يفعله المستخدم تالياً
                 setTimeout(() => this._focusFirstReviewField(data), 200);
             })
             .catch((err) => {
                 // الإيقاف المقصود ليس خطأً — _stopExtraction تولّى الرسالة والحالة
                 if (this._extractStopped || err.name === 'AbortError') return;
+                this._extractProgress.end('error', 0, progressRun);
                 this.showToast(err.message || this.t('extractFail'), 'error', 6000);
                 console.error(err);
             })
             .finally(() => {
-                this._hideExtractionOverlay();
+                this._extractProgress.end('cancel', 0, progressRun);
                 if (extractBtn) extractBtn.disabled = false;
                 // إذا لم يتغير الزر بسبب الخطأ، أعد النص الأصلي
                 if (extractBtn && extractBtn.innerHTML.includes('جاري')) {
@@ -4377,10 +4463,13 @@ class ExtractionSmartSystem {
      *  مسارٌ واحد يحلّ محلّ النداء المتزامن القديم: تقدّم حقيقي من الأنبوب + إيقاف
      *  يُبقي ما وصل (بدل انتظار كلّ شيء ثم لا شيء عند القطع). */
     async _streamExtract(gen) {
+        const streamAbort = this._extractAbort;   // قد يحلّ محلّه متحكّمُ جولةٍ أحدث
         const form = new FormData();
         form.append('file', this.currentFile);
         // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
         form.append('book_kind', (typeof this?.getCurrentKind === 'function' ? this.getCurrentKind() : (window.extractionSystem?.getCurrentKind?.() || '')) || '');
+        form.append('progress_id', this._extractProgress.beginPolling(
+            this.apiEndpoints.smartExtractProgress, (ev) => this._onExtractStage(ev, gen)));
 
         let response;
         try {
@@ -4425,7 +4514,7 @@ class ExtractionSmartSystem {
                 let ev;
                 try { ev = JSON.parse(line); } catch (_) { continue; }   // سطر تالف يُتخطّى
                 if (this._isStaleGen(gen)) {           // أُلغيت الصورةُ أو فُرّغت الحقول
-                    try { this._extractAbort?.abort(); } catch (_) {}
+                    try { streamAbort.abort(); } catch (_) {}
                     return null;
                 }
                 if (ev.type === 'stage') this._onExtractStage(ev, gen);
@@ -4448,17 +4537,7 @@ class ExtractionSmartSystem {
     _onExtractStage(ev, gen) {
         if (gen !== undefined && this._isStaleGen(gen)) return;
         this._applyPartialFields(ev.fields);
-        const overlay = document.querySelector('#modalBody .extraction-loading-overlay');
-        if (!overlay) return;
-        const text = overlay.querySelector('.overlay-text');
-        const sub = overlay.querySelector('.overlay-sub');
-        if (text) text.textContent = `يجري ${ev.label}…`;
-        if (sub) {
-            const names = [...(this._streamFilled || [])].map(id => this._fieldLabelAr(id)).filter(Boolean);
-            sub.textContent = names.length
-                ? `تم استخراج: ${names.join('، ')}`
-                : 'ستُملأ الحقول تِباعاً فور استخراج كلٍّ منها';
-        }
+        this._extractProgress.onStage(ev.stage, ev.label);
     }
 
     /** يملأ حقول اللقطة الجزئية — مرّة واحدة لكل حقل (لا يدهس ما ملأه المستخدم بعدها). */
@@ -4494,16 +4573,10 @@ class ExtractionSmartSystem {
             this.updateConfidenceBadge(id, conf);
             this.setFieldConfidence(id, conf);
             this.validateField(id);
+            this._extractProgress.fly(el);
             filled.add(id);
         });
         if (window.__autoGrowTitle) window.__autoGrowTitle();
-    }
-
-    _fieldLabelAr(id) {
-        return ({
-            bookNumber: 'رقمنا', title: 'الموضوع', date: 'تاريخنا',
-            senderDate: 'تاريخ الجهة', senderNumber: 'العدد', secretLevel: 'السرية',
-        })[id] || '';
     }
 
     /** إيقاف الاستخراج الجاري: يقطع البثّ ويُبقي كلّ ما مُلئ حتى اللحظة للإكمال يدوياً. */
@@ -4511,14 +4584,14 @@ class ExtractionSmartSystem {
         if (this._extractStopped) return;
         this._extractStopped = true;
         try { this._extractAbort?.abort(); } catch (_) {}
-        this._hideExtractionOverlay();
+        this._extractProgress.end('stopped');
         const kept = (this._streamFilled || new Set()).size;
         this.showToast(
             kept ? `أُوقف الاستخراج — بقي ما استُخرج (${kept} حقل)، أكمل الباقي يدوياً.`
                  : 'أُوقف الاستخراج — أدخِل الحقول يدوياً.',
             'info', 6000, 'إيقاف الاستخراج');
         const btn = document.getElementById('extractButton');
-        if (btn) { btn.disabled = false; btn.innerHTML = '↺ إعادة الاستخراج'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>إعادة الاستخراج'; }
     }
 
     // يَعُدّ الحقول التي استُخرجت فعلاً (قيمة غير فارغة) — لرسالة صادقة بعد الاستخراج:
@@ -4636,10 +4709,12 @@ class ExtractionSmartSystem {
 
         // بطاقةُ الموضوع الضعيف — نفسُ نقطة الدخول للمسارات الثلاثة.
         applyTitleSuggestion(data);
+        applyNumberNotice(data);
 
         const extractedDocumentType = (data.document_type || data.book_type_name || '').trim();
         if (extractedDocumentType) {
             this.setDocumentTypeValue(extractedDocumentType, this.getCurrentKind());
+            this._docTypeFromFile = true;
         }
 
         // ملخّص الثقة الكلي + تنبيه المراجعة (بطاقتا P1)
