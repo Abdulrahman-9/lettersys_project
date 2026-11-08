@@ -27,7 +27,7 @@ from django.utils.http import content_disposition_header, url_has_allowed_host_a
 from pypdf import PdfReader, PdfWriter
 
 from ..attachment_service import attachment_write, ensure_pdf, validate_attachment_file
-from ..models import Attachment, AttachmentVersion, BookHistory
+from ..models import BOOK_ATTACHMENT_MEDIA_PREFIX, Attachment, AttachmentVersion, BookHistory
 from core.scoping import can_edit_book, can_open_content, is_privileged
 
 logger = logging.getLogger(__name__)
@@ -104,8 +104,8 @@ def serve_media(request, path):
     خدمة ملفات MEDIA خلف مصادقة (يحلّ محلّ static(MEDIA_URL) المفتوح للجميع).
 
     - يمنع اجتياز المسار (safe_join).
-    - ملفات المرفقات (Attachment/AttachmentVersion) تتطلّب ملكية الكتاب أو staff.
-    - أي media أخرى (شعارات…) تُخدَم لأي مستخدم مُصادَق فقط.
+    - ملفات المرفقات ونسخها تتطلّب إذن المحتوى؛ المحذوف والمستند بلا سجل يُرفضان.
+    - المسارات غير القياسية تُرفض؛ الوسائط الأخرى (شعارات…) تبقى للمصادَق فقط.
 
     ملاحظة نشر: في الإنتاج يجب توجيه /media/ عبر هذا العرض (أو تكرار الفحص
     على مستوى الويب-سيرفر) — لا تَخدمه مباشرةً دون مصادقة. مع
@@ -114,20 +114,33 @@ def serve_media(request, path):
     """
     try:
         full_path = safe_join(settings.MEDIA_ROOT, path)
+        rel_path = os.path.relpath(full_path, settings.MEDIA_ROOT).replace(os.sep, '/')
     except (ValueError, SuspiciousOperation):
+        raise Http404("ملف غير موجود")
+    # NTFS aliases must not turn an ownership-lookup miss into generic media access.
+    if (path != rel_path or '\\' in path
+            or any(part.endswith(('.', ' ')) or ':' in part
+                   for part in rel_path.split('/'))):
         raise Http404("ملف غير موجود")
     if not os.path.isfile(full_path):
         raise Http404("ملف غير موجود")
 
     # حدّد الكتاب المالك إن كان الملف مرفقاً أو نسخة مرفق
     owner_book = None
-    att = Attachment.objects.filter(file=path).select_related("book").first()
+    att = Attachment.all_objects.filter(file=rel_path).select_related("book").first()
     if att is not None:
+        if att.is_deleted:
+            raise Http404("ملف غير موجود")
         owner_book = att.book
     else:
-        ver = AttachmentVersion.objects.filter(file=path).select_related("attachment__book").first()
+        ver = AttachmentVersion.objects.filter(file=rel_path).select_related("attachment__book").first()
         if ver is not None and ver.attachment_id:
+            if ver.attachment.is_deleted:
+                raise Http404("ملف غير موجود")
             owner_book = ver.attachment.book
+
+    if owner_book is None and rel_path.casefold().startswith(BOOK_ATTACHMENT_MEDIA_PREFIX.casefold()):
+        raise Http404("ملف غير موجود")
 
     if owner_book is not None:
         if not can_open_content(owner_book, request.user):
@@ -141,11 +154,11 @@ def serve_media(request, path):
 
         if request.GET.get('download'):
             record_event(request, 'DOWNLOAD_ATTACHMENT', book=owner_book,
-                         metadata={'path': path[:200]})
+                         metadata={'path': rel_path[:200]})
         else:
             record_view(request, owner_book, action=UserActivityLog.VIEW_ATTACHMENT)
 
-    return _serve_media_file(full_path, path,
+    return _serve_media_file(full_path, rel_path,
                              as_attachment=bool(request.GET.get('download')))
 
 

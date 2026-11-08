@@ -12,6 +12,50 @@ from core.models import Book, Entity
 from core.decorators import rate_limit_scan, reset_scan_rate_limit_for_request
 
 
+@override_settings(TRUST_X_FORWARDED_FOR=False)
+class LoginForwardedIdentityTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def test_forged_forwarded_headers_do_not_reset_login_limit(self):
+        for attempt in range(11):
+            response = self.client.post(
+                "/login/", {"username": "unknown-audit-user", "password": "invalid"},
+                REMOTE_ADDR="192.0.2.10",
+                HTTP_X_FORWARDED_FOR=f"198.51.100.{attempt + 1}",
+            )
+            self.assertEqual(response.status_code, 200 if attempt < 10 else 429)
+        self.assertIn("Retry-After", response)
+
+    def test_limiter_matches_audit_ip_policy(self):
+        from core.audit_service import client_ip
+        from core.decorators import _client_ip
+
+        request = RequestFactory().post(
+            "/login/", REMOTE_ADDR="192.0.2.10",
+            HTTP_X_FORWARDED_FOR="198.51.100.1",
+        )
+        self.assertEqual(_client_ip(request), "192.0.2.10")
+        with self.settings(TRUST_X_FORWARDED_FOR=True):
+            self.assertEqual(_client_ip(request), client_ip(request))
+            self.assertEqual(_client_ip(request), "198.51.100.1")
+
+    @override_settings(TRUST_X_FORWARDED_FOR=True)
+    def test_declared_proxy_preserves_separate_client_buckets(self):
+        for attempt in range(11):
+            response = self.client.post(
+                "/login/", {"username": "unknown-audit-user", "password": "invalid"},
+                REMOTE_ADDR="192.0.2.10", HTTP_X_FORWARDED_FOR="198.51.100.1",
+            )
+        self.assertEqual(response.status_code, 429)
+        response = self.client.post(
+            "/login/", {"username": "unknown-audit-user", "password": "invalid"},
+            REMOTE_ADDR="192.0.2.10", HTTP_X_FORWARDED_FOR="198.51.100.2",
+        )
+        self.assertEqual(response.status_code, 200)
+
+
 class RateLimitingTestCase(TestCase):
     """اختبارات معدل التحديد الأساسية"""
 

@@ -1134,10 +1134,11 @@ def restore_delta(request):
 def bak_browse(request):
     """
     متصفّح ملفات على جهاز الخادم لاختيار ملف باكاب — للقراءة فقط، يعرض المجلدات
-    وملفات النسخ الاحتياطي فقط (.bak / .zip / .7z / .tar.gz). يُستخدَم من صفحة الاستعادة.
+    وملفات النسخ الاحتياطي فقط (.bak / .zip / .tar.gz / .tgz).
+    فك ملفات 7z يتم يدوياً ثم تُمرَّر الاستعادة على ملف .bak الناتج.
     """
     import os
-    BACKUP_EXTS = ('.bak', '.zip', '.7z', '.tar.gz', '.tgz', '.gz')
+    BACKUP_EXTS = ('.bak', '.zip', '.tar.gz', '.tgz')
     raw = (request.GET.get('path') or '').strip()
 
     # المستوى الأعلى: الأقراص + مجلدات سريعة

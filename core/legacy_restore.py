@@ -176,7 +176,8 @@ class LegacyRestoreEngine:
                          delta_only=False, keep_db=False):
         """
         يستعيد .bak إلى قاعدة SQL Server مؤقتة محلية ثم يستورد منها — دون لمس القاعدة الأصلية.
-        - مضغوط (.zip / .7z / .tar.gz): يُفَكّ تلقائياً ويُبحَث عن أول .bak داخله.
+        - مضغوط (.zip / .tar.gz): يُفَكّ بأمان ويُبحَث عن أول .bak داخله.
+        - ملفات 7z تُستخرج يدوياً؛ الاستعادة تقبل ملف .bak الناتج.
         - غير مضغوط (.bak): يُستعمَل مباشرة.
         - work_dir: مجلّد ملفات القاعدة المؤقتة. فارغ = تلقائي (مجلّد بيانات SQL Server،
           فإن ضاقت مساحته فمجلّد ملف الباكاب نفسه).
@@ -189,9 +190,15 @@ class LegacyRestoreEngine:
         بعد الاستيراد: تُحذف القاعدة المؤقتة وملفاتها والمستخرجات.
         """
         import os, time, shutil, tempfile
+        import tarfile
+        import zipfile
+        from .restore_archive import UnsafeRestoreArchive, extract_backup_archive
+
         bak_path = os.path.abspath(os.path.expanduser(bak_path))
         if not os.path.exists(bak_path):
             return {'aborted': True, 'reason': f'الملف غير موجود: {bak_path}'}
+        if bak_path.lower().endswith('.7z'):
+            return {'aborted': True, 'reason': 'فك ملفات 7z آلياً معطّل لأمان الاستعادة. استخرج ملف .bak يدوياً ثم زوّد مساره مباشرة.'}
 
         try:
             import pyodbc
@@ -203,35 +210,16 @@ class LegacyRestoreEngine:
         low = bak_path.lower()
         try:
             # ── فكّ الضغط إن لزم — نستخرج بجانب الملف الأصلي (نفس القرص ليصله SQL Server) ──
-            if low.endswith('.zip') or low.endswith('.7z') or low.endswith('.tar.gz') or low.endswith('.tgz'):
-                tmp_extract = os.path.join(os.path.dirname(bak_path), f"_legacy_restore_tmp_{int(time.time())}")
-                os.makedirs(tmp_extract, exist_ok=True)
+            if low.endswith(('.zip', '.tar.gz', '.tgz')):
+                tmp_extract = tempfile.mkdtemp(
+                    prefix='_legacy_restore_tmp_', dir=os.path.dirname(bak_path))
                 if progress_cb: progress_cb('جارٍ فكّ الضغط...')
-                if low.endswith('.zip'):
-                    import zipfile
-                    with zipfile.ZipFile(bak_path) as zf:
-                        zf.extractall(tmp_extract)
-                elif low.endswith('.7z'):
-                    try:
-                        import py7zr
-                    except ImportError:
-                        return {'aborted': True, 'reason': 'ملف 7z يتطلب مكتبة py7zr. استخرجه يدوياً أو حوّله إلى zip، ثم زوّد مسار .bak مباشرة.'}
-                    with py7zr.SevenZipFile(bak_path) as zf:
-                        zf.extractall(tmp_extract)
-                else:  # tar.gz / tgz
-                    import tarfile
-                    with tarfile.open(bak_path) as tf:
-                        tf.extractall(tmp_extract)
-                # ابحث عن أول .bak
-                found = None
-                for root, _dirs, files in os.walk(tmp_extract):
-                    for f in files:
-                        if f.lower().endswith('.bak'):
-                            found = os.path.join(root, f); break
-                    if found: break
-                if not found:
-                    return {'aborted': True, 'reason': 'لم يُعثر على ملف .bak داخل الأرشيف.'}
-                actual_bak = found
+                try:
+                    actual_bak = extract_backup_archive(bak_path, tmp_extract)
+                except (UnsafeRestoreArchive, tarfile.TarError, zipfile.BadZipFile,
+                        RuntimeError, OSError) as exc:
+                    logger.warning('legacy_restore: archive extraction refused: %s', exc)
+                    return {'aborted': True, 'reason': f'تعذّر فك أرشيف الاستعادة بأمان: {exc}'}
             elif low.endswith('.rar'):
                 return {'aborted': True, 'reason': 'ملفات RAR غير مدعومة آلياً — استخرجه يدوياً وزوّد مسار ملف .bak مباشرة.'}
             elif not low.endswith('.bak'):
@@ -349,7 +337,10 @@ class LegacyRestoreEngine:
             return summary
         finally:
             if tmp_extract and os.path.isdir(tmp_extract):
-                shutil.rmtree(tmp_extract, ignore_errors=True)
+                try:
+                    shutil.rmtree(tmp_extract)
+                except OSError:
+                    logger.exception('legacy_restore: could not remove extraction directory %s', tmp_extract)
 
     # ── الدمج من قاعدةٍ مستعادة سلفاً ──────────────────────────────────────
     @classmethod

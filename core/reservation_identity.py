@@ -4,6 +4,7 @@ import re
 
 from django.conf import settings
 from django.core import signing
+from django.http import HttpRequest
 
 from .reservation_service import reservation_client_key
 
@@ -18,7 +19,9 @@ def browser_key(cookies, session_key):
     raw = cookies.get(COOKIE_NAME)
     if raw:
         try:
-            key = signing.get_cookie_signer(salt=COOKIE_NAME + COOKIE_SALT).unsign(raw)
+            request = HttpRequest()
+            request.COOKIES = cookies
+            key = request.get_signed_cookie(COOKIE_NAME, salt=COOKIE_SALT)
             if re.fullmatch(r'[0-9a-f]{64}', key):
                 return key
         except signing.BadSignature:

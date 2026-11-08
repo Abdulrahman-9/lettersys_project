@@ -41,6 +41,8 @@ if not SECRET_KEY:
 
 # DEBUG=False افتراضياً — يجب تعيينه صراحةً في .env لتفعيله
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes')
+TRUST_X_FORWARDED_FOR = os.environ.get(
+    'TRUST_X_FORWARDED_FOR', 'False').lower() in ('true', '1', 'yes')
 
 # ─── المضيفون والـ CSRF ───────────────────────────────────────────────────────
 _raw_hosts = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1')
