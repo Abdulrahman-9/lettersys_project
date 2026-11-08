@@ -51,6 +51,8 @@
 .sa-btn { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .85rem; border: 1px solid var(--sa-line); border-radius: 10px; background: #fff; color: var(--sa-ink) !important; font-size: .84rem; font-weight: 700; text-decoration: none; cursor: pointer; }
 .sa-btn:hover { background: #fffaf3; border-color: #d9a066; }
 .sa-btn.sm { padding: .25rem .6rem; font-size: .78rem; }
+.sa-btn.pri { border-color: var(--sa-amber); background: var(--sa-amber); color: #fff !important; }
+.sa-btn.pri:hover { border-color: #92400e; background: #92400e; }
 .sa-btn:focus-visible, .sa-seg a:focus-visible, .sa-tabs a:focus-visible, .sa-rows a:focus-visible { outline: 2px solid var(--sa-amber); outline-offset: 1px; }
 .sa-card { padding: 1rem 1.1rem; border: 1px solid var(--sa-line); border-radius: 14px; background: #fff; }
 .sa-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .4rem .75rem; margin-bottom: .5rem; }
@@ -108,7 +110,7 @@
 .sa-kpi span { font-size: .82rem; font-weight: 700; color: var(--sa-soft); }
 .sa-kpi small { font-size: .74rem; color: var(--sa-mute); }
 .sa-two { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
-.sa-stack { display: grid; gap: 1rem; min-width: 0; }
+.sa-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; min-width: 0; }
 .sa-rows > a, .sa-rows > .row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .7rem; align-items: center; margin: 0; padding: .5rem 0; border-top: 1px solid #f0ebe3; color: var(--sa-ink) !important; font-size: .85rem; text-decoration: none; }
 .sa-rows > :first-child { border-top: 0; }
 .sa-rows code { color: var(--sa-amber); font-family: inherit; font-weight: 800; }
@@ -135,6 +137,30 @@
 .sa-lens { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; margin-bottom: .75rem; padding: .55rem .9rem; border: 1px solid #efdcc1; border-radius: 12px; background: #fdf8f0; color: var(--sa-ink); font-size: .86rem; font-weight: 700; }
 .sa-lens a { color: var(--sa-amber); font-weight: 800; }
 .sa-lens a:last-child { margin-inline-start: auto; }
+/* النماذج */
+.sa-form { display: grid; gap: .75rem; }
+.sa-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.sa-fields.two { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.sa-fields label { display: grid; gap: .3rem; color: var(--sa-soft); font-size: .8rem; font-weight: 700; }
+.sa-input { min-width: 0; padding: .42rem .7rem; border: 1px solid var(--sa-line); border-radius: 10px; background: #fff; color: var(--sa-ink); font: inherit; font-size: .86rem; }
+.sa-fields .sa-select { max-width: none; }
+.sa-input:focus-visible, .sa-select:focus-visible { border-color: #d9a066; outline: 2px solid var(--sa-amber); outline-offset: 1px; }
+.sa-switch { display: inline-flex; align-items: center; gap: .55rem; width: fit-content; color: var(--sa-ink); font-size: .88rem; font-weight: 800; cursor: pointer; }
+.sa-switch input { width: 1.1rem; height: 1.1rem; accent-color: var(--sa-amber); }
+.sa-hint { color: var(--sa-mute); font-size: .76rem; line-height: 1.7; }
+.sa-warn { margin: 0; padding: .5rem .75rem; border-radius: 10px; background: #fef3c7; color: #92400e; font-size: .8rem; font-weight: 700; }
+.sa-file { font-family: Consolas, 'Courier New', monospace; font-size: .76rem; overflow-wrap: anywhere; }
+/* لمساتُ البطاقة: بلاطةُ أيقونة، وخطُّ حالةٍ على الحافّة يُقرأ قبل النصّ */
+.sa-card-head h2 { display: inline-flex; align-items: center; gap: .55rem; }
+.sa-ico { display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem; border-radius: 9px; background: var(--sa-tile); color: var(--sa-amber); font-size: .95rem; box-shadow: inset 0 0 0 1px #f3dcbd; }
+.sa-card.is-ok, .sa-card.is-bad, .sa-card.is-warn { border-inline-start-width: 4px; }
+.sa-card.is-ok { border-inline-start-color: #16a34a; }
+.sa-card.is-bad { border-inline-start-color: #dc2626; }
+.sa-card.is-warn { border-inline-start-color: #d97706; }
+.sa-reg tbody tr:hover td { background: #fffaf3; }
+.sa-rows > a { transition: background-color .15s; border-radius: 8px; padding-inline: .4rem; }
+.sa-rows > a:hover { background: #fffaf3; text-decoration: none; }
+
 /* مصفوفة الأدوار */
 .rm-note { display: flex; gap: .6rem; align-items: flex-start; margin: 0; padding: .75rem 1rem; border: 1px solid var(--sa-line); border-radius: 12px; background: #fff; color: var(--sa-soft); font-size: .84rem; line-height: 1.8; }
 .rm-note > i { color: var(--sa-amber); font-size: 1rem; }
@@ -150,6 +176,8 @@
 .rm td { padding: .28rem .3rem; border-bottom: 1px solid #f0ebe3; text-align: center; }
 .rm tbody th[scope="row"] { padding: .35rem .5rem; border-bottom: 1px solid #f0ebe3; color: var(--sa-ink); font-weight: 700; text-align: start; }
 .rm tbody th[scope="row"] .bi-lock-fill { color: var(--sa-mute); font-size: .72rem; }
+.rm tbody tr[id] { scroll-margin-top: 6rem; }
+.rm tbody tr:target th[scope="row"] { box-shadow: inset -3px 0 0 var(--sa-amber); }
 .rm .rm-group th { padding: .7rem .5rem .25rem; border-bottom: 1px solid var(--sa-line); color: var(--sa-amber); font-size: .74rem; font-weight: 800; text-align: start; }
 .rm-changed { display: flex; flex-wrap: wrap; align-items: center; gap: .1rem .5rem; margin-top: .1rem; }
 .rm-changed small { color: var(--sa-mute); font-size: .7rem; font-weight: 600; }
@@ -169,8 +197,6 @@ button.rm-cell:hover { border-color: #c98a4b; }
 .rm-bar b { color: #fff; }
 .rm-bar .rm-ghost { border-color: rgba(245, 220, 194, .4); background: transparent; color: #f5dcc2 !important; }
 .rm-bar .rm-ghost:hover { background: rgba(255, 255, 255, .08); }
-.rm-save { border: 0; background: var(--sa-amber); color: #fff !important; }
-.rm-save:hover { background: #92400e; }
 .rm-bar .sa-btn:focus-visible { outline: 2px solid #fcd34d; outline-offset: 2px; }
 .rm-dialog { max-width: 28rem; padding: 1.1rem 1.2rem; border: 1px solid var(--sa-line); border-radius: 14px; color: var(--sa-ink); }
 .rm-dialog::backdrop { background: rgba(33, 18, 10, .45); }
@@ -181,4 +207,5 @@ button.rm-cell:hover { border-color: #c98a4b; }
   .sa-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sa-two { grid-template-columns: minmax(0, 1fr); }
   .rm-card { overflow-x: auto; }
+  .sa-fields, .sa-fields.two { grid-template-columns: minmax(0, 1fr); }
 }

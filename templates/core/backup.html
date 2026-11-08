@@ -1,107 +1,73 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %}النسخ الاحتياطي لقواعد البيانات{% endblock %}
-
-{% block page_sidebar %}
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">معلومات النسخ</div>
-  <div class="app-context-list">
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">المسار الحالي</div>
-        <strong>قاعدة البيانات</strong>
-      </div>
-      <span class="app-context-chip is-info"><i class="bi bi-database"></i> تشغيل</span>
-    </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">عدد النسخ المتوفرة</div>
-        <strong>{{ existing_backups|length|default:0 }}</strong>
-      </div>
-      <span class="app-context-chip"><i class="bi bi-archive"></i> محفوظ</span>
-    </div>
-  </div>
-</div>
-
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">اختصارات</div>
-  <div class="app-context-list">
-    <a class="app-context-link" href="{% url 'dashboard' %}">
-      <span>العودة للوحة التحكم</span>
-      <i class="bi bi-grid-1x2"></i>
-    </a>
-  </div>
-</div>
-{% endblock %}
-
+{% block title %}النسخ الاحتياطي{% endblock %}
+{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261108-roles2">{% endif %}{% endblock %}
 {% block content %}
+<div class="sa-page">
+  <div class="sa-head">
+    <div><h1>النسخ الاحتياطي</h1><p>قاعدة <code dir="ltr">{{ database_name }}@{{ database_host }}:{{ database_port }}</code> · النسخ التلقائيّ واليدويّ والاستعادة في مكان واحد.</p></div>
+  </div>
 
-{# ── بطاقة: استعادة البيانات من قاعدة قديمة ── #}
-<div class="card shadow-sm border-0 mb-4 border-start border-4 border-primary">
-  <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-2">
-    <div>
-      <h5 class="mb-1"><i class="bi bi-arrow-counterclockwise me-2 text-primary"></i>استعادة البيانات</h5>
-      <p class="text-muted mb-0 small">استعادة البيانات من قاعدة بريد قديمة (SQL Server نوع ARCHMDOC) — كتب، جهات، ارتباطات، مرفقات — بالتطبيع الصحيح.</p>
+  <div class="sa-two">
+    <div class="sa-stack">
+      <section class="sa-card is-{% if backup_job.state == 'ok' %}ok{% elif backup_job.state == 'stale' %}bad{% else %}warn{% endif %}" aria-labelledby="bkAuto">
+        <div class="sa-card-head"><h2 id="bkAuto"><span class="sa-ico" aria-hidden="true"><i class="bi bi-clock-history"></i></span>النسخ التلقائيّ</h2>
+          <span class="sa-chip{% if backup_job.state == 'ok' %} ok{% elif backup_job.state == 'stale' %} bad{% else %} warn{% endif %}">{{ backup_job.note }}</span></div>
+        <form method="post" action="{% url 'settings_backup_save' %}" class="sa-form">
+          {% csrf_token %}
+          <label class="sa-switch" for="bkEnabled"><input type="checkbox" id="bkEnabled" name="enabled"{% if backup_settings.enabled %} checked{% endif %}>تفعيل النسخ التلقائيّ</label>
+          <div class="sa-fields">
+            <label for="bkFrequency">التكرار
+              <select id="bkFrequency" name="frequency" class="sa-select">{% for val, label in backup_settings.FREQUENCY_CHOICES %}<option value="{{ val }}"{% if backup_settings.frequency == val %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+            <label for="bkHour">ساعة التشغيل (0–23)
+              <input type="number" id="bkHour" name="hour" min="0" max="23" class="sa-input" value="{{ backup_settings.hour }}" inputmode="numeric"></label>
+            <label for="bkRetention">الاحتفاظ بالنسخ (يوماً)
+              <input type="number" id="bkRetention" name="retention_days" min="1" max="3650" class="sa-input" value="{{ backup_settings.retention_days }}" inputmode="numeric"></label>
+          </div>
+          <small class="sa-hint">إن كان الجهاز مطفأً عند الساعة المحدّدة، يُنسخ عند أوّل تشغيلٍ بعدها.{% if backup_settings.last_run_at %} آخر نسخة تلقائيّة ناجحة: {{ backup_settings.last_run_at|date:"d/m/Y H:i" }}.{% endif %}</small>
+          {% if backup_settings.enabled and not backup_settings.last_run_at %}<p class="sa-warn" role="note">الجدولة مفعّلة ولم تُسجَّل أيّ نسخة تلقائيّة بعد. تأكّد أنّ خدمة الجدولة تعمل على الخادم.</p>{% endif %}
+          <div><button type="submit" class="sa-btn">حفظ الجدولة</button></div>
+        </form>
+      </section>
+
+      <section class="sa-card" aria-labelledby="bkNow">
+        <div class="sa-card-head"><h2 id="bkNow"><span class="sa-ico" aria-hidden="true"><i class="bi bi-download"></i></span>نسخة يدويّة الآن</h2><small>نسخة PostgreSQL مشفّرة بامتداد ‎.dump.enc</small></div>
+        <form method="post" class="sa-form">
+          {% csrf_token %}
+          <div class="sa-fields two">
+            <label for="bkDir">مسار الحفظ
+              <input type="text" id="bkDir" name="target_directory" class="sa-input" value="{{ default_directory }}" dir="ltr" spellcheck="false"></label>
+            <label for="bkName">اسم الملفّ
+              <input type="text" id="bkName" name="file_name" class="sa-input" value="{{ suggested_name }}" dir="ltr" spellcheck="false"></label>
+          </div>
+          <small class="sa-hint">يُنشأ المجلّد إن لم يكن موجوداً.</small>
+          <div><button type="submit" class="sa-btn pri"><i class="bi bi-download" aria-hidden="true"></i>أنشئ النسخة الآن</button></div>
+        </form>
+      </section>
     </div>
-    <a href="{% url 'data_restore' %}" class="btn btn-primary">
-      <i class="bi bi-cloud-download me-1"></i>فتح أداة الاستعادة
-    </a>
-  </div>
-</div>
 
-<div class="card shadow-sm border-0">
-  <div class="card-header bg-white">
-    <h5 class="mb-0">إنشاء نسخة احتياطية لقاعدة البيانات</h5>
-  </div>
-  <div class="card-body">
-    <p class="text-muted mb-4">
-      قاعدة PostgreSQL الحالية:
-      <code>{{ database_name }}@{{ database_host }}:{{ database_port }}</code>
-    </p>
-    <form method="post" class="row g-3">
-      {% csrf_token %}
-      <div class="col-12 col-md-7">
-        <label class="form-label">مسار الحفظ</label>
-        <input class="form-control" type="text" name="target_directory" value="{{ default_directory }}">
-        <div class="form-text">ضع مسار مجلد النسخ الاحتياطي (سيُنشأ تلقائياً إن لم يكن موجوداً).</div>
-      </div>
-      <div class="col-12 col-md-5">
-        <label class="form-label">اسم الملف الاحتياطي</label>
-        <input class="form-control" type="text" name="file_name" value="{{ suggested_name }}">
-        <div class="form-text">سيتم إنشاء dump بصيغة PostgreSQL ثم تشفيره بامتداد .dump.enc.</div>
-      </div>
-      <div class="col-12 text-end">
-        <button class="btn btn-brand px-4" type="submit">إنشاء النسخة الاحتياطية</button>
-      </div>
-    </form>
-  </div>
-</div>
+    <div class="sa-stack">
+      <section class="sa-card" aria-labelledby="bkList">
+        <div class="sa-card-head"><h2 id="bkList"><span class="sa-ico" aria-hidden="true"><i class="bi bi-archive"></i></span>النسخ المتوفّرة</h2><small>في المسار الافتراضيّ</small></div>
+        {% if existing_backups %}
+        <div class="sa-scroll"><table class="sa-reg">
+          <thead><tr><th scope="col">الملفّ</th><th scope="col">الحجم</th><th scope="col">التاريخ</th></tr></thead>
+          <tbody>{% for backup in existing_backups|slice:":12" %}
+            <tr><td dir="ltr" class="sa-file">{{ backup.name }}</td><td class="sa-when">{{ backup.size_mb }} م.ب</td><td class="sa-when">{{ backup.modified|date:"d/m/Y H:i" }}</td></tr>
+          {% endfor %}</tbody>
+        </table></div>
+        {% if existing_backups|length > 12 %}<p class="sa-empty">وأقدم منها {{ existing_backups|length|add:"-12" }} في المجلّد نفسه.</p>{% endif %}
+        {% else %}<p class="sa-empty">لا نسخ في المسار الافتراضيّ بعد.</p>{% endif %}
+      </section>
 
-{% if existing_backups %}
-<div class="card shadow-sm border-0 mt-4">
-  <div class="card-header bg-white">
-    <h6 class="mb-0">النسخ الاحتياطية المتوفرة في المسار الافتراضي</h6>
-  </div>
-  <div class="table-responsive">
-    <table class="table align-middle mb-0">
-      <thead class="table-light">
-        <tr>
-          <th>اسم الملف</th>
-          <th>الحجم</th>
-          <th>تاريخ التعديل</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for backup in existing_backups %}
-        <tr>
-          <td>{{ backup.name }}</td>
-          <td>{{ backup.size_mb }} م.ب</td>
-          <td>{{ backup.modified|date:"d/m/Y H:i" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      <section class="sa-card" aria-labelledby="bkRestore">
+        <div class="sa-card-head"><h2 id="bkRestore"><span class="sa-ico" aria-hidden="true"><i class="bi bi-arrow-counterclockwise"></i></span>الاستعادة</h2></div>
+        <div class="sa-rows">
+          {% if nav.restore_system %}<a href="{% url 'system_restore' %}"><i class="bi bi-database-add" aria-hidden="true"></i><span>استعادة نسخة النظام <small>· تُستعاد في قاعدة جديدة بعد التحقّق، والحاليّة لا تتغيّر حتّى تبدّل إليها</small></span><i class="bi bi-chevron-left" aria-hidden="true"></i></a>{% endif %}
+          <a href="{% url 'data_restore' %}"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i><span>استعادة البيانات من القاعدة القديمة <small>· SQL Server من نوع ARCHMDOC: كتب وجهات ومرفقات</small></span><i class="bi bi-chevron-left" aria-hidden="true"></i></a>
+        </div>
+      </section>
+    </div>
   </div>
 </div>
-{% endif %}
 {% endblock %}

@@ -1,7 +1,7 @@
 {% with u=request.resolver_match.url_name tab=request.GET.tab %}
 <nav class="sa-nav" aria-label="إدارة النظام">
-  <a class="{% if u == 'system_centre' or u == 'system_department' %}on{% endif %}" href="{% url 'system_centre' %}"{% if u == 'system_centre' %} aria-current="page"{% endif %}><i class="bi bi-diagram-3-fill" aria-hidden="true"></i><span>مركز الأقسام</span></a>
-  <a class="{% if u == 'admin_panel' and tab == 'departments' %}on{% endif %}" href="{% url 'admin_panel' %}?tab=departments"><i class="bi bi-bezier2" aria-hidden="true"></i><span>الأقسام والهيكل</span></a>
+  {# مدخلٌ واحدٌ للأقسام: المركزُ ومحرّرُ الهيكل (زرٌّ في رأس المركز) صفحتان لشيءٍ واحد #}
+  <a class="{% if u == 'system_centre' or u == 'system_department' or u == 'admin_panel' and tab == 'departments' %}on{% endif %}" href="{% url 'system_centre' %}"{% if u == 'system_centre' %} aria-current="page"{% endif %}><i class="bi bi-diagram-3-fill" aria-hidden="true"></i><span>الأقسام</span></a>
   <a class="{% if u == 'admin_panel' and tab == 'users' or u == 'system_roles' %}on{% endif %}" href="{% url 'admin_panel' %}?tab=users"><i class="bi bi-people-fill" aria-hidden="true"></i><span>الحسابات والأدوار</span></a>
 
   <div class="sa-nav-group">البيانات</div>
@@ -17,10 +17,10 @@
   <a class="{% if u == 'system_ops' %}on{% endif %}" href="{% url 'system_ops' %}"><i class="bi bi-activity" aria-hidden="true"></i><span>تشغيل النظام</span>{% if nav.ops_failures %}<em aria-label="{{ nav.ops_failures }} مهمّة فاشلة">{{ nav.ops_failures }}</em>{% endif %}</a>
 
   <div class="sa-nav-group">النظام</div>
-  <a class="{% if u == 'settings_hub' %}on{% endif %}" href="{% url 'settings_hub' %}"><i class="bi bi-sliders2" aria-hidden="true"></i><span>الإعدادات</span></a>
+  {# الربطُ الشبكيّ إعدادٌ يُضبط مرّةً فمكانُه الإعدادات، وحالةُ الأجهزة الحيّة في «المحطّات» #}
+  <a class="{% if u == 'settings_hub' or u == 'network_settings' or u == 'sequence_settings' %}on{% endif %}" href="{% url 'settings_hub' %}"><i class="bi bi-sliders2" aria-hidden="true"></i><span>الإعدادات</span></a>
   <a class="{% if u == 'backup_database' %}on{% endif %}" href="{% url 'backup_database' %}"><i class="bi bi-hdd-stack" aria-hidden="true"></i><span>النسخ الاحتياطي</span></a>
   <a class="{% if u == 'mail_settings' %}on{% endif %}" href="{% url 'mail_settings' %}"><i class="bi bi-envelope" aria-hidden="true"></i><span>البريد</span></a>
-  <a class="{% if u == 'network_settings' %}on{% endif %}" href="{% url 'network_settings' %}"><i class="bi bi-hdd-network" aria-hidden="true"></i><span>الشبكة</span></a>
   <a class="{% if u == 'scan_settings' %}on{% endif %}" href="{% url 'scan_settings' %}"><i class="bi bi-printer" aria-hidden="true"></i><span>الماسح</span></a>
   <a class="{% if u == 'workstation_board' %}on{% endif %}" href="{% url 'workstation_board' %}"><i class="bi bi-pc-display" aria-hidden="true"></i><span>المحطّات</span></a>
 </nav>

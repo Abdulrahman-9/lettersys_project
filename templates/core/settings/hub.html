@@ -26,14 +26,10 @@
   <div class="settings-tabstrip-shell" id="settingsTabstripShell">
     <div class="settings-tabstrip" id="settingsTabstrip" role="tablist" aria-label="أقسام الإعدادات">
       <button class="settings-tab" role="tab" data-tab="general"       data-kind="pane"     aria-selected="true"  type="button"><i class="bi bi-card-heading"></i><span>عام</span></button>
-      <button class="settings-tab" role="tab" data-tab="email"         data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'mail_settings' %}?embed=1"><i class="bi bi-envelope-fill"></i><span>البريد الإلكتروني</span></button>
       <button class="settings-tab" role="tab" data-tab="notifications" data-kind="pane"     aria-selected="false" type="button"><i class="bi bi-bell-fill"></i><span>الإشعارات</span></button>
       <button class="settings-tab" role="tab" data-tab="security"      data-kind="pane"     aria-selected="false" type="button"><i class="bi bi-shield-lock-fill"></i><span>الأمان</span></button>
-      <button class="settings-tab" role="tab" data-tab="backup"        data-kind="pane"     aria-selected="false" type="button"><i class="bi bi-hdd-stack-fill"></i><span>النسخ والاستعادة</span></button>
       <button class="settings-tab" role="tab" data-tab="sequences"     data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'sequence_settings' %}?embed=1"><i class="bi bi-123"></i><span>العدّادات التسلسلية</span></button>
       <button class="settings-tab" role="tab" data-tab="network"       data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'network_settings' %}?embed=1"><i class="bi bi-diagram-3-fill"></i><span>الربط الشبكي</span></button>
-      <button class="settings-tab" role="tab" data-tab="scan"          data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'scan_settings' %}?embed=1"><i class="bi bi-printer-fill"></i><span>الماسح الضوئي</span></button>
-      <button class="settings-tab" role="tab" data-tab="trash"         data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'trash_list' %}?embed=1"><i class="bi bi-trash3-fill"></i><span>سلة المحذوفات</span></button>
       <button class="settings-tab" role="tab" data-tab="ai" data-kind="pane" aria-selected="false" type="button"><i class="bi bi-robot"></i><span>الذكاء الاصطناعي</span></button>
       <span class="settings-tab-indicator" id="settingsTabIndicator"></span>
     </div>
@@ -91,14 +87,13 @@
           <span class="settings-pane-icon" style="--accent:#0f766e;"><i class="bi bi-diagram-3"></i></span>
           <div>
             <h5 class="mb-1 fw-bold">الأقسام والأدوار</h5>
-            <p class="text-muted mb-0">إنشاءُ الأقسام وإسنادُ قسمِ كلّ موظّفٍ ودورِه وقوائمِ التعميم — في لوحة الإدارة.</p>
+            <p class="text-muted mb-0">الأقسامُ والحساباتُ وأدوارُها في «الأقسام» و«الحسابات والأدوار» من الشريط.</p>
           </div>
         </div>
         <div class="settings-pane-body">
           <p class="mb-1"><span class="fw-semibold">وضع التشغيل:</span> {{ system_settings.get_deployment_profile_display }}
             · <span class="fw-semibold">القسم الافتراضيّ:</span> {{ default_department.name|default:'—' }}</p>
-          <p class="text-muted small">ما يُدخله أو يحجزه حسابٌ بلا قسم — ومنه مدير النظام — يقع في القسم الافتراضيّ. والحسابُ الجديد يُختار قسمُه عند إنشائه.</p>
-          <a class="btn btn-outline-primary" href="{% url 'admin_panel' %}" target="_top"><i class="bi bi-box-arrow-up-left ms-1"></i> فتح لوحة الإدارة</a>
+          <p class="text-muted small mb-0">ما يُدخله أو يحجزه حسابٌ بلا قسم — ومنه مدير النظام — يقع في القسم الافتراضيّ. والحسابُ الجديد يُختار قسمُه عند إنشائه.</p>
         </div>
       </div>
       {% endif %}
@@ -173,103 +168,6 @@
           </form>
         </div>
       </div>
-    </div>
-
-    {# ── النسخ والاستعادة ── #}
-    <div class="settings-pane" data-pane="backup">
-      <div class="settings-pane-card mb-3">
-        <div class="settings-pane-head">
-          <span class="settings-pane-icon" style="--accent:#0369a1;"><i class="bi bi-clock-history"></i></span>
-          <div>
-            <h5 class="mb-1 fw-bold">النسخ الاحتياطي المجدول</h5>
-            <p class="text-muted mb-0">نسخٌ تلقائيٌّ مشفّر في الساعة المحدّدة — يعمل حين تكون جدولةُ الخادم مشغّلة.</p>
-          </div>
-        </div>
-        <div class="settings-pane-body">
-          <form method="post" action="{% url 'settings_backup_save' %}">
-            {% csrf_token %}
-            <div class="form-check form-switch mb-3">
-              <input class="form-check-input" type="checkbox" role="switch" id="bk_enabled" name="enabled" {% if backup_settings.enabled %}checked{% endif %}>
-              <label class="form-check-label fw-semibold" for="bk_enabled">تفعيل النسخ التلقائي</label>
-            </div>
-            <div class="row g-3">
-              <div class="col-md-4">
-                <label class="form-label fw-semibold" for="bk_frequency">التكرار</label>
-                <select name="frequency" id="bk_frequency" class="form-select">
-                  {% for val, label in backup_settings.FREQUENCY_CHOICES %}
-                  <option value="{{ val }}" {% if backup_settings.frequency == val %}selected{% endif %}>{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label fw-semibold" for="bk_hour">ساعة التشغيل (0–23)</label>
-                <input type="number" id="bk_hour" name="hour" min="0" max="23" class="form-control" value="{{ backup_settings.hour }}">
-                <div class="form-text">إن كان الجهاز مطفأً عندها، يُنفَّذ النسخ عند أوّل تشغيلٍ بعدها.</div>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label fw-semibold" for="bk_retention">مدة الاحتفاظ (يوم)</label>
-                <input type="number" id="bk_retention" name="retention_days" min="1" max="3650" class="form-control" value="{{ backup_settings.retention_days }}">
-              </div>
-            </div>
-            {% if backup_settings.last_run_at %}
-            <div class="text-muted small mt-3">آخر تشغيل ناجح: <span class="num">{{ backup_settings.last_run_at|date:"d/m/Y H:i" }}</span></div>
-            {% elif backup_settings.enabled %}
-            <div class="alert alert-warning py-2 small mt-3 mb-0">
-              <i class="bi bi-exclamation-triangle-fill ms-1"></i>
-              الجدولةُ مفعَّلةٌ هنا ولم تُسجَّل أيُّ نسخةٍ تلقائيّةٍ بعد — تأكّد أنّ خدمةَ الجدولة تعمل على الخادم، وإلّا فلا نسخَ رغم التفعيل.
-            </div>
-            {% endif %}
-            <button type="submit" class="btn btn-primary mt-3"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
-          </form>
-        </div>
-      </div>
-
-      <div class="settings-pane-card mb-3">
-        <div class="settings-pane-head">
-          <span class="settings-pane-icon" style="--accent:#0f766e;"><i class="bi bi-download"></i></span>
-          <div>
-            <h5 class="mb-1 fw-bold">نسخة احتياطية يدوية الآن</h5>
-            <p class="text-muted mb-0">إنشاء نسخة PostgreSQL مشفّرة فوراً، وتصفّح النسخ الموجودة.</p>
-          </div>
-        </div>
-        <div class="settings-pane-body">
-          <a href="{% url 'backup_database' %}?embed=1" class="btn btn-primary" data-embed-open="{% url 'backup_database' %}?embed=1">
-            <i class="bi bi-box-arrow-in-down ms-1"></i> فتح النسخ اليدوي هنا
-          </a>
-        </div>
-      </div>
-
-      <div class="settings-pane-card">
-        <div class="settings-pane-head">
-          <span class="settings-pane-icon" style="--accent:#7c3aed;"><i class="bi bi-arrow-counterclockwise"></i></span>
-          <div>
-            <h5 class="mb-1 fw-bold">استعادة البيانات الذكية</h5>
-            <p class="text-muted mb-0">استيرادٌ من قاعدة بيانات قديمة أو ملفّ .bak، مع تطبيع تلقائي وفكّ التكرار وإعادة ضبط العدّادات.</p>
-          </div>
-        </div>
-        <div class="settings-pane-body">
-          <a href="{% url 'data_restore' %}?embed=1" class="btn btn-primary" data-embed-open="{% url 'data_restore' %}?embed=1">
-            <i class="bi bi-arrow-counterclockwise ms-1"></i> فتح الاستعادة هنا
-          </a>
-        </div>
-      </div>
-
-      {% if nav.restore_system %}
-      <div class="settings-pane-card">
-        <div class="settings-pane-head">
-          <span class="settings-pane-icon" style="--accent:#0f766e;"><i class="bi bi-database-add"></i></span>
-          <div>
-            <h5 class="mb-1 fw-bold">استعادة نسخة النظام</h5>
-            <p class="text-muted mb-0">نسخُ هذا النظام المشفّرة تُستعاد في قاعدةٍ جديدة بعد التحقّق منها — والقاعدةُ الحاليّة لا تتغيّر حتى تبدّل إليها بنفسك.</p>
-          </div>
-        </div>
-        <div class="settings-pane-body">
-          <a href="{% url 'system_restore' %}?embed=1" class="btn btn-outline-primary" data-embed-open="{% url 'system_restore' %}?embed=1">
-            <i class="bi bi-database-add ms-1"></i> فتح استعادة النسخة
-          </a>
-        </div>
-      </div>
-      {% endif %}
     </div>
 
     {# ── الذكاء الاصطناعيّ: داخل المركز بدل قذف المستخدم إلى لوحة جانغو (مراجعة 2026‑09‑13) ── #}

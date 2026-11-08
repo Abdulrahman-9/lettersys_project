@@ -36,19 +36,31 @@ class SettingsHubTabstripTests(TestCase):
 
     def test_every_section_is_present_as_a_tab(self):
         html = self.client.get(reverse('settings_hub')).content.decode()
-        for key in ('general', 'email', 'notifications', 'security', 'backup',
-                    'sequences', 'network', 'scan', 'trash', 'ai'):
+        for key in ('general', 'notifications', 'security', 'sequences', 'network', 'ai'):
             self.assertIn(f'data-tab="{key}"', html, f'التبويب {key} مفقود من الشريط')
+        # ما له مدخلٌ في شريط الإدارة لا يتكرّر هنا (قرارُ المالك 2026‑11‑08)
+        for key in ('email', 'backup', 'scan', 'trash'):
+            self.assertNotIn(f'data-tab="{key}"', html, f'التبويب {key} مكرَّرٌ مع الشريط')
 
     def test_heavy_tools_load_embedded_not_by_leaving(self):
         """الأدوات الثقيلة تُحمَّل داخل الإطار — لا كروابط تُخرِج المستخدم."""
         html = self.client.get(reverse('settings_hub')).content.decode()
         for name, tab in (('sequence_settings', 'sequences'),
-                          ('network_settings', 'network'),
-                          ('scan_settings', 'scan')):
+                          ('network_settings', 'network')):
             self.assertIn(f'data-embed-url="{reverse(name)}?embed=1"', html,
                           f'التبويب {tab} لا يُحمَّل داخل المركز')
         self.assertIn('id="settingsEmbedFrame"', html)
+
+    def test_the_backup_schedule_lives_on_the_backup_page(self):
+        save = reverse('settings_backup_save')
+        self.assertNotIn(save, self.client.get(reverse('settings_hub')).content.decode())
+        html = self.client.get(reverse('backup_database')).content.decode()
+        self.assertIn(f'action="{save}"', html)
+        self.assertIn('النسخ التلقائيّ', html)
+        response = self.client.post(save, {'enabled': 'on', 'frequency': 'daily', 'hour': '7', 'retention_days': '30'})
+        self.assertRedirects(response, reverse('backup_database'), fetch_redirect_response=False)
+        from core.models import BackupSettings
+        self.assertEqual((BackupSettings.get().hour, BackupSettings.get().enabled), (7, True))
 
     def test_deep_link_tab_is_accepted(self):
         """?tab=scan لا يُسقِط الصفحة (الاختيار يتم في العميل من نفس الرابط)."""
@@ -107,7 +119,6 @@ class EmbedModeTests(TestCase):
         """أزرار الرجوع كانت تشير لوجهات خاطئة (أو مفقودة) — الآن تعود لتبويبها."""
         hub = reverse('settings_hub')
         for name, tab in (('sequence_settings', 'sequences'),
-                          ('network_settings', 'network'),
-                          ('scan_settings', 'scan')):
+                          ('network_settings', 'network')):
             html = self.client.get(reverse(name)).content.decode()
             self.assertIn(f'{hub}?tab={tab}', html, f'{name}: زر الرجوع لا يعود لتبويبه')

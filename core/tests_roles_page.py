@@ -126,7 +126,7 @@ class ShowTests(RolesPageCase):
 class SaveTests(RolesPageCase):
     def test_a_change_writes_a_row_and_a_trace_and_says_whom_it_reaches(self):
         response = self.post(change='entry:book.restore:1')
-        self.assertRedirects(response, URL, fetch_redirect_response=False)
+        self.assertEqual(response['Location'], URL + '#cap-book.restore')  # يعود إلى صفّه لا إلى رأس الصفحة
         row = RoleCapabilityOverride.objects.get()
         self.assertEqual((row.role, row.capability, row.allowed, row.changed_by), ('entry', 'book.restore', True, self.admin))
         self.assertEqual(self.traces().count(), 1)
@@ -134,7 +134,8 @@ class SaveTests(RolesPageCase):
                          ['حُفظت خليّة واحدة، ويسري الآن على 3 موظّفين.'])
 
     def test_several_changes_are_saved_together(self):
-        self.post(change=['entry:book.restore:1', 'mail:report.view:1', 'head:book.comment:0'])
+        response = self.post(change=['mail:report.view:1', 'entry:book.restore:1', 'head:book.comment:0'])
+        self.assertEqual(response['Location'], URL + '#cap-book.comment')  # أعلى صفٍّ مسّه الحفظ
         self.assertEqual(RoleCapabilityOverride.objects.count(), 3)
         self.assertEqual(self.traces().count(), 3)
 
@@ -182,9 +183,14 @@ class ResetTests(RolesPageCase):
                          'عادت إلى المعتمد خليّتان، ويسري الآن على 4 موظّفين.')
 
     def test_everything_returns(self):
-        self.post(reset='all')
+        self.assertEqual(self.post(reset='all')['Location'], URL)
         self.assertFalse(RoleCapabilityOverride.objects.exists())
         self.assertEqual(self.traces().count(), 6)
+
+    def test_a_row_reset_comes_back_to_its_row(self):
+        self.assertEqual(self.post(reset='book.restore')['Location'], URL + '#cap-book.restore')
+        # ولو لم يكن فيه ما يعود
+        self.assertEqual(self.post(reset='book.edit')['Location'], URL + '#cap-book.edit')
 
     def test_a_row_planted_on_a_locked_cell_is_left_alone(self):
         RoleCapabilityOverride.objects.create(role='head', capability='book.sign', allowed=False)

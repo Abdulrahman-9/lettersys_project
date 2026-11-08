@@ -108,10 +108,25 @@ class SidebarTests(SystemAdminCase):
         html = self.client.get(reverse(CENTRE)).content.decode('utf-8')
         nav = re.search(r'<nav class="sa-nav".*?</nav>', html, re.S).group(0)
         links = re.findall(r'href="([^"]+)"', nav)
-        self.assertEqual(len(links), 17)
+        self.assertEqual(len(links), 15)
         for link in links:
             with self.subTest(link=link):
                 self.assertEqual(self.client.get(link.replace('&amp;', '&')).status_code, 200)
+
+    def test_one_entry_per_thing(self):
+        """الأقسامُ مدخلٌ واحدٌ يضيء في المركز ومحرّر الهيكل، والشبكةُ في الإعدادات لا في الشريط (2026‑11‑08)."""
+        self.client.force_login(self.admin)
+
+        def lit(url):
+            html = self.client.get(url).content.decode('utf-8')
+            nav = re.search(r'<nav class="sa-nav".*?</nav>', html, re.S).group(0)
+            self.assertNotIn(reverse('network_settings'), nav)
+            return re.findall(r'class="on"[^>]*>.*?<span>([^<]+)</span>', nav, re.S)
+
+        self.assertEqual(lit(reverse(CENTRE)), ['الأقسام'])
+        self.assertEqual(lit(reverse('admin_panel') + '?tab=departments'), ['الأقسام'])
+        self.assertEqual(lit(reverse('network_settings')), ['الإعدادات'])
+        self.assertEqual(lit(reverse('workstation_board')), ['المحطّات'])
 
     def test_the_panel_uses_the_same_sidebar(self):
         self.client.force_login(self.admin)

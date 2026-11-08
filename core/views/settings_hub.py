@@ -5,11 +5,14 @@
 
 صفحة واحدة بشريط تبويبات علوي يجمع كل إعدادات النظام:
 
-* التبويبات البسيطة (عام، الإشعارات، الأمان، النسخ) تُعرَض وتُحفَظ هنا مباشرةً
-  عبر عروض الحفظ أدناه — تبديلها لحظي بلا إعادة تحميل.
-* الأدوات الثقيلة (البريد، العدّادات، الشبكة، الماسح، المستخدمون، السلة) تُحمَّل
-  داخل لوحة المركز في إطار ``?embed=1`` بكامل صفحاتها العاملة، فلا يغادر
-  المستخدم المركز. وضع التضمين نفسه يُدار في ``core.context_processors.embed_mode``.
+* التبويبات البسيطة (عام، الإشعارات، الأمان، الذكاء الاصطناعيّ) تُعرَض وتُحفَظ هنا
+  مباشرةً عبر عروض الحفظ أدناه — تبديلها لحظي بلا إعادة تحميل.
+* العدّاداتُ والربطُ الشبكيّ تُحمَّل داخل لوحة المركز في إطار ``?embed=1``. وضع
+  التضمين نفسه يُدار في ``core.context_processors.embed_mode``.
+
+ما له مدخلٌ في شريط الإدارة (البريد، النسخ الاحتياطيّ، الماسح، السلّة) لا يتكرّر هنا
+(قرارُ المالك 2026‑11‑08: الشريطُ هو المعتمد). وجدولةُ النسخ تُحفظ هنا وتُعرض في
+صفحة النسخ الاحتياطيّ.
 
 قائمة التبويبات وترتيبها يعيشان في القالب ``core/settings/hub.html`` (مصدر واحد)،
 والتبويب النشط يُشتقّ في العميل من ``?tab=`` — فلا حاجة لتكرارهما هنا.
@@ -47,7 +50,6 @@ def settings_hub(request):
         'default_department': BookSequence.resolve_department(),
         'notif_settings': NotificationSettings.get(),
         'sec_settings': SecuritySettings.get(),
-        'backup_settings': BackupSettings.get(),
         'ai_settings': AIIntegrationSettings.objects.first() or AIIntegrationSettings(),
     })
 
@@ -116,8 +118,8 @@ def settings_security_save(request):
 @staff_required
 @require_http_methods(["POST"])
 def settings_backup_save(request):
-    """يحفظ تبويب «النسخ الاحتياطي» — إعدادات الجدولة التي تقرؤها مهمة scheduled_backup."""
-    back = f"{reverse('settings_hub')}?tab=backup"
+    """يحفظ جدولة النسخ التي تقرؤها مهمة scheduled_backup، ونموذجُها في صفحة النسخ الاحتياطيّ."""
+    back = reverse('backup_database')
     cfg = BackupSettings.get()
     before = settings_snapshot(cfg, ('enabled', 'frequency', 'hour', 'retention_days'))
 

@@ -47,8 +47,11 @@ class SettingsHubTruthTests(TestCase):
         self.assertIn('وإعادة تعيين كلماتهم، وعند تغيير المستخدم كلمتَه بنفسه', self.html())
 
     def test_every_label_is_bound(self):
-        html = self.html()
-        for field in ('app_name', 'brand_subtitle', 'password_min_length', 'frequency', 'hour', 'retention_days'):
+        # جدولةُ النسخ انتقلت إلى صفحة النسخ الاحتياطيّ (الشريطُ هو المعتمد، 2026‑11‑08).
+        hub = self.html()
+        backup = self.client.get(reverse('backup_database')).content.decode('utf-8')
+        for html, field in [(hub, f) for f in ('app_name', 'brand_subtitle', 'password_min_length')] + [
+                (backup, f) for f in ('enabled', 'frequency', 'hour', 'retention_days', 'target_directory', 'file_name')]:
             with self.subTest(field=field):
                 tag = re.search(r'<(?:input|select)\b[^>]*\bname="%s"[^>]*>' % field, html)
                 self.assertIsNotNone(tag, field)

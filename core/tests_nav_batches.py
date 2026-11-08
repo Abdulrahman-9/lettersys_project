@@ -24,7 +24,9 @@ class BackLandsWhereYouCameFromTests(TestCase):
             self.assertNotIn('href="/books/"', src + header, name)
 
     def test_settings_subpages_cancel_back_into_the_hub(self):
-        for tpl, tab in (('scan_settings', 'scan'), ('sequence_settings', 'sequences'), ('network_settings', 'network')):
+        # الماسحُ صار مدخلاً في الشريط لا تبويباً في المركز، فلا رجوعَ منه إلى المركز (2026‑11‑08).
+        self.assertNotIn("settings_hub", open('templates/core/scan_settings.html', encoding='utf-8').read())
+        for tpl, tab in (('sequence_settings', 'sequences'), ('network_settings', 'network')):
             src = open(f'templates/core/{tpl}.html', encoding='utf-8').read()
             self.assertIn(f"{{% url 'settings_hub' %}}?tab={tab}", src, tpl)
             self.assertNotIn("{% url 'book_unified' %}\" class=\"btn btn-sm btn-outline-secondary\">رجوع", src, tpl)

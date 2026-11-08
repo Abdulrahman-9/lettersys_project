@@ -167,9 +167,15 @@ def system_roles_view(request):
         else:
             done = [cell for cell, allowed in parsed.items()
                     if permission_service.set_role_override(request, cell[0], cell[1], allowed)]
+    # العودةُ إلى الصفّ الذي عُمل فيه لا إلى رأس الصفحة.
+    if reset == 'all':
+        back = reverse('system_roles')
+    else:
+        touched = {reset} if reset else {key for _role, key in parsed}
+        back = f"{reverse('system_roles')}#cap-{next(k for k in CAPABILITIES if k in touched)}"
     if not done:
         messages.info(request, 'لم يتغيّر شيء: الخلايا على ما كانت عليه.')
-        return redirect('system_roles')
+        return redirect(back)
     _admins, holders = permission_service.role_holders()
     roles = {role for role, _key in done}
     people = sum(holders[role] for role in roles)
@@ -177,7 +183,7 @@ def system_roles_view(request):
     nobody = {1: 'الدورَ', 2: 'هذين الدورين'}.get(len(roles), 'هذه الأدوارَ')
     reach = f'ويسري الآن على {_people_ar(people)}' if people else f'ولا يحمل {nobody} أحدٌ الآن'
     messages.success(request, f"{'عادت إلى المعتمد' if reset else 'حُفظت'} {cells}، {reach}.")
-    return redirect('system_roles')
+    return redirect(back)
 
 
 @require_GET

@@ -801,6 +801,9 @@ def backup_database(request):
             messages.error(request, "تعذر كتابة أو تشفير النسخة الاحتياطية في المسار المحدد.")
         return redirect("backup_database")
 
+    from core import system_ops
+    from core.models import BackupSettings
+
     backups = list_db_backups(default_dir)
 
     return render(
@@ -813,6 +816,9 @@ def backup_database(request):
             "default_directory": default_dir,
             "suggested_name": suggested_name,
             "existing_backups": backups,
+            # الجدولةُ هنا لا في مركز الإعدادات (الشريطُ هو المعتمد، 2026‑11‑08)، وحالتُها من مصدر صفحة التشغيل.
+            "backup_settings": BackupSettings.get(),
+            "backup_job": system_ops.job_statuses()[0],
         },
     )
 

@@ -11,7 +11,7 @@
       <div class="sa-job {{ j.state }}"><b>{{ j.name }}</b><small>{{ j.note }}</small>
         {% if j.state == 'ok' %}<span class="ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> سليمة</span>
         {% elif j.state == 'stale' %}<span class="bad"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> متأخّرة</span>
-          {% if j.next_step == 'settings_backup' %}<a href="{% url 'settings_hub' %}?tab=backup">افتح إعدادات النسخ</a>{% else %}<small>افتحها في مجدول المهامّ على الخادم وشغّلها.</small>{% endif %}
+          {% if j.next_step == 'settings_backup' %}<a href="{% url 'backup_database' %}">افتح جدولة النسخ</a>{% else %}<small>افتحها في مجدول المهامّ على الخادم وشغّلها.</small>{% endif %}
         {% else %}<span class="muted"><i class="bi bi-dash-circle" aria-hidden="true"></i> غير معروفة</span>{% endif %}
       </div>
       {% endfor %}
