@@ -2,19 +2,23 @@
 """صفحاتُ إدارة النظام: مركزُ الأقسام وصفحةُ القسم وتشغيلُ النظام — لمدير النظام وحده."""
 from functools import wraps
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Max
+from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_http_methods
 
-from core import system_centre, system_ops
+from core import permission_service, system_centre, system_ops
 from core.logging_models import UserActivityLog
 from core.models import Book, BookReferral, BookSequence, Department, UserProfile
 from core.roles import get_user_role
-from core.scoping import can_use_system_admin, secret_openers, subtree_ids
+from core.scoping import CAPABILITIES, can_use_system_admin, secret_openers, subtree_ids
+from core.scoping import ROLE_LABELS as MATRIX_ROLES
 from core.views.filter_helpers import days_ar, followup_q
 
 ROLE_LABELS = {
@@ -112,6 +116,68 @@ def system_department_view(request, pk):
         'all_units': [(r['unit'].id, r['unit'].name) for r in rows],
         'lens_url': f"{reverse('book_unified')}?tab=all&dept={unit.id}",
     })
+
+
+def _people_ar(n):
+    return count_ar(n, 'موظّف واحد', 'موظّفَين', 'موظّفين', 'موظّفاً')
+
+
+def _parse_changes(values):
+    """``role:key:0|1`` لكلّ خليّة ⟵ {(role, key): allowed}، و``None`` لأيّ شيءٍ غير مفهوم أو مكرَّر."""
+    changes = {}
+    for value in values:
+        parts = value.split(':')
+        if len(parts) != 3 or parts[0] not in MATRIX_ROLES or parts[1] not in CAPABILITIES or parts[2] not in ('0', '1'):
+            return None
+        cell = (parts[0], parts[1])
+        if cell in changes:
+            return None
+        changes[cell] = parts[2] == '1'
+    return changes
+
+
+@require_http_methods(['GET', 'POST'])
+@system_admin_required
+def system_roles_view(request):
+    if request.method == 'GET':
+        matrix = permission_service.role_matrix()
+        now = timezone.localtime()
+        for group in matrix['groups']:
+            for row in group['rows']:
+                if row['last']:
+                    by = row['last'].changed_by
+                    row['last_text'] = f"عدّلها {by.get_full_name() or by.username if by else 'حساب محذوف'} {system_centre.human_when(row['last'].changed_at, now)}"
+        for role in matrix['roles']:
+            role['holders_text'] = _people_ar(role['holders']) if role['holders'] else 'لا أحد'
+        return render(request, 'core/system_admin/roles.html', {
+            'matrix': matrix, 'admins_text': count_ar(matrix['admins'], 'حساب واحد', 'حسابان', 'حسابات', 'حساباً'),
+            'columns': len(matrix['roles']) + 2,
+        })
+
+    changes, reset = request.POST.getlist('change'), request.POST.get('reset', '')
+    if bool(changes) == bool(reset) or (reset and reset != 'all' and reset not in CAPABILITIES):
+        return HttpResponseBadRequest('طلبٌ غير مفهوم.')
+    parsed = _parse_changes(changes)
+    if changes and parsed is None:
+        return HttpResponseBadRequest('خليّةٌ غير مفهومة.')
+    # المعاملةُ الواحدة: خليّةٌ مقفلةٌ في الطلب تُسقطه كلَّه بـ403 فلا يُحفظ نصفُه.
+    with transaction.atomic():
+        if reset:
+            done = permission_service.reset_role_overrides(request, None if reset == 'all' else reset)
+        else:
+            done = [cell for cell, allowed in parsed.items()
+                    if permission_service.set_role_override(request, cell[0], cell[1], allowed)]
+    if not done:
+        messages.info(request, 'لم يتغيّر شيء: الخلايا على ما كانت عليه.')
+        return redirect('system_roles')
+    _admins, holders = permission_service.role_holders()
+    roles = {role for role, _key in done}
+    people = sum(holders[role] for role in roles)
+    cells = count_ar(len(done), 'خليّة واحدة', 'خليّتان', 'خلايا', 'خليّة')
+    nobody = {1: 'الدورَ', 2: 'هذين الدورين'}.get(len(roles), 'هذه الأدوارَ')
+    reach = f'ويسري الآن على {_people_ar(people)}' if people else f'ولا يحمل {nobody} أحدٌ الآن'
+    messages.success(request, f"{'عادت إلى المعتمد' if reset else 'حُفظت'} {cells}، {reach}.")
+    return redirect('system_roles')
 
 
 @require_GET

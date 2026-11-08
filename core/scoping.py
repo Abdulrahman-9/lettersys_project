@@ -962,7 +962,8 @@ def role_of(user) -> str:
     if profile is not None and profile.is_department_head:
         department = profile.department
         return ROLE_HEAD if department is None or department.holds_register else ROLE_UNIT
-    names = set(user.groups.values_list('name', flat=True))
+    # ``all()`` لا ``values_list``: صفحةُ المصفوفة تعدّ الحاملين بمجموعاتٍ مجلوبةٍ سلفاً.
+    names = {group.name for group in user.groups.all()}
     if CONTROLLER_GROUP_NAME in names:
         return ROLE_MAIL
     if names & {ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME}:
@@ -974,14 +975,19 @@ def role_of(user) -> str:
     return ROLE_READER
 
 
-def role_capability(role, key) -> bool:
-    """ما يملكه الدورُ كما هو الآن: الافتراضُ أو تجاوزُه، بلا استثناءات الأشخاص."""
+def role_capability(role, key, overrides=None) -> bool:
+    """ما يملكه الدورُ كما هو الآن: الافتراضُ أو تجاوزُه، بلا استثناءات الأشخاص.
+
+    ``overrides`` ({(role, key): allowed}) لمن قرأ الجدولَ كلَّه مرّةً، كصفحة المصفوفة.
+    """
     from core.models import RoleCapabilityOverride
 
     capability = CAPABILITIES[key]
     default = role in capability.holders
     if capability.locked or role_cell_frozen(key, role):
         return default
+    if overrides is not None:
+        return overrides.get((role, key), default)
     row = RoleCapabilityOverride.objects.filter(role=role, capability=key).first()
     return row.allowed if row else default
 

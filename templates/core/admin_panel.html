@@ -618,6 +618,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
     <div class="crumb">إدارة النظام / الحسابات والأدوار</div>
     <div class="ph">
       <div><h1>الحسابات والأدوار</h1><p>{% if is_superadmin %}كلّ الحسابات والأدوار.{% else %}حساباتُ شجرتك — تمنح: {{ grantable_labels|join:" · " }}.{% endif %}</p></div>
+      {% if is_superadmin %}<span class="sp"></span><a class="btn" href="{% url 'system_roles' %}"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>الأدوار والصلاحيّات</a>{% endif %}
     </div>
   </div>
 

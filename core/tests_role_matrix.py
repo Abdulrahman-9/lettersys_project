@@ -29,7 +29,7 @@ PAGES = ('dashboard', 'my_today', 'desk_board', 'desk_handover', 'desk_ledger', 
          'extraction-smart-desktop', 'dossier_list', 'reports', 'audit_log', 'admin_panel',
          'trash_list', 'mail_inbox', 'mail_sent', 'mail_compose', 'mail_templates', 'mail_settings',
          'entity_list', 'settings_hub', 'sequence_settings', 'backup_database', 'workstation_board',
-         'notifications')
+         'notifications', 'system_roles')
 GATES = ('can_write', 'can_use_desk', 'can_archive', 'can_manage_mail', 'can_view_audit',
          'can_view_reports', 'can_manage_departments', 'can_manage_accounts', 'can_manage_system')
 
@@ -155,6 +155,7 @@ EXPECTED_PAGES = {
     'backup_database':          '200 200 403 403 403 403 403 403 403 403 403 403 403 403 403',
     'workstation_board':        '200 200 403 403 403 403 403 403 403 403 403 403 403 403 403',
     'notifications':            '200 200 200 200 200 200 200 200 200 200 200 200 200 200 200',
+    'system_roles':             '200 200 403 403 403 403 403 403 403 403 403 403 403 403 403',
 }
 EXPECTED_GATES = {
     'can_write':              '1 1 1 1 1 1 1 0 1 1 1 1 0 0 1',
