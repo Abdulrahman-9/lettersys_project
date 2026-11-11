@@ -7,7 +7,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import path, reverse
 from django.utils import timezone
 
-from core.models import Book, BookNumberReservation, BookSequence, Department
+from core.models import Book, BookNumberReservation, BookSequence, Department, UserProfile
 from core.reservation_service import reservation_client_key, reserve_number
 from core import reservation_api
 from core.reservation_identity import COOKIE_NAME, browser_key
@@ -215,6 +215,8 @@ class ReservationBrowserIdentityTests(TestCase):
     def test_real_page_is_standby_and_save_after_rotation_keeps_reserved_number(self):
         self.user.is_superuser = True
         self.user.save(update_fields=['is_superuser'])
+        # مديرُ نظامٍ بلا قسمٍ لا يُدخل بعدّادٍ أعمى ((ب)3‑3): يُسنَد إلى الدفتر الافتراضيّ الذي يقرؤه الاختبار.
+        UserProfile.objects.update_or_create(user=self.user, defaults={'department': BookSequence.resolve_department()})
         response = self.client.get(reverse('extraction-smart-desktop'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="reservationRing"')

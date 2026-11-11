@@ -32,13 +32,14 @@ from ..models import (
     Book,
     BookHistory,
     BookSequence,
+    Department,
 )
 from ..reservation_service import (
     claim_reservation_for_client,
 )
 from ..reservation_identity import request_client_key
-from core.scoping import (can_edit_book, can_enter_book, can_open_content, can_restore_book, can_trash_book,
-                          is_privileged, scope_books_for)
+from core.scoping import (can_edit_book, can_enter_book, can_enter_for, can_open_content, can_restore_book,
+                          can_trash_book, is_privileged, scope_books_for)
 from .books_helpers import (
     _normalize_secret_level_value,
     _resolve_entities,
@@ -173,7 +174,9 @@ def save_book_api(request):
             'title': title,
             'date': book_date_str,
         }
-        if not (kind_value == 'outgoing_external' and (reservation_id or auto_number)):
+        # ودفترُ قسمٍ هدف بترقيمٍ تلقائيّ ((ب)3‑3) يمنحه الخادمُ الرقمَ بعد التأكيد.
+        if not ((kind_value == 'outgoing_external' and (reservation_id or auto_number))
+                or (str(data.get('department_id') or '').strip() and auto_number)):
             required_values['our_number'] = our_number
         for field, value in required_values.items():
             if not value:
@@ -234,12 +237,46 @@ def save_book_api(request):
 
         # قسمُ الكتاب = دفترُ مُنشئه: الماسكُ لسجلّ قسمه ((ب)3‑2 — الشعبةُ والوحدةُ تُدخلان في
         # دفتر من فوقهما)، وإلّا الافتراضيّ. الحجزُ والعدّادُ وكشفُ التكرار تقرأ هذا المصدرَ نفسَه.
-        try:
-            book_department = BookSequence.resolve_department(
-                getattr(getattr(request.user, 'profile', None), 'department', None))
-        except ValidationError as exc:
-            return JsonResponse({'success': False, 'message': exc.messages[0],
-                                 'error_code': 'NO_REGISTER'}, status=400)
+        # ومديرُ النظام يُدخل في دفتر قسمٍ يختاره من صفحته ((ب)3‑3): يتحقّق منه الخادم، ويُسأل
+        # تأكيداً يسمّي القسمَ والرقمَ قبل كشف التكرار وقبل أيّ استهلاك.
+        own_department = getattr(getattr(request.user, 'profile', None), 'department', None)
+        target_raw = str(data.get('department_id') or '').strip()
+        target_department = None
+        if target_raw:
+            target_department = (Department.objects.filter(pk=target_raw).first()
+                                 if target_raw.isdigit() else None)
+            if not can_enter_for(request.user, target_department):
+                return JsonResponse({'success': False, 'message': 'لا تملك الإدخالَ في دفتر هذا القسم.',
+                                     'error_code': 'DEPARTMENT_FORBIDDEN'}, status=403)
+            if reservation_id:
+                return JsonResponse({'success': False, 'error_code': 'RESERVATION_WITH_DEPARTMENT',
+                                     'message': 'الحجزُ من دفتر قسمك — أدخِل في دفتر القسم الهدف بالترقيم التلقائيّ.'},
+                                    status=400)
+            book_department = target_department
+        elif is_privileged(request.user) and own_department is None:
+            # لا عدّادَ أعمى: كان الافتراضيُّ يُستهلك صامتاً لمدير نظامٍ بلا قسم.
+            return JsonResponse({'success': False, 'error_code': 'DEPARTMENT_REQUIRED',
+                                 'message': 'اختر القسمَ من صفحته في مركز الأقسام ثمّ أدخِل في دفتره.'}, status=400)
+        else:
+            try:
+                book_department = BookSequence.resolve_department(own_department)
+            except ValidationError as exc:
+                return JsonResponse({'success': False, 'message': exc.messages[0],
+                                     'error_code': 'NO_REGISTER'}, status=400)
+        if target_department is not None and str(data.get('confirm_department') or '').lower() != 'true':
+            numberless_requested = (str(data.get('numberless') or 'false').lower() in ('true', '1')
+                                    and kind_value in ('incoming_internal', 'outgoing_internal'))
+            if numberless_requested or kind_value not in BookSequence.SERIES_KINDS:
+                number_line = 'بلا رقمٍ من عدّاده'
+            else:
+                number_line = 'بالرقم %s' % BookSequence.get_next(kind_value, department=target_department)['formatted']
+            return JsonResponse({
+                'success': False, 'error_code': 'CONFIRM_DEPARTMENT',
+                'title': 'الإدخال في دفتر «%s»' % target_department.name,
+                'message': 'سيُقيَّد هذا الكتاب في دفتر «%s» %s.\nالرقمُ يُستهلك بالحفظ ولا يعود.' % (
+                    target_department.name, number_line),
+                'ok_text': 'أدخِل في دفتره',
+            }, status=409)
 
         # ── كشف التكرار داخل القسم فقط (قبل استهلاك أي رقم تسلسلي) ──
         _dup_incoming = kind_value in ('incoming_internal', 'incoming_external')
@@ -420,7 +457,10 @@ def save_book_api(request):
                     attachment = create_attachment(book, file_obj, user=request.user)
                     logger.info(f'Attachment saved: book_id={book.id}, file={file_obj.name}')
 
-                BookHistory.objects.create(book=book, action='create', by=request.user)
+                BookHistory.objects.create(
+                    book=book, action='create', by=request.user,
+                    notes=('أُدخل في دفتر «%s» من صفحة القسم' % target_department.name
+                           if target_department is not None else ''))
 
                 if reservation:
                     reservation.mark_used(book)

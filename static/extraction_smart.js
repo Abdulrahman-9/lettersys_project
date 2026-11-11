@@ -5529,15 +5529,20 @@ class ExtractionSmartSystem {
             && !!document.getElementById('numberlessCheckbox')?.checked
             && (kindValue === 'incoming_internal' || kindValue === 'outgoing_internal');
 
-        if (!isEdit && !numberlessChecked && !this.getKindConfig(kindValue).manualNumber
+        // دفترُ قسمٍ هدف ((ب)3‑3، مدير النظام من صفحة القسم): لا حجز — الخادمُ يمنح الرقمَ التالي
+        // من عدّاد الهدف بعد تأكيدٍ يسمّي القسمَ والرقم (CONFIRM_DEPARTMENT).
+        const targetDepartmentId = isEdit ? ''
+            : (document.querySelector('.extraction-container')?.dataset.targetDepartmentId || '');
+        if (!isEdit && !numberlessChecked && !targetDepartmentId && !this.getKindConfig(kindValue).manualNumber
                 && !this.reservations[kindValue]?.id) {
             this.showToast('احجز رقمًا بزر الصح أولًا، واكتبه على المستند قبل الحفظ.', 'warning', 6000);
             document.getElementById('reservationRing')?.focus();
             return;
         }
         // في التعديل الرقم ثابت فلا يُتحقَّق منه؛ في الإدخال نتخطّاه عند "بلا رقم".
-        const hasSystemNumber = kindValue === 'outgoing_external'
-            && (this.reservations[kindValue]?.id || this.autoNumberEnabled);
+        const hasSystemNumber = (kindValue === 'outgoing_external'
+            && (this.reservations[kindValue]?.id || this.autoNumberEnabled))
+            || (!!targetDepartmentId && !this.getKindConfig(kindValue).manualNumber);
         const requiredFields = (isEdit || numberlessChecked || hasSystemNumber)
             ? ['title', 'date', 'issuingEntity', 'receivingEntity']
             : ['bookNumber', 'title', 'date', 'issuingEntity', 'receivingEntity'];
@@ -5648,6 +5653,7 @@ class ExtractionSmartSystem {
         formData.append('book_type_name', documentTypeValue);
         formData.append('kind', kindValue);
         if (this.scanToken) formData.append('scan_token', this.scanToken);  // حلقة التقاط التدريب
+        if (targetDepartmentId) formData.set('department_id', targetDepartmentId);
 
         if (numberlessChecked) {
             // كتاب داخلي بلا رقم — يتجاهل الحجز والترقيم التلقائي
@@ -5661,6 +5667,9 @@ class ExtractionSmartSystem {
             // بدون هذا كان الخادم يخترع رقماً من عدّادٍ لا يخصّ هذا السجلّ.
             formData.delete('reservation_id');
             formData.append('auto_number', 'false');
+        } else if (targetDepartmentId) {
+            formData.delete('reservation_id');
+            formData.set('auto_number', 'true');
         } else {
             // The operator must explicitly reserve before saving.
             const activeReservation = this.reservations[kindValue];
@@ -5890,6 +5899,7 @@ class ExtractionSmartSystem {
         saveBtn.disabled = true;
 
         let confirmedDuplicate = false;
+        let confirmedDepartment = false;
 
         try {
             while (true) {
@@ -5940,6 +5950,20 @@ class ExtractionSmartSystem {
                 if (this.isRecoverableReservationError(data)) {
                     await this.recoverReservationForRetry(savedKind, data.message);
                     break;
+                }
+
+                // دفترُ قسمٍ هدف: الخادمُ يسمّي القسمَ والرقمَ التالي قبل أيّ استهلاك — نستأذن مرّة
+                if (!confirmedDepartment && data.error_code === 'CONFIRM_DEPARTMENT') {
+                    const proceed = typeof window.confirmDelete === 'function'
+                        ? await window.confirmDelete({ title: data.title, message: data.message,
+                                                      okText: data.ok_text, danger: false })
+                        : window.confirm(data.message);
+                    if (proceed) {
+                        confirmedDepartment = true;
+                        formData.set('confirm_department', 'true');
+                        continue;
+                    }
+                    break;   // ألغى المستخدم
                 }
 
                 // كشف التكرار: 3/4 (SIMILAR) أو 4/4 (DUPLICATE) — نستأذن مرّة ثم نُعيد بعلَم التأكيد

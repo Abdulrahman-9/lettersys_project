@@ -14,6 +14,7 @@
       <select id="saJump" name="go" class="sa-select">{% for id, name in all_units %}<option value="{{ id }}"{% if id == unit.id %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>
       <button type="submit" class="sa-btn">انتقل</button>
     </form>
+    {% if can_enter_here %}<a class="sa-btn" href="{% url 'extraction-smart-desktop' %}?department={{ unit.id }}"><i class="bi bi-journal-plus" aria-hidden="true"></i>إدخال في دفتره</a>{% endif %}
     {% if unit.holds_register %}<a class="sa-btn" href="{% url 'desk_board' %}"><i class="bi bi-inbox" aria-hidden="true"></i>طاولة البريد</a>{% endif %}
   </div>
 

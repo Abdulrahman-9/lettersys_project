@@ -29,8 +29,9 @@ from core.extraction.kinds import (
     normalize_book_kind,
 )
 from core.document_types import DEFAULT_DOCUMENT_TYPE_BY_KIND, DOCUMENT_TYPE_OPTIONS_BY_KIND
-from core.models import Book, BookSequence, DataExtractionResult
-from core.scoping import can_enter_book, can_open_extraction, can_reserve_number, can_use_entry_desk
+from core.models import Book, BookSequence, DataExtractionResult, Department
+from core.scoping import (can_enter_book, can_enter_for, can_open_extraction, can_reserve_number,
+                          can_use_entry_desk)
 from core.views.helpers import guard_required
 
 
@@ -92,6 +93,15 @@ def extraction_smart_desktop(request):
     # الجديدُ لمن يملك «الإدخال» — والتعديلُ يسأل ``can_edit_book`` أدناه.
     if not edit_pk and not can_enter_book(request.user):
         raise PermissionDenied('الإدخالُ ليس من صلاحيّات حسابك.')
+
+    # الإدخالُ في دفتر قسمٍ من صفحته ((ب)3‑3): يتحقّق منه الخادمُ هنا وعند الحفظ، والتعديلُ
+    # يبقى في دفتر كتابه. ولا حجزَ في هذا الوضع: الحجزُ من دفتر قسم المستخدم لا الهدف.
+    target_department = None
+    target_raw = request.GET.get('department', '').strip()
+    if target_raw and not edit_pk:
+        target_department = Department.objects.filter(pk=target_raw).first() if target_raw.isdigit() else None
+        if not can_enter_for(request.user, target_department):
+            raise PermissionDenied('لا تملك الإدخالَ في دفتر هذا القسم.')
 
     if edit_pk:
         try:
@@ -155,7 +165,7 @@ def extraction_smart_desktop(request):
     kind_scope = get_kind_scope(kind)
 
     all_kinds = [k for k, _ in BOOK_KIND_CHOICES]
-    sequence_department = getattr(
+    sequence_department = target_department or getattr(
         getattr(request.user, 'profile', None), 'department', None)
     seq_map = {}
     for k in all_kinds:
@@ -209,8 +219,10 @@ def extraction_smart_desktop(request):
             'edit_book_json': edit_book_json,
             'back_url': back_url,
             'recent_books': recent_books,
-            # زرُّ «احجز رقماً» لمن يقبله الخادم (``reserve_number``) — لا زرَّ يُعرض ليُرفض
-            'can_reserve_number': can_reserve_number(request.user),
+            # زرُّ «احجز رقماً» لمن يقبله الخادم (``reserve_number``) — لا زرَّ يُعرض ليُرفض،
+            # ولا في دفتر قسمٍ هدف (الخادمُ يرفض الحجزَ مع ``department_id``).
+            'can_reserve_number': can_reserve_number(request.user) and target_department is None,
+            'target_department': target_department,
         },
     )
 

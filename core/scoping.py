@@ -1109,6 +1109,14 @@ def can_use_entry_desk(user) -> bool:
     return can_enter_book(user) or has_capability(user, 'book.edit')
 
 
+def can_enter_for(user, department) -> bool:
+    """الإدخالُ في دفتر قسمٍ يُختار من صفحته في مركز الأقسام — لمدير النظام وحده، وفي قسمٍ نشطٍ
+    يمسك سجلَّه **هو** (مواصفةُ المالك (ب)3). لا صعودَ إلى ماسك: تأكيدٌ يسمّي شعبةً ويستهلك
+    عدّادَ أبيها يكذب. وغيرُه يُدخل في دفتر قسمه (``BookSequence.resolve_department``)."""
+    return (is_privileged(user) and department is not None
+            and department.is_active and department.holds_register)
+
+
 def can_reserve_number(user) -> bool:
     """حجزُ رقمٍ مسبقاً وإعادةُ تفعيل حجزٍ — مفتاحُ «حجز رقم»، وزرُّه في صفحة الإدخال يتبعه."""
     return has_capability(user, 'number.reserve')

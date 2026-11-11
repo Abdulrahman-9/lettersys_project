@@ -2110,3 +2110,14 @@ body.app-shell-body .app-main .extraction-container { flex: 1 1 auto; min-height
 .date-dmy__pick:hover { background: #f1f5f9; }
 .date-dmy > input:disabled ~ .date-dmy__pick { display: none; }
 .date-dmy__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+
+/* (ب)3‑3 — دفترُ قسمٍ هدف (مدير النظام من صفحة القسم): سطرُ سياقٍ يسمّيه فوق تبويبات النوع.
+   تركوازُ العلامة لا برتقاليُّ الإدخال: سياقٌ يُقرأ لا فعلٌ يُضغط. */
+.target-dept-badge {
+    display: flex; align-items: center; gap: .45rem;
+    margin-bottom: .5rem; padding: .35rem .9rem; border-radius: 8px;
+    background: color-mix(in srgb, var(--brand, #0f766e) 9%, #fff);
+    border: 1px solid color-mix(in srgb, var(--brand, #0f766e) 26%, #fff);
+    color: color-mix(in srgb, var(--brand, #0f766e) 82%, #000);
+    font-size: .82rem; font-weight: 700;
+}

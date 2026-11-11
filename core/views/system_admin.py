@@ -17,7 +17,8 @@ from core import permission_service, system_centre, system_ops
 from core.logging_models import UserActivityLog
 from core.models import Book, BookReferral, BookSequence, Department, UserProfile
 from core.roles import get_user_role
-from core.scoping import CAPABILITIES, WIRED_CAPABILITIES, can_use_system_admin, secret_openers, subtree_ids
+from core.scoping import (CAPABILITIES, WIRED_CAPABILITIES, can_enter_for, can_use_system_admin, secret_openers,
+                          subtree_ids)
 from core.scoping import ROLE_LABELS as MATRIX_ROLES
 from core.views.filter_helpers import days_ar, followup_q
 
@@ -115,6 +116,8 @@ def system_department_view(request, pk):
         'staff': staff, 'sequences': BookSequence.objects.filter(department=unit).order_by('kind'),
         'all_units': [(r['unit'].id, r['unit'].name) for r in rows],
         'lens_url': f"{reverse('book_unified')}?tab=all&dept={unit.id}",
+        # «إدخال في دفتره» لمن يقبله الخادم (``can_enter_for``) — الحفظُ يسأل تأكيداً يسمّي القسمَ والرقم
+        'can_enter_here': can_enter_for(request.user, unit),
     })
 
 

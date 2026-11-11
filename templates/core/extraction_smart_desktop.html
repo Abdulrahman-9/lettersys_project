@@ -4,7 +4,7 @@
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261104-xp6">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261111-b3dept">
 <style>
 .scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
 .scan-agent-status:hover{filter:brightness(.97)}
@@ -124,6 +124,7 @@
     data-reservation-void-endpoint="{% url 'reservation-void' %}"
     data-reservation-status-endpoint="{% url 'reservation-status' %}"
     data-settings-url="{% url 'sequence_settings' %}"
+    {% if target_department %}data-target-department-id="{{ target_department.pk }}"{% endif %}
 >
     <!-- الجانب الأيسر: نماذج الإدخال -->
     <div class="extraction-form-panel">
@@ -153,6 +154,12 @@
         <!-- شبكة النماذج بـ 3 أعمدة -->
         <div class="extraction-form-grid">
             <!-- ===== تبويبات التصنيف ===== -->
+            {% if target_department %}
+            <div class="target-dept-badge" id="targetDeptBadge" role="status">
+                <i class="bi bi-journal-plus" aria-hidden="true"></i>
+                <span>تُدخل في دفتر «{{ target_department.name }}» — يُطلب تأكيدٌ يسمّي القسمَ والرقم قبل الحفظ.</span>
+            </div>
+            {% endif %}
             <div class="kind-tabs-wrapper">
                 <div class="kind-tabs" id="kindTabs">
                     <button type="button" class="kind-tab" data-kind="incoming_internal">
@@ -701,7 +708,7 @@
 <script src="{% static 'js/subject_locate.js' %}?v=20260929exc"></script>
 <script src="{% static 'js/date_dmy.js' %}?v=20261104-xp6"></script>
 <script src="{% static 'js/extraction_progress.js' %}?v=20261104-xp6"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20261104-xp6"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20261111-b3dept"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20261007"></script>
 <script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
 
