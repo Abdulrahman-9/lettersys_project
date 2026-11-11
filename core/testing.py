@@ -31,3 +31,18 @@ def as_referrer(user):
     for key in ('referral.send', 'referral.receive'):
         UserCapabilityOverride.objects.update_or_create(user=user, capability=key, defaults={'allowed': True})
     return user
+
+
+def as_custodian(user):
+    """كاتبٌ يحذف إلى السلّة ويسترجع منها باستثناءٍ شخصيّ — لاختبارات آليّة السلّة.
+
+    منذ (ب)4 (2026‑11‑11) الحذفُ لرئيس القسم ومختصّ البريد، والاسترجاعُ لهما ولمسؤول الأرشفة.
+    وهذه الاختباراتُ تحرس الآليّةَ لا الدور، والدورُ محروسٌ في ``tests_b4_trash``.
+    """
+    from core.models import UserCapabilityOverride
+
+    as_writer(user)
+    for key in ('book.trash', 'book.restore'):
+        UserCapabilityOverride.objects.update_or_create(user=user, capability=key, defaults={'allowed': True})
+    return user
+

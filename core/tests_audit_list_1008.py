@@ -19,7 +19,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from core.models import Book, Department, UserProfile
-from core.testing import as_writer
+from core.testing import as_custodian, as_writer
 
 ROOT = Path(__file__).resolve().parent.parent
 User = get_user_model()
@@ -32,12 +32,13 @@ def _member(name, department):
 
 
 class BulkFollowsSingleRuleTests(TestCase):
-    """الحذفُ والحالةُ الجماعيّان = ``can_edit_book`` على كلّ كتاب، كالفرديّ."""
+    """الحذفُ الجماعيّ = ``can_trash_book`` والحالةُ الجماعيّة = ``can_edit_book`` على كلّ كتاب، كالفرديّ."""
 
     def setUp(self):
         self.mine = Department.objects.create(name='قسم التدقيق', code='ت.د')
         self.other = Department.objects.create(name='قسمٌ غيره', code='ت.غ')
         self.me = _member('auditor1008', self.mine)
+        as_custodian(self.me)   # (ب)4: الحذفُ مفتاحٌ مستقلّ — والقاعدةُ هنا تطابقُ الجماعيّ والفرديّ
         self.colleague = _member('colleague1008', self.mine)
         # كتابُ زميلي في قسمي: الفرديُّ يحذفه — فالجماعيُّ أيضاً
         self.dept_book = Book.objects.create(kind='incoming_external', title='كتابُ القسم',

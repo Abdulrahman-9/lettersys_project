@@ -580,6 +580,8 @@ def api_delete_book(request, book_id):
             return JsonResponse({"error": "غير موجود"}, status=404)
         return JsonResponse({"error": "Unauthorized"}, status=403)
 
+    # «تراجع» في التوست لمن يملك الاسترجاع — يُسأل قبل الحذف وهو ما زال في نطاقه ((ب)4)
+    can_undo = can_restore_book(book, request.user)
     try:
         book.is_deleted = True
         book.deleted_at = timezone.now()
@@ -596,7 +598,8 @@ def api_delete_book(request, book_id):
         return JsonResponse({
             "success": True,
             "message": "تم نقل الكتاب إلى سلة المهملات",
-            "book_id": book.id
+            "book_id": book.id,
+            "can_undo": can_undo,
         })
     except Exception as e:
         logger.error(f"Error deleting book {book_id}: {e}", exc_info=True)

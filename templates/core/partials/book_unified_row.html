@@ -168,17 +168,17 @@
          title="تفاصيل الكتاب" aria-label="فتح تفاصيل الكتاب كاملة">
         <i class="bi bi-eye"></i>
       </a>
-      <a href="{% url 'book_edit' book.id %}" class="act-btn act-edit" title="تعديل">
+      {% if book.can_edit_row %}<a href="{% url 'book_edit' book.id %}" class="act-btn act-edit" title="تعديل">
         <i class="bi bi-pencil"></i>
-      </a>
-      <button class="act-btn act-delete btn-delete"
+      </a>{% endif %}
+      {% if book.can_trash_row %}<button class="act-btn act-delete btn-delete"
               data-book-id="{{ book.id }}"
               data-book-number="{{ book.our_number_display }}"
               data-delete-url="{% url 'api_delete_book' book.id %}"
               data-undo-url="{% url 'api_undo_delete_book' book.id %}"
               title="نقل إلى السلة">
         <i class="bi bi-trash"></i>
-      </button>
+      </button>{% endif %}
     </div>
   </td>
 </tr>

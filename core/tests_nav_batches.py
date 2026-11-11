@@ -5,13 +5,13 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from core.models import Book, Entity, Notification
-from core.testing import as_writer
+from core.testing import as_writer, as_custodian
 
 
 class BackLandsWhereYouCameFromTests(TestCase):
 
     def setUp(self):
-        self.staff = as_writer(User.objects.create_user('navb', password='pw-navb-11', is_staff=True))
+        self.staff = as_custodian(User.objects.create_user('navb', password='pw-navb-11', is_staff=True))
         self.client.force_login(self.staff)
 
     def test_desk_print_pages_go_back_to_the_desk_board(self):

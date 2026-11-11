@@ -18,8 +18,9 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from ..models import Attachment, Book, Entity
-from core.scoping import (can_restore_book, listed_books, is_privileged, present_book_payload,
-                          scope_books_for)
+from core.scoping import (can_open_trash, can_restore_book, has_capability, listed_books, is_privileged,
+                          mark_row_actions, present_book_payload, scope_books_for)
+from core.views.helpers import guard_required
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +121,9 @@ def _serialize_book(book):
         'updated_at': timezone.localtime(book.updated_at).strftime('%d/%m/%Y %H:%M') if book.updated_at else '',
         'urls': {
             'detail': reverse('book_detail', args=[book.id]),
-            'edit':   reverse('book_edit',   args=[book.id]),
-            'delete': reverse('api_delete_book', args=[book.id]),
+            # بعلامتَي ``mark_row_actions`` — الحمولةُ لا تعد بما يرفضه الخادم ((ب)4)
+            'edit':   reverse('book_edit', args=[book.id]) if getattr(book, 'can_edit_row', False) else None,
+            'delete': reverse('api_delete_book', args=[book.id]) if getattr(book, 'can_trash_row', False) else None,
         },
     }
 
@@ -208,6 +210,7 @@ def book_unified(request):
         page_obj = paginator.page(1)
 
     books = list(page_obj.object_list)
+    mark_row_actions(books, request.user)   # «تعديل» و«نقل إلى السلّة» لمن يقبلهما الخادم ((ب)4)
     for book in books:
         book.shown_director_general_number = (
             '' if book.restricted else book.director_general_number)
@@ -240,6 +243,9 @@ def book_unified(request):
     context = {
         "books": books,
         "page_obj": page_obj,
+        # الأفعالُ الجماعيّة بمفتاحَي حارسيها — والملكيّةُ يقرّرها الخادمُ كتاباً كتاباً (failed_ids)
+        "bulk_trash": has_capability(request.user, 'book.trash'),
+        "bulk_status": has_capability(request.user, 'book.edit'),
         "total_count": paginator.count,
         "showing_count": len(books),
         "total_pages": paginator.num_pages,
@@ -335,6 +341,7 @@ def api_unified_data(request):
         page_obj = paginator.page(1)
 
     books_qs = list(page_obj.object_list)
+    mark_row_actions(books_qs, request.user)
     for book in books_qs:
         book.shown_director_general_number = (
             '' if book.restricted else book.director_general_number)
@@ -376,6 +383,7 @@ def api_unified_data(request):
 
 
 @login_required
+@guard_required(can_open_trash)
 def trash_list(request):
     """عرض سلة المهملات - الكتب والمرفقات المحذوفة."""
     # ‏all_objects: المدير الافتراضي لا يرى المحذوف — والسلّة كلّها محذوف.

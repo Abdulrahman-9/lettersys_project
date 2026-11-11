@@ -40,8 +40,8 @@
         <span id="bulkSelectedCount">0</span> محدد
       </span>
       <div class="bulk-actions-buttons">
-        <button type="button" class="btn btn-sm" id="bulkDeleteBtn"><i class="bi bi-trash" aria-hidden="true"></i> نقل إلى السلّة</button>
-        <button type="button" class="btn btn-sm" id="bulkUpdateStatusBtn"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> تحديث الحالة</button>
+        {% if bulk_trash %}<button type="button" class="btn btn-sm" id="bulkDeleteBtn"><i class="bi bi-trash" aria-hidden="true"></i> نقل إلى السلّة</button>{% endif %}
+        {% if bulk_status %}<button type="button" class="btn btn-sm" id="bulkUpdateStatusBtn"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> تحديث الحالة</button>{% endif %}
       </div>
       <button type="button" class="btn btn-sm" id="bulkClearBtn">إلغاء التحديد</button>
     </div>
@@ -154,7 +154,7 @@
 {% block extra_js %}
 <script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20261103-lens"></script>
 <script src="{% static 'js/book_unified_actions.js' %}?v=20261008"></script>
-<script src="{% static 'js/book_unified_api.js' %}?v=20261008"></script>
+<script src="{% static 'js/book_unified_api.js' %}?v=20261111-b4"></script>
 <script src="{% static 'js/book_column_resize.js' %}?v=20260707c"></script>
 <script src="{% static 'js/number_hint.js' %}?v=20260810"></script>
 {% comment %}

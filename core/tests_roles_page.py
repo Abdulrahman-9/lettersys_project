@@ -236,18 +236,18 @@ class WiredOnlyTests(RolesPageCase):
     """صفحةٌ تقول «يسري الآن» لا تقبل إلّا ما يسري فعلاً (11-11: 26 من 28 لم يُربط حارسها)."""
 
     def test_an_unwired_capability_is_refused_without_a_row(self):
-        for cell in ('entry:book.restore:1', 'mail:report.view:1', 'unit:desk.mine:0'):
+        for cell in ('entry:archive.complete:1', 'mail:report.view:1', 'unit:desk.mine:0'):
             with self.subTest(cell=cell):
                 self.assertEqual(self.post(change=cell).status_code, 403)
-        self.assertEqual(self.post(change=['entry:referral.receive:1', 'entry:book.restore:1']).status_code, 403)
+        self.assertEqual(self.post(change=['entry:referral.receive:1', 'entry:archive.complete:1']).status_code, 403)
         self.assertFalse(RoleCapabilityOverride.objects.exists())
         self.assertFalse(self.traces().exists())
 
     def test_unwired_rows_are_shown_not_offered(self):
         self.client.force_login(self.admin)
         body = self.client.get(URL).content.decode()
-        self.assertNotIn('value="entry:book.restore:', body)
-        self.assertIn('الاسترجاع من السلّة لدور مدخل: لا يستطيع، لم يُربط حارسها بعد"', body)
+        self.assertNotIn('value="entry:archive.complete:', body)
+        self.assertIn('تمام الأرشفة لدور مدخل: لا يستطيع، لم يُربط حارسها بعد"', body)
         self.assertIn('«الإحالة» و«استلام المُحال وإنجازه»', body)
 
     def test_the_wired_set_is_what_the_code_reads(self):

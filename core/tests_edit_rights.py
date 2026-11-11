@@ -178,14 +178,19 @@ class TheDoorsTests(EditRightsTestCase):
 
 
 class TrashButtonsTests(EditRightsTestCase):
-    """لا زرَّ يُعرض ليُرفض: الوحدةُ ترى كتابَ المالك المحذوف في سلّتها ولا تستعيده."""
+    """لا زرَّ يُعرض ليُرفض: الاسترجاعُ لمن يملكه، والحذفُ النهائيّ للمدير، والسلّةُ مغلقةٌ عمّن لا يفعل فيها."""
 
     def test_restore_shows_to_whoever_may_restore_and_purge_to_the_admin(self):
         Book.all_objects.filter(pk=self.book.pk).update(is_deleted=True, deleted_at=timezone.now())
         restore = reverse('restore_book', args=[self.book.pk])
         purge = reverse('purge_book', args=[self.book.pk])
-        for user, can_restore, can_purge in ((self.unit, False, False), (self.clerk, True, False),
-                                             (self.admin, True, True)):
+        # (ب)4: السلّةُ لمن يحذف أو يسترجع — الوحدةُ والمدخلُ لا يملكان أيّاً منهما فتُغلق بالرابط
+        for user in (self.unit, self.clerk):
+            self.client.force_login(user)
+            self.assertEqual(self.client.get(reverse('trash_list')).status_code, 403)
+        from core.testing import as_custodian
+        as_custodian(self.clerk)
+        for user, can_restore, can_purge in ((self.clerk, True, False), (self.admin, True, True)):
             with self.subTest(user=user.username):
                 self.client.force_login(user)
                 html = self.client.get(reverse('trash_list')).content.decode('utf-8')

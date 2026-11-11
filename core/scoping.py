@@ -463,17 +463,46 @@ def can_edit_book(book, user) -> bool:
 
 
 def can_trash_book(book, user) -> bool:
-    """الحذفُ إلى السلّة — كتاباً أو مرفقاً، فرداً أو جملةً، ومعه التراجعُ الفوريّ.
+    """نقلُ الكتاب إلى السلّة، فرداً أو جملةً — مفتاحُ «الحذف إلى السلّة» على ما يملكه قسمُه.
 
-    **بينيٌّ حتى (ب)4:** يتبع «التعديل» كما كان قبل الفصل، و(ب)4 يجعل مفتاحَه
-    «الحذف إلى السلّة» (``book.trash``) على ``_owns_book`` نفسِه بلا لمس مواضعه."""
-    return can_edit_book(book, user)
+    قرارُ المالك (ب)4: لرئيس القسم ومختصّ البريد. وحذفُ **المرفق** ليس هنا: هو لمن يعدّل
+    الكتاب (``can_edit_book``، قرارُه المسجَّل)."""
+    return has_capability(user, 'book.trash') and _owns_book(book, user)
 
 
 def can_restore_book(book, user) -> bool:
-    """الاسترجاعُ من السلّة — كتاباً أو مرفقاً. **بينيٌّ حتى (ب)4** كأخيه
-    ``can_trash_book``، ومفتاحُه هناك «الاسترجاع من السلّة» (``book.restore``)."""
-    return can_edit_book(book, user)
+    """الاسترجاعُ من السلّة — أبوابُه الثلاثة: استعادةُ الكتاب، واستعادةُ المرفق، والتراجعُ الفوريّ
+    بعد الحذف. مفتاحُ «الاسترجاع من السلّة» (رئيسُ القسم ومختصُّ البريد ومسؤولُ الأرشفة)."""
+    return has_capability(user, 'book.restore') and _owns_book(book, user)
+
+
+def can_open_trash(user) -> bool:
+    """السلّةُ لمن يفعل فيها شيئاً: الحذفُ إليها أو الاسترجاعُ منها — والقارئُ والمنفِّذُ خارجها
+    بالرابط أيضاً (قرارُ المالك (ب)4). ورابطُ الشريط يسأل المسندَ نفسَه."""
+    return has_capability(user, 'book.trash') or has_capability(user, 'book.restore')
+
+
+def mark_row_actions(books, user) -> None:
+    """يضع على كلّ كتابٍ في صفحة القائمة ``can_edit_row`` و``can_trash_row`` — قاعدةُ
+    ``can_edit_book``/``can_trash_book`` نفسُها بلا استعلامٍ لكلّ صفّ: المفتاحان مرّةً للمستخدم،
+    والملكيّةُ (``_owns_book``) من شجرة قسمه مرّةً ومن وسم ``restricted`` الذي ألحقته القائمة
+    (محتوىً لا يُفتح). فلا زرَّ في الصفّ يُعرض ليُرفض، أوّليّاً وفي AJAX."""
+    may_edit = has_capability(user, 'book.edit')
+    may_trash = has_capability(user, 'book.trash')
+    privileged = is_privileged(user)
+    dept_id = user_department_id(user)
+    mine = set(subtree_ids(dept_id)) if dept_id is not None and not privileged else set()
+    for book in books:
+        if privileged:
+            owns = True
+        elif getattr(book, 'restricted', False):
+            owns = False
+        elif dept_id is None or book.department_id is None:
+            owns = book.created_by_id == user.id
+        else:
+            owns = book.department_id in mine
+        book.can_edit_row = may_edit and owns
+        book.can_trash_row = may_trash and owns
 
 
 def _extraction_book(extraction):
@@ -980,9 +1009,10 @@ CAPABILITIES = {
 # ما يقرؤه حارسٌ فعلاً اليوم. البقيّةُ مسجَّلةٌ في المصفوفة ولم يُربط حارسُها بعد فتعمل بالأدوار
 # القديمة: صفحةُ الأدوار تعرضها ولا تقبل تعديلها، كي لا تقول «يسري الآن» على ما لا يسري.
 # كلُّ شريحةٍ تربط حارساً تضيف مفتاحه هنا، واختبارُ التطابق في tests_roles_page يفشل إن نُسي.
-# الإحالة (11-04) · الإدخالُ والتعديلُ وحجزُ الرقم وإضافةُ الجهة والعهدةُ والربط ((ب)3، 11-11).
-WIRED_CAPABILITIES = frozenset({'book.enter', 'book.edit', 'number.reserve', 'entity.add',
-                                'referral.send', 'referral.receive', 'custody.link'})
+# الإحالة (11-04) · الإدخالُ والتعديلُ وحجزُ الرقم وإضافةُ الجهة والعهدةُ والربط ((ب)3، 11-11) ·
+# الحذفُ إلى السلّة والاسترجاعُ منها ((ب)4، 11-11).
+WIRED_CAPABILITIES = frozenset({'book.enter', 'book.edit', 'number.reserve', 'entity.add', 'book.trash',
+                                'book.restore', 'referral.send', 'referral.receive', 'custody.link'})
 
 # القارئُ احتياطيُّ كلِّ حسابٍ بلا دور: منحُ الكتابة له على مستوى الدور يمنحها للجميع،
 # فتُجمَّد خليّتُه هو والمنفِّذ في المصفوفة، وتبقى ممكنةً باستثناءٍ لشخصٍ بعينه.

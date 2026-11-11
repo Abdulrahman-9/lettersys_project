@@ -24,6 +24,7 @@ from core.models import (Attachment, Book, BookLink, CustodyEvent, DataExtractio
                          UserCapabilityOverride, UserProfile)
 from core.registration_service import register_book_here, register_here_ledger
 from core.roles import ENTRY_GROUP_NAME, ensure_role_groups
+from core.testing import as_custodian
 from core.views.book_state import more_actions, primary_action
 
 DESK = '/books/extract/smart-desktop/'
@@ -114,12 +115,16 @@ class EachGuardReadsItsOwnKeyTests(B3Case):
         self.assertFalse(s.can_add_entity(self.fresh(self.no_entity)))
         self.assertTrue(s.can_enter_book(self.fresh(self.no_entity)))
 
-    def test_trash_and_restore_follow_edit_until_b4(self):
-        """بينيٌّ معلن: (ب)4 يبدّل مفتاحَيهما — وحتى ذلك يتبعان «التعديل» كما كانا."""
-        for user, expected in ((self.entry, True), (self.no_edit, False), (self.reader, False)):
+    def test_trash_and_restore_read_their_own_keys_since_b4(self):
+        """(ب)4: الحذفُ والاسترجاعُ مفتاحان لا «التعديل» — المدخلُ يعدّل ولا يحذف."""
+        for user in (self.entry, self.no_edit, self.reader):
             with self.subTest(user=user.username):
-                self.assertIs(s.can_trash_book(self.book, self.fresh(user)), expected)
-                self.assertIs(s.can_restore_book(self.book, self.fresh(user)), expected)
+                self.assertFalse(s.can_trash_book(self.book, self.fresh(user)))
+                self.assertFalse(s.can_restore_book(self.book, self.fresh(user)))
+        self.assertTrue(s.can_edit_book(self.book, self.fresh(self.entry)))
+        as_custodian(self.entry)
+        self.assertTrue(s.can_trash_book(self.book, self.fresh(self.entry)))
+        self.assertTrue(s.can_restore_book(self.book, self.fresh(self.entry)))
 
     def test_content_is_a_condition_no_key_widens(self):
         """المدخلُ لا يفتح السرّيَّ ولا كتابَ قسمٍ آخر — فلا عهدةَ ولا قيدَ عليهما وإن ملك المفتاح."""
@@ -243,6 +248,10 @@ class TrashDoorsFollowTheirWrappersTests(B3Case):
     def post_json(self, user, url, payload):
         self.client.force_login(user)
         return self.client.post(url, data=json.dumps(payload), content_type='application/json')
+
+    def setUp(self):
+        super().setUp()
+        as_custodian(self.entry)   # (ب)4: الحذفُ والاسترجاعُ مفتاحان — المدخلُ يُمنحهما هنا والمسحوبُ منه التعديلُ لا
 
     def fresh_book(self, **extra):
         return Book.objects.create(kind='incoming_internal', title='سلّة ب3', created_by=self.owner,

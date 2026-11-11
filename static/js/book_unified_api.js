@@ -179,7 +179,8 @@
       // يبحث في السلّة عن ضغطةٍ خاطئة (تدقيقُ الانتقالات د1/د2).
       const undoUrl = trigger.getAttribute("data-undo-url");
       const ls = window.LetterSystem;
-      if (undoUrl && ls && typeof ls.showToastWithAction === "function") {
+      // «تراجع» لمن يملك الاسترجاع وحدَه ((ب)4): الحذفُ والاسترجاعُ مفتاحان، والخادمُ يقول أيّهما له.
+      if (undoUrl && payload.can_undo !== false && ls && typeof ls.showToastWithAction === "function") {
         const undoBtn = document.createElement("button");
         undoBtn.type = "button";
         undoBtn.className = "btn btn-sm btn-warning";
