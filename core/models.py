@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password, check_password
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -154,6 +155,20 @@ class Department(models.Model):
         """افتراضُ الوحدة الجديدة — يغيّره مديرُ النظام إن خالفه الواقع."""
         first = ((name or '').split() or [''])[0]
         return not (parent is not None and first in cls.NO_REGISTER_WORDS)
+
+    def register_holder(self):
+        """الماسكُ لسجلّ هذا القسم: هو إن أمسكه، وإلّا أقربُ أبٍ يمسكه، وإلّا ``None``.
+
+        الشعبةُ والوحدةُ تحت أبٍ تعملان على سجلّ مَن فوقهما (قرارُ المالك 2026‑11‑02:
+        «الإدخالُ في ديوان القسم فقط»). وأبوّةٌ دائريّةٌ بلا ماسكٍ تنتهي بـ``None`` لا بحلقة.
+        """
+        node, seen = self, set()
+        while node is not None and node.pk not in seen:
+            if node.holds_register:
+                return node
+            seen.add(node.pk)
+            node = node.parent
+        return None
 
     #: المستوى من **اسم القسم نفسه** — الشجرةُ الحيّة لا تطابق العمق: «مكتب المدير
     #: العام» جذرٌ و«قسم المتابعة» تحته، فالعمقُ وحده سمّى القسمَ شعبةً والشعبةَ وحدة.
@@ -1704,28 +1719,36 @@ class BookSequence(models.Model):
 
     @classmethod
     def resolve_department(cls, department=None):
-        """القسمُ المقصود بالعدّاد — والافتراضيّ حين لا يُمرَّر.
+        """دفترُ العدّاد: الماسكُ لسجلّ القسم المُمرَّر — والافتراضيُّ حين لا يُمرَّر قسم.
 
-        التوقيعُ متساهلٌ عمداً: مسارات الاستدعاء القديمة (الاستخراج، الحجز،
-        شاشة العدّادات) لا تعرف القسم بعد، وإجبارها عليه اليوم يعني تعديلاً
-        متزامناً في ملفّاتٍ تعمل عليها جلسةٌ أخرى. فتُسقَط إلى القسم الافتراضيّ
-        — وهو الصواب حرفيّاً في وضع «قسم واحد».
+        **(ب)3‑2 — مصدرٌ واحد لـ«أيُّ دفترٍ يُستهلك عدّادُه»:** الشعبةُ والوحدةُ لا عدّادَ
+        لهما، فيصعد القسمُ إلى أقرب أبٍ يمسك السجلّ (``Department.register_holder``)
+        وتتّسق منه الحجوزُ والعرضُ والحفظُ والقيدُ عندنا. وقسمٌ لا ماسكَ فوقه خطأُ إعدادٍ
+        يُرفض بصوتٍ عالٍ (``ValidationError``) — لا يُستهلك عدّادُ قسمٍ آخر بصمت.
+
+        وبلا قسم (مساراتٌ قديمةٌ لا تعرفه: الاستعادة، شاشة العدّادات): أوّلُ قسمٍ نشطٍ
+        يمسك السجلّ — الصوابُ حرفيّاً في وضع «قسم واحد».
         """
-        if department is not None:
-            return department
         from core.models import Department
-        return Department.objects.filter(is_active=True).order_by('id').first()
+        if department is not None:
+            holder = department.register_holder()
+            if holder is None:
+                raise ValidationError(
+                    'لا قسمَ يمسك السجلّ فوق «%s» — يُصحَّح من إدارة الأقسام.' % department.name)
+            return holder
+        return Department.objects.filter(is_active=True, holds_register=True).order_by('id').first()
 
     @classmethod
     def get_next(cls, kind, department=None):
-        """إرجاع الرقم التالي دون استهلاكه (لا نهائي — لا تصفير سنوي)."""
-        obj, _ = cls.objects.get_or_create(
-            kind=kind, department=cls.resolve_department(department),
-            defaults={'next_number': 1, 'year': timezone.now().year}
-        )
-        n = obj.next_number
+        """الرقمُ التالي **قراءةً** بلا استهلاكٍ ولا إنشاء (لا نهائي — لا تصفير سنويّ).
+
+        كانت ``get_or_create`` فتُنشئ القراءةُ صفَّ عدّادٍ لكلّ قسمٍ يفتح صفحةَ الإدخال؛
+        والصفُّ يولد عند أوّل استهلاك (``consume_next``) ورقمُه الأوّل 1 كما يُعرض هنا.
+        """
+        obj = cls.objects.filter(kind=kind, department=cls.resolve_department(department)).first()
+        n = obj.next_number if obj else 1
         return {
-            'kind': kind, 'number': n, 'year': obj.year,
+            'kind': kind, 'number': n, 'year': obj.year if obj else timezone.now().year,
             'formatted': cls.format_number(kind, n),
         }
 

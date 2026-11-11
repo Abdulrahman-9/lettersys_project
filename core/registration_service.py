@@ -35,6 +35,8 @@ def register_book_here(book, department, *, by, direction=None, via_referral=Non
         raise PermissionDenied('لا تملك صلاحيةَ قيدِ هذا الكتاب.')
     if department is None:
         raise ValidationError('لا قسمَ للقيد.')
+    # الدفترُ والعدّادُ من مصدرٍ واحد: شعبةٌ أو وحدةٌ تُمرَّر تُقيِّد في دفتر ماسكها (ب)3‑2.
+    department = BookSequence.resolve_department(department)
     if via_referral is not None and via_referral.book_id != book.pk:
         raise ValidationError('الإحالةُ ليست لهذا الكتاب.')
 
@@ -90,6 +92,22 @@ def registrations_of(book, user):
     return list(book.registrations.select_related('department').all())
 
 
+def ledger_department(user):
+    """دفترُ «قيِّده عندنا» لهذا المستخدم: الماسكُ لسجلّ قسمه (``resolve_department``)،
+    و``None`` بلا قسمٍ أو بلا ماسكٍ فوقه — مصدرٌ واحدٌ للزرّ ولنقطته، لا قسمٌ يختاره الطلب."""
+    from core.models import BookSequence, Department
+    from core.scoping import user_department_id
+
+    department_id = user_department_id(user)
+    department = Department.objects.filter(pk=department_id).first() if department_id is not None else None
+    if department is None:
+        return None
+    try:
+        return BookSequence.resolve_department(department)
+    except ValidationError:
+        return None
+
+
 def register_here_ledger(book, user):
     """دفترُ «قيِّده عندنا» لهذا المستخدم — القسمُ الذي سيُستهلك عدّادُه، أو ``None``.
 
@@ -98,15 +116,14 @@ def register_here_ledger(book, user):
     مقيَّدٌ في دفتره سلفاً (قيدُ التفرّد). فالزرُّ لا يُعرض لمن سيُرفض، واسمُ
     الدفتر يُسمّى في التأكيد — الضغطةُ تستهلك رقماً حقيقيّاً لا يُستردّ.
     """
-    from core.models import Department
-    from core.scoping import can_register_book, user_department_id
+    from core.scoping import can_register_book
 
-    department_id = user_department_id(user)
-    if department_id is None or not can_register_book(book, user):
+    ledger = ledger_department(user)
+    if ledger is None or not can_register_book(book, user):
         return None
-    if book.registrations.filter(department_id=department_id).exists():
+    if book.registrations.filter(department=ledger).exists():
         return None
-    return Department.objects.filter(pk=department_id).first()
+    return ledger
 
 
 # ───────────────────────────── الداخليّات ─────────────────────────────

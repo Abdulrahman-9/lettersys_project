@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -159,7 +160,11 @@ def extraction_smart_desktop(request):
     seq_map = {}
     for k in all_kinds:
         if k in BookSequence.SERIES_KINDS:
-            data = BookSequence.get_next(k, department=sequence_department)
+            try:
+                data = BookSequence.get_next(k, department=sequence_department)
+            except ValidationError:      # لا ماسكَ للسجلّ فوقه — الحفظُ يسمّي الخطأ ((ب)3‑2)
+                seq_map[k] = ''
+                continue
             seq_map[k] = data.get('formatted') or str(data.get('number', ''))
         else:
             seq_map[k] = ''

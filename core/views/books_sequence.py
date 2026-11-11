@@ -7,6 +7,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
@@ -56,7 +57,11 @@ def next_number_api(request):
         })
     profile = getattr(request.user, 'profile', None)
     department = getattr(profile, 'department', None)
-    data = BookSequence.get_next(kind, department=department)
+    try:
+        data = BookSequence.get_next(kind, department=department)
+    except ValidationError as exc:   # لا ماسكَ للسجلّ فوق قسمه ((ب)3‑2)
+        return JsonResponse({'kind': kind, 'number': None, 'year': None, 'formatted': '',
+                             'message': exc.messages[0], 'error_code': 'NO_REGISTER'}, status=400)
     return JsonResponse(data)
 
 

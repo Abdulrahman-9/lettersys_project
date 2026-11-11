@@ -232,10 +232,14 @@ def save_book_api(request):
                 'error_code': 'INVALID_DATE'
             }, status=400)
 
-        # قسمُ الكتاب = قسمُ مُنشئه، وإلّا القسم الافتراضيّ. الحجز والعدّاد
-        # وكشف التكرار تقرأ كلّها هذا المصدر نفسه.
-        book_department = (getattr(getattr(request.user, 'profile', None), 'department', None)
-                           or BookSequence.resolve_department())
+        # قسمُ الكتاب = دفترُ مُنشئه: الماسكُ لسجلّ قسمه ((ب)3‑2 — الشعبةُ والوحدةُ تُدخلان في
+        # دفتر من فوقهما)، وإلّا الافتراضيّ. الحجزُ والعدّادُ وكشفُ التكرار تقرأ هذا المصدرَ نفسَه.
+        try:
+            book_department = BookSequence.resolve_department(
+                getattr(getattr(request.user, 'profile', None), 'department', None))
+        except ValidationError as exc:
+            return JsonResponse({'success': False, 'message': exc.messages[0],
+                                 'error_code': 'NO_REGISTER'}, status=400)
 
         # ── كشف التكرار داخل القسم فقط (قبل استهلاك أي رقم تسلسلي) ──
         _dup_incoming = kind_value in ('incoming_internal', 'incoming_external')

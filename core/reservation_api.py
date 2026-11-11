@@ -9,6 +9,7 @@ import json
 import logging
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.db.models import Q
 from django.utils import timezone
@@ -101,6 +102,10 @@ def reserve_number(request):
         reservation, outcome = _svc_reserve(
             request.user, kind, department=_request_department(request.user),
             client_key=_request_client_key(request))
+    except ValidationError as e:
+        # قسمٌ لا ماسكَ للسجلّ فوقه ((ب)3‑2): خطأُ إعدادٍ يُسمّى لا 500.
+        return JsonResponse({'success': False, 'message': e.messages[0], 'error_code': 'NO_REGISTER'},
+                            status=400)
     except Exception as e:
         logger.error(f'[Reservation] Error: {e}', exc_info=True)
         return JsonResponse({'success': False, 'message': 'خطأ في الحجز'}, status=500)
@@ -265,7 +270,11 @@ def reservation_status(request):
             'preview_number': '',
             'manual_number': True,
         })
-    department = _request_department(request.user)
+    try:
+        department = _request_department(request.user)
+    except ValidationError as e:
+        return JsonResponse({'has_reservation': False, 'expired_reservation': None, 'preview_number': '',
+                             'message': e.messages[0], 'error_code': 'NO_REGISTER'}, status=400)
     other_holds = _other_holds(request, kind, department)
 
     # فحص وتحديث الحجوزات المنتهية

@@ -165,16 +165,16 @@ def api_record_custody(request, pk):
 @require_http_methods(['POST'])
 def api_register_here(request, pk):
     """«قيِّده عندنا» — رقمُ واردٍ من عدّاد قسمي."""
-    from core.registration_service import register_book_here
-    from core.scoping import user_department_id
+    from core.registration_service import ledger_department, register_book_here
 
     book = _book(request, pk)
     if book is None:
         return _missing()
 
     data = _json(request)
-    department = _department(data.get('department')) or _department(
-        user_department_id(request.user))
+    # الدفترُ من المصدر الواحد لا من الطلب ((ب)3‑2): كان ``department`` في الجسم يستهلك
+    # عدّادَ أيّ قسم. والزرُّ يسمّي هذا الدفترَ نفسَه (``register_here_ledger``).
+    department = ledger_department(request.user)
     try:
         row = register_book_here(
             book, department, by=request.user,
