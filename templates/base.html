@@ -1,13 +1,48 @@
 <!doctype html>
 {% load static %}
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl"{% block html_attrs %}{% endblock %}>
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <meta name="description" content="نظام متقدم لإدارة الكتب الواردة والصادرة مع متابعة آلية">
     <meta name="theme-color" content="#ff9233">
-    
+    {% comment %}
+      الكاتبُ الوحيد للوضع الفاتح/الداكن (theme.css لا يقرأ إعدادَ الجهاز بنفسه).
+      يعمل قبل أوّل ورقة أنماط فلا يومض الوضعُ، وفي الصفحات المنقولة وحدها
+      (data-lx-page="v2") فلا تصير صفحةٌ قديمةٌ نصفَ داكنة. الاختيار في
+      localStorage «lx-theme»، وبدونه يتبع الجهاز ويتغيّر معه. الطباعةُ فاتحةٌ دائماً.
+    {% endcomment %}
+    <script>
+      (function () {
+        var root = document.documentElement;
+        if (root.getAttribute('data-lx-page') !== 'v2') return;
+        var saved = null;
+        try { saved = localStorage.getItem('lx-theme'); } catch (e) { /* تخزينٌ محجوب: يتبع الجهاز */ }
+        var media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+        function chosen() { return saved === 'dark' || saved === 'light' ? saved : (media && media.matches ? 'dark' : 'light'); }
+        function apply() {
+          var theme = chosen();
+          root.setAttribute('data-bs-theme', theme);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', theme === 'dark' ? '#0c1413' : '#0f766e');
+          document.dispatchEvent(new CustomEvent('lx-theme-change', { detail: theme }));
+        }
+        apply();
+        if (media && media.addEventListener) media.addEventListener('change', function () { if (saved !== 'dark' && saved !== 'light') apply(); });
+        window.addEventListener('beforeprint', function () { root.setAttribute('data-bs-theme', 'light'); });
+        window.addEventListener('afterprint', apply);
+        window.lxTheme = {
+          get: function () { return root.getAttribute('data-bs-theme'); },
+          set: function (theme) {
+            saved = theme;
+            try { localStorage.setItem('lx-theme', theme); } catch (e) { /* يبقى للجلسة وحدها */ }
+            apply();
+          }
+        };
+      })();
+    </script>
+
     <!-- PWA Meta Tags -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,9 +58,11 @@
     <link href="{% static 'vendor/bootstrap/bootstrap.rtl.min.css' %}?v=20260419-shellfix" rel="stylesheet">
     <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}?v=20260705a" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'vendor/cairo/cairo.css' %}?v=20260705a">
+    <!-- الهويّة الموحّدة: رموزُ الوضعين وتطبيقُها على Bootstrap في الصفحات المنقولة -->
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261111-theme4">
     <!-- Design System (موحد للألوان والمسافات) -->
     <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260927">
-    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261011-responsive-shell">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261111-theme1">
     <!-- مكوّنات واجهة محايدة اللون (مستوحاة من صفحة الدخول) — اختيارية عبر أصناف .btn-brand/.card-brand/.field-brand -->
     <link rel="stylesheet" href="{% static 'css/brand-components.css' %}?v=20260705c">
     
@@ -263,7 +300,8 @@
       {% with tag=m.tags %}
       <div class="toast fancy-toast" role="alert" aria-live="assertive" aria-atomic="true"
            data-bs-autohide="true"
-           data-bs-delay="{% if 'error' in tag %}6000{% elif 'warning' in tag %}5000{% else %}3800{% endif %}">
+           data-bs-delay="{% if 'error' in tag %}6000{% elif 'warning' in tag %}5000{% else %}3800{% endif %}"
+           style="--lx-toast-ms: {% if 'error' in tag %}6000{% elif 'warning' in tag %}5000{% else %}3800{% endif %}ms">
         <div class="d-flex align-items-center gap-2">
           <div class="toast-accent {% if 'success' in tag %}bg-success{% elif 'warning' in tag %}bg-warning{% elif 'error' in tag %}bg-danger{% else %}bg-primary{% endif %}"></div>
           <div class="ps-2 d-flex align-items-center">
@@ -310,7 +348,9 @@
     <script src="{% static 'logging-system.js' %}"></script>
     
     <!-- نظام إدارة الكتب - JavaScript الحديث -->
-    <script src="{% static 'app.js' %}?v=20261013-guided-actions"></script>
+    <script src="{% static 'app.js' %}?v=20261111-theme1"></script>
+    <!-- زرّ الوضع الفاتح/الداكن — يعمل في الصفحات المنقولة وحدها (حيث يُعرَّف lxTheme) -->
+    <script src="{% static 'js/theme.js' %}?v=20261111-theme1"></script>
 
     <!-- Sidebar Mini Toggle -->
     <script>

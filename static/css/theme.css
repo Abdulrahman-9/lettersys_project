@@ -1,0 +1,326 @@
+/* ==========================================================================
+   LetterSys — الهويّة الموحّدة (2026-11-11، قرارُ المالك: تركوازٌ واحد)
+   --------------------------------------------------------------------------
+   مصدرٌ واحدٌ لألوان النظام: لونُ فعلٍ واحد (تركواز)، أرضيّةٌ كريميّةٌ دافئة،
+   ذهبيُّ الشعار لمسةٌ زخرفيّةٌ فقط، وألوانُ الحالات محجوزةٌ لمعناها
+   (أحمر متأخّر · كهرمانيّ ينتظر · أخضر أُنجز · أزرق قيد العمل).
+
+   الوضعان: كاتبٌ واحدٌ لـ`data-bs-theme` هو سكربتُ الرأس في base.html
+   (يقرأ اختيارَ الموظّف ثمّ إعدادَ الجهاز عبر matchMedia) — لذلك لا فرعَ
+   لإعداد الجهاز في هذا الملفّ، وإلّا صار للوضع كاتبان (اختبار tests_theme_guards).
+
+   الانتقالُ صفحةً صفحة: تطبيقُ ألوان Bootstrap والمكوّنات على الرموز محصورٌ
+   في الصفحات المنقولة `[data-lx-page="v2"]`، فلا تصير صفحةٌ قديمةٌ نصفَ داكنة.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* الأرضيّة والأسطح */
+  --lx-bg: #f6f4ef;
+  --lx-bg-tint: #e8f4f1;
+  --lx-bg-warm: #fff4e4;
+  --lx-surface: #ffffff;
+  --lx-surface-2: #f6f9f8;
+  --lx-ink: #14262b;
+  --lx-mute: #52656b;
+  --lx-line: #dfe7e5;
+  --lx-line-strong: #c9d6d3;
+
+  /* لونُ الفعل */
+  --lx-pri: #0f766e;
+  --lx-pri-rgb: 15, 118, 110;
+  --lx-pri-strong: #115e59;
+  --lx-pri-2: #0d9488;
+  --lx-pri-fill: #0f766e;
+  --lx-pri-fill-ink: #ffffff;
+  --lx-pri-soft: #e3f3f0;
+  --lx-pri-soft-ink: #0f5f58;
+  --lx-hero-a: #0f766e;
+  --lx-hero-b: #115e59;
+  --lx-hero-c: #0f857a;   /* كان #0d9488: الأبيضُ عليه 3.7:1 — صار 4.5:1 في كلّ نقاط التدرّج */
+
+  /* ذهبيُّ الشعار — زخرفةٌ لا نصّ */
+  --lx-accent: #d99a1e;
+  --lx-accent-soft: rgba(217, 154, 30, .16);
+
+  /* الحالات */
+  --lx-late: #b42318;  --lx-late-bg: #fef3f2;  --lx-late-line: #fecdca;
+  --lx-wait: #b54708;  --lx-wait-bg: #fffaeb;  --lx-wait-line: #fedf89;
+  --lx-done: #067647;  --lx-done-bg: #ecfdf3;  --lx-done-line: #abefc6;
+  --lx-prog: #175cd3;  --lx-prog-bg: #eff8ff;  --lx-prog-line: #b2ddff;
+
+  /* العمق والحركة */
+  --lx-shadow-sm: 0 1px 2px rgba(20, 38, 43, .06);
+  --lx-shadow-md: 0 10px 26px rgba(20, 38, 43, .08);
+  --lx-shadow-lg: 0 24px 64px rgba(15, 23, 42, .15);
+  --lx-radius: 14px;
+  --lx-radius-lg: 22px;
+  --lx-ease: cubic-bezier(.2, .8, .2, 1);
+  --lx-ease-spring: cubic-bezier(.2, .9, .25, 1.2);
+}
+
+[data-bs-theme="dark"] {
+  color-scheme: dark;
+
+  --lx-bg: #0c1413;
+  --lx-bg-tint: #0f1f1d;
+  --lx-bg-warm: #17140e;
+  --lx-surface: #13201e;
+  --lx-surface-2: #182826;
+  --lx-ink: #e4efed;
+  --lx-mute: #a3b6b2;
+  --lx-line: #283a37;
+  --lx-line-strong: #36504c;
+
+  --lx-pri: #2dd4bf;
+  --lx-pri-rgb: 45, 212, 191;
+  --lx-pri-strong: #5eead4;
+  --lx-pri-2: #14b8a6;
+  --lx-pri-fill: #14a394;
+  --lx-pri-fill-ink: #04211e;
+  --lx-pri-soft: rgba(45, 212, 191, .13);
+  --lx-pri-soft-ink: #7fe9dc;
+  --lx-hero-a: #0b3f3a;
+  --lx-hero-b: #0d544d;
+  --lx-hero-c: #10766c;
+
+  --lx-accent: #f2c14e;
+  --lx-accent-soft: rgba(242, 193, 78, .14);
+
+  --lx-late: #fda29b;  --lx-late-bg: rgba(240, 68, 56, .14);   --lx-late-line: rgba(240, 68, 56, .35);
+  --lx-wait: #fec84b;  --lx-wait-bg: rgba(247, 144, 9, .14);   --lx-wait-line: rgba(247, 144, 9, .35);
+  --lx-done: #75e0a7;  --lx-done-bg: rgba(23, 178, 106, .14);  --lx-done-line: rgba(23, 178, 106, .35);
+  --lx-prog: #84caff;  --lx-prog-bg: rgba(46, 144, 250, .14);  --lx-prog-line: rgba(46, 144, 250, .35);
+
+  --lx-shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --lx-shadow-md: 0 10px 26px rgba(0, 0, 0, .35);
+  --lx-shadow-lg: 0 24px 64px rgba(0, 0, 0, .5);
+}
+
+@media print {
+  :root { color-scheme: light; }
+}
+
+/* --------------------------------------------------------------------------
+   Bootstrap على الرموز — في الصفحات المنقولة وحدها
+   -------------------------------------------------------------------------- */
+[data-lx-page="v2"] {
+  --bs-body-bg: var(--lx-bg);
+  --bs-body-color: var(--lx-ink);
+  --bs-emphasis-color: var(--lx-ink);
+  --bs-secondary-color: var(--lx-mute);
+  --bs-tertiary-color: var(--lx-mute);
+  --bs-secondary-bg: var(--lx-surface-2);
+  --bs-tertiary-bg: var(--lx-surface-2);
+  --bs-border-color: var(--lx-line);
+  --bs-primary: var(--lx-pri);
+  --bs-primary-rgb: var(--lx-pri-rgb);
+  --bs-link-color: var(--lx-pri);
+  --bs-link-color-rgb: var(--lx-pri-rgb);
+  --bs-link-hover-color: var(--lx-pri-strong);
+  --bs-focus-ring-color: rgba(var(--lx-pri-rgb), .25);
+}
+
+/* أزرارُ «الورق المطبوع» (app.css، كتلة COMPONENT POLISH): الإحساسُ نفسُه — سطحٌ ورقيّ
+   وخطٌّ سفليٌّ رفيع وارتفاعٌ هادئ — بلون الهويّة لا البرتقاليّ، وبسطحٍ يتبع الوضع.
+   البادئة html[…] ترفع الخصوصيّة فوق app.css الذي يُحمَّل بعد هذا الملفّ. */
+html[data-lx-page="v2"] :is(.btn-brand, .btn-primary, .btn-success, .btn-danger, .btn-secondary, .btn-info) {
+  background: var(--lx-surface);
+}
+
+html[data-lx-page="v2"] :is(.btn-brand, .btn-primary, .btn-success, .btn-danger, .btn-secondary, .btn-info):hover {
+  background: var(--lx-surface-2);
+}
+
+html[data-lx-page="v2"] :is(.btn-brand, .btn-primary),
+html[data-lx-page="v2"] :is(.btn-brand, .btn-primary):hover {
+  color: var(--lx-pri);
+  box-shadow: inset 0 -2px 0 rgba(var(--lx-pri-rgb), .55),
+              inset 0 0 0 1px rgba(var(--lx-pri-rgb), .28),
+              0 1px 2px rgba(var(--lx-pri-rgb), .10);
+}
+
+html[data-lx-page="v2"] .btn-success,
+html[data-lx-page="v2"] .btn-success:hover {
+  color: var(--lx-done);
+  box-shadow: inset 0 -2px 0 var(--lx-done-line), inset 0 0 0 1px var(--lx-done-line);
+}
+
+html[data-lx-page="v2"] .btn-danger,
+html[data-lx-page="v2"] .btn-danger:hover {
+  color: var(--lx-late);
+  box-shadow: inset 0 -2px 0 var(--lx-late-line), inset 0 0 0 1px var(--lx-late-line);
+}
+
+html[data-lx-page="v2"] .btn-info,
+html[data-lx-page="v2"] .btn-info:hover {
+  color: var(--lx-prog);
+  box-shadow: inset 0 -2px 0 var(--lx-prog-line), inset 0 0 0 1px var(--lx-prog-line);
+}
+
+html[data-lx-page="v2"] .btn-secondary,
+html[data-lx-page="v2"] .btn-secondary:hover {
+  color: var(--lx-ink);
+  box-shadow: inset 0 -2px 0 var(--lx-line-strong), inset 0 0 0 1px var(--lx-line);
+}
+
+[data-lx-page="v2"] .btn-outline-primary {
+  --bs-btn-color: var(--lx-pri);
+  --bs-btn-border-color: var(--lx-pri);
+  --bs-btn-hover-color: var(--lx-pri-fill-ink);
+  --bs-btn-hover-bg: var(--lx-pri-fill);
+  --bs-btn-hover-border-color: var(--lx-pri-fill);
+  --bs-btn-active-color: var(--lx-pri-fill-ink);
+  --bs-btn-active-bg: var(--lx-pri-strong);
+  --bs-btn-focus-shadow-rgb: var(--lx-pri-rgb);
+}
+
+[data-lx-page="v2"] .form-control:focus,
+[data-lx-page="v2"] .form-select:focus,
+[data-lx-page="v2"] .form-check-input:focus {
+  border-color: var(--lx-pri);
+  box-shadow: 0 0 0 .25rem rgba(var(--lx-pri-rgb), .18);
+}
+
+/* مربّعُ الاختيار: app.css يلوّنه برتقاليّاً (هالةُ المرور والتحديد) — هنا بلون الهويّة،
+   والقفزةُ اللطيفة عند المرور باقية */
+html[data-lx-page="v2"] .form-check-input {
+  background-color: var(--lx-surface);
+  border-color: var(--lx-line-strong);
+}
+
+html[data-lx-page="v2"] .form-check-input:hover {
+  box-shadow: 0 0 0 3px rgba(var(--lx-pri-rgb), .12);
+}
+
+html[data-lx-page="v2"] .form-check-input:checked {
+  background-color: var(--lx-pri-fill);
+  border-color: var(--lx-pri-fill);
+  box-shadow: 0 0 0 3px rgba(var(--lx-pri-rgb), .2);
+}
+
+/* رابطُ «تخطَّ إلى المحتوى» (base.html يلوّنه برتقاليّاً) — يظهر للوحة المفاتيح وحدها */
+html[data-lx-page="v2"] .skip-link {
+  color: var(--lx-pri);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-md);
+  outline: 2px solid var(--lx-pri);
+}
+
+/* --------------------------------------------------------------------------
+   زرُّ الوضع (شمس ↔ قمر) — مكوّنٌ واحدٌ للدخول وللشريط العلويّ لاحقاً
+   -------------------------------------------------------------------------- */
+.lx-theme-toggle {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px solid var(--lx-line);
+  background: color-mix(in srgb, var(--lx-surface) 86%, transparent);
+  color: var(--lx-ink);
+  box-shadow: var(--lx-shadow-sm);
+  cursor: pointer;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  transition: border-color .25s ease, transform .25s var(--lx-ease), box-shadow .25s ease;
+}
+
+.lx-theme-toggle:hover {
+  border-color: var(--lx-pri);
+  transform: translateY(-1px);
+  box-shadow: var(--lx-shadow-md);
+}
+
+.lx-theme-toggle:active { transform: scale(.94); }
+
+.lx-theme-toggle:focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 3px;
+}
+
+.lx-theme-toggle svg {
+  position: absolute;
+  transition: transform .55s var(--lx-ease), opacity .35s ease;
+}
+
+.lx-theme-toggle .lx-sun { color: var(--lx-accent); transform: rotate(0) scale(1); opacity: 1; }
+.lx-theme-toggle .lx-moon { color: var(--lx-pri); transform: rotate(-90deg) scale(.4); opacity: 0; }
+[data-bs-theme="dark"] .lx-theme-toggle .lx-sun { transform: rotate(90deg) scale(.4); opacity: 0; }
+[data-bs-theme="dark"] .lx-theme-toggle .lx-moon { transform: rotate(0) scale(1); opacity: 1; }
+
+/* انتقالُ الوضع: دائرةٌ تتّسع من الزرّ (View Transitions)؛ theme.js يحرّكها */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* --------------------------------------------------------------------------
+   التوست الموحّد — في الصفحات المنقولة: في الزاوية لا وسطَ الشاشة
+   (كان يغطّي حقلَي الدخول)، بسطح الهويّة وشريطِ وقتٍ يتوقّف عند المرور
+   -------------------------------------------------------------------------- */
+[data-lx-page="v2"] .toast-center {
+  top: auto;
+  bottom: 24px;
+  left: 24px;
+  transform: none;
+  width: min(420px, calc(100vw - 32px));
+}
+
+[data-lx-page="v2"] .fancy-toast {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--lx-surface) 94%, transparent);
+  border: 1px solid var(--lx-line);
+  border-radius: 16px;
+  box-shadow: var(--lx-shadow-lg);
+  color: var(--lx-ink);
+  animation: lx-toast-in .42s var(--lx-ease-spring) backwards;
+}
+
+[data-lx-page="v2"] .fancy-toast .toast-body,
+[data-lx-page="v2"] .fancy-toast .text-dark { color: var(--lx-ink) !important; }
+[data-lx-page="v2"] .fancy-toast .text-muted { color: var(--lx-mute) !important; }
+[data-lx-page="v2"] .fancy-toast .bg-success { background-color: var(--lx-done) !important; }
+[data-lx-page="v2"] .fancy-toast .bg-warning { background-color: var(--lx-wait) !important; }
+[data-lx-page="v2"] .fancy-toast .bg-danger { background-color: var(--lx-late) !important; }
+[data-lx-page="v2"] .fancy-toast .text-success { color: var(--lx-done) !important; }
+[data-lx-page="v2"] .fancy-toast .text-warning { color: var(--lx-wait) !important; }
+[data-lx-page="v2"] .fancy-toast .text-danger { color: var(--lx-late) !important; }
+
+[data-lx-page="v2"] .fancy-toast[data-bs-autohide="true"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--lx-pri);
+  transform-origin: right center;
+  animation: lx-toast-timer var(--lx-toast-ms, 3800ms) linear forwards;
+}
+
+/* Bootstrap يُوقف المؤقّت عند المرور ويعيده كاملاً بعده — فالشريطُ يختفي ثمّ يبدأ من جديد */
+[data-lx-page="v2"] .fancy-toast:hover::after,
+[data-lx-page="v2"] .fancy-toast:focus-within::after {
+  animation: none;
+  opacity: 0;
+}
+
+@keyframes lx-toast-in {
+  from { opacity: 0; transform: translateY(14px) scale(.96); }
+}
+
+@keyframes lx-toast-timer {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lx-theme-toggle,
+  .lx-theme-toggle svg,
+  [data-lx-page="v2"] .fancy-toast { transition: none; animation: none; }
+  [data-lx-page="v2"] .fancy-toast[data-bs-autohide="true"]::after { animation: none; display: none; }
+}

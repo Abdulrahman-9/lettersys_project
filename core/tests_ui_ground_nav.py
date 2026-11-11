@@ -74,9 +74,13 @@ class CalmGroundTests(SimpleTestCase):
         light = [b for m, h, b in rules if not m and h == 'body']
         dark = [b for m, h, b in rules if not m and h == '[data-theme="dark"] body']
         self.assertEqual(len(light), 1)
-        self.assertEqual(len(dark), 1)
+        # الهويّة الموحّدة (11-11): الوضعُ الداكن القديم (data-theme) حُذف بكامله؛ أرضيّةُ الداكن
+        # صارت رمزاً واحداً في theme.css تحت data-bs-theme — فلا تصريحَ داكناً في app.css.
+        self.assertEqual(len(dark), 0)
         self.assertIn('background: #f4f2ee', light[0])
-        self.assertIn('background: #1d1d1d', dark[0])
+        theme = read('static/css/theme.css')
+        dark_block = theme[theme.index('[data-bs-theme="dark"] {'):]
+        self.assertIn('--lx-bg: #0c1413', dark_block[:dark_block.index('}')])
         for m, h, b in rules:
             if h in ('body', '[data-theme="dark"] body'):
                 self.assertNotIn('linear-gradient', b, (m, h))

@@ -446,10 +446,6 @@ body {
     gap: 0.75rem;
   }
 
-  [data-theme="dark"] .app-sidebar {
-    --bs-offcanvas-bg: #1d1d1d;
-  }
-
   .app-sidebar .app-sidebar-panel {
     box-shadow: none;
     backdrop-filter: none;
@@ -2405,91 +2401,6 @@ tr.search-no-results strong {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* ============================================
-   Dark Mode Support (الوضع الليلي)
-   ============================================ */
-
-[data-theme="dark"] {
-  --warm-bg-top: #1a1a1a;
-  --warm-bg-mid: #252525;
-  --warm-bg-bottom: #2d2d2d;
-  --deep-brown: #e5e5e5;
-  --soft-brown: #c9c9c9;
-  --muted-brown: #a0a0a0;
-  --card-border: rgba(255, 255, 255, 0.15);
-  --card-shadow: rgba(0, 0, 0, 0.5);
-  --surface-blur: rgba(0, 0, 0, 0.3);
-}
-
-[data-theme="dark"] body {
-  background: #1d1d1d;
-  color: var(--deep-brown);
-}
-
-[data-theme="dark"] .bg-white {
-  background-color: #2d2d2d !important;
-  color: var(--deep-brown);
-}
-
-[data-theme="dark"] .card {
-  background-color: #2d2d2d;
-  color: var(--deep-brown);
-  border-color: var(--card-border);
-}
-
-[data-theme="dark"] .navbar {
-  background-color: #2d2d2d !important;
-  border-bottom: 1px solid var(--card-border);
-}
-
-[data-theme="dark"] .table {
-  color: var(--deep-brown);
-  border-color: var(--card-border);
-}
-
-[data-theme="dark"] .table tbody tr:hover {
-  background-color: rgba(255, 146, 51, 0.15);
-}
-
-[data-theme="dark"] .form-control,
-[data-theme="dark"] .form-select {
-  background-color: #3a3a3a;
-  color: var(--deep-brown);
-  border-color: var(--card-border);
-}
-
-[data-theme="dark"] .form-control:focus,
-[data-theme="dark"] .form-select:focus {
-  background-color: #3a3a3a;
-  color: var(--deep-brown);
-  border-color: var(--accent);
-}
-
-[data-theme="dark"] .btn-outline-secondary {
-  color: var(--deep-brown);
-  border-color: var(--card-border);
-}
-
-[data-theme="dark"] .btn-outline-secondary:hover {
-  background-color: var(--accent);
-  border-color: var(--accent);
-  color: #1a1a1a;
-}
-
-[data-theme="dark"] .text-muted {
-  color: var(--muted-brown) !important;
-}
-
-[data-theme="dark"] .modal-content {
-  background-color: #2d2d2d;
-  color: var(--deep-brown);
-}
-
-[data-theme="dark"] .toast {
-  background-color: #2d2d2d;
-  color: var(--deep-brown);
 }
 
 /* Offline Mode Indicator */

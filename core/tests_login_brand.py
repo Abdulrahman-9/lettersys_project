@@ -53,7 +53,8 @@ class LoginPageBrandTests(TestCase):
 
         resp = self._login_page()
 
-        self.assertContains(resp, '<h5>منظومة التجربة</h5>', html=True)
+        # h1 لا h5: عنوانُ الصفحة الوحيد (تسلسلُ العناوين لقارئ الشاشة — مراجعةُ 11-11)
+        self.assertContains(resp, '<h1>منظومة التجربة</h1>', html=True)
         self.assertContains(resp, 'سطرُ وصفٍ للتجربة')
 
     def test_no_company_name_logo_or_bootstrap_blue_on_the_page(self):
@@ -81,7 +82,7 @@ class LoginPageBrandTests(TestCase):
             resp = self._login_page()
 
         self.assertIsNone(resp.context['system_settings'])
-        self.assertContains(resp, '<h5>نظام الكتب</h5>', html=True)
+        self.assertContains(resp, '<h1>نظام الكتب</h1>', html=True)
         self.assertContains(resp, 'نظام تتبع الكتب والمراسلات')
 
     def test_the_logo_stays_inside_the_app(self):
@@ -103,8 +104,16 @@ class LoginTemplateColourTests(SimpleTestCase):
                 self.assertNotIn(blue, src)
 
     def test_the_tokens_are_the_teal_scope(self):
-        """الرموزُ نفسُها التي تُلوّن ورشةَ الاستخراج (brand-components.css) — لا لونَ ثالث."""
-        src = _flat(LOGIN_TEMPLATE.read_text(encoding='utf-8'))
+        """الهويّة الموحّدة (11-11): الصفحةُ تقرأ ألوانَها من theme.css وحده — لا لونَ ثالث.
 
-        self.assertIn('--brand-strong:#0f766e', src)
-        self.assertIn('--brand-strong-2:#115e59', src)
+        كان القالبُ يحمل نسختَه من رموز التركواز؛ صار مصدرُها واحداً يتبدّل فيه الوضعان معاً.
+        """
+        src = _flat(LOGIN_TEMPLATE.read_text(encoding='utf-8'))
+        theme = _flat((LOGIN_TEMPLATE.parents[2] / 'static' / 'css' / 'theme.css').read_text(encoding='utf-8'))
+
+        self.assertIn('var(--lx-pri', src)
+        self.assertIn('var(--lx-hero-a)', src)
+        self.assertNotIn('#0f766e', src)
+        self.assertNotIn('#115e59', src)
+        self.assertIn('--lx-pri:#0f766e', theme)
+        self.assertIn('--lx-pri-strong:#115e59', theme)

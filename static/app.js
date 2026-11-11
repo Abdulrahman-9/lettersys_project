@@ -1062,62 +1062,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-const DarkMode = {
-  init() {
-    // قراءة الإعداد المحفوظ
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    this.setTheme(savedTheme);
-    
-    // إضافة زر التبديل
-    this.createToggleButton();
-  },
-  
-  setTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-    
-    // تحديث أيقونة الزر
-    const icon = document.querySelector('#darkModeToggle i');
-    if (icon) {
-      icon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
-    }
-  },
-  
-  toggle() {
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-    this.setTheme(newTheme);
-    
-    showToast(
-      newTheme === 'dark' ? 'تم تفعيل الوضع الليلي' : 'تم تفعيل الوضع النهاري',
-      'info'
-    );
-  },
-  
-  createToggleButton() {
-    // البحث عن navbar
-    const navbar = document.querySelector('.navbar-nav');
-    if (!navbar) return;
-    
-    // إنشاء زر التبديل
-    const toggleLi = document.createElement('li');
-    toggleLi.className = 'nav-item';
-    toggleLi.innerHTML = `
-      <button class="btn btn-sm btn-outline-secondary rounded-pill" id="darkModeToggle" title="تبديل الوضع الليلي">
-        <i class="bi bi-moon-fill"></i>
-      </button>
-    `;
-    
-    // إضافة الزر قبل آخر عنصر
-    const lastItem = navbar.lastElementChild;
-    navbar.insertBefore(toggleLi, lastItem);
-    
-    // ربط الحدث
-    document.getElementById('darkModeToggle').addEventListener('click', () => {
-      this.toggle();
-    });
-  },
-};
 
 // ================================
 // Moderate Improvements - Advanced Features
@@ -1397,9 +1341,7 @@ class PerformanceOptimizer {
   }
 }
 
-// تفعيل Dark Mode
 document.addEventListener('DOMContentLoaded', () => {
-  DarkMode.init();
   
   // Initialize Moderate Improvements
   new BackToTopButton();
@@ -1560,6 +1502,8 @@ window.ToastCenter = {
     toastEl.setAttribute('aria-atomic', 'true');
     toastEl.dataset.bsAutohide = autohide ? 'true' : 'false';
     toastEl.dataset.bsDelay = String(delay);
+    // شريطُ الوقت في الهويّة الموحّدة (theme.css) يقرأ المدّة نفسها
+    if (autohide) toastEl.style.setProperty('--lx-toast-ms', delay + 'ms');
 
     var shell = document.createElement('div');
     shell.className = 'd-flex align-items-start position-relative';

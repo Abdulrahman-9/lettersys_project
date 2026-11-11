@@ -12,7 +12,7 @@
 // الدمجُ يجمع أصولَ الفرعين، فالنسخةُ تُرفع **فوق أعلاهما** (v95 · v83) كي
 // يُبطل كاشُ كلّ متصفّحٍ مهما كان الفرعُ الذي كان يخدمه. ورقمٌ أدنى من أحدهما
 // يترك متصفّحاً كاملاً على أصولٍ قديمةٍ بلا أن يظهر خطأ.
-const CACHE_VERSION = 'v183-20261112-c3';
+const CACHE_VERSION = 'v184-20261111-theme';
 const CACHE_NAME = 'lettersys-' + CACHE_VERSION;
 
 // قشرة التطبيق الثابتة فقط — لا '/' ولا أي صفحة مُصادَقة.
@@ -20,6 +20,8 @@ const CACHE_NAME = 'lettersys-' + CACHE_VERSION;
 const SHELL_URLS = [
   '/static/app.css',
   '/static/app.js',
+  '/static/css/theme.css',
+  '/static/js/theme.js',
   '/static/vendor/bootstrap-icons/bootstrap-icons.css',
   '/static/vendor/bootstrap-icons/fonts/bootstrap-icons.woff2',
   '/static/vendor/cairo/cairo.css',

@@ -80,7 +80,12 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
         assets = (
             ('templates/core/dashboard.html', 'css/dashboard_roles.css', 20260929),
             ('templates/base.html', 'design-system.css', 20260927),
-            ('templates/base.html', 'app.css', 20260929),
+            # الهويّة الموحّدة (11-11): app.css فقد الوضعَ الداكن القديم، وأُضيف المصدرُ الجديد
+            ('templates/base.html', 'app.css', 20261111),
+            ('templates/base.html', 'app.js', 20261111),
+            ('templates/base.html', 'css/theme.css', 20261111),
+            ('templates/base.html', 'js/theme.js', 20261111),
+            ('templates/core/login.html', 'js/login.js', 20261111),
             ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js', 20261006),
             ('templates/core/book_unified.html', 'css/book_unified_tabs.css', 20261006),
             ('templates/core/extraction_smart_desktop.html', 'extraction_smart.css', 20260929),

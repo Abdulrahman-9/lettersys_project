@@ -1,22 +1,21 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}تسجيل الدخول{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* هويّةُ الصفحة تركوازُ التطبيق لا أزرقُ Bootstrap (البند 6). كلُّ لونٍ أدناه يُشتقّ
-     من الرموز الأربعة على .login-wrapper — النطاقُ نفسُه في brand-components.css
-     (.extraction-container). والإحساسُ كما أحبّه المالك: ارتفاعٌ وموجةٌ وحلقةُ تركيز. */
+  /* الهويّة الموحّدة (2026-11-11): كلُّ لونٍ من رموز theme.css (--lx-*) فيتبدّل الوضعان معاً.
+     الإحساسُ كما أحبّه المالك باقٍ كلُّه: صعودُ البطاقة، الموجةُ على الزرّ، حلقةُ التركيز،
+     ودائرتا الخلفيّة — وزيد عليها: خطٌّ ذهبيٌّ ينمو تحت الرأس، ودخولٌ متتابعٌ للحقول،
+     وهزّةٌ قصيرةٌ للبطاقة عند الخطأ. كلّها تتوقّف لمن طلب تقليلَ الحركة. */
   body {
-    /* أوّلُ التدرّج تركوازٌ فاتح (--dc-brand-soft) — الجسمُ خارج نطاق الرموز */
-    background: linear-gradient(135deg, #e6f4f2 0%, #fdf6e3 50%, #fff4e4 100%);
+    background: linear-gradient(135deg, var(--lx-bg-tint) 0%, var(--lx-bg) 52%, var(--lx-bg-warm) 100%);
     min-height: 100vh;
   }
 
   .login-wrapper {
-    --brand: #0f766e;
-    --brand-2: #0d9488;
-    --brand-strong: #0f766e;
-    --brand-strong-2: #115e59;
+    --login-card-line: rgba(255, 255, 255, .8);
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -25,78 +24,121 @@
     position: relative;
     overflow: hidden;
   }
-  
-  .login-wrapper::before {
-    content: '';
-    position: absolute;
-    width: 500px;
-    height: 500px;
-    background: radial-gradient(circle, color-mix(in srgb, var(--brand) 10%, transparent), transparent);
-    top: -250px;
-    right: -250px;
-    border-radius: 50%;
-    z-index: 0;
-  }
-  
+
+  [data-bs-theme="dark"] .login-wrapper { --login-card-line: var(--lx-line); }
+
+  .login-wrapper::before,
   .login-wrapper::after {
     content: '';
     position: absolute;
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(245, 158, 11, 0.1), transparent);
-    bottom: -200px;
-    left: -200px;
     border-radius: 50%;
     z-index: 0;
+    will-change: transform;
   }
-  
+
+  .login-wrapper::before {
+    width: 520px;
+    height: 520px;
+    background: radial-gradient(circle, rgba(var(--lx-pri-rgb), .12), transparent 70%);
+    top: -260px;
+    right: -260px;
+    animation: loginDrift 16s ease-in-out infinite alternate;
+  }
+
+  .login-wrapper::after {
+    width: 420px;
+    height: 420px;
+    background: radial-gradient(circle, var(--lx-accent-soft), transparent 70%);
+    bottom: -210px;
+    left: -210px;
+    animation: loginDrift 19s ease-in-out -6s infinite alternate-reverse;
+  }
+
+  @keyframes loginDrift {
+    from { transform: translate(0, 0) scale(1); }
+    to { transform: translate(-28px, 22px) scale(1.06); }
+  }
+
+  /* زرّ الوضع: أعلى يمين الشاشة */
+  .login-theme {
+    position: fixed;
+    top: 18px;
+    inset-inline-start: 18px;
+    z-index: 5;
+    animation: loginFade .5s .4s var(--lx-ease) backwards;
+  }
+
   .login-card {
-    max-width: 500px;
+    max-width: 480px;
     width: 100%;
-    border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.15);
-    background: rgba(255, 255, 255, 0.95);
+    border-radius: var(--lx-radius-lg);
+    border: 1px solid var(--login-card-line);
+    box-shadow: var(--lx-shadow-lg);
+    background: color-mix(in srgb, var(--lx-surface) 95%, transparent);
     backdrop-filter: blur(10px);
     position: relative;
     z-index: 1;
-    animation: slideUp 0.6s ease-out;
+    overflow: hidden;
+    animation: slideUp .6s var(--lx-ease) backwards;
   }
-  
+
+  .login-card.has-error {
+    animation: slideUp .6s var(--lx-ease) backwards, loginShake .45s .62s ease-in-out;
+  }
+
   @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(30px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(30px); }
   }
-  
+
+  @keyframes loginShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-7px); }
+    40%, 80% { transform: translateX(7px); }
+  }
+
+  @keyframes loginFade {
+    from { opacity: 0; transform: translateY(8px); }
+  }
+
   .login-hero {
-    background: linear-gradient(135deg, var(--brand-strong) 0%, var(--brand-strong-2) 60%, var(--brand-2) 100%);
+    background: linear-gradient(135deg, var(--lx-hero-a) 0%, var(--lx-hero-b) 60%, var(--lx-hero-c) 100%);
     color: #fff;
-    border-radius: 20px 20px 0 0;
-    padding: 2.5rem 2rem;
-    box-shadow: 0 8px 32px color-mix(in srgb, var(--brand-strong) 30%, transparent);
+    padding: 2.5rem 2rem 2.25rem;
     position: relative;
     overflow: hidden;
     text-align: center;
   }
-  
+
   .login-hero::before {
     content: '';
     position: absolute;
     width: 150px;
     height: 150px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, .1);
     border-radius: 50%;
     top: -50px;
     right: -50px;
   }
-  
-  /* علامةٌ عامّة بدل شعار الشركة: رمزٌ أبيض في دائرةٍ على التركواز، ساكنةٌ كما كان الشعار */
+
+  /* ذهبيُّ الشعار: خطٌّ ينمو من المنتصف تحت الرأس */
+  .login-hero::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 84px;
+    height: 4px;
+    margin-left: -42px;
+    border-radius: 4px 4px 0 0;
+    background: var(--lx-accent);
+    animation: loginGrow .7s .45s var(--lx-ease) backwards;
+  }
+
+  @keyframes loginGrow {
+    from { transform: scaleX(0); }
+  }
+
+  /* علامةٌ عامّة بدل شعار الشركة (البند 6: المستودعُ عامّ وهذه أوّلُ صفحة) */
   .login-mark {
     width: 72px;
     height: 72px;
@@ -105,133 +147,256 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.16);
-    border: 2px solid rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, .16);
+    border: 2px solid rgba(255, 255, 255, .4);
     font-size: 2rem;
     line-height: 1;
     position: relative;
     z-index: 1;
+    animation: loginGlow 1.8s .5s ease-out;
   }
 
-  .login-hero h5 { 
-    margin: 0.5rem 0 0.25rem;
+  @keyframes loginGlow {
+    0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, .35); }
+    100% { box-shadow: 0 0 0 18px rgba(255, 255, 255, 0); }
+  }
+
+  .login-hero h1 {
+    margin: .5rem 0 .25rem;
     font-weight: 800;
     font-size: 1.75rem;
     position: relative;
     z-index: 1;
   }
-  
-  .login-hero p { 
+
+  .login-hero p {
     margin: 0;
-    opacity: 0.95;
+    opacity: .95;
     font-size: 1rem;
     position: relative;
     z-index: 1;
   }
-  
-  .login-form {
-    padding: 2rem;
-  }
-  
-  .login-form .form-control {
-    border-radius: 14px;
-    padding: 0.85rem 1rem;
-    border: 2px solid #e5e7eb;
-    transition: all 0.3s ease;
-    font-size: 1rem;
-  }
-  
-  .login-form .form-control:focus {
-    border-color: var(--brand);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 16%, transparent);
-  }
-  
+
+  .login-form { padding: 2rem; }
+
+  /* دخولٌ متتابعٌ للحقول بعد البطاقة */
+  .login-form > * { animation: loginFade .5s var(--lx-ease) backwards; }
+  .login-form > :nth-child(2) { animation-delay: .18s; }
+  .login-form > :nth-child(3) { animation-delay: .24s; }
+  .login-form > :nth-child(4) { animation-delay: .30s; }
+  .login-form > :nth-child(5) { animation-delay: .36s; }
+  .login-form > :nth-child(6) { animation-delay: .42s; }
+  .login-form > :nth-child(7) { animation-delay: .48s; }
+  .login-form > :nth-child(n+8) { animation-delay: .54s; }
+
   .login-form .form-label {
-    color: #374151;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-  }
-  
-  .login-form .btn-login {
-    border-radius: 14px;
-    padding: 0.85rem 1.5rem;
+    color: var(--lx-ink);
+    margin-bottom: .5rem;
     font-weight: 700;
+  }
+
+  .login-form .form-label i { color: var(--lx-pri); }
+
+  .login-form .form-control {
+    border-radius: var(--lx-radius);
+    padding: .85rem 1rem;
+    border: 2px solid var(--lx-line);
+    background-color: var(--lx-surface);
+    color: var(--lx-ink);
+    font-size: 1rem;
+    transition: border-color .25s ease, box-shadow .25s ease, background-color .25s ease;
+  }
+
+  .login-form .form-control::placeholder { color: var(--lx-mute); opacity: .75; }
+
+  .login-form .form-control:focus {
+    border-color: var(--lx-pri);
+    box-shadow: 0 0 0 4px rgba(var(--lx-pri-rgb), .16);
+    background-color: var(--lx-surface);
+    color: var(--lx-ink);
+  }
+
+  .login-pass { position: relative; }
+  .login-pass .form-control { padding-inline-end: 3.25rem; }
+
+  .login-eye {
+    position: absolute;
+    top: 50%;
+    inset-inline-end: .45rem;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: var(--lx-mute);
+    font-size: 1.15rem;
+    cursor: pointer;
+    transition: background-color .2s ease, color .2s ease;
+  }
+
+  .login-eye:hover { background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink); }
+  .login-eye:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 1px; }
+  .login-eye[aria-pressed="true"] { color: var(--lx-pri); }
+
+  .login-keyhint {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-top: .5rem;
+    padding: .45rem .75rem;
+    border-radius: 10px;
+    background: var(--lx-wait-bg);
+    border: 1px solid var(--lx-wait-line);
+    color: var(--lx-wait);
+    font-size: .88rem;
+    font-weight: 700;
+    animation: loginFade .3s var(--lx-ease);
+  }
+
+  .login-keyhint[hidden] { display: none; }
+
+  .login-alert,
+  .login-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    padding: .75rem .9rem;
+    margin-bottom: 1.1rem;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: .95rem;
+    line-height: 1.6;
+  }
+
+  .login-alert {
+    background: var(--lx-late-bg);
+    border: 1px solid var(--lx-late-line);
+    color: var(--lx-late);
+  }
+
+  .login-alert small {
+    display: block;
+    font-weight: 600;
+    color: var(--lx-mute);
+  }
+
+  .login-hint {
+    background: var(--lx-pri-soft);
+    border: 1px solid rgba(var(--lx-pri-rgb), .25);
+    color: var(--lx-pri-soft-ink);
+  }
+
+  .login-form .form-check-label { color: var(--lx-ink); }
+
+  .login-form .btn-login {
+    border-radius: var(--lx-radius);
+    padding: .9rem 1.5rem;
+    font-weight: 800;
     font-size: 1.05rem;
-    background: linear-gradient(135deg, var(--brand-strong) 0%, var(--brand-strong-2) 60%, var(--brand-2) 100%);
+    color: #fff;
+    background: linear-gradient(135deg, var(--lx-hero-a) 0%, var(--lx-hero-b) 60%, var(--lx-hero-c) 100%);
     border: none;
-    box-shadow: 0 8px 24px color-mix(in srgb, var(--brand-strong) 30%, transparent);
+    box-shadow: 0 8px 24px rgba(var(--lx-pri-rgb), .3);
     position: relative;
     overflow: hidden;
-    transition: all 0.3s ease;
+    transition: transform .3s var(--lx-ease), box-shadow .3s ease;
   }
-  
+
+  /* الموجة: دائرةٌ ثابتةُ الحجم تتّسع بـtransform (لا width/height) — ومع لوحة المفاتيح أيضاً */
   .login-form .btn-login::before {
     content: '';
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 0;
-    height: 0;
+    width: 320px;
+    height: 320px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.3);
-    transform: translate(-50%, -50%);
-    transition: width 0.6s, height 0.6s;
-  }
-  
-  .login-form .btn-login:hover::before {
-    width: 300px;
-    height: 300px;
-  }
-  
-  .login-form .btn-login:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 32px color-mix(in srgb, var(--brand-strong) 40%, transparent);
-  }
-  
-  .login-note { 
-    color: #6b7280;
-    font-size: 0.95rem;
-    text-align: center;
-    margin-top: 1.5rem;
-  }
-  
-  .login-info {
-    background: #f3f4f6;
-    border-left: 4px solid var(--brand);
-    padding: 1rem;
-    border-radius: 8px;
-    margin-top: 1.5rem;
-  }
-  
-  .login-info h6 {
-    color: #1f2937;
-    margin-bottom: 0.5rem;
-    font-weight: 700;
-  }
-  
-  .login-info p {
-    color: #6b7280;
-    margin: 0;
-    font-size: 0.9rem;
+    background: rgba(255, 255, 255, .24);
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform .6s var(--lx-ease);
+    pointer-events: none;
   }
 
-  /* أيقوناتُ الحقول وصندوقِ المعلومات: .text-primary أزرقُ Bootstrap بـ!important */
-  .login-card .text-primary {
-    color: var(--brand) !important;
+  .login-form .btn-login:hover::before,
+  .login-form .btn-login:focus-visible::before { transform: translate(-50%, -50%) scale(1); }
+
+  .login-form .btn-login:hover {
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(var(--lx-pri-rgb), .4);
+  }
+
+  .login-form .btn-login:active { transform: translateY(0) scale(.99); }
+
+  .login-form .btn-login:focus-visible {
+    color: #fff;
+    outline: 3px solid var(--lx-accent);
+    outline-offset: 3px;
+  }
+
+  .login-btn-busy { display: none; }
+  .btn-login.is-busy { pointer-events: none; cursor: progress; }
+  .btn-login.is-busy .login-btn-label { display: none; }
+  .btn-login.is-busy .login-btn-busy { display: inline-flex; align-items: center; gap: .6rem; }
+
+  .login-spin {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(255, 255, 255, .35);
+    border-top-color: #fff;
+    animation: loginSpin .7s linear infinite;
+  }
+
+  @keyframes loginSpin { to { transform: rotate(360deg); } }
+
+  .login-note,
+  .login-help {
+    color: var(--lx-mute);
+    font-size: .92rem;
+    text-align: center;
+  }
+
+  .login-note { margin-top: 1.25rem; }
+  .login-help { margin-top: .35rem; font-size: .86rem; }
+
+  .login-info {
+    background: var(--lx-surface-2);
+    border-top: 1px solid var(--lx-line);
+    border-inline-start: 4px solid var(--lx-pri);
+    padding: 1rem 1.25rem;
+  }
+
+  .login-info h2 {
+    color: var(--lx-ink);
+    margin: 0 0 .25rem;
+    font-size: 1rem;
+    font-weight: 800;
+  }
+
+  .login-info h2 i { color: var(--lx-pri); }
+
+  .login-info p {
+    color: var(--lx-mute);
+    margin: 0;
+    font-size: .9rem;
   }
 
   @media (max-width: 576px) {
-    .login-hero {
-      padding: 2rem;
-    }
+    .login-hero { padding: 2rem; }
+    .login-form { padding: 1.5rem; }
+    .login-hero h1 { font-size: 1.5rem; }
+  }
 
-    .login-form {
-      padding: 1.5rem;
+  @media (prefers-reduced-motion: reduce) {
+    .login-wrapper::before, .login-wrapper::after, .login-card, .login-card.has-error,
+    .login-hero::after, .login-mark, .login-theme, .login-form > *, .login-keyhint {
+      animation: none !important;
     }
-
-    .login-hero h5 {
-      font-size: 1.5rem;
-    }
+    .login-form .btn-login, .login-form .btn-login::before { transition: none; }
   }
 </style>
 {% endblock %}
@@ -240,67 +405,82 @@
 {# الاسمُ من «إعدادات النظام» لا اسمُ الشركة ولا شعارُها — المستودعُ عامّ وهذه أوّلُ صفحة (البند 6) #}
 {% with app_name=system_settings.app_name|default:"نظام الكتب" %}
 <div class="login-wrapper">
-  <div class="login-card">
-    <!-- Hero Section -->
+  <button type="button" class="lx-theme-toggle login-theme" data-theme-toggle aria-pressed="false" aria-label="الوضع الداكن" title="الوضع الداكن">
+    <svg class="lx-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4"/></svg>
+    <svg class="lx-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+
+  <div class="login-card{% if form.errors %} has-error{% endif %}">
     <div class="login-hero">
       <span class="login-mark" aria-hidden="true"><i class="bi bi-journal-bookmark-fill"></i></span>
-      <h5>{{ app_name }}</h5>
+      <h1>{{ app_name }}</h1>
       <p>تسجيل الدخول للوصول إلى لوحة التحكم</p>
     </div>
-    
-    <!-- Login Form -->
-    <form method="post" class="login-form">
+
+    <form method="post" class="login-form" id="loginForm">
       {% csrf_token %}
       {% if form.errors %}
       {# كانت كلمةُ المرور الخاطئة تعيد الصفحةَ نفسَها بصمت (تدقيقُ نيلسن E#1) #}
-      <div class="alert alert-danger py-2 small" role="alert">
-        <i class="bi bi-exclamation-circle me-1"></i>اسمُ المستخدم أو كلمةُ المرور غيرُ صحيحة.
+      <div class="login-alert" role="alert">
+        <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+        <span>اسمُ المستخدم أو كلمةُ المرور غيرُ صحيحة.<small>تأكّد من لغة لوحة المفاتيح ومن مفتاح الأحرف الكبيرة، ثمّ أعد المحاولة.</small></span>
+      </div>
+      {% elif next and next != '/' %}
+      <div class="login-hint" role="note">
+        <i class="bi bi-signpost-split" aria-hidden="true"></i>
+        <span>سجّل الدخول لتتابع إلى الصفحة التي طلبتها.</span>
       </div>
       {% endif %}
-      
+
       <div class="mb-3">
-        <label class="form-label fw-semibold" for="id_username">
-          <i class="bi bi-person-fill text-primary me-2"></i>اسم المستخدم
+        <label class="form-label" for="id_username">
+          <i class="bi bi-person-fill me-2" aria-hidden="true"></i>اسم المستخدم
         </label>
-        <input type="text" name="username" id="id_username" class="form-control" placeholder="أدخل اسم المستخدم" value="{{ form.username.value|default:'' }}" autocomplete="username" required autofocus>
+        <input type="text" name="username" id="id_username" class="form-control" placeholder="أدخل اسم المستخدم" value="{{ form.username.value|default:'' }}" autocomplete="username" aria-describedby="loginUserHint" required{% if not form.errors or not form.username.value %} autofocus{% endif %}>
+        <div class="login-keyhint" id="loginUserHint" aria-live="polite" hidden><i class="bi bi-keyboard" aria-hidden="true"></i><span></span></div>
       </div>
-      
+
       <div class="mb-3">
-        <label class="form-label fw-semibold" for="id_password">
-          <i class="bi bi-key-fill text-primary me-2"></i>كلمة المرور
+        <label class="form-label" for="id_password">
+          <i class="bi bi-key-fill me-2" aria-hidden="true"></i>كلمة المرور
         </label>
-        <input type="password" name="password" id="id_password" class="form-control" placeholder="أدخل كلمة المرور" autocomplete="current-password" required>
+        <div class="login-pass">
+          <input type="password" name="password" id="id_password" class="form-control" placeholder="أدخل كلمة المرور" autocomplete="current-password" aria-describedby="loginPassHint" required{% if form.errors and form.username.value %} autofocus{% endif %}>
+          <button type="button" class="login-eye" id="loginEye" aria-controls="id_password" aria-pressed="false" aria-label="إظهار كلمة المرور" title="إظهار كلمة المرور"><i class="bi bi-eye" aria-hidden="true"></i></button>
+        </div>
+        <div class="login-keyhint" id="loginPassHint" aria-live="polite" hidden><i class="bi bi-keyboard" aria-hidden="true"></i><span></span></div>
       </div>
-      
-      <!-- ✅ Remember Me Checkbox (جديد) -->
+
       <div class="form-check mb-3 d-flex align-items-center">
         <input class="form-check-input cursor-pointer" type="checkbox" id="id_remember_me" name="remember_me" value="on">
         <label class="form-check-label ms-2 cursor-pointer fw-500" for="id_remember_me">
-          <i class="bi bi-bookmark-check text-primary me-1"></i>تذكّرني 7 أيّام
+          <i class="bi bi-bookmark-check me-1" aria-hidden="true"></i>تذكّرني 7 أيّام على هذا الجهاز
         </label>
       </div>
-      
-      <div class="d-grid mb-3">
-        <button class="btn btn-login text-white" type="submit">
-          <i class="bi bi-box-arrow-in-right me-2"></i>تسجيل الدخول
+
+      <div class="d-grid mb-1">
+        <button class="btn btn-login" type="submit" id="loginSubmit">
+          <span class="login-btn-label"><i class="bi bi-box-arrow-in-right me-2" aria-hidden="true"></i>تسجيل الدخول</span>
+          <span class="login-btn-busy"><span class="login-spin" aria-hidden="true"></span>جارٍ الدخول…</span>
         </button>
       </div>
-      
-      <div class="login-note small">
-        <i class="bi bi-info-circle me-1"></i>
+
+      <div class="login-note">
+        <i class="bi bi-shield-lock me-1" aria-hidden="true"></i>
         دخول آمن ومركزي لإدارة الكتب والمراسلات
       </div>
+      <div class="login-help">نسيت كلمة المرور؟ يعيد مدير النظام تعيينها لك.</div>
     </form>
-    
-    <!-- Info Box -->
+
     <div class="login-info">
-      <h6 class="mb-1">
-        <i class="bi bi-info-circle-fill text-primary me-2"></i>معلومات النظام
-      </h6>
-      <p>{{ app_name }}</p>
-      <p class="mb-0">{{ system_settings.brand_subtitle|default:"نظام تتبع الكتب والمراسلات" }}</p>
+      <h2><i class="bi bi-info-circle-fill me-2" aria-hidden="true"></i>معلومات النظام</h2>
+      <p>{{ system_settings.brand_subtitle|default:"نظام تتبع الكتب والمراسلات" }}</p>
     </div>
   </div>
 </div>
 {% endwith %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/login.js' %}?v=20261111-theme2"></script>
 {% endblock %}
