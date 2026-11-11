@@ -270,23 +270,37 @@ def mail_manager_required(view_func):
 
 #: ردُّ «قارئ فقط» — واحدٌ للصفحة ولنقطة JSON.
 READ_ONLY_DENIAL = 'حسابُك للقراءة والتعليق فقط.'
+#: ردُّ مفتاحٍ لا يملكه الحساب (مصفوفةُ الأدوار) — صادقٌ للقارئ ولمن سُحب منه فعلٌ بعينه.
+CAPABILITY_DENIAL = 'لا تملك صلاحيّةَ هذا الفعل.'
+
+
+def guard_required(predicate, denial=CAPABILITY_DENIAL):
+    """حارسُ صفحةٍ بمسندٍ مسمّى من ``core/scoping.py`` يقرأ مفتاحَه هناك حرفيّاً — فيلتقطه
+    اختبارُ «المربوطُ هو ما يقرؤه الكود» ولا يُمرَّر مفتاحٌ نصّاً من هنا."""
+    return lambda view_func: _guarded(view_func, predicate, denial)
+
+
+def guard_required_api(predicate, denial=CAPABILITY_DENIAL, error_code='FORBIDDEN'):
+    """توأمُ ``guard_required`` لنقاط JSON: 403 بجسمٍ يقرؤه سطحُ الاستدعاء.
+
+    يُرفض **قبل أيّ بحث** — الجوابُ واحدٌ لكلّ معرّف، فلا يكشف وجودَ شيء."""
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped(request, *args, **kwargs):
+            if not predicate(request.user):
+                from django.http import JsonResponse
+
+                return JsonResponse({'success': False, 'message': denial,
+                                     'error_code': error_code}, status=403)
+            return view_func(request, *args, **kwargs)
+        return _wrapped
+    return decorator
 
 
 def writer_required(view_func):
-    """صفحاتُ الإنشاء والإرسال لمَن يكتب (``scoping.can_write``) — توأمُ الحرّاس أعلاه."""
+    """صفحاتُ الإرسال لمَن يكتب (``scoping.can_write``) — بقيت للبريد وحده حتى (ب)5."""
     return _guarded(view_func, can_write, READ_ONLY_DENIAL)
 
 
-def writer_required_api(view_func):
-    """توأمُ ``writer_required`` لنقاط JSON: 403 بجسمٍ يقرؤه سطحُ الاستدعاء.
-
-    يُرفض **قبل أيّ بحث** — الجوابُ واحدٌ لكلّ معرّف، فلا يكشف وجودَ شيء."""
-    @wraps(view_func)
-    def _wrapped(request, *args, **kwargs):
-        if not can_write(request.user):
-            from django.http import JsonResponse
-
-            return JsonResponse({'success': False, 'message': READ_ONLY_DENIAL,
-                                 'error_code': 'READ_ONLY'}, status=403)
-        return view_func(request, *args, **kwargs)
-    return _wrapped
+#: توأمُ ``writer_required`` لنقاط JSON — أبوابُ البريد الستّة حتى (ب)5.
+writer_required_api = guard_required_api(can_write, READ_ONLY_DENIAL, 'READ_ONLY')

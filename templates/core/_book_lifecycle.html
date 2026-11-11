@@ -21,11 +21,11 @@
   <section class="bx-card bx-route-empty" id="lifecycleCard" data-book-id="{{ book.pk }}" aria-label="التفريق والردود">
     <i class="bi bi-diagram-3" aria-hidden="true"></i>
     <span>لا حركةَ تسييرٍ على هذا الكتاب — لم يُفرَّق ولم تُسجَّل له عهدة.</span>
-    {% if can_distribute and not paper %}
+    {% if not paper %}{% if can_distribute or can_link %}
     <span class="spacer"></span>
-    <button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#distributeModal"><i class="bi bi-arrow-left-right" aria-hidden="true"></i>فرِّق…</button>
-    <button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#custodyModal"><i class="bi bi-person-badge" aria-hidden="true"></i>سجّل عهدة…</button>
-    {% endif %}
+    {% if can_distribute %}<button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#distributeModal"><i class="bi bi-arrow-left-right" aria-hidden="true"></i>فرِّق…</button>{% endif %}
+    {% if can_link %}<button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#custodyModal"><i class="bi bi-person-badge" aria-hidden="true"></i>سجّل عهدة…</button>{% endif %}
+    {% endif %}{% endif %}
   </section>
 {% else %}
 <section class="bx-card" id="lifecycleCard" data-book-id="{{ book.pk }}" aria-labelledby="h-route">
@@ -35,10 +35,8 @@
     {% elif open_referrals %}<span class="bx-badge bx-badge--wait">{{ open_referrals|length }} قيد الإنجاز</span>{% endif %}
     {% if book.sent_to_group %}<span class="bx-tag" title="عُمِّم على عنقود">{{ book.sent_to_group }}</span>{% endif %}
     <span class="spacer"></span>
-    {% if can_distribute %}
-    <button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#distributeModal"><i class="bi bi-plus" aria-hidden="true"></i>فرِّق إلى وحدةٍ أخرى</button>
-    <button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#custodyModal"><i class="bi bi-person-badge" aria-hidden="true"></i>تسجيل عهدة…</button>
-    {% endif %}
+    {% if can_distribute %}<button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#distributeModal"><i class="bi bi-plus" aria-hidden="true"></i>فرِّق إلى وحدةٍ أخرى</button>{% endif %}
+    {% if can_link %}<button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#custodyModal"><i class="bi bi-person-badge" aria-hidden="true"></i>تسجيل عهدة…</button>{% endif %}
   </div>
   <p class="bx-action-note">تأكيد الوصول يحدّث حالة الإحالة فقط. «تسجيل عهدة» يوثّق الحامل والتوقيع؛ والطباعة وحدها لا تثبت الاستلام.</p>
 

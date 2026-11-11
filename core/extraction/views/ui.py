@@ -29,8 +29,8 @@ from core.extraction.kinds import (
 )
 from core.document_types import DEFAULT_DOCUMENT_TYPE_BY_KIND, DOCUMENT_TYPE_OPTIONS_BY_KIND
 from core.models import Book, BookSequence, DataExtractionResult
-from core.scoping import can_open_extraction
-from core.views.helpers import writer_required
+from core.scoping import can_enter_book, can_open_extraction, can_reserve_number, can_use_entry_desk
+from core.views.helpers import guard_required
 
 
 def _confidence_percent(value):
@@ -74,7 +74,7 @@ def extraction_wizard(request):
 
 
 @login_required
-@writer_required
+@guard_required(can_use_entry_desk)
 def extraction_smart_desktop(request):
     """نظام الاستخراج الذكي المحسّن للـ Desktop — يدعم وضع التعديل عبر edit_pk"""
     from django.core.exceptions import PermissionDenied
@@ -86,6 +86,11 @@ def extraction_smart_desktop(request):
 
     edit_pk = request.GET.get('edit_pk', '').strip()
     edit_book_json = 'null'
+
+    # وضعان ومفتاحان (قرارُ المالك 2026‑11‑11): الصفحةُ لمن يُدخل أو يعدّل، والكتابُ
+    # الجديدُ لمن يملك «الإدخال» — والتعديلُ يسأل ``can_edit_book`` أدناه.
+    if not edit_pk and not can_enter_book(request.user):
+        raise PermissionDenied('الإدخالُ ليس من صلاحيّات حسابك.')
 
     if edit_pk:
         try:
@@ -199,6 +204,8 @@ def extraction_smart_desktop(request):
             'edit_book_json': edit_book_json,
             'back_url': back_url,
             'recent_books': recent_books,
+            # زرُّ «احجز رقماً» لمن يقبله الخادم (``reserve_number``) — لا زرَّ يُعرض ليُرفض
+            'can_reserve_number': can_reserve_number(request.user),
         },
     )
 

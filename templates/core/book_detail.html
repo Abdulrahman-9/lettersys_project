@@ -118,25 +118,26 @@
         </ul>
       </div>
       <a class="bx-btn" href="{% url 'mail_compose_book' book.pk %}"><i class="bi bi-envelope" aria-hidden="true"></i>إرسال…</a>
-      <button type="button" class="bx-btn" data-bs-toggle="modal" data-bs-target="#linkPickerModal"><i class="bi bi-link-45deg" aria-hidden="true"></i>اربط…</button>
+      {% if can_link %}<button type="button" class="bx-btn" data-bs-toggle="modal" data-bs-target="#linkPickerModal"><i class="bi bi-link-45deg" aria-hidden="true"></i>اربط…</button>{% endif %}
       <span class="spacer"></span>
+      {# «أفعالٌ أخرى» من ``book_state.more_actions`` — القالبُ يعرض ولا يقرّر، وقائمةٌ فارغةٌ لا تُعرض #}
+      {% if more_actions %}
       <div class="dropdown">
         <button type="button" class="bx-btn bx-btn--ghost" data-bs-toggle="dropdown" aria-expanded="false" aria-label="أفعالٌ أخرى">
           <i class="bi bi-three-dots" aria-hidden="true"></i>
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
-          {% if can_distribute and not paper %}
-            {% if primary.key != 'distribute' %}<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#distributeModal"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> فرِّق…</button></li>{% endif %}
-            {% if primary.key != 'custody' %}<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#custodyModal"><i class="bi bi-person-badge" aria-hidden="true"></i> سجّل عهدة…</button></li>{% endif %}
-          {% endif %}
-          {% if can_register_here %}
+          {% if 'distribute' in more_actions %}<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#distributeModal"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> فرِّق…</button></li>{% endif %}
+          {% if 'custody' in more_actions %}<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#custodyModal"><i class="bi bi-person-badge" aria-hidden="true"></i> سجّل عهدة…</button></li>{% endif %}
+          {% if 'register' in more_actions %}
           {# لمن يقبله الخادمُ وحدَه (register_here_ledger)؛ والتأكيدُ في book_lifecycle.js يسمّي data-ledger #}
           <li><button type="button" class="dropdown-item" id="registerHereBtn" data-ledger="{{ register_ledger.name }}"
                       title="امنحه رقمَ واردٍ من عدّاد «{{ register_ledger.name }}»"><i class="bi bi-journal-plus" aria-hidden="true"></i> قيّده عندنا…</button></li>
           {% endif %}
-          <li><a class="dropdown-item" href="{% url 'extraction-smart-desktop' %}?kind={{ book.kind }}"><i class="bi bi-plus-circle" aria-hidden="true"></i> إدخال كتابٍ مماثل</a></li>
+          {% if 'similar' in more_actions %}<li><a class="dropdown-item" href="{% url 'extraction-smart-desktop' %}?kind={{ book.kind }}"><i class="bi bi-plus-circle" aria-hidden="true"></i> إدخال كتابٍ مماثل</a></li>{% endif %}
         </ul>
       </div>
+      {% endif %}
     </div>
   </header>
 
@@ -189,7 +190,7 @@
       <section class="bx-card" aria-labelledby="h-links">
         <div class="bx-card-hd">
           <h2 id="h-links">كتبٌ مرتبطة</h2><span class="spacer"></span>
-          <button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#linkPickerModal"><i class="bi bi-plus" aria-hidden="true"></i>اربط كتاباً</button>
+          {% if can_link %}<button type="button" class="bx-tag" data-bs-toggle="modal" data-bs-target="#linkPickerModal"><i class="bi bi-plus" aria-hidden="true"></i>اربط كتاباً</button>{% endif %}
         </div>
         {% if links %}
         <ul class="bx-links">

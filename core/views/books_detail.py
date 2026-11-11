@@ -21,11 +21,11 @@ from ..forms import AttachmentForm
 from ..models import Attachment, Book, BookEmailLog, BookHistory
 from .comments import can_edit_comment
 from core.scoping import (
-    ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_send_referral, can_edit_book, can_open_content,
-    can_view_book,
+    ACCESS_STUB, RESTRICTED_SECRET_LEVELS, can_send_referral, can_edit_book, can_enter_book, can_link_book,
+    can_open_content, can_view_book,
     is_privileged, secret_access, secret_openers,
 )
-from .book_state import citation, due_pill, is_paper, journey, primary_action
+from .book_state import citation, due_pill, is_paper, journey, more_actions, primary_action
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +166,9 @@ def book_detail(request, pk):
 
     lifecycle = _lifecycle_context(book, request.user)
     can_edit = can_edit_book(book, request.user)
+    primary = primary_action(book, referrals=lifecycle["referrals"],
+                             can_distribute=lifecycle["can_distribute"],
+                             can_link=lifecycle["can_link"], can_edit=can_edit)
 
     return render(
         request,
@@ -187,9 +190,12 @@ def book_detail(request, pk):
             "can_edit": can_edit,
             # الترويسةُ من دالّاتٍ خالصة (``book_state``) — القالبُ يعرض ولا يقرّر
             "journey": journey(book, referrals=lifecycle["referrals"]),
-            "primary": primary_action(book, referrals=lifecycle["referrals"],
-                                      can_distribute=lifecycle["can_distribute"],
-                                      can_edit=can_edit),
+            "primary": primary,
+            "more_actions": more_actions(book, primary=primary,
+                                         can_distribute=lifecycle["can_distribute"],
+                                         can_link=lifecycle["can_link"],
+                                         can_register=lifecycle["can_register_here"],
+                                         can_enter=can_enter_book(request.user)),
             "due": due_pill(book),
             "citation": citation(book),
             "paper": is_paper(book),
@@ -273,6 +279,9 @@ def _lifecycle_context(book, user):
         "can_archive_book": can_archive(user),
         # «فعِّل متابعة» و«تفريق» لمن يملك المحتوى — الحارسُ نفسُه في referral_service
         "can_distribute": can_send_referral(book, user),
+        # «سجّل عهدة…» و«اربط…» بمفتاح «العهدة والربط» — الحارسُ نفسُه في custody_service
+        # وlinking_service (كانت العهدةُ على مسند التفريق، والربطُ يظهر للقارئ ويُرفض).
+        "can_link": can_link_book(book, user),
         # «قيِّده عندنا»: الزرُّ لمن يقبله الخادم، والتأكيدُ يسمّي الدفترَ الذي
         # سيُستهلك عدّادُه — من الخدمة نفسِها لا من القالب.
         "can_register_here": ledger is not None,

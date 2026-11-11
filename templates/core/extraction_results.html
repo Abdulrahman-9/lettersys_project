@@ -54,10 +54,12 @@
       <i class="bi bi-paperclip"></i>
     </a>
     {% endif %}
+    {% if nav.enter %}
     <a class="app-context-link" href="{% url 'extraction-smart-desktop' %}?kind={{ normalized_book_kind }}">
       <span>فتح الإدخال الذكي</span>
       <i class="bi bi-upc-scan"></i>
     </a>
+    {% endif %}
     {% if extraction.book_id %}
     <a class="app-context-link" href="{% url 'book_detail' extraction.book_id %}">
       <span>عرض الكتاب المرتبط</span>

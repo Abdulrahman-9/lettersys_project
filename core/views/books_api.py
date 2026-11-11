@@ -24,7 +24,7 @@ from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError
 from ..attachment_service import create_attachment, validate_attachment_file
 from ..decorators import rate_limit
-from .helpers import writer_required_api
+from .helpers import guard_required_api
 from ..document_types import resolve_document_type
 from ..extraction.kinds import normalize_book_kind
 from ..models import (
@@ -37,7 +37,8 @@ from ..reservation_service import (
     claim_reservation_for_client,
 )
 from ..reservation_identity import request_client_key
-from core.scoping import can_edit_book, can_open_content, can_write, is_privileged, scope_books_for
+from core.scoping import (can_edit_book, can_enter_book, can_open_content, can_restore_book, can_trash_book,
+                          is_privileged, scope_books_for)
 from .books_helpers import (
     _normalize_secret_level_value,
     _resolve_entities,
@@ -134,7 +135,7 @@ def _duplicate_guard(request, data, *, department, kind, title, party_number,
 
 
 @login_required
-@writer_required_api
+@guard_required_api(can_enter_book)
 @rate_limit('save_book', max_attempts=30, window_seconds=60, by='user')
 def save_book_api(request):
     """
@@ -530,7 +531,7 @@ def api_delete_book(request, book_id):
 
     # الحذفُ للقسم المالك وطاولته والمدير (Q1‑ج) — والوحدةُ المُحالُ إليها لا تحذف كتابَ غيرها.
     # وما خارج النطاق «غير موجود» لا «ممنوع» — كأخيه ``api_book_inline_status``.
-    if not can_edit_book(book, request.user):
+    if not can_trash_book(book, request.user):
         if not can_open_content(book, request.user):
             return JsonResponse({"error": "غير موجود"}, status=404)
         return JsonResponse({"error": "Unauthorized"}, status=403)
@@ -574,17 +575,18 @@ def _bulk_ids(request):
     return ids, data
 
 
-def _editable_ids(user, ids):
-    """ما يحقّ له الكتابةُ عليه منها — بقاعدة الحذف الفرديّ نفسِها (``can_edit_book``).
+def _editable_ids(user, ids, allowed):
+    """ما يقبله مسندُ الفعل الفرديّ منها — ``allowed`` من مستدعيه: الحذفُ الجماعيُّ بقاعدة
+    الحذف الفرديّ (``can_trash_book``) والحالةُ الجماعيّةُ بقاعدة التعديل (``can_edit_book``).
 
     كان الجماعيُّ يقرّر بـ«مُنشئُه أو مديرُ النظام» والفرديُّ بشجرة القسم المالك
     (Q1‑ج): فيحذف المُنشئُ جماعيّاً كتاباً صار لقسمٍ آخر، ويُترك كتابُ زميل
     القسم صامتاً بينما تمحوه الواجهةُ من القائمة.
+
+    القارئُ يُرفض في أوّل سؤالٍ عن كلّ كتاب: مفتاحُ المسند يُفحص قبل الكتاب ومخبّأٌ على المستخدم.
     """
-    if not can_write(user):
-        return []   # «قارئ فقط» — لا حاجةَ لسؤالٍ عن كلّ كتاب (can_edit_book يرفضه أيضاً)
     books = scope_books_for(user, Book.objects.filter(id__in=ids))
-    return [b.id for b in books if can_edit_book(b, user)]
+    return [b.id for b in books if allowed(b, user)]
 
 
 def _history_rows(user, ids, action, notes):
@@ -605,7 +607,7 @@ def api_bulk_delete_books(request):
     ids, data = _bulk_ids(request)
     if ids is None:
         return data
-    allowed = _editable_ids(request.user, ids)
+    allowed = _editable_ids(request.user, ids, can_trash_book)
     if allowed:
         with transaction.atomic():
             Book.objects.filter(id__in=allowed).update(
@@ -643,7 +645,7 @@ def api_bulk_update_status_books(request):
     if action not in ("archived", "reopen"):
         return JsonResponse({"error": "إجراءٌ غير معروف — «إنهاء المتابعة» أو «إعادة فتحها»."}, status=400)
 
-    editable = _editable_ids(request.user, ids)
+    editable = _editable_ids(request.user, ids, can_edit_book)
     books_qs = Book.objects.filter(id__in=editable)
     if action == "archived":
         target_value, action_label = True, "أُرشفت"
@@ -687,8 +689,8 @@ def api_undo_delete_book(request, book_id):
     # البحثُ والبوّابةُ خارج ``try``: كان 404 يُبتلع فيصير 500 بنصّ الاستثناء.
     book = get_object_or_404(Book.all_objects, id=book_id, is_deleted=True)
 
-    # الاستعادةُ عكسُ الحذف — بالبوّابة نفسِها (Q1‑ج)، وما خارج النطاق «غير موجود».
-    if not can_edit_book(book, request.user):
+    # الاستعادةُ عكسُ الحذف — بابٌ من أبواب الاسترجاع الثلاثة (Q1‑ج)، وما خارج النطاق «غير موجود».
+    if not can_restore_book(book, request.user):
         if not can_open_content(book, request.user):
             return JsonResponse({"error": "غير موجود"}, status=404)
         return JsonResponse({"error": "Unauthorized"}, status=403)

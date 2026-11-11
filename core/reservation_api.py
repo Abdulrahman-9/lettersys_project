@@ -18,7 +18,8 @@ from .models import BookNumberReservation, BookSequence, SystemSettings
 from .reservation_service import claim_reservation_for_client
 from .reservation_identity import request_client_key as _request_client_key
 from .decorators import rate_limit
-from .views.helpers import writer_required_api
+from .scoping import can_reserve_number
+from .views.helpers import guard_required_api
 
 logger = logging.getLogger('lettersys')
 
@@ -71,7 +72,7 @@ def _other_holds(request, kind, department):
 
 
 @login_required
-@writer_required_api
+@guard_required_api(can_reserve_number)
 @require_http_methods(['POST'])
 @rate_limit('reserve_number', max_attempts=30, window_seconds=60, by='user')
 def reserve_number(request):
@@ -197,7 +198,7 @@ def void_reservation(request):
 
 
 @login_required
-@writer_required_api
+@guard_required_api(can_reserve_number)
 @require_http_methods(['POST'])
 def reactivate_reservation(request):
     """

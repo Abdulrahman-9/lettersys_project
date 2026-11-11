@@ -16,13 +16,13 @@ import subprocess
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 
-from .helpers import staff_required, writer_required_api
+from .helpers import guard_required_api, staff_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from core.netaddr import request_is_loopback
 from core.pdf_lock import MUPDF_LOCK
-from core.scoping import can_edit_book, can_open_content, is_privileged
+from core.scoping import can_edit_book, can_open_content, can_use_entry_desk, is_privileged
 
 logger = logging.getLogger('lettersys')
 
@@ -407,7 +407,7 @@ def scan_agent_info(request):
 
 
 @login_required
-@writer_required_api
+@guard_required_api(can_use_entry_desk)
 @require_http_methods(['POST'])
 def scan_agent_start(request):
     """يشغّل وكيل المسح المحلي (حزمة scan_agent في جذر المشروع، نفس جهاز الخادم) بصمت.
@@ -453,7 +453,7 @@ def scan_agent_start(request):
 
 
 @login_required
-@writer_required_api
+@guard_required_api(can_use_entry_desk)
 @require_http_methods(['POST'])
 def scan_process_upload(request):
     """يستقبل مستنداً مرفوعاً (PDF من وكيل المسح، أو PDF/صورة من زر الرفع)،

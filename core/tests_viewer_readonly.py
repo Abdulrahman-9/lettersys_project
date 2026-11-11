@@ -21,7 +21,7 @@ from core import roles
 from core.models import (Book, BookComment, BookEmailLog, BookHistory, BookLink,
                          BookNumberReservation, BookReferral, BookRegistration,
                          CustodyEvent, Department, EmailThread, Entity, UserProfile)
-from core.scoping import (_writer_group_names, can_act_on_book, can_edit_book,
+from core.scoping import (_writer_group_names, can_edit_book, can_link_book, can_register_book,
                           can_open_content, can_view_book, can_write, scope_books_for)
 
 
@@ -95,9 +95,11 @@ class ViewerReadsLikeAColleagueTests(TestCase):
                 self.assertEqual(can_open_content(book, self.viewer),
                                  can_open_content(book, self.entry))
                 self.assertFalse(can_edit_book(book, self.viewer))
-                self.assertFalse(can_act_on_book(book, self.viewer))
+                self.assertFalse(can_link_book(book, self.viewer))
+                self.assertFalse(can_register_book(book, self.viewer))
         self.assertTrue(can_edit_book(self.books[0], self.entry))
-        self.assertTrue(can_act_on_book(self.books[0], self.entry))
+        self.assertTrue(can_link_book(self.books[0], self.entry))
+        self.assertTrue(can_register_book(self.books[0], self.entry))
 
 
 class ViewerWriteEndpointsTests(TestCase):
@@ -140,7 +142,7 @@ class ViewerWriteEndpointsTests(TestCase):
         return self.client.post(url, data=json.dumps(payload), content_type='application/json')
 
     def test_user_level_gates_answer_read_only(self):
-        """نقاطٌ بلا كتابٍ بعينه: 403 ``READ_ONLY`` قبل أيّ بحث."""
+        """نقاطٌ بلا كتابٍ بعينه: 403 قبل أيّ بحث — بمفتاحها ``FORBIDDEN`` منذ (ب)3، والبريدُ ``READ_ONLY`` حتى (ب)5."""
         before = self.snapshot()
         b = self.book.pk
         calls = {
@@ -171,7 +173,8 @@ class ViewerWriteEndpointsTests(TestCase):
             with self.subTest(label):
                 r = call()
                 self.assertEqual(r.status_code, 403)
-                self.assertEqual(r.json().get('error_code'), 'READ_ONLY')
+                mail = label in ('mail_compose', 'mail_bulk', 'thread_status', 'email_send', 'book_email_send')
+                self.assertEqual(r.json().get('error_code'), 'READ_ONLY' if mail else 'FORBIDDEN')
         self.assertEqual(self.snapshot(), before)
 
     def test_entry_pages_are_closed(self):

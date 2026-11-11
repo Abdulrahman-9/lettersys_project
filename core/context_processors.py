@@ -81,7 +81,7 @@ def nav_gates(request):
     if user is None or not user.is_authenticated:
         return {'nav': {}}
 
-    from core.scoping import (can_archive, can_manage_accounts, can_manage_departments,
+    from core.scoping import (can_archive, can_enter_book, can_manage_accounts, can_manage_departments,
                               can_manage_mail,
                               can_manage_system, can_restore_system, can_use_desk,
                               can_use_system_admin, can_view_audit, can_view_reports)
@@ -94,6 +94,8 @@ def nav_gates(request):
         ops_failures = failing_job_count()
 
     return {'nav': {
+        # «الإدخال الذكي» وكلُّ رابطٍ إلى وضع الإدخال — كان يظهر للقارئ فيلقى 403 ((ب)3).
+        'enter': can_enter_book(user),
         'desk': can_use_desk(user),
         'audit': can_view_audit(user),
         'reports': can_view_reports(user),

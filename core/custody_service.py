@@ -60,7 +60,7 @@ def _write_event(book, event, *, referral=None, to_department=None, to_user=None
                  to_name='', signed_at=None, mode=None, note='', by):
     """كتابةُ صفّ العهدة وتحريكُ المؤشّر — الجسدُ المشترك للبابين."""
     from core.models import CustodyEvent
-    from core.scoping import can_act_on_book
+    from core.scoping import can_link_book
 
     if event not in dict(CustodyEvent.EVENT_CHOICES):
         raise ValidationError('حدثُ عهدةٍ غيرُ معروف.')
@@ -68,7 +68,7 @@ def _write_event(book, event, *, referral=None, to_department=None, to_user=None
         raise ValidationError('لا حاملَ لهذه العهدة — ولا تُسجَّل عهدةٌ إلى لا أحد.')
     if referral is not None and referral.book_id != book.pk:
         raise ValidationError('الإحالةُ ليست لهذا الكتاب.')
-    if not can_act_on_book(book, by):
+    if not can_link_book(book, by):
         raise PermissionDenied('لا تملك صلاحيةَ تسجيل عهدةٍ على هذا الكتاب.')
 
     with transaction.atomic():

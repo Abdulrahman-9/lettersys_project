@@ -118,10 +118,10 @@
               <i class="bi bi-grid-1x2-fill"></i>
               <span>لوحة التحكم</span>
             </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'extraction-smart-desktop' or request.resolver_match.url_name == 'extraction-results-ui' %} active{% endif %}" href="{% url 'extraction-smart-desktop' %}" title="الإدخال الذكي">
+            {% if nav.enter %}<a class="app-sidebar-link{% if request.resolver_match.url_name == 'extraction-smart-desktop' or request.resolver_match.url_name == 'extraction-results-ui' %} active{% endif %}" href="{% url 'extraction-smart-desktop' %}" title="الإدخال الذكي">
               <i class="bi bi-upc-scan"></i>
               <span>الإدخال الذكي</span>
-            </a>
+            </a>{% endif %}
             {% comment %}
               الطابورُ الشخصيّ أوّلاً: هو ما يفتحه الموظّفُ صباحاً. وطاولةُ
               الوارد تحته لأنّ جمهورَها أضيق (مختصُّ البريد ورئيسُ القسم) —

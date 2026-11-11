@@ -57,11 +57,13 @@
       <li>على حاسبة الكاتبة يفعل ذلك مسؤولُ النظام مرّةً واحدة بـ<span class="code-inline">install_agent.bat</span> (يكتب قائمةَ الأصول المسموحة ويضع اختصارَ بدء التشغيل).</li>
       <li>ضع الورق في الـADF واضغط «مسح من السكانر» في صفحة الإدخال الذكي.</li>
     </ol>
+    {% if nav.enter %}
     <div class="mt-2">
       <a href="{% url 'extraction-smart-desktop' %}" style="color:#2563eb;font-weight:600;text-decoration:none;font-size:.85rem">
         <i class="bi bi-arrow-left-circle"></i> الانتقال لصفحة الإدخال الذكي
       </a>
     </div>
+    {% endif %}
   </div>
 
 </div>

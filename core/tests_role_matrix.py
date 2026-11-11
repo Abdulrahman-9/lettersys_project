@@ -30,7 +30,8 @@ PAGES = ('dashboard', 'my_today', 'desk_board', 'desk_handover', 'desk_ledger', 
          'trash_list', 'mail_inbox', 'mail_sent', 'mail_compose', 'mail_templates', 'mail_settings',
          'entity_list', 'settings_hub', 'sequence_settings', 'backup_database', 'workstation_board',
          'notifications', 'system_roles')
-GATES = ('can_write', 'can_use_desk', 'can_archive', 'can_manage_mail', 'can_view_audit',
+GATES = ('can_write', 'can_enter_book', 'can_use_entry_desk', 'can_reserve_number', 'can_add_entity',
+         'can_use_desk', 'can_archive', 'can_manage_mail', 'can_view_audit',
          'can_view_reports', 'can_manage_departments', 'can_manage_accounts', 'can_manage_system')
 
 
@@ -124,7 +125,7 @@ def book_row(book, people):
             ('V', scoping.can_view_book(book, user)),
             ('O', scoping.can_open_content(book, user)),
             ('E', scoping.can_edit_book(book, user)),
-            ('A', scoping.can_act_on_book(book, user)),
+            ('A', scoping.can_link_book(book, user)),
             ('S', can_sign(user, book))) if allowed)
         cells.append(cell or '-')
     return ' '.join(cells)
@@ -138,7 +139,7 @@ EXPECTED_PAGES = {
     'desk_handover':            '200 200 200 200 200 403 403 403 200 403 200 403 403 403 200',
     'desk_ledger':              '200 200 200 200 200 403 403 403 200 403 200 403 403 403 200',
     'book_unified':             '200 200 200 200 200 200 200 200 200 200 200 200 200 200 200',
-    'extraction-smart-desktop': '200 200 200 200 200 200 200 403 200 200 200 200 403 403 200',
+    'extraction-smart-desktop': '200 200 200 200 200 200 200 403 403 200 403 200 403 403 200',
     'dossier_list':             '200 200 200 200 200 200 200 200 200 200 200 200 200 200 200',
     'reports':                  '200 200 200 200 404 404 404 404 200 404 200 404 404 404 404',
     'audit_log':                '200 200 200 200 403 403 403 403 200 403 200 403 403 403 403',
@@ -159,6 +160,10 @@ EXPECTED_PAGES = {
 }
 EXPECTED_GATES = {
     'can_write':              '1 1 1 1 1 1 1 0 1 1 1 1 0 0 1',
+    'can_enter_book':         '1 1 1 1 1 1 1 0 0 1 0 1 0 0 1',
+    'can_use_entry_desk':     '1 1 1 1 1 1 1 0 0 1 0 1 0 0 1',
+    'can_reserve_number':     '1 1 1 1 1 1 1 0 0 1 0 1 0 0 1',
+    'can_add_entity':         '1 1 1 1 1 1 1 0 0 1 0 1 0 0 1',
     'can_use_desk':           '1 1 1 1 1 0 0 0 1 0 1 0 0 0 1',
     'can_archive':            '1 1 0 0 0 1 0 0 0 0 0 0 0 0 0',
     'can_manage_mail':        '1 1 0 0 1 0 0 0 0 0 0 0 0 0 1',
@@ -171,13 +176,13 @@ EXPECTED_GATES = {
 EXPECTED_BOOKS = {
     'normal_q':          'VOEAS VOEAS VOEA VOEAS VOEA VOEA VOEA VO - - - - - - -',
     'secret_q':          'VOEAS VOEAS V VOEAS VOEA VOEA V V - - - - - - -',
-    'normal_s':          'VOEAS VOEAS VOEA VOEA VOEA VOEA VOEA VO VOEAS VOEA - - - - -',
-    'secret_s':          'VOEAS VOEAS V V V V V V VOEAS V - - - - -',
-    'normal_w':          'VOEAS VOEAS VOEA VOEA VOEA VOEA VOEA VO VOEA VOEA VOEAS VOEA VO VO -',
-    'secret_w':          'VOEAS VOEAS V V V V V V V V VOEAS V V V -',
-    'normal_w2':         'VOEAS VOEAS VOEA VOEA VOEA VOEA VOEA VO VOEA VOEA - - - - -',
+    'normal_s':          'VOEAS VOEAS VOEA VOEA VOEA VOEA VOEA VO VOS VOEA - - - - -',
+    'secret_s':          'VOEAS VOEAS V V V V V V VOS V - - - - -',
+    'normal_w':          'VOEAS VOEAS VOEA VOEA VOEA VOEA VOEA VO VO VOEA VOS VOEA VO VO -',
+    'secret_w':          'VOEAS VOEAS V V V V V V V V VOS V V V -',
+    'normal_w2':         'VOEAS VOEAS VOEA VOEA VOEA VOEA VOEA VO VO VOEA - - - - -',
     'normal_far':        'VOEAS VOEAS - - - - - - - - - - - - VOEA',
-    'referred_w':        'VOEAS VOEAS VOEA VOEAS VOEA VOEA VOEA VO VOA VOA VOA VOA VO VO -',
+    'referred_w':        'VOEAS VOEAS VOEA VOEAS VOEA VOEA VOEA VO VO VOA VO VOA VO VO -',
     'referred_secret_w': 'VOEAS VOEAS V VOEAS VOEA VOEA V V V V V V V V -',
     'referred_far':      'VOEAS VOEAS VOEA VOEAS VOEA VOEA VOEA VO - - - - - - VOA',
 }

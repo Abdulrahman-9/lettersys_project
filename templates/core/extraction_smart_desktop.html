@@ -213,10 +213,13 @@
                                     <span id="bookNumberConfidenceValue">95%</span>
                                 </span>
                             </div>
-                            <div class="book-number-cell{% if edit_book_json == 'null' %} has-ring{% endif %}">
+                            <div class="book-number-cell{% if edit_book_json == 'null' and can_reserve_number %} has-ring{% endif %}">
                                 <input type="text" class="form-control-smart book-number-readonly" id="bookNumber" placeholder="—" readonly tabindex="-1" autocomplete="off">
                                 {% if edit_book_json == 'null' %}
+                                {# «احجز رقماً» لمن يقبله الخادم (``can_reserve_number``) — لا زرَّ يُعرض ليُرفض #}
+                                {% if can_reserve_number %}
                                 <button type="button" class="res-ring" id="reservationRing" title="احجز رقمًا عند بدء إدخال الكتاب" aria-label="احجز رقمًا عند بدء إدخال الكتاب" aria-pressed="false" aria-describedby="bookNumberHint"><i class="bi bi-check-lg" aria-hidden="true"></i></button>
+                                {% endif %}
                                 {% comment %}استثناء «بلا رقم»: أيقونة تُبدّل #numberlessCheckbox المخفي (حالة يقرؤها saveBook) — popover لا يُزيح التخطيط.{% endcomment %}
                                 <button type="button" class="nl-btn" id="numberlessToggle" style="display:none;" title="استثناء: كتاب داخلي بلا رقم رسمي" aria-pressed="false"><i class="bi bi-slash-circle"></i></button>
                                 <input type="checkbox" id="numberlessCheckbox" class="visually-hidden-cb" tabindex="-1" aria-hidden="true">

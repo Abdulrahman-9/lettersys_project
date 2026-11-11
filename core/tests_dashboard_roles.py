@@ -343,6 +343,10 @@ class DashboardOverviewTests(TestCase):
 
     def test_quick_actions_and_brand_card_are_gone(self):
         """q1‑ب وq2‑أ: البطاقةُ الضخمة والإجراءاتُ السريعة زالتا؛ البحثُ والفعلُ باقيان."""
+        # الفعلُ «إدخال كتاب جديد» لمن يملك الإدخال ((ب)3) — والقارئُ لا يرى زرّاً يُرفض
+        # (``tests_b3_write_guards.NoButtonShownToBeRefusedTests``).
+        from core.testing import as_writer
+        as_writer(self.worker)
         dash = self._dash()
         for gone in ('إجراءات سريعة', 'quick-action-card', 'مرحباً في لوحة التحكم'):
             self.assertNotContains(dash, gone)

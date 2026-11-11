@@ -54,14 +54,14 @@ class JourneyAndPrimaryTests(BookStateTestCase):
         b = self._book()
         self.assertEqual(_states(journey(b, referrals=[])),
                          {'registered': 'done', 'distributed': 'now', 'custody': 'todo', 'closed': 'todo'})
-        self.assertEqual(primary_action(b, referrals=[], can_distribute=True, can_edit=True)['key'],
+        self.assertEqual(primary_action(b, referrals=[], can_distribute=True, can_link=True, can_edit=True)['key'],
                          'distribute')
 
     def test_distributed_without_custody_asks_for_custody(self):
         b = self._book()
         rows = [self._open_row()]
         self.assertEqual(_states(journey(b, referrals=rows))['custody'], 'now')
-        self.assertEqual(primary_action(b, referrals=rows, can_distribute=True, can_edit=True)['key'],
+        self.assertEqual(primary_action(b, referrals=rows, can_distribute=True, can_link=True, can_edit=True)['key'],
                          'custody')
 
     def test_with_custody_and_an_open_due_date_the_next_step_is_closing(self):
@@ -72,10 +72,10 @@ class JourneyAndPrimaryTests(BookStateTestCase):
         steps = journey(b, referrals=rows)
         self.assertEqual(_states(steps)['closed'], 'now')
         self.assertEqual(steps[-1]['sub'], 'بعد 5 أيّام')
-        self.assertEqual(primary_action(b, referrals=rows, can_distribute=True, can_edit=True)['key'],
+        self.assertEqual(primary_action(b, referrals=rows, can_distribute=True, can_link=True, can_edit=True)['key'],
                          'close')
         # ومَن لا يكتب على الكتاب لا يُعرض عليه إنهاؤه (Q1‑ج) — ولا أساسيَّ معطَّلاً
-        self.assertIsNone(primary_action(b, referrals=rows, can_distribute=True, can_edit=False))
+        self.assertIsNone(primary_action(b, referrals=rows, can_distribute=True, can_link=True, can_edit=False))
 
     def test_closed_is_not_measured_by_is_archived_alone(self):
         """``is_archived`` افتراضُه True لكلّ كتابٍ بلا موعد — فلا يصير «أُنجز» بذلك وحده."""
@@ -93,12 +93,12 @@ class JourneyAndPrimaryTests(BookStateTestCase):
         states = _states(journey(b, referrals=[]))
         self.assertEqual(states.pop('registered'), 'done')
         self.assertEqual(set(states.values()), {'off'})
-        self.assertIsNone(primary_action(b, referrals=[], can_distribute=True, can_edit=True))
+        self.assertIsNone(primary_action(b, referrals=[], can_distribute=True, can_link=True, can_edit=True))
 
     def test_outgoing_has_no_distribution_step_and_starts_from_custody(self):
         b = self._book(kind='outgoing_internal')
         self.assertNotIn('distributed', _states(journey(b, referrals=[])))
-        self.assertEqual(primary_action(b, referrals=[], can_distribute=True, can_edit=True)['key'],
+        self.assertEqual(primary_action(b, referrals=[], can_distribute=True, can_link=True, can_edit=True)['key'],
                          'custody')
 
 

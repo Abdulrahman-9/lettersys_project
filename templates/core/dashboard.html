@@ -39,9 +39,11 @@
       <input type="search" name="q" class="field-brand" placeholder="ابحث برقم القيد أو العنوان أو الجهة…" aria-label="بحث سريع" enterkeyhint="search">
       <button type="submit" class="db-search-btn" aria-label="بحث"><i class="bi bi-search" aria-hidden="true"></i></button>
     </form>
+    {% if nav.enter %}
     <a href="{% url 'extraction-smart-desktop' %}" class="btn-brand">
       <i class="bi bi-plus-circle" aria-hidden="true"></i> إدخال كتاب جديد
     </a>
+    {% endif %}
     <a href="{% url 'book_unified' %}" class="btn-brand-ghost">
       <i class="bi bi-list-ul" aria-hidden="true"></i> قائمة الكتب
     </a>
@@ -166,7 +168,7 @@
     <kbd>Esc</kbd>
   </form>
   <ul class="db-palette-list" role="listbox" aria-label="الأوامر">
-    <li role="option"><a href="{% url 'extraction-smart-desktop' %}"><i class="bi bi-plus-circle" aria-hidden="true"></i>إدخال كتاب جديد</a></li>
+    {% if nav.enter %}<li role="option"><a href="{% url 'extraction-smart-desktop' %}"><i class="bi bi-plus-circle" aria-hidden="true"></i>إدخال كتاب جديد</a></li>{% endif %}
     <li role="option"><a href="{% url 'book_unified' %}?tab=all&followup=overdue"><i class="bi bi-alarm" aria-hidden="true"></i>الكتب المتأخرة</a></li>
     <li role="option"><a href="{% url 'book_unified' %}?tab=all&followup=due_today"><i class="bi bi-calendar-event" aria-hidden="true"></i>المستحق اليوم</a></li>
     <li role="option"><a href="{% url 'book_unified' %}?tab=incoming"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>الكتب الواردة</a></li>

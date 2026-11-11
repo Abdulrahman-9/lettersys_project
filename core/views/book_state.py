@@ -71,23 +71,43 @@ def journey(book, *, referrals, today=None):
     return steps
 
 
-def primary_action(book, *, referrals, can_distribute, can_edit):
+def primary_action(book, *, referrals, can_distribute, can_link, can_edit):
     """الفعلُ الأساسيُّ الواحد — أو ``None`` (لا أساسيَّ معطَّلاً، Q3).
 
     الوارد بلا تفريق ⟵ فرِّق… · بلا عهدة ⟵ سجّل عهدة… · متابعةٌ مفتوحةٌ بموعد ⟵
     أنهِ المتابعة. والصادرُ يبدأ من العهدة، والورقُ المنقولُ لا فعلَ أساسيَّ له.
+
+    كلُّ فعلٍ بمسند حارسه: التفريقُ ``can_send_referral``، والعهدةُ ``can_link_book``
+    ((ب)3 — كانت على مسند التفريق فتظهر لمسؤول الوحدة ويرفضها الخادم)، والإنهاءُ ``can_edit_book``.
     """
     if is_paper(book):
         return None
     if book.is_incoming and not referrals and can_distribute:
         key = 'distribute'
-    elif not book.current_custody_id and can_distribute:
+    elif not book.current_custody_id and can_link:
         key = 'custody'
     elif book.due_date and not book.is_archived and can_edit:
         key = 'close'
     else:
         return None
     return {'key': key, **PRIMARY_ACTIONS[key]}
+
+
+def more_actions(book, *, primary, can_distribute, can_link, can_register, can_enter):
+    """مفاتيحُ قائمة «أفعالٌ أخرى» بترتيبها — وفارغةٌ تُخفي الزرَّ كلَّه، فلا تُفتح قائمةٌ
+    بلا شيء (القارئُ ومسؤولُ الوحدة بعد (ب)3). والأساسيُّ لا يتكرّر فيها."""
+    paper = is_paper(book)
+    primary_key = primary['key'] if primary else None
+    keys = []
+    if can_distribute and not paper and primary_key != 'distribute':
+        keys.append('distribute')
+    if can_link and not paper and primary_key != 'custody':
+        keys.append('custody')
+    if can_register:
+        keys.append('register')
+    if can_enter:
+        keys.append('similar')
+    return keys
 
 
 def due_pill(book, today=None):

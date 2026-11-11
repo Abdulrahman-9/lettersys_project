@@ -18,7 +18,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from ..models import Attachment, Book, Entity
-from core.scoping import (can_edit_book, listed_books, is_privileged, present_book_payload,
+from core.scoping import (can_restore_book, listed_books, is_privileged, present_book_payload,
                           scope_books_for)
 
 logger = logging.getLogger(__name__)
@@ -387,16 +387,16 @@ def trash_list(request):
         attachments_qs = attachments_qs.filter(book__in=scope_books_for(
             request.user, Book.all_objects.all()))
 
-    # لا زرَّ يُعرض ليُرفض: «استعادة» لمن يكتب على الكتاب (Q1‑ج، ``can_edit_book``)
+    # لا زرَّ يُعرض ليُرفض: «استعادة» لمن يكتب على الكتاب (Q1‑ج، ``can_restore_book``)
     # — الوحدةُ المُحالُ إليها ترى كتابَ المالك المحذوف ولا تستعيده — و«حذفٌ نهائيّ»
     # لمدير النظام وحده كما يحرسه ``purge_book``.
     privileged = is_privileged(request.user)
     deleted_books = list(books_qs.order_by("-deleted_at"))
     deleted_attachments = list(attachments_qs.order_by("-deleted_at"))
     for b in deleted_books:
-        b.can_restore = privileged or can_edit_book(b, request.user)
+        b.can_restore = privileged or can_restore_book(b, request.user)
     for a in deleted_attachments:
-        a.can_restore = privileged or can_edit_book(a.book, request.user)
+        a.can_restore = privileged or can_restore_book(a.book, request.user)
 
     context = {
         "deleted_books": deleted_books,

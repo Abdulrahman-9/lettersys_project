@@ -37,7 +37,7 @@ from django.utils.dateparse import parse_date
 from core.tasks import process_attachment_extraction
 from core.extraction.pipeline import AIExtractionService, slim_entity_matches
 from core.decorators import rate_limit_scan, rate_limit
-from core.views.helpers import writer_required_api
+from core.views.helpers import guard_required_api
 from core.models import (
     Attachment,
     DataExtractionResult,
@@ -46,7 +46,8 @@ from core.models import (
     SuggestionItem,
     ExtractionStatistics,
 )
-from core.scoping import can_edit_book, can_open_content, can_review_extraction, user_department_id
+from core.scoping import (can_edit_book, can_open_content, can_review_extraction, can_use_entry_desk,
+                          user_department_id)
 from core.extraction.kinds import BOOK_KIND_LABELS, DEFAULT_BOOK_KIND, get_kind_label, normalize_book_kind
 logger = logging.getLogger(__name__)
 
@@ -331,7 +332,7 @@ def _mint_scan_token(result) -> str:
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-@writer_required_api
+@guard_required_api(can_use_entry_desk)
 @rate_limit_scan(max_attempts=20, window_seconds=300)
 def smart_extract_direct(request):
     """Synchronous extraction for the smart desktop UI (handles direct file uploads)."""
@@ -485,7 +486,7 @@ _STAGE_LABELS = {
 
 
 @login_required
-@writer_required_api
+@guard_required_api(can_use_entry_desk)
 @require_http_methods(['POST'])
 def smart_extract_stream(request):
     """بثّ الاستخراج تدريجياً (NDJSON): سطرٌ لكل مرحلة بحقولها المكتملة ثم سطر نهائي.
@@ -579,7 +580,7 @@ def smart_extract_stream(request):
 
 
 @login_required
-@writer_required_api
+@guard_required_api(can_use_entry_desk)
 @require_http_methods(['GET'])
 def smart_extract_progress(request, progress_id):
     """آخر مرحلة بلغها استخراجٌ جارٍ.
@@ -677,7 +678,7 @@ def subject_box_read(request):
 
 
 @login_required
-@writer_required_api
+@guard_required_api(can_use_entry_desk)
 @require_http_methods(['POST'])
 @rate_limit('subject_box_confirm', max_attempts=60, window_seconds=60, by='user')
 def subject_box_confirm(request):

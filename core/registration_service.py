@@ -29,9 +29,9 @@ def register_book_here(book, department, *, by, direction=None, via_referral=Non
     عدّاداً** ولا يفتح فجوةً في الدفتر.
     """
     from core.models import BookRegistration, BookSequence
-    from core.scoping import can_act_on_book
+    from core.scoping import can_register_book
 
-    if not can_act_on_book(book, by):
+    if not can_register_book(book, by):
         raise PermissionDenied('لا تملك صلاحيةَ قيدِ هذا الكتاب.')
     if department is None:
         raise ValidationError('لا قسمَ للقيد.')
@@ -99,10 +99,10 @@ def register_here_ledger(book, user):
     الدفتر يُسمّى في التأكيد — الضغطةُ تستهلك رقماً حقيقيّاً لا يُستردّ.
     """
     from core.models import Department
-    from core.scoping import can_act_on_book, user_department_id
+    from core.scoping import can_register_book, user_department_id
 
     department_id = user_department_id(user)
-    if department_id is None or not can_act_on_book(book, user):
+    if department_id is None or not can_register_book(book, user):
         return None
     if book.registrations.filter(department_id=department_id).exists():
         return None

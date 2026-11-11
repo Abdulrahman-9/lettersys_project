@@ -404,6 +404,11 @@ def can_write(user) -> bool:
     ``is_mail_officer`` و``is_archivist``: التسميةُ سلسلةُ أولويّةٍ للعرض.
 
     والنطاقُ فوقه لا تحته: مَن يكتب يكتب على ما يحقّ له (``can_edit_book``) لا على كلّ شيء.
+
+    **(ب)3 — 2026‑11‑11:** لم يعد يحرس الكتابةَ على الكتب؛ لكلّ فعلٍ مفتاحُه في مصفوفة
+    الأدوار (``can_enter_book`` · ``can_edit_book`` · ``can_link_book`` · ``can_register_book``
+    · ``can_reserve_number`` · ``can_add_entity``). بقي لأبواب البريد الستّة وحدها حتى
+    تُربط مع (ب)5 (قرارُ المالك)، ثمّ يُحذف.
     """
     if not (getattr(user, 'is_authenticated', False) and user.is_active):
         return False
@@ -412,15 +417,23 @@ def can_write(user) -> bool:
     return user.groups.filter(name__in=_writer_group_names()).exists()
 
 
-def can_act_on_book(book, user) -> bool:
-    """أفعالُ الصفّ على كتابٍ يُفتح محتواه: التفريقُ وأفعالُ الإحالة والعهدةُ والقيدُ
-    عندنا والربط. الوحدةُ المُحالُ إليها تفعلها ولا تعدّل الكتاب — والقارئُ لا يفعلها."""
-    return can_write(user) and can_open_content(book, user)
+def can_link_book(book, user) -> bool:
+    """العهدةُ والربط على كتابٍ يُفتح محتواه — مفتاحُ «العهدة والربط».
+
+    الوحدةُ المُحالُ إليها تسجّل العهدةَ وتربط ولا تعدّل الكتاب (``can_edit_book``)،
+    والقارئُ لا يفعلهما. وكانا مع القيد عندنا مسنداً واحداً على ``can_write``
+    (``can_act_on_book``)، فصار لكلّ فعلٍ مفتاحُه في (ب)3 — والمحتوى شرطٌ لا يوسّعه منح."""
+    return has_capability(user, 'custody.link') and can_open_content(book, user)
 
 
-def can_edit_book(book, user) -> bool:
-    """أيحقّ له **الكتابةُ على الكتاب نفسِه**: حقولِه وهامشِه ومرفقاته وحالةِ
-    متابعته — أو حذفُه واستعادتُه؟
+def can_register_book(book, user) -> bool:
+    """قيدُ الكتاب في دفترنا برقمٍ من عدّادنا — مفتاحُه «الإدخال» (قرارُ المالك 2026‑11‑11:
+    القيدُ إدخالٌ في سجلّنا يستهلك رقماً لا يعود). والنطاقُ فتحُ المحتوى كالعهدة."""
+    return has_capability(user, 'book.enter') and can_open_content(book, user)
+
+
+def _owns_book(book, user) -> bool:
+    """نطاقُ الكتابة على الكتاب نفسِه بلا سؤالٍ عن الفعل — والفعلُ مفتاحُ مَن يستدعيه.
 
     قرارُ المالك 2026‑09‑29 (Q1‑ج): لشجرة **القسم المالك** وطاولته ومدير النظام.
     والوحدةُ التي فُرِّق إليها الكتابُ أو ذُكرت فيه تراه وتفتح محتواه
@@ -429,9 +442,9 @@ def can_edit_book(book, user) -> bool:
     عنوانَ القسم وتحذف كتابَه وتكتب فوق هامش مديره.
 
     مَن بلا قسمٍ (تنصيبٌ لم تُبذَر أقسامُه) وكتابٌ بلا قسم: يكتب عليه مُنشئُه —
-    كما يراه وحدَه في ``scope_books_for``. و«قارئ فقط» لا يكتب على شيء (``can_write``).
+    كما يراه وحدَه في ``scope_books_for``.
     """
-    if not can_write(user) or not can_open_content(book, user):
+    if not can_open_content(book, user):
         return False
     if is_privileged(user):
         return True
@@ -439,6 +452,28 @@ def can_edit_book(book, user) -> bool:
     if dept_id is None or book.department_id is None:
         return book.created_by_id == user.id
     return book.department_id in subtree_ids(dept_id)
+
+
+def can_edit_book(book, user) -> bool:
+    """أيعدّل **الكتابَ نفسَه**: حقولَه وهامشَه ومرفقاتِه وحالةَ متابعته ومراجعةَ
+    استخراجه؟ — مفتاحُ «التعديل» على ما يملكه قسمُه (``_owns_book``).
+
+    والمفتاحُ أوّلاً: مخبّأٌ على كائن المستخدم، فيُرفض القارئُ بلا سؤالٍ عن الكتاب."""
+    return has_capability(user, 'book.edit') and _owns_book(book, user)
+
+
+def can_trash_book(book, user) -> bool:
+    """الحذفُ إلى السلّة — كتاباً أو مرفقاً، فرداً أو جملةً، ومعه التراجعُ الفوريّ.
+
+    **بينيٌّ حتى (ب)4:** يتبع «التعديل» كما كان قبل الفصل، و(ب)4 يجعل مفتاحَه
+    «الحذف إلى السلّة» (``book.trash``) على ``_owns_book`` نفسِه بلا لمس مواضعه."""
+    return can_edit_book(book, user)
+
+
+def can_restore_book(book, user) -> bool:
+    """الاسترجاعُ من السلّة — كتاباً أو مرفقاً. **بينيٌّ حتى (ب)4** كأخيه
+    ``can_trash_book``، ومفتاحُه هناك «الاسترجاع من السلّة» (``book.restore``)."""
+    return can_edit_book(book, user)
 
 
 def _extraction_book(extraction):
@@ -945,7 +980,9 @@ CAPABILITIES = {
 # ما يقرؤه حارسٌ فعلاً اليوم. البقيّةُ مسجَّلةٌ في المصفوفة ولم يُربط حارسُها بعد فتعمل بالأدوار
 # القديمة: صفحةُ الأدوار تعرضها ولا تقبل تعديلها، كي لا تقول «يسري الآن» على ما لا يسري.
 # كلُّ شريحةٍ تربط حارساً تضيف مفتاحه هنا، واختبارُ التطابق في tests_roles_page يفشل إن نُسي.
-WIRED_CAPABILITIES = frozenset({'referral.send', 'referral.receive'})
+# الإحالة (11-04) · الإدخالُ والتعديلُ وحجزُ الرقم وإضافةُ الجهة والعهدةُ والربط ((ب)3، 11-11).
+WIRED_CAPABILITIES = frozenset({'book.enter', 'book.edit', 'number.reserve', 'entity.add',
+                                'referral.send', 'referral.receive', 'custody.link'})
 
 # القارئُ احتياطيُّ كلِّ حسابٍ بلا دور: منحُ الكتابة له على مستوى الدور يمنحها للجميع،
 # فتُجمَّد خليّتُه هو والمنفِّذ في المصفوفة، وتبقى ممكنةً باستثناءٍ لشخصٍ بعينه.
@@ -1056,6 +1093,30 @@ def can_edit_exception(by, target, key) -> bool:
 def can_send_referral(book, user) -> bool:
     """أيُحيل هذا الكتاب أو يطارد إحالتَه؟ الفعلُ من المحلِّل، ومحتوى الكتاب شرطٌ لا يوسّعه منح."""
     return has_capability(user, 'referral.send') and can_open_content(book, user)
+
+
+def can_enter_book(user) -> bool:
+    """إدخالُ كتابٍ جديد — مفتاحُ «الإدخال»: الحفظُ الأوّل، ووضعُ الإدخال في صفحته، وكلُّ
+    رابطٍ إليه (الشريطُ ولوحةُ التحكّم و«إدخال كتابٍ مماثل»)."""
+    return has_capability(user, 'book.enter')
+
+
+def can_use_entry_desk(user) -> bool:
+    """صفحةُ الإدخال وأدواتُها (الاستخراجُ والمسح) تخدم وضعين: كتاباً جديداً وتعديلَ كتابٍ
+    قائم (``edit_pk``) — فتُفتح لمن يملك «الإدخال» أو «التعديل»، والصفحةُ تسأل عن مفتاح
+    وضعها (قرارُ المالك 2026‑11‑11). والحفظُ مساران: ``save_book_api`` بالإدخال
+    و``update_book_api`` بالتعديل."""
+    return can_enter_book(user) or has_capability(user, 'book.edit')
+
+
+def can_reserve_number(user) -> bool:
+    """حجزُ رقمٍ مسبقاً وإعادةُ تفعيل حجزٍ — مفتاحُ «حجز رقم»، وزرُّه في صفحة الإدخال يتبعه."""
+    return has_capability(user, 'number.reserve')
+
+
+def can_add_entity(user) -> bool:
+    """إضافةُ جهةٍ جديدة إلى السجلّ من نقطة ``add_new_entity`` — مفتاحُ «إضافة جهة جديدة»."""
+    return has_capability(user, 'entity.add')
 
 
 def can_refer_to(user, department=None) -> bool:

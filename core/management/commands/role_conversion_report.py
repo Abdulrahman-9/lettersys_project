@@ -24,6 +24,10 @@ def losses(user):
     department = profile.department if profile else None
     if ENTRY_GROUP_NAME in groups and department is not None and not department.holds_register:
         out.append('مدخل في وحدة لا تمسك سجلّاً')
+    # (ب)3: رئاسةُ الوحدة تسبق المجموعات في ``role_of``، ودورُ «مسؤول شعبة أو وحدة» لا يملك
+    # مفاتيحَ الكتابة — فالرئيسُ العضوُ في مجموعة كتابةٍ يفقد ما كانت تمنحه عضويّتُه.
+    if is_head and department is not None and not department.holds_register and groups - {EXECUTOR_GROUP_NAME}:
+        out.append('رئيس وحدة في مجموعة كتابة: يفقد الإدخال والتعديل والعهدة')
     return out
 
 
