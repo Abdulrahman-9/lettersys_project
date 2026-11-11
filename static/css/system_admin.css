@@ -189,6 +189,10 @@ button.rm-cell:hover { border-color: #c98a4b; }
 .rm-cell.lk { border-color: transparent; background: #f5f1eb; color: #a08f7f; cursor: default; }
 .rm-cell.lk.on { background: #e3dacd; color: #4a3627; }
 .rm-cell.mod { outline: 2px solid var(--sa-amber); outline-offset: 1px; }
+/* لم يُربط حارسُها: تُعرض ولا تُعدَّل */
+.rm-cell.nw { border-style: dashed; background: #faf8f5; color: #a99a8c; cursor: default; }
+.rm-cell.nw.on { border-color: #b9dcc6; color: #4d8a63; }
+.rm-nw { margin-inline-start: .45rem; padding: 0 .4rem; border-radius: 6px; background: #f1ede7; color: var(--sa-mute); font-size: .66rem; font-weight: 800; }
 .rm-cell.pending { outline: 2px dashed var(--sa-amber); outline-offset: 2px; }
 .rm-cell:focus-visible, .rm-reset:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
 .rm-mark { display: block; margin-top: 2px; color: var(--sa-amber); font-size: .62rem; font-weight: 800; line-height: 1.2; }

@@ -17,7 +17,7 @@ from core import permission_service, system_centre, system_ops
 from core.logging_models import UserActivityLog
 from core.models import Book, BookReferral, BookSequence, Department, UserProfile
 from core.roles import get_user_role
-from core.scoping import CAPABILITIES, can_use_system_admin, secret_openers, subtree_ids
+from core.scoping import CAPABILITIES, WIRED_CAPABILITIES, can_use_system_admin, secret_openers, subtree_ids
 from core.scoping import ROLE_LABELS as MATRIX_ROLES
 from core.views.filter_helpers import days_ar, followup_q
 
@@ -152,6 +152,7 @@ def system_roles_view(request):
         return render(request, 'core/system_admin/roles.html', {
             'matrix': matrix, 'admins_text': count_ar(matrix['admins'], 'حساب واحد', 'حسابان', 'حسابات', 'حساباً'),
             'columns': len(matrix['roles']) + 2,
+            'wired_text': ' و'.join(f'«{CAPABILITIES[k].label}»' for k in CAPABILITIES if k in WIRED_CAPABILITIES),
         })
 
     changes, reset = request.POST.getlist('change'), request.POST.get('reset', '')
@@ -160,6 +161,9 @@ def system_roles_view(request):
     parsed = _parse_changes(changes)
     if changes and parsed is None:
         return HttpResponseBadRequest('خليّةٌ غير مفهومة.')
+    # صلاحيّةٌ لم يُربط حارسُها لا تُعدَّل: تعديلُها لا يغيّر شيئاً، والصفحةُ تقول «يسري الآن».
+    if parsed and any(key not in WIRED_CAPABILITIES for _role, key in parsed):
+        raise PermissionDenied('هذه الصلاحيّة لم يُربط حارسُها بعد، فتعديلُها لا يسري.')
     # المعاملةُ الواحدة: خليّةٌ مقفلةٌ في الطلب تُسقطه كلَّه بـ403 فلا يُحفظ نصفُه.
     with transaction.atomic():
         if reset:

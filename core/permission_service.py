@@ -11,8 +11,9 @@ from django.db import transaction
 from core.audit_service import _department_of, client_ip
 from core.logging_models import UserActivityLog
 from core.models import RoleCapabilityOverride, UserCapabilityOverride
-from core.scoping import (CAPABILITIES, ROLE_LABELS, can_edit_exception, can_edit_role_matrix,
-                          clear_capability_cache, is_privileged, role_capability, role_cell_frozen, role_of)
+from core.scoping import (CAPABILITIES, ROLE_LABELS, WIRED_CAPABILITIES, can_edit_exception,
+                          can_edit_role_matrix, clear_capability_cache, is_privileged, role_capability,
+                          role_cell_frozen, role_of)
 
 EDIT_PERMISSIONS = 'EDIT_PERMISSIONS'
 
@@ -106,6 +107,7 @@ def role_matrix():
         changed = [c['row'] for c in cells if c['row']]
         groups.setdefault(capability.group, []).append({
             'key': key, 'label': capability.label, 'locked': capability.locked, 'cells': cells,
+            'wired': key in WIRED_CAPABILITIES,
             'changed': len(changed), 'last': max(changed, key=lambda r: r.changed_at) if changed else None})
     return {
         'admins': admins,
