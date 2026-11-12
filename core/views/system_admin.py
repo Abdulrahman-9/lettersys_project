@@ -346,3 +346,82 @@ def system_account_view(request, pk):
         response['Cache-Control'] = 'no-store, private'
         response['Referrer-Policy'] = 'no-referrer'
     return response
+
+
+# ───────────────────────── إنشاءُ حساب (ج، الشريحة 3) ─────────────────────────
+# التصميمُ المعتمد shots_v2/v2_account_new.png: الأدوارُ بحسب القسم المختار (``roles_for_department``)
+# وملخّصُ ما سيستطيعه، ثمّ يُفتح محرّرُ الحساب الجديد بكلمته المؤقّتة مرّةً واحدة.
+
+#: مفتاحُ الدور في المصفوفة ⟵ مفتاحُه في ``create_department_user`` (لوحةُ الإدارة القديمة).
+_PANEL_ROLE = {'head': 'department_head', 'unit': 'department_head', 'mail': 'controller',
+               'archivist': 'archivist', 'entry': 'entry', 'executor': 'executor', 'reader': 'viewer'}
+_ROLE_HINTS = {
+    'head': 'يدير قسمه وما يتبعه، ويُحيل ويوقّع ويرى التقارير.',
+    'mail': 'يمسك ديوان القسم: البريد والطاولة والدفتر والإحالة.',
+    'archivist': 'يحفظ ورق القسم ويفتح سرّيّه، ويسترجع من السلّة.',
+    'entry': 'يُدخل الكتب ويعدّلها ويحجز أرقامها.',
+    'unit': 'يدير موظّفي وحدته، ويُحيل ويتابع تقاريرها.',
+    'executor': 'يستلم المُحال إلى وحدته وينجزه، بلا إدخال.',
+    'reader': 'يقرأ كتب نطاقه ويعلّق عليها فقط.',
+}
+_NOTABLE = ('book.enter', 'book.edit', 'book.trash', 'secret.own', 'referral.send', 'mail.operate', 'report.view')
+
+
+def _new_account_roles():
+    """ما يستطيعه كلُّ دورٍ كما المصفوفةُ الآن — الموصولُ وحده كمعاينة تغيير الدور، والقراءةُ للجميع بالنطاق."""
+    from core.models import RoleCapabilityOverride
+    from core.scoping import role_capability
+
+    overrides = {(r, k): allowed for r, k, allowed in
+                 RoleCapabilityOverride.objects.values_list('role', 'capability', 'allowed')}
+    meta = {}
+    for role, label in MATRIX_ROLES.items():
+        can = [c.label for k, c in CAPABILITIES.items()
+               if (k == 'book.read' or k in WIRED_CAPABILITIES) and role_capability(role, k, overrides)]
+        cannot = [CAPABILITIES[k].label for k in _NOTABLE if not role_capability(role, k, overrides)]
+        meta[role] = {'label': label, 'hint': _ROLE_HINTS.get(role, ''), 'can': can, 'cannot': cannot}
+    return meta
+
+
+@require_http_methods(['GET', 'POST'])
+@system_admin_required
+def system_account_new_view(request):
+    """إنشاءُ حسابٍ بدورٍ يناسب قسمه — لمدير النظام؛ والقاعدةُ نفسُها في ``create_department_user``."""
+    from django.core.exceptions import ValidationError as _VE
+
+    from core.admin_service import create_department_user
+    from core.scoping import roles_for_department
+
+    departments = list(Department.objects.filter(is_active=True).order_by('code'))
+    values = {}
+    if request.method == 'POST':
+        values = {key: (request.POST.get(key) or '').strip()
+                  for key in ('name', 'username', 'department', 'job_title', 'role')}
+        raw = values['department']
+        department = next((d for d in departments if raw.isdigit() and d.pk == int(raw)), None)
+        try:
+            if department is None:
+                raise _VE('اختر قسمَ الحساب.')
+            if values['role'] not in roles_for_department(department):
+                raise _VE('اختر دوراً يُسند في هذا القسم.')
+            first, _, last = values['name'].partition(' ')
+            user, password = create_department_user(   # ذرّيّةٌ في داخلها
+                by=request.user, department=department, username=values['username'],
+                first_name=first, last_name=last.strip(), job_title=values['job_title'],
+                role=_PANEL_ROLE[values['role']])
+        except (_VE, PermissionDenied) as exc:
+            messages.error(request, exc.messages[0] if isinstance(exc, _VE) else str(exc))
+        else:
+            messages.success(request, 'أُنشئ حساب «%s».' % user.get_username())
+            response = render(request, 'core/system_admin/account.html',
+                              {**_account_context(request, user), 'temp_password': password})
+            response['Cache-Control'] = 'no-store, private'
+            response['Referrer-Policy'] = 'no-referrer'
+            return response
+    return render(request, 'core/system_admin/account_new.html', {
+        'departments': departments, 'values': values,
+        'roles_meta': _new_account_roles(),
+        'department_roles': {str(d.pk): {'roles': list(roles_for_department(d)), 'register': d.holds_register}
+                             for d in departments},
+        'role_order': list(MATRIX_ROLES),
+    })

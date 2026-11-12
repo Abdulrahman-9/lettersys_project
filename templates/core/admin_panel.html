@@ -650,9 +650,10 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
         </select>
         <span class="fcount" id="user-count" aria-live="polite"></span>
       </div>
-      <button class="btn pri" onclick="openModal('userModal')">
+      {% if is_superadmin %}<a class="btn pri" href="{% url 'system_account_new' %}"><i class="bi bi-person-plus-fill" aria-hidden="true"></i> حساب جديد</a>
+      {% else %}<button class="btn pri" onclick="openModal('userModal')">
         <i class="bi bi-person-plus-fill"></i> حساب جديد
-      </button>
+      </button>{% endif %}
     </div>
     <div class="tbl">
       <table id="userTable">

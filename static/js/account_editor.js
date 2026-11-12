@@ -4,6 +4,8 @@
   'use strict';
 
   var page = document.getElementById('aePage');
+  // بعد الإنشاء أو كلمة المرور يبقى العنوانُ عنوانَ الـPOST؛ عنوانُ الحساب يمنع إعادةَ الإرسال عند التحديث.
+  if (page && page.dataset.url && window.history.replaceState) window.history.replaceState(null, '', page.dataset.url);
   var dataNode = document.getElementById('aePreviews');
   var previews = {};
   try { previews = JSON.parse(dataNode ? dataNode.textContent : '{}') || {}; } catch (e) { previews = {}; }

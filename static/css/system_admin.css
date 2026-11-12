@@ -256,3 +256,13 @@ button.rm-cell:hover { border-color: #c98a4b; }
 .ae-secret code { font-size: 1rem; font-weight: 800; letter-spacing: .04em; direction: ltr; unicode-bidi: isolate; }
 @media (prefers-reduced-motion: reduce) { .ae-group > summary::after { transition: none; } }
 @media (max-width: 992px) { .ae-grid { grid-template-columns: minmax(0, 1fr); } }
+/* ── حسابٌ جديد (ج، الشريحة 3): خياراتُ الدور بطاقاتٌ تتبع القسم المختار ── */
+.ae-choices { display: grid; gap: .6rem; margin: .4rem 0 .6rem; }
+.ae-choice { display: grid; grid-template-columns: auto 1fr; gap: .1rem .6rem; align-items: start; padding: .75rem .9rem; border: 1px solid var(--sa-line); border-radius: 12px; background: #fff; cursor: pointer; }
+.ae-choice:hover { border-color: #d9a066; }
+.ae-choice:has(input:checked) { border-color: #e2b07c; background: var(--sa-tile); }
+.ae-choice:has(input:focus-visible) { outline: 2px solid var(--sa-amber); outline-offset: 2px; }
+.ae-choice input { margin-top: .3rem; accent-color: var(--sa-amber); }
+.ae-choice b { font-size: .9rem; }
+.ae-choice span { grid-column: 2; color: var(--sa-mute); font-size: .8rem; }
+.ae-note { margin: 0 0 .5rem; color: var(--sa-mute); font-size: .78rem; }

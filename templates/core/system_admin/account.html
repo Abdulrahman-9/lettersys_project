@@ -6,7 +6,7 @@
 محرّرُ الحساب (ج، الشريحة 2) — التصميمُ المعتمد shots_v2/v2_account.png وv2_account_change.png.
 القالبُ يعرض ولا يقرّر: الحالاتُ والأعلامُ والمعاينةُ من system_admin._account_context.
 {% endcomment %}
-<div class="sa-page" id="aePage" data-name="{{ target.get_full_name|default:target.get_username }}">
+<div class="sa-page" id="aePage" data-url="{% url 'system_account' target.pk %}" data-name="{{ target.get_full_name|default:target.get_username }}">
   <nav class="sa-crumb" aria-label="مسار الصفحة">إدارة النظام / <a href="{% url 'admin_panel' %}?tab=users">الحسابات والأدوار</a> / <span aria-current="page">{{ target.get_full_name|default:target.get_username }}</span></nav>
   <div class="sa-head">
     <div><h1>{{ target.get_full_name|default:target.get_username }}</h1>
@@ -19,7 +19,7 @@
 
   <div class="ae-grid">
     <aside class="ae-side" aria-label="الحساب والدخول">
-      <form method="post" class="sa-card" id="aeAccount" data-exceptions="{{ exceptions|length }}">
+      <form method="post" action="{% url 'system_account' target.pk %}" class="sa-card" id="aeAccount" data-exceptions="{{ exceptions|length }}">
         {% csrf_token %}
         <input type="hidden" name="action" value="save">
         <input type="hidden" name="confirm_department" value="0">
@@ -44,12 +44,12 @@
         <div class="sa-card-head"><h2 id="aeAccessTitle">الدخول والأثر</h2></div>
         <div class="ae-links">
           {% if not is_self %}
-          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="password">
+          <form method="post" action="{% url 'system_account' target.pk %}">{% csrf_token %}<input type="hidden" name="action" value="password">
             <button type="submit" class="sa-btn" data-confirm="تُنشأ كلمةُ مرورٍ مؤقّتة لـ«{{ target.get_username }}» وتبطل الحالية." data-confirm-ok="أنشئها" data-confirm-tone="safe"><i class="bi bi-key" aria-hidden="true"></i>كلمة مرور مؤقّتة</button></form>
           {% endif %}
           <a class="sa-btn" href="{{ audit_url }}"><i class="bi bi-clock-history" aria-hidden="true"></i>سجلّ حركاته</a>
           {% if can_delete %}
-          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete">
+          <form method="post" action="{% url 'system_account' target.pk %}">{% csrf_token %}<input type="hidden" name="action" value="delete">
             <button type="submit" class="sa-btn ae-danger" data-confirm="حذفُ حساب «{{ target.get_username }}» نهائيّ ولا يُستردّ." data-confirm-ok="احذف الحساب"><i class="bi bi-trash" aria-hidden="true"></i>حذف الحساب</button></form>
           {% endif %}
         </div>
@@ -60,7 +60,7 @@
 
     <div class="ae-main">
       <section class="sa-card" aria-labelledby="aeRoleLabel">
-        <form method="post" id="aeRoleForm">
+        <form method="post" action="{% url 'system_account' target.pk %}" id="aeRoleForm">
           {% csrf_token %}
           <input type="hidden" name="action" value="role">
           <input type="hidden" name="confirm" value="0">
@@ -94,7 +94,7 @@
             <span class="ae-row-label">{{ e.label }}</span>
             <span class="ae-badge {% if e.allowed %}added{% else %}blocked{% endif %}">{% if e.allowed %}مضاف{% else %}محجوب{% endif %}</span>
             <span class="ae-who">{% if e.allowed %}أضافها{% else %}حجبها{% endif %} {{ e.by|default:"—" }}{% if e.at %} · {{ e.at|date:"m-d" }}{% endif %}</span>
-            <form method="post">{% csrf_token %}<input type="hidden" name="action" value="override"><input type="hidden" name="key" value="{{ e.key }}"><input type="hidden" name="value" value="reset">
+            <form method="post" action="{% url 'system_account' target.pk %}">{% csrf_token %}<input type="hidden" name="action" value="override"><input type="hidden" name="key" value="{{ e.key }}"><input type="hidden" name="value" value="reset">
               <button type="submit" class="ae-act">رجوع إلى الدور</button></form>
           </div>
           {% endfor %}
@@ -120,7 +120,7 @@
               {% elif r.state == "blocked" %}<span class="ae-badge blocked">محجوب</span>
               {% else %}<span class="ae-badge">من الدور</span>{% endif %}
               {% if r.editable %}
-              <form method="post">{% csrf_token %}<input type="hidden" name="action" value="override"><input type="hidden" name="key" value="{{ r.key }}">
+              <form method="post" action="{% url 'system_account' target.pk %}">{% csrf_token %}<input type="hidden" name="action" value="override"><input type="hidden" name="key" value="{{ r.key }}">
                 {% if r.state == "role" %}<input type="hidden" name="value" value="{% if r.allowed %}deny{% else %}allow{% endif %}"><button type="submit" class="ae-act">{% if r.allowed %}احجب{% else %}أضف{% endif %}</button>
                 {% else %}<input type="hidden" name="value" value="reset"><button type="submit" class="ae-act">رجوع إلى الدور</button>{% endif %}</form>
               {% else %}<span class="ae-act muted">لا يُعدَّل</span>{% endif %}
@@ -144,4 +144,4 @@
   </div>
 </dialog>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/account_editor.js' %}?v=20261112-c2" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/account_editor.js' %}?v=20261112-c3" defer></script>{% endblock %}

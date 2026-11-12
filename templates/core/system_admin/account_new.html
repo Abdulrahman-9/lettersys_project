@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load static dict_utils %}
+{% block title %}حساب جديد{% endblock %}
+{% block content %}
+{% comment %}
+إنشاءُ حساب (ج، الشريحة 3) — التصميمُ المعتمد shots_v2/v2_account_new.png. الأدوارُ تتبع القسم المختار
+(roles_for_department) والملخّصُ من مصفوفة الأدوار؛ والخادمُ يعيد الفحصَ نفسَه عند الإنشاء.
+{% endcomment %}
+<form method="post" class="sa-page" id="anForm">
+  {% csrf_token %}
+  <nav class="sa-crumb" aria-label="مسار الصفحة">إدارة النظام / <a href="{% url 'admin_panel' %}?tab=users">الحسابات والأدوار</a> / <span aria-current="page">حساب جديد</span></nav>
+  <div class="sa-head"><div><h1>حساب جديد</h1><p>يصير الموظّف قادراً على ما يعرضه الدور فور إنشاء الحساب.</p></div></div>
+
+  <div class="ae-grid">
+    <aside class="ae-side" aria-label="الحساب">
+      <section class="sa-card">
+        <div class="sa-card-head"><h2>الحساب</h2></div>
+        <div class="ae-field"><label for="anName">الاسم</label>
+          <input class="sa-input" id="anName" name="name" value="{{ values.name|default:'' }}" maxlength="300" autocomplete="off"></div>
+        <div class="ae-field"><label for="anUser">اسم الدخول</label>
+          <input class="sa-input" id="anUser" name="username" value="{{ values.username|default:'' }}" maxlength="150" required autocomplete="off" dir="ltr" spellcheck="false"></div>
+        <div class="ae-field"><label for="anDept">القسم (مطلوب)</label>
+          <select class="sa-select" id="anDept" name="department" required>
+            {% for d in departments %}<option value="{{ d.pk }}"{% if values.department == d.pk|stringformat:"s" %} selected{% endif %}>{{ d.name }}{% if d.code %} ({{ d.code }}){% endif %}</option>{% endfor %}
+          </select>
+          <small>يحدّد ما يراه والأدوار المتاحة.</small></div>
+        <div class="ae-field"><label for="anJob">المستوى الوظيفي</label>
+          <input class="sa-input" id="anJob" name="job_title" value="{{ values.job_title|default:'' }}" maxlength="120"></div>
+        <p class="ae-note">تُولَّد كلمة مرور مؤقّتة، ويُطلب تغييرها عند أوّل دخول.</p>
+      </section>
+      <button type="submit" class="sa-btn pri ae-save">أنشئ الحساب</button>
+    </aside>
+
+    <div class="ae-main">
+      <section class="sa-card" aria-labelledby="anRoleTitle">
+        <div class="sa-card-head"><h2 id="anRoleTitle">الدور</h2><small>حسب القسم المختار</small></div>
+        <fieldset class="ae-choices" id="anRoles">
+          <legend class="visually-hidden">الدور</legend>
+          {% for key in role_order %}{% with meta=roles_meta|get_item:key %}
+          <label class="ae-choice" data-role="{{ key }}">
+            <input type="radio" name="role" value="{{ key }}"{% if values.role == key %} checked{% endif %}>
+            <b>{{ meta.label }}</b><span>{{ meta.hint }}</span>
+          </label>
+          {% endwith %}{% endfor %}
+        </fieldset>
+        <p class="ae-note" id="anUnitNote" hidden>هذه الوحدة لا تمسك سجلّاً، فلا تظهر فيها أدوار الإدخال والبريد والأرشفة.</p>
+        <div class="ae-summary" id="anSummary" aria-live="polite">
+          <p><b>سيستطيع:</b> <span id="anCan"></span></p>
+          <p>ولا يستطيع: <span id="anCannot"></span></p>
+        </div>
+        <p class="ae-note" style="margin-top:.7rem">الاستثناءات لهذا الشخص تُضاف من حسابه بعد إنشائه.</p>
+      </section>
+    </div>
+  </div>
+</form>
+{{ roles_meta|json_script:"anRolesMeta" }}
+{{ department_roles|json_script:"anDeptRoles" }}
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/account_new.js' %}?v=20261112-c3" defer></script>{% endblock %}
