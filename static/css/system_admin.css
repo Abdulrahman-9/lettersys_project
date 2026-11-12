@@ -1,24 +1,35 @@
 /* إدارة النظام: شريطٌ داكن ليعرف المدير أنّه في وضع الإدارة، وصفحاتُ المركز والقسم والتشغيل. */
+/* الهويّة الموحّدة (11-11): الشريطُ ما زال داكناً في الوضعين علامةً لوضع الإدارة، لكن بحبرٍ
+   تركوازيّ بدل البنّيّ، ولونُ الفعل تركوازُ الهويّة بدل الكهرمانيّ (الأسماءُ نفسها فلا تتغيّر
+   القواعد). الحالاتُ (--sa-bad/--sa-ok) لمعناها كما هي. */
 :root {
-  --sa-ink: #362014; --sa-soft: #6f4631; --sa-mute: #7c6656; --sa-amber: #b45309; --sa-tile: #fdf1e1;
-  --sa-line: #e7e2da; --sa-dark: #21120a; --sa-on-dark: #e8d5c2; --sa-on-dark-mute: #c7a98f;
+  --sa-ink: #14262b; --sa-soft: #3d5a60; --sa-mute: #566a70; --sa-amber: #0f766e; --sa-tile: #e3f3f0;
+  --sa-line: #dfe7e5; --sa-dark: #0b2a27; --sa-on-dark: #d5ece8; --sa-on-dark-mute: #8fb5af;
   --sa-bad: #b91c1c; --sa-ok: #15803d;
 }
 
+/* بطاقةُ الحساب على الشريط الداكن */
+.is-system-admin .app-sidebar-account { background: rgba(255, 255, 255, .06); border-color: rgba(213, 236, 232, .18); color: var(--sa-on-dark); }
+.is-system-admin .app-sidebar-account:hover,
+.is-system-admin .app-sidebar-account[aria-expanded="true"] { background: rgba(255, 255, 255, .1); border-color: rgba(213, 236, 232, .35); }
+.is-system-admin .app-sidebar-account-text small,
+.is-system-admin .app-sidebar-account > .bi { color: var(--sa-on-dark-mute); }
+.is-system-admin .app-sidebar-avatar { background: #d99a1e; color: #1c1404; }
+
 /* الشريط */
-.is-system-admin .app-topbar { background: var(--sa-dark); color: var(--sa-on-dark); border-color: rgba(245, 220, 194, .13); box-shadow: none; }
+.is-system-admin .app-topbar { background: var(--sa-dark); color: var(--sa-on-dark); border-color: rgba(213, 236, 232, .13); box-shadow: none; }
 .is-system-admin .app-topbar .navbar-brand, .is-system-admin .app-topbar .navbar-brand *, .is-system-admin .app-topbar-copy { color: #fff !important; -webkit-text-fill-color: currentColor; background: none; }
-.is-system-admin .app-topbar-alert, .is-system-admin .app-topbar-user { background: rgba(255, 255, 255, .1) !important; border-color: rgba(245, 220, 194, .25) !important; color: #fff !important; box-shadow: none; }
+.is-system-admin .app-topbar-alert, .is-system-admin .app-topbar-user { background: rgba(255, 255, 255, .1) !important; border-color: rgba(213, 236, 232, .25) !important; color: #fff !important; box-shadow: none; }
 .is-system-admin .app-topbar-alert *, .is-system-admin .app-topbar-user * { color: inherit; -webkit-text-fill-color: currentColor; }
 .is-system-admin .app-topbar-alert .app-topbar-alert-badge { color: #fff; }
 .is-system-admin .app-shell { gap: 0; width: 100%; margin: 0; }
 /* Bootstrap يفرض شفافية offcanvas-xl بـ!important في الشاشات الواسعة */
 .is-system-admin .app-sidebar { background: var(--sa-dark) !important; color: var(--sa-on-dark); padding: 0; align-self: stretch; min-height: calc(100vh - 75px); position: sticky; top: 0; }
 .is-system-admin .app-sidebar-panel { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: .5rem .55rem; backdrop-filter: none; color: var(--sa-on-dark); }
-.is-system-admin .app-sidebar-panel-footer { border-top: 1px solid rgba(245, 220, 194, .13); }
+.is-system-admin .app-sidebar-panel-footer { border-top: 1px solid rgba(213, 236, 232, .13); }
 .is-system-admin .app-sidebar-section-title, .is-system-admin .sidebar-title-text { color: #fff !important; -webkit-text-fill-color: #fff; font-weight: 800; background: none; }
-.is-system-admin .app-sidebar-toggle-btn { color: var(--sa-on-dark) !important; background: transparent !important; border-color: rgba(245, 220, 194, .25) !important; }
-.is-system-admin .app-sidebar-link, .is-system-admin .app-sidebar-logout { color: var(--sa-on-dark); background: transparent; border-color: rgba(245, 220, 194, .2); padding-block: .35rem; font-size: .84rem; }
+.is-system-admin .app-sidebar-toggle-btn { color: var(--sa-on-dark) !important; background: transparent !important; border-color: rgba(213, 236, 232, .25) !important; }
+.is-system-admin .app-sidebar-link, .is-system-admin .app-sidebar-logout { color: var(--sa-on-dark); background: transparent; border-color: rgba(213, 236, 232, .2); padding-block: .35rem; font-size: .84rem; }
 .is-system-admin .app-sidebar-link:hover, .is-system-admin .app-sidebar-logout:hover { background: rgba(255, 255, 255, .08); color: #fff; }
 .is-system-admin .app-main { padding: 1rem 1.25rem 2rem; }
 .sa-nav { padding: .25rem .1rem; }
@@ -32,9 +43,9 @@
 .sa-nav-group { margin: .6rem .6rem .15rem; font-size: .72rem; line-height: 1.4; font-weight: 800; color: #b3937a; }
 
 /* لوحة الإدارة المستقلّة تستعمل الشريط نفسه */
-.top.sa-top { background: var(--sa-dark); border-color: rgba(245, 220, 194, .13); color: #fff; }
+.top.sa-top { background: var(--sa-dark); border-color: rgba(213, 236, 232, .13); color: #fff; }
 .top.sa-top .brand, .top.sa-top .brand small { color: #fff; }
-.top.sa-top .pill { background: rgba(255, 255, 255, .1); border-color: rgba(245, 220, 194, .25); color: #fff; }
+.top.sa-top .pill { background: rgba(255, 255, 255, .1); border-color: rgba(213, 236, 232, .25); color: #fff; }
 .side.sa-side { background: var(--sa-dark); border: 0; padding: .6rem .5rem; color: var(--sa-on-dark); }
 
 /* الصفحات */
@@ -199,7 +210,7 @@ button.rm-cell:hover { border-color: #c98a4b; }
 .rm-bar { position: sticky; bottom: .75rem; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .75rem; padding: .7rem 1rem; border-radius: 12px; background: #2b170d; color: #f5dcc2; font-size: .86rem; font-weight: 700; box-shadow: 0 8px 24px rgba(33, 18, 10, .25); }
 .rm-bar[hidden] { display: none; }
 .rm-bar b { color: #fff; }
-.rm-bar .rm-ghost { border-color: rgba(245, 220, 194, .4); background: transparent; color: #f5dcc2 !important; }
+.rm-bar .rm-ghost { border-color: rgba(213, 236, 232, .4); background: transparent; color: #f5dcc2 !important; }
 .rm-bar .rm-ghost:hover { background: rgba(255, 255, 255, .08); }
 .rm-bar .sa-btn:focus-visible { outline: 2px solid #fcd34d; outline-offset: 2px; }
 .rm-dialog { max-width: 28rem; padding: 1.1rem 1.2rem; border: 1px solid var(--sa-line); border-radius: 14px; color: var(--sa-ink); }

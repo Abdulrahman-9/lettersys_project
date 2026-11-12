@@ -201,8 +201,13 @@ class DashboardCarryOverTests(SimpleTestCase):
     """بقايا مراجعة المرحلة 2: منطقةُ نقرٍ ميّتة، ورابطُ «تحديث» بأزرق Bootstrap، والتحيّةُ في الليليّ."""
 
     def test_dashboard_carry_over_rules(self):
+        """الحراسةُ نفسها بعد الهويّة الموحّدة (11-11): الصيغةُ تغيّرت لا المعنى."""
         css = read('static/css/dashboard_roles.css')
-        self.assertIn('.db-sub{pointer-events:none', css)
-        self.assertIn('.db-sub a{pointer-events:auto', css)
-        self.assertRegex(css, r'\.db-asof a\{[^}]*color:var\(--amber\)')
-        self.assertIn('[data-theme="dark"] .db-page{--ink:', css)
+        # منطقةُ النقر الميّتة: سطرُ الروابط الفرعيّة لا يبتلع نقرةَ البلاطة، وروابطُه تُنقر
+        self.assertRegex(css, r'\.db-sub \{[^}]*pointer-events: none')
+        self.assertRegex(css, r'\.db-sub a \{[^}]*pointer-events: auto')
+        # «تحديث» بلون الهويّة لا بأزرق Bootstrap
+        self.assertRegex(css, r'\.db-asof a \{[^}]*color: var\(--lx-pri\)')
+        # الليليّ: اللوحةُ منقولةٌ فتتبع الوضعَ برموز theme.css، ولا قاعدةَ data-theme قديمة
+        self.assertIn('{% block html_attrs %} data-lx-page="v2"{% endblock %}', read('templates/core/dashboard.html'))
+        self.assertNotIn('[data-theme="dark"]', css)

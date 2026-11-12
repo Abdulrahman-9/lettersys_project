@@ -22,7 +22,7 @@ from django.urls import reverse
 from core.branding import DEFAULT_ORG_NAME
 from core.models import SystemSettings
 
-LOGO = 'md-o-c-logo'
+LOGO = 'mdoc-mark'  # العلامةُ الشفّافة في الشريط (11-11)؛ صفحةُ الدخول بلا شعار كما كانت
 LOGIN_TEMPLATE = Path(settings.BASE_DIR) / 'templates' / 'core' / 'login.html'
 
 #: كلُّ أزرقٍ كان في القالب (بلا مسافات) — واحدٌ منسيٌّ يترك ظلّاً أزرقَ تحت زرٍّ تركوازيّ.

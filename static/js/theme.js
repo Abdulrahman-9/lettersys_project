@@ -40,7 +40,11 @@
     var x = box.left + box.width / 2;
     var y = box.top + box.height / 2;
     var radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+    // lx-flipping: الدائرةُ تشمل الشريطين أيضاً (theme.css يرفع أسماءهما طوال الانتقال)
+    var root = document.documentElement;
+    root.classList.add('lx-flipping');
     var transition = document.startViewTransition(apply);
+    transition.finished.finally(function () { root.classList.remove('lx-flipping'); });
     transition.ready.then(function () {
       document.documentElement.animate(
         { clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + radius + 'px at ' + x + 'px ' + y + 'px)'] },

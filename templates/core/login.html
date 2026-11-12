@@ -9,7 +9,8 @@
      الإحساسُ كما أحبّه المالك باقٍ كلُّه: صعودُ البطاقة، الموجةُ على الزرّ، حلقةُ التركيز،
      ودائرتا الخلفيّة — وزيد عليها: خطٌّ ذهبيٌّ ينمو تحت الرأس، ودخولٌ متتابعٌ للحقول،
      وهزّةٌ قصيرةٌ للبطاقة عند الخطأ. كلّها تتوقّف لمن طلب تقليلَ الحركة. */
-  body {
+  /* بخصوصيّة أرضيّة theme.css نفسها، وبعدها في الترتيب — فيغلب تدرّجُ الدخول */
+  html[data-lx-page="v2"] body {
     background: linear-gradient(135deg, var(--lx-bg-tint) 0%, var(--lx-bg) 52%, var(--lx-bg-warm) 100%);
     min-height: 100vh;
   }
@@ -154,6 +155,34 @@
     position: relative;
     z-index: 1;
     animation: loginGlow 1.8s .5s ease-out;
+  }
+
+  /* المسحة: الخطّ يعبر الورقة (y 6←42) في نصف الدورة ثمّ يخفت، والأسطرُ تضيء لحظةَ مروره
+     (تأخيرُ كلّ سطر = موضعُه على مسار الخطّ) — دورةٌ هادئة كلّ 3.2 ثانية */
+  .login-scan .ls-page { fill: rgba(255, 255, 255, .1); stroke: #fff; stroke-width: 2; stroke-linejoin: round; }
+  .login-scan .ls-fold { stroke: #fff; stroke-width: 2; stroke-linejoin: round; }
+  .login-scan .ls-lines path { stroke: #fff; stroke-width: 2; stroke-linecap: round; opacity: .4; animation: lsLine 3.2s ease-in-out infinite; }
+  .login-scan .ls-l1 { animation-delay: .52s !important; }
+  .login-scan .ls-l2 { animation-delay: .76s !important; }
+  .login-scan .ls-l3 { animation-delay: 1s !important; }
+  .login-scan .ls-l4 { animation-delay: 1.24s !important; }
+  .login-scan .ls-l5 { animation-delay: 1.48s !important; }
+  .login-scan .ls-ray { fill: #6ee7b7; filter: drop-shadow(0 0 3px #6ee7b7) drop-shadow(0 0 6px rgba(110, 231, 183, .7)); }
+  .login-scan .ls-beam { animation: lsBeam 3.2s cubic-bezier(.45, 0, .55, 1) infinite; }
+
+  @keyframes lsBeam {
+    0% { transform: translateY(6px); opacity: 0; }
+    6% { opacity: 1; }
+    50% { transform: translateY(43px); opacity: 1; }
+    58%, 100% { transform: translateY(43px); opacity: 0; }
+  }
+
+  @keyframes lsLine {
+    0% { opacity: .4; stroke: #fff; }
+    6% { opacity: 1; stroke: #a7f3d0; }
+    30% { opacity: 1; stroke: #fff; }
+    70% { opacity: .95; }
+    100% { opacity: .4; }
   }
 
   @keyframes loginGlow {
@@ -393,9 +422,13 @@
 
   @media (prefers-reduced-motion: reduce) {
     .login-wrapper::before, .login-wrapper::after, .login-card, .login-card.has-error,
-    .login-hero::after, .login-mark, .login-theme, .login-form > *, .login-keyhint {
+    .login-hero::after, .login-mark, .login-theme, .login-form > *, .login-keyhint,
+    .login-scan .ls-beam, .login-scan .ls-lines path {
       animation: none !important;
     }
+    /* بلا حركة: الخطّ ساكنٌ في منتصف الورقة والأسطرُ مضاءة — الدلالةُ نفسها بلا مسح */
+    .login-scan .ls-beam { transform: translateY(25px); opacity: 1; }
+    .login-scan .ls-lines path { opacity: .9; }
     .login-form .btn-login, .login-form .btn-login::before { transition: none; }
   }
 </style>
@@ -412,7 +445,36 @@
 
   <div class="login-card{% if form.errors %} has-error{% endif %}">
     <div class="login-hero">
-      <span class="login-mark" aria-hidden="true"><i class="bi bi-journal-bookmark-fill"></i></span>
+      {% comment %}
+        علامةُ الاستخراج (11-11، طلب المالك): كتابٌ رسميّ يمسحه خطٌّ أخضر من أعلاه إلى أسفله،
+        ويُضيء كلُّ سطرٍ لحظةَ مرور الخطّ عليه — دلالةً على القراءة الآليّة. عامّةٌ بلا شعار شركة.
+      {% endcomment %}
+      <span class="login-mark" aria-hidden="true">
+        <svg class="login-scan" viewBox="0 0 48 48" width="44" height="44" fill="none">
+          <defs>
+            <linearGradient id="loginScanTrail" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#6ee7b7" stop-opacity="0"/>
+              <stop offset="1" stop-color="#6ee7b7" stop-opacity=".45"/>
+            </linearGradient>
+            <clipPath id="loginScanPage"><path d="M12 6h18l7 7v29H12z"/></clipPath>
+          </defs>
+          <path class="ls-page" d="M12 6h18l7 7v29H12z"/>
+          <path class="ls-fold" d="M30 6v7h7"/>
+          <g class="ls-lines">
+            <path class="ls-l1" d="M32 17H17"/>
+            <path class="ls-l2" d="M32 22H20"/>
+            <path class="ls-l3" d="M32 27H16"/>
+            <path class="ls-l4" d="M32 32H22"/>
+            <path class="ls-l5" d="M32 37H18"/>
+          </g>
+          <g clip-path="url(#loginScanPage)">
+            <g class="ls-beam">
+              <rect x="8" y="-8" width="32" height="8" fill="url(#loginScanTrail)"/>
+              <rect class="ls-ray" x="8" y="-1" width="32" height="2" rx="1"/>
+            </g>
+          </g>
+        </svg>
+      </span>
       <h1>{{ app_name }}</h1>
       <p>تسجيل الدخول للوصول إلى لوحة التحكم</p>
     </div>

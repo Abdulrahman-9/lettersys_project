@@ -404,7 +404,7 @@ class DepartmentManagerScopeTests(AdminPanelTestCase):
         self.assertEqual(password_page.status_code, 200)
         self.assertContains(password_page, 'تغيير كلمة المرور')
         self.assertNotContains(password_page, 'title="لوحة التحكم"')
-        self.assertNotContains(password_page, 'title="قائمة الكتب"')
+        self.assertNotContains(password_page, 'title="كلّ الكتب"')
 
         changed = 'Changed-Temporary-Password-42'
         result = self.client.post('/password/', {

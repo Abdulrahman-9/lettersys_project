@@ -57,7 +57,19 @@
   --lx-radius: 14px;
   --lx-radius-lg: 22px;
   --lx-ease: cubic-bezier(.2, .8, .2, 1);
+  --lx-ease-out: cubic-bezier(.4, 0, 1, 1);
   --lx-ease-spring: cubic-bezier(.2, .9, .25, 1.2);
+
+  /* إيقاع الحركة (لغة الإبهار، مراجعة فيبل 11-11): المرور 120 · الخروج والقوائم 200 ·
+     دخول الحوار والتوست واللوحة 320 · اللحظات المميّزة وحدها 560 */
+  --lx-dur-1: 120ms;
+  --lx-dur-2: 200ms;
+  --lx-dur-3: 320ms;
+  --lx-dur-4: 560ms;
+
+  /* شارةُ العدد (التنبيهات، الطاولة): نصٌّ مقروءٌ في الوضعين */
+  --lx-badge-bg: #c4320a;
+  --lx-badge-ink: #ffffff;
 }
 
 [data-bs-theme="dark"] {
@@ -96,6 +108,9 @@
   --lx-shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
   --lx-shadow-md: 0 10px 26px rgba(0, 0, 0, .35);
   --lx-shadow-lg: 0 24px 64px rgba(0, 0, 0, .5);
+
+  --lx-badge-bg: #f97066;
+  --lx-badge-ink: #2b0a07;
 }
 
 @media print {
@@ -200,6 +215,13 @@ html[data-lx-page="v2"] .form-check-input:checked {
   box-shadow: 0 0 0 3px rgba(var(--lx-pri-rgb), .2);
 }
 
+/* الشريطُ العلويّ لاصق: التمريرُ إلى عنصرٍ أو التركيزُ عليه لا يختفي تحته (WCAG 2.2 · 2.4.11) */
+html { scroll-padding-top: 96px; }
+
+/* أرضيّةُ الصفحات المنقولة (app.css يضع #f4f2ee صريحاً لكلّ الصفحات) ودرجُ الهاتف في الداكن */
+html[data-lx-page="v2"] body { background: var(--lx-bg); color: var(--lx-ink); }
+html[data-bs-theme="dark"] .app-sidebar { --bs-offcanvas-bg: var(--lx-bg); }
+
 /* رابطُ «تخطَّ إلى المحتوى» (base.html يلوّنه برتقاليّاً) — يظهر للوحة المفاتيح وحدها */
 html[data-lx-page="v2"] .skip-link {
   color: var(--lx-pri);
@@ -228,6 +250,10 @@ html[data-lx-page="v2"] .skip-link {
   transition: border-color .25s ease, transform .25s var(--lx-ease), box-shadow .25s ease;
 }
 
+/* في الشريط العلويّ: موجودٌ في كلّ صفحة، ظاهرٌ في المنقولة وحدها */
+.lx-shell-toggle { display: none; width: 40px; height: 40px; border-radius: 12px; }
+html[data-lx-page="v2"] .lx-shell-toggle { display: inline-grid; }
+
 .lx-theme-toggle:hover {
   border-color: var(--lx-pri);
   transform: translateY(-1px);
@@ -251,9 +277,34 @@ html[data-lx-page="v2"] .skip-link {
 [data-bs-theme="dark"] .lx-theme-toggle .lx-sun { transform: rotate(90deg) scale(.4); opacity: 0; }
 [data-bs-theme="dark"] .lx-theme-toggle .lx-moon { transform: rotate(0) scale(1); opacity: 1; }
 
-/* انتقالُ الوضع: دائرةٌ تتّسع من الزرّ (View Transitions)؛ theme.js يحرّكها */
-::view-transition-old(root),
-::view-transition-new(root) {
+/* --------------------------------------------------------------------------
+   الانتقال بين الصفحات (View Transitions بين المستندات — Edge/Chrome 126+)
+   الشريطان ثابتان، والمحتوى وحده يتلاشى ويصعد 6px في 200ms؛ المتصفّحُ الأقدم ينتقل
+   عاديّاً بلا خسارة، ومن طلب تقليل الحركة لا يرى شيئاً.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+}
+
+.app-topbar { view-transition-name: lx-topbar; }
+.app-sidebar { view-transition-name: lx-sidebar; }
+
+::view-transition-group(lx-topbar),
+::view-transition-group(lx-sidebar) { animation-duration: 0s; }
+
+::view-transition-old(root) { animation: lx-vt-out var(--lx-dur-2) var(--lx-ease-out) both; }
+::view-transition-new(root) { animation: lx-vt-in var(--lx-dur-2) var(--lx-ease) both; }
+
+@keyframes lx-vt-out { to { opacity: 0; } }
+@keyframes lx-vt-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* تبديلُ الوضع: دائرةٌ تتّسع من الزرّ تشمل الصفحة كلّها — theme.js يضع lx-flipping
+   على html طوال الانتقال، فتُرفع أسماءُ الشريطين ويُلغى التلاشي الافتراضيّ */
+html.lx-flipping .app-topbar,
+html.lx-flipping .app-sidebar { view-transition-name: none; }
+
+html.lx-flipping::view-transition-old(root),
+html.lx-flipping::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
 }

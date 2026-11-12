@@ -93,6 +93,11 @@ def nav_gates(request):
         from core.system_ops import failing_job_count
         ops_failures = failing_job_count()
 
+    # بطاقةُ الحساب في الشريط: الدورُ من مصدره الواحد (role_of) لا من شرطٍ في القالب
+    from core.scoping import ROLE_LABELS, role_of
+    role_label = 'مدير النظام' if user.is_superuser else ROLE_LABELS.get(role_of(user), '')
+    department = getattr(profile, 'department', None) if profile else None
+
     return {'nav': {
         # «الإدخال الذكي» وكلُّ رابطٍ إلى وضع الإدخال — كان يظهر للقارئ فيلقى 403 ((ب)3).
         'enter': can_enter_book(user),
@@ -122,4 +127,6 @@ def nav_gates(request):
         'ops_failures': ops_failures,
         # استعادةُ نسخة النظام إلى قاعدةٍ جديدة — حارسُ صفحتها نفسُه (قرارُ المالك 2026‑10‑07، البند 3)
         'restore_system': can_restore_system(user),
+        'role_label': role_label,
+        'department_name': department.name if department else '',
     }}

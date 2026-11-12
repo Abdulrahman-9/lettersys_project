@@ -324,12 +324,18 @@ class DashboardOverviewTests(TestCase):
         self.assertNotContains(listing, 'pill-count-active')
 
     def test_incoming_number_keeps_its_blue(self):
-        """قاعدةُ المالك: لا تغييرَ صبغة بلا إذن — رقمُ الوارد أزرقُ كأيقونته، لا كهرمانُ `.stat-value`."""
+        """رقمُ الوارد بلون أيقونته — وصار لونَ الهويّة (إذنُ المالك 2026-11-11: تركوازٌ واحد).
+
+        القاعدةُ الأصل «لا تغييرَ صبغة بلا إذن» باقية؛ الإذنُ صدر بالتوحيد، فالوارد تركوازُ
+        الهويّة (``--lx-pri`` عبر ``--db-in``) لا أزرقُ Bootstrap ولا كهرمانُ ``.stat-value``.
+        """
         import io
         dash = self._dash()
         self.assertContains(dash, 'class="db-tile db-tile--lg db-tone-in"')
         with io.open('static/css/dashboard_roles.css', encoding='utf-8') as fh:
-            self.assertIn('.db-tone-in{--tone:var(--bs-primary)}', fh.read())
+            css = fh.read()
+        self.assertIn('.db-tone-in { --tone: var(--db-in); }', css)
+        self.assertIn('--db-in: var(--lx-pri);', css)
 
     def test_active_label_is_its_own_words(self):
         """«قيد المتابعة» تعني المستقبليَّ وحده؛ الجاريةُ كلُّها اسمٌ آخر."""

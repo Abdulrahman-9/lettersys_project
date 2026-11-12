@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}لوحة التحكم{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20261021a">
-<link rel="stylesheet" href="{% static 'css/dashboard_command.css' %}?v=20261021b">
+{# الهويّة الموحّدة (11-11): ملفٌّ واحد — dashboard_command.css دُمج فيه #}
+<link rel="stylesheet" href="{% static 'css/dashboard_roles.css' %}?v=20261111-dash3">
 {% endblock %}
 
 {% block content %}
@@ -23,10 +24,37 @@
         · هذا الأسبوع {{ insights.week_total }} كتاب
       </p>
     </div>
-    <div class="db-ring" role="img" aria-label="نسبة المنجز {{ insights.done_percent }}٪ من الكتب">
-      <svg viewBox="0 0 120 120" aria-hidden="true">
-        <circle class="db-ring-bg" cx="60" cy="60" r="52" pathLength="100"></circle>
-        <circle class="db-ring-fg" cx="60" cy="60" r="52" pathLength="100" style="--p:{{ insights.done_percent }}"></circle>
+    {% comment %}
+      رحلةُ الكتاب (لغةُ المراسلة والأرشفة): ظرفٌ يهبط على مسارٍ متقطّع إلى درج الأرشيف ويُختم
+      بذهب الشعار — رسمٌ خطّيٌّ يُرسم مرّةً عند الفتح. زخرفةٌ صامتةٌ لقارئ الشاشة.
+    {% endcomment %}
+    <svg class="db-hero-art" viewBox="0 0 230 130" aria-hidden="true" focusable="false">
+      <path class="db-art-route" d="M222 18 C 188 6, 160 30, 150 46"/>
+      <g class="db-art-drawer">
+        <path d="M44 78 h132 a6 6 0 0 1 6 6 v34 a6 6 0 0 1 -6 6 h-132 a6 6 0 0 1 -6 -6 v-34 a6 6 0 0 1 6 -6 z"/>
+        <path d="M38 92 h144"/>
+        <path class="db-art-handle" d="M96 106 h28"/>
+      </g>
+      <g class="db-art-letter">
+        <rect x="76" y="20" width="68" height="46" rx="5"/>
+        <path d="M78 23 L110 46 L142 23"/>
+        <circle class="db-art-stamp" cx="132" cy="56" r="7"/>
+      </g>
+    </svg>
+    {% comment %}
+      ختمُ الوارد: نسبةُ المنجَز حلقةٌ ذهبيّة داخل ختمٍ دائريّ يحمل اسمَ القسم وتاريخَ اليوم —
+      كالختم الذي يُطبع على الكتاب نفسه.
+    {% endcomment %}
+    <div class="db-ring db-seal" role="img" aria-label="نسبة المنجز {{ insights.done_percent }}٪ من الكتب">
+      <svg viewBox="0 0 140 140" aria-hidden="true">
+        <defs><path id="dbSealArc" d="M 17 70 A 53 53 0 0 1 123 70"/></defs>
+        <circle class="db-seal-edge" cx="70" cy="70" r="66"></circle>
+        <circle class="db-seal-inner" cx="70" cy="70" r="47"></circle>
+        <text class="db-seal-text"><textPath href="#dbSealArc" startOffset="50%" text-anchor="middle">{% if my_department %}{{ my_department.name }} · {% endif %}{{ today|date:"Y/m/d" }}</textPath></text>
+        <g transform="rotate(-90 70 70)">
+          <circle class="db-ring-bg" cx="70" cy="70" r="40" pathLength="100"></circle>
+          <circle class="db-ring-fg" cx="70" cy="70" r="40" pathLength="100" style="--p:{{ insights.done_percent }}"></circle>
+        </g>
       </svg>
       <span class="db-ring-label"><strong>{{ insights.done_percent }}٪</strong><small>مُنجَز</small></span>
     </div>
@@ -55,25 +83,29 @@
   {# الملخّص أوّلاً (مرحلة نيلسن): البلاطةُ كلُّها رابط، والروابطُ الفرعيّة في سطرها الثاني #}
   <section class="db-card db-summary" aria-labelledby="db-h-summary">
     <div class="db-card-hd">
-      <h2 id="db-h-summary">الملخّص</h2>
+      <h2 id="db-h-summary"><i class="bi bi-mailbox2" aria-hidden="true"></i>الملخّص</h2>
       <span class="db-asof">محدَّث {{ now|time:"H:i" }} · <a href="{% url 'dashboard' %}">تحديث</a></span>
     </div>
     <div class="db-tiles">
       <div class="db-tile db-tile--lg db-tone-danger">
+        <span class="db-tile-ico" aria-hidden="true"><i class="bi bi-alarm"></i></span>
         <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=all&followup=overdue"><span class="db-l">كتب متأخّرة</span><span class="db-n"{% if overdue %} data-has="1"{% endif %}>{{ overdue }}</span></a>
         <p class="db-sub">{% if overdue %}تحتاج متابعة{% else %}لا كتبَ متأخّرة{% endif %}</p>
       </div>
       <div class="db-tile db-tile--lg db-tone-in">
+        <span class="db-tile-ico" aria-hidden="true"><i class="bi bi-envelope-arrow-down"></i></span>
         <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=incoming"><span class="db-l">الكتب الواردة</span><span class="db-n"{% if incoming_total %} data-has="1"{% endif %}>{{ incoming_total }}</span></a>
         <p class="db-sub"><a href="{% url 'book_unified' %}?tab=incoming&followup=active">{{ active_label }}: <strong>{{ incoming_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=incoming&followup=archived">مُنجَز / بلا متابعة: <strong>{{ incoming_done }}</strong></a></p>
         <svg class="db-spark" data-spark="{{ insights.spark_incoming }}" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
       </div>
-      <div class="db-tile db-tile--lg db-tone-accent">
+      <div class="db-tile db-tile--lg db-tone-out">
+        <span class="db-tile-ico" aria-hidden="true"><i class="bi bi-envelope-arrow-up"></i></span>
         <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=outgoing"><span class="db-l">الكتب الصادرة</span><span class="db-n"{% if outgoing_total %} data-has="1"{% endif %}>{{ outgoing_total }}</span></a>
         <p class="db-sub"><a href="{% url 'book_unified' %}?tab=outgoing&followup=active">{{ active_label }}: <strong>{{ outgoing_pending }}</strong></a> · <a href="{% url 'book_unified' %}?tab=outgoing&followup=archived">مُنجَز / بلا متابعة: <strong>{{ outgoing_done }}</strong></a></p>
         <svg class="db-spark" data-spark="{{ insights.spark_outgoing }}" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
       </div>
-      <div class="db-tile db-tile--lg db-tone-accent">
+      <div class="db-tile db-tile--lg db-tone-calm">
+        <span class="db-tile-ico" aria-hidden="true"><i class="bi bi-archive"></i></span>
         <a class="db-tile-main stretched-link" href="{% url 'book_unified' %}?tab=all"><span class="db-l">إجمالي الكتب</span><span class="db-n"{% if total %} data-has="1"{% endif %}>{{ total }}</span></a>
         <p class="db-sub"><a href="{% url 'book_unified' %}?tab=all&date_from={{ today|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}">اليوم: <strong>{{ today_count }}</strong></a> · <a href="{% url 'book_unified' %}?tab=all&date_from={{ week_ago|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}">الأسبوع: <strong>{{ week_count }}</strong></a></p>
                 <svg class="db-spark" data-spark="{{ insights.spark_total }}" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
@@ -186,5 +218,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/dashboard_fx.js' %}?v=20261021b" defer></script>
+<script src="{% static 'js/dashboard_fx.js' %}?v=20261111-dash1" defer></script>
 {% endblock %}

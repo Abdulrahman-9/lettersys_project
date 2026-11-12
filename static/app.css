@@ -80,10 +80,12 @@ body {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.9rem 1.25rem;
-  background: rgba(255, 255, 255, 0.86);
+  /* الهويّة الموحّدة: رموز theme.css (فاتحةٌ في كلّ الصفحات، وداكنةٌ حيث يُضبط الوضع) */
+  background: color-mix(in srgb, var(--lx-surface) 88%, transparent);
   backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(111, 70, 40, 0.12);
-  box-shadow: 0 10px 26px rgba(77, 44, 25, 0.08);
+  border-bottom: 1px solid var(--lx-line);
+  box-shadow: var(--lx-shadow-sm);
+  color: var(--lx-ink);
   position: sticky;
   top: 0;
   z-index: 120;
@@ -95,8 +97,35 @@ body {
   gap: 1rem;
 }
 
+/* اسمُ النظام في الشريط: حبرُ الهويّة، بلا تباعد أحرف (يفكّ وصلَ الحروف العربيّة) */
+.app-topbar .navbar-brand,
+.app-topbar .brand-text {
+  color: var(--lx-ink);
+  letter-spacing: 0;
+}
+
+.app-topbar .navbar-brand:hover .brand-text { color: var(--lx-pri); }
+
+/* العلامة شفّافة على الفاتح؛ وعلى الداكن (والشريطُ الإداريّ) شارةٌ بيضاء — قوسُها الأسود يختفي على الداكن */
+.app-topbar-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  transition: transform var(--lx-dur-2) var(--lx-ease-spring);
+}
+
+.app-topbar .navbar-brand:hover .app-topbar-logo { transform: scale(1.06) rotate(-3deg); }
+
+[data-bs-theme="dark"] .app-topbar-logo,
+.is-system-admin .app-topbar-logo {
+  padding: 3px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .28);
+}
+
 .app-topbar-copy {
-  color: var(--muted-brown);
+  color: var(--lx-mute);
   font-size: 0.88rem;
   font-weight: 600;
 }
@@ -115,12 +144,27 @@ body {
   gap: 0.55rem;
   padding: 0.6rem 0.9rem;
   border-radius: 999px;
-  background: rgba(255, 245, 236, 0.9);
-  border: 1px solid rgba(111, 70, 40, 0.12);
-  color: var(--soft-brown);
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  color: var(--lx-ink);
   text-decoration: none;
   font-weight: 700;
   position: relative;
+  transition: border-color var(--lx-dur-1) ease, background-color var(--lx-dur-1) ease, transform var(--lx-dur-1) ease;
+}
+
+.app-topbar-alert:hover,
+.app-topbar-user:hover,
+.app-topbar-menu:hover {
+  border-color: var(--lx-pri);
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+}
+
+.app-topbar-alert:focus-visible,
+.app-topbar-user:focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 2px;
 }
 
 /* زرّ القائمة (الهاتف واللوحيّ): يفتح الدرج — هدفُ لمسٍ ≥44px */
@@ -131,7 +175,7 @@ body {
 }
 
 .app-topbar-menu:focus-visible {
-  outline: 2px solid var(--brand-strong, #b45309);
+  outline: 2px solid var(--lx-pri);
   outline-offset: 2px;
 }
 
@@ -143,10 +187,11 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #dc2626;
-  color: #fff;
+  background: var(--lx-badge-bg);
+  color: var(--lx-badge-ink);
   font-size: 0.72rem;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .app-shell {
@@ -171,12 +216,11 @@ body {
 }
 
 .app-sidebar-panel {
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(111, 70, 40, 0.16);
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
   border-radius: 1.1rem;
-  box-shadow: 0 12px 28px rgba(77, 44, 25, 0.1);
+  box-shadow: var(--lx-shadow-md);
   padding: 1rem;
-  backdrop-filter: blur(10px);
 }
 
 .app-sidebar-panel-footer {
@@ -189,7 +233,7 @@ body {
 }
 
 .app-sidebar-section-copy {
-  color: var(--muted-brown);
+  color: var(--lx-mute);
   font-size: 0.82rem;
   line-height: 1.65;
   margin-bottom: 0.85rem;
@@ -207,12 +251,13 @@ body {
   gap: 0.75rem;
   padding: 0.82rem 0.9rem;
   border-radius: 0.95rem;
-  color: var(--soft-brown);
+  color: var(--lx-mute);
   text-decoration: none;
   font-weight: 700;
   border: 1px solid transparent;
-  transition: all 0.2s ease;
+  transition: background-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease, transform var(--lx-dur-1) ease;
   min-width: 0;
+  position: relative;
 }
 
 .app-sidebar-link span {
@@ -222,16 +267,31 @@ body {
 }
 
 .app-sidebar-link:hover {
-  background: rgba(255, 245, 236, 0.92);
-  border-color: rgba(255, 146, 51, 0.22);
-  color: var(--deep-brown);
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+  transform: translateX(-2px);
 }
 
+.app-sidebar-link:focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 2px;
+}
+
+/* النشط: خلفيّةٌ تركوازيّة خفيفة وحدُّ ذهبِ الشعار في بداية السطر */
 .app-sidebar-link.active {
-  background: linear-gradient(135deg, rgba(255, 166, 38, 0.18), rgba(216, 123, 68, 0.12));
-  border-color: rgba(255, 146, 51, 0.26);
-  color: #5b331b;
-  box-shadow: inset 0 0 0 1px rgba(255, 146, 51, 0.12);
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+}
+
+.app-sidebar-link.active::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0.55rem;
+  bottom: 0.55rem;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--lx-accent);
 }
 
 .app-sidebar-link i {
@@ -240,6 +300,138 @@ body {
   text-align: center;
 }
 
+.app-sidebar-link.active i { color: var(--lx-pri); }
+
+/* الفعلُ الأساسيّ الوحيد في الشريط: «إدخال كتاب» (لمن يملك الإدخال) */
+.app-sidebar-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 46px;
+  margin-bottom: 0.35rem;
+  border-radius: 0.95rem;
+  background: linear-gradient(135deg, var(--lx-hero-a) 0%, var(--lx-hero-b) 60%, var(--lx-hero-c) 100%);
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 6px 16px rgba(var(--lx-pri-rgb), .26);
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--lx-dur-1) ease, box-shadow var(--lx-dur-2) ease;
+}
+
+.app-sidebar-cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .28) 50%, transparent 70%);
+  transform: translateX(120%);
+  transition: transform .7s var(--lx-ease);
+  pointer-events: none;
+}
+
+.app-sidebar-cta:hover {
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(var(--lx-pri-rgb), .32);
+}
+
+.app-sidebar-cta:hover::before { transform: translateX(-120%); }
+.app-sidebar-cta:active { transform: translateY(0) scale(.99); }
+.app-sidebar-cta:focus-visible { outline: 3px solid var(--lx-accent); outline-offset: 3px; color: #fff; }
+.app-sidebar-cta.active { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .35), 0 6px 16px rgba(var(--lx-pri-rgb), .26); }
+
+.app-sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.app-sidebar-gtitle {
+  padding: 0.65rem 0.9rem 0.2rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--lx-mute);
+}
+
+/* بطاقةُ الحساب وقائمتُها */
+.app-sidebar-account {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 0.95rem;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color var(--lx-dur-1) ease, background-color var(--lx-dur-1) ease;
+}
+
+.app-sidebar-account:hover,
+.app-sidebar-account[aria-expanded="true"] { border-color: var(--lx-pri); background: var(--lx-surface); }
+.app-sidebar-account:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
+
+.app-sidebar-avatar {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: var(--lx-pri-fill);
+  color: var(--lx-pri-fill-ink);
+  font-weight: 800;
+}
+
+.app-sidebar-account-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.app-sidebar-account-text b,
+.app-sidebar-account-text small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-sidebar-account-text b { font-size: 0.92rem; font-weight: 800; }
+.app-sidebar-account-text small { font-size: 0.77rem; color: var(--lx-mute); font-weight: 600; }
+.app-sidebar-account > .bi { color: var(--lx-mute); }
+
+.app-sidebar-account-menu {
+  width: 100%;
+  padding: 0.35rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 14px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-lg);
+}
+
+.app-sidebar-account-menu .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font-weight: 700;
+  color: var(--lx-ink);
+}
+
+.app-sidebar-account-menu .dropdown-item:hover,
+.app-sidebar-account-menu .dropdown-item:focus { background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink); }
+.app-sidebar-account-menu .app-sidebar-logout-item { color: var(--lx-late); }
+.app-sidebar-account-menu .app-sidebar-logout-item:hover,
+.app-sidebar-account-menu .app-sidebar-logout-item:focus { background: var(--lx-late-bg); color: var(--lx-late); }
+
 .app-sidebar-link-badge {
   margin-right: auto;
   flex: 0 0 auto;
@@ -247,20 +439,21 @@ body {
   height: 1.4rem;
   border-radius: 999px;
   padding: 0 0.35rem;
-  background: #dc2626;
-  color: #fff;
+  background: var(--lx-badge-bg);
+  color: var(--lx-badge-ink);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 0.72rem;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .app-sidebar-logout {
   width: 100%;
-  border: 1px solid rgba(111, 70, 40, 0.16);
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--soft-brown);
+  border: 1px solid var(--lx-line);
+  background: var(--lx-surface);
+  color: var(--lx-ink);
   border-radius: 0.95rem;
   padding: 0.85rem 1rem;
   font-weight: 700;
@@ -289,27 +482,28 @@ body {
   gap: 0.75rem;
   padding: 0.8rem 0.9rem;
   border-radius: 0.9rem;
-  background: rgba(255, 252, 248, 0.95);
-  border: 1px solid rgba(111, 70, 40, 0.12);
-  color: var(--soft-brown);
+  background: var(--lx-surface-2);
+  border: 1px solid var(--lx-line);
+  color: var(--lx-ink);
   text-decoration: none;
   font-weight: 700;
 }
 
 .app-context-link:hover {
-  background: rgba(255, 245, 236, 0.96);
-  border-color: rgba(255, 146, 51, 0.22);
-  color: var(--deep-brown);
+  background: var(--lx-pri-soft);
+  border-color: rgba(var(--lx-pri-rgb), .3);
+  color: var(--lx-pri-soft-ink);
 }
 
 .app-context-item strong,
 .app-context-link strong {
-  color: var(--deep-brown);
+  color: var(--lx-ink);
   font-size: 1rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .app-context-meta {
-  color: var(--muted-brown);
+  color: var(--lx-mute);
   font-size: 0.78rem;
   font-weight: 600;
 }
@@ -320,25 +514,25 @@ body {
   gap: 0.35rem;
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
-  background: rgba(255, 146, 51, 0.12);
-  color: #8a4b19;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
   font-size: 0.78rem;
   font-weight: 700;
 }
 
 .app-context-chip.is-danger {
-  background: rgba(239, 68, 68, 0.14);
-  color: #b42318;
+  background: var(--lx-late-bg);
+  color: var(--lx-late);
 }
 
 .app-context-chip.is-info {
-  background: rgba(59, 130, 246, 0.14);
-  color: #1d4ed8;
+  background: var(--lx-prog-bg);
+  color: var(--lx-prog);
 }
 
 .app-context-chip.is-success {
-  background: rgba(34, 197, 94, 0.16);
-  color: #166534;
+  background: var(--lx-done-bg);
+  color: var(--lx-done);
 }
 
 /* ══════════════════════════════════════════════
@@ -354,7 +548,7 @@ body {
 .sidebar-title-text {
   font-size: 0.9rem;
   font-weight: 800;
-  color: var(--deep-brown);
+  color: var(--lx-ink);
 }
 
 /* زر التبديل — مرئي دائماً داخل السايد بار */
@@ -366,17 +560,21 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 0.5rem;
-  background: rgba(255, 146, 51, 0.18);
-  border: 1.5px solid rgba(111, 70, 40, 0.28);
+  background: var(--lx-pri-soft);
+  border: 1px solid var(--lx-line);
   cursor: pointer;
   padding: 0;
-  color: var(--deep-brown, #4a2a12);
+  color: var(--lx-pri-soft-ink);
   font-size: 0.9rem;
   line-height: 1;
-  transition: background 0.18s;
+  transition: background-color var(--lx-dur-1) ease;
 }
 .app-sidebar-toggle-btn:hover {
-  background: rgba(255, 146, 51, 0.4);
+  background: rgba(var(--lx-pri-rgb), .22);
+}
+.app-sidebar-toggle-btn:focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 2px;
 }
 
 /* ≥1200: عمودٌ ثابتٌ لاصق بجانب المحتوى، مع وضع Mini. تحت 1200 هو درجُ offcanvas-xl
@@ -420,6 +618,18 @@ body {
   .app-shell.sidebar-mini .app-sidebar-section-title {
     justify-content: center;
     margin-bottom: 0.5rem;
+  }
+  /* المصغّر: الفعلُ وبطاقةُ الحساب أيقونتان، وعناوينُ المجموعات تختفي */
+  .app-shell.sidebar-mini .app-sidebar-gtitle,
+  .app-shell.sidebar-mini .app-sidebar-cta span,
+  .app-shell.sidebar-mini .app-sidebar-account-text,
+  .app-shell.sidebar-mini .app-sidebar-account > .bi {
+    display: none;
+  }
+  .app-shell.sidebar-mini .app-sidebar-cta,
+  .app-shell.sidebar-mini .app-sidebar-account {
+    justify-content: center;
+    padding-inline: 0;
   }
 }
 

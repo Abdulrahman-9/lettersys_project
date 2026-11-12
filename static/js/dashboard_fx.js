@@ -3,6 +3,14 @@
   'use strict';
   var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // اللحظاتُ المميّزة (العدّ والجسيمات) في أوّل زيارةٍ للجلسة وحدها — لا تتكرّر مع كلّ رجوعٍ
+  // إلى اللوحة خلال يوم العمل (لغة الإبهار، مراجعة فيبل 11-11).
+  var firstVisit = true;
+  try {
+    firstVisit = !sessionStorage.getItem('lx-db-intro');
+    sessionStorage.setItem('lx-db-intro', '1');
+  } catch (e) { /* تخزينٌ محجوب: تُعرض كأوّل زيارة */ }
+
   // شرارةُ كلّ بلاطة: سبعةُ أيّامٍ من اليمين (الأقدم) إلى اليسار (اليوم) لأنّ القراءة RTL
   document.querySelectorAll('svg.db-spark[data-spark]').forEach(function (svg) {
     var vals = (svg.getAttribute('data-spark') || '').split(',').map(Number).filter(function (v) { return !isNaN(v); });
@@ -23,7 +31,7 @@
   });
 
   // العدّ التصاعديّ للأرقام الكبيرة — النصّ النهائيّ موجودٌ أصلاً في HTML
-  if (!calm && 'IntersectionObserver' in window) {
+  if (!calm && firstVisit && 'IntersectionObserver' in window) {
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) {
         if (!e.isIntersecting) return;
@@ -42,9 +50,15 @@
     document.querySelectorAll('.db-page .db-n[data-has], .db-flow-n').forEach(function (el) { io.observe(el); });
   }
 
-  // جسيماتُ الترحيب الذهبيّة — تتوقّف خارج الشاشة وعند إخفاء التبويب
+  // جسيماتُ الترحيب الذهبيّة — أوّلَ زيارةٍ في الجلسة، ثمّ تهدأ وتختفي بعد ثوانٍ
+  // (لا حركةَ دائمة على صفحة عمل)، وتتوقّف خارج الشاشة وعند إخفاء التبويب.
   var canvas = document.querySelector('.db-hero-fx');
-  if (canvas && !calm && canvas.getContext) {
+  if (canvas && (calm || !firstVisit)) canvas.hidden = true;
+  if (canvas && !calm && firstVisit && canvas.getContext) {
+    setTimeout(function () {
+      canvas.classList.add('is-resting');
+      setTimeout(function () { visible = false; run(); canvas.hidden = true; }, 1300);
+    }, 7000);
     var ctx = canvas.getContext('2d'), dots = [], w = 0, h = 0, raf = 0, visible = true;
     var resize = function () {
       var r = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -66,7 +80,7 @@
         if (d.x < -4) d.x = w + 4; else if (d.x > w + 4) d.x = -4;
         ctx.beginPath();
         ctx.arc(d.x, d.y, d.r, 0, 6.283);
-        ctx.fillStyle = 'rgba(224,184,74,' + d.a + ')';
+        ctx.fillStyle = 'rgba(242,193,78,' + d.a + ')';
         ctx.fill();
       }
       raf = requestAnimationFrame(frame);

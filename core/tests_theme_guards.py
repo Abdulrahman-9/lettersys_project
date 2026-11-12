@@ -75,7 +75,21 @@ class ThemePagesTests(TestCase):
     def test_a_page_not_yet_migrated_stays_out_of_the_dark(self):
         user = get_user_model().objects.create_user('theme_clerk', password='pw-theme-1111')
         self.client.force_login(user)
-        html = self.client.get(reverse('dashboard')).content.decode('utf-8')
+        html = self.client.get(reverse('notifications')).content.decode('utf-8')
         self.assertIn('<html lang="ar" dir="rtl">', html)
         self.assertNotIn('data-lx-page', html.split('<head>')[0])
-        self.assertNotIn('data-theme-toggle', html)
+        # زرّ الوضع في الشريط العلويّ لكلّ صفحة، مخفيٌّ ما لم تُنقل الصفحة (ولا lxTheme فيها)
+        self.assertRegex(html, r'<button[^>]*class="lx-theme-toggle lx-shell-toggle"[^>]*data-theme-toggle')
+        theme = _read('static/css/theme.css')
+        self.assertIn('.lx-shell-toggle { display: none;', theme)
+        self.assertIn('html[data-lx-page="v2"] .lx-shell-toggle { display: inline-grid; }', theme)
+
+    def test_the_shell_carries_the_unified_groups_and_account_card(self):
+        user = get_user_model().objects.create_user('theme_clerk2', password='pw-theme-2222')
+        self.client.force_login(user)
+        html = self.client.get(reverse('dashboard')).content.decode('utf-8')
+        for gid in ('navgWork', 'navgArchive'):
+            self.assertIn(f'id="{gid}"', html)
+        self.assertIn('class="app-sidebar-account"', html)
+        self.assertIn(reverse('password_change'), html)
+        self.assertNotIn('class="app-topbar-user"', html)

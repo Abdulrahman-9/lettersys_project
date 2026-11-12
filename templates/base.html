@@ -59,10 +59,10 @@
     <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}?v=20260705a" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'vendor/cairo/cairo.css' %}?v=20260705a">
     <!-- الهويّة الموحّدة: رموزُ الوضعين وتطبيقُها على Bootstrap في الصفحات المنقولة -->
-    <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261111-theme4">
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261111-shell1">
     <!-- Design System (موحد للألوان والمسافات) -->
     <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260927">
-    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261111-theme1">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261111-shell3">
     <!-- مكوّنات واجهة محايدة اللون (مستوحاة من صفحة الدخول) — اختيارية عبر أصناف .btn-brand/.card-brand/.field-brand -->
     <link rel="stylesheet" href="{% static 'css/brand-components.css' %}?v=20260705c">
     
@@ -88,7 +88,7 @@
     </style>
     
     {# Optional per-page CSS block (for legacy templates) #}
-    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261112-c3">{% endif %}
+    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261112-shell1">{% endif %}
     {% block extra_css %}{% endblock %}
 
     {% block extra_head %}{% endblock %}
@@ -105,27 +105,32 @@
         <button type="button" class="app-topbar-menu d-xl-none" data-bs-toggle="offcanvas" data-bs-target="#appNav" aria-controls="appNav" aria-haspopup="dialog"><i class="bi bi-list" aria-hidden="true"></i><span>القائمة</span></button>
         <a class="navbar-brand d-flex align-items-center gap-2"
            href="{% if nav.system_admin %}{% url 'system_centre' %}{% elif nav.password_change_required %}{% url 'password_change' %}{% else %}{% url 'dashboard' %}{% endif %}">
-          <img src="{% static 'img/md-o-c-logo.png' %}" alt="الشركة" style="height: 40px; width: auto;">
+          {# علامةُ الشركة الشفّافة عالية الدقّة (مقتطعة من mdoc-logo-mark بلا الاسم) بدل صورة 40px البيضاء #}
+          <img class="app-topbar-logo" src="{% static 'img/mdoc-mark.png' %}?v=20261111" alt="الشركة" width="40" height="40">
           <span class="brand-text">{{ system_settings.app_name|default:'نظام الكتب' }}</span>
         </a>
+        {% comment %}
+          زرّ الوضع أعلى اليمين بجانب الشعار (قرار المالك 11-11). موجودٌ في كلّ صفحة لكنّه
+          لا يظهر إلّا في الصفحات المنقولة (theme.css: .lx-shell-toggle) — فلا يقلب صفحةً
+          لم تُنقل بعدُ إلى نصف داكنة؛ وtheme.js لا يعمل حيث لا يُعرَّف lxTheme.
+        {% endcomment %}
+        <button type="button" class="lx-theme-toggle lx-shell-toggle" data-theme-toggle aria-pressed="false" aria-label="الوضع الداكن" title="الوضع الداكن">
+          <svg class="lx-sun" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="lx-moon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
         <div class="app-topbar-copy">{{ system_settings.brand_subtitle|default:'أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة' }}</div>
       </div>
       <div class="app-topbar-actions">
         {% if request.user.is_authenticated %}
         {% if not nav.password_change_required %}
         <a class="app-topbar-alert" href="{% url 'notifications' %}">
-          <i class="bi bi-bell"></i>
+          <i class="bi bi-bell" aria-hidden="true"></i>
           <span class="app-topbar-label">التنبيهات</span>
           {% if navbar_unread_notifications %}
           <span class="app-topbar-alert-badge">{{ navbar_unread_notifications }}</span>
           {% endif %}
         </a>
         {% endif %}
-        <a class="app-topbar-user" href="{% url 'password_change' %}" title="تغيير كلمة المرور" style="text-decoration:none;color:inherit">
-          <i class="bi bi-person-circle"></i>
-          <span>{{ request.user.get_full_name|default:request.user.username }}</span>
-          <i class="bi bi-key small opacity-75" aria-hidden="true"></i>
-        </a>
         {% else %}
         <a class="btn btn-sm btn-primary rounded-pill" href="{% url 'login' %}"><i class="bi bi-box-arrow-in-left me-1"></i>تسجيل الدخول</a>
         {% endif %}
@@ -151,65 +156,74 @@
               <span>تغيير كلمة المرور</span>
             </a>
             {% else %}
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" href="{% url 'dashboard' %}" title="لوحة التحكم">
-              <i class="bi bi-grid-1x2-fill"></i>
-              <span>لوحة التحكم</span>
-            </a>
-            {% if nav.enter %}<a class="app-sidebar-link{% if request.resolver_match.url_name == 'extraction-smart-desktop' or request.resolver_match.url_name == 'extraction-results-ui' %} active{% endif %}" href="{% url 'extraction-smart-desktop' %}" title="الإدخال الذكي">
-              <i class="bi bi-upc-scan"></i>
-              <span>الإدخال الذكي</span>
-            </a>{% endif %}
             {% comment %}
-              الطابورُ الشخصيّ أوّلاً: هو ما يفتحه الموظّفُ صباحاً. وطاولةُ
-              الوارد تحته لأنّ جمهورَها أضيق (مختصُّ البريد ورئيسُ القسم) —
-              وحارسُها في العرض لا في القالب، فالرابطُ ظاهرٌ والدخولُ محروس.
+              الشريطُ الموحّد (الخيار أ، 11-11): فعلٌ أساسيٌّ واحد ثمّ ثلاث مجموعات معنونة.
+              كلُّ رابطٍ بحارسه من nav_gates (core/scoping) — الرابطُ الظاهر صفحةٌ تُفتح.
+              التنبيهاتُ في الشريط العلويّ وحده (كانت مكرّرة في الموضعين).
             {% endcomment %}
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'my_today' %} active{% endif %}" href="{% url 'my_today' %}" title="ما يخصّني اليوم">
-              <i class="bi bi-person-check"></i>
-              <span>ما يخصّني اليوم</span>
-            </a>
-            {% if nav.desk %}
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'desk_board' or request.resolver_match.url_name == 'desk_ledger' or request.resolver_match.url_name == 'desk_handover' %} active{% endif %}" href="{% url 'desk_board' %}" title="طاولة البريد">
-              <i class="bi bi-inboxes"></i>
-              <span>طاولة البريد</span>
+            {% if nav.enter %}
+            <a class="app-sidebar-cta{% if request.resolver_match.url_name == 'extraction-smart-desktop' or request.resolver_match.url_name == 'extraction-results-ui' %} active{% endif %}" href="{% url 'extraction-smart-desktop' %}" title="إدخال كتاب"{% if request.resolver_match.url_name == 'extraction-smart-desktop' %} aria-current="page"{% endif %}>
+              <i class="bi bi-plus-lg" aria-hidden="true"></i>
+              <span>إدخال كتاب</span>
             </a>
             {% endif %}
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' %} active{% endif %}" href="{% url 'book_unified' %}" title="قائمة الكتب">
-              <i class="bi bi-list-ul"></i>
-              <span>قائمة الكتب</span>
-            </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dossier_list' or request.resolver_match.url_name == 'dossier_detail' %} active{% endif %}" href="{% url 'dossier_list' %}" title="الأضابير">
-              <i class="bi bi-folder2-open"></i>
-              <span>الأضابير</span>
-            </a>
+            <div class="app-sidebar-group" role="group" aria-labelledby="navgWork">
+              <div class="app-sidebar-gtitle" id="navgWork">عملي</div>
+              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" href="{% url 'dashboard' %}" title="لوحة التحكم">
+                <i class="bi bi-grid-1x2-fill" aria-hidden="true"></i>
+                <span>لوحة التحكم</span>
+              </a>
+              {% comment %}
+                «ما يخصّني اليوم» حُذف بقرار المالك (11-04) — لكنّ رابطه يبقى حتّى تُفتح الطاولة
+                لموظّف التنفيذ مقصورةً على وحدته ((ب)6 في جلسة الأدوار)، وإلّا بقي المنفّذ بلا
+                صفحة عمل. يُحذفان معاً في إصدارٍ واحد.
+              {% endcomment %}
+              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'my_today' %} active{% endif %}" href="{% url 'my_today' %}" title="ما يخصّني اليوم">
+                <i class="bi bi-person-check" aria-hidden="true"></i>
+                <span>ما يخصّني اليوم</span>
+              </a>
+              {% if nav.desk %}
+              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'desk_board' or request.resolver_match.url_name == 'desk_ledger' or request.resolver_match.url_name == 'desk_handover' %} active{% endif %}" href="{% url 'desk_board' %}" title="طاولة البريد">
+                <i class="bi bi-inboxes" aria-hidden="true"></i>
+                <span>طاولة البريد</span>
+              </a>
+              {% endif %}
+            </div>
+            <div class="app-sidebar-group" role="group" aria-labelledby="navgArchive">
+              <div class="app-sidebar-gtitle" id="navgArchive">الأرشيف</div>
+              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' %} active{% endif %}" href="{% url 'book_unified' %}" title="كلّ الكتب">
+                <i class="bi bi-journals" aria-hidden="true"></i>
+                <span>كلّ الكتب</span>
+              </a>
+              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dossier_list' or request.resolver_match.url_name == 'dossier_detail' %} active{% endif %}" href="{% url 'dossier_list' %}" title="الأضابير">
+                <i class="bi bi-folder2-open" aria-hidden="true"></i>
+                <span>الأضابير</span>
+              </a>
+              <a class="app-sidebar-link{% if request.resolver_match.url_name in 'mail_hub,mail_sent,mail_inbox,mail_compose,mail_thread,mail_settings,mail_templates,mail_template_new,mail_template_edit' %} active{% endif %}" href="{% if mail_inbox_unread %}{% url 'mail_inbox' %}{% else %}{% url 'mail_sent' %}{% endif %}" title="البريد الإلكتروني">
+                <i class="bi bi-envelope" aria-hidden="true"></i>
+                <span>البريد الإلكتروني</span>
+                {% if mail_inbox_unread %}<span class="app-sidebar-link-badge">{{ mail_inbox_unread }}</span>{% endif %}
+              </a>
+              {% if nav.trash %}
+              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'trash_list' %} active{% endif %}" href="{% url 'trash_list' %}" title="سلة المهملات">
+                <i class="bi bi-trash3" aria-hidden="true"></i>
+                <span>سلة المهملات</span>
+              </a>
+              {% endif %}
+            </div>
+            {% if nav.audit or nav.reports or nav.admin or nav.department_admin %}
+            <div class="app-sidebar-group" role="group" aria-labelledby="navgWatch">
+              <div class="app-sidebar-gtitle" id="navgWatch">الرقابة والقسم</div>
             {% if nav.audit %}
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'audit_log' %} active{% endif %}" href="{% url 'audit_log' %}" title="سجلّ الحركات">
-              <i class="bi bi-clock-history"></i>
+              <i class="bi bi-clock-history" aria-hidden="true"></i>
               <span>سجلّ الحركات</span>
             </a>
             {% endif %}
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'notifications' %} active{% endif %}" href="{% url 'notifications' %}" title="التنبيهات">
-              <i class="bi bi-bell-fill"></i>
-              <span>التنبيهات</span>
-              {% if navbar_unread_notifications %}
-              <span class="app-sidebar-link-badge">{{ navbar_unread_notifications }}</span>
-              {% endif %}
-            </a>
-            <a class="app-sidebar-link{% if request.resolver_match.url_name in 'mail_hub,mail_sent,mail_inbox,mail_compose,mail_thread,mail_settings,mail_templates,mail_template_new,mail_template_edit' %} active{% endif %}" href="{% if mail_inbox_unread %}{% url 'mail_inbox' %}{% else %}{% url 'mail_sent' %}{% endif %}" title="البريد">
-              <i class="bi bi-envelope-fill"></i>
-              <span>البريد</span>
-              {% if mail_inbox_unread %}<span class="app-sidebar-link-badge" style="background:#dc3545">{{ mail_inbox_unread }}</span>{% endif %}
-            </a>
             {% if nav.reports %}
             <a class="app-sidebar-link{% if request.resolver_match.url_name == 'reports' %} active{% endif %}" href="{% url 'reports' %}" title="التقارير">
-              <i class="bi bi-graph-up-arrow"></i>
+              <i class="bi bi-graph-up-arrow" aria-hidden="true"></i>
               <span>التقارير</span>
-            </a>
-            {% endif %}
-            {% if nav.trash %}
-            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'trash_list' %} active{% endif %}" href="{% url 'trash_list' %}" title="سلة المهملات">
-              <i class="bi bi-trash3"></i>
-              <span>سلة المهملات</span>
             </a>
             {% endif %}
             {% if nav.admin %}
@@ -255,6 +269,8 @@
             {% endwith %}
             {% endif %}
             {% endif %}
+            </div>
+            {% endif %}
             {% endif %}
           </nav>
           {% endif %}
@@ -263,19 +279,34 @@
         {% block page_sidebar %}{% endblock %}
 
         {% if request.user.is_authenticated %}
+        {% comment %}
+          بطاقةُ الحساب: من أنا (الاسم · الدور · القسم) وقائمةٌ صغيرة لما يُستعمل نادراً —
+          كلمةُ المرور وتجهيزُ الجهاز — والخروجُ مفصولٌ بالأحمر في آخرها.
+        {% endcomment %}
         <div class="app-sidebar-panel app-sidebar-panel-footer">
-          {% if not nav.password_change_required %}
-          <a class="app-sidebar-link" href="{% url 'device_setup' %}">
-            <i class="bi bi-pc-display" aria-hidden="true"></i><span>تجهيز هذا الجهاز</span>
-          </a>
-          {% endif %}
-          <form method="post" action="{% url 'logout' %}">
-            {% csrf_token %}
-            <button type="submit" class="app-sidebar-logout">
-              <i class="bi bi-box-arrow-left"></i>
-              <span>تسجيل الخروج</span>
+          <div class="dropup app-sidebar-account-wrap">
+            <button type="button" class="app-sidebar-account" data-bs-toggle="dropdown" aria-expanded="false" aria-label="قائمة الحساب: {{ request.user.get_full_name|default:request.user.username }}">
+              <span class="app-sidebar-avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|slice:":1"|upper }}</span>
+              <span class="app-sidebar-account-text">
+                <b dir="auto">{{ request.user.get_full_name|default:request.user.username }}</b>
+                {% if nav.role_label %}<small>{{ nav.role_label }}{% if nav.department_name %} · {{ nav.department_name }}{% endif %}</small>{% endif %}
+              </span>
+              <i class="bi bi-three-dots" aria-hidden="true"></i>
             </button>
-          </form>
+            <ul class="dropdown-menu app-sidebar-account-menu">
+              {% if not nav.password_change_required %}
+              <li><a class="dropdown-item" href="{% url 'password_change' %}"><i class="bi bi-key" aria-hidden="true"></i>تغيير كلمة المرور</a></li>
+              <li><a class="dropdown-item" href="{% url 'device_setup' %}"><i class="bi bi-pc-display" aria-hidden="true"></i>تجهيز هذا الجهاز</a></li>
+              <li><hr class="dropdown-divider"></li>
+              {% endif %}
+              <li>
+                <form method="post" action="{% url 'logout' %}">
+                  {% csrf_token %}
+                  <button type="submit" class="dropdown-item app-sidebar-logout-item"><i class="bi bi-box-arrow-left" aria-hidden="true"></i>تسجيل الخروج</button>
+                </form>
+              </li>
+            </ul>
+          </div>
         </div>
         {% endif %}
       </aside>
@@ -350,7 +381,7 @@
     <!-- نظام إدارة الكتب - JavaScript الحديث -->
     <script src="{% static 'app.js' %}?v=20261111-theme1"></script>
     <!-- زرّ الوضع الفاتح/الداكن — يعمل في الصفحات المنقولة وحدها (حيث يُعرَّف lxTheme) -->
-    <script src="{% static 'js/theme.js' %}?v=20261111-theme1"></script>
+    <script src="{% static 'js/theme.js' %}?v=20261111-shell1"></script>
 
     <!-- Sidebar Mini Toggle -->
     <script>
