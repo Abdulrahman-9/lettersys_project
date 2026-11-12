@@ -183,6 +183,27 @@ class Department(models.Model):
                 return word, key
         return self.LEVEL_BY_DEPTH[min(max(depth, 0), len(self.LEVEL_BY_DEPTH) - 1)]
 
+    @classmethod
+    def unit_level_ids(cls, preview=None):
+        """أقسامُ مستوى الوحدة — آخرُ الشجرة (قرارُ المالك 11‑02: «تقف الشجرةُ عند الوحدة»).
+
+        المستوى من ``level`` (الاسمُ ثمّ العمق)، والعمقُ من خريطةٍ في الذاكرة باستعلامٍ واحد؛
+        وأبوّةٌ دائريّةٌ تنتهي ولا تدور. ``preview``: قسمٌ بتعديلٍ لم يُحفظ (اسمٌ أو أب) يُحسب مكانَ صفّه.
+        """
+        nodes = {node.pk: node for node in cls.objects.only('pk', 'name', 'parent_id')}
+        if preview is not None and preview.pk:
+            nodes[preview.pk] = preview
+
+        def depth(node):
+            steps, seen = 0, set()
+            while node.parent_id in nodes and node.pk not in seen:
+                seen.add(node.pk)
+                node = nodes[node.parent_id]
+                steps += 1
+            return steps
+
+        return {pk for pk, node in nodes.items() if node.level(depth(node))[1] == 'unit'}
+
 
 class UserProfile(models.Model):
     """امتدادُ المستخدم: قسمُه وصفتُه فيه.

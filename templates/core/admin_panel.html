@@ -353,7 +353,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
       <div><h1>مركز إدارة النظام</h1><p>إشراف شامل على الهيكل والحسابات والصلاحيات.</p></div>
       <span class="sp"></span>
       {% if is_superadmin %}<button class="btn" onclick="go('aud')"><i class="bi bi-clock-history"></i>سجلّ الحركات</button>{% endif %}
-      <button class="btn pri" onclick="go('dep')"><i class="bi bi-plus-lg"></i>قسم جديد</button>
+      {% if can_shape_tree %}<button class="btn pri" onclick="go('dep')"><i class="bi bi-plus-lg"></i>قسم جديد</button>{% endif %}
     </div>
   </div>
 
@@ -385,7 +385,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
       <i class="bi bi-shield-lock"></i>
       <div class="n" data-count="{{ sensitive_role_count }}">{{ sensitive_role_count }}</div>
       <div class="l">أدوار حسّاسة</div>
-      <div class="s">رؤساء · بريد/متابعة · أرشيف</div>
+      <div class="s">رؤساء · مختصّو البريد · أرشفة</div>
     </a>
   </div>
 
@@ -462,9 +462,9 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
       <div><h1>الأقسام والهيكل</h1>
         <p>{% if is_superadmin %}المدير العام يرى كلّ الأقسام.{% else %}نطاقك: {{ scope_label }}.{% endif %}</p>
       </div>
-      <button class="btn pri" onclick="openModal('depModal')">
+      {% if can_shape_tree %}<button class="btn pri" onclick="openModal('depModal')">
         <i class="bi bi-plus-lg"></i> قسم / شعبة / وحدة جديدة
-      </button>
+      </button>{% endif %}
     </div>
   </div>
 
@@ -534,7 +534,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
           <label for="modal-dep-parent">تتبع (الأب)</label>
           <select id="modal-dep-parent" name="parent" onchange="updateDepLevel(this)" {% if not is_superadmin %}required{% endif %}>
             {% if is_superadmin %}<option value="">— قسم مستقل —</option>{% else %}<option value="" disabled selected>— اختر الأب —</option>{% endif %}
-            {% for d in active_departments %}<option value="{{ d.pk }}" data-depth="{{ forloop.counter0 }}">{{ d.code }} — {{ d.name }}</option>{% endfor %}
+            {% for d in parent_departments %}<option value="{{ d.pk }}" data-depth="{{ forloop.counter0 }}">{{ d.code }} — {{ d.name }}</option>{% endfor %}
           </select>
         </div>
         {% if is_superadmin %}
@@ -582,10 +582,9 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
           <label for="depEditParent">يتبع</label>
           <select name="parent" id="depEditParent">
             {% if is_superadmin %}<option value="">— مستقل —</option>{% endif %}
+            {# الوحدةُ والمعطَّلُ لا يُختاران أباً، ويبقيان ليظهر الأبُ الحاليّ — والمعطَّلُ لا يُرسَل فيبقى الأب #}
             {% for d in all_departments %}
-              {% if d.is_active %}
-              <option value="{{ d.pk }}">{{ d.code }} — {{ d.name }}</option>
-              {% endif %}
+              <option value="{{ d.pk }}"{% if not d.is_active or d.pk in unit_ids %} data-locked="1" disabled{% endif %}>{{ d.code }} — {{ d.name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -1079,7 +1078,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
             <option value="{{ value }}"{% if create_form_values.role == value %} selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
-          <small>الأرشيفيُّ ومشرف المتابعة يُطّلعان على محتوى الكتب السرّية في قسمهما.</small>
+          <small>رئيسُ القسم ومختصُّ البريد ومسؤولُ الأرشفة يفتحون سرّيَّ قسمهم.</small>
         </div>
       </div>
       <div style="display:flex;gap:.5rem;justify-content:flex-end">
@@ -1107,6 +1106,7 @@ const roots=deps.filter(d=>!byId.has(d.pid));   /* شجرةُ الرئيس: جذ
 const lvc={'مكتب':'o','قسم':'q','شعبة':'s','وحدة':'w'};
 const LV_SHORT={'مكتب':'م','قسم':'ق','شعبة':'ش','وحدة':'و'};
 const IS_ADMIN={{ is_superadmin|yesno:"true,false" }};
+const CAN_SHAPE={{ can_shape_tree|yesno:"true,false" }};   // مسؤولُ الشعبة أو الوحدة لا يعدّل الهيكل (unit.add)
 const ROOT_ID={{ manager_root_id|default:"null" }};
 const params=new URLSearchParams(location.search);
 /* أسماءُ الأقسام ورموزُها نصٌّ يكتبه رئيسُ القسم — لا تدخل innerHTML إلّا مُهرَّبة */
@@ -1230,8 +1230,8 @@ function buildDTreeNode(d){
       ${d.e?'':'<span class="badge warn" title="لا جهةَ في الدليل — لا يُخاطَب">بلا جهة</span>'}
       ${d.active?'':'<span class="badge off">معطّل</span>'}
       <span class="dtree-meta"><span>${d.b} كتاب</span><span>${d.u} موظّف</span>${d.o?`<span class="bad">${d.o} متأخّر</span>`:''}</span>
-      <button type="button" class="btn sm dtree-edit" style="flex-shrink:0;padding:.25rem .5rem"
-        data-id="${d.id}" aria-label="تعديل ${esc(d.n)}"><i class="bi bi-pencil" aria-hidden="true"></i></button>
+      ${CAN_SHAPE?`<button type="button" class="btn sm dtree-edit" style="flex-shrink:0;padding:.25rem .5rem"
+        data-id="${d.id}" aria-label="تعديل ${esc(d.n)}"><i class="bi bi-pencil" aria-hidden="true"></i></button>`:''}
     </div>
     ${hasKids?`<ul class="dtree-children" id="${uid}">${kids.map(buildDTreeNode).join('')}</ul>`:''}
   </li>`;
@@ -1338,7 +1338,7 @@ function openDepEdit(d){
   const banned=new Set([d.id]);
   (function walk(id){kidsOf(id).forEach(k=>{banned.add(k.id);walk(k.id);});})(d.id);
   const sel=$('#depEditParent');
-  [...sel.options].forEach(o=>{const no=o.value!==''&&banned.has(+o.value);o.hidden=no;o.disabled=no;});
+  [...sel.options].forEach(o=>{const no=o.value!==''&&banned.has(+o.value);o.hidden=no;o.disabled=no||o.dataset.locked==='1';});
   sel.value=d.pid!=null&&!banned.has(d.pid)?String(d.pid):'';
   sel.disabled=isRoot;            /* المعطَّلُ لا يُرسَل ⟵ الأبُ «لم يتغيّر» */
   $('#depEditParentGroup').hidden=isRoot;

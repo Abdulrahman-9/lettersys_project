@@ -236,8 +236,8 @@ class WiredOnlyTests(RolesPageCase):
     """صفحةٌ تقول «يسري الآن» لا تقبل إلّا ما يسري فعلاً (11-11: 26 من 28 لم يُربط حارسها)."""
 
     def test_an_unwired_capability_is_refused_without_a_row(self):
-        # (ب)6 وصل التقاريرَ — والأمثلةُ مفاتيحُ لم يُربط حارسُها بعد
-        for cell in ('entry:archive.complete:1', 'mail:book.comment:0', 'unit:desk.mine:0'):
+        # (ج‑4) وصل «طاولتي» ومفاتيحَ الإدارة — والأمثلةُ مفاتيحُ لم يُربط حارسُها بعد
+        for cell in ('entry:archive.complete:1', 'mail:book.comment:0', 'head:archive.complete:1'):
             with self.subTest(cell=cell):
                 self.assertEqual(self.post(change=cell).status_code, 403)
         self.assertEqual(self.post(change=['entry:referral.receive:1', 'entry:archive.complete:1']).status_code, 403)

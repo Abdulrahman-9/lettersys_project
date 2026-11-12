@@ -37,7 +37,10 @@ def create_department(*, name, code, parent=None, by, entity=None):
     """
     from core.models import Department, Entity
 
+    _guard_tree_shaper(by)
     _guard_department_parent(by, parent)
+    if parent is not None and parent.pk in Department.unit_level_ids():
+        raise ValidationError('الوحدةُ آخرُ الشجرة: لا يتبعها قسم.')
     is_admin = _is_account_admin(by)
     if not is_admin and entity is not None:
         raise PermissionDenied('رئيسُ القسم لا يربط جهاتٍ عامةً بأقسامه.')
@@ -81,6 +84,7 @@ def update_department(department, *, by, name=None, code=None, parent=UNSET,
     from core.models import Department
 
     _guard_department(by, department)
+    _guard_tree_shaper(by)
     changes = {}
 
     if name is not None and name.strip() and name.strip() != department.name:
@@ -98,6 +102,17 @@ def update_department(department, *, by, name=None, code=None, parent=UNSET,
         if not is_active and department.children.filter(is_active=True).exists():
             raise ValidationError('لا يُعطَّل قسمٌ له شُعبٌ نشطة.')
         changes['is_active'] = department.is_active = is_active
+    # الاسمُ والأبُ يغيّران المستوى، وإعادةُ التفعيل تُعيد قسماً تحت أبٍ صار وحدةً وهو معطَّل؛
+    # والنقلُ يُعمّق الشجرةَ كلَّها فقد يصير حفيدٌ بلا كلمةِ مستوى وحدةً وله أبناء (مراجعةُ فيبل).
+    if 'name' in changes or 'parent' in changes or changes.get('is_active') is True:
+        from core.scoping import subtree_ids
+
+        units = Department.unit_level_ids(preview=department)
+        if department.parent_id in units:
+            raise ValidationError('الوحدةُ آخرُ الشجرة: لا يتبعها قسم.')
+        if Department.objects.filter(parent_id__in=units & set(subtree_ids(department.pk)),
+                                     is_active=True).exists():
+            raise ValidationError('بهذا تصير وحدةٌ ولها أقسامٌ تتبعها — والوحدةُ آخرُ الشجرة.')
 
     if not changes:
         return department
@@ -457,6 +472,14 @@ def _is_account_admin(user):
     from core.scoping import can_manage_accounts
 
     return can_manage_accounts(user)
+
+
+def _guard_tree_shaper(by):
+    """إضافةُ الأقسام وتسميتُها وتبعيّتُها (``unit.add``) لرئيس القسم ومدير النظام."""
+    from core.scoping import can_add_units
+
+    if not can_add_units(by):
+        raise PermissionDenied('هيكلُ الأقسام لرئيس القسم ومدير النظام؛ مسؤولُ الشعبة أو الوحدة يدير موظّفيه.')
 
 
 def _guard_department_parent(by, parent):

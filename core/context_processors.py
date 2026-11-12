@@ -84,7 +84,7 @@ def nav_gates(request):
     from core.scoping import (can_archive, can_enter_book, can_manage_accounts, can_manage_departments, can_open_trash,
                               can_manage_mail, can_operate_mail,
                               can_manage_system, can_restore_system, can_use_desk, can_use_ledger,
-                              can_use_system_admin, can_view_audit, can_view_reports)
+                              can_use_my_desk, can_use_system_admin, can_view_audit, can_view_reports)
     profile = getattr(user, 'profile', None)
     must_change = bool(profile and profile.must_change_password)
     system_admin = can_use_system_admin(user) and not must_change
@@ -104,6 +104,8 @@ def nav_gates(request):
         'desk': can_use_desk(user),
         # الدفترُ وكشفُ التسليم بمفتاحهما ((ب)6) — المنفِّذ يرى الطاولةَ لا الدفتر
         'ledger': can_use_ledger(user),
+        # «طاولتي» لمسؤول الشعبة أو الوحدة ((ج‑4)) — طوابيرُ شجرته بلا الدفتر
+        'my_desk': can_use_my_desk(user),
         'audit': can_view_audit(user),
         'reports': can_view_reports(user),
         # السلّةُ مُنطَّقةٌ أصلاً بـ`scope_books_for`، والاستعادةُ بـ

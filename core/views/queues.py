@@ -29,8 +29,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from core.models import Book, BookHistory, BookReferral, CustodyEvent
-from core.scoping import (ACCESS_STUB, STUB_TITLE, can_send_referral, can_use_desk, has_capability,
+from core.models import Book, BookHistory, BookReferral, CustodyEvent, Department
+from core.scoping import (ACCESS_STUB, STUB_TITLE, can_send_referral, can_use_desk, can_use_my_desk, has_capability,
                           is_privileged, scope_books_for, scope_referrals_for,
                           secret_access, subtree_ids, user_department_id)
 
@@ -203,31 +203,15 @@ def desk_board(request):
         open_here = open_here.filter(
             Q(to_department_id__in=mine) | Q(from_department_id__in=mine))
 
-    # «غيرُ مستلَم» حالةٌ لا حساب: الصفُّ أُرسل ولم يُؤشَّر استلامُه بعد.
-    unreceived = open_here.filter(status=BookReferral.SENT)
-    overdue = open_here.filter(purpose=BookReferral.ACTION, due_date__lt=today)
-    due_today = open_here.filter(purpose=BookReferral.ACTION, due_date=today)
     # «بلا ردّ» = غرضُه التنفيذ ولم يُقفَل بجوابٍ ولا موعدَ له يُطارَد به.
     no_reply = open_here.filter(purpose=BookReferral.ACTION,
                                 closed_by_link__isnull=True, due_date__isnull=True)
-    received_action = open_here.filter(
-        status=BookReferral.RECEIVED, purpose=BookReferral.ACTION,
-    )
 
     visible_books = scope_books_for(request.user, Book.objects.all())
     secret_open = open_here.filter(book__in=visible_books.exclude(secret_level='normal'))
     recent_books = _recent_desk_books(request.user, dept_id, mine)
 
-    queues = [
-        {'key': 'overdue', 'label': 'متأخّر', 'tone': 'danger',
-         'hint': 'مرّ موعدُه ولم يُنجَز', **_queue(overdue, request.user, limit=_limit_for(request, 'overdue'))},
-        {'key': 'unreceived', 'label': 'غير مُستلَم', 'tone': 'warn',
-         'hint': 'أُرسل ولم تُؤشَّر عهدتُه', **_queue(unreceived, request.user, limit=_limit_for(request, 'unreceived'))},
-        {'key': 'received_action', 'label': 'مستلَم وقيد الإنجاز', 'tone': 'accent',
-         'hint': 'الوصول مؤشّر؛ توجيه التنفيذ ما زال مفتوحاً',
-         **_queue(received_action, request.user, limit=_limit_for(request, 'received_action'))},
-        {'key': 'today', 'label': 'يستحقّ اليوم', 'tone': 'accent',
-         'hint': 'موعدُه اليوم', **_queue(due_today, request.user, limit=_limit_for(request, 'today'))},
+    queues = _work_queues(request, open_here, today) + [
         {'key': 'no_reply', 'label': 'بلا ردّ', 'tone': 'muted',
          'hint': 'للتنفيذ وبلا جوابٍ ولا موعد', **_queue(no_reply, request.user, limit=_limit_for(request, 'no_reply'))},
         {'key': 'secret', 'label': 'سرّي مفتوح', 'tone': 'secret',
@@ -238,16 +222,76 @@ def desk_board(request):
     if active_queue != 'recent' and selected_queue is None:
         raise Http404('تصنيف المتابعة غير موجود.')
 
+    queues_empty = not any(q.get('total') for q in queues)
     return render(request, 'core/desk_board.html', {
         'queues': queues,
         'active_queue': active_queue,
         'selected_queue': selected_queue,
         # فراغٌ واحدٌ بمخرج بدل خمس بطاقاتٍ تقول «لا شيء هنا» — كـ«ما يخصّني» (تدقيقُ نيلسن D#24)
-        'queues_empty': not any(q.get('total') for q in queues),
+        'queues_empty': queues_empty,
+        'show_blank': queues_empty and active_queue == 'recent',
+        'show_recent': True,
         'today': today,
         'department_id': dept_id,
         'recent_books': recent_books,
         'recent_book_limit': RECENT_BOOK_LIMIT,
+    })
+
+
+def _work_queues(request, open_here, today):
+    """طوابيرُ العمل الأربعة — مصدرُها واحدٌ لطاولة البريد و«طاولتي»."""
+    # «غيرُ مستلَم» حالةٌ لا حساب: الصفُّ أُرسل ولم يُؤشَّر استلامُه بعد.
+    unreceived = open_here.filter(status=BookReferral.SENT)
+    overdue = open_here.filter(purpose=BookReferral.ACTION, due_date__lt=today)
+    due_today = open_here.filter(purpose=BookReferral.ACTION, due_date=today)
+    received_action = open_here.filter(status=BookReferral.RECEIVED, purpose=BookReferral.ACTION)
+    return [
+        {'key': 'overdue', 'label': 'متأخّر', 'tone': 'danger',
+         'hint': 'مرّ موعدُه ولم يُنجَز', **_queue(overdue, request.user, limit=_limit_for(request, 'overdue'))},
+        {'key': 'unreceived', 'label': 'غير مُستلَم', 'tone': 'warn',
+         'hint': 'أُرسل ولم تُؤشَّر عهدتُه', **_queue(unreceived, request.user, limit=_limit_for(request, 'unreceived'))},
+        {'key': 'received_action', 'label': 'مستلَم وقيد الإنجاز', 'tone': 'accent',
+         'hint': 'الوصول مؤشّر؛ توجيه التنفيذ ما زال مفتوحاً',
+         **_queue(received_action, request.user, limit=_limit_for(request, 'received_action'))},
+        {'key': 'today', 'label': 'يستحقّ اليوم', 'tone': 'accent',
+         'hint': 'موعدُه اليوم', **_queue(due_today, request.user, limit=_limit_for(request, 'today'))},
+    ]
+
+
+@login_required
+def my_desk(request):
+    """«طاولتي» — مسؤولُ الشعبة أو الوحدة (قرارُ المالك 11‑02): ما أُحيل إلى شجرته فقط.
+
+    طاولةُ عملٍ لا رقابة: طوابيرُ العمل الأربعة على ما وصل إلى وحدته وما يتبعها، بلا «آخر القيود»
+    ولا «بلا ردّ» ولا «السرّيّ المفتوح»، وبلا الدفتر والكشف. والسرّيُّ يظهر رقماً بلا موضوع (``_shape``).
+    """
+    if not can_use_my_desk(request.user):
+        raise PermissionDenied('«طاولتي» لمسؤول الشعبة أو الوحدة.')
+
+    today = timezone.localdate()
+    dept_id = user_department_id(request.user)
+    open_here = scope_referrals_for(request.user, BookReferral.objects.filter(
+        status__in=BookReferral.OPEN_STATUSES,
+        to_department_id__in=subtree_ids(dept_id) if dept_id else [],
+    ))
+    queues = _work_queues(request, open_here, today)
+    queues_empty = not any(q.get('total') for q in queues)
+    asked = request.GET.get('queue') or request.GET.get('expand')
+    selected_queue = next((q for q in queues if q['key'] == asked), None)
+    if asked and selected_queue is None:
+        raise Http404('تصنيف المتابعة غير موجود.')
+    if selected_queue is None and not queues_empty:
+        selected_queue = next(q for q in queues if q['total'])
+    return render(request, 'core/desk_board.html', {
+        'my_desk': True,
+        'department': Department.objects.filter(pk=dept_id).first(),
+        'queues': queues,
+        'active_queue': selected_queue['key'] if selected_queue else None,
+        'selected_queue': selected_queue,
+        'queues_empty': queues_empty,
+        'show_blank': queues_empty,
+        'show_recent': False,
+        'today': today,
     })
 
 

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}طاولة البريد{% endblock %}
+{% block title %}{% if my_desk %}طاولتي{% else %}طاولة البريد{% endif %}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20261012-no-archive-desk">
@@ -10,7 +10,11 @@
 
 {% block content %}
 <div class="queues-page desk-workspace">
+  {% if my_desk %}
+  {% include "core/_desk_header.html" with desk_page="mine" desk_title="طاولتي" desk_description="ما أُحيل إلى وحدتك وما يتبعها: ما ينتظر الاستلام، وما قيد الإنجاز، وما تأخّر أو يستحقّ اليوم." %}
+  {% else %}
   {% include "core/_desk_header.html" with desk_page="board" desk_title="طاولة البريد" desk_description="ابدأ بما يحتاج انتباهك، ثم تابع استلام الكتب وتفريقها من مكان واحد." %}
+  {% endif %}
 
   <section class="desk-priorities" aria-labelledby="desk-priorities-heading">
     <div class="desk-section-head">
@@ -18,14 +22,14 @@
       <p>اختر تصنيفاً لعرض تفاصيله؛ قد يظهر الكتاب في أكثر من تصنيف.</p>
     </div>
     <nav class="desk-queue-tabs" aria-label="تصنيفات متابعة الوارد">
-      <a href="{% url 'desk_board' %}#recent-books"{% if active_queue == "recent" %} aria-current="page"{% endif %}><span>آخر القيود</span><i class="bi bi-list-ul" aria-hidden="true"></i></a>
+      {% if show_recent %}<a href="{% url 'desk_board' %}#recent-books"{% if active_queue == "recent" %} aria-current="page"{% endif %}><span>آخر القيود</span><i class="bi bi-list-ul" aria-hidden="true"></i></a>{% endif %}
       {% for queue in queues %}
       <a class="qb-{{ queue.tone }}" data-desk-queue="{{ queue.key }}" href="?queue={{ queue.key }}#q-{{ queue.key }}"{% if active_queue == queue.key %} aria-current="page"{% endif %}><span>{{ queue.label }}</span><b>{{ queue.total }}</b></a>
       {% endfor %}
     </nav>
   </section>
 
-  {% if queues_empty and active_queue == "recent" %}
+  {% if show_blank %}
     <div class="qb-blank">
       <i class="bi bi-check2-circle qb-blank-icon" aria-hidden="true"></i>
       <h2>الطاولةُ نظيفة</h2>
@@ -39,7 +43,7 @@
 
   {% if selected_queue %}
   {% include "core/_desk_queue_panel.html" %}
-  {% else %}
+  {% elif show_recent %}
   <section class="qb-recent" id="recent-books" aria-labelledby="recent-books-heading">
     <div class="qb-recent-head">
       <div>

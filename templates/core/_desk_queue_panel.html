@@ -47,7 +47,7 @@
   <div class="qb-recent-empty">
     <i class="bi bi-check2-circle" aria-hidden="true"></i>
     <p>لا إحالات في هذا التصنيف حالياً.</p>
-    <a class="qb-act-link" href="{% url 'desk_board' %}#recent-books">العودة إلى آخر القيود</a>
+    {% if not my_desk %}<a class="qb-act-link" href="{% url 'desk_board' %}#recent-books">العودة إلى آخر القيود</a>{% endif %}
   </div>
   {% endif %}
 </section>

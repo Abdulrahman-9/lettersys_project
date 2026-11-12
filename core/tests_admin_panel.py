@@ -676,7 +676,7 @@ class MergedPanelTests(AdminPanelTestCase):
     def test_the_empty_row_spans_every_column(self):
         import re
 
-        for user, columns in ((self.root, 10), (self.manager, 8)):
+        for user, columns in ((self.root, 11), (self.manager, 9)):   # (ج‑4) عمودُ «تنفيذ»
             with self.subTest(user=user.username):
                 body = self._get(user, tab='users').content.decode('utf-8')
                 head = body.split('<table id="userTable">', 1)[1].split('</thead>', 1)[0]

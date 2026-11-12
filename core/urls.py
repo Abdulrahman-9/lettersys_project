@@ -95,6 +95,7 @@ urlpatterns = [
          name="verify_signature"),
     # طاولةُ البريد — اللوحةُ والورقتان اللتان يطلبهما الكاتبُ ليترك دفترَه
     path("desk/", queues.desk_board, name="desk_board"),
+    path("desk/mine/", queues.my_desk, name="desk_mine"),
     path("desk/book/<int:book_id>/referral/<int:referral_id>/cancel/",
          queues.cancel_desk_referral, name="desk_cancel_referral"),
     path("my/today/", queues.my_today, name="my_today"),

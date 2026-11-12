@@ -261,6 +261,14 @@ def can_use_ledger(user) -> bool:
     return has_capability(user, 'desk.ledger')
 
 
+def can_use_my_desk(user) -> bool:
+    """«طاولتي» — مسؤولُ الشعبة أو الوحدة (قرارُ المالك 11‑02): طوابيرُ عمل شجرته بلا الدفتر والكشف.
+
+    والشجرةُ من قسمه: بلا قسمٍ طاولةٌ فارغةٌ أبداً — ومديرُ النظام يملك المفاتيحَ كلَّها.
+    """
+    return has_capability(user, 'desk.mine') and user_department_id(user) is not None
+
+
 def _department_custodian(user) -> bool:
     """أهو أمينُ ورقِ قسمه؟ — رئيسُه أو مختصُّ بريده أو أرشيفيُّه.
 
@@ -630,15 +638,36 @@ def managed_department_ids(user):
 
     if can_manage_accounts(user):
         return list(Department.objects.values_list('pk', flat=True))
-    if is_department_head(user):
+    if can_manage_staff(user):
         return subtree_ids(user_department_id(user))
     return []
 
 
+def can_manage_staff(user) -> bool:
+    """«إدارة موظّفي نطاقه» — رئيسُ القسم ومسؤولُ الشعبة أو الوحدة (مقفل)."""
+    return has_capability(user, 'staff.manage')
+
+
+def can_grant_office_roles(user) -> bool:
+    """منحُ مختصّ البريد والأرشفة والمدخل — رئيسُ القسم وحده (قرارُ المالك 11‑02، مقفل)."""
+    return has_capability(user, 'grant.office')
+
+
+def can_grant_basic_roles(user) -> bool:
+    """منحُ موظّف التنفيذ والقارئ — رئيسُ القسم ومسؤولُ الشعبة أو الوحدة (مقفل)."""
+    return has_capability(user, 'grant.basic')
+
+
+def can_add_units(user) -> bool:
+    """إضافةُ الأقسام وتسميتُها وتبعيّتُها — رئيسُ القسم ومديرُ النظام؛ ومسؤولُ الشعبة أو الوحدة
+    يدير موظّفيه لا هيكلَه (قرارُ المالك 11‑02، مقفل)."""
+    return has_capability(user, 'unit.add')
+
+
 def can_manage_departments(user) -> bool:
-    """أيحقّ له فتحَ إدارة الأقسام؟ مديرُ النظام أو رئيسُ قسمٍ مسند."""
+    """أيحقّ له فتحَ إدارة الأقسام؟ مديرُ النظام أو مَن يدير موظّفي قسمٍ مسند."""
     return can_manage_accounts(user) or bool(
-        is_department_head(user) and user_department_id(user))
+        can_manage_staff(user) and user_department_id(user))
 
 
 def can_manage_department(user, department) -> bool:
@@ -647,7 +676,7 @@ def can_manage_department(user, department) -> bool:
     if can_manage_accounts(user):
         return True
     return bool(
-        is_department_head(user)
+        can_manage_staff(user)
         and department_id is not None
         and department_id in subtree_ids(user_department_id(user))
     )
@@ -656,17 +685,24 @@ def can_manage_department(user, department) -> bool:
 #: ما يمنحه رئيسُ القسم لمن في شجرته (قرارُ المالك 2026‑10‑26)، وما فوقه لمدير
 #: النظام وحدَه. **مصدرٌ واحد** لخدمة الإدارة وقراءتِها ونموذجِ الإنشاء — كانت
 #: القاعدةُ في ثلاثة مواضع، والقالبُ يقرأ ``grantable_roles`` لا شرطَ دور.
-HEAD_GRANTABLE_ROLES = frozenset({'viewer', 'entry', 'archivist', 'controller'})
-ADMIN_ONLY_ROLES = frozenset({'department_head', 'company_archivist', 'executor'})
+#: مختصُّ البريد والأرشفة والمدخل (``grant.office``) · موظّفُ التنفيذ والقارئ (``grant.basic``).
+OFFICE_ROLES = frozenset({'entry', 'archivist', 'controller'})
+BASIC_ROLES = frozenset({'viewer', 'executor'})
+HEAD_GRANTABLE_ROLES = OFFICE_ROLES | BASIC_ROLES
+ADMIN_ONLY_ROLES = frozenset({'department_head', 'company_archivist'})
 
 
 def grantable_roles(user) -> frozenset:
-    """الأدوارُ التي يمنحها هذا المستخدم — فارغةٌ لمن لا يدير أحداً."""
+    """الأدوارُ التي يمنحها هذا المستخدم بمستواه — فارغةٌ لمن لا يدير أحداً.
+
+    قرارُ المالك (11‑02، المستوى 2): رئيسُ القسم يمنح الخمسة، ومسؤولُ الشعبة أو الوحدة التنفيذَ
+    والقارئَ وحدهما، ومديرُ النظام كلَّها. ووحدةُ الموظّف تقيّدها بعدُ في الخدمة
+    (``roles_for_department``): لا مدخلَ في وحدةٍ لا تمسك سجلّاً.
+    """
     if can_manage_accounts(user):
         return HEAD_GRANTABLE_ROLES | ADMIN_ONLY_ROLES
-    if can_manage_departments(user):
-        return HEAD_GRANTABLE_ROLES
-    return frozenset()
+    return ((OFFICE_ROLES if can_grant_office_roles(user) else frozenset())
+            | (BASIC_ROLES if can_grant_basic_roles(user) else frozenset()))
 
 
 def _group_names(user, group_names):
@@ -999,10 +1035,13 @@ CAPABILITIES = {
 # كلُّ شريحةٍ تربط حارساً تضيف مفتاحه هنا، واختبارُ التطابق في tests_roles_page يفشل إن نُسي.
 # الإحالة (11-04) · الإدخالُ والتعديلُ وحجزُ الرقم وإضافةُ الجهة والعهدةُ والربط ((ب)3، 11-11) ·
 # الحذفُ إلى السلّة والاسترجاعُ منها ((ب)4، 11-11).
+# البريد ((ب)5) · الطاولةُ والدفترُ والتقاريرُ والسجلّ ((ب)6) · إدارةُ الموظّفين والمنحُ بمستوى الرئيس
+# وإضافةُ الوحدات و«طاولتي» ((ج‑4)، 11-12).
 WIRED_CAPABILITIES = frozenset({'book.enter', 'book.edit', 'number.reserve', 'entity.add', 'book.trash',
                                 'book.restore', 'referral.send', 'referral.receive', 'custody.link',
                                 'mail.operate', 'mail.send_book', 'mail.settings', 'secret.own',
-                                'desk.board', 'desk.ledger', 'report.view', 'audit.view'})
+                                'desk.board', 'desk.ledger', 'desk.mine', 'report.view', 'audit.view',
+                                'staff.manage', 'grant.office', 'grant.basic', 'unit.add'})
 
 # القارئُ احتياطيُّ كلِّ حسابٍ بلا دور: منحُ الكتابة له على مستوى الدور يمنحها للجميع،
 # فتُجمَّد خليّتُه هو والمنفِّذ في المصفوفة، وتبقى ممكنةً باستثناءٍ لشخصٍ بعينه.

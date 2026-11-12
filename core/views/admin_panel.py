@@ -29,8 +29,8 @@ from core.admin_service import (UNSET, assign_user, create_department,
 from core.logging_models import UserActivityLog
 from core.models import BookNumberReservation, Department, Entity, EntityGroup
 from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
-                        CONTROLLER_GROUP_NAME, ENTRY_GROUP_NAME)
-from core.scoping import (can_delete_account, can_manage_accounts, can_manage_departments,
+                        CONTROLLER_GROUP_NAME, ENTRY_GROUP_NAME, EXECUTOR_GROUP_NAME)
+from core.scoping import (can_add_units, can_delete_account, can_manage_accounts, can_manage_departments,
                           can_manage_user,
                           grantable_roles, is_sensitive_account, managed_department_ids,
                           user_department_id)
@@ -45,26 +45,28 @@ RESERVATION_REPORT_PAGE_SIZE = 50
 
 #: أعمدةُ الأدوار في جدول الحسابات بترتيبها — يظهر منها ما يمنحه الناظرُ وحدَه.
 #: (الدور، مفتاحُ الصفّ، حقلُ النموذج = وسيطُ ``assign_user``، العنوان، التلميح)
-ROLE_COLUMNS = (
-    ('entry', 'is_entry', 'is_entry', 'إدخال', 'مدخل كتب — يضيف ويعدّل'),
-    ('archivist', 'is_archivist', 'is_archivist', 'أرشيفي',
-     'مسؤول الأرشفة — يفتح سرّيّات قسمه ويحفظ ورقه'),
-    ('controller', 'is_controller', 'is_controller', 'بريد/متابعة',
-     'مشرف المتابعة/البريد — يفتح السرّيّ ويدير بريد الشركة'),
-    ('department_head', 'is_head', 'is_department_head', 'رئيس قسم',
-     'رئيس القسم — يدير شجرته ويرى سرّيّاتها'),
+ROLE_COLUMNS = (   # الوصفُ ما يفعله الدورُ اليوم (مصفوفةُ ``core/scoping.py``) لا ما كان يُرجى منه
+    ('entry', 'is_entry', 'is_entry', 'إدخال', 'مدخل — يُدخل الكتب ويعدّلها ويحجز أرقامها'),
+    ('archivist', 'is_archivist', 'is_archivist', 'أرشفة',
+     'مسؤول الأرشفة — يحفظ ورق قسمه ويفتح سرّيّه ويسترجع من السلّة'),
+    ('controller', 'is_controller', 'is_controller', 'بريد',
+     'مختصّ البريد — يمسك ديوان القسم: البريد والطاولة والدفتر والإحالة'),
+    ('executor', 'is_executor', 'is_executor', 'تنفيذ',
+     'موظّف تنفيذ — يستلم المُحال إلى وحدته وينجزه، بلا إدخال'),
+    ('department_head', 'is_head', 'is_department_head', 'رئيس',
+     'رئيس القسم يدير شجرته ويفتح سرّيّ قسمه؛ ومسؤول الشعبة أو الوحدة يدير موظّفيه ولا يفتحه'),
     ('company_archivist', 'is_company_archivist', 'is_company_archivist', 'أرشيف الشركة',
-     'أرشيف الشركة — يفتح سرّيّات كلّ الأقسام'),
+     'أرشيف الشركة — لا يوسّع النطاق بعد: يعمل كمسؤول أرشفة قسمه ولا يفتح سرّيّ غيره'),
 )
 #: خياراتُ «حساب جديد» بترتيبها — يظهر منها ما يمنحه الناظر.
 ROLE_OPTIONS = (
-    ('viewer', 'قارئ — يرى الكتب فقط'),
-    ('entry', 'مدخل كتب — يضيف ويعدّل'),
-    ('archivist', 'مسؤول أرشفة — يفتح سرّيّات قسمه ويحفظ ورقه'),
-    ('controller', 'مشرف متابعة/بريد — يفتح السرّيّ ويدير البريد'),
-    ('department_head', 'رئيس قسم — يدير شجرته'),
-    ('company_archivist', 'أرشيف الشركة — سرّيّات كلّ الأقسام'),
+    ('viewer', 'قارئ — يقرأ كتب نطاقه'),
+    ('entry', 'مدخل — يُدخل الكتب ويعدّلها'),
+    ('archivist', 'مسؤول أرشفة — يحفظ ورق قسمه ويفتح سرّيّه'),
+    ('controller', 'مختصّ البريد — يمسك ديوان القسم'),
     ('executor', 'موظّف تنفيذ — يستلم المُحال وينجزه في وحدته'),
+    ('department_head', 'رئيس قسم أو مسؤول شعبة ووحدة — يدير شجرته'),
+    ('company_archivist', 'أرشيف الشركة — كمسؤول أرشفة قسمه'),
 )
 
 
@@ -131,6 +133,7 @@ def _render_panel(request, tab, created_credentials=None, create_form_values=Non
         if is_superadmin else []
     )
 
+    unit_ids = Department.unit_level_ids()
     context = {
         'tab': tab,
         'is_superadmin': is_superadmin,
@@ -139,6 +142,10 @@ def _render_panel(request, tab, created_credentials=None, create_form_values=Non
         'departments': department_rows,
         'all_departments': departments,
         'active_departments': departments.filter(is_active=True),
+        # الأبُ لا يكون وحدة: الشجرةُ تقف عندها (قرارُ المالك 11‑02)
+        'parent_departments': [d for d in departments if d.is_active and d.pk not in unit_ids],
+        'unit_ids': unit_ids,
+        'can_shape_tree': can_add_units(request.user),
         'people': people,
         'department_count': len(department_rows),
         'active_department_count': sum(
@@ -607,6 +614,7 @@ def _user_rows(department_ids=None, actor=None):
             'is_archivist': ARCHIVIST_GROUP_NAME in names,
             'is_company_archivist': ARCHIVE_ALL_GROUP_NAME in names,
             'is_entry': ENTRY_GROUP_NAME in names,
+            'is_executor': EXECUTOR_GROUP_NAME in names,
             'is_active': u.is_active,
             'is_admin_account': u.is_superuser,
             'must_change_password': bool(getattr(profile, 'must_change_password', False)),
