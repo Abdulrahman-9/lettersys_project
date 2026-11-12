@@ -264,13 +264,20 @@ class DepartmentManagerScopeTests(AdminPanelTestCase):
 
     def test_manager_may_assign_operational_details_only_inside_scope(self):
         assign_user(self.staff, job_title='كاتب وحدة', by=self.manager)
+        # (ج‑2) قرارُ المستوى 2: الإدخالُ في ديوان القسم لا في الشعبة — يُرفض هناك ويُقبل هنا
+        with self.assertRaises(ValidationError):
+            assign_user(self.staff, is_entry=True, by=self.manager)
+        UserProfile.objects.filter(user=self.staff).update(department=self.dept)
+        self.staff = User.objects.get(pk=self.staff.pk)
         assign_user(self.staff, is_entry=True, by=self.manager)
         fresh = User.objects.get(pk=self.staff.pk)
         self.assertEqual(fresh.profile.job_title, 'كاتب وحدة')
         self.assertTrue(fresh.groups.filter(name=ENTRY_GROUP_NAME).exists())
 
     def test_manager_can_grant_controller_and_archivist_to_subtree_only(self):
-        # رئيسُ القسم يمنح مشرف المتابعة والأرشيفي لمن في شجرته
+        # رئيسُ القسم يمنح مشرف المتابعة والأرشيفي لمن في شجرته — في ديوان القسم (المستوى 2)
+        UserProfile.objects.filter(user=self.staff).update(department=self.dept)
+        self.staff = User.objects.get(pk=self.staff.pk)
         assign_user(self.staff, is_controller=True, by=self.manager)
         self.assertTrue(User.objects.get(pk=self.staff.pk)
                         .groups.filter(name=CONTROLLER_GROUP_NAME).exists())
@@ -335,8 +342,9 @@ class DepartmentManagerScopeTests(AdminPanelTestCase):
         head, _ = create_department_user(
             by=self.root, department=self.unit, username='new-head', role='department_head')
         self.assertTrue(UserProfile.objects.get(user=head).is_department_head)
+        # (ج‑2) المستوى 2: الأرشيفُ في ديوان القسم لا في الشعبة
         archivist, _ = create_department_user(
-            by=self.root, department=self.unit, username='new-co-archivist',
+            by=self.root, department=self.dept, username='new-co-archivist',
             role='company_archivist')
         self.assertTrue(archivist.groups.filter(name=ARCHIVE_ALL_GROUP_NAME).exists())
 
@@ -348,8 +356,12 @@ class DepartmentManagerScopeTests(AdminPanelTestCase):
 
     def test_manager_can_provision_controller_in_subtree_but_not_admin_role_or_foreign_dept(self):
         # رئيسُ القسم ينشئ مستخدماً بدور مشرف متابعة في شجرته — مسموح
+        # (ج‑2) المستوى 2: مختصُّ البريد في ديوان القسم — والشعبةُ ترفضه
+        with self.assertRaises(ValidationError):
+            create_department_user(by=self.manager, department=self.unit, username='unit-controller',
+                                   role='controller')
         user, _ = create_department_user(
-            by=self.manager, department=self.unit, username='local-controller',
+            by=self.manager, department=self.dept, username='local-controller',
             role='controller')
         self.assertTrue(user.groups.filter(name=CONTROLLER_GROUP_NAME).exists())
         # لكنّه لا ينشئ رئيس قسم
@@ -366,7 +378,7 @@ class DepartmentManagerScopeTests(AdminPanelTestCase):
         self.client.force_login(self.manager)
         response = self.client.post('/books/admin/', {
             'action': 'create_department_user',
-            'department': self.unit.pk,
+            'department': self.dept.pk,   # المدخلُ في الديوان (المستوى 2)
             'username': 'local-clerk',
             'first_name': 'كاتب',
             'job_title': 'محرر',
@@ -640,6 +652,7 @@ class MergedPanelTests(AdminPanelTestCase):
 
     def test_a_head_posting_admin_roles_changes_nothing_but_his_own(self):
         """النموذجُ يُقرأ بما يمنحه الناظر، وغيابُ حقل القسم «لم يُغيَّر» لا «بلا قسم»."""
+        UserProfile.objects.filter(user=self.staff).update(department=self.dept)   # المدخلُ في الديوان (المستوى 2)
         self.client.force_login(self.manager)
         self.client.post('/books/admin/', {
             'action': 'assign_user', 'tab': 'users', 'user_id': self.staff.pk,
@@ -648,7 +661,7 @@ class MergedPanelTests(AdminPanelTestCase):
         self.assertFalse(fresh.profile.is_department_head)
         self.assertFalse(fresh.groups.filter(name=ARCHIVE_ALL_GROUP_NAME).exists())
         self.assertTrue(fresh.groups.filter(name=ENTRY_GROUP_NAME).exists())
-        self.assertEqual(fresh.profile.department, self.unit)
+        self.assertEqual(fresh.profile.department, self.dept)
 
     def test_the_tree_is_keyed_by_id_not_by_the_arabic_code(self):
         response = self._get(self.root)

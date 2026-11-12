@@ -19,6 +19,8 @@ ROLE_GROUP_NAMES = {
     'archivist': ARCHIVIST_GROUP_NAME,
     'controller': CONTROLLER_GROUP_NAME,
     'company_archivist': ARCHIVE_ALL_GROUP_NAME,
+    # (ج‑2): يُمنح من محرّر الحساب — كان خارجَ القائمة فيرفضه ``_guard_grant`` حتى لمدير النظام
+    'executor': EXECUTOR_GROUP_NAME,
 }
 
 ROLE_DEFINITIONS = {

@@ -657,7 +657,7 @@ def can_manage_department(user, department) -> bool:
 #: النظام وحدَه. **مصدرٌ واحد** لخدمة الإدارة وقراءتِها ونموذجِ الإنشاء — كانت
 #: القاعدةُ في ثلاثة مواضع، والقالبُ يقرأ ``grantable_roles`` لا شرطَ دور.
 HEAD_GRANTABLE_ROLES = frozenset({'viewer', 'entry', 'archivist', 'controller'})
-ADMIN_ONLY_ROLES = frozenset({'department_head', 'company_archivist'})
+ADMIN_ONLY_ROLES = frozenset({'department_head', 'company_archivist', 'executor'})
 
 
 def grantable_roles(user) -> frozenset:
@@ -1013,6 +1013,18 @@ _FROZEN_FOR_THEM = frozenset({'book.enter', 'book.edit', 'number.reserve', 'enti
 
 def role_cell_frozen(key, role) -> bool:
     return key in _FROZEN_FOR_THEM and role in _FROZEN_ROLES
+
+
+def roles_for_department(department) -> tuple:
+    """الأدوارُ التي تُسند في هذا القسم — مصدرٌ واحدٌ لمحرّر الحساب ولـ``assign_user``.
+
+    قرارُ المالك (المستوى 2): القسمُ الماسكُ لسجلّه = رئيس · مختصُّ البريد · مسؤولُ الأرشفة · مدخل ·
+    قارئ؛ والشعبةُ والوحدةُ = مسؤول · موظّفُ تنفيذ · قارئ؛ ومَن بلا قسمٍ قارئٌ فقط."""
+    if department is None:
+        return (ROLE_READER,)
+    if department.holds_register:
+        return (ROLE_HEAD, ROLE_MAIL, ROLE_ARCHIVIST, ROLE_ENTRY, ROLE_READER)
+    return (ROLE_UNIT, ROLE_EXECUTOR, ROLE_READER)
 
 
 def role_of(user) -> str:

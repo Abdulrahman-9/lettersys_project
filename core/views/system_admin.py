@@ -4,7 +4,7 @@ from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Max
 from django.http import HttpResponseBadRequest
@@ -208,3 +208,141 @@ def system_ops_view(request):
         'sources': [{'key': k, 'label': v[0], 'on': k == source} for k, v in system_ops.LOG_SOURCES.items()],
         'tail_kb': system_ops.LOG_TAIL_BYTES // 1024,
     })
+
+
+# ───────────────────────── محرّرُ الحساب (ج، الشريحة 2) ─────────────────────────
+# التصميمُ المعتمد: shots_v2/v2_account.png و v2_account_change.png. الدورُ الواحدُ يملأ الصلاحيّات،
+# والاستثناءُ يضيف أو يحجب لشخصٍ بعينه (الموصولُ وحده)، وتغييرُ الدور أو القسم يُلغي الاستثناءات بتأكيد.
+
+_SUMMARY_SKIP = ('book.read', 'book.comment')
+
+
+def _join_ar(items):
+    items = list(items)
+    if len(items) < 2:
+        return ''.join(items)
+    return '، '.join(items[:-1]) + '، و' + items[-1]
+
+
+def _account_context(request, target):
+    from core.models import UserCapabilityOverride
+    from core.permission_service import role_change_preview
+    from core.scoping import (CAPABILITIES, WIRED_CAPABILITIES, can_delete_account, has_capability,
+                              role_of, roles_for_department)
+
+    profile = getattr(target, 'profile', None)
+    department = getattr(profile, 'department', None)
+    role = None if target.is_superuser else role_of(target)
+    overrides = {row.capability: row for row in
+                 UserCapabilityOverride.objects.filter(user=target).select_related('changed_by')}
+    groups, can, cannot = {}, [], []
+    for key, capability in CAPABILITIES.items():
+        allowed = has_capability(target, key)
+        row = overrides.get(key)
+        if capability.locked:
+            state = 'locked'
+        elif key not in WIRED_CAPABILITIES:
+            state = 'unwired'
+        elif row is not None:
+            state = 'added' if row.allowed else 'blocked'
+        else:
+            state = 'role'
+        group = groups.setdefault(capability.group, {'name': capability.group, 'rows': [], 'can': 0})
+        group['rows'].append({'key': key, 'label': capability.label, 'allowed': allowed, 'state': state,
+                              'editable': state in ('role', 'added', 'blocked') and role is not None})
+        group['can'] += int(allowed)
+        if key in _SUMMARY_SKIP:
+            continue
+        note = {'added': ' (استثناء)', 'blocked': ' (محجوب عنه)'}.get(state, '')
+        (can if allowed else cannot).append(capability.label + note)
+    for group in groups.values():
+        group['total'] = len(group['rows'])
+    exceptions = [{'key': key, 'label': CAPABILITIES[key].label if key in CAPABILITIES else key,
+                   'allowed': row.allowed, 'by': row.changed_by.get_username() if row.changed_by else '',
+                   'at': row.changed_at}
+                  for key, row in overrides.items()]
+    options = [] if role is None else [(r, MATRIX_ROLES[r]) for r in roles_for_department(department)]
+    scope = 'نطاقه'
+    if department is not None:
+        scope = 'قسم «%s»%s' % (department.name, ' وما يتبعه' if department.children.exists() else '')
+    return {
+        'target': target, 'profile': profile, 'department': department,
+        'role': role, 'role_label': MATRIX_ROLES.get(role, 'مدير النظام'), 'role_options': options,
+        'previews': {r: {**role_change_preview(target, r), 'label': label} for r, label in options if r != role},
+        'summary_can': _join_ar(can), 'summary_cannot': _join_ar(cannot), 'scope_text': scope,
+        'exceptions': exceptions, 'groups': list(groups.values()),
+        'departments': Department.objects.filter(is_active=True).order_by('code'),
+        'can_delete': can_delete_account(request.user, target),
+        'is_self': target.pk == request.user.pk,
+        'audit_url': f"{reverse('audit_log')}?actor={target.get_username()}",
+    }
+
+
+def _account_post(request, target):
+    """فعلٌ واحدٌ لكلّ طلب؛ يعيد (رسالة، كلمة مرورٍ مؤقّتة أو None، وجهة أو None)."""
+    from core.admin_service import UNSET, assign_user, delete_user, reset_department_user_password
+    from core.permission_service import set_user_override, set_user_role
+    from core.scoping import CAPABILITIES, WIRED_CAPABILITIES
+
+    action = request.POST.get('action', '')
+    if action == 'role':
+        if request.POST.get('confirm') != '1':
+            raise ValidationError('أكّد تغيير الدور.')
+        set_user_role(request, target, request.POST.get('role', ''))
+        return 'غُيّر دورُ «%s».' % target.get_username(), None, None
+    if action == 'override':
+        key = request.POST.get('key', '')
+        value = {'allow': True, 'deny': False, 'reset': None}.get(request.POST.get('value'), 'bad')
+        if key not in CAPABILITIES or key not in WIRED_CAPABILITIES or value == 'bad':
+            raise ValidationError('صلاحيّةٌ لا تُعدَّل من هنا.')
+        set_user_override(request, target, key, value)
+        return 'حُدِّثت صلاحيّة «%s».' % CAPABILITIES[key].label, None, None
+    if action == 'password':
+        return 'أُعيد تعيين كلمة المرور، وتظهر الكلمة المؤقّتة مرّةً واحدة.', \
+            reset_department_user_password(by=request.user, user=target), None
+    if action == 'delete':
+        username = target.get_username()
+        delete_user(by=request.user, user=target)
+        return 'حُذف حساب «%s».' % username, None, f"{reverse('admin_panel')}?tab=users"
+    if action == 'save':
+        raw = (request.POST.get('department') or '').strip()
+        department = Department.objects.filter(pk=raw).first() if raw.isdigit() else None
+        current = getattr(getattr(target, 'profile', None), 'department', None)
+        if department != current and request.POST.get('confirm_department') != '1':
+            raise ValidationError('أكّد تغيير القسم — يُلغي استثناءاتِ الحساب.')
+        first, _, last = (request.POST.get('name') or '').strip().partition(' ')
+        assign_user(target, by=request.user, department=department if department != current else UNSET,
+                    first_name=first, last_name=last.strip(), job_title=request.POST.get('job_title', ''),
+                    is_active=bool(request.POST.get('is_active')))
+        return 'حُفظ حساب «%s».' % target.get_username(), None, None
+    raise ValidationError('إجراءٌ غير معروف.')
+
+
+@require_http_methods(['GET', 'POST'])
+@system_admin_required
+def system_account_view(request, pk):
+    """محرّرُ الحساب — الدورُ والاستثناءاتُ والحسابُ والدخولُ في صفحةٍ واحدة لمدير النظام."""
+    from django.contrib.auth.models import User
+    from django.core.exceptions import ValidationError as _VE
+
+    target = get_object_or_404(User.objects.select_related('profile__department'), pk=pk)
+    password = None
+    if request.method == 'POST':
+        try:
+            with transaction.atomic():
+                message, password, back = _account_post(request, target)
+        except (_VE, PermissionDenied) as exc:
+            messages.error(request, exc.messages[0] if isinstance(exc, _VE) else str(exc))
+            return redirect('system_account', pk=pk)
+        messages.success(request, message)
+        if back:
+            return redirect(back)
+        if password is None:
+            return redirect('system_account', pk=pk)
+        target = User.objects.select_related('profile__department').get(pk=pk)
+    response = render(request, 'core/system_admin/account.html',
+                      {**_account_context(request, target), 'temp_password': password})
+    if password:
+        response['Cache-Control'] = 'no-store, private'
+        response['Referrer-Policy'] = 'no-referrer'
+    return response

@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ target.get_full_name|default:target.get_username }}{% endblock %}
+{% block content %}
+{% comment %}
+محرّرُ الحساب (ج، الشريحة 2) — التصميمُ المعتمد shots_v2/v2_account.png وv2_account_change.png.
+القالبُ يعرض ولا يقرّر: الحالاتُ والأعلامُ والمعاينةُ من system_admin._account_context.
+{% endcomment %}
+<div class="sa-page" id="aePage" data-name="{{ target.get_full_name|default:target.get_username }}">
+  <nav class="sa-crumb" aria-label="مسار الصفحة">إدارة النظام / <a href="{% url 'admin_panel' %}?tab=users">الحسابات والأدوار</a> / <span aria-current="page">{{ target.get_full_name|default:target.get_username }}</span></nav>
+  <div class="sa-head">
+    <div><h1>{{ target.get_full_name|default:target.get_username }}</h1>
+      <p>{% if department %}{{ department.name }}{% else %}بلا قسم{% endif %} · {% if target.is_active %}حساب نشط{% else %}حساب معطَّل{% endif %}{% if target.last_login %} · آخر دخول {{ target.last_login|date:"Y-m-d H:i" }}{% endif %}</p></div>
+  </div>
+
+  {% if temp_password %}
+  <div class="ae-secret" role="status">كلمة المرور المؤقّتة لـ«{{ target.get_username }}»: <code>{{ temp_password }}</code> — تظهر مرّةً واحدة، ويُطلب تغييرها عند الدخول.</div>
+  {% endif %}
+
+  <div class="ae-grid">
+    <aside class="ae-side" aria-label="الحساب والدخول">
+      <form method="post" class="sa-card" id="aeAccount" data-exceptions="{{ exceptions|length }}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save">
+        <input type="hidden" name="confirm_department" value="0">
+        <div class="sa-card-head"><h2>الحساب</h2></div>
+        <div class="ae-field"><label for="aeName">الاسم</label>
+          <input class="sa-input" id="aeName" name="name" value="{{ target.get_full_name }}" maxlength="300" autocomplete="off"></div>
+        <div class="ae-field"><label for="aeUsername">اسم الدخول</label>
+          <input class="sa-input" id="aeUsername" value="{{ target.get_username }}" readonly dir="ltr"></div>
+        <div class="ae-field"><label for="aeDepartment">القسم</label>
+          <select class="sa-select" id="aeDepartment" name="department" data-initial="{{ department.pk|default:'' }}">
+            <option value=""{% if not department %} selected{% endif %}>بلا قسم</option>
+            {% for d in departments %}<option value="{{ d.pk }}"{% if d.pk == department.pk %} selected{% endif %}>{{ d.name }}{% if d.code %} ({{ d.code }}){% endif %}</option>{% endfor %}
+          </select>
+          <small>يحدّد ما يراه الحساب. تغييره يلغي الاستثناءات بعد تأكيد.</small></div>
+        <div class="ae-field"><label for="aeJob">المستوى الوظيفي</label>
+          <input class="sa-input" id="aeJob" name="job_title" value="{{ profile.job_title|default:'' }}" maxlength="120"></div>
+        <label class="ae-check"><input type="checkbox" name="is_active" value="1"{% if target.is_active %} checked{% endif %}{% if is_self %} disabled{% endif %}> الحساب نشط</label>
+        {% if is_self %}<input type="hidden" name="is_active" value="1">{% endif %}
+      </form>
+
+      <section class="sa-card" aria-labelledby="aeAccessTitle">
+        <div class="sa-card-head"><h2 id="aeAccessTitle">الدخول والأثر</h2></div>
+        <div class="ae-links">
+          {% if not is_self %}
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="password">
+            <button type="submit" class="sa-btn" data-confirm="تُنشأ كلمةُ مرورٍ مؤقّتة لـ«{{ target.get_username }}» وتبطل الحالية." data-confirm-ok="أنشئها" data-confirm-tone="safe"><i class="bi bi-key" aria-hidden="true"></i>كلمة مرور مؤقّتة</button></form>
+          {% endif %}
+          <a class="sa-btn" href="{{ audit_url }}"><i class="bi bi-clock-history" aria-hidden="true"></i>سجلّ حركاته</a>
+          {% if can_delete %}
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete">
+            <button type="submit" class="sa-btn ae-danger" data-confirm="حذفُ حساب «{{ target.get_username }}» نهائيّ ولا يُستردّ." data-confirm-ok="احذف الحساب"><i class="bi bi-trash" aria-hidden="true"></i>حذف الحساب</button></form>
+          {% endif %}
+        </div>
+      </section>
+
+      <button type="submit" form="aeAccount" class="sa-btn pri ae-save">احفظ</button>
+    </aside>
+
+    <div class="ae-main">
+      <section class="sa-card" aria-labelledby="aeRoleLabel">
+        <form method="post" id="aeRoleForm">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="role">
+          <input type="hidden" name="confirm" value="0">
+          <div class="ae-field"><label for="aeRole" id="aeRoleLabel">الدور</label>
+            {% if role %}
+            <select class="ae-role-select" id="aeRole" name="role" data-current="{{ role }}"{% if is_self %} disabled{% endif %}>
+              {% for key, label in role_options %}<option value="{{ key }}"{% if key == role %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <small>اختيار الدور يملأ الصلاحيّات، ثمّ تضيف أو تحجب لهذا الشخص.</small>
+            {% else %}
+            <div class="ae-role-select" aria-readonly="true">مدير النظام</div>
+            <small>مدير النظام يستطيع كلّ شيء، ولا يُعدَّل دورُه من هنا.</small>
+            {% endif %}
+          </div>
+        </form>
+        {% if role %}
+        <div class="ae-summary">
+          {% if summary_can %}<p><b>يستطيع في {{ scope_text }}:</b> {{ summary_can }}.</p>{% endif %}
+          {% if summary_cannot %}<p>ولا يستطيع: {{ summary_cannot }}.</p>{% endif %}
+        </div>
+        {% endif %}
+      </section>
+
+      {% if role %}
+      <section class="sa-card" aria-labelledby="aeExTitle">
+        <div class="sa-card-head"><h2 id="aeExTitle">الاستثناءات عن الدور</h2><small>{{ exceptions|length }}</small></div>
+        {% if exceptions %}
+        <div class="ae-rows">
+          {% for e in exceptions %}
+          <div class="ae-row">
+            <span class="ae-row-label">{{ e.label }}</span>
+            <span class="ae-badge {% if e.allowed %}added{% else %}blocked{% endif %}">{% if e.allowed %}مضاف{% else %}محجوب{% endif %}</span>
+            <span class="ae-who">{% if e.allowed %}أضافها{% else %}حجبها{% endif %} {{ e.by|default:"—" }}{% if e.at %} · {{ e.at|date:"m-d" }}{% endif %}</span>
+            <form method="post">{% csrf_token %}<input type="hidden" name="action" value="override"><input type="hidden" name="key" value="{{ e.key }}"><input type="hidden" name="value" value="reset">
+              <button type="submit" class="ae-act">رجوع إلى الدور</button></form>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="ae-who">لا استثناءات — صلاحيّاته كلّها من دوره.</p>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      <section class="sa-card" aria-labelledby="aeAllTitle">
+        <div class="sa-card-head"><h2 id="aeAllTitle">كلّ الصلاحيّات</h2></div>
+        {% for g in groups %}
+        <details class="ae-group"{% if forloop.first %} open{% endif %}>
+          <summary>{{ g.name }}<small>يستطيع {{ g.can }} من {{ g.total }}</small></summary>
+          <div class="ae-rows">
+            {% for r in g.rows %}
+            <div class="ae-row{% if not r.allowed %} is-off{% endif %}" id="ae-{{ r.key }}">
+              <span class="ae-row-label">{{ r.label }}</span>
+              {% if r.state == "locked" %}<span class="ae-badge locked"><i class="bi bi-lock-fill" aria-hidden="true"></i>مقفل</span>
+              {% elif r.state == "unwired" %}<span class="ae-badge">لم يُربط بعد</span>
+              {% elif r.state == "added" %}<span class="ae-badge added">مضاف</span>
+              {% elif r.state == "blocked" %}<span class="ae-badge blocked">محجوب</span>
+              {% else %}<span class="ae-badge">من الدور</span>{% endif %}
+              {% if r.editable %}
+              <form method="post">{% csrf_token %}<input type="hidden" name="action" value="override"><input type="hidden" name="key" value="{{ r.key }}">
+                {% if r.state == "role" %}<input type="hidden" name="value" value="{% if r.allowed %}deny{% else %}allow{% endif %}"><button type="submit" class="ae-act">{% if r.allowed %}احجب{% else %}أضف{% endif %}</button>
+                {% else %}<input type="hidden" name="value" value="reset"><button type="submit" class="ae-act">رجوع إلى الدور</button>{% endif %}</form>
+              {% else %}<span class="ae-act muted">لا يُعدَّل</span>{% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </details>
+        {% endfor %}
+      </section>
+    </div>
+  </div>
+</div>
+
+{{ previews|json_script:"aePreviews" }}
+<dialog class="rm-dialog" id="aeConfirm" aria-labelledby="aeConfirmTitle">
+  <h2 id="aeConfirmTitle">تغيير الدور</h2>
+  <div id="aeConfirmBody"></div>
+  <div class="rm-dialog-actions">
+    <button type="button" class="sa-btn" id="aeConfirmNo" autofocus>إلغاء</button>
+    <button type="button" class="sa-btn pri" id="aeConfirmYes">غيّر الدور</button>
+  </div>
+</dialog>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/account_editor.js' %}?v=20261112-c2" defer></script>{% endblock %}

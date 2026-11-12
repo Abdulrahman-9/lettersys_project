@@ -117,7 +117,7 @@ def update_department(department, *, by, name=None, code=None, parent=UNSET,
 def assign_user(user, *, by, department=UNSET, is_department_head=None,
                 is_controller=None, is_archivist=None, is_company_archivist=None,
                 job_title=None, is_entry=None, is_active=None, first_name=None,
-                last_name=None, email=None):
+                last_name=None, email=None, is_executor=None):
     """يُسند موظّفاً إلى قسمٍ ويمنحه أدوارَه — **وكلُّ منحٍ واقعةٌ مسجَّلة**.
 
     الدورُ يفتح سجلَّ القراءة والكتبَ السرّيّة، فمنحُه بلا أثرٍ يُبطل السجلّ.
@@ -146,6 +146,10 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
                 _guard_admin(by)
             changes['department'] = department.code if department else None
             profile.department = department
+            # (ج‑2) نقلُ القسم يُلغي استثناءاتِ الشخص: كانت تُمنح على ما يراه في قسمه السابق
+            cancelled = _cancel_exceptions(user)
+            if cancelled:
+                changes['exceptions_cancelled'] = cancelled
         if job_title is not None:
             job_title = job_title.strip()
             if len(job_title) > 120:
@@ -190,7 +194,8 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
                 (is_entry, 'entry', 'is_entry'),
                 (is_controller, 'controller', 'is_controller'),
                 (is_archivist, 'archivist', 'is_archivist'),
-                (is_company_archivist, 'company_archivist', 'is_company_archivist')):
+                (is_company_archivist, 'company_archivist', 'is_company_archivist'),
+                (is_executor, 'executor', 'is_executor')):
             if flag is None:
                 continue
             _guard_grant(by, role)
@@ -207,9 +212,33 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
             user.save(update_fields=['is_active'])
             changes['is_active'] = is_active
 
+        # (ج‑2) الدورُ الواحدُ يناسب القسم (``roles_for_department``) — وإلّا رئيسُ قسمٍ نُقل إلى وحدةٍ
+        # صار «مسؤولَ وحدة» صامتاً، ومدخلٌ في وحدةٍ لا تمسك سجلّاً بقي مدخلاً.
+        if changes.keys() & {'department', 'is_department_head', 'is_entry', 'is_controller',
+                             'is_archivist', 'is_company_archivist', 'is_executor'}:
+            from core.scoping import ROLE_LABELS, clear_capability_cache, role_of, roles_for_department
+
+            clear_capability_cache(user)
+            role = role_of(user)
+            if role not in roles_for_department(profile.department):
+                raise ValidationError('دورُ «%s» لا يُسند في «%s» — غيّر الدورَ أوّلاً.' % (
+                    ROLE_LABELS[role], profile.department.name if profile.department else 'بلا قسم'))
+
         if changes:
             _log(by, 'ASSIGN_USER', {'user': user.get_username(), **changes})
     return profile
+
+
+def _cancel_exceptions(user):
+    """يحذف استثناءاتِ الشخص كلَّها (والمقفلَ واليتيمَ معها) ويعيد مفاتيحَها للأثر."""
+    from core.models import UserCapabilityOverride
+    from core.scoping import clear_capability_cache
+
+    rows = list(UserCapabilityOverride.objects.filter(user=user).values_list('capability', 'allowed'))
+    if rows:
+        UserCapabilityOverride.objects.filter(user=user).delete()
+        clear_capability_cache(user)
+    return [{'capability': key, 'allowed': allowed} for key, allowed in rows]
 
 
 def create_department_user(*, by, department, username, first_name='',
@@ -268,6 +297,12 @@ def create_department_user(*, by, department, username, first_name='',
             ensure_role_groups()
             group, _ = Group.objects.get_or_create(name=group_name)
             user.groups.add(group)
+        # (ج‑2) الدورُ يناسب القسم كما في ``assign_user`` — مصدرٌ واحد (``roles_for_department``)
+        from core.scoping import ROLE_LABELS, role_of, roles_for_department
+
+        created_role = role_of(user)
+        if created_role not in roles_for_department(department):
+            raise ValidationError('دورُ «%s» لا يُسند في «%s».' % (ROLE_LABELS[created_role], department.name))
         temporary = UserPassword(
             user=user,
             expires_at=timezone.now() + timedelta(hours=24),

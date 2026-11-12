@@ -82,6 +82,7 @@ urlpatterns = [
     path("system/department/<int:pk>/", system_admin.system_department_view, name="system_department"),
     path("system/ops/", system_admin.system_ops_view, name="system_ops"),
     path("system/roles/", system_admin.system_roles_view, name="system_roles"),
+    path("system/account/<int:pk>/", system_admin.system_account_view, name="system_account"),
     # سجلُّ الحركات — رئيسُ القسم ومديرُ النظام حصراً
     path("audit/", audit.audit_log, name="audit_log"),
     # التواقيع — والتحقّقُ **عامٌّ بلا تسجيل دخول**: الورقةُ تخرج من الشركة
