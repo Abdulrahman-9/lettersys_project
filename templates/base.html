@@ -173,15 +173,13 @@
                 <i class="bi bi-grid-1x2-fill" aria-hidden="true"></i>
                 <span>لوحة التحكم</span>
               </a>
-              {% comment %}
-                «ما يخصّني اليوم» حُذف بقرار المالك (11-04) — لكنّ رابطه يبقى حتّى تُفتح الطاولة
-                لموظّف التنفيذ مقصورةً على وحدته ((ب)6 في جلسة الأدوار)، وإلّا بقي المنفّذ بلا
-                صفحة عمل. يُحذفان معاً في إصدارٍ واحد.
-              {% endcomment %}
-              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'my_today' %} active{% endif %}" href="{% url 'my_today' %}" title="ما يخصّني اليوم">
-                <i class="bi bi-person-check" aria-hidden="true"></i>
-                <span>ما يخصّني اليوم</span>
+              {# «ما يخصّني اليوم» حُذف بقرار المالك (11-04)؛ ومسؤولُ الشعبة أو الوحدة يعمل من «طاولتي» ((ج‑4)) #}
+              {% if nav.my_desk %}
+              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'desk_mine' %} active{% endif %}" href="{% url 'desk_mine' %}" title="طاولتي">
+                <i class="bi bi-person-workspace" aria-hidden="true"></i>
+                <span>طاولتي</span>
               </a>
+              {% endif %}
               {% if nav.desk %}
               <a class="app-sidebar-link{% if request.resolver_match.url_name == 'desk_board' or request.resolver_match.url_name == 'desk_ledger' or request.resolver_match.url_name == 'desk_handover' %} active{% endif %}" href="{% url 'desk_board' %}" title="طاولة البريد">
                 <i class="bi bi-inboxes" aria-hidden="true"></i>

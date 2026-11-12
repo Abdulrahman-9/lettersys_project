@@ -40,7 +40,7 @@ class DashboardSectionTests(TestCase):
 
         keys = self._keys(worker)
 
-        self.assertIn('mine', keys)
+        self.assertNotIn('mine', keys)   # حُذف مع «ما يخصّني اليوم» (قرارُ المالك 11‑04)
         self.assertNotIn('desk', keys)
         self.assertNotIn('mail', keys)
         self.assertNotIn('admin', keys)
@@ -70,7 +70,7 @@ class DashboardSectionTests(TestCase):
 
         keys = self._keys(boss)
 
-        for key in ('mine', 'desk', 'mail', 'admin'):
+        for key in ('desk', 'mail', 'admin'):
             self.assertIn(key, keys)
         # مرحلة نيلسن: «دفتر القسم» كان يكرّر أرقامَ الملخّص حرفاً بحرف — حُذف.
         self.assertNotIn('register', keys)
@@ -176,8 +176,8 @@ class DashboardSectionTests(TestCase):
         from core.models import BookReferral
 
         boss = self._user('boss5', self.dept, admin=True)
-        mine = {s['key']: s for s in sections_for(boss)}['mine']
-        self.assertIs(mine['quiet'], True)
+        desk = {s['key']: s for s in sections_for(boss)}['desk']
+        self.assertIs(desk['quiet'], True)
 
         book = Book.objects.create(kind='incoming_external', title='ك', our_number='6101',
                                    department=self.dept, created_by=boss)
@@ -186,7 +186,7 @@ class DashboardSectionTests(TestCase):
                                     due_date=timezone.localdate(),
                                     status=BookReferral.SENT)
         by_key = {s['key']: s for s in sections_for(boss)}
-        self.assertIs(by_key['mine']['quiet'], False)
+        self.assertIs(by_key['desk']['quiet'], False)
 
         for section in by_key.values():
             self.assertTrue(section.get('home'), msg=section['key'])

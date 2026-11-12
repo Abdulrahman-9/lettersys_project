@@ -236,42 +236,17 @@ class QueueScreenTests(TestCase):
             pk=referral.pk, status__in=BookReferral.OPEN_STATUSES,
         ).exists())
 
-    # ── ما يخصّني اليوم ────────────────────────────────────────
-    def test_my_today_is_open_to_every_role(self):
-        self.client.force_login(self.worker)
-
-        self.assertEqual(self.client.get(reverse('my_today')).status_code, 200)
-
-    def test_my_today_shows_only_my_assignments(self):
-        self._referral(assignee=self.worker, due_date=self.today)
-        self._referral(assignee=self.clerk, due_date=self.today)
-        self.client.force_login(self.worker)
-
-        res = self.client.get(reverse('my_today'))
-
-        self.assertEqual(res.context['assigned_total'], 1)
-        queue = next(q for q in res.context['queues'] if q['key'] == 'today')
-        self.assertEqual(queue['total'], 1)
-
-    def test_my_today_is_empty_without_assignments(self):
-        """الحالةُ الفارغةُ مصمَّمة — لا صفحةٌ مكسورة."""
-        self.client.force_login(self.worker)
-
-        res = self.client.get(reverse('my_today'))
-
-        self.assertEqual(res.context['assigned_total'], 0)
-        self.assertContains(res, 'لا التزامَ مفتوحاً')
-
 
 class QueueExpandTests(TestCase):
-    """مواصفةُ الواجهات، الدفعتان 1–2: «و{n} غيرها» بابٌ لا طريقٌ مسدود — ``?expand=<key>``
-    يرفع القطعَ عن طابورٍ واحد، والبطاقةُ تحمل مرساةً ``id="q-<key>"`` تشير إليها عدّاداتُ الداشبورد."""
+    """مواصفةُ الواجهات، الدفعتان 1–2: «عرض الكلّ» بابٌ لا طريقٌ مسدود — ``?expand=<key>``
+    يرفع القطعَ عن طابورٍ واحد، واللوحةُ تحمل مرساةً ``id="q-<key>"`` تشير إليها عدّاداتُ الداشبورد.
+    (كان على «ما يخصّني اليوم» قبل حذفها بقرار المالك 11‑04؛ صار على طاولة البريد.)"""
 
     def setUp(self):
         from core.models import Department, UserProfile
         self.dept = Department.objects.create(name='قسمُ التوسيع', code='ق-ع')
         self.me = User.objects.create_user('qexp', password='pw-qexp-11')
-        UserProfile.objects.create(user=self.me, department=self.dept)
+        UserProfile.objects.create(user=self.me, department=self.dept, is_department_head=True)
         today = timezone.localdate()
         for i in range(15):
             b = Book.objects.create(kind='incoming_internal', title=f'ك{i}', created_by=self.me,
@@ -281,16 +256,16 @@ class QueueExpandTests(TestCase):
                                         due_date=today - timedelta(days=1), created_by=self.me)
         self.client.force_login(self.me)
 
-    def test_the_card_is_cut_and_links_to_its_expansion(self):
-        r = self.client.get(reverse('my_today'))
+    def test_the_queue_is_cut_and_links_to_its_expansion(self):
+        r = self.client.get(reverse('desk_board') + '?queue=overdue')
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, 'id="q-overdue"')
-        self.assertContains(r, '?expand=overdue#q-overdue')
-        self.assertContains(r, 'و3 غيرها')
+        self.assertContains(r, '?queue=overdue&amp;expand=overdue#q-overdue')
+        self.assertContains(r, 'معروض 12 من 15 إحالة')
 
     def test_expand_lifts_the_cut_for_that_queue_only(self):
-        r = self.client.get(reverse('my_today') + '?expand=overdue')
-        self.assertNotContains(r, '?expand=overdue#q-overdue')   # لم يعد مقطوعاً
-        self.assertContains(r, 'is-expanded', count=1)            # طابورٌ واحدٌ فقط
-        self.assertContains(r, '?expand=action#q-action')         # الآخرُ ما زال مقطوعاً
-        self.assertContains(r, 'اطوِ')
+        r = self.client.get(reverse('desk_board') + '?queue=overdue&expand=overdue')
+        self.assertContains(r, 'معروض 15 من 15 إحالة')
+        self.assertContains(r, 'عرض مختصر')
+        unreceived = next(q for q in r.context['queues'] if q['key'] == 'unreceived')
+        self.assertEqual((len(unreceived['rows']), unreceived['more']), (12, 3))   # الآخرُ ما زال مقطوعاً

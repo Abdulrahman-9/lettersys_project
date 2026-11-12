@@ -25,7 +25,7 @@ from core.signature_service import can_sign
 
 PERSONAS = ('admin', 'prod_admin', 'head_office', 'head_q', 'mail_q', 'arch_q', 'entry_q', 'read_q',
             'head_s', 'entry_s', 'head_w', 'entry_w', 'exec_w', 'read_w', 'mail_far')
-PAGES = ('dashboard', 'my_today', 'desk_board', 'desk_handover', 'desk_ledger', 'book_unified',
+PAGES = ('dashboard', 'desk_mine', 'desk_board', 'desk_handover', 'desk_ledger', 'book_unified',
          'extraction-smart-desktop', 'dossier_list', 'reports', 'audit_log', 'admin_panel',
          'trash_list', 'mail_inbox', 'mail_sent', 'mail_compose', 'mail_templates', 'mail_settings',
          'entity_list', 'settings_hub', 'sequence_settings', 'backup_database', 'workstation_board',
@@ -134,7 +134,7 @@ def book_row(book, people):
 # ── المصفوفةُ المقيسة ── (ترتيبُ الخانات = PERSONAS)
 EXPECTED_PAGES = {
     'dashboard':                '200 200 200 200 200 200 200 200 200 200 200 200 200 200 200',
-    'my_today':                 '200 200 200 200 200 200 200 200 200 200 200 200 200 200 200',
+    'desk_mine':                '403 403 403 403 403 403 403 403 200 403 200 403 403 403 403',
     'desk_board':               '200 200 200 200 200 403 403 403 403 403 403 403 200 403 200',
     'desk_handover':            '200 200 200 200 200 403 403 403 403 403 403 403 403 403 200',
     'desk_ledger':              '200 200 200 200 200 403 403 403 403 403 403 403 403 403 200',

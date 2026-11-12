@@ -25,8 +25,8 @@ from django.utils.http import urlencode
 
 def _to(name, *args, anchor='', **query):
     """وجهةُ عدّادٍ **تصدق**: `reverse()` لا مساراً حرفيّاً (يشيخ بصمت)، ومرشّحٌ
-    يطابق ما يعدّه العدّاد. `anchor` = مفتاحُ الطابور على لوحة الطوابير
-    (`_queue_board.html` يمنح كلَّ بطاقةٍ `id="q-<key>"`)."""
+    يطابق ما يعدّه العدّاد. `anchor` = مفتاحُ الطابور على طاولة البريد
+    (`_desk_queue_panel.html` يمنح اللوحةَ `id="q-<key>"`)."""
     if name == 'desk_board' and anchor:
         query.setdefault('queue', anchor)
     url = reverse(name, args=args)
@@ -38,37 +38,6 @@ def _to(name, *args, anchor='', **query):
 
 
 # ═══════════════════════════ البنائيّات ═══════════════════════════
-
-def _my_queue(user):
-    """ما يخصّني أنا — الالتزاماتُ المفتوحةُ باسمي."""
-    from core.models import BookReferral
-    from core.scoping import scope_referrals_for
-
-    today = timezone.localdate()
-    mine = scope_referrals_for(user, BookReferral.objects.filter(
-        assignee=user, status__in=BookReferral.OPEN_STATUSES))
-
-    counts = mine.aggregate(
-        total=Count('id'),
-        overdue=Count('id', filter=Q(due_date__lt=today)),
-        today=Count('id', filter=Q(due_date=today)),
-        unreceived=Count('id', filter=Q(status=BookReferral.SENT)),
-    )
-    return {
-        'counters': [
-            {'label': 'متأخّر عليّ', 'value': counts['overdue'], 'tone': 'danger',
-             'href': _to('my_today', anchor='overdue')},
-            {'label': 'يستحقّ اليوم', 'value': counts['today'], 'tone': 'accent',
-             'href': _to('my_today', anchor='today')},
-            {'label': 'لم أستلمه', 'value': counts['unreceived'], 'tone': 'warn',
-             'href': _to('my_today', anchor='new')},
-            {'label': 'كلُّ التزاماتي', 'value': counts['total'], 'tone': 'calm',
-             'href': _to('my_today')},
-        ],
-        'quiet_msg': 'لا التزامَ مفتوحاً باسمك',
-        'home': _to('my_today'),
-    }
-
 
 def _desk(user):
     """طاولةُ البريد — عملُ القسم اليوم، لمن يمسك بريدَه."""
@@ -222,10 +191,9 @@ def _can_admin(user):
     return can_manage_accounts(user)
 
 
-#: (المفتاح · العنوان · الشرح · البوّابة · البانِي) — والترتيبُ ترتيبُ العرض:
-#: **ما يخصّني أوّلاً** لأنّه ما يفتحه الموظّفُ صباحاً، ثمّ ما يتّسع دائرةً.
+#: (المفتاح · العنوان · الشرح · البوّابة · البانِي) — والترتيبُ ترتيبُ العرض. و«ما يخصّني اليوم»
+#: حُذف مع صفحته بقرار المالك (11‑04).
 SECTIONS = (
-    ('mine', 'ما يخصّني اليوم', 'التزاماتي المفتوحة باسمي', _always, _my_queue),
     ('desk', 'طاولة البريد', 'عملُ القسم اليوم', _can_desk, _desk),
     ('mail', 'البريد الإلكتروني', 'ما وصل وما أخفق', _can_mail, _mail),
     ('dossier', 'أضبارة وحدتي', 'ما ذُكر فيه اسمُنا', _always, _dossier),

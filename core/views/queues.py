@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
-"""طابورا العمل — طاولةُ البريد و«ما يخصّني اليوم».
+"""طاولتا العمل — طاولةُ البريد و«طاولتي».
 
-**شاشتان لجمهورين لا واحدة لجمهورٍ عامّ:**
+- ``desk_board`` (``/desk/``) — طاولةُ البريد لرئيس القسم ومختصّ البريد والمنفِّذ (``can_use_desk``):
+  خريطةُ عملِ القسم في ستّة طوابير و«آخر القيود»، والمنفِّذ مقصورٌ على وحدته.
+- ``my_desk`` (``/desk/mine/``) — «طاولتي» لمسؤول الشعبة أو الوحدة (``can_use_my_desk``): طوابيرُ
+  العمل الأربعة على ما أُحيل إلى شجرته، بلا رقابة ولا دفتر.
 
-- ``desk_board`` (``/desk/``) — طاولةُ البريد لمختصّ البريد ورئيس القسم:
-  خريطةُ عملِ القسم كلِّه في خمسة طوابير. جمهورُها هو جمهورُ الورقتين
-  المطبوعتين نفسُه (``can_use_desk``).
-- ``my_today`` (``/my/today/``) — الطابورُ الشخصيّ **لكلّ الأدوار**: ما
-  يخصُّني أنا. وهو ما يجعل الموظّفَ يسكن النظامَ بدل أن يزوره؛ الخطّةُ بنت
-  طاولةً لموظّف البريد وحده، وهذه الشاشةُ حصّةُ البقيّة.
+و«ما يخصّني اليوم» (``my_today``) حُذفت بقرار المالك (11‑04): كانت تكرّر الطاولة.
 
 **والطابورُ ينقر إلى القائمة الموحّدة بفلاتر — لا جدولَ كتبٍ ثانٍ في النظام.**
 عدّادٌ هنا وصفوفٌ هناك؛ ونسخُ جدول الكتب ثالثةً كان سيُنشئ مصدرَ حقيقةٍ ثالثاً
@@ -316,41 +314,3 @@ def cancel_desk_referral(request, book_id, referral_id):
     else:
         messages.success(request, 'أُلغي التفريق مع الاحتفاظ بسجله الزمني.')
     return redirect(reverse('desk_board') + '#recent-books')
-
-
-@login_required
-def my_today(request):
-    """ما يخصّني اليوم — الطابورُ الشخصيّ لكلّ الأدوار."""
-    today = timezone.localdate()
-    user = request.user
-
-    assigned = scope_referrals_for(user, BookReferral.objects.filter(
-        assignee=user, status__in=BookReferral.OPEN_STATUSES,
-    ))
-
-    queues = [
-        {'key': 'overdue', 'label': 'متأخّر عليّ', 'tone': 'danger',
-         'hint': 'مرّ موعدُه', **_queue(assigned.filter(
-             purpose=BookReferral.ACTION, due_date__lt=today,
-         ), user, limit=_limit_for(request, 'overdue'))},
-        {'key': 'today', 'label': 'يستحقّ اليوم', 'tone': 'accent',
-         'hint': 'موعدُه اليوم', **_queue(assigned.filter(
-             purpose=BookReferral.ACTION, due_date=today,
-         ), user, limit=_limit_for(request, 'today'))},
-        {'key': 'new', 'label': 'محالٌ إليّ ولم أستلمه', 'tone': 'warn',
-         'hint': 'لم أؤشّر استلامَه بعد',
-         **_queue(assigned.filter(status=BookReferral.SENT), user, limit=_limit_for(request, 'new'))},
-        {'key': 'action', 'label': 'مطلوبٌ ردّي', 'tone': 'muted',
-         'hint': 'للتنفيذ لا للعلم',
-         **_queue(assigned.filter(purpose=BookReferral.ACTION), user, limit=_limit_for(request, 'action'))},
-    ]
-
-    return render(request, 'core/my_today.html', {
-        'queues': queues,
-        'today': today,
-        'assigned_total': assigned.count(),
-        # مشتقٌّ من الطوابير نفسِها لا من عدٍّ مستقلّ: فلا يمكن أن يُخفي صفّاً
-        # موجوداً (ي-4). `assigned_total` وحدَه لا يكفي حَكَماً لأنّ الطوابيرَ
-        # مرشّحاتٌ متقاطعة، فقد يختلف عن مجموعها (ي-6).
-        'queues_empty': not any(q.get('total') for q in queues),
-    })

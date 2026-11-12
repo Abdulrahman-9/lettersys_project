@@ -98,7 +98,6 @@ urlpatterns = [
     path("desk/mine/", queues.my_desk, name="desk_mine"),
     path("desk/book/<int:book_id>/referral/<int:referral_id>/cancel/",
          queues.cancel_desk_referral, name="desk_cancel_referral"),
-    path("my/today/", queues.my_today, name="my_today"),
     path("desk/handover/", desk.desk_handover, name="desk_handover"),
     path("desk/ledger/", desk.desk_ledger, name="desk_ledger"),
     path("api/links/picker/", linking.api_link_picker, name="api_link_picker"),
