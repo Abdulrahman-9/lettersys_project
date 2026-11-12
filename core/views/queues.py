@@ -30,7 +30,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core.models import Book, BookHistory, BookReferral, CustodyEvent
-from core.scoping import (ACCESS_STUB, STUB_TITLE, can_use_desk,
+from core.scoping import (ACCESS_STUB, STUB_TITLE, can_send_referral, can_use_desk, has_capability,
                           is_privileged, scope_books_for, scope_referrals_for,
                           secret_access, subtree_ids, user_department_id)
 
@@ -75,18 +75,15 @@ def _recent_desk_books(user, department_id, department_scope):
         'book', 'from_department', 'to_department', 'to_entity', 'assignee', 'created_by',
     ).order_by('-created_at', '-pk')
     referrals_by_book = {}
-    privileged = is_privileged(user)
+    # (ب)6: الأعلامُ من حرّاس الخدمة نفسِها لا من «كتابُ قسمي» — كان الشرطُ يفترض رئيساً أو مختصَّ بريد
+    # فيُظهر للمنفِّذ «إلغاء» و«متابعة» و«استلام» ثمّ يرفضها الخادم (مراجعةُ فيبل). الاستلامُ والإنجاز
+    # ``_guard_target``، والإلغاءُ ``_guard_chaser``، وتفعيلُ المتابعة ``can_send_referral``.
+    from core.referral_service import _chaser_side, _target_side
+
+    may_receive = has_capability(user, 'referral.receive')
     for referral in referral_rows:
-        target_side = (
-            privileged
-            or referral.to_department_id in department_scope
-            or referral.book.department_id == department_id
-        )
-        source_side = (
-            privileged
-            or referral.from_department_id in department_scope
-            or referral.book.department_id == department_id
-        )
+        may_send = can_send_referral(referral.book, user)
+        target_side = may_receive and _target_side(referral, user)
         referral.desk_can_receive = (
             referral.status == BookReferral.SENT and target_side
         )
@@ -96,12 +93,12 @@ def _recent_desk_books(user, department_id, department_scope):
             and target_side
         )
         referral.desk_can_cancel = (
-            referral.status == BookReferral.SENT and source_side
+            referral.status == BookReferral.SENT and may_send and _chaser_side(referral, user)
         )
         referral.desk_can_update_followup = (
             referral.status in BookReferral.OPEN_STATUSES
             and referral.purpose == BookReferral.ACTION
-            and (privileged or referral.book.department_id == department_id)
+            and may_send
         )
         referrals_by_book.setdefault(referral.book_id, []).append(referral)
 
@@ -193,7 +190,7 @@ def _limit_for(request, key):
 def desk_board(request):
     """طاولةُ البريد — طوابيرُ التسليم والاستلام والإنجاز المفتوحة."""
     if not can_use_desk(request.user):
-        raise PermissionDenied('طاولةُ البريد لمختصّ البريد ورئيس القسم.')
+        raise PermissionDenied('طاولةُ البريد لمختصّ البريد ورئيس القسم وموظّف التنفيذ.')
 
     today = timezone.localdate()
     dept_id = user_department_id(request.user)

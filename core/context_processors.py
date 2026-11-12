@@ -83,7 +83,7 @@ def nav_gates(request):
 
     from core.scoping import (can_archive, can_enter_book, can_manage_accounts, can_manage_departments, can_open_trash,
                               can_manage_mail, can_operate_mail,
-                              can_manage_system, can_restore_system, can_use_desk,
+                              can_manage_system, can_restore_system, can_use_desk, can_use_ledger,
                               can_use_system_admin, can_view_audit, can_view_reports)
     profile = getattr(user, 'profile', None)
     must_change = bool(profile and profile.must_change_password)
@@ -97,6 +97,8 @@ def nav_gates(request):
         # «الإدخال الذكي» وكلُّ رابطٍ إلى وضع الإدخال — كان يظهر للقارئ فيلقى 403 ((ب)3).
         'enter': can_enter_book(user),
         'desk': can_use_desk(user),
+        # الدفترُ وكشفُ التسليم بمفتاحهما ((ب)6) — المنفِّذ يرى الطاولةَ لا الدفتر
+        'ledger': can_use_ledger(user),
         'audit': can_view_audit(user),
         'reports': can_view_reports(user),
         # السلّةُ مُنطَّقةٌ أصلاً بـ`scope_books_for`، والاستعادةُ بـ

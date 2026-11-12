@@ -26,7 +26,7 @@ from core import numbering
 from core.custody_service import undelivered
 from core.forms import DeskFilterForm
 from core.models import Book, BookReferral, CustodyEvent, Department, Entity
-from core.scoping import (ACCESS_STUB, STUB_TITLE, can_use_desk, content_authorized_books,
+from core.scoping import (ACCESS_STUB, STUB_TITLE, can_use_ledger, content_authorized_books,
                           is_privileged,
                           scope_books_for, secret_access, subtree_ids,
                           user_department_id)
@@ -202,8 +202,9 @@ def _acting_department(request):
     يرفع ``PermissionDenied`` لمن ليس مختصَّ بريدٍ ولا رئيسَ قسم: الكشفُ
     والدفترُ يُظهران خريطةَ عملِ القسم كاملةً في ورقةٍ تخرج من الجهاز.
     """
-    if not can_use_desk(request.user):
-        raise PermissionDenied('طاولةُ البريد لمختصّ البريد ورئيس القسم.')
+    # (ب)6: الدفترُ والكشفُ بمفتاحهما — الطاولةُ وحدها تتبع المنفِّذ
+    if not can_use_ledger(request.user):
+        raise PermissionDenied('الدفترُ وكشفُ التسليم لمختصّ البريد ورئيس القسم.')
 
     if is_privileged(request.user):
         wanted = (request.GET.get('department') or '').strip()

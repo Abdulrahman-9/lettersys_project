@@ -124,7 +124,7 @@ def can_view_audit(user) -> bool:
     **ومختصُّ البريد لا يراه** رغم أنّه أمينُ السرّيّ تشغيليّاً: سجلُّ القراءة
     أداةُ **مراقبةِ أشخاص** لا أداةُ بريد، ومَن يحاسِب موظّفي القسم هو رئيسُه.
     """
-    return is_privileged(user) or is_department_head(user)
+    return has_capability(user, 'audit.view')   # (ب)6: مفتاحُ «سجلّ الحركات»
 
 
 def can_view_reports(user) -> bool:
@@ -134,7 +134,7 @@ def can_view_reports(user) -> bool:
     لا أداةُ عمل، ومخرَجُه (الطباعة وCSV) يخرج من الجهاز. توأمُ ``can_view_audit``؛
     و``roles.role_capabilities`` قاموسُ عرضٍ لا بوّابة.
     """
-    return is_privileged(user) or is_department_head(user)
+    return has_capability(user, 'report.view')   # (ب)6: مفتاحُ «التقارير»
 
 
 def report_departments(user):
@@ -147,7 +147,8 @@ def report_departments(user):
 
     if is_privileged(user):
         return Department.objects.filter(is_active=True)
-    if is_department_head(user):
+    # (ب)6: شجرةُ قسم حامل المفتاح — منحُ التقارير لمختصّ البريد يفتح شجرتَه لا صفحةً فارغة
+    if can_view_reports(user) and user_department_id(user) is not None:
         return Department.objects.filter(pk__in=subtree_ids(user_department_id(user)))
     return Department.objects.none()
 
@@ -165,7 +166,7 @@ def scope_activity_for(user, qs=None):
         qs = UserActivityLog.objects.all()
     if is_privileged(user):
         return qs
-    if not is_department_head(user):
+    if not can_view_audit(user):   # (ب)6: حاملُ المفتاح لا «أيُّ رئيس»
         return qs.none()
 
     mine = subtree_ids(user_department_id(user))
@@ -249,7 +250,15 @@ def can_use_desk(user) -> bool:
     مختصُّ البريد ورئيسُ القسم ومديرُ النظام. وهي ليست بوّابةَ سرّيّةٍ بل
     بوّابةُ **سطحٍ يخرج من الجهاز**: ورقةٌ تحمل خريطةَ عمل القسم كاملةً.
     """
-    return is_privileged(user) or is_department_head(user) or is_mail_officer(user)
+    # (ب)6: مفتاحُ «طاولة البريد» (رئيسُ القسم ومختصُّ البريد والمنفِّذ — قرارُ المالك 11-04: المنفِّذ
+    # يدخلها مقصورةً على وحدته، والطوابيرُ مقيَّدةٌ بشجرة قسمه في ``queues.desk_board``).
+    return has_capability(user, 'desk.board')
+
+
+def can_use_ledger(user) -> bool:
+    """الدفترُ وكشفُ التسليم — مفتاحُ «الدفتر وكشف التسليم» (رئيسُ القسم ومختصُّ البريد): ورقةٌ تخرج
+    من الجهاز بخريطة عمل القسم كاملة، فلا تتبع الطاولةَ إلى المنفِّذ."""
+    return has_capability(user, 'desk.ledger')
 
 
 def _department_custodian(user) -> bool:
@@ -992,7 +1001,8 @@ CAPABILITIES = {
 # الحذفُ إلى السلّة والاسترجاعُ منها ((ب)4، 11-11).
 WIRED_CAPABILITIES = frozenset({'book.enter', 'book.edit', 'number.reserve', 'entity.add', 'book.trash',
                                 'book.restore', 'referral.send', 'referral.receive', 'custody.link',
-                                'mail.operate', 'mail.send_book', 'mail.settings', 'secret.own'})
+                                'mail.operate', 'mail.send_book', 'mail.settings', 'secret.own',
+                                'desk.board', 'desk.ledger', 'report.view', 'audit.view'})
 
 # القارئُ احتياطيُّ كلِّ حسابٍ بلا دور: منحُ الكتابة له على مستوى الدور يمنحها للجميع،
 # فتُجمَّد خليّتُه هو والمنفِّذ في المصفوفة، وتبقى ممكنةً باستثناءٍ لشخصٍ بعينه.

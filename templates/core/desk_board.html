@@ -31,7 +31,7 @@
       <h2>الطاولةُ نظيفة</h2>
       <p>لا متأخّرَ ولا غيرَ مُستلَمٍ ولا مستحقَّ اليوم في القسم الآن.</p>
       <div class="qb-blank-acts">
-        <a class="btn btn-primary btn-sm" href="{% url 'desk_ledger' %}">دفتر البريد</a>
+        {% if nav.ledger %}<a class="btn btn-primary btn-sm" href="{% url 'desk_ledger' %}">دفتر البريد</a>{% endif %}
         <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">القائمةُ الموحّدة</a>
       </div>
     </div>
