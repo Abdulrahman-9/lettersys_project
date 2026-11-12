@@ -40,7 +40,7 @@ BOOK UNIFIED CARD (Mobile View)
         {% if book.our_number_is_numberless %}
           <span class="book-number-numberless">بلا رقم</span>
         {% else %}
-          <span class="book-number-text">{{ book.our_number_sequence }}{% if book.our_number_year %}<span class="num-year">/{{ book.our_number_year }}</span>{% endif %}</span>
+          <span class="book-number-text">{{ book.our_number_sequence }}{% if book.our_number_year %}<span class="num-year">/{{ book.our_number_year }}</span>{% endif %}</span>{% if book.register_tag %}<span class="num-register" title="دفتر {{ book.register_name }}">{{ book.register_tag }}</span>{% endif %}
         {% endif %}
         {% if book.source_ref %}<span class="num-paper" title="منقولٌ من الدفتر الورقيّ">ورق</span>{% endif %}
       </div>

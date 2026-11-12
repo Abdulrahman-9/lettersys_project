@@ -17,7 +17,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from ..models import Attachment, Book, Entity
+from ..models import Attachment, Book, Department, Entity
 from core.scoping import (can_open_trash, can_restore_book, has_capability, listed_books, is_privileged,
                           mark_row_actions, present_book_payload, scope_books_for)
 from core.views.helpers import guard_required
@@ -128,6 +128,21 @@ def _serialize_book(book):
     }
 
 
+def _mark_registers(books, qs) -> None:
+    """رقمٌ واحدٌ في دفترين كتابان: التفرّدُ داخل القسم (``uniq_book_number_kind_dept``)، فحين
+    تجمع النتيجةُ كتبَ أكثر من قسمٍ يحمل كلُّ صفٍّ رمزَ سجلّه بجوار رقمه (``register_tag``)،
+    وإلّا بقي الصفُّ كما كان. والقرارُ من النتيجة كلّها لا من الصفحة — فلا يظهر الوسمُ في صفحةٍ
+    ويغيب في تاليتها — باستعلامٍ واحدٍ محدود، والأسماءُ باستعلامٍ واحدٍ للصفحة."""
+    if qs.order_by().values('department_id').distinct()[:2].count() < 2:
+        return
+    ids = {b.department_id for b in books if b.department_id is not None}
+    departments = Department.objects.only('name', 'code').in_bulk(ids) if ids else {}
+    for book in books:
+        department = departments.get(book.department_id)
+        book.register_tag = department.code if department else 'بلا قسم'
+        book.register_name = department.name if department else 'بلا قسم'
+
+
 def _lens_department(request):
     """قسمُ العدسة من ``?dept=``. لمدير النظام وحده؛ وغيره يبقى على نطاقه بلا رسالة."""
     from core.models import Department
@@ -211,6 +226,7 @@ def book_unified(request):
 
     books = list(page_obj.object_list)
     mark_row_actions(books, request.user)   # «تعديل» و«نقل إلى السلّة» لمن يقبلهما الخادم ((ب)4)
+    _mark_registers(books, qs)              # رمزُ السجلّ بجوار الرقم حين تتعدّد الدفاتر
     for book in books:
         book.shown_director_general_number = (
             '' if book.restricted else book.director_general_number)
@@ -342,6 +358,7 @@ def api_unified_data(request):
 
     books_qs = list(page_obj.object_list)
     mark_row_actions(books_qs, request.user)
+    _mark_registers(books_qs, qs)
     for book in books_qs:
         book.shown_director_general_number = (
             '' if book.restricted else book.director_general_number)

@@ -1147,6 +1147,31 @@ def can_enter_for(user, department) -> bool:
             and department.is_active and department.holds_register)
 
 
+def counter_departments(user) -> list:
+    """الدفاترُ التي تفتح صفحةُ العدّادات عدّاداتِها لهذا المستخدم (والصفحةُ نفسُها
+    لحاملي ``staff_required``).
+
+    كانت الصفحةُ تعرض أوّلَ ماسكٍ وحدَه فلا يُضبط عدّادُ قسمٍ ثانٍ من أيّ واجهة. الآن:
+    **مديرُ النظام** يختار أيَّ قسمٍ نشطٍ يمسك سجلَّه — كما يُدخل في دفتر أيّ قسمٍ
+    (``can_enter_for``)؛ و**غيرُه** على دفتر قسمه (``ledger_department``)، وبلا قسمٍ على
+    الافتراضيّ كما كان. في وضع «قسمٍ واحد» القائمةُ الماسكُ الوحيد فلا يتغيّر شيء."""
+    from core.models import BookSequence, Department
+    from core.registration_service import ledger_department
+
+    if is_privileged(user):
+        return list(Department.objects.filter(is_active=True, holds_register=True).order_by('id'))
+    own = ledger_department(user) if user_department_id(user) is not None else None
+    fallback = own or BookSequence.resolve_department()
+    return [fallback] if fallback is not None else []
+
+
+def can_edit_counters(user, department) -> bool:
+    """أيضبط عدّاداتِ دفتر ``department`` من صفحة العدّادات؟ — قاعدةُ ``counter_departments``
+    نفسُها، لرابط «اضبط عدّاداته» في صفحة القسم."""
+    return (department is not None and bool(user.is_staff or user.is_superuser)
+            and any(d.pk == department.pk for d in counter_departments(user)))
+
+
 def can_reserve_number(user) -> bool:
     """حجزُ رقمٍ مسبقاً وإعادةُ تفعيل حجزٍ — مفتاحُ «حجز رقم»، وزرُّه في صفحة الإدخال يتبعه."""
     return has_capability(user, 'number.reserve')

@@ -17,7 +17,7 @@ from core import permission_service, system_centre, system_ops
 from core.logging_models import UserActivityLog
 from core.models import Book, BookReferral, BookSequence, Department, UserProfile
 from core.roles import get_user_role
-from core.scoping import (CAPABILITIES, WIRED_CAPABILITIES, can_enter_for, can_use_system_admin, secret_openers,
+from core.scoping import (CAPABILITIES, WIRED_CAPABILITIES, can_edit_counters, can_enter_for, can_use_system_admin, secret_openers,
                           subtree_ids)
 from core.scoping import ROLE_LABELS as MATRIX_ROLES
 from core.views.filter_helpers import days_ar, followup_q
@@ -118,6 +118,10 @@ def system_department_view(request, pk):
         'lens_url': f"{reverse('book_unified')}?tab=all&dept={unit.id}",
         # «إدخال في دفتره» لمن يقبله الخادم (``can_enter_for``) — الحفظُ يسأل تأكيداً يسمّي القسمَ والرقم
         'can_enter_here': can_enter_for(request.user, unit),
+        # «اضبطها» إلى صفحة العدّادات على دفتر هذا القسم (``can_edit_counters``) — كانت العدّاداتُ
+        # هنا للقراءة وحدَها وصفحتُها على أوّل ماسك، فلا يُضبط عدّادُ قسمٍ ثانٍ من أيّ واجهة
+        'counters_url': (f"{reverse('sequence_settings')}?department={unit.pk}"
+                         if can_edit_counters(request.user, unit) else ''),
     })
 
 

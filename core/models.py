@@ -1726,7 +1726,7 @@ class BookSequence(models.Model):
         وتتّسق منه الحجوزُ والعرضُ والحفظُ والقيدُ عندنا. وقسمٌ لا ماسكَ فوقه خطأُ إعدادٍ
         يُرفض بصوتٍ عالٍ (``ValidationError``) — لا يُستهلك عدّادُ قسمٍ آخر بصمت.
 
-        وبلا قسم (مساراتٌ قديمةٌ لا تعرفه: الاستعادة، شاشة العدّادات): أوّلُ قسمٍ نشطٍ
+        وبلا قسم (مساراتٌ قديمةٌ لا تعرفه: الاستعادة): أوّلُ قسمٍ نشطٍ
         يمسك السجلّ — الصوابُ حرفيّاً في وضع «قسم واحد».
         """
         from core.models import Department
@@ -1737,6 +1737,21 @@ class BookSequence(models.Model):
                     'لا قسمَ يمسك السجلّ فوق «%s» — يُصحَّح من إدارة الأقسام.' % department.name)
             return holder
         return Department.objects.filter(is_active=True, holds_register=True).order_by('id').first()
+
+    @classmethod
+    def register_department_ids(cls, holder):
+        """أقسامُ دفتر ``holder``: هو ومَن يصعد إليه بـ``resolve_department`` (شُعبُه ووحداتُه
+        التي لا سجلَّ لها). عكسٌ محسوبٌ من المصدر الواحد نفسِه لا قاعدةٌ ثانية، وكتبٌ بلا قسمٍ
+        تُضاف إلى الافتراضيّ في موضع السؤال (هجرة 0064 أسندتها إليه)."""
+        from core.models import Department
+        ids = []
+        for department in Department.objects.only('id', 'parent_id', 'holds_register'):
+            try:
+                if cls.resolve_department(department).pk == holder.pk:
+                    ids.append(department.pk)
+            except ValidationError:
+                continue
+        return ids
 
     @classmethod
     def get_next(cls, kind, department=None):

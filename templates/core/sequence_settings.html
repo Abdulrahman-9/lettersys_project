@@ -26,8 +26,26 @@
     {% endfor %}
     {% endif %}
 
+    {% comment %}لكلّ قسمٍ يمسك سجلَّه عدّاداتُه (``counter_departments``): كانت الصفحةُ على أوّل ماسكٍ
+       وحدَه فلا يُضبط عدّادُ قسمٍ ثانٍ من أيّ واجهة. يظهر المُختارُ حين تتعدّد الدفاتر.{% endcomment %}
+    {% if departments|length > 1 %}
+    <form method="get" class="d-flex align-items-end gap-2 mb-3">
+        <div class="flex-grow-1">
+            <label class="form-label fw-semibold" style="font-size:0.85rem;" for="counterDepartment">دفترُ القسم</label>
+            <select id="counterDepartment" name="department" class="form-select form-select-sm">
+                {% for d in departments %}
+                <option value="{{ d.pk }}"{% if d.pk == department.pk %} selected{% endif %}>{{ d.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-sm btn-outline-secondary">اعرض عدّاداته</button>
+    </form>
+    <p class="text-muted mb-3" style="font-size:0.85rem;">تضبط هنا عدّاداتِ دفتر <strong>{{ department.name }}</strong> وحده؛ ولكلّ دفترٍ سلسلتُه.</p>
+    {% endif %}
+
     <form method="post">
         {% csrf_token %}
+        {% if departments|length > 1 %}<input type="hidden" name="department" value="{{ department.pk }}">{% endif %}
         <div class="row g-3">
             {% for seq in sequences %}
             <div class="col-md-6">

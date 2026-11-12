@@ -9,13 +9,16 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.http import JsonResponse
+from django.db.models import Q
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 
 from ..audit_service import record_settings_change, settings_snapshot
 from ..extraction.kinds import BOOK_KIND_CHOICES, normalize_book_kind
 from ..models import Book, BookSequence, SystemSettings
 from ..numbering import MANUAL_KINDS, max_series_seq
+from ..scoping import counter_departments
 from .helpers import staff_required
 
 logger = logging.getLogger(__name__)
@@ -37,12 +40,36 @@ def _parse_int(raw):
     return value if value >= 0 else None
 
 
-def _last_issued(kind):
-    """آخرُ تسلسلٍ صدر في السلسلة الجارية لنوعٍ (والمحذوفُ ناعماً صدر أيضاً)."""
+def _last_issued(kind, department):
+    """آخرُ تسلسلٍ صدر في **دفتر** ``department`` لنوعٍ (والمحذوفُ ناعماً صدر أيضاً).
+
+    كان البحثُ بالنوع وحدَه عبر الأقسام كلّها: فبدايةٌ صحيحةٌ لعدّاد قسمٍ تُرفض لأنّ قسماً
+    آخر بلغ رقماً أعلى، والرسالةُ تقول «فكان سيكرّر أرقاماً» ولا تكرار — التفرّدُ داخل القسم
+    (``uniq_book_number_kind_dept``). الدفترُ كتبُ الماسك ومَن يصعد إليه، والكتبُ بلا قسمٍ
+    على الافتراضيّ."""
     if kind in MANUAL_KINDS:
         return 0
-    return max_series_seq(
-        Book.all_objects.filter(kind=kind).values_list('our_number', flat=True).iterator())
+    books = Book.all_objects.filter(kind=kind)
+    if department is not None:
+        scope = Q(department_id__in=BookSequence.register_department_ids(department))
+        default = BookSequence.resolve_department()
+        if default is not None and default.pk == department.pk:
+            scope |= Q(department__isnull=True)
+        books = books.filter(scope)
+    return max_series_seq(books.values_list('our_number', flat=True).iterator())
+
+
+def _chosen_department(request, departments):
+    """دفترُ الصفحة: ``department`` من الطلب ضمن ``counter_departments``، وإلّا أوّلُها.
+    قسمٌ خارجها 404 — لا يُكشف وجودُه ولا يُضبط عدّادُه بطلبٍ مصنوع."""
+    raw = (request.POST.get('department') if request.method == 'POST'
+           else request.GET.get('department'))
+    if raw in (None, ''):
+        return departments[0] if departments else BookSequence.resolve_department()
+    for department in departments:
+        if str(department.pk) == str(raw).strip():
+            return department
+    raise Http404('لا دفترَ بهذا الرقم لك.')
 
 
 @login_required
@@ -70,10 +97,12 @@ def next_number_api(request):
 def sequence_settings(request):
     """Sequence settings page for all book kinds."""
     sequences = []
-    # عدّادُ القسم الذي يُصدر منه الترقيمُ فعلاً (``consume_next`` بلا قسم ⟵ ``resolve_department``).
-    # كان البحثُ بالنوع وحدَه، و«قيِّده عندنا» تُنشئ لكلّ قسمٍ صفّاً من النوع نفسِه — فأوّلُ
-    # قيدٍ في قسمٍ ثانٍ يجعل الصفحةَ MultipleObjectsReturned (500).
-    department = BookSequence.resolve_department()
+    # عدّادُ الدفتر الذي يُصدر منه الترقيمُ فعلاً. كان البحثُ بالنوع وحدَه، و«قيِّده عندنا»
+    # تُنشئ لكلّ قسمٍ صفّاً من النوع نفسِه — فأوّلُ قيدٍ في قسمٍ ثانٍ يجعل الصفحةَ
+    # MultipleObjectsReturned (500). ثمّ كانت الصفحةُ على أوّل ماسكٍ وحدَه فلا يُضبط عدّادُ
+    # قسمٍ ثانٍ من أيّ واجهة؛ الآن تختار من ``counter_departments``.
+    departments = counter_departments(request.user)
+    department = _chosen_department(request, departments)
     for kind_value, kind_label in BOOK_KIND_CHOICES:
         obj, _ = BookSequence.objects.get_or_create(kind=kind_value, department=department,
                                                     defaults={'next_number': 1})
@@ -101,6 +130,8 @@ def sequence_settings(request):
         saved = False   # «حُفظ» يُقال حين حُفظ شيءٌ فعلاً (تدقيقُ نيلسن F#9)
         # ذرّيّةٌ صريحة: لا ``ATOMIC_REQUESTS`` في هذا المشروع، وكان خطأُ تحليلٍ
         # في حقل المدّة يترك العدّاداتَ محفوظةً والصفحةَ على 500.
+        # اسمُ الدفتر في الرسالة والسجلّ حين تتعدّد الدفاتر — وفي وضع «قسمٍ واحد» لا يتغيّر نصّ
+        where = f' في «{department.name}»' if len(departments) > 1 and department is not None else ''
         with transaction.atomic():
             for seq in sequences:
                 prefix_key = f"prefix_{seq['kind']}"
@@ -114,10 +145,10 @@ def sequence_settings(request):
                     seq['obj'].prefix = new_prefix
                     update_fields.append('prefix')
                 if new_number is not None and new_number != seq['obj'].next_number:
-                    issued = _last_issued(seq['kind'])
+                    issued = _last_issued(seq['kind'], department)
                     if new_number <= issued:
                         sequence_errors.append(
-                            f"«{seq['label']}»: الرقمُ التالي {new_number} لا يأتي بعد آخر رقمٍ "
+                            f"«{seq['label']}»{where}: الرقمُ التالي {new_number} لا يأتي بعد آخر رقمٍ "
                             f"صدر ({issued}) فكان سيكرّر أرقاماً — بقي {seq['obj'].next_number}.")
                     else:
                         seq['obj'].next_number = new_number
@@ -125,7 +156,7 @@ def sequence_settings(request):
                 if update_fields:
                     seq['obj'].save(update_fields=update_fields + ['updated_at'])
                     saved = True
-                    record_settings_change(request, f"العدّادات — {seq['label']}", seq['obj'], before)
+                    record_settings_change(request, f"العدّادات{where} — {seq['label']}", seq['obj'], before)
 
             # المدى من ثوابت النموذج — لا رقمَ مكتوباً بيدٍ هنا ولا في القالب.
             raw_expire = request.POST.get('reservation_expire_minutes', '').strip()
@@ -168,9 +199,13 @@ def sequence_settings(request):
                 messages.success(request, 'حُفظت بقيّةُ التغييرات.')
         else:
             messages.success(request, 'تم حفظ إعدادات العدّادات والحجز بنجاح.')
+        if len(departments) > 1 and department is not None:
+            return redirect(f"{reverse('sequence_settings')}?department={department.pk}")
         return redirect('sequence_settings')
 
     return render(request, 'core/sequence_settings.html', {
         'sequences': sequences,
         'reservation_settings': reservation_settings,
+        'departments': departments,
+        'department': department,
     })

@@ -34,7 +34,7 @@
         {% endcomment %}
         <span class="book-number-text">
           <span class="num-sequence">{{ book.our_number_sequence }}</span>{% if book.our_number_year %}<span class="num-year">/{{ book.our_number_year }}</span>{% endif %}
-        </span>
+        </span>{% if book.register_tag %}<span class="num-register" title="دفتر {{ book.register_name }}">{{ book.register_tag }}</span>{% endif %}
       {% endif %}
     </div>
   </td>

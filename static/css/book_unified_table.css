@@ -112,6 +112,20 @@
   vertical-align: middle;
 }
 
+/* رمزُ السجلّ حين تجمع القائمةُ أكثر من دفتر: «125» في دفترين كتابان (_mark_registers) */
+.num-register {
+  display: inline-block;
+  margin-inline-start: 0.35rem;
+  padding: 0 0.35rem;
+  border: 1px solid #99d5cf;
+  border-radius: 0.35rem;
+  color: #0f766e;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+
 .num-year {
   font-size: 0.7rem;
   font-weight: 600;

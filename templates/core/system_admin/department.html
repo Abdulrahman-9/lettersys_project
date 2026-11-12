@@ -52,7 +52,7 @@
         <div class="sa-rows">{% for p in staff %}
           <div class="row"><i class="bi bi-person" aria-hidden="true"></i><span>{{ p.name }} <small>· {{ p.role }}{% if not p.active %} · معطَّل{% endif %}</small></span><small>{{ p.last|default:'—' }}</small></div>
         {% empty %}<p class="sa-empty">لا حسابات في هذا القسم.</p>{% endfor %}</div></section>
-      <section class="sa-card" id="saCounters"><div class="sa-card-head"><h2>العدّادات</h2></div>
+      <section class="sa-card" id="saCounters"><div class="sa-card-head"><h2>العدّادات</h2>{% if counters_url %}<a href="{{ counters_url }}">اضبطها</a>{% endif %}</div>
         <div class="sa-ctr">{% for s in sequences %}<span>{{ s.get_kind_display }}</span><b>{{ s.next_number }}</b>{% empty %}<p class="sa-empty">لا عدّادات لهذا القسم.</p>{% endfor %}</div></section>
     </div>
   </div>
