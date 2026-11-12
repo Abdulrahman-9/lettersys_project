@@ -117,7 +117,7 @@
           <li><a class="dropdown-item" href="{% url 'book_report' book.id %}?print=1" target="_blank" rel="noopener">تقرير الكتاب ودورة حياته</a></li>
         </ul>
       </div>
-      <a class="bx-btn" href="{% url 'mail_compose_book' book.pk %}"><i class="bi bi-envelope" aria-hidden="true"></i>إرسال…</a>
+      {% if nav.mail_operate %}<a class="bx-btn" href="{% url 'mail_compose_book' book.pk %}"><i class="bi bi-envelope" aria-hidden="true"></i>إرسال…</a>{% endif %}
       {% if can_link %}<button type="button" class="bx-btn" data-bs-toggle="modal" data-bs-target="#linkPickerModal"><i class="bi bi-link-45deg" aria-hidden="true"></i>اربط…</button>{% endif %}
       <span class="spacer"></span>
       {# «أفعالٌ أخرى» من ``book_state.more_actions`` — القالبُ يعرض ولا يقرّر، وقائمةٌ فارغةٌ لا تُعرض #}
@@ -263,7 +263,7 @@
         <div class="bx-card-hd">
           <h2 id="h-mail">البريد الإلكترونيّ</h2>
           <span class="meta" id="bookEmailCount">…</span><span class="spacer"></span>
-          <a class="bx-tag" href="{% url 'mail_compose_book' book.pk %}"><i class="bi bi-send" aria-hidden="true"></i>إرسال</a>
+          {% if nav.mail_operate %}<a class="bx-tag" href="{% url 'mail_compose_book' book.pk %}"><i class="bi bi-send" aria-hidden="true"></i>إرسال</a>{% endif %}
         </div>
         <div id="bookEmailList" class="bx-mail"><p class="bx-empty">جارٍ التحميل…</p></div>
         {% if email_log_count %}

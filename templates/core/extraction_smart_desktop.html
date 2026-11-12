@@ -579,10 +579,12 @@
                 <i class="bi bi-x-lg" aria-hidden="true"></i> إلغاء
             </button>
             {% endif %}
+            {% if can_send_book_mail %}
             <button type="button" class="btn-action-secondary" id="saveAndSendButton"
                     title="حفظ الكتاب ثم إرساله بالبريد إلى الجهة المعنيّة مع مرفقاته">
                 <i class="bi bi-envelope" aria-hidden="true"></i> حفظ وإرسال
             </button>
+            {% endif %}
             <button type="button" class="btn-action-primary" id="saveButton" title="حفظ الكتاب في النظام (Ctrl+S)" aria-keyshortcuts="Control+S">
                 <i class="bi bi-check-lg" aria-hidden="true"></i> حفظ الكتاب
             </button>

@@ -2,7 +2,7 @@
 """«قارئ فقط» يقرأ ويعلّق ولا يكتب — قرارُ المالك 2026-11-01.
 
 كان الدورُ تسميةَ عرضٍ (``roles.get_user_role``) لا تمنع شيئاً: القارئُ حذف كتابَ قسمه.
-المسندُ الآن ``scoping.can_write`` (عضويّةٌ في مجموعات الأدوار الكاتبة، أو رئاسةُ قسم، أو
+المسندُ اليوم مفاتيحُ مصفوفة الأدوار ((ب)3–(ب)5 حذفت ``scoping.can_write``؛ كان عضويّةً أو رئاسةَ قسم، أو
 مديرُ النظام) مطويٌّ في ``can_edit_book``، ومعه ``can_act_on_book`` لأفعال الصفّ،
 وحارسا ``writer_required``/``writer_required_api`` لنقاط الإنشاء بلا كتاب.
 
@@ -21,8 +21,8 @@ from core import roles
 from core.models import (Book, BookComment, BookEmailLog, BookHistory, BookLink,
                          BookNumberReservation, BookReferral, BookRegistration,
                          CustodyEvent, Department, EmailThread, Entity, UserProfile)
-from core.scoping import (_writer_group_names, can_edit_book, can_link_book, can_register_book,
-                          can_open_content, can_view_book, can_write, scope_books_for)
+from core.scoping import (can_edit_book, can_enter_book, can_link_book, can_register_book,
+                          can_open_content, can_view_book, scope_books_for)
 
 
 def _member(name, dept, group=None, *, head=False, staff=False, active=True):
@@ -59,11 +59,8 @@ class CanWriteContractTests(TestCase):
         }
         for label, (user, expected) in cases.items():
             with self.subTest(label):
-                self.assertIs(can_write(user), expected)
-
-    def test_writer_list_is_every_role_group(self):
-        """مجموعةُ دورٍ جديدة تولد للقراءة — هذا الحارسُ يُلزم بقرارٍ صريحٍ لها."""
-        self.assertEqual(set(_writer_group_names()), set(roles.ROLE_GROUP_NAMES.values()))
+                # (ب)3–(ب)5: حُذف ``can_write``؛ «يكتب» = يملك مفتاحَ الإدخال في مصفوفة الأدوار
+                self.assertIs(can_enter_book(user), expected)
 
 
 class ViewerReadsLikeAColleagueTests(TestCase):
@@ -173,8 +170,7 @@ class ViewerWriteEndpointsTests(TestCase):
             with self.subTest(label):
                 r = call()
                 self.assertEqual(r.status_code, 403)
-                mail = label in ('mail_compose', 'mail_bulk', 'thread_status', 'email_send', 'book_email_send')
-                self.assertEqual(r.json().get('error_code'), 'READ_ONLY' if mail else 'FORBIDDEN')
+                self.assertEqual(r.json().get('error_code'), 'FORBIDDEN')   # كلُّها على مفاتيحها منذ (ب)5
         self.assertEqual(self.snapshot(), before)
 
     def test_entry_pages_are_closed(self):

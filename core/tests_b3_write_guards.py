@@ -142,7 +142,7 @@ class EachGuardReadsItsOwnKeyTests(B3Case):
         UserCapabilityOverride.objects.create(user=self.reader, capability='book.enter', allowed=True)
         self.assertTrue(s.can_enter_book(self.fresh(self.reader)))
 
-    def test_the_unit_head_no_longer_writes_but_mail_waits_for_b5(self):
+    def test_the_unit_head_no_longer_writes(self):
         """أمرُ المالك «يُضيَّق can_write عن رئيس أيّ مستوى» — والبريدُ وحده على can_write حتى (ب)5."""
         u = self.fresh(self.unit_head)
         self.assertEqual(s.role_of(u), s.ROLE_UNIT)
@@ -151,7 +151,7 @@ class EachGuardReadsItsOwnKeyTests(B3Case):
         self.assertFalse(s.can_edit_book(self.unit_book, u))
         self.assertFalse(s.can_link_book(self.unit_book, u))
         self.assertTrue(s.can_open_content(self.unit_book, u))
-        self.assertTrue(s.can_write(u))
+        self.assertFalse(s.can_operate_mail(u))   # (ب)5: البريدُ لمختصّه — حُذف ``can_write``
 
 
 class ServicesRefuseWithoutTheKeyTests(B3Case):

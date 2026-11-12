@@ -24,7 +24,7 @@ from core.attachment_sharing import (
     read_share_token,
 )
 from core.models import Attachment, Book, EmailSettings, Entity
-from core.testing import as_writer
+from core.testing import as_writer, as_mail_operator
 
 
 def _make_attachment(book, name, size):
@@ -150,7 +150,7 @@ class SendBookToEntityTests(TestCase):
     """نقطة الإرسال: ترفض بصدق حين لا تستطيع، وتُمرّر المرفقات حين تستطيع."""
 
     def setUp(self):
-        self.user = as_writer(get_user_model().objects.create_user(
+        self.user = as_mail_operator(get_user_model().objects.create_user(
             username='sender', password='pw-send-12345', is_staff=True,
         ))
         self.client.force_login(self.user)

@@ -56,7 +56,15 @@ class MailGateIsMembershipTests(TestCase):
         self.assertTrue(is_mail_officer(self.head_officer))
 
     def test_the_head_officer_sees_the_mail_section_on_his_dashboard(self):
-        keys = {s['key'] for s in sections_for(self.head_officer)}
+        """(ب)5: قسمُ البريد بمفتاح «تشغيل البريد» والدورُ واحد، فرئيسٌ عضوٌ في البريد يُحسب رئيساً
+        ويُمنح التشغيلَ استثناءً شخصيّاً (المفتاحُ غيرُ مقفل) — مشورةُ فيبل."""
+        from django.contrib.auth.models import User
+
+        from core.models import UserCapabilityOverride
+
+        self.assertNotIn('mail', {s['key'] for s in sections_for(User.objects.get(pk=self.head_officer.pk))})
+        UserCapabilityOverride.objects.create(user=self.head_officer, capability='mail.operate', allowed=True)
+        keys = {s['key'] for s in sections_for(User.objects.get(pk=self.head_officer.pk))}
 
         self.assertIn('mail', keys)
 

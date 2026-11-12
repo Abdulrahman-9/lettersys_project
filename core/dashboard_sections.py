@@ -211,8 +211,9 @@ def _can_desk(user):
 
 
 def _can_mail(user):
-    from core.scoping import is_mail_officer, is_privileged
-    return is_privileged(user) or is_mail_officer(user)
+    # قسمُ البريد في اللوحة لمن يشغّله ((ب)5، مفتاحُ «تشغيل البريد»)
+    from core.scoping import can_operate_mail
+    return can_operate_mail(user)
 
 
 def _can_admin(user):

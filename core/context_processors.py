@@ -82,7 +82,7 @@ def nav_gates(request):
         return {'nav': {}}
 
     from core.scoping import (can_archive, can_enter_book, can_manage_accounts, can_manage_departments, can_open_trash,
-                              can_manage_mail,
+                              can_manage_mail, can_operate_mail,
                               can_manage_system, can_restore_system, can_use_desk,
                               can_use_system_admin, can_view_audit, can_view_reports)
     profile = getattr(user, 'profile', None)
@@ -107,6 +107,8 @@ def nav_gates(request):
         # tests_wiring. تشغيل البريد له بوّابة مستقلة أدناه.
         'admin': can_manage_system(user),
         'mail_admin': can_manage_mail(user),
+        # تشغيلُ البريد (الإنشاءُ والقوالبُ والمزامنة) لمختصّه ((ب)5) — والإعداداتُ أعلاه للمدير
+        'mail_operate': can_operate_mail(user),
         # إدارة الحسابات العامة وورشة العناقيد للسوبر أدمن وحده؛ إدارة القسم لها
         # بوابة منفصلة أدناه وتظل محصورة في شجرة رئيس القسم.
         # لا يظهر رابط الحسابات العامة لمن يلقى 403.

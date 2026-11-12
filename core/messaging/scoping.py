@@ -82,12 +82,13 @@ def scope_mail_books(qs, user):
         | Q(department_id=department_id)
         | Q(pk__in=live_grants.values('book_id'))
     )
-    openable = scoped.filter(
+    # (ب)5 — واجبُ أمن: لا يتجاوز نطاقَ الكتب أبداً (المنحُ الحيّةُ داخل ``scoped`` لا اتّحادٌ مع ``qs``
+    # كلّه — كان كتابٌ مُفوَّضٌ رُفعت سرّيّتُه يُخرج من خارج النطاق).
+    return scoped.filter(
         Q(secret_level='normal')
         | Q(secret_level__in=RESTRICTED_SECRET_LEVELS)
         & restricted_content_access
     )
-    return openable | qs.filter(pk__in=live_grants.values('book_id'))
 
 
 def mailable_book(user, book_id):

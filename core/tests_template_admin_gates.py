@@ -52,7 +52,8 @@ class MailSyncButtonGateTests(TestCase):
 
     def test_sync_button_is_a_view_decision(self):
         plain = User.objects.create_user('mplain', password='pw-mplain-11')
-        staff = User.objects.create_user('mstaff', password='pw-mstaff-11', is_staff=True)
+        # (ب)5: المزامنةُ تشغيلٌ بمفتاحه لا ``is_staff`` — ومديرُ النظام يملكه
+        staff = User.objects.create_superuser('mstaff', password='pw-mstaff-11')
         self.client.force_login(plain)
         r1 = self.client.get(reverse('mail_inbox'))
         self.client.force_login(staff)

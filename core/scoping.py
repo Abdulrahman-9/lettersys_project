@@ -187,13 +187,22 @@ def can_manage_system(user) -> bool:
 
 
 def can_manage_mail(user) -> bool:
-    """أيحقّ له إدارةُ تشغيل البريد وقوالبه؟
+    """إعداداتُ بريد الشركة (SMTP/IMAP واختبارُ الاتصال) — مفتاحُ «إعدادات بريد الشركة» المقفل:
+    لمدير النظام وحده (قرارُ المالك (ب)5). كان يُدخل ``is_staff`` ومختصَّ البريد؛ وتشغيلُ البريد
+    (المزامنةُ والقوالبُ والإنشاءُ والإرسال) صار ``can_operate_mail``."""
+    return has_capability(user, 'mail.settings')
 
-    يشمل إعدادات SMTP/IMAP ومزامنة الوارد والقوالب واختبار الاتصال. لا يساوي
-    صلاحيةَ إدارة الحسابات أو بقية إعدادات النظام. ويدخل حاملُ ``is_staff``
-    حفاظاً على السلوك الإداريّ القائم.
-    """
-    return is_privileged(user) or bool(user.is_staff) or is_mail_officer(user)
+
+def can_operate_mail(user) -> bool:
+    """تشغيلُ البريد: الإنشاءُ والإرسالُ الجماعيّ ومزامنةُ الوارد والقوالبُ وحالةُ الخيط — مفتاحُ
+    «تشغيل البريد» (مختصُّ البريد، (ب)5). وقراءةُ البريد تبقى بنطاقها (``scope_mail_books``)."""
+    return has_capability(user, 'mail.operate')
+
+
+def can_send_book_mail(user) -> bool:
+    """إرسالُ الكتاب بالبريد إلى جهته («حفظ وإرسال» ونقطتاه) — مفتاحُ «إرسال الكتاب بالبريد»؛
+    ومحتوى الكتاب شرطٌ تسأله النقطتان (``mailable_book``)."""
+    return has_capability(user, 'mail.send_book')
 
 
 def can_manage_accounts(user) -> bool:
@@ -251,7 +260,9 @@ def _department_custodian(user) -> bool:
     بالصدفة؛ ولو أُضيف دورٌ إلى إحداهما دون الأخرى لصار البحثُ إمّا أداةَ
     استنطاقٍ وإمّا حاجباً لِما يملكه صاحبُه. والحارسُ البنيويُّ يقارنهما.
     """
-    return is_department_head(user) or is_mail_officer(user) or is_archivist(user)
+    # (ب)5 — واجبُ أمن: المفتاحُ المقفل «فتح سرّيّ قسمه» (رئيسُ القسم ومختصُّ البريد ومسؤولُ الأرشفة)
+    # لا العضويّة؛ فلا يفتحه منحٌ ولا رئيسُ وحدة (قرارُ المالك: الوحدةُ تستلم السرّيَّ المُحالَ ولا تفتحه).
+    return has_capability(user, 'secret.own')
 
 
 def secret_access(user, book) -> str:
@@ -383,38 +394,6 @@ def can_open_content(book, user) -> bool:
     (خدمةً أو رفعاً أو حذفاً أو دمجاً) تمرّ من هنا لا من ``can_view_book``.
     """
     return can_view_book(book, user) and secret_access(user, book) == ACCESS_FULL
-
-
-def _writer_group_names():
-    """مجموعاتُ الأدوار التي تكتب — **قائمةُ سماحٍ صريحة** لا «كلُّ مجموعةِ دور»:
-    مجموعةٌ جديدةٌ تولد للقراءة حتى يُقرَّر لها، وحارسُ التطابق يُلزم بالقرار."""
-    from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
-                            CONTROLLER_GROUP_NAME, ENTRY_GROUP_NAME)
-
-    return frozenset({ENTRY_GROUP_NAME, CONTROLLER_GROUP_NAME,
-                      ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME})
-
-
-def can_write(user) -> bool:
-    """أيكتب أصلاً؟ — ما عدا «قارئ فقط».
-
-    قرارُ المالك 2026‑11‑01: **القارئُ يقرأ ويعلّق** — لا يُنشئ ولا يعدّل ولا يحذف ولا
-    يغيّر حالةً ولا يفرّق ولا يرسل. كان الدورُ تسميةَ عرضٍ (``roles.get_user_role``)
-    لا تمنع شيئاً. والسؤالُ هنا عن **العضويّة** لا التسمية — كأختَيها
-    ``is_mail_officer`` و``is_archivist``: التسميةُ سلسلةُ أولويّةٍ للعرض.
-
-    والنطاقُ فوقه لا تحته: مَن يكتب يكتب على ما يحقّ له (``can_edit_book``) لا على كلّ شيء.
-
-    **(ب)3 — 2026‑11‑11:** لم يعد يحرس الكتابةَ على الكتب؛ لكلّ فعلٍ مفتاحُه في مصفوفة
-    الأدوار (``can_enter_book`` · ``can_edit_book`` · ``can_link_book`` · ``can_register_book``
-    · ``can_reserve_number`` · ``can_add_entity``). بقي لأبواب البريد الستّة وحدها حتى
-    تُربط مع (ب)5 (قرارُ المالك)، ثمّ يُحذف.
-    """
-    if not (getattr(user, 'is_authenticated', False) and user.is_active):
-        return False
-    if is_privileged(user) or is_department_head(user):
-        return True
-    return user.groups.filter(name__in=_writer_group_names()).exists()
 
 
 def can_link_book(book, user) -> bool:
@@ -1012,7 +991,8 @@ CAPABILITIES = {
 # الإحالة (11-04) · الإدخالُ والتعديلُ وحجزُ الرقم وإضافةُ الجهة والعهدةُ والربط ((ب)3، 11-11) ·
 # الحذفُ إلى السلّة والاسترجاعُ منها ((ب)4، 11-11).
 WIRED_CAPABILITIES = frozenset({'book.enter', 'book.edit', 'number.reserve', 'entity.add', 'book.trash',
-                                'book.restore', 'referral.send', 'referral.receive', 'custody.link'})
+                                'book.restore', 'referral.send', 'referral.receive', 'custody.link',
+                                'mail.operate', 'mail.send_book', 'mail.settings', 'secret.own'})
 
 # القارئُ احتياطيُّ كلِّ حسابٍ بلا دور: منحُ الكتابة له على مستوى الدور يمنحها للجميع،
 # فتُجمَّد خليّتُه هو والمنفِّذ في المصفوفة، وتبقى ممكنةً باستثناءٍ لشخصٍ بعينه.

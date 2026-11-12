@@ -17,7 +17,7 @@ from core.models import (
     SecretAccessGrant, UserProfile,
 )
 from core.roles import CONTROLLER_GROUP_NAME
-from core.testing import as_writer
+from core.testing import as_writer, as_mail_operator
 
 
 class MailScopeTestCase(TestCase):
@@ -25,8 +25,9 @@ class MailScopeTestCase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.alice = as_writer(User.objects.create_user('alice', password='pw-alice-1'))
-        cls.bob   = as_writer(User.objects.create_user('bob',   password='pw-bob-111'))
+        # (ب)5: الإنشاءُ والإرسالُ لمختصّ البريد — يُمنحانهما استثناءً، والنطاقُ عضويّةٌ لا يتغيّر
+        cls.alice = as_mail_operator(User.objects.create_user('alice', password='pw-alice-1'))
+        cls.bob   = as_mail_operator(User.objects.create_user('bob',   password='pw-bob-111'))
         # مدير النظام هو من يرى الكلّ الآن — `is_staff` صارت صفةً إداريّةً
         # لواجهات الإدارة لا توسيعاً للرؤية (المرحلة أ).
         cls.staff = User.objects.create_superuser('boss', 'boss@x.com', 'pw-boss-11')
@@ -192,29 +193,28 @@ class DepartmentMailOfficerScopeTests(TestCase):
         )
         self.assertIsNone(mailable_book(self.officer, self.other_book.pk))
 
-    def test_mail_officer_can_manage_mail_settings_and_templates(self):
+    def test_mail_officer_operates_templates_but_not_company_settings(self):
+        """(ب)5: القوالبُ والمزامنةُ تشغيلٌ لمختصّ البريد، وإعداداتُ بريد الشركة لمدير النظام وحده."""
         from core.models import EmailSettings
 
         self.client.force_login(self.officer)
-        for url in ('/books/mail/settings/', '/books/mail/templates/',
-                    '/books/mail/templates/new/'):
+        for url in ('/books/mail/templates/', '/books/mail/templates/new/'):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
                 if url == '/books/mail/templates/':
-                    self.assertContains(response, 'href="/books/mail/settings/"')
+                    self.assertNotContains(response, 'href="/books/mail/settings/"')
 
         inbox = self.client.get('/books/mail/inbox/')
         self.assertTrue(inbox.context['can_sync_mail'])
 
+        self.assertEqual(self.client.get('/books/mail/settings/').status_code, 403)
         response = self.client.post('/books/mail/settings/', {
             'smtp_host': 'smtp.department.test', 'smtp_password': 'test-secret'})
-        self.assertEqual(response.status_code, 302)
-        settings = EmailSettings.get()
-        self.assertEqual(settings.smtp_host, 'smtp.department.test')
-        self.assertEqual(settings.smtp_password, 'test-secret')
+        self.assertEqual(response.status_code, 403)
+        self.assertNotEqual(EmailSettings.get().smtp_host, 'smtp.department.test')
 
-    def test_mail_officer_can_trigger_manual_sync_and_connection_tests(self):
+    def test_mail_officer_syncs_but_connection_tests_are_settings(self):
         from unittest.mock import patch
 
         self.client.force_login(self.officer)
@@ -227,10 +227,11 @@ class DepartmentMailOfficerScopeTests(TestCase):
         ):
             self.assertEqual(
                 self.client.post('/books/mail/api/inbox/sync/').status_code, 200)
+            # اختبارُ الاتّصال من الإعدادات — لمدير النظام وحده منذ (ب)5
             self.assertEqual(
-                self.client.post('/books/mail/api/settings/test-smtp/').status_code, 200)
+                self.client.post('/books/mail/api/settings/test-smtp/').status_code, 403)
             self.assertEqual(
-                self.client.post('/books/mail/api/settings/test-imap/').status_code, 200)
+                self.client.post('/books/mail/api/settings/test-imap/').status_code, 403)
 
     def test_non_mail_officer_cannot_manage_mail_settings_or_sync(self):
         self.client.force_login(self.colleague)
@@ -556,7 +557,7 @@ class SecretBookMailTests(TestCase):
         dept = Department.objects.create(name='المتابعة', code='ش13-mail')
 
         def member(name, head=False):
-            u = as_writer(User.objects.create_user(name, password=f'pw-{name}-1111'))
+            u = as_mail_operator(User.objects.create_user(name, password=f'pw-{name}-1111'))
             UserProfile.objects.create(user=u, department=dept, is_department_head=head)
             return u
 

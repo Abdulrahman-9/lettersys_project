@@ -26,7 +26,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core.decorators import rate_limit
-from core.views.helpers import writer_required_api
+from core.scoping import can_operate_mail
+from core.views.helpers import guard_required_api
 
 logger = logging.getLogger('lettersys')
 
@@ -54,7 +55,7 @@ def _json(request):
 # ══════════════════════════════════════════════════════
 
 @login_required
-@writer_required_api
+@guard_required_api(can_operate_mail)
 @require_http_methods(['POST'])
 @rate_limit('mail_compose', max_attempts=20, window_seconds=300, by='user')
 def api_compose(request):
@@ -187,10 +188,8 @@ def api_compose(request):
 @require_http_methods(['POST'])
 @rate_limit('inbox_sync', max_attempts=5, window_seconds=60, by='user')
 def api_inbox_sync(request):
-    """Trigger IMAP sync immediately and return stats."""
-    from core.scoping import can_manage_mail
-
-    if not can_manage_mail(request.user):
+    """Trigger IMAP sync immediately and return stats — تشغيلٌ لا إعداد ((ب)5)."""
+    if not can_operate_mail(request.user):
         return JsonResponse({'success': False, 'message': 'غير مصرح'}, status=403)
     try:
         from core.messaging.engines.imap import sync_inbox
@@ -275,7 +274,7 @@ def api_thread_detail(request, pk):
 # ══════════════════════════════════════════════════════
 
 @login_required
-@writer_required_api
+@guard_required_api(can_operate_mail)
 @require_http_methods(['POST'])
 def api_thread_status(request, pk):
     from core.models import EmailThread
@@ -302,7 +301,7 @@ def api_thread_status(request, pk):
 # ══════════════════════════════════════════════════════
 
 @login_required
-@writer_required_api
+@guard_required_api(can_operate_mail)
 @require_http_methods(['POST'])
 @rate_limit('bulk_mail_send', max_attempts=5, window_seconds=300, by='user')
 def api_bulk_send(request):

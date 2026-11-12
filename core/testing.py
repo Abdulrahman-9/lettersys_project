@@ -46,3 +46,17 @@ def as_custodian(user):
         UserCapabilityOverride.objects.update_or_create(user=user, capability=key, defaults={'allowed': True})
     return user
 
+
+def as_mail_operator(user):
+    """كاتبٌ يشغّل البريد ويرسل الكتابَ باستثناءٍ شخصيّ — لاختبارات آليّة البريد ونطاقه.
+
+    منذ (ب)5 (2026‑11‑12) الإنشاءُ والإرسالُ لمختصّ البريد. ونطاقُ قراءة البريد عضويّةٌ لا مفتاح،
+    فالاستثناءُ يفتح الأفعالَ ولا يغيّر ما يُرى. والدورُ محروسٌ في ``tests_b5_mail``.
+    """
+    from core.models import UserCapabilityOverride
+
+    as_writer(user)
+    for key in ('mail.operate', 'mail.send_book'):
+        UserCapabilityOverride.objects.update_or_create(user=user, capability=key, defaults={'allowed': True})
+    return user
+

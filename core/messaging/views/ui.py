@@ -24,7 +24,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
 from core.audit_service import record_settings_change, settings_snapshot
-from core.views.helpers import mail_manager_required, writer_required
+from core.scoping import can_operate_mail
+from core.views.helpers import guard_required, mail_manager_required
 from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
@@ -202,14 +203,13 @@ def mail_inbox(request):
         IncomingEmail.objects.filter(is_read=False), request.user
     ).count()
 
-    from core.scoping import can_manage_mail
 
     return render(request, 'core/mail/hub.html', {
         'active_tab':   'inbox',
         'page_obj':     page,
         'unread_count': unread_count,
         # زرُّ «مزامنة الآن» بوّابةُ فعلٍ تُحسَب في العرض لا في القالب (§7.6).
-        'can_sync_mail': can_manage_mail(request.user),
+        'can_sync_mail': can_operate_mail(request.user),
         'read_filter':  read_filter,
         'search':       search,
     })
@@ -245,7 +245,7 @@ def _reply_address(thread):
 
 
 @login_required
-@writer_required
+@guard_required(can_operate_mail)
 def mail_compose(request, book_id=None):
     from core.models import Entity, EmailTemplate, EmailSettings
     from core.messaging.scoping import mailable_book, repliable_thread
@@ -419,7 +419,7 @@ def _update_email_settings(cfg, data):
 # ══════════════════════════════════════════════════════
 
 @login_required
-@mail_manager_required
+@guard_required(can_operate_mail)
 def mail_templates(request):
     from core.models import EmailTemplate
     templates = EmailTemplate.objects.order_by('applicable_kind', 'name')
@@ -432,7 +432,7 @@ def mail_templates(request):
 
 @login_required
 @require_http_methods(['GET', 'POST'])
-@mail_manager_required
+@guard_required(can_operate_mail)
 def mail_template_edit(request, template_id=None):
     """Create new template or edit existing one."""
     from core.models import EmailTemplate
@@ -482,7 +482,7 @@ def mail_template_edit(request, template_id=None):
 
 @login_required
 @require_http_methods(['POST'])
-@mail_manager_required
+@guard_required(can_operate_mail)
 def mail_template_delete(request, template_id):
     # الحارسُ الواحد كجاراتها (القوالب · التحرير · الإعدادات) — كان `is_staff` وحدَه فيُردّ
     # مديرُ النظام الذي ليس «موظّفاً» عن حذفٍ يرى زرّه

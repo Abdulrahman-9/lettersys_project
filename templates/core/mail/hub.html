@@ -367,10 +367,10 @@
         <div class="mail-page-subtitle">مراسلات الجهات — صادر / وارد / محادثات</div>
       </div>
     </div>
-    <a href="{% url 'mail_compose' %}" class="btn btn-sm d-flex align-items-center gap-1"
+    {% if nav.mail_operate %}<a href="{% url 'mail_compose' %}" class="btn btn-sm d-flex align-items-center gap-1"
        style="background:var(--warm-clay);color:#fff;border-radius:8px;font-weight:700;font-size:.85rem">
       <i class="bi bi-pencil-square"></i> إنشاء رسالة
-    </a>
+    </a>{% endif %}
   </div>
 
   <!-- ── شريط التبويبات ── -->
@@ -385,15 +385,17 @@
       <span>الوارد</span>
       {% if unread_count %}<span class="mail-tab-badge badge-danger">{{ unread_count }}</span>{% endif %}
     </a>
-    <a href="{% url 'mail_compose' %}" class="mail-tab {% if active_tab == 'compose' %}active{% endif %}">
+    {% if nav.mail_operate %}<a href="{% url 'mail_compose' %}" class="mail-tab {% if active_tab == 'compose' %}active{% endif %}">
       <i class="bi bi-pencil-square"></i>
       <span>إنشاء رسالة</span>
-    </a>
-    {% if nav.mail_admin %}
+    </a>{% endif %}
+    {% if nav.mail_operate %}
     <a href="{% url 'mail_templates' %}" class="mail-tab {% if active_tab == 'templates' or active_tab == 'template_edit' %}active{% endif %}">
       <i class="bi bi-file-earmark-richtext"></i>
       <span>القوالب</span>
     </a>
+    {% endif %}
+    {% if nav.mail_admin %}{# إعداداتُ بريد الشركة لمدير النظام وحده ((ب)5) #}
     <a href="{% url 'mail_settings' %}" class="mail-tab {% if active_tab == 'settings' %}active{% endif %}">
       <i class="bi bi-gear-fill"></i>
       <span>الإعدادات</span>
@@ -744,6 +746,7 @@
       </div>
       <div class="ms-auto d-flex align-items-center gap-2">
         <span class="mail-status {{ thread.status }}">{{ thread.get_status_display }}</span>
+        {% if nav.mail_operate %}{# حالةُ الخيط والردُّ تشغيلٌ ((ب)5) #}
         <select id="threadStatusSel" onchange="changeThreadStatus({{ thread.pk }}, this.value)"
                 style="border-radius:7px;border:1px solid var(--card-border);font-size:.8rem;padding:.3rem .6rem;background:rgba(255,255,255,.9)">
           <option value="open"    {% if thread.status == 'open' %}selected{% endif %}>مفتوح</option>
@@ -755,6 +758,7 @@
            class="btn btn-sm" style="background:var(--warm-clay);color:#fff;border-radius:8px;font-size:.82rem;font-weight:700">
           <i class="bi bi-reply me-1"></i>رد
         </a>
+        {% endif %}
       </div>
     </div>
 

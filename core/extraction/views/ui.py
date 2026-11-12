@@ -31,7 +31,7 @@ from core.extraction.kinds import (
 from core.document_types import DEFAULT_DOCUMENT_TYPE_BY_KIND, DOCUMENT_TYPE_OPTIONS_BY_KIND
 from core.models import Book, BookSequence, DataExtractionResult, Department
 from core.scoping import (can_enter_book, can_enter_for, can_open_extraction, can_reserve_number,
-                          can_use_entry_desk)
+                          can_send_book_mail, can_use_entry_desk)
 from core.views.helpers import guard_required
 
 
@@ -222,6 +222,8 @@ def extraction_smart_desktop(request):
             # زرُّ «احجز رقماً» لمن يقبله الخادم (``reserve_number``) — لا زرَّ يُعرض ليُرفض،
             # ولا في دفتر قسمٍ هدف (الخادمُ يرفض الحجزَ مع ``department_id``).
             'can_reserve_number': can_reserve_number(request.user) and target_department is None,
+            # «حفظ وإرسال» لمن يرسل الكتابَ بالبريد ((ب)5) — لا زرَّ يُعرض ليُرفض
+            'can_send_book_mail': can_send_book_mail(request.user),
             'target_department': target_department,
         },
     )

@@ -16,7 +16,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 
 from .. import numbering
-from ..scoping import can_manage_accounts, can_manage_mail, can_write
+from ..scoping import can_manage_accounts, can_manage_mail
 
 
 def apply_search_filters(queryset, search_text):
@@ -268,8 +268,6 @@ def mail_manager_required(view_func):
     return _guarded(view_func, can_manage_mail, 'هذه الصفحةُ لمسؤول البريد.')
 
 
-#: ردُّ «قارئ فقط» — واحدٌ للصفحة ولنقطة JSON.
-READ_ONLY_DENIAL = 'حسابُك للقراءة والتعليق فقط.'
 #: ردُّ مفتاحٍ لا يملكه الحساب (مصفوفةُ الأدوار) — صادقٌ للقارئ ولمن سُحب منه فعلٌ بعينه.
 CAPABILITY_DENIAL = 'لا تملك صلاحيّةَ هذا الفعل.'
 
@@ -295,12 +293,3 @@ def guard_required_api(predicate, denial=CAPABILITY_DENIAL, error_code='FORBIDDE
             return view_func(request, *args, **kwargs)
         return _wrapped
     return decorator
-
-
-def writer_required(view_func):
-    """صفحاتُ الإرسال لمَن يكتب (``scoping.can_write``) — بقيت للبريد وحده حتى (ب)5."""
-    return _guarded(view_func, can_write, READ_ONLY_DENIAL)
-
-
-#: توأمُ ``writer_required`` لنقاط JSON — أبوابُ البريد الستّة حتى (ب)5.
-writer_required_api = guard_required_api(can_write, READ_ONLY_DENIAL, 'READ_ONLY')
