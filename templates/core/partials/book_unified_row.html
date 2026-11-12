@@ -1,4 +1,4 @@
-{% load static %}
+{% load static ar_counts %}
 {% with state=book.followup_state delay_days=book.delay_days %}
 
 <tr class="book-row book-row-{{ state }}"
@@ -19,9 +19,9 @@
   <td class="col-our-number">
     <div class="num-cell" title="{{ book.our_number_explained }}{% if book.legacy_number %} — الرقم قبل التوحيد: {{ book.legacy_number }}{% endif %}">
       {% if book.is_incoming %}
-        <i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>
+        <i class="bi bi-envelope-arrow-down kind-icon kind-icon-incoming" aria-hidden="true"></i>
       {% else %}
-        <i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>
+        <i class="bi bi-envelope-arrow-up kind-icon kind-icon-outgoing" aria-hidden="true"></i>
       {% endif %}
       {% if book.our_number_is_numberless %}
         <span class="book-number-numberless" title="كتاب بلا رقم رسمي — استثناء معتمَد في النظام">بلا رقم</span>
@@ -37,14 +37,11 @@
         </span>
       {% endif %}
     </div>
+    {# تاريخُنا تحت رقمنا: يُقرآن معاً «3914 · 30/08/2026» (ترتيب الدفتر، قرارُ المالك 11-12) #}
+    <div class="date-val num-date" title="{% if book.is_incoming %}تاريخ استلامنا للكتاب{% else %}تاريخ إصدار الكتاب{% endif %}">{{ book.date|date:"d/m/Y"|default:"—" }}</div>
   </td>
 
-  {# 3: تاريخ تسجيل الكتاب — استلام للوارد / إصدار للصادر — بجوار رقمنا (جانبنا) #}
-  <td class="col-date">
-    <span class="date-val" title="{% if book.is_incoming %}تاريخ استلامنا للكتاب{% else %}تاريخ إصدار الكتاب{% endif %}">{{ book.date|date:"d/m/Y"|default:"—" }}</span>
-  </td>
-
-  {# 4: رقم الجهة الواردة أو رقم مكتب المدير العام للصادر الخارجي #}
+  {# 3: مرجعُ الجهة — عددُها فوق تاريخها للوارد · رقمُ مكتب المدير العام للصادر الخارجيّ · شرطةٌ لغيرهما #}
   <td class="col-sender-number">
     {% if book.is_incoming %}
       {% if book.sender_number %}
@@ -52,23 +49,31 @@
       {% else %}
         <span class="sender-number-empty" title="العدد المطبوع على المستند لم يُسجَّل بعد — أضِفه عند التعديل">لم يُسجَّل</span>
       {% endif %}
+      {% if book.sender_date %}
+        <div class="date-val-sm" title="تاريخ إرسال الجهة المرسلة">{{ book.sender_date|date:"d/m/Y" }}</div>
+      {% endif %}
     {% elif book.kind == "outgoing_external" and book.shown_director_general_number %}
       <span class="sender-number-value" title="رقم مكتب المدير العام — مستقل عن رقم القيد المتسلسل لدينا.">{{ book.shown_director_general_number }}</span>
+      <div class="date-val-sm">مكتب المدير العام</div>
+    {% else %}
+      <span class="ref-none" title="لا مرجعَ للجهة في هذا النوع">—</span>
     {% endif %}
   </td>
 
-  {# 5: تاريخ الإرسال — للوارد فقط؛ يُخفى العمود كاملاً في الصادر #}
-  <td class="col-sender-date">
-    {% if book.is_incoming %}
-      {% if book.sender_date %}
-        <span class="date-val-sm" title="تاريخ إرسال الجهة المرسلة">{{ book.sender_date|date:"d/m/Y" }}</span>
+  {# 4: الجهة — العريضُ هو الطرفُ الآخر دائماً: «من» للوارد و«إلى» للصادر، وطرفُنا خافتٌ تحته #}
+  <td class="col-entity">
+    <div class="book-entity-cell">
+      {% if book.is_incoming %}
+        {% include 'core/partials/book_entity_side.html' with label='من' ents=book.issuing_entities.all main=True only %}
+        {% include 'core/partials/book_entity_side.html' with label='إلى' ents=book.receiving_entities.all main=False only %}
       {% else %}
-        <span class="date-empty" title="لم يُسجَّل تاريخ إرسال الجهة">—</span>
+        {% include 'core/partials/book_entity_side.html' with label='إلى' ents=book.receiving_entities.all main=True only %}
+        {% include 'core/partials/book_entity_side.html' with label='من' ents=book.issuing_entities.all main=False only %}
       {% endif %}
-    {% endif %}
+    </div>
   </td>
 
-  {# 6: العنوان #}
+  {# 5: الموضوع — أعرضُ عمود، سطران ثمّ «…»، والنوعُ والورقُ والمرفقُ تحته #}
   <td class="col-title">
     <div class="book-title-cell">
       <div class="book-title-text" title="{{ book.title }}">
@@ -82,63 +87,38 @@
         {% endif %}
         {% if book.source_ref %}<span class="num-paper" title="منقولٌ من الدفتر الورقيّ">ورق</span>{% endif %}
         {% if book.attachment %}
-          <span class="title-attach-badge" title="يوجد مرفق"><i class="bi bi-paperclip"></i></span>
+          <span class="title-attach-badge" title="يوجد مرفق"><i class="bi bi-paperclip" aria-hidden="true"></i></span>
         {% endif %}
       </div>
     </div>
   </td>
 
-  {# 7: الجهات #}
-  <td class="col-entity">
-    <div class="book-entity-cell">
-      <div class="entity-primary">
-        <i class="bi bi-building entity-icon"></i>
-        {% for e in book.issuing_entities.all %}
-          <span class="entity-name" title="{{ e.name }}">{{ e.name }}</span>{% if not forloop.last %}<span class="text-muted mx-1">·</span>{% endif %}
-        {% empty %}
-          <span class="entity-name text-muted">—</span>
-        {% endfor %}
-      </div>
-      {% with recv=book.receiving_entities.all %}
-      {% if recv %}
-        <div class="entity-secondary">
-          <i class="bi bi-arrow-left-right"></i>
-          {% for e in recv %}
-            <span class="entity-name-secondary" title="{{ e.name }}">{{ e.name }}</span>{% if not forloop.last %}<span class="text-muted mx-1">·</span>{% endif %}
-          {% endfor %}
-        </div>
-      {% endif %}
-      {% endwith %}
-    </div>
-  </td>
-
-  {# 8: حالة المتابعة (badge قابل للنقر للأرشفة/إعادة الفتح) #}
+  {# 6: حالة المتابعة — المُنجَزُ (أكثرُ من 13 ألفاً) علامةُ ✓ هادئة، والحيُّ شارةٌ ملوّنة؛ والنقرُ كما كان #}
   <td class="col-status">
     <div class="status-cell">
-      <button type="button" class="status-badge status-badge-btn badge-status-{{ state }}"
+      <button type="button" class="status-badge status-badge-btn badge-status-{{ state }}{% if state == 'archived' %} status-badge-quiet{% endif %}"
               data-book-id="{{ book.id }}"
               data-current-status="{{ state }}"
               data-has-due-date="{% if book.due_date %}1{% else %}0{% endif %}"
               data-status-url="{% url 'api_book_inline_status' book.id %}"
               title="انقر لإنهاء/إعادة فتح المتابعة">
         {% if state == 'pending' %}
-          <i class="bi bi-clock-history"></i>قيد المتابعة
+          <i class="bi bi-clock-history" aria-hidden="true"></i>قيد المتابعة<i class="bi bi-chevron-down status-badge-caret" aria-hidden="true"></i>
         {% elif state == 'due_today' %}
-          <i class="bi bi-calendar-event-fill"></i>مستحق اليوم
+          <i class="bi bi-calendar-event-fill" aria-hidden="true"></i>مستحق اليوم<i class="bi bi-chevron-down status-badge-caret" aria-hidden="true"></i>
         {% elif state == 'overdue' %}
-          <i class="bi bi-exclamation-triangle-fill"></i>متأخر
+          <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>متأخر<i class="bi bi-chevron-down status-badge-caret" aria-hidden="true"></i>
         {% else %}
-          <i class="bi bi-check2-circle"></i>مُنجَز / بلا متابعة
+          <i class="bi bi-check2-circle" aria-hidden="true"></i><span class="visually-hidden">مُنجَز / بلا متابعة</span>
         {% endif %}
-        <i class="bi bi-chevron-down status-badge-caret"></i>
       </button>
       {% if state == 'overdue' %}
         <div class="due-indicator due-overdue">
-          <i class="bi bi-exclamation-triangle-fill"></i><span>متأخر {{ delay_days }} يوم</span>
+          <span>منذ {{ delay_days|days_ar }}</span>
         </div>
       {% elif state == 'pending' and delay_days <= 3 %}
         <div class="due-indicator due-pending">
-          <i class="bi bi-clock-fill"></i><span>بعد {{ delay_days }} يوم</span>
+          <span>بعد {{ delay_days|days_ar }}</span>
         </div>
       {% endif %}
     </div>

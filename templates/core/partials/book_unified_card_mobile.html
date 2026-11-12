@@ -33,9 +33,9 @@ BOOK UNIFIED CARD (Mobile View)
       {# رقم الكتاب #}
       <div class="card-book-number" title="{{ book.our_number_explained }}">
         {% if book.is_incoming %}
-          <i class="bi bi-box-arrow-in-down kind-icon kind-icon-incoming"></i>
+          <i class="bi bi-envelope-arrow-down kind-icon kind-icon-incoming" aria-hidden="true"></i>
         {% else %}
-          <i class="bi bi-box-arrow-up kind-icon kind-icon-outgoing"></i>
+          <i class="bi bi-envelope-arrow-up kind-icon kind-icon-outgoing" aria-hidden="true"></i>
         {% endif %}
         {% if book.our_number_is_numberless %}
           <span class="book-number-numberless">بلا رقم</span>

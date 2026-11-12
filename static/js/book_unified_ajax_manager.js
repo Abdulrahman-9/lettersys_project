@@ -24,7 +24,7 @@
 
     if (!books || books.length === 0) {
       tbody.innerHTML = `<tr class="empty-row">
-        <td colspan="9" class="text-center py-5">
+        <td colspan="7" class="text-center py-5">
           <div class="empty-table-message">
             <i class="bi bi-inbox empty-icon"></i>
             <p class="empty-text">لا توجد كتب مطابقة</p>
@@ -507,14 +507,14 @@
       const current = this.currentState.sort || (this.currentState.search ? '' : '-date');
       const descending = current.startsWith('-');
       const active = descending ? current.slice(1) : current;
+      // رأسُ «القيد» يحمل زرَّي فرز (الرقم والتاريخ): يُمسح الكلُّ أوّلاً ثمّ يُعلَّم النشط —
+      // كان الزرُّ الثاني يمحو علامةَ الأوّل في الرأس نفسه
+      document.querySelectorAll('th[aria-sort]').forEach(th => th.removeAttribute('aria-sort'));
       document.querySelectorAll('[data-sort]').forEach(el => {
+        const on = el.dataset.sort === active;
+        el.classList.toggle('is-sorted', on);
         const th = el.closest('th');
-        if (!th) return;
-        if (el.dataset.sort === active) {
-          th.setAttribute('aria-sort', descending ? 'descending' : 'ascending');
-        } else {
-          th.removeAttribute('aria-sort');
-        }
+        if (on && th) th.setAttribute('aria-sort', descending ? 'descending' : 'ascending');
       });
     }
 

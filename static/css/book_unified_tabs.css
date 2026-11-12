@@ -1,18 +1,23 @@
 /* ═════════════════════════════════════════════════════════════
-   التبويبات الرئيسية + شريط الفلترة
+   التبويبات الرئيسيّة + شريط الفلترة — على الهويّة الموحّدة
+   (كتلتا «DESIGN REVIEW · BATCH 2/3» اللتان كانتا تُعيدان تعريف ما قبلهما دُمجتا هنا:
+    القيمُ النهائيّة نفسُها، بلا طبقاتٍ تتجاوز بعضها)
 ═════════════════════════════════════════════════════════════ */
 
-/* ── التبويبان الرئيسيان: وارد / صادر — عرض الصفحة كاملاً ── */
+/* ── التبويبات: وارد · صادر · «الكلّ» ──
+   لونٌ واحدٌ للنشط أيّاً كان (قرارُ المالك 11-11)؛ الاتّجاهُ في الأيقونة.
+   لوحُ النشط ينزلق بين التبويبات (js/lx_tabs.js → .lx-tabs-ind في theme.css)؛
+   وبلا السكربت يتلوّن التبويبُ النشط نفسُه بالسطح ذاته. */
 .tabs-split {
   display: grid;
-  /* وارد · صادر · «الكلّ» أضيقُ منهما: حالةٌ صريحة لا اتّجاهٌ ثالث (تدقيقُ نيلسن A#6) */
+  /* «الكلّ» أضيقُ منهما: حالةٌ صريحة لا اتّجاهٌ ثالث (تدقيقُ نيلسن A#6) */
   grid-template-columns: 1fr 1fr 0.6fr;
   gap: 0;
   margin: 0 0 0.7rem;
-  border-radius: 0.85rem;
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
-  position: relative;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
   border: 1px solid var(--border);
 }
 
@@ -21,129 +26,102 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.7rem;
-  padding: 1rem 1.2rem;
-  background: #fff;
+  gap: 0.6rem;
+  padding: 0.55rem 1rem;
+  background: transparent;
   border: none;
   cursor: pointer;
   font-family: inherit;
-  color: #475569;
-  transition: background 0.25s ease, color 0.25s ease;
+  color: var(--lx-mute);
+  transition: background var(--lx-dur-2) ease, color var(--lx-dur-3) ease;
   overflow: hidden;
 }
 
-.tab-main::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 3px;
-  background: transparent;
-  transition: background 0.3s ease;
+.tab-main + .tab-main {
+  border-inline-start: 1px solid var(--border);
 }
 
 .tab-main .tab-icon {
-  font-size: 1.55rem;
+  font-size: 1.25rem;
   line-height: 1;
   flex-shrink: 0;
-  transition: transform 0.25s ease, color 0.25s ease;
-  color: #94a3b8;
+  color: var(--lx-mute);
+  transition: transform var(--lx-dur-2) var(--lx-ease-spring), color var(--lx-dur-3) ease;
 }
 
 .tab-main .tab-text {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  line-height: 1.15;
+  line-height: 1.1;
   text-align: start;
 }
 
 .tab-main .tab-label {
-  font-size: 1.18rem;
+  font-size: 1.02rem;
   font-weight: 800;
-  letter-spacing: 0.01em;
 }
 
 .tab-main .tab-count {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--lx-mute);
   font-variant-numeric: tabular-nums;
-  margin-top: 0.1rem;
-  transition: color 0.25s ease;
+  margin-top: 0.05rem;
+  transition: color var(--lx-dur-3) ease;
 }
 
-.tab-main:hover {
-  background: #f8fafc;
+.tab-main:not(.active):hover {
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
 }
 
 .tab-main:hover .tab-icon { transform: scale(1.08); }
 
-/* — وارد نشط (royal blue) — */
-.tab-main.tab-incoming.active {
-  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-  color: #fff;
+.tab-main:focus-visible {
+  outline: 2px solid var(--lx-accent);
+  outline-offset: -4px;
+  border-radius: 10px;
 }
-.tab-main.tab-incoming.active .tab-icon,
-.tab-main.tab-incoming.active .tab-count { color: #dbeafe; }
-.tab-main.tab-incoming.active::after { background: #fbbf24; }
 
-/* — صادر نشط (ذهبي ملكي مزجّج / glossy royal gold) — */
-.tab-main.tab-outgoing.active {
-  background:
-    /* لمعة علوية ناعمة لتأثير الزجاج */
-    linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 50%),
-    /* تدرّج ذهبي رئيسي: داكن خفيف → ذهبي براق → فاتح زجاجي */
-    linear-gradient(135deg, #ca8a04 0%, #eab308 45%, #fbbf24 100%);
-  color: #4a2a05;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset 0 -1px 0 rgba(146, 64, 14, 0.18);
-}
-.tab-main.tab-outgoing.active .tab-icon { color: #78350f; }
-.tab-main.tab-outgoing.active .tab-count { color: #78350f; opacity: 0.85; }
-.tab-main.tab-outgoing.active::after { background: #1e40af; }
+/* — النشط: حبرٌ أبيض فوق اللوح؛ والأيقونةُ والعدّاد أخفّ قليلاً — */
+.tab-main.active { color: #fff; }
 
-/* — «الكلّ» نشط (تيلٌ محايد — لا لونَ اتّجاه) — */
-.tab-main.tab-all.active {
-  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
-  color: #fff;
-}
-.tab-main.tab-all.active .tab-icon,
-.tab-main.tab-all.active .tab-count { color: #ccfbf1; }
-.tab-main.tab-all.active::after { background: #f4f2ee; }
+.tab-main.active .tab-icon,
+.tab-main.active .tab-count { color: rgba(255, 255, 255, 0.82); }
 
-/* — divider بين التبويبين — */
-.tab-main + .tab-main {
-  border-inline-start: 1px solid var(--border);
+/* بلا السكربت: التبويبُ النشط يحمل السطحَ والخطَّ الذهبيّ بنفسه */
+.tabs-split:not(.lx-tabs-on) .tab-main.active {
+  background: linear-gradient(135deg, var(--lx-hero-a) 0%, var(--lx-hero-b) 100%);
+  box-shadow: inset 0 -3px 0 var(--lx-accent);
 }
+
+/* الفاصلُ لا يقطع اللوح */
+.tab-main.active,
+.tab-main.active + .tab-main { border-inline-start-color: transparent; }
 
 @media (max-width: 600px) {
-  .tab-main {
-    padding: 0.65rem 0.5rem;
-    gap: 0.45rem;
-  }
-  .tab-main .tab-icon { font-size: 1.2rem; }
-  .tab-main .tab-label { font-size: 1rem; }
+  .tab-main { padding: 0.5rem 0.6rem; gap: 0.45rem; }
+  .tab-main .tab-icon  { font-size: 1.1rem; }
+  .tab-main .tab-label { font-size: 0.95rem; }
   .tab-main .tab-count { font-size: 0.7rem; }
 }
 
 
 /* ═════════════════════════════════════════════════════════════
-   شريط الفلترة المضغوط
-   - بحث + scope + status pills في صف واحد
+   شريط الفلترة المضغوط — بحث + نطاق + رقاقات الحالة في صفّ واحد
 ═════════════════════════════════════════════════════════════ */
 .filter-bar {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.7rem;
   padding: 0.5rem 0.7rem;
-  background: #fff;
+  background: var(--lx-surface);
   border: 1px solid var(--border);
-  border-radius: 0.7rem;
+  border-radius: 12px;
   margin: 0 0 0.55rem;
   flex-wrap: wrap;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: var(--lx-shadow-sm);
 }
 
 /* — حقل البحث — */
@@ -158,16 +136,19 @@
   width: 100%;
   padding: 0.45rem 2rem 0.45rem 0.7rem;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: #f8fafc;
+  border-radius: 10px;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
   font-size: 0.88rem;
-  transition: all 0.2s ease;
+  transition: background var(--lx-dur-2) ease, border-color var(--lx-dur-2) ease, box-shadow var(--lx-dur-2) ease;
 }
+
+.fb-search input::placeholder { color: var(--lx-mute); opacity: 0.85; }
 
 .fb-search input:focus {
   outline: none;
-  background: #fff;
-  border-color: var(--theme-accent);
+  background: var(--lx-surface);
+  border-color: var(--lx-pri);
   box-shadow: 0 0 0 3px var(--theme-glow);
 }
 
@@ -176,7 +157,7 @@
   inset-inline-end: 0.65rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #94a3b8;
+  color: var(--lx-mute);
   pointer-events: none;
   font-size: 0.95rem;
 }
@@ -188,19 +169,21 @@
   transform: translateY(-50%);
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--lx-mute);
   font-size: 1rem;
   cursor: pointer;
   padding: 0.1rem 0.35rem;
   line-height: 1;
+  border-radius: 6px;
 }
-.fb-search-clear:hover { color: #ef4444; }
 
-/* — scope toggle (داخلي/خارجي) — */
+.fb-search-clear:hover { color: var(--lx-late); background: var(--lx-late-bg); }
+
+/* — النطاق: الكلّ / داخلي / خارجي — */
 .fb-scope {
   display: inline-flex;
-  background: #f1f5f9;
-  border-radius: 0.5rem;
+  background: var(--lx-surface-2);
+  border-radius: 10px;
   padding: 0.18rem;
   border: 1px solid var(--border);
 }
@@ -210,31 +193,32 @@
   align-items: center;
   gap: 0.3rem;
   padding: 0.3rem 0.65rem;
-  border-radius: 0.38rem;
+  border-radius: 8px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: var(--lx-mute);
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: background var(--lx-dur-2) ease, color var(--lx-dur-2) ease, box-shadow var(--lx-dur-2) ease;
   white-space: nowrap;
 }
 
 .fb-scope-btn:hover {
-  color: var(--neutral-text);
-  background: rgba(255, 255, 255, 0.6);
+  color: var(--lx-ink);
+  background: var(--lx-surface);
 }
 
 .fb-scope-btn.active {
-  background: #fff;
-  color: var(--theme-primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: var(--lx-surface);
+  color: var(--lx-pri);
+  box-shadow: var(--lx-shadow-sm), inset 0 0 0 1px var(--border);
 }
 
 .fb-scope-btn i { font-size: 0.85rem; }
 
-/* — status pills — */
+/* — رقاقاتُ حالة المتابعة — النشطةُ هادئة: خلفيّةُ الحالة الفاتحة + نصُّها + خطٌّ سفليّ —
+   خمسةُ ألوانٍ لا تتصارع مع الهويّة (كانت BATCH 3) */
 .fb-pills {
   display: inline-flex;
   flex-wrap: wrap;
@@ -248,88 +232,94 @@
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: #fff;
-  color: #64748b;
+  background: var(--lx-surface);
+  color: var(--lx-mute);
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: border-color var(--lx-dur-2) ease, color var(--lx-dur-2) ease, background var(--lx-dur-2) ease;
   white-space: nowrap;
 }
 
 .fb-pill i { font-size: 0.85rem; }
 
+/* العدّادُ يأخذ لونَه من الرقاقة نفسها فيصلح في الوضعين */
 .fb-pill .fb-pill-count {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   font-size: 0.7rem;
-  background: rgba(0, 0, 0, 0.05);
+  background: color-mix(in srgb, currentColor 12%, transparent);
   border-radius: 999px;
   padding: 0.05rem 0.4rem;
   margin-inline-start: 0.15rem;
 }
 
 .fb-pill:hover {
-  border-color: var(--theme-accent);
+  border-color: var(--lx-pri-2);
   color: var(--theme-text);
 }
 
+.fb-pill:focus-visible,
+.fb-scope-btn:focus-visible,
+.fb-advanced-toggle:focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 2px;
+}
+
 .fb-pill.active {
-  border-color: var(--theme-primary);
-  background: var(--theme-primary);
-  color: #fff;
-}
-.fb-pill.active .fb-pill-count {
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
+  background: var(--lx-surface);
+  border-color: transparent;
+  color: var(--lx-ink);
+  font-weight: 800;
+  box-shadow: inset 0 -2px 0 currentColor, var(--lx-shadow-sm);
 }
 
-/* — السمات اللونية الموحَّدة لـ pills حالة المتابعة (من custom properties في app.css) — */
-.fb-pill.fb-pill-pending.active   { background: var(--followup-pending);   border-color: var(--followup-pending);   color: #fff; }
-.fb-pill.fb-pill-due-today.active { background: var(--followup-due-today); border-color: var(--followup-due-today); color: #fff; }
-.fb-pill.fb-pill-overdue.active   { background: var(--followup-overdue);   border-color: var(--followup-overdue);   color: #fff; }
-.fb-pill.fb-pill-archived.active  { background: var(--followup-archived);  border-color: var(--followup-archived);  color: #fff; }
+/* لونُ كلّ رقاقةٍ دلاليّ عند التفعيل — من رموز الحالات (theme.css يربط --followup-*) */
+.fb-pill.fb-pill-pending.active   { color: var(--followup-pending-text);   background: var(--followup-pending-bg);   border-color: var(--followup-pending); }
+.fb-pill.fb-pill-due-today.active { color: var(--followup-due-today-text); background: var(--followup-due-today-bg); border-color: var(--followup-due-today); }
+.fb-pill.fb-pill-overdue.active   { color: var(--followup-overdue-text);   background: var(--followup-overdue-bg);   border-color: var(--followup-overdue); }
+.fb-pill.fb-pill-archived.active  { color: var(--followup-archived-text);  background: var(--followup-archived-bg);  border-color: var(--followup-archived); }
 
-/* — فاصل عمودي — */
-.fb-divider {
-  width: 1px;
-  align-self: stretch;
-  background: var(--border);
-  margin: 0.1rem 0.05rem;
+/* «الكلّ» بلون الهويّة */
+.fb-pill[data-filter="all"].active {
+  color: var(--theme-text);
+  background: var(--theme-light);
 }
 
-/* — زر فلتر متقدم — */
+/* — زرُّ الفلترة المتقدّمة — */
 .fb-advanced-toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   padding: 0.4rem 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #64748b;
+  border-radius: 10px;
+  background: var(--lx-surface);
+  color: var(--lx-mute);
   font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: border-color var(--lx-dur-2) ease, color var(--lx-dur-2) ease;
   margin-inline-start: auto;
 }
 
-.fb-advanced-toggle:hover {
-  border-color: var(--theme-accent);
+.fb-advanced-toggle:hover,
+.fb-advanced-toggle[aria-expanded="true"] {
+  border-color: var(--lx-pri-2);
   color: var(--theme-text);
 }
 
 .fb-advanced-toggle .fb-active-count {
-  background: var(--theme-primary);
-  color: #fff;
+  background: var(--theme-fill);
+  color: var(--theme-on);
   font-size: 0.68rem;
   border-radius: 999px;
   padding: 0.05rem 0.4rem;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
-/* — لوح فلتر متقدم (مطوي) — */
+/* — لوحُ الفلترة المتقدّمة (مطويّ) — */
 .fb-advanced-panel {
   width: 100%;
   display: none;
@@ -338,7 +328,7 @@
   margin-top: 0.45rem;
 }
 
-.fb-advanced-panel.open { display: block; animation: fadeIn 0.2s ease; }
+.fb-advanced-panel.open { display: block; animation: fbFadeIn var(--lx-dur-2) var(--lx-ease); }
 
 .fb-advanced-grid {
   display: grid;
@@ -359,114 +349,27 @@
   width: 100%;
   padding: 0.35rem 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 0.4rem;
+  border-radius: 8px;
   font-size: 0.83rem;
-  background: #f8fafc;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
 }
 
 .fb-advanced-item input:focus,
 .fb-advanced-item select:focus {
   outline: none;
-  border-color: var(--theme-accent);
-  background: #fff;
+  border-color: var(--lx-pri);
+  background: var(--lx-surface);
   box-shadow: 0 0 0 2px var(--theme-glow);
 }
 
-/* «يشمل الورق القديم» — مفتاحُ الحيّ وحدَه (قرارُ المالك 2026‑10‑06) */
-.fb-advanced-switch { display: flex; flex-direction: column; justify-content: center; gap: 0.15rem; }
-.fb-switch { display: inline-flex !important; align-items: center; gap: 0.45rem; margin: 0 !important;
-  font-size: 0.83rem !important; color: var(--text, #1f2937) !important; cursor: pointer; }
-.fb-switch input { width: auto !important; accent-color: var(--theme-accent); }
-.fb-advanced-switch small { font-size: 0.7rem; color: var(--muted); }
-.fb-hint { flex-basis: 100%; margin: 0.35rem 0.4rem 0; font-size: 0.78rem; color: var(--muted);
-  display: flex; align-items: center; gap: 0.35rem; }
-.fb-hint[hidden] { display: none; }
-/* سطرُ الورق القديم — يقول ما تعرضه القائمة وما تُخفيه، وزرُّه يقلب المفتاح.
-   الحالةُ المقلوبة تتلوّن بثيم التبويب: ``--theme-text`` لا ``--theme-primary`` (أصفرُ الصادر يسقط في التباين) */
-  background: color-mix(in srgb, var(--theme-primary) 7%, #fff); color: var(--theme-text); }
-.fb-hint-action { display: inline-flex; align-items: center; padding: 0.2rem 0.7rem; border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--theme-primary) 28%, #fff);
-  background: color-mix(in srgb, var(--theme-primary) 9%, #fff); color: var(--theme-text);
-  font: inherit; font-weight: 800; cursor: pointer; transition: border-color 0.18s ease; }
-.fb-hint-action:hover { border-color: var(--theme-accent); }
-.fb-hint-action:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 2px; }
-
-@keyframes fadeIn {
+@keyframes fbFadeIn {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* تخفي الـ scope/pills عند ضيق الشاشة وتُجمع على سطر آخر */
+/* عند ضيق الشاشة: البحثُ سطرٌ كامل، والنطاقُ والرقاقات على سطرٍ تالٍ */
 @media (max-width: 768px) {
-  .fb-divider { display: none; }
   .fb-search { flex: 1 1 100%; max-width: none; }
   .fb-scope, .fb-pills { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
 }
-
-/* ════════════════════════════════════════════════════════════════
-   ▼ DESIGN REVIEW · BATCH 2 — TAB HEIGHT TIGHTENING
-   تقليل ارتفاع التبويبَين من ~80px إلى ~52px مع الحفاظ التام
-   على ثيم الأزرق الملكي (وارد) والذهبي المزجج (صادر).
-   هذه الكتلة override للقيم أعلاه. للتراجع: احذفها فقط.
-═════════════════════════════════════════════════════════════════ */
-
-.tab-main {
-  padding: 0.55rem 1rem;
-  gap: 0.6rem;
-}
-.tab-main .tab-icon  { font-size: 1.25rem; }
-.tab-main .tab-text  { line-height: 1.1; }
-.tab-main .tab-label { font-size: 1.02rem; }
-.tab-main .tab-count { font-size: 0.74rem; margin-top: 0.05rem; }
-.tab-main::after     { height: 2.5px; }
-.tab-main:hover .tab-icon { transform: scale(1.06); }
-
-@media (max-width: 600px) {
-  .tab-main { padding: 0.5rem 0.6rem; gap: 0.45rem; }
-  .tab-main .tab-icon  { font-size: 1.1rem; }
-  .tab-main .tab-label { font-size: 0.95rem; }
-  .tab-main .tab-count { font-size: 0.7rem; }
-}
-
-/* ▲ END DESIGN REVIEW · BATCH 2 */
-
-/* ════════════════════════════════════════════════════════════════
-   ▼ DESIGN REVIEW · BATCH 3 — FILTER BAR CLEANUP
-   ١. حذف فواصل عمودية (fb-divider) لتقليل الضوضاء البصرية
-   ٢. تهدئة الـ pills النشطة: بدل خلفية ملوّنة صلبة لكل حالة،
-      تأخذ خلفية فاتحة دلالية + نص بلون الحالة + شريط سفلي رفيع.
-      نتيجة: ٥ ألوان pills لا تتصارع مع ثيم الصفحة (أزرق/ذهبي).
-   ٣. زرّ "الكل" يتبع ثيم التبويب (أزرق للوارد، ذهبي للصادر).
-   للتراجع: احذف هذه الكتلة فقط.
-═════════════════════════════════════════════════════════════════ */
-
-/* (١) حذف الفواصل + توسيع الفراغ بين العناصر */
-.fb-divider { display: none; }
-.filter-bar { gap: 0.7rem; }
-
-/* (٢) إعادة تعريف الحالة النشطة الافتراضية */
-.fb-pill.active {
-  background: #fff;
-  border-color: transparent;
-  color: #1f2937;
-  font-weight: 800;
-  box-shadow: inset 0 -2px 0 currentColor, 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-.fb-pill.active .fb-pill-count {
-  background: rgba(0, 0, 0, 0.06);
-  color: inherit;
-}
-
-/* (٣) لون كل pill دلالي عند التفعيل — من custom properties */
-.fb-pill.fb-pill-pending.active   { color: var(--followup-pending-text);   background: var(--followup-pending-bg); }
-.fb-pill.fb-pill-due-today.active { color: var(--followup-due-today-text); background: var(--followup-due-today-bg); }
-.fb-pill.fb-pill-overdue.active   { color: var(--followup-overdue-text);   background: var(--followup-overdue-bg); }
-.fb-pill.fb-pill-archived.active  { color: var(--followup-archived-text);  background: var(--followup-archived-bg); }
-
-/* (٤) "الكل" يتبع ثيم التبويب */
-.fb-pill[data-filter="all"].active {
-  color: var(--theme-text);
-  background: var(--theme-tint);
-}
-
-/* ▲ END DESIGN REVIEW · BATCH 3 */

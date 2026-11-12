@@ -328,8 +328,12 @@
             ? `<i class="bi bi-arrow-counterclockwise"></i> إعادة الفتح`
             : `<i class="bi bi-archive-fill"></i> إنهاء المتابعة`;
         } else {
-          badge.className = "status-badge status-badge-btn badge-status-" + newState;
-          badge.innerHTML = `<i class="bi ${display.icon}"></i>${display.label}<i class="bi bi-chevron-down status-badge-caret"></i>`;
+          // كما يرسمها book_unified_row.html: المُنجَزُ علامةٌ هادئة واسمُه للقارئ الصوتيّ وحده
+          badge.className = "status-badge status-badge-btn badge-status-" + newState +
+            (newState === "archived" ? " status-badge-quiet" : "");
+          badge.innerHTML = newState === "archived"
+            ? `<i class="bi ${display.icon}" aria-hidden="true"></i><span class="visually-hidden">${display.label}</span>`
+            : `<i class="bi ${display.icon}" aria-hidden="true"></i>${display.label}<i class="bi bi-chevron-down status-badge-caret" aria-hidden="true"></i>`;
         }
         const row = badge.closest("tr, .book-card");
         if (row) {

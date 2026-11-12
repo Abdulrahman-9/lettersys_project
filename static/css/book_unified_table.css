@@ -1,72 +1,84 @@
 /* ═════════════════════════════════════════════════════════════
-   جدول الكتب — تصميم مضغوط بصف واحد للأزرار
-   - بدون صف توسّع
-   - بدون toggle حالة سفلي
-   - بصمة theme على الـ header والـ hover
+   جدول الكتب — مضغوطٌ بصفٍّ واحدٍ للأزرار، على الهويّة الموحّدة
+   - الاتّجاه: أيقونةُ ظرفٍ وشارةُ النوع (الوارد تركواز · الصادر حبر)
+   - الحالة: شارةٌ + شريطٌ عند بداية الصفّ للمتابعات الحيّة وحدها
+   - أزرارُ الإجراءات هادئة، ولونُها عند المرور (الحذفُ أحمر)
 ═════════════════════════════════════════════════════════════ */
 
-/* الحاوية تسمح بالتمرير الأفقي بدل قصّ عمود الإجراءات عند ضيق الشاشة */
+/* الحاوية تسمح بالتمرير الأفقيّ بدل قصّ عمود الإجراءات عند ضيق الشاشة */
 .desktop-table-container {
   overflow-x: auto;
 }
 
 .book-unified-table {
   width: 100%;
-  min-width: 1080px;        /* أقل عرض يحفظ الأعمدة من الانسحاق */
-  table-layout: fixed;      /* عرض ثابت — عمود العنوان يمتصّ الفائض، بلا فراغات */
+  /* أقلّ عرضٍ يحفظ الأعمدة من الانسحاق. مساحةُ الجدول على 1440 مع الشريط الجانبيّ 1061px؛
+     كان التخطيطُ القديم (1080) يفيض ويُقصّ زرُّ الحذف خلف تمريرٍ أفقيّ. ستّةُ أعمدةٍ تتّسع
+     الآن، وعلى 1280 يضيق عمودُ الجهة (الوسائط أسفلَه) */
+  min-width: 980px;
+  table-layout: fixed;      /* عرضٌ ثابت — عمود العنوان يمتصّ الفائض، بلا فراغات */
   margin: 0;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 0.875rem;
+  color: var(--lx-ink);
 }
 
+/* الرأسُ غيرُ لاصق: كان sticky هنا وposition:relative في قسم التحجيم أسفلَه يُبطله، والحاويةُ
+   ذاتُ التمرير الأفقيّ تحصره أصلاً — أُزيل التصريحُ الميّت */
 .book-unified-table thead th {
-  position: sticky;
-  top: 0;
   z-index: 2;
-  background: linear-gradient(180deg, var(--theme-tint) 0%, #fff 100%);
+  background: linear-gradient(180deg, var(--theme-tint) 0%, var(--lx-surface) 100%);
   color: var(--theme-text);
   font-size: 0.78rem;
   font-weight: 800;
   padding: 0.55rem 0.55rem;
-  border-bottom: 1.5px solid var(--theme-glow);
+  border-bottom: 1.5px solid var(--lx-line-strong);
   text-align: start;
   white-space: nowrap;
-  transition: background 0.4s ease, color 0.4s ease, border-color 0.4s ease;
 }
 
+/* الخلايا سطرٌ واحد (كان nowrap يأتي من ‎#bookTableBody td في app.css — انتقل إلى هنا)؛
+   العنوانُ والعددُ وحدَهما يلتفّان، بقاعدتيهما أدناه */
 .book-unified-table tbody td {
+  white-space: nowrap;
   padding: 0.45rem 0.55rem;
   vertical-align: middle;
   border-bottom: 1px solid var(--border);
-  transition: background 0.18s ease;
+  transition: background var(--lx-dur-1) ease;
 }
+
+.book-unified-table tbody tr:last-child td { border-bottom-color: transparent; }
 
 .book-unified-table tbody tr.book-row {
   position: relative;
-  background: #fff;
+  background: var(--lx-surface);
 }
 
 .book-unified-table tbody tr.book-row:hover {
   background: var(--row-hover);
 }
 
-/* ═══ السمات اللونية الموحَّدة لحالات المتابعة الأربع ═══
-   الألوان معرَّفة في app.css كـ CSS custom properties — تعريف موحَّد لكل التطبيق.
-   انظر: .badge-status-{state} و .book-row-{state} في app.css */
-.book-row {
+/* ═══ حالةُ المتابعة عند بداية الصفّ ═══
+   كانت حدّاً على <tr> (app.css ‎.book-row-*) — والجدولُ بحدودٍ منفصلة يتجاهل حدودَ الصفوف،
+   فلم يُرسم قطّ. هنا على الخليّة الأولى، وللمتابعات الحيّة وحدها: المُنجَزُ هو الأصل
+   (أكثرُ من 13 ألف كتاب) فيبقى بلا شريط، والقليلُ الحيُّ يبرز. */
+.book-unified-table tbody tr.book-row > td:first-child {
   border-inline-start: 3px solid transparent;
 }
+.book-unified-table tbody tr.book-row-pending   > td:first-child { border-inline-start-color: var(--followup-pending); }
+.book-unified-table tbody tr.book-row-due_today > td:first-child { border-inline-start-color: var(--followup-due-today); }
+.book-unified-table tbody tr.book-row-overdue   > td:first-child { border-inline-start-color: var(--followup-overdue); }
 
 /* ── العمود: Checkbox ── */
 .col-select { width: 36px; text-align: center; }
 .row-checkbox, .select-all-checkbox {
   cursor: pointer;
-  accent-color: var(--theme-primary);
+  accent-color: var(--lx-pri);
 }
 
 /* ── العمود: رقم القيد (قيدنا) ── */
-.col-our-number { width: 98px; }
+.col-our-number { width: 104px; }
 
 .num-cell {
   display: inline-flex;
@@ -77,14 +89,19 @@
   max-width: 100%;
 }
 
+/* علامةُ الاتّجاه: ظرفٌ داخل/خارج — كأيقونات لوحة التحكّم */
 .kind-icon {
   font-size: 0.95rem;
   flex-shrink: 0;
 }
-.kind-icon-incoming { color: #2563eb; }
-.kind-icon-outgoing { color: #ca8a04; }
+.kind-icon-incoming { color: var(--dir-in); }
+.kind-icon-outgoing { color: var(--dir-out); }
 
 .book-number-text {
+  /* «825/2025» كما في شرح الأرقام أعلى الجدول: معزولٌ باتّجاهٍ يساريّ — كان السياقُ العربيّ يقلبه
+     فيُقرأ «2025/825» */
+  direction: ltr;
+  unicode-bidi: isolate;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
   color: var(--neutral-text);
@@ -95,35 +112,37 @@
 
 .num-sequence {
   font-size: 0.96rem;
-  color: #111827;
+  color: var(--lx-ink);
 }
 
-
+/* «ورق»: منقولٌ من الدفتر — وسمٌ بلون الورق نفسه */
 .num-paper {
   display: inline-block;
   margin-inline-start: 0.35rem;
   padding: 0 0.35rem;
-  border: 1px solid #d6cfc4;
+  border: 1px dashed var(--lx-line-strong);
   border-radius: 0.35rem;
-  color: #6f5b4b;
+  background: var(--lx-bg);
+  color: var(--lx-mute);
   font-size: 0.68rem;
   font-weight: 700;
   line-height: 1.5;
   vertical-align: middle;
 }
 
+/* السنة: كان #94a3b8 (2.6:1 على الأبيض) — الآن حبرٌ هادئ مقروء */
 .num-year {
   font-size: 0.7rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--lx-mute);
 }
 
 .book-number-missing {
   font-size: 0.74rem;
   font-weight: 700;
-  color: #b91c1c;
-  background: #fef2f2;
-  border: 1px dashed #fca5a5;
+  color: var(--lx-late);
+  background: var(--lx-late-bg);
+  border: 1px dashed var(--lx-late-line);
   border-radius: 0.3rem;
   padding: 0 0.4rem;
 }
@@ -131,22 +150,23 @@
 .book-number-numberless {
   font-size: 0.74rem;
   font-weight: 700;
-  color: #6b7280;
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
+  color: var(--lx-mute);
+  background: var(--lx-surface-2);
+  border: 1px solid var(--lx-line-strong);
   border-radius: 0.3rem;
   padding: 0 0.4rem;
 }
 
-/* ── العمود: رقم الجهة (رقمهم) — للوارد فقط ── */
-.col-sender-number { width: 124px; }
+/* ── العمود: العدد / رقم المكتب ── */
+/* ── العمود: مرجعُ الجهة — عددُها فوق تاريخها ── */
+.col-sender-number { width: 128px; }
 
 .sender-number-value {
   font-variant-numeric: tabular-nums;
   font-size: 0.82rem;
   font-weight: 800;
-  color: #075985;
-  /* الأرقام أولوية الظهور: لا اقتصاص أبداً — يلتفّ عند الطول ويبقى كاملاً */
+  color: var(--lx-pri-soft-ink);
+  /* الأرقام أولويّة الظهور: لا اقتصاص أبداً — يلتفّ عند الطول ويبقى كاملاً */
   white-space: normal;
   overflow-wrap: anywhere;
   line-height: 1.25;
@@ -155,40 +175,27 @@
   font-size: 0.68rem;
   font-weight: 600;
   font-style: italic;
-  color: #94a3b8;
-  background: rgba(148, 163, 184, 0.1);
-  border: 1px dashed rgba(148, 163, 184, 0.4);
+  color: var(--lx-mute);
+  border: 1px dashed var(--lx-line-strong);
   border-radius: 0.25rem;
   padding: 0 0.3rem;
 }
 
-/* ── العمود: التاريخ (استلام للوارد / إصدار للصادر) ── */
-.col-date { width: 96px; white-space: nowrap; }
-
-.date-val {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #475569;
-}
-
-/* ── العمود: تاريخ الإرسال — للوارد فقط ── */
-.col-sender-date { width: 92px; white-space: nowrap; }
-
+/* التاريخان تحت رقميهما: تاريخُنا تحت القيد، وتاريخُ الجهة تحت عددها */
+.date-val,
 .date-val-sm {
+  display: block;
+  margin-top: 0.15rem;
   font-variant-numeric: tabular-nums;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 600;
-  color: #64748b;
-}
-.date-empty {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #cbd5e1;
+  color: var(--lx-mute);
 }
 
-/* ── العمود: العنوان ── (مُقلَّص لصالح الجهات — الأرقام والجهات أولى بالظهور) */
-.col-title { min-width: 172px; width: 22%; }
+/* مرجعٌ لا ينطبق (صادرٌ داخليّ): شرطةٌ خافتة لا خانةٌ فارغة */
+.ref-none { color: var(--lx-line-strong); font-weight: 700; }
+
+/* ── العمود: الموضوع ── أعرضُ عمود: بلا عرضٍ ثابت فيأخذ ما يبقى (318px على 1440 · كان 141) */
 
 .book-title-cell {
   display: flex;
@@ -196,17 +203,20 @@
   gap: 0.18rem;
 }
 
+/* سطران ثمّ «…»: كان nowrap موروثاً من app.css (‎#bookTableBody td — تخطيطٌ قديمٌ بسبعة
+   أعمدة) يُبطل القصّ فيُبتر العنوانُ وسط الكلمة بلا علامة */
 .book-title-text {
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: 0.93rem;
+  font-weight: 600;
   color: var(--neutral-text);
-  line-height: 1.35;
+  line-height: 1.55;
+  white-space: normal;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  /* المحتوى المختلط: يُحدَّد الاتجاه بأول حرف قويّ (عربي=RTL، إنجليزي=LTR)
-     فتبقى بداية النصّ ظاهرة دائماً و«...» في نهايته المنطقية لا في بدايته. */
+  /* المحتوى المختلط: يُحدَّد الاتّجاه بأوّل حرفٍ قويّ (عربيّ=RTL، إنكليزيّ=LTR)
+     فتبقى بداية النصّ ظاهرة دائماً و«...» في نهايته المنطقيّة لا في بدايته. */
   unicode-bidi: plaintext;
   text-align: start;
 }
@@ -216,13 +226,12 @@
 tr.book-row.row-expanded .book-title-text {
   -webkit-line-clamp: unset;
   overflow: visible;
-  white-space: normal;
 }
 tr.book-row.row-expanded .entity-name,
 tr.book-row.row-expanded .entity-name-secondary {
+  -webkit-line-clamp: unset;
   white-space: normal;
   overflow: visible;
-  max-width: none;
 }
 
 .title-meta-row {
@@ -231,62 +240,94 @@ tr.book-row.row-expanded .entity-name-secondary {
   gap: 0.3rem;
 }
 
+/* شارةُ النوع: الوارد تركوازٌ فاتح · الصادر سطحٌ بحبرٍ وإطار */
 .kind-mini-badge {
   font-size: 0.65rem;
   font-weight: 700;
-  padding: 0.05rem 0.4rem;
+  padding: 0.05rem 0.45rem;
   border-radius: 999px;
-  letter-spacing: 0.01em;
 }
-.badge-kind-incoming { background: rgba(37, 99, 235, 0.12); color: #1e40af; }
-.badge-kind-outgoing { background: rgba(202, 138, 4, 0.14); color: #92400e; }
+.badge-kind-incoming { background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink); }
+.badge-kind-outgoing { background: var(--lx-surface-2); color: var(--lx-ink); box-shadow: inset 0 0 0 1px var(--lx-line-strong); }
 
 .title-attach-badge {
-  color: var(--theme-accent);
+  color: var(--lx-mute);
   font-size: 0.78rem;
 }
 
-/* ── العمود: الجهات ── (مُعرِّف رئيسيّ خاصةً حين يغيب العنوان — عرض متوازن قابل للسحب) */
-.col-entity { width: 196px; }
+/* ── العمود: الجهة (partials/book_entity_side.html) ──
+   العريضُ هو الطرفُ الآخر دائماً («من» للوارد · «إلى» للصادر) والاسمُ كاملٌ بسطرين؛
+   طرفُنا خافتٌ بسطر؛ والبقيّةُ «+N» تُقرأ عند المرور — لا أسماءٌ مبتورةٌ يفصلها «·» */
+.col-entity { width: 235px; }
 
 .book-entity-cell {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  font-size: 0.78rem;
-}
-
-.entity-primary,
-.entity-secondary {
-  display: inline-flex;
-  align-items: center;
   gap: 0.25rem;
-  line-height: 1.3;
+  font-size: 0.8rem;
+  white-space: normal;
 }
 
-.entity-primary {
+.ent-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.ent-lbl {
+  flex: none;
+  font-size: 0.64rem;
+  font-weight: 800;
+  color: var(--lx-mute);
+  background: var(--lx-surface-2);
+  border: 1px solid var(--lx-line);
+  border-radius: 6px;
+  padding: 0 0.3rem;
+  line-height: 1.55;
+}
+
+.ent-main .entity-name {
+  min-width: 0;
+  font-weight: 800;
   color: var(--neutral-text);
-  font-weight: 700;
-}
-
-.entity-secondary {
-  color: var(--muted);
-}
-
-.entity-icon { color: var(--theme-accent); font-size: 0.85rem; }
-
-.entity-name,
-.entity-name-secondary {
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
-  unicode-bidi: plaintext;   /* بداية اسم الجهة (عربي/إنجليزي) تبقى ظاهرة */
+  unicode-bidi: plaintext;   /* بدايةُ الاسم (عربيّ/إنكليزيّ) تبقى ظاهرة */
   text-align: start;
 }
 
+.ent-ours .entity-name-secondary {
+  min-width: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+.ent-more {
+  flex: none;
+  font-size: 0.64rem;
+  font-weight: 800;
+  color: var(--lx-pri-soft-ink);
+  background: var(--lx-pri-soft);
+  border-radius: 999px;
+  padding: 0 0.4rem;
+  cursor: help;
+  direction: ltr;           /* «+2» لا «2+» في السياق العربيّ */
+  unicode-bidi: isolate;
+}
+
+.ent-none { color: var(--lx-line-strong); font-weight: 700; }
+
 /* ── العمود: الحالة ── */
-.col-status { width: 138px; }
+.col-status { width: 108px; }
 
 .status-cell {
   display: flex;
@@ -306,16 +347,35 @@ tr.book-row.row-expanded .entity-name-secondary {
   white-space: nowrap;
 }
 
+/* ألوانُ الشارات في app.css (‎.badge-status-*) على --followup-* — وإطارُها هنا */
 .status-badge-btn {
   border: 1px solid transparent;
   cursor: pointer;
-  transition: filter 0.15s, box-shadow 0.15s;
+  transition: box-shadow var(--lx-dur-1) ease, transform var(--lx-dur-1) ease;
   font-family: inherit;
+}
+.status-badge-btn.badge-status-pending   { border-color: var(--followup-pending-line); }
+.status-badge-btn.badge-status-due_today { border-color: var(--followup-due-today-line); }
+.status-badge-btn.badge-status-overdue   { border-color: var(--followup-overdue-line); }
+.status-badge-btn.badge-status-archived  { border-color: var(--followup-archived-line); }
+
+/* المُنجَز (13,094 من 13,095): علامةُ ✓ هادئة بلا خلفيّة — يبقى زرّاً يُعيد فتحَ المتابعة،
+   واسمُه للقارئ الصوتيّ وفي التلميح */
+.status-badge-btn.status-badge-quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--lx-mute);
+  font-size: 1rem;
+  padding: 0.05rem 0.3rem;
 }
 
 .status-badge-btn:hover {
-  filter: brightness(0.96);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.status-badge-btn:focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 2px;
 }
 
 .status-badge-caret {
@@ -323,8 +383,6 @@ tr.book-row.row-expanded .entity-name-secondary {
   opacity: 0.7;
   margin-inline-start: 0.1rem;
 }
-
-/* ألوان الـ badges معرَّفة في app.css كـ utility classes (.badge-status-*) */
 
 .due-indicator {
   display: inline-flex;
@@ -338,65 +396,69 @@ tr.book-row.row-expanded .entity-name-secondary {
 .due-pending  { color: var(--followup-pending-text); }
 .due-followup { color: var(--followup-pending-text); }
 
-/* ── العمود: الإجراءات (صف واحد، 4 أزرار) ── */
-.col-actions { width: 152px; }
+/* ── العمود: الإجراءات (صفٌّ واحد، 4 أزرار) ──
+   هادئةٌ في أصلها (كانت أربعة ألوانٍ في كلّ صفّ × 12 صفّاً)، ولونُها عند المرور والتركيز */
+.col-actions { width: 134px; }
 
 .action-row {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .act-btn {
-  width: 1.85rem;
-  height: 1.85rem;
-  border-radius: 0.45rem;
+  width: 1.65rem;   /* 26px: هدفُ لمسٍ ≥ 24 (WCAG 2.5.8)، والأربعةُ في 134px */
+  height: 1.65rem;
+  border-radius: 8px;
   border: 1px solid var(--border);
-  background: #fff;
-  color: #64748b;
+  background: var(--lx-surface);
+  color: var(--lx-mute);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-decoration: none;
   padding: 0;
   cursor: pointer;
-  transition: all 0.18s ease;
-  font-size: 0.92rem;
+  transition: background var(--lx-dur-1) ease, color var(--lx-dur-1) ease,
+              border-color var(--lx-dur-1) ease, transform var(--lx-dur-1) ease;
+  font-size: 0.86rem;
 }
 
-.act-btn:hover {
+.act-btn:hover,
+.act-btn:focus-visible {
+  color: var(--lx-pri);
+  background: var(--lx-pri-soft);
+  border-color: color-mix(in srgb, var(--lx-pri) 35%, var(--lx-line));
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
+
+.act-btn:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 1px; }
 
 .act-btn:active { transform: translateY(0); }
 
-.act-btn.act-preview { color: #0369a1; }
-.act-btn.act-preview:hover { background: #f0f9ff; color: #0284c7; }
+.act-btn.act-delete:hover,
+.act-btn.act-delete:focus-visible {
+  color: var(--lx-late);
+  background: var(--lx-late-bg);
+  border-color: var(--lx-late-line);
+}
 
-.act-btn.act-view { color: #1e40af; }
-.act-btn.act-view:hover { background: #eff6ff; color: #2563eb; }
+.act-btn.act-delete:focus-visible { outline-color: var(--lx-late); }
 
-.act-btn.act-edit { color: #b45309; }
-.act-btn.act-edit:hover { background: #fffbeb; color: #d97706; }
-
-.act-btn.act-delete { color: #b91c1c; }
-.act-btn.act-delete:hover { background: #fef2f2; color: #dc2626; }
-
-/* ── popover تغيير الحالة ── */
+/* ── نافذةُ تغيير الحالة ── */
 .status-popover {
   position: absolute;
   z-index: 1080;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 0.55rem;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  background: var(--lx-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--lx-shadow-md);
   padding: 0.32rem;
   min-width: 168px;
   display: flex;
   flex-direction: column;
   gap: 0.12rem;
-  animation: popIn 0.14s ease;
+  animation: popIn var(--lx-dur-2) var(--lx-ease);
 }
 
 @keyframes popIn {
@@ -409,7 +471,7 @@ tr.book-row.row-expanded .entity-name-secondary {
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.6rem;
-  border-radius: 0.35rem;
+  border-radius: 8px;
   border: none;
   background: transparent;
   text-align: start;
@@ -418,14 +480,14 @@ tr.book-row.row-expanded .entity-name-secondary {
   color: var(--neutral-text);
   width: 100%;
   font-family: inherit;
-  transition: background 0.12s ease;
+  transition: background var(--lx-dur-1) ease;
 }
 
-.status-popover-item:hover { background: rgba(0, 0, 0, 0.04); }
-.status-popover-item.active { background: var(--theme-tint); color: var(--theme-text); font-weight: 700; }
+.status-popover-item:hover { background: var(--lx-surface-2); }
+.status-popover-item.active { background: var(--theme-light); color: var(--theme-text); font-weight: 700; }
 .status-popover-item i { font-size: 0.95rem; }
 
-/* ── فرز Header ── */
+/* ── فرز الرؤوس ── */
 .th-content {
   display: inline-flex;
   align-items: center;
@@ -433,13 +495,34 @@ tr.book-row.row-expanded .entity-name-secondary {
   font-weight: 800;
 }
 
+/* رأسُ «القيد»: زرّا فرزٍ متراكبان — الرقمُ ثمّ التاريخُ أصغرَ تحته (كما في الخانة) */
+.th-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+
+.th-content.th-sub {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--lx-mute);
+}
+
+/* الفرزُ النشط ظاهر: لونُ الهويّة وسهمٌ كامل (aria-sort على الرأس للقارئ الصوتيّ) */
+.th-content.is-sorted,
+.th-content.is-sorted .sort-icon {
+  color: var(--lx-pri);
+  opacity: 1;
+}
+
 .th-content.sortable {
   cursor: pointer;
   user-select: none;
-  transition: color 0.15s ease;
+  transition: color var(--lx-dur-1) ease;
 }
 
-.th-content.sortable:hover { color: var(--theme-accent); }
+.th-content.sortable:hover { color: var(--lx-pri); }
 
 /* رأسُ الفرز زرٌّ حقيقيّ ليعمل بلوحة المفاتيح (WCAG 2.1.1).
    إعادةُ تعيينٍ مستهدَفة لا `all: unset`: الأخيرةُ أعلى خصوصيّةً من
@@ -459,7 +542,7 @@ button.th-content {
 }
 
 button.th-content:focus-visible {
-  outline: 2px solid var(--theme-accent);
+  outline: 2px solid var(--lx-pri);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -475,11 +558,11 @@ button.th-content:focus-visible {
   font-size: 0.72rem;
   opacity: 0.55;
   cursor: help;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--lx-dur-1) ease;
 }
-.th-info:hover { opacity: 1; color: var(--theme-accent); }
+.th-info:hover { opacity: 1; color: var(--lx-pri); }
 
-/* ── حالة فارغة داخل الجدول ── */
+/* ── حالةٌ فارغة داخل الجدول ── */
 .empty-row td {
   padding: 2.5rem 1rem;
   text-align: center;
@@ -495,34 +578,43 @@ button.th-content:focus-visible {
 
 .empty-icon {
   font-size: 1.9rem;
-  color: rgba(0, 0, 0, 0.18);
+  color: var(--lx-line-strong);
 }
 
-/* ── animation: stagger fade-in للصفوف الجديدة ── */
+/* ── دخولُ الصفوف: تتابعٌ خفيف للعشرة الأولى (≤ 160ms) بعد كلّ تحميل ── */
 .book-row {
-  animation: rowFadeIn 0.28s ease both;
+  animation: rowFadeIn var(--lx-dur-3) var(--lx-ease) both;
 }
+.book-row:nth-child(2)  { animation-delay: 16ms; }
+.book-row:nth-child(3)  { animation-delay: 32ms; }
+.book-row:nth-child(4)  { animation-delay: 48ms; }
+.book-row:nth-child(5)  { animation-delay: 64ms; }
+.book-row:nth-child(6)  { animation-delay: 80ms; }
+.book-row:nth-child(7)  { animation-delay: 96ms; }
+.book-row:nth-child(8)  { animation-delay: 112ms; }
+.book-row:nth-child(9)  { animation-delay: 128ms; }
+.book-row:nth-child(10) { animation-delay: 144ms; }
+.book-row:nth-child(n+11) { animation-delay: 160ms; }
 
 @keyframes rowFadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ═══ خطوط فاصلة عمودية خفيفة بين الخلايا ═══
-   تفصل المعلومات المتراكمة سابقاً (الرقم/التاريخ) إلى خلايا واضحة. */
+/* ═══ خطوطٌ فاصلة عموديّة خفيفة بين الخلايا ═══ */
 .book-unified-table thead th:not(:last-child),
 .book-unified-table tbody td:not(:last-child) {
-  border-inline-end: 1px solid rgba(15, 23, 42, 0.05);
+  border-inline-end: 1px solid color-mix(in srgb, var(--lx-line) 60%, transparent);
 }
 
-/* ═══ إخفاء عمودَي الجهة في تبويب الصادر ═══
-   الصادر لا يملك رقم جهة ولا تاريخ إرسال — يُطوى العمودان فيتمدّد الجدول بلا فراغ. */
-#bookUnifiedPage[data-theme="outgoing"] .col-sender-number,
-#bookUnifiedPage[data-theme="outgoing"] .col-sender-date {
+/* ═══ طيُّ مرجع الجهة في تبويب الصادر ═══
+   الصادر لا يملك عدداً ولا تاريخَ جهة — يُطوى العمود فيتّسع الموضوع (data-theme من التبويب). */
+#bookUnifiedPage[data-theme="outgoing"] .col-sender-number {
   display: none;
 }
 
-/* ═══ تظليل مطابقات البحث ═══ */
+/* ═══ تظليل مطابقات البحث ═══
+   الأرقام: تركوازٌ فاتح · الكلمات: قلمُ تظليلٍ ذهبيّ — لونان يفرّقان التطابق الرقميّ عن النصّيّ */
 mark.search-hl,
 mark.search-hl-num,
 mark.search-hl-text {
@@ -532,19 +624,19 @@ mark.search-hl-text {
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-/* الأرقام (قيدنا/رقمهم): أزرق */
 mark.search-hl,
 mark.search-hl-num {
-  background: #bfdbfe;
-  color: #1e3a8a;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+  box-shadow: inset 0 -1.5px 0 rgba(var(--lx-pri-rgb), .45);
 }
-/* كلمات العنوان/الجهة: كهرماني — لون مختلف يميّز التطابق النصّي عن الرقمي */
 mark.search-hl-text {
-  background: #fde68a;
-  color: #7c2d12;
+  background: var(--lx-accent-soft);
+  color: var(--lx-ink);
+  box-shadow: inset 0 -2px 0 var(--lx-accent);
 }
 
-/* إبراز الصف الذي يحتوي مطابقة بلون الثيم */
+/* الصفّ الذي فيه مطابقة */
 .book-unified-table tbody tr.book-row--match {
   background: var(--theme-tint);
 }
@@ -552,17 +644,17 @@ mark.search-hl-text {
   background: var(--theme-glow);
 }
 
-/* إبراز مؤقّت للصف القادم من ودجة «آخر الكتب» (?focus=<id>) — يتلاشى تلقائياً */
+/* إبرازٌ مؤقّت للصفّ القادم من ودجة «آخر الكتب» (?focus=<id>) — يتلاشى تلقائيّاً */
 .book-unified-table tbody tr.book-row--focused {
   animation: bookRowFocusPulse 2.6s ease-out 1;
 }
 @keyframes bookRowFocusPulse {
-  0%   { background: var(--theme-glow); box-shadow: inset 0 0 0 2px var(--theme-strong, #0f766e); }
+  0%   { background: var(--theme-glow); box-shadow: inset 0 0 0 2px var(--theme-strong); }
   70%  { background: var(--theme-tint);  box-shadow: inset 0 0 0 2px transparent; }
   100% { background: transparent;        box-shadow: none; }
 }
 
-/* ═══ تحجيم الأعمدة يدوياً (سحب حدّ الترويسة) ═══ */
+/* ═══ تحجيم الأعمدة يدويّاً (سحب حدّ الترويسة) ═══ */
 .book-unified-table thead th { position: relative; }
 .col-resizer {
   position: absolute;
@@ -584,11 +676,11 @@ mark.search-hl-text {
   width: 2px;
   background: transparent;
   border-radius: 2px;
-  transition: background 0.15s;
+  transition: background var(--lx-dur-1);
 }
 .col-resizer:hover::before,
 body.col-resizing .col-resizer::before {
-  background: var(--theme-primary, #0f766e);
+  background: var(--lx-pri);
 }
 body.col-resizing {
   cursor: col-resize !important;
@@ -596,12 +688,9 @@ body.col-resizing {
 }
 body.col-resizing * { user-select: none !important; }
 
-@media (max-width: 1100px) {
-  .col-entity { width: 180px; }
-  .col-our-number { width: 92px; }
-  .col-sender-number { width: 108px; }   /* يبقى كافياً للرقم كاملاً */
-  .col-sender-date { width: 80px; }
-  .entity-name, .entity-name-secondary { max-width: 150px; }
+/* شاشةُ 1280 وما دونها: الجهةُ تضيق أوّلاً، والأرقامُ لا تُضغط */
+@media (max-width: 1400px) {
+  .col-entity { width: 205px; }
 }
 
 @media (max-width: 900px) {

@@ -67,6 +67,9 @@
   --lx-dur-3: 320ms;
   --lx-dur-4: 560ms;
 
+  /* ارتفاعُ الشريط العلويّ اللاصق (مقيسٌ 75px على 1440): ما يلتصق في الصفحة يبدأ تحته لا خلفه */
+  --lx-topbar-h: 75px;
+
   /* شارةُ العدد (التنبيهات، الطاولة): نصٌّ مقروءٌ في الوضعين */
   --lx-badge-bg: #c4320a;
   --lx-badge-ink: #ffffff;
@@ -215,8 +218,138 @@ html[data-lx-page="v2"] .form-check-input:checked {
   box-shadow: 0 0 0 3px rgba(var(--lx-pri-rgb), .2);
 }
 
+/* حالاتُ المتابعة الأربع: app.css يعرّفها على ‎:root بألوانٍ ثابتة لا تعرف الداكن — هنا على رموز
+   الحالات (قيد المتابعة = تقدّم · مستحقّ اليوم = انتظار · متأخّر = تأخّر · مُنجَز = هادئ).
+   البادئة html[…] ترفع الخصوصيّة فوق ‎:root في app.css الذي يُحمَّل بعد هذا الملفّ. */
+html[data-lx-page="v2"] {
+  --followup-pending: var(--lx-prog);
+  --followup-pending-bg: var(--lx-prog-bg);
+  --followup-pending-text: var(--lx-prog);
+  --followup-pending-line: var(--lx-prog-line);
+  --followup-due-today: var(--lx-wait);
+  --followup-due-today-bg: var(--lx-wait-bg);
+  --followup-due-today-text: var(--lx-wait);
+  --followup-due-today-line: var(--lx-wait-line);
+  --followup-overdue: var(--lx-late);
+  --followup-overdue-bg: var(--lx-late-bg);
+  --followup-overdue-text: var(--lx-late);
+  --followup-overdue-line: var(--lx-late-line);
+  --followup-archived: var(--lx-mute);
+  --followup-archived-bg: var(--lx-surface-2);
+  --followup-archived-text: var(--lx-mute);
+  --followup-archived-line: var(--lx-line);
+}
+
 /* الشريطُ العلويّ لاصق: التمريرُ إلى عنصرٍ أو التركيزُ عليه لا يختفي تحته (WCAG 2.2 · 2.4.11) */
-html { scroll-padding-top: 96px; }
+html { scroll-padding-top: calc(var(--lx-topbar-h) + 21px); }
+
+/* --------------------------------------------------------------------------
+   أشرطةُ التمرير والتحديد — app.css يرسمها بالهويّة القديمة (مقبضٌ برتقاليٌّ متدرّج على مسارٍ
+   دافئ، وتحديدٌ برتقاليّ) فتنافر التركواز. هنا: مقبضٌ رفيعٌ مستدير بحبرٍ هادئ يغلظ ويتركوز
+   تحت المؤشّر، ومسارٌ شفّاف، في الوضعين. Chromium وSafari بالعناصر الزائفة (تحكّمٌ كامل
+   بالشكل)، وFirefox بالخاصّيّتين القياسيّتين وحدَه — إن ضُبطتا في Chromium تجاهل الزائفة.
+   -------------------------------------------------------------------------- */
+html[data-lx-page="v2"] {
+  --lx-scroll-thumb: color-mix(in srgb, var(--lx-mute) 42%, transparent);
+  --lx-scroll-thumb-hover: rgba(var(--lx-pri-rgb), .75);
+  /* مكانُ الشريط محجوزٌ دائماً: لا تقفز الصفحة أفقيّاً بين قصيرةٍ وطويلة (ولا أثناء الانتقال) */
+  scrollbar-gutter: stable;
+}
+
+html[data-lx-page="v2"]::-webkit-scrollbar,
+html[data-lx-page="v2"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html[data-lx-page="v2"]::-webkit-scrollbar-track,
+html[data-lx-page="v2"] ::-webkit-scrollbar-track,
+html[data-lx-page="v2"]::-webkit-scrollbar-corner,
+html[data-lx-page="v2"] ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* حدٌّ شفّافٌ مقصوصٌ عنه اللون: المقبضُ المرئيّ 6px داخل مجرى 10px (عرضُ القديم نفسُه — لا تضيق
+   الصفحة)، و8px تحت المؤشّر */
+html[data-lx-page="v2"]::-webkit-scrollbar-thumb,
+html[data-lx-page="v2"] ::-webkit-scrollbar-thumb {
+  background: var(--lx-scroll-thumb);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+html[data-lx-page="v2"]::-webkit-scrollbar-thumb:hover,
+html[data-lx-page="v2"] ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--lx-scroll-thumb-hover);
+  border-width: 1px;
+}
+
+html[data-lx-page="v2"]::-webkit-scrollbar-thumb:active,
+html[data-lx-page="v2"] ::-webkit-scrollbar-thumb:active {
+  background-color: var(--lx-pri);
+  border-width: 1px;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  html[data-lx-page="v2"],
+  html[data-lx-page="v2"] * {
+    scrollbar-color: var(--lx-scroll-thumb) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+/* الشريطُ الجانبيّ: مقبضُه أخفتُ من مقبض الصفحة — يُرى ولا يصير خطّاً فاصلاً ثانياً بجوار البطاقة،
+   ويتركوز تحت اليد كغيره. (إظهارُه بمرور اليد على الشريط وحدَه لا يصلح: Chromium لا يعيد رسمَ مقبضٍ
+   زائفٍ تغيّر نمطُه بـ‎:hover العنصر حتّى يُنشأ الشريطُ من جديد — مقيسٌ 11-12 — والخاصّيّتان
+   القياسيّتان تُعيدان سهمَي الشريط القديم) */
+html[data-lx-page="v2"] .app-sidebar {
+  --lx-scroll-thumb: color-mix(in srgb, var(--lx-mute) 24%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   لوحُ التبويب المنزلق (js/lx_tabs.js) — سطحُ «القيادة» نفسُه: تركوازٌ عميق وخطٌّ ذهبيّ،
+   ينزلق بنابضٍ خفيف إلى التبويب الذي اختير. left/translateX فيزيائيّان عمداً: السكربتُ
+   يقيس offsetLeft (فيزيائيٌّ في RTL أيضاً).
+   -------------------------------------------------------------------------- */
+[data-lx-tabs] {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-lx-tabs] > [role="tab"] {
+  position: relative;
+  z-index: 1;
+}
+
+.lx-tabs-ind {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--ind-w, 0px);
+  transform: translateX(var(--ind-x, 0px));
+  background: linear-gradient(135deg, var(--lx-hero-a) 0%, var(--lx-hero-b) 100%);
+  box-shadow: inset 0 -3px 0 var(--lx-accent);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.lx-tabs-ind.is-ready {
+  transition: transform var(--lx-dur-3) var(--lx-ease-spring), width var(--lx-dur-3) var(--lx-ease-spring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lx-tabs-ind.is-ready { transition: none; }
+}
+
+/* التحديد: تعبئةُ الهويّة بحبرها — مقروءٌ فوق أيّ سطح (حتّى الرأس التركوازيّ) وفي الوضعين */
+html[data-lx-page="v2"] ::selection {
+  background: var(--lx-pri-fill);
+  color: var(--lx-pri-fill-ink);
+}
 
 /* أرضيّةُ الصفحات المنقولة (app.css يضع #f4f2ee صريحاً لكلّ الصفحات) ودرجُ الهاتف في الداكن */
 html[data-lx-page="v2"] body { background: var(--lx-bg); color: var(--lx-ink); }

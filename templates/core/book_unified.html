@@ -3,12 +3,15 @@
 
 {% block title %}قائمة الكتب{% endblock %}
 
+{# الهويّة الموحّدة (11-12): رموز theme.css والوضعان؛ لونٌ واحدٌ للتبويبات والاتّجاهُ علامةٌ في الصفّ #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/book_unified.css' %}?v=20261007">
-<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20261103-one-view">
-<link rel="stylesheet" href="{% static 'css/book_unified_table.css' %}?v=20261027-sortable">
-<link rel="stylesheet" href="{% static 'css/book_unified_mobile.css' %}?v=20260629-preview">
-<link rel="stylesheet" href="{% static 'css/number_hint.css' %}?v=20260810">
+<link rel="stylesheet" href="{% static 'css/book_unified.css' %}?v=20261112-list1">
+<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20261112-list1">
+<link rel="stylesheet" href="{% static 'css/book_unified_table.css' %}?v=20261112-list3">
+<link rel="stylesheet" href="{% static 'css/book_unified_mobile.css' %}?v=20261112-list1">
+<link rel="stylesheet" href="{% static 'css/number_hint.css' %}?v=20261112-list1">
 {% endblock %}
 
 {# الـ sidebar مُلغى لهذه الصفحة #}
@@ -152,11 +155,12 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20261103-lens"></script>
+<script src="{% static 'js/book_unified_ajax_manager.js' %}?v=20261112-list1"></script>
 <script src="{% static 'js/book_unified_actions.js' %}?v=20261008"></script>
-<script src="{% static 'js/book_unified_api.js' %}?v=20261111-b4"></script>
-<script src="{% static 'js/book_column_resize.js' %}?v=20260707c"></script>
+<script src="{% static 'js/book_unified_api.js' %}?v=20261112-list1"></script>
+<script src="{% static 'js/book_column_resize.js' %}?v=20261112-list1"></script>
 <script src="{% static 'js/number_hint.js' %}?v=20260810"></script>
+<script src="{% static 'js/lx_tabs.js' %}?v=20261112-list1"></script>
 {% comment %}
 التهيئة تتم ذاتياً داخل book_unified_ajax_manager.js على DOMContentLoaded —
 لا تُكرّرها هنا وإلا عمل مديران معاً فيُطلق كل إجراء طلبَي AJAX مزدوجين.

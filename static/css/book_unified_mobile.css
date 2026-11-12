@@ -1,4 +1,6 @@
-/* Mobile card view and responsive rules for Book Unified page */
+/* بطاقات الشاشات الضيّقة (< 992px) لقائمة الكتب — على الهويّة الموحّدة.
+   الألوانُ وحدَها انتقلت إلى الرموز (عملُ الهاتف مؤجَّلٌ بقرار المالك)؛ التخطيطُ كما هو.
+   أُزيلت قواعدُ ‎.btn-toggle-status-mobile و‎.filter-grid: لا عنصرَ في هذه الصفحة يحملها. */
 
 .mobile-cards-container {
   display: none;
@@ -7,18 +9,18 @@
 }
 
 .book-card {
-  border: 1px solid rgba(111, 70, 40, 0.17);
-  border-radius: 0.85rem;
-  background: #fff;
-  box-shadow: 0 4px 14px rgba(77, 44, 25, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
   overflow: hidden;
 }
 
-/* ═══ السمات اللونية الموحَّدة لحالات المتابعة الأربع (بطاقات الموبايل) ═══ */
-.book-card-overdue   { background: linear-gradient(160deg, #fff1f1 0%, #ffffff 65%); border-inline-start: 3px solid #dc2626; }   /* أحمر */
-.book-card-due_today { background: linear-gradient(160deg, #fff8ec 0%, #ffffff 65%); border-inline-start: 3px solid #d97706; }   /* برتقالي */
-.book-card-pending   { background: linear-gradient(160deg, #f2f9ff 0%, #ffffff 65%); border-inline-start: 3px solid #2563eb; }   /* أزرق */
-.book-card-archived  { background: linear-gradient(160deg, #f4f5f6 0%, #ffffff 65%); border-inline-start: 3px solid #94a3b8; opacity: 0.92; }  /* رمادي */
+/* ═══ حالاتُ المتابعة الأربع: شريطٌ عند البداية وظلٌّ خفيفٌ من لون الحالة ═══ */
+.book-card-overdue   { background: linear-gradient(160deg, var(--followup-overdue-bg) 0%, var(--lx-surface) 65%);   border-inline-start: 3px solid var(--followup-overdue); }
+.book-card-due_today { background: linear-gradient(160deg, var(--followup-due-today-bg) 0%, var(--lx-surface) 65%); border-inline-start: 3px solid var(--followup-due-today); }
+.book-card-pending   { background: linear-gradient(160deg, var(--followup-pending-bg) 0%, var(--lx-surface) 65%);   border-inline-start: 3px solid var(--followup-pending); }
+.book-card-archived  { background: var(--lx-surface); border-inline-start: 3px solid var(--followup-archived-line); }
 
 .book-card-header,
 .book-card-body,
@@ -30,7 +32,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  border-bottom: 1px solid rgba(111, 70, 40, 0.12);
+  border-bottom: 1px solid var(--border);
 }
 
 .card-book-number {
@@ -38,7 +40,8 @@
   align-items: center;
   gap: 0.35rem;
   font-weight: 800;
-  color: #2f221b;
+  color: var(--lx-ink);
+  font-variant-numeric: tabular-nums;
 }
 
 .secondary-number-badge-mobile {
@@ -52,7 +55,7 @@
 
 .card-due-banner {
   margin: 0.45rem 0.75rem 0;
-  border-radius: 0.55rem;
+  border-radius: 8px;
   padding: 0.35rem 0.55rem;
   display: inline-flex;
   align-items: center;
@@ -61,13 +64,13 @@
   font-weight: 700;
 }
 
-.banner-overdue { background: rgba(220, 38, 38, 0.15); color: #b91c1c; }   /* أحمر */
-.banner-today   { background: rgba(217, 119, 6, 0.18); color: #b45309; }   /* برتقالي */
-.banner-pending { background: rgba(37, 99, 235, 0.15); color: #1e40af; }   /* أزرق */
+.banner-overdue { background: var(--followup-overdue-bg);   color: var(--followup-overdue-text); }
+.banner-today   { background: var(--followup-due-today-bg); color: var(--followup-due-today-text); }
+.banner-pending { background: var(--followup-pending-bg);   color: var(--followup-pending-text); }
 
 .card-title {
   font-weight: 700;
-  color: #2f221b;
+  color: var(--lx-ink);
   line-height: 1.5;
   margin-bottom: 0.45rem;
 }
@@ -90,25 +93,19 @@
   padding: 0.15rem 0.45rem;
 }
 
-.badge-kind-incoming-mobile {
-  background: rgba(14, 165, 233, 0.14);
-  color: #075985;
-}
+/* علامةُ الاتّجاه كما في الجدول: الوارد تركواز · الصادر حبر */
+.badge-kind-incoming-mobile { background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink); }
+.badge-kind-outgoing-mobile { background: var(--lx-surface-2); color: var(--lx-ink); box-shadow: inset 0 0 0 1px var(--lx-line-strong); }
 
-.badge-kind-outgoing-mobile {
-  background: rgba(249, 115, 22, 0.15);
-  color: #9a3412;
-}
-
-/* ═══ ألوان حالات المتابعة على الموبايل — من custom properties في app.css ═══ */
+/* ═══ ألوانُ حالات المتابعة — --followup-* (theme.css يربطها برموز الحالات) ═══ */
 .badge-status-pending-mobile   { background: var(--followup-pending-bg);   color: var(--followup-pending-text); }
 .badge-status-due_today-mobile { background: var(--followup-due-today-bg); color: var(--followup-due-today-text); }
 .badge-status-overdue-mobile   { background: var(--followup-overdue-bg);   color: var(--followup-overdue-text); }
 .badge-status-archived-mobile  { background: var(--followup-archived-bg);  color: var(--followup-archived-text); }
 
 .badge-has-attachment-mobile {
-  background: rgba(59, 130, 246, 0.18);
-  color: #1d4ed8;
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
 }
 
 .card-entity,
@@ -116,13 +113,13 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  color: #78533e;
+  color: var(--lx-mute);
   font-size: 0.77rem;
   margin-top: 0.35rem;
 }
 
 .book-card-footer {
-  border-top: 1px solid rgba(111, 70, 40, 0.12);
+  border-top: 1px solid var(--border);
 }
 
 .card-action-icons {
@@ -134,11 +131,12 @@
   flex: 1 1 0;
 }
 
+/* أزرارُ البطاقة هادئةٌ كأزرار الجدول؛ الحذفُ وحده بلون الخطر */
 .card-action-btn {
-  border: 1px solid rgba(111, 70, 40, 0.2);
-  border-radius: 0.45rem;
-  background: #fff;
-  color: #65412d;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--lx-surface);
+  color: var(--lx-mute);
   min-height: 2rem;
   display: inline-flex;
   align-items: center;
@@ -150,33 +148,12 @@
   transform: scale(0.98);
 }
 
-.btn-preview-mobile { color: #0369a1; }
-.btn-view-mobile { color: #2563eb; }
-.btn-edit-mobile { color: #ca8a04; }
-.btn-delete-mobile { color: #dc2626; }
+.btn-preview-mobile,
+.btn-view-mobile,
+.btn-edit-mobile { color: var(--lx-pri); }
+.btn-delete-mobile { color: var(--lx-late); }
 
-.card-status-toggle .btn-toggle-status-mobile {
-  border-color: rgba(111, 70, 40, 0.2);
-  color: #7b5942;
-  background: #fff;
-}
-
-.card-status-toggle .btn-toggle-status-mobile.active[data-status="pending"] {
-  background: rgba(245, 158, 11, 0.2);
-  color: #92400e;
-}
-
-.card-status-toggle .btn-toggle-status-mobile.active[data-status="hold"] {
-  background: rgba(148, 163, 184, 0.24);
-  color: #334155;
-}
-
-.card-status-toggle .btn-toggle-status-mobile.active[data-status="done"] {
-  background: rgba(34, 197, 94, 0.23);
-  color: #166534;
-}
-
-/* Responsive switching */
+/* التبديل بين البطاقات والجدول */
 @media (max-width: 991.98px) {
   .desktop-table-container {
     display: none;
@@ -184,10 +161,6 @@
 
   .mobile-cards-container {
     display: grid;
-  }
-
-  .filter-grid {
-    grid-template-columns: 1fr;
   }
 }
 

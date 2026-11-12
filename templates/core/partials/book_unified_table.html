@@ -1,10 +1,10 @@
 {% load static %}
 {% comment %}
 ============================================
-الجدول الرئيسي — 9 أعمدة، خلايا مفصولة
-- رقم القيد / رقم الجهة عمودان منفصلان
-- تاريخ الاستلام / تاريخ الإرسال عمودان منفصلان
-- عمودا الجهة (رقم + تاريخ إرسال) يظهران للوارد فقط (إخفاء عبر data-theme)
+الجدول الرئيسيّ — ستّة أعمدة بترتيب دفتر الوارد (قرارُ المالك 11-12، توصيةُ فيبل):
+القيد (رقمُنا فوق تاريخنا) ← مرجعُ الجهة (عددُها فوق تاريخها) ← الجهة ← الموضوع ← الحالة ← الإجراءات.
+كانت تسعةً يأخذ فيها الموضوعُ 141 بكسل؛ الآن أعرضُ عمود. وفرزُ الرقم والتاريخ كلاهما في رأس «القيد».
+عمودُ المرجع يُطوى في تبويب الصادر (data-theme) كما كان عمودا الجهة.
 ============================================
 {% endcomment %}
 
@@ -15,38 +15,30 @@
         <input type="checkbox" class="select-all-checkbox" id="selectAllBooks" aria-label="تحديد الكل">
       </th>
       <th class="col-our-number">
-        <button type="button" class="th-content sortable" data-sort="our_number">
-          <span>رقم القيد</span>
-          <i class="bi bi-info-circle th-info" title="رقم القيد الفريد لدينا (قيدنا)."></i>
-          <i class="bi bi-arrow-down-up sort-icon" aria-hidden="true"></i>
-        </button>
-      </th>
-      <th class="col-date">
-        <button type="button" class="th-content sortable" data-sort="date">
-          <span>التاريخ</span>
-          <i class="bi bi-info-circle th-info" title="تاريخ تسجيل الكتاب — للوارد: تاريخ الاستلام. للصادر: تاريخ الإصدار."></i>
-          <i class="bi bi-arrow-down-up sort-icon" aria-hidden="true"></i>
-        </button>
+        <div class="th-stack">
+          <button type="button" class="th-content sortable" data-sort="our_number" title="رقم القيد الفريد لدينا (قيدنا) — انقر للفرز به">
+            <span>القيد</span>
+            <i class="bi bi-arrow-down-up sort-icon" aria-hidden="true"></i>
+          </button>
+          <button type="button" class="th-content sortable th-sub" data-sort="date" title="تاريخ تسجيل الكتاب — للوارد الاستلام وللصادر الإصدار — انقر للفرز به">
+            <span>التاريخ</span>
+            <i class="bi bi-arrow-down-up sort-icon" aria-hidden="true"></i>
+          </button>
+        </div>
       </th>
       <th class="col-sender-number">
         <div class="th-content">
-          <span>العدد / رقم المكتب</span>
-          <i class="bi bi-info-circle th-info" title="للوارد: عدد الجهة المرسلة. للصادر الخارجي: رقم مكتب المدير العام المستقل عن رقم قيدنا."></i>
+          <span>مرجع الجهة</span>
+          <i class="bi bi-info-circle th-info" title="للوارد: عددُ الجهة المرسِلة المطبوعُ على المستند وتاريخُه. للصادر الخارجيّ: رقمُ مكتب المدير العام المستقلّ عن رقم قيدنا." aria-hidden="true"></i>
         </div>
       </th>
-      <th class="col-sender-date">
-        <div class="th-content">
-          <span>تاريخ الإرسال</span>
-          <i class="bi bi-info-circle th-info" title="تاريخ إرسال الجهة المرسلة للكتاب."></i>
-        </div>
+      <th class="col-entity">
+        <div class="th-content"><span>الجهة</span></div>
       </th>
       <th class="col-title">
         <button type="button" class="th-content sortable" data-sort="title">
-          <span>العنوان</span><i class="bi bi-arrow-down-up sort-icon" aria-hidden="true"></i>
+          <span>الموضوع</span><i class="bi bi-arrow-down-up sort-icon" aria-hidden="true"></i>
         </button>
-      </th>
-      <th class="col-entity">
-        <div class="th-content"><span>الجهات</span></div>
       </th>
       <th class="col-status">
         <div class="th-content"><span>الحالة</span></div>
@@ -64,7 +56,7 @@
       {% endfor %}
     {% else %}
       <tr class="empty-row">
-        <td colspan="9">
+        <td colspan="7">
           <div class="empty-table-message">
             <i class="bi bi-inbox empty-icon"></i>
             <p>لا توجد كتب مطابقة</p>

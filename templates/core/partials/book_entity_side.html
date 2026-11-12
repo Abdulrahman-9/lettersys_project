@@ -1,0 +1,16 @@
+{% comment %}
+سطرٌ من خانة الجهة في قائمة الكتب: «من» أو «إلى» ثمّ الاسمُ الأوّل كاملاً و«+N» يحمل البقيّة في title.
+main = الطرفُ الآخر (عريضٌ بسطرين) · وإلّا طرفُنا (خافتٌ بسطر). قرارُ المالك 11-12 «ترتيب الدفتر».
+count قبل first عمداً: len() يملأ ذاكرةَ الاستعلام فلا يطلب [0] استعلاماً ثانياً.
+{% endcomment %}
+{% with count=ents|length first=ents.0 %}
+<div class="ent-line {% if main %}ent-main{% else %}ent-ours{% endif %}">
+  <span class="ent-lbl">{{ label }}</span>
+  {% if first %}
+    <span class="{% if main %}entity-name{% else %}entity-name-secondary{% endif %}" title="{% for e in ents %}{{ e.name }}{% if not forloop.last %}، {% endif %}{% endfor %}">{{ first.name }}</span>
+    {% if count > 1 %}<span class="ent-more" title="{% for e in ents %}{% if not forloop.first %}{{ e.name }}{% if not forloop.last %}، {% endif %}{% endif %}{% endfor %}">+{{ count|add:"-1" }}</span>{% endif %}
+  {% else %}
+    <span class="ent-none">—</span>
+  {% endif %}
+</div>
+{% endwith %}

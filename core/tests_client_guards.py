@@ -81,13 +81,22 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
             ('templates/core/dashboard.html', 'css/dashboard_roles.css', 20260929),
             ('templates/base.html', 'design-system.css', 20260927),
             # الهويّة الموحّدة (11-11): app.css فقد الوضعَ الداكن القديم، وأُضيف المصدرُ الجديد
-            ('templates/base.html', 'app.css', 20261111),
+            # قائمة الكتب على الهويّة (11-12): app.css فقد قواعد ‎#bookTableBody، وtheme.css كسب
+            # أشرطةَ التمرير وحالاتِ المتابعة ولوحَ التبويب، وأوراقُ القائمة الخمس على الرموز
+            ('templates/base.html', 'app.css', 20261112),
             ('templates/base.html', 'app.js', 20261111),
-            ('templates/base.html', 'css/theme.css', 20261111),
+            ('templates/base.html', 'css/theme.css', 20261112),
             ('templates/base.html', 'js/theme.js', 20261111),
             ('templates/core/login.html', 'js/login.js', 20261111),
-            ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js', 20261006),
-            ('templates/core/book_unified.html', 'css/book_unified_tabs.css', 20261006),
+            ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js', 20261112),
+            ('templates/core/book_unified.html', 'js/book_unified_api.js', 20261112),
+            ('templates/core/book_unified.html', 'js/book_column_resize.js', 20261112),
+            ('templates/core/book_unified.html', 'css/book_unified.css', 20261112),
+            ('templates/core/book_unified.html', 'css/book_unified_tabs.css', 20261112),
+            ('templates/core/book_unified.html', 'css/book_unified_table.css', 20261112),
+            ('templates/core/book_unified.html', 'css/book_unified_mobile.css', 20261112),
+            ('templates/core/book_unified.html', 'css/number_hint.css', 20261112),
+            ('templates/core/book_unified.html', 'js/lx_tabs.js', 20261112),
             ('templates/core/extraction_smart_desktop.html', 'extraction_smart.css', 20260929),
             ('templates/core/reports.html', 'css/reports.css', 20261006),
             ('templates/core/book_detail.html', 'css/book_detail_v2.css', 20261006),
@@ -101,7 +110,7 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
         sw = (ROOT / 'static' / 'service-worker.js').read_text(encoding='utf-8')
         m = re.search(r"CACHE_VERSION = 'v(\d+)-", sw)
         self.assertIsNotNone(m, 'CACHE_VERSION')
-        self.assertGreaterEqual(int(m.group(1)), 118)
+        self.assertGreaterEqual(int(m.group(1)), 183)
 
 
 class LifecycleScriptGuardsTests(SimpleTestCase):

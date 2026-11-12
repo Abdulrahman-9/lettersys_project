@@ -10,18 +10,17 @@
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'lettersys.book.colWidths.v1';
+  // v2: ستّةُ أعمدةٍ بترتيب الدفتر (11-12) — عروضُ التخطيط القديم لا تصلح له فتبدأ من جديد
+  var STORAGE_KEY = 'lettersys.book.colWidths.v2';
   var TABLE_ID = 'bookUnifiedTable';
   // أعمدة قابلة للتحجيم (نستثني الاختيار والإجراءات — عرضهما ثابت وظيفيّ)
   var RESIZABLE = [
-    'col-our-number', 'col-date', 'col-sender-number',
-    'col-sender-date', 'col-title', 'col-entity', 'col-status'
+    'col-our-number', 'col-sender-number', 'col-entity', 'col-title', 'col-status'
   ];
   // حدّ أدنى لكل عمود — الأرقام والتواريخ لا تُضغط لدرجة الإخفاء
   var MIN = {
     'default': 60,
-    'col-our-number': 82, 'col-sender-number': 92,
-    'col-date': 78, 'col-sender-date': 78, 'col-status': 96
+    'col-our-number': 92, 'col-sender-number': 100, 'col-status': 60
   };
 
   function colKey(th) {

@@ -1,19 +1,20 @@
 {% load static %}
 {% comment %}
 ============================================
-التبويبات الرئيسيّة: وارد / صادر / الكلّ — «الكلّ» حالةٌ صريحة بثيمٍ محايد
-(تدقيقُ نيلسن A#6): البحثُ السريع و«المتأخّرة» من اللوحة يفتحان tab=all، وكانت
-الصفحةُ تُفتح بلا تبويبٍ مُضاء وبثيم «وارد».
+التبويبات الرئيسيّة: وارد / صادر / الكلّ — «الكلّ» حالةٌ صريحة (تدقيقُ نيلسن A#6):
+البحثُ السريع و«المتأخّرة» من اللوحة يفتحان tab=all، وكانت الصفحةُ تُفتح بلا تبويبٍ مُضاء.
+الهويّة الموحّدة: لونٌ واحدٌ للنشط ولوحٌ ينزلق إليه (data-lx-tabs ← js/lx_tabs.js)،
+والأيقوناتُ أيقوناتُ لوحة التحكّم: ظرفٌ داخل · ظرفٌ خارج · صندوقُ الأرشيف.
 ============================================
 {% endcomment %}
 
-<div class="tabs-split" role="tablist">
+<div class="tabs-split" role="tablist" aria-label="سجلّ الكتب" data-lx-tabs>
 
   <button class="tab-main tab-incoming {% if current_tab|slice:':8' == 'incoming' %}active{% endif %}"
           role="tab"
           data-tab="incoming"
           aria-selected="{% if current_tab|slice:':8' == 'incoming' %}true{% else %}false{% endif %}">
-    <i class="bi bi-box-arrow-in-down tab-icon"></i>
+    <i class="bi bi-envelope-arrow-down tab-icon" aria-hidden="true"></i>
     <div class="tab-text">
       <span class="tab-label">وارد</span>
       <span class="tab-count" id="badge-incoming">{{ incoming_count|default:0 }}</span>
@@ -24,7 +25,7 @@
           role="tab"
           data-tab="outgoing"
           aria-selected="{% if current_tab|slice:':8' == 'outgoing' %}true{% else %}false{% endif %}">
-    <i class="bi bi-box-arrow-up tab-icon"></i>
+    <i class="bi bi-envelope-arrow-up tab-icon" aria-hidden="true"></i>
     <div class="tab-text">
       <span class="tab-label">صادر</span>
       <span class="tab-count" id="badge-outgoing">{{ outgoing_count|default:0 }}</span>
@@ -35,7 +36,7 @@
           role="tab"
           data-tab="all"
           aria-selected="{% if current_tab|slice:':3' == 'all' %}true{% else %}false{% endif %}">
-    <i class="bi bi-collection tab-icon"></i>
+    <i class="bi bi-archive tab-icon" aria-hidden="true"></i>
     <div class="tab-text">
       <span class="tab-label">الكلّ</span>
       <span class="tab-count" id="badge-all">{{ total_books|default:0 }}</span>
