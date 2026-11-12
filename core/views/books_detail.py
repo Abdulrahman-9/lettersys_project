@@ -214,7 +214,11 @@ def _attachment_series(attachments):
     أخيرٌ بلا ملفّ يترك فاصلةً معلّقة فيسقط التحليلُ صامتاً، وزرُّ المعاينة يحمل
     `forloop.counter0` الذي يعدّ **كلَّ** المرفقات فيفتح الملفَّ الخطأ بعد أوّل
     مرفقٍ بلا ملفّ. الآن: ما له ملفٌّ وحده، ومفتاحُ الزرّ `att.id` لا موضعُه.
+    والملفُّ المسجَّلُ الغائبُ عن التخزين خارجَها أيضاً (``file_presence``): كان العارضُ يفتحه
+    فيرسم مربّعاً بأيقونة ملفٍّ مكسور، والقالبُ يقول «الملفُّ غيرُ موجود» بدلَ زرّيه.
     """
+    from core.file_presence import stored_size
+
     return [
         {
             'id': att.pk,
@@ -224,7 +228,7 @@ def _attachment_series(attachments):
             'last_by': att.last_merge_by,
             'last_added': att.last_merge_added or 0,
         }
-        for att in attachments if att.file
+        for att in attachments if stored_size(att.file) is not None
     ]
 
 
@@ -294,9 +298,13 @@ def _crop_source(book):
 
     نكتفي بالأوّل: الهامشُ على الصفحة الأولى في الغالب، ومنتقي الصفحة يتيح
     الانتقال داخل المرفق نفسِه. وقائمةُ مرفقاتٍ للاختيار تعقيدٌ بلا حاجةٍ مقيسة.
+    «صالحٌ» = ملفُّه في التخزين فعلاً: كان أوّلَ مرفقٍ أيّاً كان، فإن غاب ملفُّه طلبت
+    القصاصةُ صورةَ صفحةٍ غيرَ موجودة (404) ورسمت صورةً مكسورة في حوار «فرِّق».
     """
-    return (book.attachments.all()
-            .order_by('uploaded_at').first())
+    from core.file_presence import stored_size
+
+    return next((att for att in book.attachments.all().order_by('uploaded_at')
+                 if stored_size(att.file) is not None), None)
 
 
 @login_required

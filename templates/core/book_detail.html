@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static stored_files %}
 {% comment %}
   «ملفّ الكتاب» — المقترحُ المعتمَد (2026‑10‑06) وقراراتُ المالك Q1–Q5:
   الرقمُ مرّةً في الدائرة الداكنة · سطرُ استشهادٍ يُنسخ · شريطُ الطريق · **فعلٌ
@@ -11,8 +11,11 @@
   رسمَها في المكان بعد كلّ فعل.
 {% endcomment %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/book_detail_v2.css' %}?v=20261007">
-<link rel="stylesheet" href="{% static 'css/lifecycle_design.css' %}?v=20261020-actions">{% endblock %}
+{# الهويّة الموحّدة (11-12): رموزُ «ملفّ الكتاب» على theme.css والوضعان #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/book_detail_v2.css' %}?v=20261112-detail1">
+<link rel="stylesheet" href="{% static 'css/lifecycle_design.css' %}?v=20261112-detail1">{% endblock %}
 
 {% block title %}{{ book.title }} - كتاب {{ book.our_number_display }}{% endblock %}
 
@@ -276,7 +279,7 @@
     <aside class="bx-card bx-doc" aria-labelledby="h-doc">
       <div class="bx-card-hd">
         <h2 id="h-doc">المستند</h2>
-        <span class="meta">{% if attachment_series %}{{ attachment_series|length }} ملف{% else %}بلا مرفق{% endif %}</span>
+        <span class="meta">{% if attachment_series %}{{ attachment_series|length }} ملف{% elif attachments %}الملفُّ غائب{% else %}بلا مرفق{% endif %}</span>
       </div>
       <div class="bx-preview d-none" id="bookDocCard">
         <div class="bx-preview-tools">
@@ -291,12 +294,16 @@
       {% if attachments %}
       <ul class="bx-files">
         {% for att in attachments %}
+        {% with size=att.file|stored_size %}
         <li>
           <span class="ic" aria-hidden="true"><i class="bi bi-file-earmark-pdf"></i></span>
           <span style="min-width:0">
-            {% if att.file %}<div class="fn" title="{{ att.filename }}">{{ att.filename|default:"مرفق" }}</div>
+            {# اسمُ الملفّ يساريُّ الاتّجاه معزولاً: كان السياقُ العربيّ يقلبه «document_20.pdf_3913» #}
+            {% if att.file %}<div class="fn" title="{{ att.filename }}"><bdi dir="ltr">{{ att.filename|default:"مرفق" }}</bdi></div>
             {% else %}<div class="fn bx-muted">مرفقٌ بلا ملف</div>{% endif %}
-            <div class="fm num">{% if att.page_count %}{{ att.page_count }} ورقة · {% endif %}{% if att.file %}{{ att.file.size|filesizeformat }} · {% endif %}{{ att.uploaded_at|date:"d/m/Y" }}</div>
+            {% comment %}الحجمُ بـstored_size (core/file_presence): file.size يسأل التخزين، وملفٌّ غائبٌ عنه
+               كان يُسقط الصفحةَ كلَّها بـ500 — الآن يُقال، ولا زرَّ معاينةٍ أو تنزيلٍ له{% endcomment %}
+            <div class="fm num">{% if att.page_count %}{{ att.page_count }} ورقة · {% endif %}{% if att.file %}{% if size is None %}<span class="bx-file-missing">الملفُّ غيرُ موجود في التخزين</span>{% else %}{{ size|filesizeformat }}{% endif %} · {% endif %}{{ att.uploaded_at|date:"d/m/Y" }}</div>
             {% if att.last_merge_by %}<div class="fm">آخرُ إلحاق: {{ att.last_merge_by }}{% if att.last_merge_added %} (+{{ att.last_merge_added }} ورقة){% endif %}</div>{% endif %}
             {% if att.versions.all %}
             <details class="bx-versions"><summary>نسخٌ سابقة ({{ att.versions.all|length }})</summary>
@@ -304,13 +311,14 @@
             </details>
             {% endif %}
           </span>
-          {% if att.file %}
+          {% if size is not None %}
           <span class="acts">
             <button class="bx-icon-btn preview-btn" data-doc-series="{{ att.id }}" data-file-url="{{ request.scheme }}://{{ request.META.HTTP_HOST }}{{ att.file.url }}" data-file-name="{{ att.file.name }}" data-att-id="{{ att.id }}" type="button" title="معاينة" aria-label="معاينة {{ att.filename }}"><i class="bi bi-eye" aria-hidden="true"></i></button>
             <a class="bx-icon-btn" href="{{ att.file.url }}" download title="تنزيل" aria-label="تنزيل {{ att.filename }}"><i class="bi bi-download" aria-hidden="true"></i></a>
           </span>
           {% endif %}
         </li>
+        {% endwith %}
         {% endfor %}
       </ul>
       {% else %}

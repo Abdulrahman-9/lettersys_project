@@ -1,19 +1,19 @@
 /* «ملفّ الكتاب» — صفحة تفاصيل الكتاب (المقترحُ المعتمَد 2026‑10‑06). مقصورٌ على .bx */
+/* رموزُ الصفحة على الهويّة الموحّدة (theme.css) — الوضعان من الرموز نفسِها. كانت كتلةُ الداكن
+   هنا على ‎[data-theme="dark"]، سمةِ الوضع القديم المحذوف، فلم يعد يكتبها أحد. */
 .bx {
-  --bx-surface: #fff; --bx-line: #e7e2d9; --bx-line-2: #d6cfc2;
-  --bx-ink: #1c2321; --bx-ink-2: #3f4744; --bx-muted: #646760; --bx-quiet: #f8f6f2;
-  --bx-teal: #0f766e; --bx-teal-soft: #e4f2ef; --bx-amber: #b45309; --bx-amber-soft: #fbf0e2;
-  --bx-red: #b42318; --bx-red-soft: #fbebea; --bx-green: #1f7a4d; --bx-green-soft: #e7f3ec;
-  --bx-blue: #1d4ed8; --bx-dark: #1f2a28; --bx-hover: #fbfaf7;
+  --bx-surface: var(--lx-surface); --bx-line: var(--lx-line); --bx-line-2: var(--lx-line-strong);
+  --bx-ink: var(--lx-ink); --bx-ink-2: color-mix(in srgb, var(--lx-ink) 80%, var(--lx-mute)); --bx-muted: var(--lx-mute);
+  --bx-quiet: var(--lx-surface-2);
+  --bx-teal: var(--lx-pri); --bx-teal-soft: var(--lx-pri-soft);
+  --bx-amber: var(--lx-wait); --bx-amber-soft: var(--lx-wait-bg);
+  --bx-red: var(--lx-late); --bx-red-soft: var(--lx-late-bg);
+  --bx-green: var(--lx-done); --bx-green-soft: var(--lx-done-bg);
+  --bx-blue: var(--lx-prog);
+  --bx-dark: var(--lx-hero-b);   /* دائرةُ الرقم: تركوازٌ عميق بحبرٍ أبيض في الوضعين */
+  --bx-hover: var(--lx-surface-2);
   color: var(--bx-ink);
   padding: 24px 32px 56px; max-width: 1240px; display: flex; flex-direction: column; gap: 20px;
-}
-[data-theme="dark"] .bx {
-  --bx-surface: #2d2d2d; --bx-line: rgba(255,255,255,.12); --bx-line-2: rgba(255,255,255,.22);
-  --bx-ink: #e8e8e6; --bx-ink-2: #cfcfcb; --bx-muted: #a3a39e; --bx-quiet: #262626;
-  --bx-teal: #5cc8bb; --bx-teal-soft: rgba(92,200,187,.14); --bx-amber: #f0b45a; --bx-amber-soft: rgba(240,180,90,.14);
-  --bx-red: #f08b82; --bx-red-soft: rgba(240,139,130,.14); --bx-green: #6fcf97; --bx-green-soft: rgba(111,207,151,.14);
-  --bx-blue: #8fb3ff; --bx-dark: #111816; --bx-hover: #333;
 }
 .bx *, .bx *::before, .bx *::after { box-sizing: border-box; }
 .bx .num { font-variant-numeric: tabular-nums; }
@@ -73,7 +73,7 @@ button.bx-pill { cursor: pointer; }
 .bx-step.done i.n { background: var(--bx-green-soft); border-color: color-mix(in srgb, var(--bx-green) 30%, transparent); color: var(--bx-green); }
 .bx-step.now { background: var(--bx-teal-soft); color: var(--bx-ink-2); }
 .bx-step.now::after { content: ''; position: absolute; inset-inline: 0; bottom: -1px; height: 3px; background: var(--bx-teal); }
-.bx-step.now i.n { background: var(--bx-teal); border-color: var(--bx-teal); color: #fff; }
+.bx-step.now i.n { background: var(--lx-pri-fill); border-color: var(--lx-pri-fill); color: var(--lx-pri-fill-ink); }
 .bx-step.off { opacity: .45; }
 
 .bx-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 0 18px; }
@@ -82,8 +82,7 @@ button.bx-pill { cursor: pointer; }
   font: inherit; font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; text-decoration: none; white-space: nowrap; }
 .bx a.bx-btn { color: var(--bx-ink-2); }
 .bx-btn:hover, .bx a.bx-btn:hover { border-color: var(--bx-teal); color: var(--bx-teal); }
-.bx-btn--primary, .bx-btn--primary:hover { background: var(--bx-teal); border-color: var(--bx-teal); color: #fff; padding: 0 22px; }
-[data-theme="dark"] .bx-btn--primary, [data-theme="dark"] .bx-btn--primary:hover { color: #10201e; }
+.bx-btn--primary, .bx .bx-btn--primary:hover { background: var(--lx-pri-fill); border-color: var(--lx-pri-fill); color: var(--lx-pri-fill-ink); padding: 0 22px; }
 .bx-btn--primary:hover { filter: brightness(.94); }
 .bx-btn--ghost { border-color: transparent; background: transparent; }
 .bx-btn--small { height: 36px; padding: 0 14px; font-size: 13.5px; }
@@ -249,4 +248,17 @@ details[open] > .bx-fold .bi-chevron-down { transform: rotate(180deg); }
   details > *:not(summary) { display: block !important; }
 }
 .bx-links .bx-unlink { border: 0; background: none; color: var(--bx-muted); padding: 2px 6px; border-radius: 6px; line-height: 1; }
-.bx-links .bx-unlink:hover, .bx-links .bx-unlink:focus-visible { color: #b91c1c; background: var(--bx-quiet); }
+.bx-links .bx-unlink:hover, .bx-links .bx-unlink:focus-visible { color: var(--bx-red); background: var(--bx-red-soft); }
+
+/* ── المستند والنصّ المستخرج: app.css يرسمهما بالهويّة القديمة (بنّيٌّ ورقائقُ برتقاليّة) لحوار المعاينة
+   في الصفحات الأخرى — هنا داخل «ملفّ الكتاب» على الرموز وفي الوضعين ── */
+.bx .bp-doc-viewer { border-color: var(--bx-line); background: var(--bx-quiet); }
+.bx .bp-doc-chip { border-color: var(--bx-line-2); background: var(--bx-surface); color: var(--bx-ink-2); }
+.bx .bp-doc-chip:hover { background: var(--bx-hover); border-color: var(--bx-teal); color: var(--bx-teal); }
+.bx .bp-doc-chip.active,
+.bx #bookOcrToggle.active { background: var(--lx-pri-fill); border-color: var(--lx-pri-fill); color: var(--lx-pri-fill-ink); }
+.bx .bp-ocr-panel { border-color: var(--bx-line); background: var(--bx-surface); }
+.bx .bp-ocr-text { color: var(--bx-ink); }
+
+/* ملفٌّ مسجَّلٌ غائبٌ عن التخزين: يُقال بدل أن تسقط الصفحة (stored_size) */
+.bx-file-missing { color: var(--bx-red); font-weight: 700; }

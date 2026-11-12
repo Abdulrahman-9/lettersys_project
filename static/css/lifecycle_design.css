@@ -200,3 +200,42 @@
   .lc-noprint { display: none !important; }
   @page { size: A4; margin: 1.2cm; }
 }
+
+/* ═══ على الهويّة الموحّدة في الصفحات المنقولة (data-lx-page="v2") ═══
+   «مكتبُ الأرشيف الدافئ» يصير تركوازاً وفي الوضعين — تفاصيلُ الكتاب وحواريّاتُ التسيير؛
+   والصفحاتُ غيرُ المنقولة (الكتابُ السرّيّ بعدُ) على حالها حتّى يأتي دورُها.
+   ورقةُ الكشف (.lc-sheet) تبقى حبراً على ورقٍ أبيض: هي ما يُطبع. */
+html[data-lx-page="v2"] .lc-scope {
+  --ink: var(--lx-ink);
+  --ink-soft: color-mix(in srgb, var(--lx-ink) 80%, var(--lx-mute));
+  --ink-faint: var(--lx-mute);
+  --amber: var(--lx-pri);
+  --amber-deep: var(--lx-pri-strong);
+  --amber-lite: var(--lx-pri-2);
+  --gold: var(--lx-accent);
+  --paper: var(--lx-surface);
+  --paper-warm: var(--lx-surface-2);
+  --paper-tint: var(--lx-surface-2);
+  --rule: var(--lx-line);
+  --rule-hard: var(--lx-line-strong);
+}
+html[data-lx-page="v2"] .lc-scope .modal-content { background: var(--paper); box-shadow: var(--lx-shadow-lg); }
+html[data-lx-page="v2"] .lc-scope .modal-header { background: var(--paper); }
+html[data-lx-page="v2"] .lc-scope :is(.form-control, .form-select):focus { box-shadow: 0 0 0 .18rem rgba(var(--lx-pri-rgb), .18); }
+html[data-lx-page="v2"] .lc-state-done { background: var(--lx-done-bg); color: var(--lx-done); }
+html[data-lx-page="v2"] .lc-state-late { background: var(--lx-late-bg); color: var(--lx-late); }
+html[data-lx-page="v2"] .lc-state-wait { background: var(--lx-wait-bg); color: var(--lx-wait); }
+html[data-lx-page="v2"] .lc-state-info { background: var(--lx-surface-2); color: var(--ink-soft); }
+html[data-lx-page="v2"] .bx-overdue-note { color: var(--lx-late); }
+
+/* قصاصةُ الهامش في حوار «فرِّق» — كانت أنماطاً مضمّنة بالبرتقاليّ فلا تبلغها الهويّة */
+.lc-scope .lc-crop-stage {
+  position: relative; overflow: hidden; max-height: 22rem;
+  border: 2px solid var(--amber-lite); border-radius: .7rem;
+  background: var(--paper-tint); cursor: crosshair; touch-action: none;
+}
+.lc-scope .lc-crop-rect {
+  position: absolute; pointer-events: none;
+  border: 2px dashed var(--amber); border-radius: .4rem;
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+}
