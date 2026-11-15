@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}لوحة المكوّنات{% endblock %}
+
+{# لوحةٌ حيّة للطبقة (11-15): ما تراه الصفحاتُ من توستاتٍ وحواراتٍ وأزرار، في الوضعين — لا بيانات ولا أثر #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
+{% block extra_css %}
+<style>
+  .kit { display: grid; gap: 1rem; max-width: 1100px; color: var(--lx-ink); }
+  .kit-head h1 { margin: 0; font-size: 1.5rem; font-weight: 800; }
+  .kit-head p { margin: .25rem 0 0; color: var(--lx-mute); line-height: 1.9; }
+  .kit-card { padding: 1rem 1.15rem 1.15rem; border: 1px solid var(--lx-line); border-radius: 16px; background: var(--lx-surface); box-shadow: var(--lx-shadow-sm); }
+  .kit-card h2 { margin: 0 0 .2rem; font-size: 1rem; font-weight: 800; }
+  .kit-card > p { margin: 0 0 .8rem; color: var(--lx-mute); font-size: .85rem; line-height: 1.9; }
+  .kit-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  .kit-chip { display: inline-flex; align-items: center; gap: .35rem; padding: .15rem .7rem; border: 1px solid; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+  .kit-late { color: var(--lx-late); background: var(--lx-late-bg); border-color: var(--lx-late-line); }
+  .kit-wait { color: var(--lx-wait); background: var(--lx-wait-bg); border-color: var(--lx-wait-line); }
+  .kit-done { color: var(--lx-done); background: var(--lx-done-bg); border-color: var(--lx-done-line); }
+  .kit-prog { color: var(--lx-prog); background: var(--lx-prog-bg); border-color: var(--lx-prog-line); }
+  .kit-secret { color: var(--lx-secret); background: var(--lx-secret-bg); border-color: var(--lx-secret-line); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="kit">
+  <div class="kit-head">
+    <h1>لوحةُ المكوّنات</h1>
+    <p>ما تراه الصفحاتُ من توستاتٍ وحواراتٍ وأزرار — جرّبه هنا، وبدّل الوضعَ من زرّ الشمس/القمر أعلاه. لا شيءَ هنا يغيّر بيانات.</p>
+  </div>
+
+  <section class="kit-card" aria-labelledby="kit-toasts">
+    <h2 id="kit-toasts">التوستات</h2>
+    <p>تنزلق بنابضٍ في الزاوية، وشريطُ الوقت يتوقّف تحت اليد، والخطأُ يُعلَن فوراً لقارئ الشاشة.</p>
+    <div class="kit-row">
+      <button type="button" class="btn btn-success" data-kit-toast="success">نجاح</button>
+      <button type="button" class="btn btn-primary" data-kit-toast="info">معلومة</button>
+      <button type="button" class="btn btn-warning" data-kit-toast="warning">تحذير</button>
+      <button type="button" class="btn btn-danger" data-kit-toast="error">خطأ</button>
+      <button type="button" class="btn btn-outline-secondary" data-kit-toast="undo">مع «تراجع»</button>
+    </div>
+  </section>
+
+  <section class="kit-card" aria-labelledby="kit-dialogs">
+    <h2 id="kit-dialogs">الحوارات</h2>
+    <p>الهدّامُ يبدأ التركيزَ على «إلغاء» فلا يُمضيه Enter عابر، وأيُّ إغلاقٍ (× · Esc · الخلفيّة) إلغاء.</p>
+    <div class="kit-row">
+      <button type="button" class="btn btn-danger" data-kit-confirm="danger">تأكيدٌ هدّام</button>
+      <button type="button" class="btn btn-primary" data-kit-confirm="safe">تأكيدٌ آمن</button>
+      <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#kitModal">نافذةٌ عاديّة</button>
+      <form method="get" action="" data-confirm="هذا تأكيدٌ تصريحيّ من نموذج: بعد الموافقة تُعاد الصفحةُ فقط." data-confirm-ok="فهمت" data-confirm-tone="safe">
+        <button type="submit" class="btn btn-outline-secondary">تأكيدٌ تصريحيّ (نموذج)</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="kit-card" aria-labelledby="kit-states">
+    <h2 id="kit-states">الأزرارُ والحالات</h2>
+    <p>لونُ فعلٍ واحد، والحالاتُ وحدها لها ألوانُها — في الوضعين.</p>
+    <div class="kit-row">
+      <button type="button" class="btn btn-primary">أساسيّ</button>
+      <button type="button" class="btn btn-outline-secondary">ثانويّ</button>
+      <button type="button" class="btn btn-danger">هدّام</button>
+      <button type="button" class="btn btn-primary" disabled>معطَّل</button>
+      <span class="kit-chip kit-late"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i>متأخّر</span>
+      <span class="kit-chip kit-wait"><i class="bi bi-hourglass-split" aria-hidden="true"></i>ينتظر</span>
+      <span class="kit-chip kit-prog"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>قيد العمل</span>
+      <span class="kit-chip kit-done"><i class="bi bi-check2-circle" aria-hidden="true"></i>تمّ</span>
+      <span class="kit-chip kit-secret"><i class="bi bi-shield-lock" aria-hidden="true"></i>سرّيّ</span>
+    </div>
+  </section>
+
+  <section class="kit-card" aria-labelledby="kit-moves">
+    <h2 id="kit-moves">الانتقالات</h2>
+    <p>انتقل بين صفحات العمود (الأقسام · الحسابات · كلّ الكتب): لوحُ الصفحة الحاليّة ينزلق إلى مكانه الجديد، والمحتوى يتلاشى ويصعد. واطوِ العمودَ بـ Ctrl+B.</p>
+  </section>
+</div>
+
+<div class="modal fade" id="kitModal" tabindex="-1" aria-labelledby="kitModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="kitModalTitle"><span class="lx-dialog-ico" aria-hidden="true"><i class="bi bi-journal-text"></i></span>نافذةٌ عاديّة</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+      <div class="modal-body">هكذا تبدو نوافذُ الصفحات المنقولة: حافّةٌ علويّةٌ بلون القيادة، وأيقونةٌ في بلاطة، ودخولٌ بنابض.</div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إغلاق</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var MSG = {
+    success: 'حُفظ الكتاب — مثالُ نجاح.',
+    info: 'وصلت إحالةٌ جديدة إلى وحدتك — مثالُ معلومة.',
+    warning: 'موعدُ الإنجاز غداً — مثالُ تحذير.',
+    error: 'تعذّر الحفظ: الشبكةُ غيرُ متاحة — مثالُ خطأ.'
+  };
+  document.querySelectorAll('[data-kit-toast]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var kind = btn.getAttribute('data-kit-toast');
+      if (kind !== 'undo') { window.ToastCenter.show(kind, MSG[kind]); return; }
+      window.ToastCenter.action('success', 'نُقل الكتاب إلى السلّة — مثال.', [{
+        label: 'تراجع', className: 'btn btn-sm btn-outline-primary',
+        onClick: function () { window.ToastCenter.show('info', 'أُعيد كما كان — مثال.'); }
+      }]);
+    });
+  });
+  document.querySelectorAll('[data-kit-confirm]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var danger = btn.getAttribute('data-kit-confirm') === 'danger';
+      window.confirmDelete(danger
+        ? { title: 'حذفُ الكتاب 3921؟', message: 'يُنقل إلى السلّة ويبقى قابلاً للاسترجاع ثلاثين يوماً.\nسجلُّ حركاته يبقى كما هو.', okText: 'انقله إلى السلّة' }
+        : { title: 'إرسالُ الإشعار؟', message: 'يصل إلى مسؤول الوحدة فوراً.', okText: 'أرسل', danger: false }
+      ).then(function (ok) {
+        window.ToastCenter.show(ok ? 'success' : 'info', ok ? 'اخترتَ التأكيد — مثال.' : 'أُلغي — لم يتغيّر شيء.');
+      });
+    });
+  });
+})();
+</script>
+{% endblock %}

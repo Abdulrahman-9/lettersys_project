@@ -36,7 +36,7 @@
     <div class="qb-blank">
       <i class="bi bi-check2-circle qb-blank-icon" aria-hidden="true"></i>
       <h2>الطاولةُ نظيفة</h2>
-      <p>لا متأخّرَ ولا غيرَ مُستلَمٍ ولا مستحقَّ اليوم في القسم الآن.</p>
+      <p>لا متأخّرَ ولا غيرَ مُستلَمٍ ولا مستحقَّ اليوم في {% if my_desk %}الوحدة{% else %}القسم{% endif %} الآن.</p>
       <div class="qb-blank-acts">
         {% if nav.ledger %}<a class="btn btn-primary btn-sm" href="{% url 'desk_ledger' %}">دفتر البريد</a>{% endif %}
         <a class="btn btn-outline-secondary btn-sm" href="{% url 'book_unified' %}">القائمةُ الموحّدة</a>

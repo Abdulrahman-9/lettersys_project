@@ -677,7 +677,8 @@ body {
     align-self: start;
     height: calc(100vh - var(--lx-topbar-h) - 2rem);
     overflow-x: hidden;
-    background: var(--lx-surface);
+    /* Bootstrap يفرض شفافيةَ offcanvas-xl بـ!important في الشاشات الواسعة — فالسطحُ بمثلها (كانت البطاقةُ شفّافةً، مقيسٌ 11-15) */
+    background: var(--lx-surface) !important;
     border: 1px solid var(--lx-line);
     border-radius: 18px;
     box-shadow: var(--lx-shadow-md);

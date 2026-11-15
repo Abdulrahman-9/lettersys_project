@@ -50,10 +50,30 @@ class ShellSourceTests(SimpleTestCase):
     def test_moving_titles_never_drops_a_name(self):
         self.assertIn("el.setAttribute('aria-label', el.title)", _read('static/js/shell.js'))
 
-    def test_the_admin_column_sits_under_the_top_bar(self):
+    def test_the_admin_column_is_the_shared_card_and_follows_the_mode(self):
+        # أمرُ المالك 11-15: «الداكنُ ستايل والفاتحُ ستايل» — كان داكناً في الوضعين ويلصق top:0 تحت الشريط
         css = _read('static/css/system_admin.css')
-        self.assertIn('.is-system-admin .app-sidebar { top: var(--lx-topbar-h); height: calc(100vh - var(--lx-topbar-h));', css)
-        self.assertNotRegex(css, r'\.is-system-admin \.app-sidebar \{[^}]*top: 0')
+        self.assertNotIn('.is-system-admin .app-sidebar {', css)
+        self.assertNotIn('.is-system-admin .app-shell {', css)
+        self.assertNotIn('--sa-dark', css)
+        app = _read('static/app.css')
+        xl = app[app.index('@media (min-width: 1200px) {\n  .app-sidebar {'):]
+        self.assertIn('top: calc(var(--lx-topbar-h) + 1rem);', block(xl, '  .app-sidebar {'))
+
+    def test_the_card_has_its_own_surface_over_bootstraps_transparency(self):
+        app = _read('static/app.css')
+        xl = app[app.index('@media (min-width: 1200px) {\n  .app-sidebar {'):]
+        self.assertIn('background: var(--lx-surface) !important;', block(xl, '  .app-sidebar {'))
+
+    def test_the_admin_links_speak_tokens(self):
+        css = _read('static/css/system_admin.css')
+        nav = css[css.index('.sa-nav a {'):css.index('/* لوحةُ الإدارة المستقلّة')]
+        self.assertNotIn('--sa-on-dark', nav)
+        self.assertIn('color: var(--lx-ink)', nav)
+
+    def test_the_standalone_panel_loads_the_tokens_first(self):
+        src = _read('templates/core/admin_panel.html')
+        self.assertLess(src.index("static 'css/theme.css'"), src.index("static 'css/system_admin.css'"))
 
     def test_the_admin_labels_fade_when_folded(self):
         css = _read('static/css/system_admin.css')

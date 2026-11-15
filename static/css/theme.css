@@ -440,8 +440,14 @@ html[data-lx-page="v2"] .lx-shell-toggle { display: inline-grid; }
 
 /* تبديلُ الوضع: دائرةٌ تتّسع من الزرّ تشمل الصفحة كلّها — theme.js يضع lx-flipping
    على html طوال الانتقال، فتُرفع أسماءُ الشريطين ويُلغى التلاشي الافتراضيّ */
+/* لوحُ الصفحة الحاليّة ينزلق بين الصفحات: الرابطُ النشطُ في القديمة والجديدة يحملان الاسمَ نفسَه */
+.app-sidebar-link.active,
+.sa-nav a.on { view-transition-name: lx-nav-active; }
+::view-transition-group(lx-nav-active) { animation-duration: var(--lx-dur-3); animation-timing-function: var(--lx-ease-spring); }
 html.lx-flipping .app-topbar,
-html.lx-flipping .app-sidebar { view-transition-name: none; }
+html.lx-flipping .app-sidebar,
+html.lx-flipping .app-sidebar-link.active,
+html.lx-flipping .sa-nav a.on { view-transition-name: none; }
 
 html.lx-flipping::view-transition-old(root),
 html.lx-flipping::view-transition-new(root) {

@@ -1,0 +1,83 @@
+/* طبقةُ المكوّنات (11-15، قرارُ المالك: مكوّناتُنا بأنماط Tabler — لا ملفّاته؛ لوحتُها الحيّة /books/system/ui-kit/).
+   الجزءُ 1: الحوارات. ما تفتحه صفحةٌ منقولة من نوافذ Bootstrap — ومنها حواريّةُ التأكيد الواحدة confirmDelete في
+   app.js — على الهويّة: حافّةٌ علويّةٌ بلون القيادة وذهبه، أيقونةٌ في بلاطةٍ بلون معناها، دخولٌ بنابضٍ من تحتٍ قليلاً،
+   وخلفيّةٌ مضبّبة. النوافذُ تحت html[data-lx-page="v2"] وحدها — الصفحاتُ غيرُ المنقولة كما هي. */
+/* Bootstrap يعيد إعلانَ متغيّرَي الخلفيّة على ‎.modal-backdrop‎ نفسِها — فهنا تُعلَن، لا على html (مراجعةُ فيبل 11-15) */
+html[data-lx-page="v2"] .modal-backdrop {
+  --bs-backdrop-bg: #04211e;
+  --bs-backdrop-opacity: .42;
+}
+
+html[data-lx-page="v2"] .modal-backdrop.show { backdrop-filter: blur(3px); }
+
+/* بلا overflow: hidden — كان سيقصّ قوائمَ الإكمال والقوائمَ المنسدلة داخل النافذة (صفحةُ الإدخال فيها ذلك) */
+html[data-lx-page="v2"] .modal-content {
+  position: relative;
+  border: 1px solid var(--lx-line);
+  border-radius: 18px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  box-shadow: var(--lx-shadow-lg);
+}
+
+html[data-lx-page="v2"] .modal-content::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  border-radius: 17px 17px 0 0;
+  background: linear-gradient(to left, var(--lx-hero-b), var(--lx-hero-a) 62%, var(--lx-accent));
+  pointer-events: none;
+}
+
+html[data-lx-page="v2"] .modal-header { padding: 1.05rem 1.25rem .8rem; border-bottom: 1px solid var(--lx-line); }
+html[data-lx-page="v2"] .modal-title { display: flex; align-items: center; gap: .6rem; font-size: 1.02rem; font-weight: 800; line-height: 1.6; }
+html[data-lx-page="v2"] .modal-body { padding: 1rem 1.25rem; line-height: 1.9; }
+html[data-lx-page="v2"] .modal-footer { gap: .5rem; padding: .75rem 1.25rem 1.1rem; border-top: 0; }
+html[data-lx-page="v2"] .modal-footer > * { margin: 0; }
+
+/* الدخولُ بنابضٍ من تحتٍ قليلاً (بدل انزلاق Bootstrap من فوق 50px)، والخروجُ أسرعُ منه */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-lx-page="v2"] .modal.fade .modal-dialog {
+    opacity: 0;
+    transform: translateY(14px) scale(.97);
+    transition: transform var(--lx-dur-2) var(--lx-ease-out), opacity var(--lx-dur-1) ease;
+  }
+
+  html[data-lx-page="v2"] .modal.show .modal-dialog {
+    opacity: 1;
+    transform: none;
+    transition: transform var(--lx-dur-3) var(--lx-ease-spring), opacity var(--lx-dur-2) ease;
+  }
+
+  /* النقرُ خارج نافذةٍ ثابتة يهزّها هزّةَ Bootstrap — القاعدةُ أعلاه كانت تغلبها */
+  html[data-lx-page="v2"] .modal.modal-static .modal-dialog { transform: scale(1.02); }
+}
+
+/* أيقونةُ الحوار في بلاطةٍ بلون معناها: الهدّامُ أحمرُ «متأخّر»، والآمنُ تركوازيّ (في كلّ الصفحات) */
+.lx-dialog-ico {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 10px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri);
+  font-size: 1.05rem;
+}
+
+.lx-dialog-ico.is-danger { background: var(--lx-late-bg); color: var(--lx-late); }
+
+/* «ثانويّ» Bootstrap في الداكن: رماديُّه 3.6:1 على السطح (مقيسٌ في الحوار 11-15) ⟵ حبرُ الهويّة الخافت؛
+   بمتغيّرات الزرّ نفسِه فلا تتغيّر أحجامُه ولا الفاتحُ المعتمَد */
+html[data-lx-page="v2"][data-bs-theme="dark"] .btn-outline-secondary {
+  --bs-btn-color: var(--lx-mute);
+  --bs-btn-border-color: var(--lx-line-strong);
+  --bs-btn-hover-color: var(--lx-ink);
+  --bs-btn-hover-bg: var(--lx-surface-2);
+  --bs-btn-hover-border-color: var(--lx-line-strong);
+  --bs-btn-active-color: var(--lx-ink);
+  --bs-btn-active-bg: var(--lx-surface-2);
+  --bs-btn-active-border-color: var(--lx-line-strong);
+}

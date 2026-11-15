@@ -23,6 +23,16 @@
     side.scrollTop = current.offsetTop - side.clientHeight / 3;
   }
 
+  // لوحُ الصفحة الحاليّة ينزلق بين الصفحات (theme.css) — إلّا إن كان خارج ما يُرى من العمود المُمرَّر:
+  // لقطةُ الانتقال لا يقصّها العمود، فكان سيطير فوق الشريط العلويّ (مراجعةُ فيبل 11-15)
+  window.addEventListener('pageswap', function () {
+    var now = side.querySelector('.app-sidebar-link.active, .sa-nav a.on');
+    if (!now) return;
+    var r = now.getBoundingClientRect();
+    var s = side.getBoundingClientRect();
+    if (r.top < s.top || r.bottom > s.bottom || side.offsetParent === null) now.style.viewTransitionName = 'none';
+  });
+
   // ── اللوحُ المنزلق ──
   var glide = document.createElement('span');
   glide.className = 'lx-glide';

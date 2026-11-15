@@ -184,7 +184,7 @@ function createConfirmModal(opts) {
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
           <div class="modal-header border-0">
-            <h2 class="modal-title fs-6 fw-bold" id="appConfirmTitle"><i class="bi bi-question-circle text-warning me-2" aria-hidden="true"></i><span></span></h2>
+            <h2 class="modal-title fs-6 fw-bold" id="appConfirmTitle"><span class="lx-dialog-ico" aria-hidden="true"><i class="bi"></i></span><span class="lx-dialog-title"></span></h2>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
           </div>
           <div class="modal-body" style="white-space:pre-line"></div>
@@ -196,7 +196,12 @@ function createConfirmModal(opts) {
       </div>
     </div>`;
   const modal = tempDiv.firstElementChild;
-  modal.querySelector('.modal-title span').textContent = opts.title || 'تأكيد العملية';
+  modal.querySelector('.lx-dialog-title').textContent = opts.title || 'تأكيد العملية';
+  // الهدّامُ مثلّثُ تحذيرٍ في بلاطةٍ حمراء، والآمنُ علامةُ استفهامٍ تركوازيّة — المعنى قبل قراءة النصّ
+  const danger = opts.danger !== false;
+  const ico = modal.querySelector('.lx-dialog-ico');
+  ico.classList.toggle('is-danger', danger);
+  ico.firstElementChild.classList.add(danger ? 'bi-exclamation-triangle' : 'bi-question-circle');
   modal.querySelector('.modal-body').textContent = opts.message || '';
   const ok = modal.querySelector('.btn-confirm');
   ok.textContent = opts.okText || 'تأكيد';

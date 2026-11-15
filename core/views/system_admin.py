@@ -69,6 +69,13 @@ def system_centre_view(request):
     })
 
 
+@require_GET
+@system_admin_required
+def system_ui_kit_view(request):
+    """لوحةُ المكوّنات — كلُّ توستٍ وحوارٍ وزرٍّ في حالاته وفي الوضعين، مرجعُ الصفحات القادمة (11-15)."""
+    return render(request, 'core/system_admin/ui_kit.html')
+
+
 def _backup_hour():
     from core.models import BackupSettings
     return BackupSettings.get().hour
