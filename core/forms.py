@@ -31,11 +31,11 @@ class DeskFilterForm(forms.Form):
     )
     number_from = forms.CharField(
         label="من رقم قيد القسم", required=False, max_length=32,
-        widget=forms.TextInput(attrs={"inputmode": "numeric", "placeholder": "مثال: 3921…"}),
+        widget=forms.TextInput(attrs={"inputmode": "numeric", "placeholder": "3921"}),
     )
     number_to = forms.CharField(
         label="إلى رقم قيد القسم", required=False, max_length=32,
-        widget=forms.TextInput(attrs={"inputmode": "numeric", "placeholder": "مثال: 3930…"}),
+        widget=forms.TextInput(attrs={"inputmode": "numeric", "placeholder": "3930"}),
     )
     party = forms.ChoiceField(
         label="الجهة", required=False, choices=[("", "كل الجهات")],

@@ -224,7 +224,7 @@ class DeskWorkspacePresentationTests(DeskTestCase):
                 self.assertContains(response, 'aria-label="صفحات طاولة البريد"')
                 self.assertContains(response, 'aria-current="page"', count=2 if page == 'desk_board' else 1)
                 self.assertContains(response, '<h1', count=1)
-                self.assertContains(response, 'css/desk.css?v=20261020-mail-desk2')
+                self.assertContains(response, 'css/desk.css?v=20261112-desk2')
                 for destination in ('desk_board', 'desk_ledger', 'desk_handover'):
                     self.assertContains(response, reverse(destination))
 

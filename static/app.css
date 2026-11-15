@@ -74,124 +74,188 @@ body {
   min-height: 100vh;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   القشرة — الشريطُ العلويّ والعمودُ الجانبيّ (11-15، بطلب المالك: أناقةٌ وطيٌّ احترافيّ)
+   تقنياتُ لوحة التحكّم والدخول نفسُها: سطحُ «القيادة» التركوازيّ بورق الضمان وخطِّه الذهبيّ،
+   ولوحُ النشط بحافّته الذهبيّة كتبويب القائمة، وحركةٌ بنابضٍ خفيف.
+   الأيقوناتُ في عمودٍ ثابت مركزُه منتصفُ الشريط المطويّ (36px من حافّته): عند الطيّ يتحرّك
+   العرضُ وحده وتبهت التسميات — لا يقفز شيء.
+   ══════════════════════════════════════════════════════════════════════════ */
 .app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 120;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.9rem 1.25rem;
-  /* الهويّة الموحّدة: رموز theme.css (فاتحةٌ في كلّ الصفحات، وداكنةٌ حيث يُضبط الوضع) */
-  background: color-mix(in srgb, var(--lx-surface) 88%, transparent);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--lx-line);
-  box-shadow: var(--lx-shadow-sm);
-  color: var(--lx-ink);
-  position: sticky;
-  top: 0;
-  z-index: 120;
+  height: var(--lx-topbar-h);
+  padding: 0 1rem;
+  color: #fff;
+  /* الأغمقُ تحت العلامة (يمين الصفحة) فيُقرأ السطرُ الفرعيّ فوقه */
+  background:
+    repeating-radial-gradient(circle at 18% 190%, rgba(255, 255, 255, .05) 0 1px, transparent 1px 11px),
+    repeating-radial-gradient(circle at 64% -150%, rgba(255, 255, 255, .04) 0 1px, transparent 1px 13px),
+    linear-gradient(to left, var(--lx-hero-b) 0%, var(--lx-hero-a) 62%, var(--lx-hero-a) 100%);
+  /* لونُ الأساس = أفتحُ ما تحت النصّ: قياسُ التباين يقرأه (لا يقرأ التدرّج) فيُقاس الأسوأ */
+  background-color: var(--lx-hero-a);
+  transition: box-shadow var(--lx-dur-2) ease;
 }
+
+/* الخطُّ الذهبيّ — توقيعُ الهويّة؛ ينمو مرّةً في أوّل صفحةٍ من الجلسة */
+.app-topbar::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(to left, transparent 0%, var(--lx-accent) 14%, var(--lx-accent) 58%, transparent 100%);
+  transform-origin: right center;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.lx-first-paint .app-topbar::after { animation: lx-rule-grow .9s .15s var(--lx-ease) backwards; }
+}
+
+@keyframes lx-rule-grow { from { transform: scaleX(0); } }
+
+.app-topbar.is-scrolled { box-shadow: 0 10px 24px rgba(6, 40, 37, .22); }
 
 .app-topbar-brand {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: .6rem;
+  min-width: 0;
 }
 
-/* اسمُ النظام في الشريط: حبرُ الهويّة، بلا تباعد أحرف (يفكّ وصلَ الحروف العربيّة) */
-.app-topbar .navbar-brand,
-.app-topbar .brand-text {
-  color: var(--lx-ink);
-  letter-spacing: 0;
+.app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
+  min-width: 0;
+  color: #fff;
+  text-decoration: none;
 }
 
-.app-topbar .navbar-brand:hover .brand-text { color: var(--lx-pri); }
+.app-brand:hover,
+.app-brand:focus { color: #fff; }
+.app-brand:focus-visible { outline: 2px solid var(--lx-accent); outline-offset: 3px; border-radius: 12px; }
 
-/* العلامة شفّافة على الفاتح؛ وعلى الداكن (والشريطُ الإداريّ) شارةٌ بيضاء — قوسُها الأسود يختفي على الداكن */
+/* العلامةُ على شارةٍ بيضاء في الوضعين — قوسُها الداكن يختفي على التركواز */
 .app-topbar-logo {
-  width: 40px;
-  height: 40px;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  padding: 3px;
+  border-radius: 11px;
+  background: #fff;
   object-fit: contain;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .18);
   transition: transform var(--lx-dur-2) var(--lx-ease-spring);
 }
 
-.app-topbar .navbar-brand:hover .app-topbar-logo { transform: scale(1.06) rotate(-3deg); }
+.app-brand:hover .app-topbar-logo { transform: rotate(-4deg) scale(1.05); }
 
-[data-bs-theme="dark"] .app-topbar-logo,
-.is-system-admin .app-topbar-logo {
-  padding: 3px;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, .28);
+.app-brand-text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.3;
 }
 
+.app-brand-name { font-size: 1rem; font-weight: 800; white-space: nowrap; }
+
 .app-topbar-copy {
-  color: var(--lx-mute);
-  font-size: 0.88rem;
+  max-width: 46ch;
+  overflow: hidden;
+  color: rgba(255, 255, 255, .9);
+  font-size: .74rem;
   font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .app-topbar-actions {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: .5rem;
 }
 
+/* أزرارُ الشريط زجاجٌ على التركواز: الطيّ · القائمة · التنبيهات · الوضع */
+.app-topbar-btn,
 .app-topbar-alert,
 .app-topbar-user,
-.app-topbar-menu {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.6rem 0.9rem;
-  border-radius: 999px;
-  background: var(--lx-surface);
-  border: 1px solid var(--lx-line);
-  color: var(--lx-ink);
-  text-decoration: none;
-  font-weight: 700;
+.app-topbar-menu,
+.app-topbar .lx-theme-toggle {
   position: relative;
-  transition: border-color var(--lx-dur-1) ease, background-color var(--lx-dur-1) ease, transform var(--lx-dur-1) ease;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  height: 40px;
+  min-width: 40px;
+  padding: 0 .75rem;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+  box-shadow: none;
+  backdrop-filter: none;
+  font-family: inherit;
+  font-size: .88rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--lx-dur-1) ease, border-color var(--lx-dur-1) ease, transform var(--lx-dur-1) ease;
 }
 
+.app-topbar-btn,
+.app-topbar-alert,
+.app-topbar-user,
+.app-topbar-menu { display: inline-flex; }
+
+.app-topbar-btn:hover,
 .app-topbar-alert:hover,
 .app-topbar-user:hover,
-.app-topbar-menu:hover {
-  border-color: var(--lx-pri);
-  background: var(--lx-pri-soft);
-  color: var(--lx-pri-soft-ink);
+.app-topbar-menu:hover,
+.app-topbar .lx-theme-toggle:hover {
+  background: rgba(255, 255, 255, .16);
+  border-color: rgba(255, 255, 255, .34);
+  color: #fff;
+  box-shadow: none;
+  transform: none;
 }
 
+.app-topbar-btn:active,
+.app-topbar-alert:active,
+.app-topbar-menu:active,
+.app-topbar .lx-theme-toggle:active { transform: scale(.95); }
+
+.app-topbar-btn:focus-visible,
 .app-topbar-alert:focus-visible,
-.app-topbar-user:focus-visible {
-  outline: 2px solid var(--lx-pri);
-  outline-offset: 2px;
-}
+.app-topbar-user:focus-visible,
+.app-topbar-menu:focus-visible,
+.app-topbar .lx-theme-toggle:focus-visible { outline: 2px solid var(--lx-accent); outline-offset: 2px; }
 
-/* زرّ القائمة (الهاتف واللوحيّ): يفتح الدرج — هدفُ لمسٍ ≥44px */
-.app-topbar-menu {
-  min-height: 44px;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.app-topbar-menu:focus-visible {
-  outline: 2px solid var(--lx-pri);
-  outline-offset: 2px;
-}
+.app-topbar .lx-theme-toggle { width: 40px; padding: 0; }
+.app-topbar .lx-theme-toggle .lx-moon { color: #fff; }
+.app-topbar-btn i,
+.app-topbar-alert i,
+.app-topbar-menu i { font-size: 1.1rem; line-height: 1; }
 
 .app-topbar-alert-badge {
-  min-width: 1.35rem;
-  height: 1.35rem;
-  padding: 0 0.35rem;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding: 0 .35rem;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: var(--lx-badge-bg);
   color: var(--lx-badge-ink);
-  font-size: 0.72rem;
+  font-size: .7rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .85);
 }
 
 .app-shell {
@@ -207,29 +271,35 @@ body {
   min-width: 0;
 }
 
-/* المشترَك بين العمود (≥1200) والدرج (<1200)؛ الموضعُ والعرضُ في @media (min-width: 1200px) أدناه */
+/* المشترَك بين العمود (≥1200) والدرج (<1200)؛ الموضعُ والعرضُ والطيّ في @media (min-width: 1200px) أدناه */
 .app-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: .25rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.app-sidebar-panel {
-  background: var(--lx-surface);
-  border: 1px solid var(--lx-line);
-  border-radius: 1.1rem;
-  box-shadow: var(--lx-shadow-md);
-  padding: 1rem;
-}
+.app-sidebar-panel { padding: .65rem 10px; }
+.app-sidebar-panel + .app-sidebar-panel:not(.app-sidebar-panel-footer) { border-top: 1px solid var(--lx-line); }
 
 .app-sidebar-panel-footer {
-  padding: 0.75rem;
   margin-top: auto;
+  padding: .55rem 10px;
+  border-top: 1px solid var(--lx-line);
 }
 
 .app-sidebar-section-title {
-  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .45rem;
+}
+
+.sidebar-title-text {
+  font-size: .9rem;
+  font-weight: 800;
+  color: var(--lx-ink);
 }
 
 .app-sidebar-section-copy {
@@ -239,87 +309,113 @@ body {
   margin-bottom: 0.85rem;
 }
 
-.app-sidebar-nav {
+.app-sidebar-nav,
+.app-sidebar-group {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 2px;
+}
+
+.app-sidebar-gtitle {
+  position: relative;
+  overflow: hidden;
+  padding: .8rem 13px .3rem;
+  font-size: .72rem;
+  font-weight: 800;
+  color: var(--lx-mute);
+  white-space: nowrap;
 }
 
 .app-sidebar-link {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.82rem 0.9rem;
-  border-radius: 0.95rem;
-  color: var(--lx-mute);
+  gap: .7rem;
+  min-height: 40px;
+  padding: .4rem .7rem;
+  padding-inline-start: 13px;
+  border-radius: 10px;
+  overflow: hidden;
+  color: var(--lx-ink);
+  font-size: .9rem;
+  font-weight: 600;
   text-decoration: none;
-  font-weight: 700;
-  border: 1px solid transparent;
-  transition: background-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease, transform var(--lx-dur-1) ease;
-  min-width: 0;
-  position: relative;
+  transition: background-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease;
 }
 
-.app-sidebar-link span {
+.app-sidebar-link > span {
   flex: 1 1 auto;
   min-width: 0;
   line-height: 1.35;
-}
-
-.app-sidebar-link:hover {
-  background: var(--lx-surface-2);
-  color: var(--lx-ink);
-  transform: translateX(-2px);
-}
-
-.app-sidebar-link:focus-visible {
-  outline: 2px solid var(--lx-pri);
-  outline-offset: 2px;
-}
-
-/* النشط: خلفيّةٌ تركوازيّة خفيفة وحدُّ ذهبِ الشعار في بداية السطر */
-.app-sidebar-link.active {
-  background: var(--lx-pri-soft);
-  color: var(--lx-pri-soft-ink);
-}
-
-.app-sidebar-link.active::before {
-  content: '';
-  position: absolute;
-  inset-inline-start: 0;
-  top: 0.55rem;
-  bottom: 0.55rem;
-  width: 3px;
-  border-radius: 3px;
-  background: var(--lx-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app-sidebar-link i {
-  font-size: 1.05rem;
-  width: 1.25rem;
+  flex: none;
+  width: 24px;
+  font-size: 1.08rem;
   text-align: center;
+  color: var(--lx-mute);
+  transition: color var(--lx-dur-1) ease;
 }
 
-.app-sidebar-link.active i { color: var(--lx-pri); }
+.app-sidebar-link:hover { background: var(--lx-surface-2); color: var(--lx-ink); }
+.app-sidebar-link:hover i { color: var(--lx-pri); }
+.app-sidebar-link:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: -2px; }
 
-/* الفعلُ الأساسيّ الوحيد في الشريط: «إدخال كتاب» (لمن يملك الإدخال) */
-.app-sidebar-cta {
-  display: flex;
+/* النشط: لوحُ «القيادة» — تركوازٌ عميقٌ بحافّةٍ ذهبيّة، كتبويب القائمة ورأس لوحة التحكّم */
+.app-sidebar-link.active {
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--lx-hero-a), var(--lx-hero-b));
+  box-shadow: inset -3px 0 0 var(--lx-accent), 0 6px 14px rgba(var(--lx-pri-rgb), .22);
+}
+
+.app-sidebar-link.active i { color: #fff; }
+
+.app-sidebar-link-badge {
+  margin-inline-start: auto;
+  flex: 0 0 auto;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  padding: 0 0.35rem;
+  background: var(--lx-badge-bg);
+  color: var(--lx-badge-ink);
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.55rem;
-  min-height: 46px;
-  margin-bottom: 0.35rem;
-  border-radius: 0.95rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* الفعلُ الأساسيّ — أيقونتُه في عمود الأيقونات نفسِه */
+.app-sidebar-cta {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  min-height: 42px;
+  margin-bottom: .35rem;
+  padding: .45rem .7rem;
+  padding-inline-start: 13px;
+  border-radius: 12px;
   background: linear-gradient(135deg, var(--lx-hero-a) 0%, var(--lx-hero-b) 60%, var(--lx-hero-c) 100%);
   color: #fff;
+  font-size: .92rem;
   font-weight: 800;
   text-decoration: none;
   box-shadow: 0 6px 16px rgba(var(--lx-pri-rgb), .26);
-  position: relative;
-  overflow: hidden;
   transition: transform var(--lx-dur-1) ease, box-shadow var(--lx-dur-2) ease;
 }
+
+.app-sidebar-cta > i { flex: none; width: 24px; font-size: 1.1rem; text-align: center; }
+.app-sidebar-cta > span { white-space: nowrap; overflow: hidden; }
 
 .app-sidebar-cta::before {
   content: '';
@@ -340,30 +436,18 @@ body {
 .app-sidebar-cta:hover::before { transform: translateX(-120%); }
 .app-sidebar-cta:active { transform: translateY(0) scale(.99); }
 .app-sidebar-cta:focus-visible { outline: 3px solid var(--lx-accent); outline-offset: 3px; color: #fff; }
-.app-sidebar-cta.active { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .35), 0 6px 16px rgba(var(--lx-pri-rgb), .26); }
+.app-sidebar-cta.active { box-shadow: inset -3px 0 0 var(--lx-accent), 0 6px 16px rgba(var(--lx-pri-rgb), .26); }
 
-.app-sidebar-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.app-sidebar-gtitle {
-  padding: 0.65rem 0.9rem 0.2rem;
-  font-size: 0.76rem;
-  font-weight: 800;
-  color: var(--lx-mute);
-}
-
-/* بطاقةُ الحساب وقائمتُها */
+/* بطاقةُ الحساب — الصورةُ الرمزيّة في عمود الأيقونات (مركزُها 36px من الحافّة) */
 .app-sidebar-account {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: .6rem;
   width: 100%;
-  padding: 0.55rem 0.6rem;
+  padding: 5px;
+  overflow: hidden;
   border: 1px solid var(--lx-line);
-  border-radius: 0.95rem;
+  border-radius: 13px;
   background: var(--lx-surface-2);
   color: var(--lx-ink);
   font: inherit;
@@ -380,12 +464,13 @@ body {
   flex: none;
   width: 38px;
   height: 38px;
-  border-radius: 11px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
-  background: var(--lx-pri-fill);
-  color: var(--lx-pri-fill-ink);
+  background: linear-gradient(135deg, var(--lx-hero-a), var(--lx-hero-b));
+  color: #fff;
   font-weight: 800;
+  box-shadow: inset 0 -2px 0 var(--lx-accent);
 }
 
 .app-sidebar-account-text {
@@ -403,12 +488,13 @@ body {
   text-overflow: ellipsis;
 }
 
-.app-sidebar-account-text b { font-size: 0.92rem; font-weight: 800; }
-.app-sidebar-account-text small { font-size: 0.77rem; color: var(--lx-mute); font-weight: 600; }
-.app-sidebar-account > .bi { color: var(--lx-mute); }
+.app-sidebar-account-text b { font-size: 0.9rem; font-weight: 800; }
+.app-sidebar-account-text small { font-size: 0.76rem; color: var(--lx-mute); font-weight: 600; }
+.app-sidebar-account > .bi { flex: none; color: var(--lx-mute); }
 
 .app-sidebar-account-menu {
   width: 100%;
+  min-width: 14rem;
   padding: 0.35rem;
   border: 1px solid var(--lx-line);
   border-radius: 14px;
@@ -431,23 +517,6 @@ body {
 .app-sidebar-account-menu .app-sidebar-logout-item { color: var(--lx-late); }
 .app-sidebar-account-menu .app-sidebar-logout-item:hover,
 .app-sidebar-account-menu .app-sidebar-logout-item:focus { background: var(--lx-late-bg); color: var(--lx-late); }
-
-.app-sidebar-link-badge {
-  margin-right: auto;
-  flex: 0 0 auto;
-  min-width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 999px;
-  padding: 0 0.35rem;
-  background: var(--lx-badge-bg);
-  color: var(--lx-badge-ink);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.72rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
 
 .app-sidebar-logout {
   width: 100%;
@@ -535,101 +604,160 @@ body {
   color: var(--lx-done);
 }
 
-/* ══════════════════════════════════════════════
-   Mini Sidebar Toggle
-   ══════════════════════════════════════════════ */
-
-/* عنوان القسم: صف flex يضم الزر + النص */
-.app-sidebar-section-title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.sidebar-title-text {
-  font-size: 0.9rem;
-  font-weight: 800;
-  color: var(--lx-ink);
-}
-
-/* زر التبديل — مرئي دائماً داخل السايد بار */
-.app-sidebar-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 0.5rem;
-  background: var(--lx-pri-soft);
-  border: 1px solid var(--lx-line);
-  cursor: pointer;
-  padding: 0;
-  color: var(--lx-pri-soft-ink);
-  font-size: 0.9rem;
-  line-height: 1;
-  transition: background-color var(--lx-dur-1) ease;
-}
-.app-sidebar-toggle-btn:hover {
-  background: rgba(var(--lx-pri-rgb), .22);
-}
-.app-sidebar-toggle-btn:focus-visible {
-  outline: 2px solid var(--lx-pri);
-  outline-offset: 2px;
+/* لوحٌ ينزلق تحت الرابط الذي تمرّ عليه اليد (js/shell.js) — بنابض اللوح المنزلق في القائمة */
+.lx-glide {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  width: var(--gw, 0px);
+  height: var(--gh, 0px);
+  transform: translate3d(var(--gx, 0px), var(--gy, 0px), 0);
+  border-radius: 10px;
+  background: var(--lx-surface-2);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform var(--lx-dur-3) var(--lx-ease-spring), width var(--lx-dur-3) var(--lx-ease), opacity var(--lx-dur-2) ease;
 }
 
-/* ≥1200: عمودٌ ثابتٌ لاصق بجانب المحتوى، مع وضع Mini. تحت 1200 هو درجُ offcanvas-xl
+.lx-glide.is-on { opacity: 1; }
+.lx-glide.is-instant { transition: opacity var(--lx-dur-2) ease; }
+.lx-glide-ready :is(.app-sidebar-link:not(.active), .sa-nav a:not(.on)):hover { background: transparent; }
+
+/* تلميحُ الشريط المطويّ: اسمُ الرابط بجواره، بلون لوح القيادة */
+.lx-tip {
+  position: fixed;
+  z-index: 1080;
+  top: 0;
+  left: 0;
+  padding: .38rem .75rem;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--lx-hero-a), var(--lx-hero-b));
+  color: #fff;
+  font-size: .8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: inset -2px 0 0 var(--lx-accent), var(--lx-shadow-md);
+  opacity: 0;
+  transform: translateX(6px);
+  pointer-events: none;
+  transition: opacity var(--lx-dur-1) ease, transform var(--lx-dur-2) var(--lx-ease-spring);
+}
+
+.lx-tip.is-on { opacity: 1; transform: none; }
+
+.lx-tip::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 2px;
+  background: var(--lx-hero-a);
+  transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lx-glide,
+  .lx-tip { transition: none; }
+}
+
+/* ≥1200: عمودٌ لاصقٌ بطول الشاشة بجانب المحتوى، مع وضع الطيّ. تحت 1200 هو درجُ offcanvas-xl
    (Bootstrap) — لذلك لا شيءَ من هذا خارج الوسائط: قاعدةٌ عامّة هنا تتغلّب على
    .offcanvas-xl (التخصيصُ نفسه وهذا الملفُّ لاحق) فتكسر الدرج. */
 @media (min-width: 1200px) {
   .app-sidebar {
-    flex: 0 0 310px;
-    width: 310px;
-    min-width: 310px;
+    flex: 0 0 var(--lx-side-w);
+    width: var(--lx-side-w);
+    min-width: var(--lx-side-w);
     position: sticky;
-    top: 88px;
+    top: calc(var(--lx-topbar-h) + 1rem);
     align-self: start;
-    max-height: calc(100vh - 104px);
-    /* انتقال سلس عند التقليص */
-    transition: flex-basis 0.3s ease, min-width 0.3s ease, width 0.3s ease;
+    height: calc(100vh - var(--lx-topbar-h) - 2rem);
+    overflow-x: hidden;
+    background: var(--lx-surface);
+    border: 1px solid var(--lx-line);
+    border-radius: 18px;
+    box-shadow: var(--lx-shadow-md);
+    transition: flex-basis var(--lx-dur-3) var(--lx-ease), width var(--lx-dur-3) var(--lx-ease), min-width var(--lx-dur-3) var(--lx-ease);
   }
 
-  /* وضع Mini: 52px أيقونات فقط */
-  .app-shell.sidebar-mini .app-sidebar {
-    flex: 0 0 52px !important;
-    width: 52px !important;
-    min-width: 52px !important;
+  /* بطاقةُ الحساب ثابتةٌ أسفل العمود: القائمةُ تمرّ تحتها ولا تُقصّ هي (كانت تُقصّ عند 900px) */
+  .app-sidebar-panel-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--lx-surface);
+  }
+
+  /* عنوانُ العمود للدرج ولقارئ الشاشة: على المكتب العمودُ واضحٌ بلا عنوان */
+  .app-sidebar-head {
+    position: absolute;
+    width: 1px;
+    height: 1px;
     overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
-  .app-shell.sidebar-mini .sidebar-title-text,
-  .app-shell.sidebar-mini .app-sidebar-link span,
-  .app-shell.sidebar-mini .app-sidebar-link-badge,
-  .app-shell.sidebar-mini .app-sidebar-section-copy,
-  .app-shell.sidebar-mini .app-sidebar-logout span {
-    display: none;
+
+  /* التسمياتُ تبهت وتعود بعد أن يبدأ العرضُ بالاتّساع — الخروجُ أسرعُ من الدخول */
+  .app-sidebar-link > span,
+  .app-sidebar-cta > span,
+  .app-sidebar-account-text,
+  .app-sidebar-account > .bi,
+  .sidebar-title-text {
+    transition: opacity var(--lx-dur-2) ease var(--lx-dur-1);
   }
-  .app-shell.sidebar-mini .app-sidebar-link {
-    justify-content: center;
-    padding: 0.75rem 0;
-    gap: 0;
+
+  .app-sidebar-gtitle { transition: color var(--lx-dur-2) ease var(--lx-dur-1); }
+
+  .app-sidebar-gtitle::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: 15px;
+    top: 50%;
+    width: 20px;
+    height: 1px;
+    background: var(--lx-line-strong);
+    opacity: 0;
+    transition: opacity var(--lx-dur-2) ease;
   }
-  .app-shell.sidebar-mini .app-sidebar-panel {
-    padding: 0.75rem 0.4rem;
+
+  /* المطويّ: شريطُ أيقوناتٍ عرضُه 72px */
+  .app-shell.sidebar-mini .app-sidebar {
+    flex: 0 0 var(--lx-rail-w) !important;
+    width: var(--lx-rail-w) !important;
+    min-width: var(--lx-rail-w) !important;
   }
-  .app-shell.sidebar-mini .app-sidebar-section-title {
-    justify-content: center;
-    margin-bottom: 0.5rem;
-  }
-  /* المصغّر: الفعلُ وبطاقةُ الحساب أيقونتان، وعناوينُ المجموعات تختفي */
-  .app-shell.sidebar-mini .app-sidebar-gtitle,
-  .app-shell.sidebar-mini .app-sidebar-cta span,
+
+  .app-shell.sidebar-mini .app-sidebar-link > span,
+  .app-shell.sidebar-mini .app-sidebar-cta > span,
   .app-shell.sidebar-mini .app-sidebar-account-text,
-  .app-shell.sidebar-mini .app-sidebar-account > .bi {
-    display: none;
+  .app-shell.sidebar-mini .app-sidebar-account > .bi,
+  .app-shell.sidebar-mini .sidebar-title-text {
+    opacity: 0;
+    transition-delay: 0s;
+    transition-duration: var(--lx-dur-1);
   }
-  .app-shell.sidebar-mini .app-sidebar-cta,
-  .app-shell.sidebar-mini .app-sidebar-account {
-    justify-content: center;
-    padding-inline: 0;
+
+  .app-shell.sidebar-mini .app-sidebar-gtitle { color: transparent; transition-delay: 0s; }
+  .app-shell.sidebar-mini .app-sidebar-gtitle::before { opacity: 1; }
+
+  .app-shell.sidebar-mini .app-sidebar-context-panel,
+  .app-shell.sidebar-mini .app-sidebar-section-copy { display: none; }
+
+  /* العدّادُ فقاعةٌ على زاوية الأيقونة */
+  .app-shell.sidebar-mini .app-sidebar-link-badge {
+    position: absolute;
+    top: 3px;
+    inset-inline-start: 28px;
+    min-width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0 4px;
+    font-size: .6rem;
   }
 }
 
@@ -657,28 +785,23 @@ body {
   }
 
   .app-sidebar .app-sidebar-panel {
-    box-shadow: none;
-    backdrop-filter: none;
+    border: 1px solid var(--lx-line);
+    border-radius: 16px;
+    background: var(--lx-surface);
   }
 
-  .app-topbar {
-    flex-wrap: wrap;
-  }
+  .app-topbar { padding-inline: .75rem; }
 }
 
 @media (max-width: 575.98px) {
-  .app-topbar {
-    flex-wrap: nowrap;
-    gap: 0.5rem;
-    padding: 0.6rem 0.8rem;
-  }
+  .app-topbar { gap: 0.5rem; padding-inline: 0.6rem; }
 
   .app-topbar-copy,
   .app-topbar-user {
     display: none;
   }
 
-  /* النصُّ للقارئ الشاشيّ وحده؛ الشارةُ تبقى ظاهرة */
+  /* التسميةُ تختفي بصرياً وتبقى لقارئ الشاشة */
   .app-topbar-label {
     position: absolute;
     width: 1px;
@@ -1828,27 +1951,27 @@ body {
     border: 2px solid #f59e0b !important;
   }
   
-  /* تحسين عرض الجداول للطباعة */
+  /* تحسين عرض الجداول للطباعة — عدا ورقتَي الطاولة (table.rep): وثيقتان لهما حبرُهما ومقاساتُهما */
   table {
     border-collapse: collapse !important;
     width: 100% !important;
     margin: 0 !important;
   }
   
-  table thead {
+  table:not(.rep) thead {
     background: #f3f4f6 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
   
-  table th {
+  table:not(.rep) th {
     border: 1px solid #d1d5db !important;
     padding: 6px 4px !important;
     font-size: 10pt !important;
     font-weight: 600 !important;
   }
   
-  table td {
+  table:not(.rep) td {
     border: 1px solid #d1d5db !important;
     padding: 5px 4px !important;
     font-size: 9pt !important;

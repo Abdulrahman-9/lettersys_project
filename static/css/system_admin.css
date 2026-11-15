@@ -16,31 +16,45 @@
 .is-system-admin .app-sidebar-account > .bi { color: var(--sa-on-dark-mute); }
 .is-system-admin .app-sidebar-avatar { background: #d99a1e; color: #1c1404; }
 
-/* الشريط */
-.is-system-admin .app-topbar { background: var(--sa-dark); color: var(--sa-on-dark); border-color: rgba(213, 236, 232, .13); box-shadow: none; }
-.is-system-admin .app-topbar .navbar-brand, .is-system-admin .app-topbar .navbar-brand *, .is-system-admin .app-topbar-copy { color: #fff !important; -webkit-text-fill-color: currentColor; background: none; }
-.is-system-admin .app-topbar-alert, .is-system-admin .app-topbar-user { background: rgba(255, 255, 255, .1) !important; border-color: rgba(213, 236, 232, .25) !important; color: #fff !important; box-shadow: none; }
-.is-system-admin .app-topbar-alert *, .is-system-admin .app-topbar-user * { color: inherit; -webkit-text-fill-color: currentColor; }
-.is-system-admin .app-topbar-alert .app-topbar-alert-badge { color: #fff; }
+/* الشريطُ العلويّ واحدٌ للجميع (سطحُ القيادة في app.css)، والعمودُ الداكن هو علامةُ وضع الإدارة */
 .is-system-admin .app-shell { gap: 0; width: 100%; margin: 0; }
 /* Bootstrap يفرض شفافية offcanvas-xl بـ!important في الشاشات الواسعة */
-.is-system-admin .app-sidebar { background: var(--sa-dark) !important; color: var(--sa-on-dark); padding: 0; align-self: stretch; min-height: calc(100vh - 75px); position: sticky; top: 0; }
-.is-system-admin .app-sidebar-panel { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: .5rem .55rem; backdrop-filter: none; color: var(--sa-on-dark); }
-.is-system-admin .app-sidebar-panel-footer { border-top: 1px solid rgba(213, 236, 232, .13); }
-.is-system-admin .app-sidebar-section-title, .is-system-admin .sidebar-title-text { color: #fff !important; -webkit-text-fill-color: #fff; font-weight: 800; background: none; }
-.is-system-admin .app-sidebar-toggle-btn { color: var(--sa-on-dark) !important; background: transparent !important; border-color: rgba(213, 236, 232, .25) !important; }
-.is-system-admin .app-sidebar-link, .is-system-admin .app-sidebar-logout { color: var(--sa-on-dark); background: transparent; border-color: rgba(213, 236, 232, .2); padding-block: .35rem; font-size: .84rem; }
+.is-system-admin .app-sidebar { background: var(--sa-dark) !important; color: var(--sa-on-dark); }
+.is-system-admin .app-sidebar-panel { color: var(--sa-on-dark); }
+.is-system-admin .app-sidebar-panel-footer,
+.is-system-admin .app-sidebar-panel + .app-sidebar-panel { border-top-color: rgba(213, 236, 232, .13); }
+.is-system-admin .app-sidebar-panel-footer { background: var(--sa-dark); }
+.is-system-admin .sidebar-title-text { color: var(--sa-on-dark-mute); font-size: .72rem; font-weight: 800; }
+.is-system-admin .app-sidebar-link, .is-system-admin .app-sidebar-logout { color: var(--sa-on-dark); background: transparent; border-color: rgba(213, 236, 232, .2); }
 .is-system-admin .app-sidebar-link:hover, .is-system-admin .app-sidebar-logout:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+.is-system-admin .lx-glide { background: rgba(255, 255, 255, .08); }
 .is-system-admin .app-main { padding: 1rem 1.25rem 2rem; }
-.sa-nav { padding: .25rem .1rem; }
-.sa-nav a { display: flex; align-items: center; gap: .65rem; padding: .3rem .65rem; margin-bottom: 1px; border-radius: 9px; font-size: .84rem; line-height: 1.45; font-weight: 700; color: var(--sa-on-dark); text-decoration: none; }
-.sa-nav a i { width: 1.1rem; font-size: .95rem; color: var(--sa-on-dark-mute); }
+@media (min-width: 1200px) {
+  /* بطول الشاشة تحت الشريط العلويّ — كان top:0 فينزلق تحته 75px عند التمرير (مقيسٌ 11-15) */
+  .is-system-admin .app-sidebar { top: var(--lx-topbar-h); height: calc(100vh - var(--lx-topbar-h)); border: 0; border-radius: 0; box-shadow: none; }
+  /* «إدارة النظام» يبقى ظاهراً: هو علامةُ الوضع */
+  .is-system-admin .app-sidebar-head { position: static; width: auto; height: auto; overflow: visible; clip-path: none; margin: .35rem 0 .1rem; padding-inline-start: 13px; }
+  .sa-nav a > span { transition: opacity var(--lx-dur-2) ease var(--lx-dur-1); }
+  .sa-nav-group { transition: color var(--lx-dur-2) ease var(--lx-dur-1); }
+  .sa-nav-group::before { content: ''; position: absolute; inset-inline-start: 15px; top: 50%; width: 20px; height: 1px; background: rgba(213, 236, 232, .22); opacity: 0; transition: opacity var(--lx-dur-2) ease; }
+  /* المطويّ — كانت التسمياتُ تبقى مقصوصةً في الشريط (14 بقيّةً مقيسة) */
+  .app-shell.sidebar-mini .sa-nav a > span { opacity: 0; transition-delay: 0s; transition-duration: var(--lx-dur-1); }
+  .app-shell.sidebar-mini .sa-nav-group { color: transparent; transition-delay: 0s; }
+  .app-shell.sidebar-mini .sa-nav-group::before { opacity: 1; }
+  .app-shell.sidebar-mini .sa-nav em { position: absolute; top: 3px; inset-inline-start: 28px; min-width: 16px; height: 16px; margin: 0; padding: 0 4px; font-size: .6rem; line-height: 16px; }
+}
+.sa-nav { display: flex; flex-direction: column; gap: 2px; padding: 0; }
+.sa-nav a { position: relative; z-index: 1; display: flex; align-items: center; gap: .7rem; min-height: 38px; padding: .3rem .7rem; padding-inline-start: 13px; border-radius: 10px; overflow: hidden; color: var(--sa-on-dark); font-size: .86rem; font-weight: 600; line-height: 1.4; text-decoration: none; transition: background-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease; }
+.sa-nav a > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-nav a i { flex: none; width: 24px; font-size: 1rem; text-align: center; color: var(--sa-on-dark-mute); transition: color var(--lx-dur-1) ease; }
 .sa-nav a:hover { background: rgba(255, 255, 255, .08); color: #fff; }
-.sa-nav a:focus-visible { outline: 2px solid #fcd34d; outline-offset: 1px; }
-.sa-nav a.on { background: rgba(252, 211, 77, .15); color: #fff; box-shadow: inset -3px 0 0 #fcd34d; }
-.sa-nav a.on i { color: #fcd34d; }
+.sa-nav a:hover i { color: #fff; }
+.sa-nav a:focus-visible { outline: 2px solid var(--lx-accent); outline-offset: -2px; }
+/* النشط: لوحُ «القيادة» بحافّته الذهبيّة — كعمود الموظّفين */
+.sa-nav a.on { color: #fff; font-weight: 700; background: linear-gradient(135deg, var(--lx-hero-a), var(--lx-hero-b)); box-shadow: inset -3px 0 0 var(--lx-accent), 0 6px 14px rgba(0, 0, 0, .28); }
+.sa-nav a.on i { color: #fff; }
 .sa-nav em { margin-inline-start: auto; min-width: 1.2rem; padding: 0 .3rem; border-radius: 99px; background: #dc2626; color: #fff; font-style: normal; font-size: .68rem; font-weight: 800; text-align: center; }
-.sa-nav-group { margin: .6rem .6rem .15rem; font-size: .72rem; line-height: 1.4; font-weight: 800; color: #b3937a; }
+.sa-nav-group { position: relative; overflow: hidden; margin: 0; padding: .8rem 13px .25rem; font-size: .7rem; line-height: 1.4; font-weight: 800; color: var(--sa-on-dark-mute); white-space: nowrap; }
 
 /* لوحة الإدارة المستقلّة تستعمل الشريط نفسه */
 .top.sa-top { background: var(--sa-dark); border-color: rgba(213, 236, 232, .13); color: #fff; }

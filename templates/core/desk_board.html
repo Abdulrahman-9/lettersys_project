@@ -3,9 +3,12 @@
 
 {% block title %}{% if my_desk %}طاولتي{% else %}طاولة البريد{% endif %}{% endblock %}
 
+{# الهويّة الموحّدة (11-12، المرحلة 1: هويّةٌ فقط — البنيةُ كما هي حتّى ما بعد P4 من خطّة دورة البريد) #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20261012-no-archive-desk">
-<link rel="stylesheet" href="{% static 'css/desk.css' %}?v=20261020-mail-desk2">
+<link rel="stylesheet" href="{% static 'css/queues.css' %}?v=20261112-desk1">
+<link rel="stylesheet" href="{% static 'css/desk.css' %}?v=20261112-desk2">
 {% endblock %}
 
 {% block content %}

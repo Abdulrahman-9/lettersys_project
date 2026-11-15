@@ -16,6 +16,8 @@
     <script>
       (function () {
         var root = document.documentElement;
+        // الخطُّ الذهبيّ تحت الشريط العلويّ ينمو مرّةً في أوّل صفحةٍ من الجلسة، لا مع كلّ انتقال
+        try { if (!sessionStorage.getItem('lx-shell-seen')) { root.classList.add('lx-first-paint'); sessionStorage.setItem('lx-shell-seen', '1'); } } catch (e) { /* تخزينٌ محجوب */ }
         if (root.getAttribute('data-lx-page') !== 'v2') return;
         var saved = null;
         try { saved = localStorage.getItem('lx-theme'); } catch (e) { /* تخزينٌ محجوب: يتبع الجهاز */ }
@@ -59,10 +61,10 @@
     <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}?v=20260705a" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'vendor/cairo/cairo.css' %}?v=20260705a">
     <!-- الهويّة الموحّدة: رموزُ الوضعين وتطبيقُها على Bootstrap في الصفحات المنقولة -->
-    <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261112-list1">
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261115-shell2">
     <!-- Design System (موحد للألوان والمسافات) -->
     <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260927">
-    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261112-list1">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261115-shell2">
     <!-- مكوّنات واجهة محايدة اللون (مستوحاة من صفحة الدخول) — اختيارية عبر أصناف .btn-brand/.card-brand/.field-brand -->
     <link rel="stylesheet" href="{% static 'css/brand-components.css' %}?v=20260705c">
     
@@ -88,7 +90,7 @@
     </style>
     
     {# Optional per-page CSS block (for legacy templates) #}
-    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261112-shell1">{% endif %}
+    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261115-shell2">{% endif %}
     {% block extra_css %}{% endblock %}
 
     {% block extra_head %}{% endblock %}
@@ -103,11 +105,16 @@
     <header class="app-topbar">
       <div class="app-topbar-brand">
         <button type="button" class="app-topbar-menu d-xl-none" data-bs-toggle="offcanvas" data-bs-target="#appNav" aria-controls="appNav" aria-haspopup="dialog"><i class="bi bi-list" aria-hidden="true"></i><span>القائمة</span></button>
-        <a class="navbar-brand d-flex align-items-center gap-2"
+        {# زرُّ الطيّ في الشريط العلويّ فوق العمود مباشرةً (المكتب وحده؛ تحت 1200 زرُّ «القائمة» مكانَه) — واختصارُه Ctrl+B #}
+        <button type="button" class="app-topbar-btn app-topbar-fold d-none d-xl-inline-flex" id="sidebarToggleBtn"
+                title="طي القائمة" aria-label="طي القائمة" aria-controls="appNav" aria-expanded="true" aria-keyshortcuts="Control+B">
+          <i class="bi bi-layout-sidebar-inset-reverse" aria-hidden="true"></i>
+        </button>
+        <a class="app-brand"
            href="{% if nav.system_admin %}{% url 'system_centre' %}{% elif nav.password_change_required %}{% url 'password_change' %}{% else %}{% url 'dashboard' %}{% endif %}">
           {# علامةُ الشركة الشفّافة عالية الدقّة (مقتطعة من mdoc-logo-mark بلا الاسم) بدل صورة 40px البيضاء #}
           <img class="app-topbar-logo" src="{% static 'img/mdoc-mark.png' %}?v=20261111" alt="الشركة" width="40" height="40">
-          <span class="brand-text">{{ system_settings.app_name|default:'نظام الكتب' }}</span>
+          <span class="app-brand-text"><span class="app-brand-name">{{ system_settings.app_name|default:'نظام الكتب' }}</span><span class="app-topbar-copy">{{ system_settings.brand_subtitle|default:'أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة' }}</span></span>
         </a>
         {% comment %}
           زرّ الوضع أعلى اليمين بجانب الشعار (قرار المالك 11-11). موجودٌ في كلّ صفحة لكنّه
@@ -118,7 +125,6 @@
           <svg class="lx-sun" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4"/></svg>
           <svg class="lx-moon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
         </button>
-        <div class="app-topbar-copy">{{ system_settings.brand_subtitle|default:'أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة' }}</div>
       </div>
       <div class="app-topbar-actions">
         {% if request.user.is_authenticated %}
@@ -138,13 +144,11 @@
     </header>
 
     <div class="app-shell">
+      {# الطيُّ المحفوظ قبل أن يُرسم العمود — كان يُطبَّق في آخر الصفحة فيُفتح العمودُ ثمّ ينطوي مع كلّ صفحة #}
+      <script>try { if (localStorage.getItem('app_sidebar_mini') === '1') document.currentScript.parentNode.classList.add('sidebar-mini'); } catch (e) { /* تخزينٌ محجوب */ }</script>
       <aside class="app-sidebar offcanvas-xl offcanvas-start" id="appNav" tabindex="-1" aria-labelledby="appNavTitle">
         <div class="app-sidebar-panel">
-          <div class="app-sidebar-section-title">
-            <button type="button" class="app-sidebar-toggle-btn d-none d-xl-inline-flex" id="sidebarToggleBtn"
-                    title="طي القائمة" aria-label="طي القائمة" aria-controls="appNav" aria-expanded="true">
-              <i class="bi bi-layout-sidebar-reverse"></i>
-            </button>
+          <div class="app-sidebar-section-title app-sidebar-head">
             <span class="sidebar-title-text" id="appNavTitle">{% if nav.system_admin %}إدارة النظام{% else %}التنقل الرئيسي{% endif %}</span>
             <button type="button" class="btn-close d-xl-none ms-auto" data-bs-dismiss="offcanvas" data-bs-target="#appNav" aria-label="إغلاق القائمة"></button>
           </div>
@@ -283,7 +287,7 @@
         {% endcomment %}
         <div class="app-sidebar-panel app-sidebar-panel-footer">
           <div class="dropup app-sidebar-account-wrap">
-            <button type="button" class="app-sidebar-account" data-bs-toggle="dropdown" aria-expanded="false" aria-label="قائمة الحساب: {{ request.user.get_full_name|default:request.user.username }}">
+            <button type="button" class="app-sidebar-account" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false" aria-label="قائمة الحساب: {{ request.user.get_full_name|default:request.user.username }}">
               <span class="app-sidebar-avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|slice:":1"|upper }}</span>
               <span class="app-sidebar-account-text">
                 <b dir="auto">{{ request.user.get_full_name|default:request.user.username }}</b>
@@ -400,7 +404,8 @@
         btn.title = label;
         btn.setAttribute('aria-label', label);
         btn.setAttribute('aria-expanded', mini ? 'false' : 'true');
-        if (icon) icon.className = mini ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-reverse';
+        btn.title = label + ' (Ctrl+B)';
+        if (icon) icon.className = mini ? 'bi bi-layout-sidebar-reverse' : 'bi bi-layout-sidebar-inset-reverse';
         try { localStorage.setItem(PREF, mini ? '1' : '0'); } catch (e) {}
       }
 
@@ -411,8 +416,20 @@
       btn.addEventListener('click', function () {
         setMini(!shell.classList.contains('sidebar-mini'));
       });
+      // Ctrl+B يطوي ويفتح (كمحرّرات الكود) — بمفتاح تحكّمٍ فلا يصطدم بالكتابة ولا بالتخطيط العربيّ (WCAG 2.1.4)،
+      // ولا يعمل داخل حقلٍ أو حوارٍ مفتوح
+      document.addEventListener('keydown', function (e) {
+        if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.code !== 'KeyB' || e.repeat) return;
+        if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable], [role="textbox"], [role="combobox"]')) return;
+        if (document.querySelector('.modal.show, dialog[open]')) return;
+        if (!window.matchMedia('(min-width: 1200px)').matches) return;
+        e.preventDefault();
+        setMini(!shell.classList.contains('sidebar-mini'));
+      });
     })();
     </script>
+
+    <script src="{% static 'js/shell.js' %}?v=20261115-shell2" defer></script>
 
     <!-- Additional Page Scripts -->
     {% block extra_js %}{% endblock %}

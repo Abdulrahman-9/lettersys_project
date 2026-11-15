@@ -1,13 +1,18 @@
-{% load static %}<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>دفتر {{ mail_noun }} — {{ department|default:"" }}</title>
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}دفتر {{ mail_noun }} — {{ department|default:"" }}{% endblock %}
+
+{# داخل إطار البرنامج (أمرُ المالك 11-12): كانت وثيقةً قائمةً بذاتها بلا شريطٍ ولا قائمة. الطباعةُ تُخرج الورقةَ وحدَها (_sheet_style). #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
+{% block extra_css %}
 {% include "core/_sheet_style.html" %}
 {% include "core/_desk_document_assets.html" %}
-</head>
-<body class="desk-workspace desk-document">
+{% endblock %}
+
+{% block content %}
+<div class="desk-workspace desk-document">
 <a class="desk-skip" href="#desk-document-main">تخطَّ إلى الدفتر</a>
 {% include "core/_desk_header.html" with desk_page="ledger" desk_description="راجع قيود القسم الواردة والصادرة وتوزيعها، وحدّد النطاق قبل طباعة الدفتر الرسمي." %}
 
@@ -26,6 +31,7 @@
     <div class="desk-form-actions">
       <button type="submit" class="desk-btn desk-btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i> تطبيق التصفية</button>
       {% if active_filter_labels or desk_filters.errors %}<a class="desk-btn desk-btn-quiet" href="{{ reset_filter_url }}"><i class="bi bi-x-circle" aria-hidden="true"></i> مسح التصفية</a>{% endif %}
+      {% include "core/_desk_presets.html" %}
     </div>
   </form>
 </section>
@@ -40,7 +46,7 @@
 </div>
 {% endif %}
 
-<main class="sheet" id="desk-document-main" tabindex="-1">
+<article class="sheet" id="desk-document-main" tabindex="-1" data-bs-theme="light" aria-labelledby="ledger-heading">
   <div class="rep-head">
     <div class="rep-org">
       {% include "core/_desk_lockup.html" with lockup_class="desk-lockup-sheet" %}
@@ -107,10 +113,11 @@
           <span><span class="ho-box" aria-hidden="true"></span>مع ملاحظات: <span class="ho-fill"></span></span>
         </div>
       </div>
+      {# الاسمُ يُكتب بخطّ اليد: المُسلِّمون والمتعهّدون متبدّلون (قرارُ المالك 11-12) — لا اسمَ حسابٍ على الورقة #}
       <div class="ho-sign">
         <section>
           <h2>المُسلِّم <small>— {{ department|default:"" }}</small></h2>
-          <div class="ho-field"><span>الاسم</span><i>{{ request.user.get_full_name|default:request.user.username }}</i></div>
+          <div class="ho-field"><span>الاسم</span><i></i></div>
           <div class="ho-field"><span>التوقيع</span><i></i></div>
           <div class="ho-field"><span>التاريخ والوقت</span><i></i></div>
         </section>
@@ -127,8 +134,7 @@
       </div>
     </div>
   {% endif %}
-</main>
+</article>
 <p class="desk-sheet-hint">معاينة ورقة A4 · على الشاشات الصغيرة، مرّر الجدول أفقياً لمراجعة جميع الأعمدة. لا تظهر أدوات الصفحة في النسخة المطبوعة.</p>
-
-</body>
-</html>
+</div>
+{% endblock %}

@@ -102,7 +102,7 @@ class DrawerCascadeTests(SimpleTestCase):
     نفسه تأتي بعد Bootstrap فتتغلّب عليه — `position: sticky` تُبقي الدرجَ في تدفّق
     الصفحة فوق المحتوى، و`transition` تمحو انزلاقه."""
 
-    DESKTOP_ONLY = ('position: sticky', 'flex: 0 0 310px', 'max-height: calc(100vh - 104px)',
+    DESKTOP_ONLY = ('position: sticky', 'flex: 0 0 var(--lx-side-w)', 'height: calc(100vh - var(--lx-topbar-h) - 2rem)',
                     'transition:')
 
     def _sidebar_rules(self):

@@ -86,6 +86,11 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
             ('templates/base.html', 'app.css', 20261112),
             ('templates/base.html', 'app.js', 20261111),
             ('templates/base.html', 'css/theme.css', 20261112),
+            # مساحةُ عمل البريد على الهويّة (11-12): الطاولةُ والدفترُ والكشفُ تقرأ desk.css نفسَه
+            ('templates/core/desk_board.html', 'css/desk.css', 20261112),
+            ('templates/core/desk_board.html', 'css/queues.css', 20261112),
+            ('templates/core/_desk_document_assets.html', 'css/desk.css', 20261112),
+            ('templates/core/_desk_document_assets.html', 'js/desk_actions.js', 20261112),
             ('templates/base.html', 'js/theme.js', 20261111),
             ('templates/core/login.html', 'js/login.js', 20261111),
             ('templates/core/book_unified.html', 'js/book_unified_ajax_manager.js', 20261112),
@@ -111,7 +116,7 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
         sw = (ROOT / 'static' / 'service-worker.js').read_text(encoding='utf-8')
         m = re.search(r"CACHE_VERSION = 'v(\d+)-", sw)
         self.assertIsNotNone(m, 'CACHE_VERSION')
-        self.assertGreaterEqual(int(m.group(1)), 184)
+        self.assertGreaterEqual(int(m.group(1)), 188)
 
 
 class LifecycleScriptGuardsTests(SimpleTestCase):

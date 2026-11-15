@@ -13,7 +13,7 @@
    في الصفحات المنقولة `[data-lx-page="v2"]`، فلا تصير صفحةٌ قديمةٌ نصفَ داكنة.
    ========================================================================== */
 
-:root {
+:root, [data-bs-theme="light"] {
   color-scheme: light;
 
   /* الأرضيّة والأسطح */
@@ -49,6 +49,8 @@
   --lx-wait: #b54708;  --lx-wait-bg: #fffaeb;  --lx-wait-line: #fedf89;
   --lx-done: #067647;  --lx-done-bg: #ecfdf3;  --lx-done-line: #abefc6;
   --lx-prog: #175cd3;  --lx-prog-bg: #eff8ff;  --lx-prog-line: #b2ddff;
+  /* السرّيّ: بنفسجيٌّ في طوابير الطاولة وعنوانِ الكتاب المحجوب — ليس حالةَ متابعة */
+  --lx-secret: #6d28d9;  --lx-secret-bg: #f5f3ff;  --lx-secret-line: #ddd6fe;
 
   /* العمق والحركة */
   --lx-shadow-sm: 0 1px 2px rgba(20, 38, 43, .06);
@@ -68,7 +70,9 @@
   --lx-dur-4: 560ms;
 
   /* ارتفاعُ الشريط العلويّ اللاصق (مقيسٌ 75px على 1440): ما يلتصق في الصفحة يبدأ تحته لا خلفه */
-  --lx-topbar-h: 75px;
+  --lx-topbar-h: 64px;
+  --lx-side-w: 296px;   /* العمودُ الجانبيّ مفتوحاً */
+  --lx-rail-w: 72px;    /* ومطويّاً: أيقوناتٌ في عمودٍ مركزُه 36px */
 
   /* شارةُ العدد (التنبيهات، الطاولة): نصٌّ مقروءٌ في الوضعين */
   --lx-badge-bg: #c4320a;
@@ -107,6 +111,7 @@
   --lx-wait: #fec84b;  --lx-wait-bg: rgba(247, 144, 9, .14);   --lx-wait-line: rgba(247, 144, 9, .35);
   --lx-done: #75e0a7;  --lx-done-bg: rgba(23, 178, 106, .14);  --lx-done-line: rgba(23, 178, 106, .35);
   --lx-prog: #84caff;  --lx-prog-bg: rgba(46, 144, 250, .14);  --lx-prog-line: rgba(46, 144, 250, .35);
+  --lx-secret: #c4b5fd;  --lx-secret-bg: rgba(139, 92, 246, .16);  --lx-secret-line: rgba(139, 92, 246, .4);
 
   --lx-shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
   --lx-shadow-md: 0 10px 26px rgba(0, 0, 0, .35);
@@ -343,6 +348,8 @@ html[data-lx-page="v2"] .app-sidebar {
 
 @media (prefers-reduced-motion: reduce) {
   .lx-tabs-ind.is-ready { transition: none; }
+  /* الطيُّ وتبهيتُ التسميات بلا حركة (قواعدُ app.css تتغلّب بالترتيب، فالتجاوزُ مؤكَّد) */
+  .app-sidebar, .app-sidebar * { transition-duration: 0s !important; transition-delay: 0s !important; }
 }
 
 /* التحديد: تعبئةُ الهويّة بحبرها — مقروءٌ فوق أيّ سطح (حتّى الرأس التركوازيّ) وفي الوضعين */

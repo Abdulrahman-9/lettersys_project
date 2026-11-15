@@ -34,10 +34,14 @@ from core.scoping import (ACCESS_STUB, STUB_TITLE, can_use_ledger, content_autho
 
 @login_required
 def desk_handover(request):
-    """كشفُ التسليم — ورقةُ توقيعٍ لوحدةٍ بعينها.
+    """كشفُ التسليم — ورقةُ توقيعٍ لوحدةٍ بعينها، أو **كشفٌ واحدٌ لكلّ الوحدات**.
 
     ``?to=<department_id>`` يختار الوحدة؛ وبلا اختيارٍ تُعرض قائمةُ الوحدات
     التي عليها التزاماتٌ غيرُ موقَّعة كي لا يبدأ الكاتبُ من فراغ.
+
+    ``?to=all`` (أمرُ المالك 2026-11-12): مَن يفرّق البريد يحمل **ورقةً واحدة**، الجهةُ فيها
+    خليّةٌ في كلّ سطر وكلُّ مستلمٍ يوقّع سطرَه — اختصاراً للأوراق المطبوعة. فالكشفُ ذكيّ:
+    وحدةٌ واحدة ⟵ بطاقتُها كما كانت، وعدّةُ وحدات ⟵ عمودُ «الجهة المستلِمة».
     """
     department = _acting_department(request)
     filters = DeskFilterForm(request.GET)
@@ -48,8 +52,17 @@ def desk_handover(request):
     targets = _units_with_pending(department, visible)
     courier_books = _courier_pending(department, visible)
     courier_count = courier_books.count()
-    is_courier = (request.GET.get('to') or '').strip() == COURIER.pk and courier_count > 0
-    chosen = COURIER if is_courier else _chosen_unit(request, targets)
+    wanted = (request.GET.get('to') or '').strip()
+    is_courier = wanted == COURIER.pk and courier_count > 0
+    is_combined = wanted == ALL_UNITS.pk and len(targets) > 1
+    if is_courier:
+        chosen = COURIER
+    elif is_combined:
+        chosen = ALL_UNITS
+    elif wanted == ALL_UNITS.pk and targets:
+        chosen = targets[0][0]           # وحدةٌ واحدةٌ عليها التزام: كشفُها هو «الكلّ»
+    else:
+        chosen = _chosen_unit(request, targets)
 
     rows = []
     if is_courier:
@@ -57,11 +70,16 @@ def desk_handover(request):
                 for b in courier_books.prefetch_related(
                     'registrations', 'receiving_entities').order_by('date', 'id')]
     elif chosen is not None:
-        pending = undelivered(chosen, qs=visible).select_related(
-            'book', 'to_department', 'assignee'
-        ).prefetch_related('book__registrations').order_by('created_at')
-        rows = [_handover_row(r, request.user, department) for r in pending]
-        rows = _grouped_by_kind(rows, filters)
+        # الموحَّد مرتَّبٌ بالوحدة (سطورُ كلّ مستلمٍ متجاورة)؛ والمفرد يُجمع بنوع البريد كما كان.
+        # ما فرّقه قسمي وشُعَبُه وحدَه — كما يعدّه اختيارُ الجهة. بلا هذا يحمل كشفُ وحدةٍ ما أحاله إليها
+        # قسمٌ آخر، ولا يطابق عددُ القائمة سطورَ الورقة (مراجعةُ فيبل 11-15).
+        mine = subtree_ids(department.pk)
+        for unit in ([unit for unit, _ in targets] if is_combined else [chosen]):
+            pending = undelivered(unit, qs=visible).filter(from_department_id__in=mine).select_related(
+                'book', 'to_department', 'assignee'
+            ).prefetch_related('book__registrations').order_by('created_at')
+            unit_rows = [_handover_row(r, request.user, department) for r in pending]
+            rows += unit_rows if is_combined else _grouped_by_kind(unit_rows, filters)
 
     context = _filter_context(request, filters)
     if chosen is not None:
@@ -76,6 +94,9 @@ def desk_handover(request):
         'courier': COURIER,
         'courier_count': courier_count,
         'is_courier': is_courier,
+        'is_combined': is_combined,
+        'all_units': ALL_UNITS,
+        'combined_count': sum(count for _unit, count in targets),
         'chosen': chosen,
         'rows': rows,
         'any_restricted': any(row['restricted'] for row in rows),
@@ -131,6 +152,17 @@ class _CourierTarget:
 
 
 COURIER = _CourierTarget()
+
+
+class _AllUnits:
+    """كشفٌ واحدٌ لكلّ الوحدات — اختيارٌ في القائمة لا وحدةٌ في الهيكل."""
+    pk = 'all'
+
+    def __str__(self):
+        return 'كلّ الوحدات (تفريق داخلي)'
+
+
+ALL_UNITS = _AllUnits()
 
 # اسمُ البريد في العناوين يتبع اختيارَ «نوع البريد»: الكلُّ بريد، والفرعُ باسمه.
 MAIL_NOUNS = {
@@ -268,6 +300,8 @@ def _handover_row(referral, user, department):
         'date': book.date,
         'title': STUB_TITLE if restricted else (book.title or '—'),
         'restricted': restricted,
+        'target': str(referral.to_department),
+        'target_id': referral.to_department_id,
         'purpose': referral.get_purpose_display(),
         'margin': '' if restricted else referral.margin,
         'due_date': referral.due_date,
