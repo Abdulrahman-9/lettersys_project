@@ -93,6 +93,17 @@ class ShellSourceTests(SimpleTestCase):
         self.assertIn('position: sticky', rule)
         self.assertIn('bottom: 0', rule)
 
+    def test_the_account_menu_is_as_wide_as_its_card_not_the_screen(self):
+        # القائمةُ ثابتةُ الموضع، فـwidth: 100% = عرضُ الشاشة (مقيسٌ 11-15: 1910px عند 1920 في كلّ صفحة)
+        rule = block(_read('static/app.css'), '.app-sidebar-account-menu {')
+        self.assertIn('width: calc(var(--lx-side-w) - 22px);', rule)
+        self.assertIn('max-width: calc(100vw - 2rem);', rule)
+        self.assertNotRegex(rule, r'(?<![-\w])width:\s*100%')
+        # وفي الدرج بعرض بطاقته هناك — يتبع عرضَ الدرج نفسَه، فإن تغيّر أحدُهما فليتغيّر الآخر
+        drawer = _read('static/app.css')
+        self.assertIn('--bs-offcanvas-width: min(86vw, 320px);', drawer)
+        self.assertIn('.app-sidebar-account-menu { width: calc(min(86vw, 320px) - 1.5rem - 22px); }', drawer)
+
     def test_the_top_bar_is_the_command_surface(self):
         css = _read('static/app.css')
         bar = block(css, '.app-topbar {\n')
@@ -123,4 +134,14 @@ class ShellMarkupTests(TestCase):
 
     def test_the_account_menu_escapes_the_folded_column(self):
         html = self.client.get(reverse('dashboard')).content.decode('utf-8')
-        self.assertIn('class="app-sidebar-account" data-bs-toggle="dropdown" data-bs-popper-config=\'{"strategy":"fixed"}\'', html)
+        button = re.search(r'<button\b[^>]*class="app-sidebar-account"[^>]*>', html).group(0)
+        import json
+        from html import unescape
+        # يُقرأ إعدادُ Popper كائناً لا نصّاً، فلا يكسره ترتيبُ المفاتيح أو مسافة (مراجعةُ فيبل 11-15)
+        config = json.loads(unescape(re.search(r"data-bs-popper-config='([^']*)'", button).group(1)))
+        self.assertEqual(config['strategy'], 'fixed')
+        modifiers = {m['name']: m.get('options') for m in config['modifiers']}
+        # موضعٌ من اليسار لا من اليمين: حسابُ Popper المتكيّف لطرف «end» يأخذ عرضَ الشاشة بالشريط (1920)
+        # و«right: 0» يُقاس بدونه (1910، الشريطُ محجوزٌ بـscrollbar-gutter) — فانزاحت القائمةُ 10px عن بطاقتها
+        self.assertEqual(modifiers.get('computeStyles'), {'adaptive': False})
+        self.assertEqual(modifiers.get('offset'), {'offset': [0, 2]})   # الدمجُ سطحيّ: إزاحةُ Bootstrap تُكتب

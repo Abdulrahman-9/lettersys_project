@@ -64,7 +64,7 @@
     <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261115-colors1">
     <!-- Design System (موحد للألوان والمسافات) -->
     <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260927">
-    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261115-colors1">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261115-acctmenu">
     <!-- طبقةُ المكوّنات على الهويّة (لوحتُها الحيّة: /books/system/ui-kit/) -->
     <link rel="stylesheet" href="{% static 'css/components.css' %}?v=20261115-colors1">
     <!-- مكوّنات واجهة محايدة اللون (مستوحاة من صفحة الدخول) — اختيارية عبر أصناف .btn-brand/.card-brand/.field-brand -->
@@ -289,7 +289,7 @@
         {% endcomment %}
         <div class="app-sidebar-panel app-sidebar-panel-footer">
           <div class="dropup app-sidebar-account-wrap">
-            <button type="button" class="app-sidebar-account" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false" aria-label="قائمة الحساب: {{ request.user.get_full_name|default:request.user.username }}">
+            <button type="button" class="app-sidebar-account" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed","modifiers":[{"name":"computeStyles","options":{"adaptive":false}},{"name":"offset","options":{"offset":[0,2]}}]}' aria-expanded="false" aria-label="قائمة الحساب: {{ request.user.get_full_name|default:request.user.username }}">
               <span class="app-sidebar-avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|slice:":1"|upper }}</span>
               <span class="app-sidebar-account-text">
                 <b dir="auto">{{ request.user.get_full_name|default:request.user.username }}</b>

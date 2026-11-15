@@ -476,9 +476,12 @@ body {
 .app-sidebar-account-text small { font-size: 0.76rem; color: var(--lx-mute); font-weight: 600; }
 .app-sidebar-account > .bi { flex: none; color: var(--lx-mute); }
 
+/* القائمةُ ثابتةُ الموضع (strategy: fixed كي لا يقصّها العمودُ المطويّ)، فنسبةُ عرضها من الشاشة لا من البطاقة:
+   width: 100% مدّها عرضَ الشاشة كلِّها في كلّ صفحة (1910px عند 1920، مقيسٌ 11-15). عرضُها عرضُ البطاقة:
+   العمودُ ناقصاً حدَّيه (2px) وحشوَ اللوح (2×10px)، وتنفتح من طرفها نحو المحتوى حين يُطوى العمود */
 .app-sidebar-account-menu {
-  width: 100%;
-  min-width: 14rem;
+  width: calc(var(--lx-side-w) - 22px);
+  max-width: calc(100vw - 2rem);
   padding: 0.35rem;
   border: 1px solid var(--lx-line);
   border-radius: 14px;
@@ -774,6 +777,10 @@ body {
     border-radius: 16px;
     background: var(--lx-surface);
   }
+
+  /* قائمةُ الحساب بعرض بطاقتها في الدرج أيضاً: الدرجُ ناقصاً حشوَه (2×0.75rem) وحدَّي اللوح وحشوَه (22px).
+     بعرض العمود الثابت (274px) كانت تزيد على بطاقتها في الهواتف الأضيق من 390 (مراجعةُ فيبل 11-15) */
+  .app-sidebar-account-menu { width: calc(min(86vw, 320px) - 1.5rem - 22px); }
 
   .app-topbar { padding-inline: .75rem; }
 }
