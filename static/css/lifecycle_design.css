@@ -205,7 +205,7 @@
    «مكتبُ الأرشيف الدافئ» يصير تركوازاً وفي الوضعين — تفاصيلُ الكتاب وحواريّاتُ التسيير؛
    والصفحاتُ غيرُ المنقولة (الكتابُ السرّيّ بعدُ) على حالها حتّى يأتي دورُها.
    ورقةُ الكشف (.lc-sheet) تبقى حبراً على ورقٍ أبيض: هي ما يُطبع. */
-html[data-lx-page="v2"] .lc-scope {
+html:not([data-lx-legacy]) .lc-scope {
   --ink: var(--lx-ink);
   --ink-soft: color-mix(in srgb, var(--lx-ink) 80%, var(--lx-mute));
   --ink-faint: var(--lx-mute);
@@ -219,14 +219,14 @@ html[data-lx-page="v2"] .lc-scope {
   --rule: var(--lx-line);
   --rule-hard: var(--lx-line-strong);
 }
-html[data-lx-page="v2"] .lc-scope .modal-content { background: var(--paper); box-shadow: var(--lx-shadow-lg); }
-html[data-lx-page="v2"] .lc-scope .modal-header { background: var(--paper); }
-html[data-lx-page="v2"] .lc-scope :is(.form-control, .form-select):focus { box-shadow: 0 0 0 .18rem rgba(var(--lx-pri-rgb), .18); }
-html[data-lx-page="v2"] .lc-state-done { background: var(--lx-done-bg); color: var(--lx-done); }
-html[data-lx-page="v2"] .lc-state-late { background: var(--lx-late-bg); color: var(--lx-late); }
-html[data-lx-page="v2"] .lc-state-wait { background: var(--lx-wait-bg); color: var(--lx-wait); }
-html[data-lx-page="v2"] .lc-state-info { background: var(--lx-surface-2); color: var(--ink-soft); }
-html[data-lx-page="v2"] .bx-overdue-note { color: var(--lx-late); }
+html:not([data-lx-legacy]) .lc-scope .modal-content { background: var(--paper); box-shadow: var(--lx-shadow-lg); }
+html:not([data-lx-legacy]) .lc-scope .modal-header { background: var(--paper); }
+html:not([data-lx-legacy]) .lc-scope :is(.form-control, .form-select):focus { box-shadow: 0 0 0 .18rem rgba(var(--lx-pri-rgb), .18); }
+html:not([data-lx-legacy]) .lc-state-done { background: var(--lx-done-bg); color: var(--lx-done); }
+html:not([data-lx-legacy]) .lc-state-late { background: var(--lx-late-bg); color: var(--lx-late); }
+html:not([data-lx-legacy]) .lc-state-wait { background: var(--lx-wait-bg); color: var(--lx-wait); }
+html:not([data-lx-legacy]) .lc-state-info { background: var(--lx-surface-2); color: var(--ink-soft); }
+html:not([data-lx-legacy]) .bx-overdue-note { color: var(--lx-late); }
 
 /* قصاصةُ الهامش في حوار «فرِّق» — كانت أنماطاً مضمّنة بالبرتقاليّ فلا تبلغها الهويّة */
 .lc-scope .lc-crop-stage {

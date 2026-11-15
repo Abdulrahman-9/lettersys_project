@@ -1085,6 +1085,8 @@ class BackToTopButton {
     this.button.className = 'back-to-top';
     this.button.innerHTML = '<i class="bi bi-arrow-up"></i>';
     this.button.title = 'العودة للأعلى (Home)';
+    this.button.type = 'button';
+    this.button.setAttribute('aria-label', 'العودة إلى أعلى الصفحة');
     document.body.appendChild(this.button);
     
     // Show/Hide on scroll
@@ -1094,11 +1096,12 @@ class BackToTopButton {
     this.button.addEventListener('click', () => this.scrollToTop());
     
     // Keyboard shortcut (Home key)
+    // Home داخل حقلٍ يعيد المؤشّرَ إلى أوّل السطر — لا يُخطف إلى أعلى الصفحة (كان يُخطف في كلّ حقل؛ 11-15)
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Home') {
-        e.preventDefault();
-        this.scrollToTop();
-      }
+      if (e.key !== 'Home' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable], [role="textbox"], [role="combobox"]')) return;
+      e.preventDefault();
+      this.scrollToTop();
     });
   }
   

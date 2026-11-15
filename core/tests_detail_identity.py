@@ -93,7 +93,7 @@ class DetailStylesheetTests(SimpleTestCase):
     def test_lifecycle_tokens_move_only_inside_v2(self):
         css = _read('static/css/lifecycle_design.css')
         self.assertIn('--amber:      #b45309;', css)        # الصفحاتُ غيرُ المنقولة على حالها
-        block = css[css.index('html[data-lx-page="v2"] .lc-scope {'):]
+        block = css[css.index('html:not([data-lx-legacy]) .lc-scope {'):]   # كلُّ الصفحات منذ جولة الألوان 11-15
         block = block[:block.index('}')]
         self.assertIn('--amber: var(--lx-pri);', block)
         self.assertIn('--paper: var(--lx-surface);', block)

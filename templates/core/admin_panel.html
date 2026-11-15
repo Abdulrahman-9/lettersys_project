@@ -9,13 +9,13 @@
 <title>{% if is_superadmin %}إدارة النظام{% else %}إدارة القسم{% endif %} — نظام الكتب</title>
 <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}">
 {# رموزُ الهويّة: الشريطان هنا هما شريطا البرنامج نفسُهما (11-15) #}
-<link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261115-kit1">
-{% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261115-kit1">{% endif %}
+<link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261115-colors1">
+{% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261115-colors1">{% endif %}
 <style>
 @font-face{font-family:Cairo;font-weight:200 1000;font-display:swap;
   src:url("{% static 'vendor/cairo/cairo-v31-SLXVc1nY6HkvangtZmpQdkhzfH5lkSscRiyS.woff2' %}") format("woff2")}
-:root{--ink:#362014;--ink-soft:#6f4631;--mute:#7c6656;--amber:#b45309;--amber-2:#d97706;--gold:#f59e0b;
-  --bg:#f3f0eb;--card:#fff;--tile:#f8f6f2;--line:#e7e2da;--danger:#dc2626;--ok:#15803d;--in:#2563eb;--secret:#7c3aed}
+:root{--ink:var(--lx-ink);--ink-soft:var(--lx-ink);--mute:#7c6656;--amber:#b45309;--amber-2:var(--lx-pri);--gold:var(--lx-pri);
+  --bg:#f3f0eb;--card:#fff;--tile:var(--lx-pri-soft);--line:#e7e2da;--danger:#dc2626;--ok:#15803d;--in:#2563eb;--secret:#7c3aed}
 *{box-sizing:border-box}
 /* hidden يُخفي ولو أعطى الصنفُ display (f-group شبكة) — وإلّا ظهر «يتبع» لجذر الرئيس */
 [hidden]{display:none!important}
@@ -30,7 +30,7 @@ a{text-decoration:none}
 .brand img{width:34px;height:34px}
 .brand small{display:block;font-size:.72rem;font-weight:600;color:var(--mute)}
 .sp{flex:1}
-.pill{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .9rem;border:1px solid #f3dcc0;
+.pill{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .9rem;border:1px solid var(--lx-line);
   border-radius:999px;background:#fffaf3;font-weight:700;font-size:.85rem;cursor:pointer;color:var(--ink)}
 .burger{display:none;border:1px solid var(--line);background:#fff;border-radius:10px;
   width:40px;height:40px;place-items:center;cursor:pointer}
@@ -43,19 +43,19 @@ main{grid-column:1;grid-row:1;padding:1.25rem 1.5rem 3rem}
 /* ── شريط التنقل ── */
 .nav a{display:flex;align-items:center;gap:.7rem;padding:.55rem .8rem;margin-bottom:2px;
   border-radius:12px;font-weight:700;font-size:.88rem;color:var(--ink-soft);cursor:pointer}
-.nav a:hover{background:#f6efe5}
+.nav a:hover{background:var(--lx-surface-2)}
 .nav a i{font-size:1rem}
 .grp{margin:1rem .8rem .4rem;font-size:.72rem;font-weight:800;color:var(--mute)}
-.admbox{border-radius:16px;padding:.5rem;background:linear-gradient(160deg,#2b170d,#5a3220);
+.admbox{border-radius:16px;padding:.5rem;background:linear-gradient(160deg,#2b170d,var(--lx-hero-b));
   box-shadow:0 12px 30px -18px #2b170d}
 .admbox .t{display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem .7rem;color:#fff;font-weight:800}
-.admbox .t small{display:block;font-size:.68rem;color:#f5dcc2;font-weight:600}
+.admbox .t small{display:block;font-size:.68rem;color:var(--lx-pri);font-weight:600}
 .admbox .t i{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;
-  background:linear-gradient(135deg,#fcd34d,#f59e0b);color:#3a2316}
+  background:linear-gradient(135deg,#fcd34d,var(--lx-pri));color:var(--lx-ink)}
 .admbox a{display:flex;align-items:center;gap:.7rem;padding:.55rem .8rem;margin-bottom:2px;
-  border-radius:12px;font-weight:700;font-size:.88rem;color:#f5dcc2;cursor:pointer}
+  border-radius:12px;font-weight:700;font-size:.88rem;color:var(--lx-pri);cursor:pointer}
 .admbox a:hover{background:rgba(255,255,255,.08)}
-.admbox a.on{background:rgba(252,211,77,.16);color:#fff;box-shadow:inset -3px 0 0 #fcd34d}
+.admbox a.on{background:rgba(252,211,77,.16);color:#fff;box-shadow:inset -3px 0 0 var(--lx-wait-line)}
 .admbox a em{margin-inline-start:auto;font-style:normal;font-size:.68rem;
   background:rgba(255,255,255,.12);border-radius:99px;padding:0 .5rem}
 /* ── مقاطع المحتوى ── */
@@ -78,10 +78,10 @@ main{grid-column:1;grid-row:1;padding:1.25rem 1.5rem 3rem}
 .kpi .l{font-size:.8rem;font-weight:700;color:var(--ink-soft)}
 .kpi .s{font-size:.72rem;color:var(--mute)}
 a.kpi.link{color:var(--ink);transition:transform .2s,box-shadow .2s}
-a.kpi.link:hover{transform:translateY(-2px);box-shadow:0 12px 24px -16px rgba(54,32,20,.35)}
+a.kpi.link:hover{transform:translateY(-2px);box-shadow:0 12px 24px -16px color-mix(in srgb, var(--lx-pri) 35%, transparent)}
 /* ── بطاقة عامة ── */
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
-  padding:1rem 1.1rem;box-shadow:0 8px 24px -18px rgba(54,32,20,.3)}
+  padding:1rem 1.1rem;box-shadow:0 8px 24px -18px color-mix(in srgb, var(--lx-pri) 30%, transparent)}
 .hd{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.75rem}
 .hd h2{margin:0;font-size:1rem}.hd .sub{font-size:.75rem;color:var(--mute)}
 /* ── عمودان ── */
@@ -90,34 +90,34 @@ a.kpi.link:hover{transform:translateY(-2px);box-shadow:0 12px 24px -16px rgba(54
 .org{display:flex;flex-direction:column;align-items:center;padding:.5rem 0 1rem;overflow-x:auto}
 .org ul{display:flex;justify-content:center;gap:0;list-style:none;margin:0;padding:1.4rem 0 0;position:relative}
 .org li{position:relative;display:flex;flex-direction:column;align-items:center;padding:1.4rem .5rem 0}
-.org li::before{content:"";position:absolute;top:0;inset-inline:0;border-top:2px solid #e2c9a6}
+.org li::before{content:"";position:absolute;top:0;inset-inline:0;border-top:2px solid var(--lx-line-strong)}
 .org li:first-child::before{inset-inline-start:50%}
 .org li:last-child::before{inset-inline-end:50%}
 .org li:only-child::before{display:none}
-.org li::after{content:"";position:absolute;top:0;height:1.4rem;border-inline-start:2px solid #e2c9a6}
+.org li::after{content:"";position:absolute;top:0;height:1.4rem;border-inline-start:2px solid var(--lx-line-strong)}
 .org>ul{padding-top:0}.org>ul>li{padding-top:0}
 /* الجذورُ تلتفّ صفوفاً، كلٌّ بشجرته تحته — أربعون قسماً في سطرٍ واحد كانت ~6000px؛
    و«safe» تُبقي ما فاض قابلاً للتمرير (التوسيطُ وحده يدفعه خارج البداية) */
 .org{align-items:safe center}
 .org>ul{flex-wrap:wrap;row-gap:1.25rem;max-width:100%}
 .org>ul>li::before,.org>ul>li::after{display:none}
-.org ul ul::before{content:"";position:absolute;top:0;height:1.4rem;border-inline-start:2px solid #e2c9a6}
+.org ul ul::before{content:"";position:absolute;top:0;height:1.4rem;border-inline-start:2px solid var(--lx-line-strong)}
 .node{min-width:150px;padding:.6rem .8rem;border-radius:14px;background:#fff;
   border:1px solid var(--line);text-align:center;cursor:pointer;transition:transform .2s,box-shadow .2s}
-.node:hover,.node:focus{transform:translateY(-3px);box-shadow:0 14px 28px -16px rgba(139,69,19,.6);
-  border-color:#f3d6ad;outline:none}
+.node:hover,.node:focus{transform:translateY(-3px);box-shadow:0 14px 28px -16px color-mix(in srgb, var(--lx-pri) 60%, transparent);
+  border-color:var(--lx-line-strong);outline:none}
 .node b{display:block;font-size:.85rem}
-.node code{font-family:inherit;font-size:.7rem;color:var(--amber);background:#fdf1e1;border-radius:6px;padding:0 .35rem}
+.node code{font-family:inherit;font-size:.7rem;color:var(--amber);background:var(--lx-surface-2);border-radius:6px;padding:0 .35rem}
 .node small{display:block;font-size:.7rem;color:var(--mute);margin-top:.2rem}
 .node .lv{display:inline-block;font-size:.62rem;font-weight:800;color:#fff;border-radius:99px;padding:0 .45rem;margin-bottom:.25rem}
-.lv.o{background:var(--secret)}.lv.q{background:#5a3220}.lv.s{background:var(--amber-2)}.lv.w{background:var(--in)}
+.lv.o{background:var(--secret)}.lv.q{background:var(--lx-hero-b)}.lv.s{background:var(--amber-2)}.lv.w{background:var(--in)}
 /* ── قائمة الصحة ── */
 .health ul,.feed ul{list-style:none;margin:0;padding:0}
 .health li{display:grid;grid-template-columns:1fr auto;gap:.2rem .75rem;
   padding:.6rem 0;border-top:1px solid var(--line);font-size:.82rem}
 .health li:first-child{border-top:0}
 .health span{color:var(--mute);font-size:.74rem}
-.track{grid-column:1/-1;height:7px;border-radius:99px;background:#f1ebe2;overflow:hidden}
+.track{grid-column:1/-1;height:7px;border-radius:99px;background:var(--lx-pri-soft);overflow:hidden}
 .track i{display:block;height:100%;border-radius:inherit;
   background:linear-gradient(90deg,var(--gold),var(--amber));transform-origin:right;
   animation:fill 1s .2s cubic-bezier(.2,.8,.2,1) backwards}
@@ -130,37 +130,37 @@ a.kpi.link:hover{transform:translateY(-2px);box-shadow:0 12px 24px -16px rgba(54
   padding:.55rem 0;border-top:1px solid var(--line);font-size:.82rem}
 .feed li:first-child{border-top:0}
 .ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;
-  background:#f6efe5;color:var(--amber)}
-.ic.b{background:#e8f0ff;color:var(--in)}.ic.r{background:#fdecec;color:var(--danger)}
-.ic.g{background:#e7f6ec;color:var(--ok)}
+  background:var(--lx-surface-2);color:var(--amber)}
+.ic.b{background:#e8f0ff;color:var(--in)}.ic.r{background:var(--lx-late-bg);color:var(--danger)}
+.ic.g{background:var(--lx-done-bg);color:var(--ok)}
 .feed time{font-size:.72rem;color:var(--mute)}
 /* ── إجراءات سريعة ── */
 .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem}
 .quick button,.quick a{display:flex;flex-direction:column;align-items:flex-start;gap:.2rem;
   padding:.8rem;border-radius:12px;border:1px solid var(--line);background:var(--tile);
   cursor:pointer;text-align:start;transition:transform .2s,background .2s;color:var(--ink)}
-.quick button:hover,.quick a:hover{transform:translateY(-2px);background:#fdf1e1}
+.quick button:hover,.quick a:hover{transform:translateY(-2px);background:var(--lx-surface-2)}
 .quick i{font-size:1.2rem;color:var(--amber)}.quick b{font-size:.82rem}
 .quick small{font-size:.7rem;color:var(--mute)}
 /* ── أزرار ── */
 .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1rem;
   border-radius:10px;border:1px solid var(--line);background:#fff;
   font-weight:700;font-size:.85rem;cursor:pointer;color:var(--ink)}
-.btn:hover{background:#fdf1e1}
-.btn.pri{background:linear-gradient(135deg,#b45309,#8b4513);color:#fff;border:0;
-  box-shadow:0 8px 18px -10px #8b4513}
+.btn:hover{background:var(--lx-surface-2)}
+.btn.pri{background:linear-gradient(135deg,#b45309,var(--lx-hero-b));color:#fff;border:0;
+  box-shadow:0 8px 18px -10px var(--lx-pri)}
 .btn.pri:hover{filter:brightness(1.08)}
 .btn.sm{padding:.35rem .7rem;font-size:.78rem;border-radius:8px}
 .btn{white-space:nowrap}
 .btn:disabled{opacity:.45;cursor:not-allowed}
-.btn.danger{background:#fff;border-color:#fca5a5;color:var(--danger)}
-.btn.danger:hover{background:#fdecec}
+.btn.danger{background:#fff;border-color:var(--lx-late-line);color:var(--danger)}
+.btn.danger:hover{background:var(--lx-late-bg)}
 /* ── شرائط الحالة ── */
 .badge{display:inline-block;font-size:.7rem;font-weight:800;border-radius:99px;
-  padding:.1rem .55rem;background:#f6efe5;color:var(--ink-soft)}
-.badge.ok{background:#e7f6ec;color:var(--ok)}.badge.off{background:#fdecec;color:var(--danger)}
+  padding:.1rem .55rem;background:var(--lx-surface-2);color:var(--ink-soft)}
+.badge.ok{background:var(--lx-done-bg);color:var(--ok)}.badge.off{background:var(--lx-late-bg);color:var(--danger)}
 .badge.v{background:#f1eafe;color:var(--secret)}.badge.b{background:#e8f0ff;color:var(--in)}
-.badge.warn{background:#fef3c7;color:#92400e}
+.badge.warn{background:var(--lx-wait-bg);color:var(--lx-wait)}
 /* ── أداة البحث والجداول ── */
 .tools{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem}
 .tools input,.tools select{padding:.45rem .8rem;border:1px solid var(--line);
@@ -170,7 +170,7 @@ a.kpi.link:hover{transform:translateY(-2px);box-shadow:0 12px 24px -16px rgba(54
 .empty-note{text-align:center;color:var(--mute);font-size:.85rem;padding:1rem}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .lens-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .7rem;border-radius:99px;
-  background:#fdf1e1;color:var(--amber);font-weight:700;font-size:.78rem;border:1px solid #f3dcc0}
+  background:var(--lx-surface-2);color:var(--amber);font-weight:700;font-size:.78rem;border:1px solid var(--lx-line)}
 .dtree-row mark{background:#fde68a;border-radius:3px;padding:0 1px}
 .cell-in{border:1px solid var(--line);border-radius:8px;padding:.35rem .6rem;font-size:.82rem;background:#fff}
 .pager{display:flex;align-items:center;justify-content:center;gap:.75rem;padding:.75rem;font-size:.82rem;color:var(--mute)}
@@ -209,19 +209,19 @@ details .inline-form{border:1px solid var(--line);border-radius:12px;padding:.8r
   pointer-events:none;transition:opacity .25s;z-index:40}
 .scrim.on{opacity:1;pointer-events:auto}
 /* ── إشعار تحميل كلمة المرور ── */
-.cred-box{background:#fffaf2;border:1px solid #f3dcc0;border-radius:14px;padding:1rem 1.1rem}
-.cred-box code{background:#f1ebe2;border-radius:6px;padding:.1rem .4rem;font-size:.9rem}
+.cred-box{background:#fffaf2;border:1px solid var(--lx-line);border-radius:14px;padding:1rem 1.1rem}
+.cred-box code{background:var(--lx-pri-soft);border-radius:6px;padding:.1rem .4rem;font-size:.9rem}
 /* ── إشعارات النظام ── */
 .sys-msg{padding:.6rem 1rem;margin:.5rem 0;border-radius:10px;font-size:.85rem;font-weight:600}
-.sys-msg.success{background:#e7f6ec;color:var(--ok)}
-.sys-msg.error{background:#fdecec;color:var(--danger)}
-.sys-msg.warning{background:#fef3c7;color:#92400e}
+.sys-msg.success{background:var(--lx-done-bg);color:var(--ok)}
+.sys-msg.error{background:var(--lx-late-bg);color:var(--danger)}
+.sys-msg.warning{background:var(--lx-wait-bg);color:var(--lx-wait)}
 .sys-msg.info{background:#e8f0ff;color:var(--in)}
 /* ── الإعدادات ── */
 .setg{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}
 .setg .card{display:flex;gap:.8rem;align-items:flex-start;cursor:pointer;
   transition:transform .15s,box-shadow .15s}
-.setg .card:hover{transform:translateY(-2px);box-shadow:0 12px 24px -16px rgba(54,32,20,.35)}
+.setg .card:hover{transform:translateY(-2px);box-shadow:0 12px 24px -16px color-mix(in srgb, var(--lx-pri) 35%, transparent)}
 .setg i{font-size:1.4rem;color:var(--amber)}.setg b{display:block;font-size:.9rem}
 .setg small{color:var(--mute);font-size:.75rem}
 .setg a.card{color:var(--ink)}
@@ -245,14 +245,14 @@ details .inline-form{border:1px solid var(--line);border-radius:12px;padding:.8r
   display:flex;align-items:center;justify-content:center;padding:1rem;
   opacity:0;pointer-events:none;transition:opacity .2s}
 .modal-bd.open{opacity:1;pointer-events:auto}
-.modal{background:#fff;border-radius:20px;box-shadow:0 24px 60px -20px rgba(54,32,20,.55);
+.modal{background:#fff;border-radius:20px;box-shadow:0 24px 60px -20px color-mix(in srgb, var(--lx-pri) 55%, transparent);
   width:min(520px,100%);max-height:calc(100vh - 2rem);overflow:auto;
   transform:translateY(16px) scale(.97);transition:transform .2s,opacity .2s;padding:1.4rem 1.5rem}
 .modal-bd.open .modal{transform:none}
 .modal h3{margin:0 0 1rem;font-size:1.1rem;display:flex;align-items:center;gap:.5rem}
 .modal .close-btn{margin-inline-start:auto;background:none;border:none;cursor:pointer;
   padding:.2rem .4rem;border-radius:8px;font-size:1.1rem;color:var(--mute);line-height:1}
-.modal .close-btn:hover{background:#f6efe5;color:var(--ink)}
+.modal .close-btn:hover{background:var(--lx-surface-2);color:var(--ink)}
 /* ── شجرة accordion للأقسام ── */
 .dtree{list-style:none;margin:0;padding:0}
 .dtree-node{margin:0}
@@ -265,7 +265,7 @@ details .inline-form{border:1px solid var(--line);border-radius:12px;padding:.8r
 .dtree-toggle.open{transform:rotate(90deg)}
 .dtree-toggle.leaf{visibility:hidden;pointer-events:none}
 .dtree-name{font-weight:700;font-size:.88rem;flex:1}
-.dtree-code{font-size:.72rem;color:var(--amber);background:#fdf1e1;border-radius:6px;padding:0 .35rem}
+.dtree-code{font-size:.72rem;color:var(--amber);background:var(--lx-surface-2);border-radius:6px;padding:0 .35rem}
 .dtree-meta{display:flex;gap:.5rem;font-size:.73rem;color:var(--mute)}
 .dtree-children{list-style:none;margin:0;
   padding-inline-start:1.65rem;
@@ -275,11 +275,11 @@ details .inline-form{border:1px solid var(--line);border-radius:12px;padding:.8r
 .dtree-children.open{max-height:3000px}
 /* المطويُّ خارج ترتيب Tab — كان التركيزُ يدخل صفوفاً لا تُرى */
 .dtree-children:not(.open){visibility:hidden}
-.dtree-row.hit{background:#fdf1e1}
+.dtree-row.hit{background:var(--lx-surface-2)}
 button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
 .dtree-row .lv-badge{width:16px;height:16px;border-radius:4px;display:grid;place-items:center;
   font-size:.6rem;font-weight:800;color:#fff;flex-shrink:0}
-.lv-badge.o{background:var(--secret)}.lv-badge.q{background:#5a3220}.lv-badge.s{background:var(--amber-2)}.lv-badge.w{background:var(--in)}
+.lv-badge.o{background:var(--secret)}.lv-badge.q{background:var(--lx-hero-b)}.lv-badge.s{background:var(--amber-2)}.lv-badge.w{background:var(--in)}
 </style>
 </head>
 <body>
@@ -360,7 +360,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
   </div>
 
   <div class="kpis">
-    <div class="kpi" style="--c:#8b4513">
+    <div class="kpi" style="--c:var(--lx-ink)">
       <i class="bi bi-diagram-3"></i>
       <div class="n" data-count="{{ department_count }}">{{ department_count }}</div>
       <div class="l">أقسام وشُعب ووحدات</div>
@@ -718,7 +718,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
               <input type="checkbox" value="1" name="{{ cell.field }}" form="assign-user-{{ row.user.pk }}"{% if cell.checked %} checked{% endif %}
                 aria-label="{{ cell.label }} — {{ row.user.username }}" title="{{ cell.title }}" style="width:16px;height:16px;cursor:pointer">
               {% elif cell.checked %}<i class="bi bi-check-lg" style="color:var(--ok)" role="img" aria-label="{{ cell.label }}"></i>
-              {% else %}<span style="color:#cfc6ba" aria-hidden="true">—</span>{% endif %}
+              {% else %}<span style="color:var(--lx-mute)" aria-hidden="true">—</span>{% endif %}
             </td>
             {% endfor %}
             <td>
@@ -878,7 +878,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
     <div class="kpi" style="--c:var(--in)"><i class="bi bi-check2-square"></i>
       <div class="n">{{ reservation_summary.used }}</div><div class="l">استُخدمت في كتاب</div>
       <div class="s">{{ reservation_summary.recycled }} أُعيد تدويرها</div></div>
-    <div class="kpi" style="--c:#8b4513"><i class="bi bi-list-ol"></i>
+    <div class="kpi" style="--c:var(--lx-ink)"><i class="bi bi-list-ol"></i>
       <div class="n">{{ reservation_summary.total }}</div><div class="l">السجلّات المعروضة</div>
       <div class="s">{{ reservation_summary.expired }} منتهية · {{ reservation_summary.voided }} ملغاة</div></div>
   </div>
@@ -1027,9 +1027,9 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
       حساب جديد داخل النطاق
       <button class="close-btn" onclick="closeModal('userModal')" aria-label="إغلاق">✕</button>
     </h3>
-    <div style="padding:.6rem .9rem;border-radius:10px;background:#fef3c7;border:1px solid #fde68a;
+    <div style="padding:.6rem .9rem;border-radius:10px;background:var(--lx-wait-bg);border:1px solid var(--lx-wait-line);
       font-size:.8rem;margin-bottom:1rem;display:flex;gap:.5rem;align-items:flex-start">
-      <i class="bi bi-key-fill" style="color:#92400e;margin-top:.1rem"></i>
+      <i class="bi bi-key-fill" style="color:var(--lx-wait);margin-top:.1rem"></i>
       <span>ستظهر كلمة المرور المؤقتة <strong>مرة واحدة فقط</strong> بعد الإنشاء — انسخها وسلّمها فوراً.</span>
     </div>
     {% if created_credentials %}
@@ -1187,7 +1187,7 @@ function openNode(d){
       <div class="kpi" style="--c:var(--in)"><div class="n">${d.a}/${d.u}</div><div class="l">حسابات نشطة</div></div>
       <div class="kpi" style="--c:var(--amber-2)"><div class="n">${d.b}</div><div class="l">كتب</div></div>
       <div class="kpi" style="--c:var(--danger)"><div class="n">${d.o}</div><div class="l">متأخّرة</div></div>
-      <div class="kpi" style="--c:#8b4513"><div class="n">${kids.length}</div><div class="l">وحدات تابعة</div></div>
+      <div class="kpi" style="--c:var(--lx-ink)"><div class="n">${kids.length}</div><div class="l">وحدات تابعة</div></div>
     </div>
     ${kids.length?`<h4 style="margin:.5rem 0 .3rem;font-size:.88rem">الوحدات التابعة</h4>
     <p style="font-size:.82rem">${kids.map(x=>esc(x.n)).join(' · ')}</p>`:''}

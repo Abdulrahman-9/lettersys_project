@@ -61,14 +61,14 @@
     <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}?v=20260705a" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'vendor/cairo/cairo.css' %}?v=20260705a">
     <!-- الهويّة الموحّدة: رموزُ الوضعين وتطبيقُها على Bootstrap في الصفحات المنقولة -->
-    <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261115-kit1">
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261115-colors1">
     <!-- Design System (موحد للألوان والمسافات) -->
     <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260927">
-    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261115-shell2">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261115-colors1">
     <!-- طبقةُ المكوّنات على الهويّة (لوحتُها الحيّة: /books/system/ui-kit/) -->
-    <link rel="stylesheet" href="{% static 'css/components.css' %}?v=20261115-kit1">
+    <link rel="stylesheet" href="{% static 'css/components.css' %}?v=20261115-colors1">
     <!-- مكوّنات واجهة محايدة اللون (مستوحاة من صفحة الدخول) — اختيارية عبر أصناف .btn-brand/.card-brand/.field-brand -->
-    <link rel="stylesheet" href="{% static 'css/brand-components.css' %}?v=20260705c">
+    <link rel="stylesheet" href="{% static 'css/brand-components.css' %}?v=20261115-colors1">
     
     <style>
       /* ضمان طباعة الألوان في جميع المتصفحات */
@@ -92,7 +92,7 @@
     </style>
     
     {# Optional per-page CSS block (for legacy templates) #}
-    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261115-kit1">{% endif %}
+    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261115-colors1">{% endif %}
     {% block extra_css %}{% endblock %}
 
     {% block extra_head %}{% endblock %}
@@ -383,7 +383,7 @@
     <script src="{% static 'logging-system.js' %}"></script>
     
     <!-- نظام إدارة الكتب - JavaScript الحديث -->
-    <script src="{% static 'app.js' %}?v=20261115-kit1"></script>
+    <script src="{% static 'app.js' %}?v=20261115-colors1"></script>
     <!-- زرّ الوضع الفاتح/الداكن — يعمل في الصفحات المنقولة وحدها (حيث يُعرَّف lxTheme) -->
     <script src="{% static 'js/theme.js' %}?v=20261111-shell1"></script>
 

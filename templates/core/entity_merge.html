@@ -4,13 +4,13 @@
 
 {% block content %}
 <style>
-  .merge-cluster { border: 1px solid rgba(111,70,40,.15); border-radius: .9rem; background: #fff; }
-  .merge-cluster.is-manual { border-color: rgba(249,168,38,.55); box-shadow: 0 .25rem .9rem rgba(249,168,38,.12); }
+  .merge-cluster { border: 1px solid color-mix(in srgb, var(--lx-pri) 15%, transparent); border-radius: .9rem; background: #fff; }
+  .merge-cluster.is-manual { border-color: color-mix(in srgb, var(--lx-pri) 55%, transparent); box-shadow: 0 .25rem .9rem color-mix(in srgb, var(--lx-pri) 12%, transparent); }
   .merge-cluster .table { font-size: .9rem; }
   .merge-key { font-family: 'JetBrains Mono', monospace; font-size: .78rem; }
   .merge-cluster tr.table-warning td { background: rgba(249,168,38,.14); }
-  .canon-star { color: #b8860b; }
-  .merge-section-title { font-weight: 800; color: var(--soft-brown, #6f4631); margin: 1rem 0 .6rem; }
+  .canon-star { color: var(--lx-mute); }
+  .merge-section-title { font-weight: 800; color: var(--soft-brown, var(--lx-ink)); margin: 1rem 0 .6rem; }
 </style>
 
 <div class="container-fluid animate-fade-in">

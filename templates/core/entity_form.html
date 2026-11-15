@@ -79,7 +79,8 @@
           {% endif %}
 
           <form method="post" novalidate class="row g-3">
-            {% with nxt=request.POST.next|default:request.GET.next %}{% if nxt %}<input type="hidden" name="next" value="{{ nxt }}">{% endif %}{% endwith %}
+            {# firstof لا يرفع إن غاب next — وسيطُ المرشِّح default:request.GET.next كان يرفع فتسقط الصفحة 500 حين تُفتح بلا ?next= (جولةُ الألوان 11-15) #}
+            {% firstof request.POST.next request.GET.next "" as nxt %}{% if nxt %}<input type="hidden" name="next" value="{{ nxt }}">{% endif %}
             {% csrf_token %}
             <div class="col-md-6 col-sm-12">
               <label class="form-label fw-semibold" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>

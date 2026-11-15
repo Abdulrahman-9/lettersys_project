@@ -75,17 +75,17 @@
   transition:background .14s, color .14s, transform .12s;
 }
 .preview-tools .pt-btn:hover,.preview-zoom .pz-btn:hover{background:var(--dc-brand-soft);color:var(--dc-brand);transform:translateY(-1px)}
-.preview-tools .pt-btn.pt-danger:hover{background:#fee2e2;color:#dc2626}
+.preview-tools .pt-btn.pt-danger:hover{background:var(--lx-late-bg);color:var(--lx-late)}
 .preview-tools .pt-sep{width:1px;height:20px;background:#e2e8f0;margin:0 2px}
 .preview-zoom .pz-label{font-size:.72rem;font-weight:800;color:#475569;min-width:42px;text-align:center}
 
 /* خطأ */
 .preview-error{
   position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:10px;color:#b91c1c;background:#fff;text-align:center;padding:16px;
+  gap:10px;color:var(--lx-late);background:#fff;text-align:center;padding:16px;
 }
 .preview-error>i{font-size:2rem}
-.preview-error .pe-download{font-size:.82rem;color:#2563eb;text-decoration:none;font-weight:700}
+.preview-error .pe-download{font-size:.82rem;color:var(--lx-prog);text-decoration:none;font-weight:700}
 
 /* المُرقّم (في رأس المعاينة) */
 .preview-pager{display:inline-flex;align-items:center;gap:6px;margin-inline-start:auto}
@@ -129,7 +129,7 @@
 
 /* بديل PDF النادر (بلا token) */
 .preview-pdf-fallback{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;color:#475569;text-align:center}
-.preview-pdf-fallback>i{font-size:3.5rem;color:#dc2626}
+.preview-pdf-fallback>i{font-size:3.5rem;color:var(--lx-late)}
 .preview-pdf-fallback .pf-name{font-weight:700;word-break:break-word}
 .preview-pdf-fallback .pf-actions{display:flex;gap:8px}
 

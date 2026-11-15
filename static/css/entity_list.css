@@ -6,10 +6,10 @@
 
 /* ── بطاقة جهة (عرض البطاقات) ── */
 .entity-card {
-  border: 1.5px solid rgba(111, 70, 40, .14);
+  border: 1.5px solid color-mix(in srgb, var(--lx-pri) 14%, transparent);
   border-radius: 16px;
   transition: all .3s cubic-bezier(.4, 0, .2, 1);
-  background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,247,236,.9));
+  background: linear-gradient(135deg, rgba(255,255,255,.96), color-mix(in srgb, var(--lx-surface-2) 90%, transparent));
   overflow: hidden;
   position: relative;
 }
@@ -18,14 +18,14 @@
   position: absolute;
   top: 0; left: 0;
   width: 4px; height: 100%;
-  background: linear-gradient(180deg, #ff9233, #ff7b18);
+  background: linear-gradient(180deg, var(--lx-pri), var(--lx-pri));
   opacity: 0;
   transition: opacity .3s;
 }
 .entity-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(217, 115, 0, .15);
-  border-color: #e0962e;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--lx-pri) 15%, transparent);
+  border-color: var(--lx-pri);
 }
 .entity-card:hover::before { opacity: 1; }
 
@@ -34,7 +34,7 @@
   border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   font-size: 1.5rem;
-  background: linear-gradient(135deg, rgba(255,146,51,.12), rgba(255,123,24,.10));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--lx-pri) 12%, transparent), color-mix(in srgb, var(--lx-pri) 10%, transparent));
   flex-shrink: 0;
 }
 .entity-type-badge {
@@ -45,73 +45,73 @@
   letter-spacing: .3px;
 }
 .entity-code {
-  background: linear-gradient(135deg, #fbeede, #f3e1c9);
+  background: linear-gradient(135deg, var(--lx-pri-soft), var(--lx-pri-soft));
   padding: .5rem 1rem;
   border-radius: 10px;
   font-family: 'JetBrains Mono', 'Courier New', monospace;
   font-weight: 600;
-  color: #6f4631;
+  color: var(--lx-ink);
   display: inline-block;
 }
 
 /* ── بطاقات الإحصاء ── */
 .stats-mini-card {
-  background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,247,236,.94));
-  border: 1.5px solid rgba(111, 70, 40, .14);
+  background: linear-gradient(135deg, rgba(255,255,255,.96), color-mix(in srgb, var(--lx-surface-2) 94%, transparent));
+  border: 1.5px solid color-mix(in srgb, var(--lx-pri) 14%, transparent);
   border-radius: 12px;
   padding: 1rem;
   transition: all .3s;
 }
 .stats-mini-card:hover {
-  border-color: #e0962e;
-  box-shadow: 0 4px 12px rgba(217, 115, 0, .12);
+  border-color: var(--lx-pri);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--lx-pri) 12%, transparent);
 }
 
 /* ── شرائح الفلترة ── */
 .filter-chip {
   padding: .5rem 1rem;
   border-radius: 20px;
-  border: 1.5px solid rgba(111, 70, 40, .18);
+  border: 1.5px solid color-mix(in srgb, var(--lx-pri) 18%, transparent);
   background: #fff;
   cursor: pointer;
   transition: all .3s;
   font-size: .875rem;
   font-weight: 500;
-  color: #6f4631;
+  color: var(--lx-ink);
   text-decoration: none;
 }
 .filter-chip:hover {
-  border-color: #e0962e;
-  background: #fff3e0;
-  color: #6f4631;
+  border-color: var(--lx-pri);
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
 }
 .filter-chip.active {
-  background: linear-gradient(135deg, #ff9233, #f97f12);
-  border-color: #f97f12;
+  background: linear-gradient(135deg, var(--lx-pri), var(--lx-pri));
+  border-color: var(--lx-pri);
   color: #fff;
 }
 
 /* ── حقل البحث ── */
 .search-box-modern {
-  border: 1.5px solid rgba(111, 70, 40, .18);
+  border: 1.5px solid color-mix(in srgb, var(--lx-pri) 18%, transparent);
   border-radius: 12px;
   padding: .75rem 1rem;
   font-size: .95rem;
   transition: all .3s;
 }
 .search-box-modern:focus {
-  border-color: #ff9233;
-  box-shadow: 0 0 0 4px rgba(255, 146, 51, .12);
+  border-color: var(--lx-pri);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--lx-pri) 12%, transparent);
   outline: none;
 }
 
 /* ── الجدول الاحترافي ── */
 .entities-table-wrapper {
   background: #fff;
-  border: 1px solid rgba(111, 70, 40, .14);
+  border: 1px solid color-mix(in srgb, var(--lx-pri) 14%, transparent);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(77, 44, 25, .05);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--lx-pri) 5%, transparent);
 }
 .entities-table {
   width: 100%;
@@ -121,13 +121,13 @@
   font-size: .92rem;
 }
 .entities-table thead th {
-  background: linear-gradient(180deg, #fff7ec, #fbeede);
-  color: #5a3922;
+  background: linear-gradient(180deg, var(--lx-surface-2), var(--lx-pri-soft));
+  color: var(--lx-ink);
   font-weight: 700;
   font-size: .82rem;
   letter-spacing: .2px;
   padding: .85rem 1rem;
-  border-bottom: 2px solid rgba(111, 70, 40, .18);
+  border-bottom: 2px solid color-mix(in srgb, var(--lx-pri) 18%, transparent);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -135,26 +135,26 @@
 }
 .entities-table tbody td {
   padding: .75rem 1rem;
-  border-bottom: 1px solid rgba(111, 70, 40, .08);
+  border-bottom: 1px solid color-mix(in srgb, var(--lx-pri) 8%, transparent);
   vertical-align: middle;
 }
-.entities-table tbody tr:hover { background: #fff7ec; }
-.entities-table tbody tr.is-selected { background: #fff3e0; }
-.entity-name-cell a { color: #362014; font-weight: 600; text-decoration: none; }
-.entity-name-cell a:hover { color: #d97300; text-decoration: underline; }
+.entities-table tbody tr:hover { background: var(--lx-surface-2); }
+.entities-table tbody tr.is-selected { background: var(--lx-surface-2); }
+.entity-name-cell a { color: var(--lx-ink); font-weight: 600; text-decoration: none; }
+.entity-name-cell a:hover { color: var(--lx-mute); text-decoration: underline; }
 .entity-code-chip {
   display: inline-flex;
   align-items: center;
   gap: .25rem;
-  background: #fbeede;
-  color: #6f4631;
+  background: var(--lx-pri-soft);
+  color: var(--lx-ink);
   padding: .18rem .55rem;
   border-radius: 6px;
   font-family: 'JetBrains Mono', 'Courier New', monospace;
   font-size: .82rem;
   font-weight: 600;
 }
-.entity-code-empty { color: #c9b79f; font-style: italic; font-size: .82rem; }
+.entity-code-empty { color: var(--lx-mute); font-style: italic; font-size: .82rem; }
 
 /* ── شارة النوع (مُشتقّة من روابط الكتب) ── */
 .etype-pill {
@@ -165,9 +165,9 @@
   font-weight: 600;
   white-space: nowrap;
 }
-.etype-pill.is-issuer   { background: #fef3c7; color: #92400e; }
+.etype-pill.is-issuer   { background: var(--lx-wait-bg); color: var(--lx-wait); }
 .etype-pill.is-receiver { background: #e0f2f1; color: #1d6b5e; }
-.etype-pill.is-both     { background: #ffe6c9; color: #92400e; }
+.etype-pill.is-both     { background: var(--lx-pri-soft); color: var(--lx-wait); }
 
 /* ── شارة عدد الكتب (أزرق=وارد / عنبري=صادر — يطابق تمييز صفحة الكتب) ── */
 .book-count-chip {
@@ -179,7 +179,7 @@
   font-size: .78rem;
   font-weight: 600;
 }
-.book-count-chip.outgoing { background: #fff1e0; color: #b45309; }
+.book-count-chip.outgoing { background: var(--lx-surface-2); color: #b45309; }
 .book-count-chip.incoming { background: #e7f0fb; color: #1e5a9e; }
 
 .entities-table .row-actions { display: flex; gap: .25rem; justify-content: flex-end; }
@@ -188,8 +188,8 @@
 /* ── مبدّل العرض (جدول / بطاقات) ── */
 .view-toggle {
   display: inline-flex;
-  background: #fbeede;
-  border: 1px solid rgba(111, 70, 40, .15);
+  background: var(--lx-pri-soft);
+  border: 1px solid color-mix(in srgb, var(--lx-pri) 15%, transparent);
   border-radius: 10px;
   padding: 3px;
 }
@@ -200,14 +200,14 @@
   border-radius: 7px;
   font-size: .85rem;
   font-weight: 600;
-  color: #9c7a63;
+  color: var(--lx-mute);
   cursor: pointer;
   transition: all .18s;
 }
 .view-toggle button.active {
   background: #fff;
-  color: #362014;
-  box-shadow: 0 1px 2px rgba(77, 44, 25, .10);
+  color: var(--lx-ink);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--lx-pri) 10%, transparent);
 }
 
 .empty-state-row td { padding: 3rem 1rem; }

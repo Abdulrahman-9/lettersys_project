@@ -1,17 +1,17 @@
 /* طبقةُ المكوّنات (11-15، قرارُ المالك: مكوّناتُنا بأنماط Tabler — لا ملفّاته؛ لوحتُها الحيّة /books/system/ui-kit/).
    الجزءُ 1: الحوارات. ما تفتحه صفحةٌ منقولة من نوافذ Bootstrap — ومنها حواريّةُ التأكيد الواحدة confirmDelete في
    app.js — على الهويّة: حافّةٌ علويّةٌ بلون القيادة وذهبه، أيقونةٌ في بلاطةٍ بلون معناها، دخولٌ بنابضٍ من تحتٍ قليلاً،
-   وخلفيّةٌ مضبّبة. النوافذُ تحت html[data-lx-page="v2"] وحدها — الصفحاتُ غيرُ المنقولة كما هي. */
+   وخلفيّةٌ مضبّبة. في كلّ الصفحات منذ جولة الألوان الشاملة (11-15)؛ ‎data-lx-legacy‎ على ‎<html>‎ يُعيد صفحةً إلى القديم. */
 /* Bootstrap يعيد إعلانَ متغيّرَي الخلفيّة على ‎.modal-backdrop‎ نفسِها — فهنا تُعلَن، لا على html (مراجعةُ فيبل 11-15) */
-html[data-lx-page="v2"] .modal-backdrop {
+html:not([data-lx-legacy]) .modal-backdrop {
   --bs-backdrop-bg: #04211e;
   --bs-backdrop-opacity: .42;
 }
 
-html[data-lx-page="v2"] .modal-backdrop.show { backdrop-filter: blur(3px); }
+html:not([data-lx-legacy]) .modal-backdrop.show { backdrop-filter: blur(3px); }
 
 /* بلا overflow: hidden — كان سيقصّ قوائمَ الإكمال والقوائمَ المنسدلة داخل النافذة (صفحةُ الإدخال فيها ذلك) */
-html[data-lx-page="v2"] .modal-content {
+html:not([data-lx-legacy]) .modal-content {
   position: relative;
   border: 1px solid var(--lx-line);
   border-radius: 18px;
@@ -20,7 +20,7 @@ html[data-lx-page="v2"] .modal-content {
   box-shadow: var(--lx-shadow-lg);
 }
 
-html[data-lx-page="v2"] .modal-content::before {
+html:not([data-lx-legacy]) .modal-content::before {
   content: '';
   position: absolute;
   inset: 0 0 auto;
@@ -30,28 +30,28 @@ html[data-lx-page="v2"] .modal-content::before {
   pointer-events: none;
 }
 
-html[data-lx-page="v2"] .modal-header { padding: 1.05rem 1.25rem .8rem; border-bottom: 1px solid var(--lx-line); }
-html[data-lx-page="v2"] .modal-title { display: flex; align-items: center; gap: .6rem; font-size: 1.02rem; font-weight: 800; line-height: 1.6; }
-html[data-lx-page="v2"] .modal-body { padding: 1rem 1.25rem; line-height: 1.9; }
-html[data-lx-page="v2"] .modal-footer { gap: .5rem; padding: .75rem 1.25rem 1.1rem; border-top: 0; }
-html[data-lx-page="v2"] .modal-footer > * { margin: 0; }
+html:not([data-lx-legacy]) .modal-header { padding: 1.05rem 1.25rem .8rem; border-bottom: 1px solid var(--lx-line); }
+html:not([data-lx-legacy]) .modal-title { display: flex; align-items: center; gap: .6rem; font-size: 1.02rem; font-weight: 800; line-height: 1.6; }
+html:not([data-lx-legacy]) .modal-body { padding: 1rem 1.25rem; line-height: 1.9; }
+html:not([data-lx-legacy]) .modal-footer { gap: .5rem; padding: .75rem 1.25rem 1.1rem; border-top: 0; }
+html:not([data-lx-legacy]) .modal-footer > * { margin: 0; }
 
 /* الدخولُ بنابضٍ من تحتٍ قليلاً (بدل انزلاق Bootstrap من فوق 50px)، والخروجُ أسرعُ منه */
 @media (prefers-reduced-motion: no-preference) {
-  html[data-lx-page="v2"] .modal.fade .modal-dialog {
+  html:not([data-lx-legacy]) .modal.fade .modal-dialog {
     opacity: 0;
     transform: translateY(14px) scale(.97);
     transition: transform var(--lx-dur-2) var(--lx-ease-out), opacity var(--lx-dur-1) ease;
   }
 
-  html[data-lx-page="v2"] .modal.show .modal-dialog {
+  html:not([data-lx-legacy]) .modal.show .modal-dialog {
     opacity: 1;
     transform: none;
     transition: transform var(--lx-dur-3) var(--lx-ease-spring), opacity var(--lx-dur-2) ease;
   }
 
   /* النقرُ خارج نافذةٍ ثابتة يهزّها هزّةَ Bootstrap — القاعدةُ أعلاه كانت تغلبها */
-  html[data-lx-page="v2"] .modal.modal-static .modal-dialog { transform: scale(1.02); }
+  html:not([data-lx-legacy]) .modal.modal-static .modal-dialog { transform: scale(1.02); }
 }
 
 /* أيقونةُ الحوار في بلاطةٍ بلون معناها: الهدّامُ أحمرُ «متأخّر»، والآمنُ تركوازيّ (في كلّ الصفحات) */
@@ -71,7 +71,7 @@ html[data-lx-page="v2"] .modal-footer > * { margin: 0; }
 
 /* «ثانويّ» Bootstrap في الداكن: رماديُّه 3.6:1 على السطح (مقيسٌ في الحوار 11-15) ⟵ حبرُ الهويّة الخافت؛
    بمتغيّرات الزرّ نفسِه فلا تتغيّر أحجامُه ولا الفاتحُ المعتمَد */
-html[data-lx-page="v2"][data-bs-theme="dark"] .btn-outline-secondary {
+html:not([data-lx-legacy])[data-bs-theme="dark"] .btn-outline-secondary {
   --bs-btn-color: var(--lx-mute);
   --bs-btn-border-color: var(--lx-line-strong);
   --bs-btn-hover-color: var(--lx-ink);

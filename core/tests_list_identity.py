@@ -107,7 +107,7 @@ class ListIdentitySourceTests(SimpleTestCase):
 
     def test_the_followup_states_follow_the_status_tokens_in_v2(self):
         css = _read('static/css/theme.css')
-        start = css.index('html[data-lx-page="v2"] {\n  --followup-pending:')
+        start = css.index('html:not([data-lx-legacy]) {\n  --followup-pending:')
         block = css[start:css.index('}', start)]
         for state, token in (('pending', 'prog'), ('due-today', 'wait'), ('overdue', 'late')):
             for suffix, part in (('', ''), ('-bg', '-bg'), ('-text', ''), ('-line', '-line')):
@@ -137,7 +137,7 @@ class ListIdentitySourceTests(SimpleTestCase):
                      for sel in m.group(1).split(',') if re.search(r'::(?:-webkit-scrollbar|selection)', sel)]
         self.assertGreaterEqual(len(selectors), 12)
         for selector in selectors:
-            self.assertTrue(selector.startswith('html[data-lx-page="v2"]'), selector)
+            self.assertTrue(selector.startswith('html:not([data-lx-legacy])'), selector)
 
 
 def _ents(*names):

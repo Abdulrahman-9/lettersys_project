@@ -53,12 +53,14 @@ class ThemeSourceGuardsTests(SimpleTestCase):
         self.assertIn("localStorage.getItem('lx-theme')", script)
         self.assertIn('beforeprint', script)
 
-    def test_bootstrap_takes_the_tokens_only_inside_the_v2_scope(self):
+    def test_bootstrap_takes_the_tokens_on_every_page_unless_opted_out(self):
+        # جولةُ الألوان الشاملة (قرارُ المالك 11-15): كانت في الصفحات المنقولة وحدها فاختلطت الألوانُ بين الصفحات.
+        # الداكنُ ما زال للمنقولة وحدها (data-bs-theme يُكتب فيها فقط)، وdata-lx-legacy يُعيد صفحةً إلى القديم.
         css = _read('static/css/theme.css')
-        root_block = css[css.index(':root {'):css.index('}', css.index(':root {'))]
-        self.assertNotIn('--bs-', root_block)
-        scoped = css[css.index('[data-lx-page="v2"] {'):]
-        self.assertIn('--bs-primary: var(--lx-pri)', scoped)
+        root_block = css[css.index(':root, [data-bs-theme="light"] {'):]
+        self.assertNotIn('--bs-', root_block[:root_block.index('}')])
+        scoped = css[css.index('html:not([data-lx-legacy]) {' + '\n' + '  --bs-body-bg'):]
+        self.assertIn('--bs-primary: var(--lx-pri)', scoped[:scoped.index('}')])
 
     def test_the_html_tag_carries_the_page_block(self):
         self.assertIn('<html lang="ar" dir="rtl"{% block html_attrs %}{% endblock %}>', _read('templates/base.html'))

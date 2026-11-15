@@ -31,17 +31,17 @@ class KitSourceTests(SimpleTestCase):
         for head in heads:
             for sel in head.split(','):
                 with self.subTest(sel=sel.strip()):
-                    self.assertTrue(sel.strip().startswith('html[data-lx-page="v2"]'))
+                    self.assertTrue(sel.strip().startswith('html:not([data-lx-legacy])'))
 
     def test_the_backdrop_tint_is_declared_where_bootstrap_reads_it(self):
         css = _read('static/css/components.css')
-        rule = css[css.index('html[data-lx-page="v2"] .modal-backdrop {'):]
+        rule = css[css.index('html:not([data-lx-legacy]) .modal-backdrop {'):]
         self.assertIn('--bs-backdrop-bg: #04211e;', rule[:rule.index('}')])
-        self.assertNotRegex(css, r'html\[data-lx-page="v2"\] \{[^}]*--bs-backdrop')
+        self.assertNotRegex(css, r'html:not\(\[data-lx-legacy\]\) \{[^}]*--bs-backdrop')
 
     def test_the_dialog_does_not_clip_its_popups(self):
         css = _read('static/css/components.css')
-        rule = css[css.index('html[data-lx-page="v2"] .modal-content {'):]
+        rule = css[css.index('html:not([data-lx-legacy]) .modal-content {'):]
         self.assertNotIn('overflow', rule[:rule.index('}')])
 
     def test_static_dialogs_keep_their_bounce(self):

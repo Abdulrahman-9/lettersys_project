@@ -20,7 +20,7 @@
   padding: 1rem 1.5rem .75rem;
   background: rgba(255,255,255,.82);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(111,70,40,.12);
+  border-bottom: 1px solid color-mix(in srgb, var(--lx-pri) 12%, transparent);
 }
 .mail-page-title {
   font-size: 1.18rem;
@@ -38,7 +38,7 @@
   gap: 0;
   padding: 0 1.25rem;
   background: rgba(255,255,255,.72);
-  border-bottom: 2px solid rgba(111,70,40,.1);
+  border-bottom: 2px solid color-mix(in srgb, var(--lx-pri) 10%, transparent);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -58,11 +58,11 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.mail-tab:hover { color: var(--warm-clay); background: rgba(248,218,192,.35); }
+.mail-tab:hover { color: var(--warm-clay); background: color-mix(in srgb, var(--lx-pri-soft) 35%, transparent); }
 .mail-tab.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
-  background: rgba(249,168,38,.07);
+  background: color-mix(in srgb, var(--lx-pri) 7%, transparent);
 }
 .mail-tab-badge {
   background: var(--accent);
@@ -125,7 +125,7 @@
 .mail-filter-bar .form-select,
 .mail-filter-bar .form-control {
   font-size: .83rem;
-  border-color: rgba(111,70,40,.2);
+  border-color: color-mix(in srgb, var(--lx-pri) 20%, transparent);
   background: rgba(255,255,255,.9);
   color: var(--deep-brown);
   border-radius: 8px;
@@ -134,7 +134,7 @@
 .mail-filter-bar .form-select:focus,
 .mail-filter-bar .form-control:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(249,168,38,.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lx-pri) 18%, transparent);
 }
 .mail-filter-bar .btn-filter {
   background: var(--warm-clay);
@@ -157,7 +157,7 @@
 }
 .mail-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .mail-table thead th {
-  background: rgba(248,218,192,.55);
+  background: color-mix(in srgb, var(--lx-pri-soft) 55%, transparent);
   color: var(--soft-brown);
   font-weight: 700;
   padding: .65rem 1rem;
@@ -166,9 +166,9 @@
 }
 .mail-table tbody tr {
   transition: background .15s;
-  border-bottom: 1px solid rgba(111,70,40,.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--lx-pri) 7%, transparent);
 }
-.mail-table tbody tr:hover { background: rgba(248,218,192,.25); }
+.mail-table tbody tr:hover { background: color-mix(in srgb, var(--lx-pri-soft) 25%, transparent); }
 .mail-table tbody td { padding: .6rem 1rem; color: var(--deep-brown); }
 
 /* ── badges الحالة ── */
@@ -182,9 +182,9 @@
 }
 .mail-status.sent    { background:#d4edda; color:#155724; }
 .mail-status.failed  { background:#f8d7da; color:#721c24; }
-.mail-status.pending { background:#fff3cd; color:#856404; }
+.mail-status.pending { background:var(--lx-pri-soft); color:var(--lx-ink); }
 .mail-status.open    { background:#cce5ff; color:#004085; }
-.mail-status.waiting { background:#fff3cd; color:#856404; }
+.mail-status.waiting { background:var(--lx-pri-soft); color:var(--lx-ink); }
 .mail-status.replied { background:#d4edda; color:#155724; }
 .mail-status.closed  { background:#e2e3e5; color:#383d41; }
 
@@ -216,7 +216,7 @@
   margin-bottom: .3rem;
 }
 .compose-input {
-  border: 1px solid rgba(111,70,40,.2);
+  border: 1px solid color-mix(in srgb, var(--lx-pri) 20%, transparent);
   border-radius: 8px;
   background: rgba(255,255,255,.9);
   color: var(--deep-brown);
@@ -227,11 +227,11 @@
 .compose-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(249,168,38,.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lx-pri) 18%, transparent);
 }
 .compose-body-editor {
   min-height: 220px;
-  border: 1px solid rgba(111,70,40,.2);
+  border: 1px solid color-mix(in srgb, var(--lx-pri) 20%, transparent);
   border-radius: 8px;
   padding: .6rem .8rem;
   font-size: .88rem;
@@ -261,8 +261,8 @@
 }
 .thread-msg.sent {
   align-self: flex-end;
-  background: rgba(249,168,38,.13);
-  border: 1px solid rgba(249,168,38,.3);
+  background: color-mix(in srgb, var(--lx-pri) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lx-pri) 30%, transparent);
 }
 .thread-msg.received {
   align-self: flex-start;
@@ -294,7 +294,7 @@
   gap: .5rem;
 }
 .settings-test-btn {
-  background: rgba(248,218,192,.6);
+  background: color-mix(in srgb, var(--lx-pri-soft) 60%, transparent);
   border: 1px solid var(--warm-clay);
   color: var(--deep-brown);
   border-radius: 8px;
@@ -341,7 +341,7 @@
   border: 1px solid var(--card-border);
   text-decoration: none;
 }
-.mail-pagination a:hover { background: rgba(248,218,192,.6); }
+.mail-pagination a:hover { background: color-mix(in srgb, var(--lx-pri-soft) 60%, transparent); }
 .mail-pagination .current {
   background: var(--warm-clay);
   color: #fff;
@@ -518,7 +518,7 @@
               <span class="mail-status {{ log.status }}">{{ log.get_status_display }}</span>
               {% if log.error_msg %}
               {# السببُ نصّاً لا خلف «⚠» بـtitle — كان لا يُرى إلّا بالتحويم (تدقيقُ نيلسن E#12) #}
-              <small class="d-block mt-1" style="color:#b91c1c;max-width:22rem;white-space:normal">{{ log.error_msg|truncatechars:160 }}</small>
+              <small class="d-block mt-1" style="color:var(--lx-late);max-width:22rem;white-space:normal">{{ log.error_msg|truncatechars:160 }}</small>
               {% endif %}
             </td>
             <td style="font-size:.78rem;color:var(--muted-brown)">{{ log.sent_at|date:"Y/m/d H:i" }}</td>
@@ -562,7 +562,7 @@
       </div>
       {% if can_sync_mail %}
       <button class="btn btn-sm" id="syncBtn"
-              style="background:rgba(248,218,192,.7);border:1px solid var(--warm-clay);border-radius:8px;font-weight:700;font-size:.82rem;color:var(--deep-brown)"
+              style="background:color-mix(in srgb, var(--lx-pri-soft) 70%, transparent);border:1px solid var(--warm-clay);border-radius:8px;font-weight:700;font-size:.82rem;color:var(--deep-brown)"
               onclick="triggerSync()">
         <i class="bi bi-arrow-repeat me-1"></i>مزامنة الآن
       </button>
@@ -670,7 +670,7 @@
         <div class="d-flex gap-2 flex-wrap">
           {% for tpl in templates %}
           <button type="button" class="btn btn-sm" onclick="loadTemplate({{ tpl.pk }}{% if book %}, {{ book.pk }}{% else %}, null{% endif %}{% if prefill.entity_id %}, {{ prefill.entity_id }}{% else %}, null{% endif %})"
-                  style="background:rgba(248,218,192,.5);border:1px solid var(--warm-clay);border-radius:8px;font-size:.8rem;font-weight:600;color:var(--deep-brown)">
+                  style="background:color-mix(in srgb, var(--lx-pri-soft) 50%, transparent);border:1px solid var(--warm-clay);border-radius:8px;font-size:.8rem;font-weight:600;color:var(--deep-brown)">
             <i class="bi bi-file-earmark-richtext me-1"></i>{{ tpl.name }}
           </button>
           {% endfor %}
@@ -794,16 +794,16 @@
     {% elif active_tab == 'settings' %}
 
     <style>
-      .mail-hint { display:block; margin-top:.3rem; font-size:.76rem; line-height:1.55; color:#6b7280; }
+      .mail-hint { display:block; margin-top:.3rem; font-size:.76rem; line-height:1.55; color:var(--lx-mute); }
       .mail-hint code { background:#f1f5f9; padding:.05rem .3rem; border-radius:4px; font-size:.92em; direction:ltr; display:inline-block; }
       .mail-guide { border:1px solid #e6ecec; border-radius:14px; padding:16px 18px; margin-bottom:20px; background:#fbfcfc; }
       .mail-guide h6 { font-weight:800; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
       .mail-guide dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:7px 12px; font-size:.83rem; }
       .mail-guide dt { font-weight:800; color:#0f766e; white-space:nowrap; direction:ltr; text-align:start; }
       .mail-guide dd { margin:0; color:#4b5563; }
-      .mail-warn { margin-top:12px; padding:11px 13px; border-radius:10px; background:#fff7ed;
-                   border:1px solid #fed7aa; color:#9a3412; font-size:.82rem; line-height:1.6; }
-      .mail-warn b { color:#7c2d12; }
+      .mail-warn { margin-top:12px; padding:11px 13px; border-radius:10px; background:var(--lx-wait-bg);
+                   border:1px solid var(--lx-wait-line); color:var(--lx-wait); font-size:.82rem; line-height:1.6; }
+      .mail-warn b { color:var(--lx-wait); }
     </style>
 
     <div class="mail-guide">
@@ -1106,7 +1106,7 @@
 <div class="modal fade" id="emailPreviewModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
     <div class="modal-content" style="border-radius:14px">
-      <div class="modal-header" style="background:rgba(248,218,192,.4);border-bottom:1px solid var(--card-border)">
+      <div class="modal-header" style="background:color-mix(in srgb, var(--lx-pri-soft) 40%, transparent);border-bottom:1px solid var(--card-border)">
         <h6 class="modal-title fw-bold" style="color:var(--deep-brown)">معاينة الإيميل</h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>

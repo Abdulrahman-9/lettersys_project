@@ -47,7 +47,7 @@
   flex:0 0 auto; width:40px; height:40px; border-radius:10px; display:flex; align-items:center;
   justify-content:center; font-size:1.25rem;
 }
-.docman-ic-pdf{background:#fdecec; color:#c0392b;}
+.docman-ic-pdf{background:var(--lx-late-bg); color:#c0392b;}
 .docman-ic-image{background:#eaf5ff; color:#1d6fb8;}
 .docman-ic-other{background:#eef1f4; color:#5b6470;}
 .docman-meta{flex:1 1 auto; min-width:0;}
