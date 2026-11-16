@@ -74,7 +74,7 @@
             {# عضويّةٌ من خانات جدول الحسابات لا يعرضها الدورُ الواحد — تُقال صراحةً لا تُخفى #}
             <div class="ae-extra" role="note">
               <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
-              <span>يملك أيضاً عضويّة {% for name in extra_memberships %}«{{ name }}»{% if not forloop.last %} و{% endif %}{% endfor %} من جدول الحسابات، فله صلاحيّاتُها مع أنّها لا تظهر في دوره أعلاه. تغييرُ دوره هنا يضبط عضويّاتِه على الدور الجديد ويُلغي استثناءاتِه؛ ولإبقاء دوره وإزالتِها أزِل خانتَها في جدول الحسابات.</span>
+              <span>يملك أيضاً عضويّة {% for name in extra_memberships %}«{{ name }}»{% if not forloop.last %} و{% endif %}{% endfor %} من جدول الحسابات، لا يعرضها دورُه أعلاه، ولم تعد تمنحه شيئاً بعد توحيد الأدوار — وأمرُ التحويل يجعل ما كانت تمنحه استثناءاتٍ باسمه أو يُسقطه. تغييرُ دوره هنا يزيلها ويُلغي استثناءاتِه؛ ولإبقاء دوره وإزالتِها أزِل خانتَها في جدول الحسابات.</span>
             </div>
             {% endif %}
             {% else %}
@@ -123,6 +123,7 @@
               <span class="ae-row-label">{{ r.label }}</span>
               {% if r.state == "locked" %}<span class="ae-badge locked"><i class="bi bi-lock-fill" aria-hidden="true"></i>مقفل</span>
               {% elif r.state == "unwired" %}<span class="ae-badge">لم يُربط بعد</span>
+              {% elif r.state == "dormant" %}<span class="ae-badge">استثناءٌ خامد — لم يُربط بعد</span>
               {% elif r.state == "added" %}<span class="ae-badge added">مضاف</span>
               {% elif r.state == "blocked" %}<span class="ae-badge blocked">محجوب</span>
               {% else %}<span class="ae-badge">من الدور</span>{% endif %}

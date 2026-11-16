@@ -181,10 +181,14 @@ class ArchivistGrantTests(TestCase):
 
         self.assertFalse(is_archivist(User.objects.get(pk=self.worker.pk)))
 
-    def test_the_two_roles_are_granted_independently(self):
-        """كتلتان لا سلسلةٌ واحدة — ومنحُ أحدهما لا يمسّ الآخر."""
-        assign_user(self.worker, by=self.root, is_controller=True, is_archivist=True)
-        assign_user(self.worker, by=self.root, is_controller=False, is_archivist=True)
+    def test_the_two_roles_are_never_held_together(self):
+        """قرارُ المالك 2026‑11‑16: «مسؤول البريد» دورٌ و«مسؤول الأرشفة» دورٌ آخر — لا يجمعهما شخص.
+
+        كان هذا الاختبارُ يثبّت العكس («كتلتان تُمنحان معاً»)، وهو مصدرُ السلطة الخفيّة."""
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            assign_user(self.worker, by=self.root, is_controller=True, is_archivist=True)
+        assign_user(self.worker, by=self.root, is_archivist=True)
 
         fresh = User.objects.get(pk=self.worker.pk)
         self.assertTrue(is_archivist(fresh))

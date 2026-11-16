@@ -249,31 +249,27 @@ def _account_context(request, target):
         if capability.locked:
             state = 'locked'
         elif key not in WIRED_CAPABILITIES:
-            state = 'unwired'
+            # استثناءٌ خامد (أمرُ التحويل، الدفعة 0): مكتوبٌ ولا حارسَ يقرؤه — لا يُعدّ «يستطيع»، ويُحذف من هنا
+            state = 'dormant' if row is not None else 'unwired'
         elif row is not None:
             state = 'added' if row.allowed else 'blocked'
         else:
             state = 'role'
         group = groups.setdefault(capability.group, {'name': capability.group, 'rows': [], 'can': 0})
+        if state == 'dormant':
+            allowed = False
         group['rows'].append({'key': key, 'label': capability.label, 'allowed': allowed, 'state': state,
-                              'editable': state in ('role', 'added', 'blocked') and role is not None})
+                              'editable': state in ('role', 'added', 'blocked', 'dormant') and role is not None})
         group['can'] += int(allowed)
-        if key in _SUMMARY_SKIP:
+        if key in _SUMMARY_SKIP or state == 'dormant':
             continue
         note = {'added': ' (استثناء)', 'blocked': ' (محجوب عنه)'}.get(state, '')
         (can if allowed else cannot).append(capability.label + note)
     for group in groups.values():
         group['total'] = len(group['rows'])
-    # عضويّةُ دورٍ لا يعرضها الدورُ الواحد (من خانات جدول الحسابات): تمنح ما لا تراه أعلاه — «سلطةٌ خفيّة»
-    # (permission_service.ROLE_FLAG_NAMES). تُعرض كما هي، ولا تُزال إلّا بحفظ دورٍ هنا.
-    from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME,
-                            ENTRY_GROUP_NAME, EXECUTOR_GROUP_NAME)
-    own = {'mail': {CONTROLLER_GROUP_NAME}, 'archivist': {ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME},
-           'entry': {ENTRY_GROUP_NAME}, 'executor': {EXECUTOR_GROUP_NAME}}.get(role, set())
-    role_groups = (CONTROLLER_GROUP_NAME, ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME, ENTRY_GROUP_NAME,
-                   EXECUTOR_GROUP_NAME)
-    extra_memberships = ([] if role is None else
-                         sorted(set(target.groups.filter(name__in=role_groups).values_list('name', flat=True)) - own))
+    # عضويّةُ دورٍ لا يعرضها الدورُ الواحد — «سلطةٌ خفيّة»؛ من المصدر الواحد (``extra_role_memberships``).
+    from core.scoping import extra_role_memberships
+    extra_memberships = [] if role is None else extra_role_memberships(target)
     exceptions = [{'key': key, 'label': CAPABILITIES[key].label if key in CAPABILITIES else key,
                    'allowed': row.allowed, 'by': row.changed_by.get_username() if row.changed_by else '',
                    'at': row.changed_at}
@@ -299,6 +295,7 @@ def _account_context(request, target):
 def _account_post(request, target):
     """فعلٌ واحدٌ لكلّ طلب؛ يعيد (رسالة، كلمة مرورٍ مؤقّتة أو None، وجهة أو None)."""
     from core.admin_service import UNSET, assign_user, delete_user, reset_department_user_password
+    from core.models import UserCapabilityOverride
     from core.permission_service import set_user_override, set_user_role
     from core.scoping import CAPABILITIES, WIRED_CAPABILITIES
 
@@ -311,7 +308,10 @@ def _account_post(request, target):
     if action == 'override':
         key = request.POST.get('key', '')
         value = {'allow': True, 'deny': False, 'reset': None}.get(request.POST.get('value'), 'bad')
-        if key not in CAPABILITIES or key not in WIRED_CAPABILITIES or value == 'bad':
+        # غيرُ الموصول لا يُعدَّل — إلّا حذفُ استثناءٍ خامدٍ قائم (أمرُ التحويل، فيبل 11-16)
+        dormant_reset = (value is None and key in CAPABILITIES
+                         and UserCapabilityOverride.objects.filter(user=target, capability=key).exists())
+        if key not in CAPABILITIES or value == 'bad' or (key not in WIRED_CAPABILITIES and not dormant_reset):
             raise ValidationError('صلاحيّةٌ لا تُعدَّل من هنا.')
         set_user_override(request, target, key, value)
         return 'حُدِّثت صلاحيّة «%s».' % CAPABILITIES[key].label, None, None

@@ -238,6 +238,13 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
             if role not in roles_for_department(profile.department):
                 raise ValidationError('دورُ «%s» لا يُسند في «%s» — غيّر الدورَ أوّلاً.' % (
                     ROLE_LABELS[role], profile.department.name if profile.department else 'بلا قسم'))
+            # قرارُ المالك 2026‑11‑16: دورٌ واحدٌ لكلّ شخص — الزائدُ استثناءٌ باسمه من محرّر الحساب.
+            from core.scoping import extra_role_memberships
+            # مديرُ النظام يملك كلَّ شيء فعضويّاتُه بلا أثر — لا يُرفض حفظُ صفّه (لقطةُ المالك 11-16: admin بأربع خانات)
+            extra = [] if user.is_superuser else extra_role_memberships(user)
+            if extra:
+                raise ValidationError('للشخص دورٌ واحد: «%s» — و«%s» زيادةٌ تُمنح استثناءً من محرّر الحساب.' % (
+                    ROLE_LABELS[role], '» و«'.join(extra)))
 
         if changes:
             _log(by, 'ASSIGN_USER', {'user': user.get_username(), **changes})

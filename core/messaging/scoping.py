@@ -19,12 +19,10 @@
 from django.db.models import Q
 
 from core.scoping import (
-    RESTRICTED_SECRET_LEVELS,
-    _live_grants_for,
-    is_mail_officer,
+    content_authorized_books,
+    has_capability,
     is_privileged,
     scope_books_for,
-    user_department_id,
 )
 
 
@@ -71,24 +69,13 @@ def scope_mail_books(qs, user):
     """الكتب التي يحقّ للمستخدم قراءة مراسلاتها دون كشف محتوى السرّيّ المحجوب."""
     if sees_all_mail(user):
         return qs
-    if not is_mail_officer(user):
+    # بمفتاح «تشغيل البريد» لا بالعضويّة (الدفعة 0): الاستثناءُ يحمل ما يحمله الدور.
+    if not has_capability(user, 'mail.operate'):
         return qs.filter(created_by=user)
-
-    department_id = user_department_id(user)
-    live_grants = _live_grants_for(user)
-    scoped = scope_books_for(user, qs)
-    restricted_content_access = (
-        Q(created_by=user)
-        | Q(department_id=department_id)
-        | Q(pk__in=live_grants.values('book_id'))
-    )
-    # (ب)5 — واجبُ أمن: لا يتجاوز نطاقَ الكتب أبداً (المنحُ الحيّةُ داخل ``scoped`` لا اتّحادٌ مع ``qs``
-    # كلّه — كان كتابٌ مُفوَّضٌ رُفعت سرّيّتُه يُخرج من خارج النطاق).
-    return scoped.filter(
-        Q(secret_level='normal')
-        | Q(secret_level__in=RESTRICTED_SECRET_LEVELS)
-        & restricted_content_access
-    )
+    # والسرّيُّ بمفتاح «فتح سرّيّ قسمه» من المصدر الواحد (``content_authorized_books``): كان الشقُّ
+    # يفترض المختصَّ أميناً، فيقرأ حاملُ استثناء «تشغيل البريد» بريدَ سرّيّ قسمه (فيبل 11-16).
+    # (ب)5 — واجبُ أمن: لا يتجاوز نطاقَ الكتب أبداً (المنحُ الحيّةُ داخل النطاق لا اتّحادٌ مع ``qs`` كلّه).
+    return content_authorized_books(scope_books_for(user, qs), user)
 
 
 def mailable_book(user, book_id):

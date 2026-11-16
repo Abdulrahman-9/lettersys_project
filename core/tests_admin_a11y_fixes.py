@@ -178,7 +178,8 @@ class HiddenAuthorityTests(TestCase):
         html = self.client.get(reverse('system_account', args=[two.pk])).content.decode('utf-8')
         self.assertIn('class="ae-extra"', html)
         self.assertIn('«%s»' % ARCHIVIST_GROUP_NAME, html)
-        self.assertIn('تغييرُ دوره هنا يضبط عضويّاتِه على الدور الجديد', html)
+        self.assertIn('لم تعد تمنحه شيئاً بعد توحيد الأدوار', html)   # الدفعة 0: الحرّاسُ تقرأ الصلاحيّة
+        self.assertIn('تغييرُ دوره هنا يزيلها ويُلغي استثناءاتِه', html)
         self.assertIn('أزِل خانتَها في جدول الحسابات', html)
         self.assertNotIn('حفظُ دورٍ هنا يزيلها', html)   # كان خطأً: حفظُ الدور نفسِه لا يغيّر شيئاً (فيبل 11-16)
 

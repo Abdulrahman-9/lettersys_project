@@ -606,6 +606,9 @@ def _user_rows(department_ids=None, actor=None):
         return ' '.join(chain)
 
     actor_is_admin = actor is not None and can_manage_accounts(actor)
+    # حاملو الاستثناءات الموجبة مرّةً واحدة لا استعلاماً لكلّ صفّ (``is_sensitive_account``، الدفعة 0)
+    from core.models import UserCapabilityOverride
+    exception_holders = set(UserCapabilityOverride.objects.filter(allowed=True).values_list('user_id', flat=True))
     rows = []
     for u in people:
         names = {g.name for g in u.groups.all()}
@@ -623,7 +626,7 @@ def _user_rows(department_ids=None, actor=None):
             'is_active': u.is_active,
             'is_admin_account': u.is_superuser,
             'must_change_password': bool(getattr(profile, 'must_change_password', False)),
-            'is_sensitive': is_sensitive_account(u, names),
+            'is_sensitive': is_sensitive_account(u, names, exception_holders),
             'job_title': getattr(profile, 'job_title', ''),
             'is_self': u.pk == getattr(actor, 'pk', None),
             # صفٌّ لا يديره الناظر يُعرض قراءةً لا نموذجاً يُرفض عند الحفظ

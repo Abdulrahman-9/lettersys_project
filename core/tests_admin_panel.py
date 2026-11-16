@@ -281,9 +281,13 @@ class DepartmentManagerScopeTests(AdminPanelTestCase):
         assign_user(self.staff, is_controller=True, by=self.manager)
         self.assertTrue(User.objects.get(pk=self.staff.pk)
                         .groups.filter(name=CONTROLLER_GROUP_NAME).exists())
-        assign_user(self.staff, is_archivist=True, by=self.manager)
-        self.assertTrue(User.objects.get(pk=self.staff.pk)
-                        .groups.filter(name=ARCHIVIST_GROUP_NAME).exists())
+        # قرارُ المالك 2026‑11‑16: دورٌ واحدٌ لكلّ شخص — الأرشفةُ فوق البريد تُرفض، والانتقالُ حفظةٌ واحدة
+        with self.assertRaises(ValidationError):
+            assign_user(self.staff, is_archivist=True, by=self.manager)
+        assign_user(self.staff, is_controller=False, is_archivist=True, by=self.manager)
+        fresh = User.objects.get(pk=self.staff.pk)
+        self.assertTrue(fresh.groups.filter(name=ARCHIVIST_GROUP_NAME).exists())
+        self.assertFalse(fresh.groups.filter(name=CONTROLLER_GROUP_NAME).exists())
         # لكنّه لا يمنح أرشيف الشركة ولا رئيس القسم
         with self.assertRaises(PermissionDenied):
             assign_user(self.staff, is_company_archivist=True, by=self.manager)

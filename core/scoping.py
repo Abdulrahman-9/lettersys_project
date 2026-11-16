@@ -710,18 +710,25 @@ def _group_names(user, group_names):
                else user.groups.values_list('name', flat=True))
 
 
-def is_sensitive_account(user, group_names=None) -> bool:
+def is_sensitive_account(user, group_names=None, exception_holders=None) -> bool:
     """حسابٌ يفتح السرّيّ أو يدير غيرَه: مديرٌ، أو أمينُ ورقِ قسمه
-    (``_department_custodian``: رئيسٌ · مختصُّ بريد · أرشيفيّ)، أو أرشيفُ الشركة.
+    (``_department_custodian``: رئيسٌ · مختصُّ بريد · أرشيفيّ)، أو أرشيفُ الشركة —
+    **أو حاملُ استثناءٍ موجب** (الدفعة 0): يملك فوق دوره، فلا يعيد رئيسُ القسم كلمتَه فيدخل بما لا يملك.
 
-    ``group_names`` من صفوفٍ مُسبقةِ الجلب — دوالُّ ``is_*`` تسأل القاعدةَ لكلّ صفّ.
+    ``group_names`` و``exception_holders`` (معرّفاتُ حاملي الاستثناء) من صفوفٍ مُسبقةِ الجلب —
+    دوالُّ ``is_*`` تسأل القاعدةَ لكلّ صفّ.
     """
+    from core.models import UserCapabilityOverride
     from core.roles import ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME
 
     if user.is_superuser or is_department_head(user):
         return True
-    return bool(_group_names(user, group_names)
-                & {CONTROLLER_GROUP_NAME, ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME})
+    if (_group_names(user, group_names)
+            & {CONTROLLER_GROUP_NAME, ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME}):
+        return True
+    if exception_holders is not None:
+        return user.pk in exception_holders
+    return UserCapabilityOverride.objects.filter(user=user, allowed=True).exists()
 
 
 def can_manage_user(by, user, *, group_names=None, managed_ids=None) -> bool:
@@ -1047,7 +1054,9 @@ WIRED_CAPABILITIES = frozenset({'book.enter', 'book.edit', 'number.reserve', 'en
 # فتُجمَّد خليّتُه هو والمنفِّذ في المصفوفة، وتبقى ممكنةً باستثناءٍ لشخصٍ بعينه.
 _FROZEN_ROLES = frozenset({ROLE_EXECUTOR, ROLE_READER})
 _FROZEN_FOR_THEM = frozenset({'book.enter', 'book.edit', 'number.reserve', 'entity.add', 'book.trash',
-                              'book.restore', 'custody.link', 'mail.send_book'})
+                              'book.restore', 'custody.link', 'mail.send_book',
+                              # الدفعة 0: صارا نطاقَ قراءة (بريدُ القسم · طاولةُ الإحالات) — لا يُفتحان لدورٍ كاملٍ من المصفوفة
+                              'mail.operate', 'desk.ledger'})
 
 
 def role_cell_frozen(key, role) -> bool:
@@ -1086,6 +1095,32 @@ def role_of(user) -> str:
     if EXECUTOR_GROUP_NAME in names:
         return ROLE_EXECUTOR
     return ROLE_READER
+
+
+def role_own_groups(role) -> frozenset:
+    """مجموعاتُ الدور التي يُشتقّ منها في ``role_of`` — رئيسُ القسم والوحدة علَمٌ لا مجموعة.
+
+    وأرشيفُ الشركة صفةٌ للأرشيفيّ (``set_user_role``) فهو من مجموعاته لا زيادةٌ عليه.
+    """
+    from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME,
+                            ENTRY_GROUP_NAME, EXECUTOR_GROUP_NAME)
+
+    return frozenset({ROLE_MAIL: {CONTROLLER_GROUP_NAME},
+                      ROLE_ARCHIVIST: {ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME},
+                      ROLE_ENTRY: {ENTRY_GROUP_NAME},
+                      ROLE_EXECUTOR: {EXECUTOR_GROUP_NAME}}.get(role, set()))
+
+
+def extra_role_memberships(user) -> list:
+    """عضويّاتُ أدوارٍ لا يعرضها الدورُ الواحد — «سلطةٌ خفيّة».
+
+    قرارُ المالك 2026‑11‑16: «مسؤول البريد» دورٌ و«مسؤول الأرشفة» دورٌ آخر — دورٌ واحدٌ لكلّ شخص،
+    والزائدُ استثناءٌ باسمه. تقرؤها الخدمةُ ثابتاً (``assign_user``) والمحرّرُ تنبيهاً والتحويلُ خطّة.
+    """
+    from core.roles import ROLE_GROUP_NAMES
+
+    held = set(user.groups.filter(name__in=set(ROLE_GROUP_NAMES.values())).values_list('name', flat=True))
+    return sorted(held - role_own_groups(role_of(user)))
 
 
 def role_capability(role, key, overrides=None) -> bool:
@@ -1158,7 +1193,9 @@ def can_edit_exception(by, target, key) -> bool:
         return False
     if is_privileged(by):
         return True
-    return role_of(by) == ROLE_HEAD and can_manage_user(by, target) and has_capability(by, key)
+    # بالدور لا بالاستثناء: رئيسٌ مُنح «تشغيل البريد» استثناءً لا يمنحه لموظّفيه (الدفعة 0، فيبل 11-16)
+    return (role_of(by) == ROLE_HEAD and can_manage_user(by, target)
+            and role_capability(ROLE_HEAD, key) and has_capability(by, key))
 
 
 def can_send_referral(book, user) -> bool:
