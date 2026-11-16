@@ -264,6 +264,16 @@ def _account_context(request, target):
         (can if allowed else cannot).append(capability.label + note)
     for group in groups.values():
         group['total'] = len(group['rows'])
+    # عضويّةُ دورٍ لا يعرضها الدورُ الواحد (من خانات جدول الحسابات): تمنح ما لا تراه أعلاه — «سلطةٌ خفيّة»
+    # (permission_service.ROLE_FLAG_NAMES). تُعرض كما هي، ولا تُزال إلّا بحفظ دورٍ هنا.
+    from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME, CONTROLLER_GROUP_NAME,
+                            ENTRY_GROUP_NAME, EXECUTOR_GROUP_NAME)
+    own = {'mail': {CONTROLLER_GROUP_NAME}, 'archivist': {ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME},
+           'entry': {ENTRY_GROUP_NAME}, 'executor': {EXECUTOR_GROUP_NAME}}.get(role, set())
+    role_groups = (CONTROLLER_GROUP_NAME, ARCHIVIST_GROUP_NAME, ARCHIVE_ALL_GROUP_NAME, ENTRY_GROUP_NAME,
+                   EXECUTOR_GROUP_NAME)
+    extra_memberships = ([] if role is None else
+                         sorted(set(target.groups.filter(name__in=role_groups).values_list('name', flat=True)) - own))
     exceptions = [{'key': key, 'label': CAPABILITIES[key].label if key in CAPABILITIES else key,
                    'allowed': row.allowed, 'by': row.changed_by.get_username() if row.changed_by else '',
                    'at': row.changed_at}
@@ -273,6 +283,7 @@ def _account_context(request, target):
     if department is not None:
         scope = 'قسم «%s»%s' % (department.name, ' وما يتبعه' if department.children.exists() else '')
     return {
+        'extra_memberships': extra_memberships,
         'target': target, 'profile': profile, 'department': department,
         'role': role, 'role_label': MATRIX_ROLES.get(role, 'مدير النظام'), 'role_options': options,
         'previews': {r: {**role_change_preview(target, r), 'label': label} for r, label in options if r != role},

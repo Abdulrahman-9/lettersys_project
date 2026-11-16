@@ -70,6 +70,13 @@
               {% for key, label in role_options %}<option value="{{ key }}"{% if key == role %} selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
             <small>اختيار الدور يملأ الصلاحيّات، ثمّ تضيف أو تحجب لهذا الشخص.</small>
+            {% if extra_memberships %}
+            {# عضويّةٌ من خانات جدول الحسابات لا يعرضها الدورُ الواحد — تُقال صراحةً لا تُخفى #}
+            <div class="ae-extra" role="note">
+              <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+              <span>يملك أيضاً عضويّة {% for name in extra_memberships %}«{{ name }}»{% if not forloop.last %} و{% endif %}{% endfor %} من جدول الحسابات، فله صلاحيّاتُها مع أنّها لا تظهر في دوره أعلاه. تغييرُ دوره هنا يضبط عضويّاتِه على الدور الجديد ويُلغي استثناءاتِه؛ ولإبقاء دوره وإزالتِها أزِل خانتَها في جدول الحسابات.</span>
+            </div>
+            {% endif %}
             {% else %}
             <div class="ae-role-select" aria-readonly="true">مدير النظام</div>
             <small>مدير النظام يستطيع كلّ شيء، ولا يُعدَّل دورُه من هنا.</small>

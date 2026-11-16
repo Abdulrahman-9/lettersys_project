@@ -314,13 +314,12 @@ def _handle(request):
         try:
             user, password = _create_department_user(request)
         except ValidationError as exc:
-            messages.error(request, exc.messages[0])
-            response = _render_panel(request, 'users', create_form_values={
-                key: request.POST.get(key, '') for key in (
-                    'department', 'username', 'first_name', 'last_name',
-                    'email', 'job_title', 'role',
-                )
-            })
+            # السببُ يُعرض داخل الحوار المعاد فتحُه لا في شريط الصفحة: الحوارُ يحبس التركيزَ (aria-modal)
+            # فلا يبلغ قارئُ الشاشة ولا لوحةُ المفاتيح ما خارجه (مراجعةُ فيبل 11-16)
+            values = {key: request.POST.get(key, '') for key in (
+                'department', 'username', 'first_name', 'last_name', 'email', 'job_title', 'role')}
+            values['error'] = exc.messages[0]
+            response = _render_panel(request, 'users', create_form_values=values)
             response['Cache-Control'] = 'no-store, private'
             return response
         except PermissionDenied as exc:
@@ -435,6 +434,8 @@ def _assign_user(request):
     # حقلٌ غائب = «لم يُغيَّر»، لا «بلا قسم» (الذي يُخرج الموظّفَ من النطاق)
     department_raw = request.POST.get('department')
 
+    from core.models import UserCapabilityOverride
+    exceptions_before = UserCapabilityOverride.objects.filter(user=user).count()
     assign_user(
         user, by=request.user,
         department=UNSET if department_raw is None else _department(department_raw),
@@ -444,6 +445,10 @@ def _assign_user(request):
         email=request.POST.get('email'),
         **roles,
     )
+    # نقلُ القسم يُلغي الاستثناءات (admin_service._cancel_exceptions) — يُقال لا يُخفى
+    cancelled = exceptions_before - UserCapabilityOverride.objects.filter(user=user).count()
+    if cancelled > 0:
+        return 'حُدِّث حساب «%s»، وأُلغيت استثناءاتُه (%d) لأنّه نُقل إلى قسمٍ آخر.' % (user.get_username(), cancelled)
     return 'حُدِّث حساب «%s».' % user.get_username()
 
 
