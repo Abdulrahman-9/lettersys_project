@@ -10,15 +10,14 @@
 هناك تعيش التوأمةُ التلقائيّة وحارسُ حلقات الشجرة وأثرُ تغيير الأدوار.
 """
 
-from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 
@@ -27,7 +26,7 @@ from core.admin_service import (UNSET, assign_user, create_department,
                                 reset_department_user_password, save_group,
                                 update_department)
 from core.logging_models import UserActivityLog
-from core.models import BookNumberReservation, Department, Entity, EntityGroup
+from core.models import Department, Entity, EntityGroup
 from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
                         CONTROLLER_GROUP_NAME, ENTRY_GROUP_NAME, EXECUTOR_GROUP_NAME)
 from core.scoping import (can_add_units, can_delete_account, can_manage_accounts, can_manage_departments,
@@ -36,12 +35,24 @@ from core.scoping import (can_add_units, can_delete_account, can_manage_accounts
                           user_department_id)
 
 TABS = ('overview', 'departments', 'users', 'groups', 'reservations', 'audit', 'settings')
-ADMIN_TABS = ('groups', 'reservations', 'audit')
+#: الدفعة 1: تبويباتٌ صار لها صفحاتُها في البرنامج (ورشةُ العناقيد · الحجوزات · سجلُّ الحركات · مركزُ الإعدادات)
+MOVED_TABS = ('groups', 'reservations', 'audit', 'settings')
+
+
+def _moved_tab_url(request, tab):
+    """وجهةُ التبويب المنقول — من قائمةٍ ثابتة، ومعاملاتُه الرقميّة وحدها تُحمل."""
+    from urllib.parse import urlencode
+
+    if tab == 'groups':
+        edit = request.GET.get('edit', '')
+        return reverse('entity_list') + '?view=groups' + (f'&edit={edit}' if edit.isdecimal() else '')
+    if tab == 'reservations':
+        query = {key: request.GET[key] for key in ('days', 'page') if request.GET.get(key, '').isdecimal()}
+        return reverse('system_reservations') + ('?' + urlencode(query) if query else '')
+    return reverse('audit_log' if tab == 'audit' else 'settings_hub')
 ADMIN_ACTIONS = ('CREATE_DEPARTMENT', 'EDIT_DEPARTMENT', 'ASSIGN_USER',
                  'CREATE_USER', 'DELETE_USER', 'CREATE_GROUP', 'EDIT_GROUP', 'DELETE_GROUP',
                  'PASSWORD_RESET', 'EDIT_SETTINGS', 'EDIT_PERMISSIONS')
-RESERVATION_REPORT_DAYS = (7, 30, 90)
-RESERVATION_REPORT_PAGE_SIZE = 50
 
 #: أعمدةُ الأدوار في جدول الحسابات بترتيبها — يظهر منها ما يمنحه الناظرُ وحدَه.
 #: (الدور، مفتاحُ الصفّ، حقلُ النموذج = وسيطُ ``assign_user``، العنوان، التلميح)
@@ -78,8 +89,11 @@ def admin_panel(request):
         raise PermissionDenied('إدارة الأقسام لمدير النظام ورئيس القسم.')
 
     tab = request.GET.get('tab')
-    tab = (tab if tab in TABS and (tab not in ADMIN_TABS or can_manage_accounts(request.user))
-           else 'overview')
+    # الدفعة 1: تبويباتٌ مكرّرة صارت صفحاتٍ في البرنامج — الرابطُ القديم يُحوَّل إليها لمن يملكها،
+    # ورئيسُ القسم (لا يملكها) يبقى على «نظرة عامة» كما كان.
+    if request.method == 'GET' and tab in MOVED_TABS and can_manage_accounts(request.user):
+        return redirect(_moved_tab_url(request, tab))
+    tab = (tab if tab in TABS and tab not in MOVED_TABS else 'overview')
 
     if request.method == 'POST':
         return _handle(request)
@@ -124,14 +138,6 @@ def _render_panel(request, tab, created_credentials=None, create_form_values=Non
         for row in department_rows
     ]
 
-    # سجلّ الحركات (سوبر أدمن فقط، آخر 40 واقعة غير مطوية)
-    audit_log = (
-        list(UserActivityLog.objects
-             .select_related('user', 'department')
-             .exclude(action__in=UserActivityLog.FOLDED_ACTIONS)
-             .order_by('-timestamp')[:40])
-        if is_superadmin else []
-    )
 
     unit_ids = Department.unit_level_ids()
     context = {
@@ -159,24 +165,16 @@ def _render_panel(request, tab, created_credentials=None, create_form_values=Non
         'user_table_columns': 5 + len(role_columns),
         'role_options': [(value, label) for value, label in ROLE_OPTIONS if value in grantable],
         'grantable_labels': [col['label'] for col in role_columns],
-        'groups': (EntityGroup.objects.prefetch_related('members').order_by('name')
-                   if is_superadmin else EntityGroup.objects.none()),
+        # الجهةُ المقابلة في نافذة «وحدة جديدة» (العناقيدُ صارت في ورشتها — الدفعة 1)
         'entities': (Entity.objects.filter(is_active=True).order_by('name')
                     if is_superadmin else Entity.objects.none()),
-        'auto_rules': EntityGroup.AUTO_RULE_CHOICES,
-        'editing': _editing_group(request) if is_superadmin else None,
-        'member_ids': _editing_member_ids(request) if is_superadmin else set(),
         'created_credentials': created_credentials,
         'create_form_values': create_form_values or {},
         'departments_data': departments_data,
-        'audit_log': audit_log,
         'health_rows': overview['health_rows'],
         'org_overdue_total': overview['overdue_total'],
         'admin_activity': overview['admin_activity'],
     }
-    # التقريرُ يُحسب في تبويبه وحدَه: أيّامُه وصفحاتُه تُعيد تحميلَ الصفحة أصلاً
-    if tab == 'reservations':
-        context.update(_reservation_report(request))
     return render(request, 'core/admin_panel.html', context)
 
 
@@ -219,92 +217,6 @@ def _overview(user, department_rows, people, department_ids):
     }
 
 
-def _reservation_report(request):
-    """ملخّصٌ للقراءة فقط: كلّ الحجوزات القائمة وسجلّات الفترة المختارة."""
-    now = timezone.now()
-    raw_days = request.GET.get('days', '')
-    days = int(raw_days) if raw_days.isdigit() and int(raw_days) in RESERVATION_REPORT_DAYS else 7
-    cutoff = now - timedelta(days=days)
-    live_statuses = (
-        BookNumberReservation.STATUS_ACTIVE,
-        BookNumberReservation.STATUS_REACTIVATED,
-    )
-    rows = (
-        BookNumberReservation.objects.filter(
-            Q(status__in=live_statuses)
-            | Q(status=BookNumberReservation.STATUS_COOLDOWN,
-                cooldown_until__gt=now)
-            | Q(assigned_at__gte=cutoff)
-            | Q(assigned_at__isnull=True, reserved_at__gte=cutoff)
-        )
-        .select_related('user', 'department')
-        .order_by('-assigned_at', '-reserved_at', '-pk')
-    )
-    status_counts = {
-        row['status']: row['total']
-        for row in rows.order_by().values('status').annotate(total=Count('pk'))
-    }
-    summary = {
-        'total': rows.count(),
-        'active': rows.filter(status__in=live_statuses, expires_at__gt=now).count(),
-        'overdue_active': rows.filter(status__in=live_statuses, expires_at__lte=now).count(),
-        'cooldown': rows.filter(status=BookNumberReservation.STATUS_COOLDOWN,
-                                cooldown_until__gt=now).count(),
-        'elapsed_cooldown': rows.filter(status=BookNumberReservation.STATUS_COOLDOWN).filter(
-            Q(cooldown_until__isnull=True) | Q(cooldown_until__lte=now)).count(),
-        'used': status_counts.get(BookNumberReservation.STATUS_USED, 0),
-        'expired': status_counts.get(BookNumberReservation.STATUS_EXPIRED, 0),
-        'voided': status_counts.get(BookNumberReservation.STATUS_VOIDED, 0),
-        'recycled': rows.filter(is_recycled=True).count(),
-    }
-
-    page_obj = Paginator(rows, RESERVATION_REPORT_PAGE_SIZE).get_page(request.GET.get('page'))
-    report_rows = []
-    for reservation in page_obj.object_list:
-        if reservation.status in live_statuses and reservation.expires_at <= now:
-            status_label = 'انتهت المهلة — بانتظار التنظيف'
-        elif reservation.status == BookNumberReservation.STATUS_COOLDOWN:
-            if reservation.cooldown_until and reservation.cooldown_until > now:
-                status_label = 'فترة السماح'
-            else:
-                status_label = 'انتهت فترة السماح — بانتظار التدوير'
-        else:
-            status_label = reservation.get_status_display()
-
-        assigned_at = reservation.assigned_at
-        age_seconds = (max(0, int((now - assigned_at).total_seconds()))
-                       if assigned_at else None)
-        if age_seconds is None:
-            age_label = 'غير متاح — حجز سابق لإضافة تتبّع الإسناد'
-        elif age_seconds < 60:
-            age_label = 'أقل من دقيقة'
-        elif age_seconds < 3600:
-            age_label = f'{age_seconds // 60} دقيقة'
-        elif age_seconds < 86400:
-            age_label = f'{age_seconds // 3600} ساعة'
-        else:
-            age_label = f'{age_seconds // 86400} يوم'
-        deadline = (reservation.cooldown_until
-                    if reservation.status == BookNumberReservation.STATUS_COOLDOWN
-                    else reservation.expires_at)
-        report_rows.append({
-            'reservation': reservation,
-            'status_label': status_label,
-            'age_label': age_label,
-            'assigned_at': timezone.localtime(assigned_at) if assigned_at else None,
-            'deadline': timezone.localtime(deadline) if deadline else None,
-        })
-
-    return {
-        'reservation_summary': summary,
-        'reservation_rows': report_rows,
-        'reservation_page': page_obj,
-        'reservation_days': days,
-        'reservation_day_options': RESERVATION_REPORT_DAYS,
-        'reservation_cutoff': timezone.localtime(cutoff),
-    }
-
-
 # ───────────────────────────── الكتابة ─────────────────────────────
 
 def _handle(request):
@@ -339,7 +251,7 @@ def _handle(request):
     if action == 'reset_user_password':
         try:
             raw_id = (request.POST.get('user_id') or '').strip()
-            target = User.objects.filter(pk=int(raw_id)).first() if raw_id.isdigit() else None
+            target = User.objects.filter(pk=int(raw_id)).first() if raw_id.isdecimal() else None
             if target is None:
                 raise ValidationError('المستخدمُ غير موجود.')
             password = reset_department_user_password(by=request.user, user=target)
@@ -388,7 +300,9 @@ def _back_to(request, tab):
     wanted = (request.POST.get('return_to') or '').strip()
     if wanted in _RETURN_TO:
         return _RETURN_TO[wanted]
-    return '/books/admin/?tab=%s' % (tab if tab in TABS else 'departments')
+    if tab == 'groups' and can_manage_accounts(request.user):   # الدفعة 1: ورشةُ العناقيد بيتُها
+        return _RETURN_TO['groups_workshop']
+    return '/books/admin/?tab=%s' % (tab if tab in TABS and tab not in MOVED_TABS else 'departments')
 
 
 def _create_department(request):
@@ -492,7 +406,7 @@ def _save_group(request):
     # HTML لا ترسل شيئاً حين لا يُحدَّد أحد، فزرُّ التعطيل — ولا حقلَ أعضاءَ فيه
     # — كان يُمرّر `[]` فتمسح `members.set([])` عضويّةَ العنقود **صامتاً**.
     # العلامةُ الصريحة تفصل الحالتين.
-    members = ([int(v) for v in request.POST.getlist('members') if v.isdigit()]
+    members = ([int(v) for v in request.POST.getlist('members') if v.isdecimal()]
                if request.POST.get('members_submitted') else None)
 
     saved = save_group(
@@ -521,20 +435,6 @@ _HANDLERS = {
     'save_group': _save_group,
     'delete_group': _delete_group,
 }
-
-
-def _editing_group(request):
-    """العنقودُ المطلوب تعديلُه عبر `?edit=<id>` — أو لا شيء."""
-    raw = (request.GET.get('edit') or '').strip()
-    if not raw.isdigit():
-        return None
-    return EntityGroup.objects.filter(pk=int(raw)).first()
-
-
-def _editing_member_ids(request):
-    """معرِّفاتُ أعضائه — لتأشير `selected` في القائمة المتعدّدة."""
-    group = _editing_group(request)
-    return set(group.members.values_list('pk', flat=True)) if group else set()
 
 
 # ───────────────────────────── القراءة ─────────────────────────────
@@ -650,11 +550,11 @@ def _user_rows(department_ids=None, actor=None):
 
 
 def _department(raw):
-    return Department.objects.filter(pk=raw).first() if raw and str(raw).isdigit() else None
+    return Department.objects.filter(pk=raw).first() if raw and str(raw).isdecimal() else None
 
 
 def _entity(raw):
-    return Entity.objects.filter(pk=raw).first() if raw and str(raw).isdigit() else None
+    return Entity.objects.filter(pk=raw).first() if raw and str(raw).isdecimal() else None
 
 
 def _flag(raw):

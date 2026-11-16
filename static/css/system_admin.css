@@ -47,7 +47,9 @@
 .side.sa-side { background: var(--lx-surface); border: 0; border-inline-end: 1px solid var(--lx-line); padding: .6rem .5rem; color: var(--lx-ink); }
 
 /* الصفحات */
-.sa-page { display: grid; gap: 1rem; color: var(--sa-ink); font-variant-numeric: tabular-nums; }
+/* مسارٌ واحدٌ بحدٍّ أدنى صفر: المسارُ الضمنيّ (auto) يتّسع لعرض أوسع جدول فتنزلق الصفحةُ كلُّها أفقيّاً على
+   الهاتف (مركزُ الأقسام 897px والحجوزات 1021px على 390px) — والجدولُ يتمرّر داخل .sa-scroll لا الصفحة */
+.sa-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; color: var(--sa-ink); font-variant-numeric: tabular-nums; }
 .sa-page a { color: var(--sa-amber); text-decoration: none; }
 .sa-page a:hover { text-decoration: underline; }
 .sa-page h1 { margin: 0; font-size: 1.45rem; font-weight: 800; }
@@ -80,7 +82,9 @@
 .sa-seg a { padding: .4rem .8rem; border-inline-start: 1px solid var(--sa-line); color: var(--sa-soft) !important; font-size: .8rem; font-weight: 700; text-decoration: none; }
 .sa-seg a:first-child { border-inline-start: 0; }
 .sa-seg a.on { background: var(--sa-tile); color: var(--sa-amber) !important; }
-.sa-scroll { overflow-x: auto; }
+/* relative: يصير الإطارُ كتلةَ احتواءٍ لما بداخله — نصٌّ مخفيٌّ بصريّاً (absolute) في خليّةٍ كان يفلت من
+   القصّ ويمدّ الصفحةَ أفقيّاً على الهاتف (مركزُ الأقسام: 797px على 390px) */
+.sa-scroll { position: relative; overflow-x: auto; }
 .sa-reg { width: 100%; border-collapse: collapse; font-size: .86rem; }
 .sa-reg th { padding: .5rem .6rem; border-bottom: 2px solid var(--sa-line); color: var(--sa-mute); font-size: .74rem; font-weight: 800; text-align: start; white-space: nowrap; vertical-align: bottom; }
 .sa-reg th small { display: block; font-weight: 600; font-size: .7rem; }
@@ -94,6 +98,8 @@
 .sa-late { color: var(--sa-bad); font-weight: 800; }
 .sa-zero { color: var(--lx-mute); }
 .sa-when { color: var(--sa-mute); font-size: .78rem; white-space: nowrap; }
+/* سجلُّ الحجوزات: خلاياه قصيرة فتبقى على سطرٍ واحد (كانت «وارد داخلي» تنكسر فيتضاعف الصفّ) — والجدولُ يتمرّر في إطاره */
+.sa-res td { white-space: nowrap; }
 .sa-empty { margin: 0; padding: .6rem 0; color: var(--sa-mute); font-size: .84rem; }
 .sa-more { display: flex; align-items: center; justify-content: space-between; margin-top: .6rem; padding: .55rem .8rem; border: 1px dashed var(--lx-line-strong); border-radius: 10px; color: var(--sa-mute); font-size: .82rem; }
 .sa-stamp { display: inline-grid; flex: none; place-items: center; min-width: 2.5rem; height: 2.5rem; padding: 0 .35rem; border: 1.5px solid var(--lx-pri); outline: 1px solid var(--lx-line-strong); outline-offset: 2px; border-radius: 50%; background: var(--lx-surface); color: var(--sa-amber); font-size: .72rem; font-weight: 800; transform: rotate(-4deg); }

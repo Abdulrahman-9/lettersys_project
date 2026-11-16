@@ -8,7 +8,7 @@
   <a class="{% if u == 'book_unified' or u == 'book_detail' or u == 'book_edit' or u == 'book_report' %}on{% endif %}" href="{% url 'book_unified' %}?tab=all"><i class="bi bi-journals" aria-hidden="true"></i><span>كلّ الكتب</span></a>
   <a class="{% if u == 'dossier_list' or u == 'dossier_detail' or u == 'dossier_report' %}on{% endif %}" href="{% url 'dossier_list' %}"><i class="bi bi-folder2-open" aria-hidden="true"></i><span>الأضابير</span></a>
   <a class="{% if u == 'entity_list' %}on{% endif %}" href="{% url 'entity_list' %}"><i class="bi bi-buildings" aria-hidden="true"></i><span>الجهات والعناقيد</span></a>
-  <a class="{% if u == 'admin_panel' and tab == 'reservations' %}on{% endif %}" href="{% url 'admin_panel' %}?tab=reservations"><i class="bi bi-list-ol" aria-hidden="true"></i><span>حجوزات الأرقام</span></a>
+  <a class="{% if u == 'system_reservations' %}on{% endif %}" href="{% url 'system_reservations' %}"{% if u == 'system_reservations' %} aria-current="page"{% endif %}><i class="bi bi-list-ol" aria-hidden="true"></i><span>حجوزات الأرقام</span></a>
   <a class="{% if u == 'trash_list' %}on{% endif %}" href="{% url 'trash_list' %}"><i class="bi bi-trash3" aria-hidden="true"></i><span>السلّة</span></a>
 
   <div class="sa-nav-group">الرقابة</div>

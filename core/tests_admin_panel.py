@@ -575,15 +575,19 @@ class MergedPanelTests(AdminPanelTestCase):
         self.assertIn('no-store', self._get(self.root)['Cache-Control'])
 
     def test_admin_tabs_fall_back_to_overview_for_a_head(self):
-        for tab in ('groups', 'reservations', 'audit'):
+        # الدفعة 1: لمدير النظام صارت صفحاتٍ في البرنامج (تحويل)، ورئيسُ القسم يبقى على «نظرة عامة»
+        for tab in ('groups', 'reservations', 'audit', 'settings'):
             with self.subTest(tab=tab):
                 self.assertEqual(self._get(self.manager, tab=tab).context['tab'], 'overview')
-                self.assertEqual(self._get(self.root, tab=tab).context['tab'], tab)
+                self.client.force_login(self.root)
+                self.assertEqual(self.client.get('/books/admin/', {'tab': tab}).status_code, 302)
         self.assertNotContains(self._get(self.manager), '?tab=reservations')
 
-    def test_the_reservation_report_is_computed_in_its_tab_only(self):
-        self.assertIn('reservation_summary', self._get(self.root, tab='reservations').context)
-        self.assertNotIn('reservation_summary', self._get(self.root, tab='users').context)
+    def test_the_panel_no_longer_computes_the_reservation_report(self):
+        # الدفعة 1: التقريرُ في صفحته (system_reservations) — اللوحةُ لا تحسبه في أيّ تبويب
+        for tab in ('overview', 'users', 'departments'):
+            with self.subTest(tab=tab):
+                self.assertNotIn('reservation_summary', self._get(self.root, tab=tab).context)
 
     def test_overdue_per_department_stays_inside_the_scope(self):
         from datetime import timedelta
@@ -696,18 +700,20 @@ class MergedPanelTests(AdminPanelTestCase):
         self.assertFalse(rows[archive_all.pk]['can_edit'])
         self.assertFalse(rows[self.manager.pk]['can_edit'])
 
-    def test_settings_cards_open_real_pages(self):
-        """رابطٌ ظاهرٌ = صفحةٌ تُفتح — والرئيسُ لا يرى بطاقاتِ إعدادات النظام."""
+    def test_settings_lead_to_the_real_hub(self):
+        """الدفعة 1: بطاقاتُ «إعدادات النظام» كانت نسخةً من مركز الإعدادات — الرابطُ إليه مباشرةً،
+        ورابطٌ ظاهرٌ = صفحةٌ تُفتح؛ والرئيسُ لا يرى الإعدادات."""
         from django.urls import reverse
 
-        names = ('sequence_settings', 'entity_list', 'network_settings', 'settings_hub')
-        body = self._get(self.root, tab='settings').content.decode('utf-8')
-        for name in names:
+        body = self._get(self.root).content.decode('utf-8')
+        for name in ('settings_hub', 'audit_log', 'system_reservations'):
             with self.subTest(page=name):
                 self.assertIn(f'href="{reverse(name)}"', body)
                 self.assertEqual(self.client.get(reverse(name)).status_code, 200)
-        head_body = self._get(self.manager, tab='settings').content.decode('utf-8')
-        self.assertNotIn(f'href="{reverse("sequence_settings")}"', head_body)
+        self.client.force_login(self.root)
+        self.assertEqual(self.client.get('/books/admin/', {'tab': 'settings'})['Location'], reverse('settings_hub'))
+        head_body = self._get(self.manager).content.decode('utf-8')
+        self.assertNotIn(f'href="{reverse("settings_hub")}"', head_body)
 
     def test_the_level_comes_from_the_name_not_the_depth(self):
         """الشجرةُ الحيّة: «مكتب المدير العام» جذرٌ و«قسم المتابعة» تحته — العمقُ سمّاه شعبة."""

@@ -59,15 +59,17 @@ class GroupsWorkshopTests(TestCase):
         self.assertEqual(res['Location'], '/books/entities/?view=groups')
         self.assertTrue(EntityGroup.objects.filter(name='عنقودٌ جديد').exists())
 
-    def test_an_unknown_return_target_falls_back_to_the_panel(self):
-        """`return_to` قائمةٌ بيضاء لا عنوانٌ حرّ — العنوانُ الحرّ تحويلٌ مفتوح."""
+    def test_an_unknown_return_target_falls_back_to_the_workshop(self):
+        """`return_to` قائمةٌ بيضاء لا عنوانٌ حرّ — العنوانُ الحرّ تحويلٌ مفتوح.
+
+        والرجوعُ الافتراضيّ للعناقيد ورشتُها (الدفعة 1) — لا تبويبٌ يُحوَّل إليها."""
         res = self.client.post(reverse('admin_panel'), {
             'action': 'save_group', 'tab': 'groups',
             'return_to': 'https://evil.example/x',
             'name': 'عنقودٌ آخر', 'auto_rule': '', 'members_submitted': '1',
         })
 
-        self.assertEqual(res['Location'], '/books/admin/?tab=groups')
+        self.assertEqual(res['Location'], '/books/entities/?view=groups')
 
     def test_a_used_group_shows_as_undeletable(self):
         Book.objects.create(kind='outgoing_internal', title='تعميم',
@@ -92,7 +94,11 @@ class GroupsWorkshopTests(TestCase):
         self.assertContains(res, 'لا أعضاء بعد')
 
     def test_the_admin_panel_links_here_instead_of_duplicating(self):
-        res = self.client.get(reverse('admin_panel'), {'tab': 'groups'})
+        # الدفعة 1: التبويبُ القديم يُحوَّل إلى الورشة، واللوحةُ تربطها ولا تحمل نموذجَها
+        old = self.client.get(reverse('admin_panel'), {'tab': 'groups'})
+        self.assertEqual(old['Location'], reverse('entity_list') + '?view=groups')
+
+        res = self.client.get(reverse('admin_panel'))
 
         self.assertContains(res, 'view=groups')
         self.assertNotContains(res, 'grp-members')

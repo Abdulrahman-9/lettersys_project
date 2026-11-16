@@ -6,16 +6,20 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Max
+from datetime import timedelta
+
+from django.core.paginator import Paginator
+from django.db.models import Count, Max, Q
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_http_methods
 
 from core import permission_service, system_centre, system_ops
 from core.logging_models import UserActivityLog
-from core.models import Book, BookReferral, BookSequence, Department, UserProfile
+from core.models import Book, BookNumberReservation, BookReferral, BookSequence, Department, UserProfile
 from core.roles import get_user_role
 from core.scoping import (CAPABILITIES, WIRED_CAPABILITIES, can_enter_for, can_use_system_admin, secret_openers,
                           subtree_ids)
@@ -51,7 +55,7 @@ def system_admin_required(view):
 @system_admin_required
 def system_centre_view(request):
     go = (request.GET.get('go') or '').strip()
-    if go.isdigit() and Department.objects.filter(pk=go).exists():
+    if go.isdecimal() and Department.objects.filter(pk=go).exists():
         return redirect('system_department', pk=int(go))
 
     now = timezone.localtime()
@@ -144,6 +148,111 @@ def _parse_changes(values):
             return None
         changes[cell] = parts[2] == '1'
     return changes
+
+
+#: تقريرُ الحجوزات (الدفعة 1: كان تبويباً في لوحة الإدارة المستقلّة)
+RESERVATION_REPORT_DAYS = (7, 30, 90)
+RESERVATION_REPORT_PAGE_SIZE = 50
+
+
+def _reservation_report(request):
+    """ملخّصٌ للقراءة فقط: كلّ الحجوزات القائمة وسجلّات الفترة المختارة."""
+    now = timezone.now()
+    raw_days = request.GET.get('days', '')
+    # isdecimal لا isdigit: «²» رقمٌ عند isdigit ويُسقط int() بخطأ 500
+    days = int(raw_days) if raw_days.isdecimal() and int(raw_days) in RESERVATION_REPORT_DAYS else 7
+    cutoff = now - timedelta(days=days)
+    live_statuses = (
+        BookNumberReservation.STATUS_ACTIVE,
+        BookNumberReservation.STATUS_REACTIVATED,
+    )
+    rows = (
+        BookNumberReservation.objects.filter(
+            Q(status__in=live_statuses)
+            | Q(status=BookNumberReservation.STATUS_COOLDOWN,
+                cooldown_until__gt=now)
+            | Q(assigned_at__gte=cutoff)
+            | Q(assigned_at__isnull=True, reserved_at__gte=cutoff)
+        )
+        .select_related('user', 'department')
+        .order_by('-assigned_at', '-reserved_at', '-pk')
+    )
+    status_counts = {
+        row['status']: row['total']
+        for row in rows.order_by().values('status').annotate(total=Count('pk'))
+    }
+    summary = {
+        'total': rows.count(),
+        'active': rows.filter(status__in=live_statuses, expires_at__gt=now).count(),
+        'overdue_active': rows.filter(status__in=live_statuses, expires_at__lte=now).count(),
+        'cooldown': rows.filter(status=BookNumberReservation.STATUS_COOLDOWN,
+                                cooldown_until__gt=now).count(),
+        'elapsed_cooldown': rows.filter(status=BookNumberReservation.STATUS_COOLDOWN).filter(
+            Q(cooldown_until__isnull=True) | Q(cooldown_until__lte=now)).count(),
+        'used': status_counts.get(BookNumberReservation.STATUS_USED, 0),
+        'expired': status_counts.get(BookNumberReservation.STATUS_EXPIRED, 0),
+        'voided': status_counts.get(BookNumberReservation.STATUS_VOIDED, 0),
+        'recycled': rows.filter(is_recycled=True).count(),
+    }
+
+    page_obj = Paginator(rows, RESERVATION_REPORT_PAGE_SIZE).get_page(request.GET.get('page'))
+    report_rows = []
+    for reservation in page_obj.object_list:
+        # «فائت» = حجزٌ تجاوز موعدَه ولم يُنظَّف بعد — نبرتُه تُقرَّر هنا لا من نصّ التسمية
+        stale = False
+        if reservation.status in live_statuses and reservation.expires_at <= now:
+            status_label, stale = 'انتهت المهلة — بانتظار التنظيف', True
+        elif reservation.status == BookNumberReservation.STATUS_COOLDOWN:
+            if reservation.cooldown_until and reservation.cooldown_until > now:
+                status_label = 'فترة السماح'
+            else:
+                status_label, stale = 'انتهت فترة السماح — بانتظار التدوير', True
+        else:
+            status_label = reservation.get_status_display()
+
+        assigned_at = reservation.assigned_at
+        age_seconds = (max(0, int((now - assigned_at).total_seconds()))
+                       if assigned_at else None)
+        if age_seconds is None:
+            age_label = 'غير متاح'   # يُشرح مرّةً تحت الجدول (has_legacy) لا في كلّ صفّ
+        elif age_seconds < 60:
+            age_label = 'أقل من دقيقة'
+        elif age_seconds < 3600:
+            age_label = f'{age_seconds // 60} دقيقة'
+        elif age_seconds < 86400:
+            age_label = f'{age_seconds // 3600} ساعة'
+        else:
+            age_label = f'{age_seconds // 86400} يوم'
+        deadline = (reservation.cooldown_until
+                    if reservation.status == BookNumberReservation.STATUS_COOLDOWN
+                    else reservation.expires_at)
+        report_rows.append({
+            'reservation': reservation,
+            'legacy': age_seconds is None,
+            'status_label': status_label,
+            'stale': stale,
+            'age_label': age_label,
+            'assigned_at': timezone.localtime(assigned_at) if assigned_at else None,
+            'deadline': timezone.localtime(deadline) if deadline else None,
+        })
+
+    return {
+        'reservation_summary': summary,
+        'reservation_rows': report_rows,
+        'reservation_has_legacy': any(row['legacy'] for row in report_rows),
+        'reservation_page': page_obj,
+        'reservation_days': days,
+        'reservation_day_options': RESERVATION_REPORT_DAYS,
+        'reservation_cutoff': timezone.localtime(cutoff),
+    }
+
+
+@never_cache   # أسماءُ المستخدمين وأعمارُ حجوزاتهم — لا تبقى في ذاكرة المتصفّح (كانت اللوحةُ كذلك)
+@system_admin_required
+@require_GET
+def system_reservations_view(request):
+    """حجوزاتُ الأرقام — صفحةٌ في إطار البرنامج للقراءة فقط (الدفعة 1)."""
+    return render(request, 'core/system_admin/reservations.html', _reservation_report(request))
 
 
 @require_http_methods(['GET', 'POST'])
@@ -324,7 +433,7 @@ def _account_post(request, target):
         return 'حُذف حساب «%s».' % username, None, f"{reverse('admin_panel')}?tab=users"
     if action == 'save':
         raw = (request.POST.get('department') or '').strip()
-        department = Department.objects.filter(pk=raw).first() if raw.isdigit() else None
+        department = Department.objects.filter(pk=raw).first() if raw.isdecimal() else None
         current = getattr(getattr(target, 'profile', None), 'department', None)
         if department != current and request.POST.get('confirm_department') != '1':
             raise ValidationError('أكّد تغيير القسم — يُلغي استثناءاتِ الحساب.')
@@ -416,7 +525,7 @@ def system_account_new_view(request):
         values = {key: (request.POST.get(key) or '').strip()
                   for key in ('name', 'username', 'department', 'job_title', 'role')}
         raw = values['department']
-        department = next((d for d in departments if raw.isdigit() and d.pk == int(raw)), None)
+        department = next((d for d in departments if raw.isdecimal() and d.pk == int(raw)), None)
         try:
             if department is None:
                 raise _VE('اختر قسمَ الحساب.')

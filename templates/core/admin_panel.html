@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}">
 {# رموزُ الهويّة: الشريطان هنا هما شريطا البرنامج نفسُهما (11-15) #}
 <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261115-colors1">
-{% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261115-standalone1">{% endif %}
+{% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261116-batch1">{% endif %}
 <style>
 @font-face{font-family:Cairo;font-weight:200 1000;font-display:swap;
   src:url("{% static 'vendor/cairo/cairo-v31-SLXVc1nY6HkvangtZmpQdkhzfH5lkSscRiyS.woff2' %}") format("woff2")}
@@ -343,13 +343,8 @@ tr.is-dirty td{background:var(--lx-wait-bg)}
       <a href="?tab=users" data-v="acc" {% if tab == 'users' %}class="on" aria-current="page"{% endif %}>
         <i class="bi bi-people-fill"></i>الحسابات والأدوار<em>{{ staff_count }}</em>
       </a>
-      {% if is_superadmin %}
-      <a href="?tab=groups" data-v="ent" {% if tab == 'groups' %}class="on" aria-current="page"{% endif %}><i class="bi bi-buildings"></i>الجهات والعناقيد</a>
-      {# التقريرُ يُحسب في تبويبه — فالرابطُ تحميلٌ كامل حين لا يكون عرضُه في الصفحة #}
-      <a href="?tab=reservations" data-v="res" {% if tab == 'reservations' %}class="on" aria-current="page"{% endif %}><i class="bi bi-list-ol"></i>حجوزات الأرقام</a>
-      <a href="?tab=audit" data-v="aud" {% if tab == 'audit' %}class="on" aria-current="page"{% endif %}><i class="bi bi-clock-history"></i>سجلّ الحركات</a>
-      {% endif %}
-      <a href="?tab=settings" data-v="set" {% if tab == 'settings' %}class="on" aria-current="page"{% endif %}><i class="bi bi-sliders2"></i>إعدادات النظام</a>
+      {% comment %}الدفعة 1: هذا الشريطُ لرئيس القسم وحده — مديرُ النظام يرى شريطَ النظام (فيه الحجوزاتُ والسجلُّ
+         والإعداداتُ وورشةُ العناقيد صفحاتٍ لا تبويبات)، ووسيطُ تغيير كلمة المرور يمنع ما سواه{% endcomment %}
     </div>
   </nav>
   {% endif %}
@@ -364,7 +359,7 @@ tr.is-dirty td{background:var(--lx-wait-bg)}
     <div class="ph">
       <div><h1>مركز إدارة النظام</h1><p>إشراف شامل على الهيكل والحسابات والصلاحيات.</p></div>
       <span class="sp"></span>
-      {% if is_superadmin %}<button class="btn" onclick="go('aud')"><i class="bi bi-clock-history"></i>سجلّ الحركات</button>{% endif %}
+      {% if is_superadmin %}<a class="btn" href="{% url 'audit_log' %}"><i class="bi bi-clock-history"></i>سجلّ الحركات</a>{% endif %}
       {% if can_shape_tree %}<button class="btn pri" onclick="go('dep')"><i class="bi bi-plus-lg"></i>قسم جديد</button>{% endif %}
     </div>
   </div>
@@ -458,9 +453,9 @@ tr.is-dirty td{background:var(--lx-wait-bg)}
       <button onclick="go('acc')"><i class="bi bi-person-badge"></i><b>إسناد دور</b><small>{{ grantable_labels|join:" · " }}</small></button>
       {% if is_superadmin %}
       <a href="{% url 'entity_list' %}?view=groups"><i class="bi bi-collection"></i><b>ورشة العناقيد</b><small>تجميع الجهات المتشابهة</small></a>
-      <button onclick="go('aud')"><i class="bi bi-search"></i><b>تتبّع مستخدم</b><small>كل حركاته عبر الأقسام</small></button>
+      <a href="{% url 'audit_log' %}"><i class="bi bi-search"></i><b>تتبّع مستخدم</b><small>كل حركاته عبر الأقسام</small></a>
+      <a href="{% url 'settings_hub' %}"><i class="bi bi-sliders2"></i><b>إعدادات النظام</b><small>أرقام · نسخ احتياطي · أمان</small></a>
       {% endif %}
-      <button onclick="go('set')"><i class="bi bi-sliders2"></i><b>إعدادات النظام</b><small>أرقام · نسخ احتياطي · أمان</small></button>
     </div>
   </section>
 </section>
@@ -804,231 +799,6 @@ tr.is-dirty td{background:var(--lx-wait-bg)}
 </section>
 
 
-{# ════════════════ الجهات والعناقيد ════════════════ #}
-<section class="view {% if tab == 'groups' %}on{% endif %}" id="ent">
-  <div>
-    <div class="crumb">إدارة النظام / الجهات والعناقيد</div>
-    <div class="ph"><div><h1>الجهات والعناقيد</h1><p>الإنشاء والتعديل الكاملان في ورشة الجهات.</p></div></div>
-  </div>
-  <div class="card">
-    <div class="hd">
-      <h2>العناقيد</h2>
-      <a class="btn" href="{% url 'entity_list' %}?view=groups"><i class="bi bi-box-arrow-up-left"></i>ورشة العناقيد</a>
-    </div>
-    <div class="tbl">
-      <table>
-        <thead><tr><th>العنقود</th><th>النوع</th><th>أعضاء</th><th style="width:12rem">الإجراءات</th></tr></thead>
-        <tbody>
-          {% for g in groups %}
-          <tr{% if not g.is_active %} class="is-inactive"{% endif %}>
-            <td style="font-weight:600">{{ g.name }}</td>
-            <td>{% if g.auto_rule %}<span class="badge b">{{ g.get_auto_rule_display }}</span>{% else %}<span style="color:var(--mute)">ثابتة</span>{% endif %}</td>
-            <td>{{ g.resolved_members.count }}</td>
-            <td>
-              <form method="post" style="display:inline">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="save_group">
-                <input type="hidden" name="tab" value="groups">
-                <input type="hidden" name="id" value="{{ g.pk }}">
-                <input type="hidden" name="name" value="{{ g.name }}">
-                <input type="hidden" name="auto_rule" value="{{ g.auto_rule }}">
-                <input type="hidden" name="is_active" value="{% if g.is_active %}0{% else %}1{% endif %}">
-                <button type="submit" class="btn sm">{% if g.is_active %}تعطيل{% else %}تفعيل{% endif %}</button>
-              </form>
-              <a class="btn sm" href="{% url 'entity_list' %}?view=groups&edit={{ g.pk }}">تعديل</a>
-              {% if not g.books.exists %}
-              <form method="post" style="display:inline" data-confirm="حذف العنقود «{{ g.name }}» نهائياً؟" data-confirm-ok="احذف">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="delete_group">
-                <input type="hidden" name="tab" value="groups">
-                <input type="hidden" name="id" value="{{ g.pk }}">
-                <button type="submit" class="btn sm danger">حذف</button>
-              </form>
-              {% else %}<span style="font-size:.72rem;color:var(--mute)">لا يُحذف</span>{% endif %}
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="4" style="text-align:center;color:var(--mute);padding:2rem">لا عناقيد بعد. <a href="{% url 'entity_list' %}?view=groups" style="color:var(--amber)">أنشئ من الورشة</a>.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-
-{# ════════════════ حجوزات الأرقام (تُحسب في تبويبها وحدَه) ════════════════ #}
-{% if tab == 'reservations' %}
-<section class="view on" id="res" aria-labelledby="res-h">
-  <div>
-    <div class="crumb">إدارة النظام / حجوزات الأرقام</div>
-    <div class="ph">
-      <div><h1 id="res-h">متابعة الحجوزات</h1>
-        <p>الحجوزاتُ القائمة كلُّها، وسجلُّ آخر {{ reservation_days }} يوماً. للقراءة فقط — لا يغيّر رقماً ولا حالة.</p></div>
-      <span class="sp"></span>
-      <form method="get" class="tools" style="margin:0">
-        <input type="hidden" name="tab" value="reservations">
-        <label for="reservation-days" style="font-size:.8rem;font-weight:700">الفترة</label>
-        <select id="reservation-days" name="days">
-          {% for option in reservation_day_options %}
-          <option value="{{ option }}"{% if reservation_days == option %} selected{% endif %}>{{ option }} يوماً</option>
-          {% endfor %}
-        </select>
-        <button type="submit" class="btn sm">عرض</button>
-      </form>
-    </div>
-  </div>
-
-  <div class="kpis">
-    <div class="kpi" style="--c:var(--ok)"><i class="bi bi-hourglass-split"></i>
-      <div class="n">{{ reservation_summary.active }}</div><div class="l">نشط ضمن المهلة</div></div>
-    <div class="kpi" style="--c:var(--danger)"><i class="bi bi-exclamation-octagon"></i>
-      <div class="n">{{ reservation_summary.overdue_active }}</div><div class="l">تجاوز المهلة</div><div class="s">بانتظار التنظيف</div></div>
-    <div class="kpi" style="--c:var(--amber-2)"><i class="bi bi-pause-circle"></i>
-      <div class="n">{{ reservation_summary.cooldown }}</div><div class="l">ضمن فترة السماح</div>
-      <div class="s">{{ reservation_summary.elapsed_cooldown }} انتهى سماحُها</div></div>
-    <div class="kpi" style="--c:var(--in)"><i class="bi bi-check2-square"></i>
-      <div class="n">{{ reservation_summary.used }}</div><div class="l">استُخدمت في كتاب</div>
-      <div class="s">{{ reservation_summary.recycled }} أُعيد تدويرها</div></div>
-    <div class="kpi" style="--c:var(--lx-ink)"><i class="bi bi-list-ol"></i>
-      <div class="n">{{ reservation_summary.total }}</div><div class="l">السجلّات المعروضة</div>
-      <div class="s">{{ reservation_summary.expired }} منتهية · {{ reservation_summary.voided }} ملغاة</div></div>
-  </div>
-
-  <div class="card" style="padding:0">
-    <div class="tbl">
-      <table>
-        <thead>
-          <tr>
-            <th>الرقم</th><th>المستخدم</th><th>القسم</th><th>النوع</th><th>الحالة</th>
-            <th>عمر الإسناد</th><th>أُسند</th><th>آخر نبضة</th><th>المهلة</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in reservation_rows %}
-          <tr>
-            <td dir="ltr" style="font-weight:700;font-variant-numeric:tabular-nums;text-align:end">{{ row.reservation.formatted }}{% if row.reservation.is_recycled %} <span class="badge b">مُدوَّر</span>{% endif %}</td>
-            <td>{{ row.reservation.user.get_username }}</td>
-            <td>{{ row.reservation.department.name|default:'—' }}</td>
-            <td>{{ row.reservation.get_kind_display }}</td>
-            <td><span class="badge{% if 'انتهت' in row.status_label %} warn{% endif %}">{{ row.status_label }}</span></td>
-            <td style="white-space:nowrap">{{ row.age_label }}</td>
-            <td style="white-space:nowrap;font-variant-numeric:tabular-nums">{{ row.assigned_at|date:'Y-m-d H:i'|default:'—' }}</td>
-            <td style="white-space:nowrap;font-variant-numeric:tabular-nums">{{ row.reservation.last_heartbeat|date:'Y-m-d H:i'|default:'—' }}</td>
-            <td style="white-space:nowrap;font-variant-numeric:tabular-nums">{{ row.deadline|date:'Y-m-d H:i'|default:'—' }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="9" style="text-align:center;color:var(--mute);padding:2rem">لا حجوزات قائمة ولا سجلّات في هذه الفترة.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% if reservation_page.paginator.num_pages > 1 %}
-    <nav class="pager" aria-label="صفحات الحجوزات">
-      {% if reservation_page.has_previous %}<a class="btn sm" href="?tab=reservations&amp;days={{ reservation_days }}&amp;page={{ reservation_page.previous_page_number }}">السابقة</a>{% endif %}
-      <span aria-live="polite">صفحة {{ reservation_page.number }} من {{ reservation_page.paginator.num_pages }}</span>
-      {% if reservation_page.has_next %}<a class="btn sm" href="?tab=reservations&amp;days={{ reservation_days }}&amp;page={{ reservation_page.next_page_number }}">التالية</a>{% endif %}
-    </nav>
-    {% endif %}
-  </div>
-</section>
-{% endif %}
-
-
-{# ════════════════ سجلّ الحركات ════════════════ #}
-{% if is_superadmin %}
-<section class="view {% if tab == 'audit' %}on{% endif %}" id="aud">
-  <div>
-    <div class="crumb">إدارة النظام / سجلّ الحركات</div>
-    <div class="ph">
-      <div><h1>سجلّ الحركات</h1><p>جميع الأقسام · آخر 40 واقعة إدارية.</p></div>
-    </div>
-  </div>
-  <div class="card" style="padding:0">
-    <div style="padding:.75rem 1rem">
-      <div class="tools">
-        <input id="aud-q" placeholder="ابحث باسم المستخدم أو الإجراء…" style="min-width:240px">
-      </div>
-    </div>
-    <div class="tbl">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:7rem">الوقت</th>
-            <th>المستخدم</th>
-            <th style="width:8rem">القسم</th>
-            <th>الإجراء</th>
-          </tr>
-        </thead>
-        <tbody id="aud-tbody">
-          {% for entry in audit_log %}
-          <tr>
-            <td style="font-variant-numeric:tabular-nums;font-size:.78rem;color:var(--mute)">
-              {{ entry.timestamp|date:"m/d H:i" }}
-            </td>
-            <td>
-              <span style="font-weight:600">{{ entry.user.get_full_name|default:entry.username_snapshot|default:"مجهول" }}</span>
-              {% if entry.user %}<div style="font-size:.74rem;color:var(--mute)">{{ entry.user.username }}</div>{% endif %}
-            </td>
-            <td><span style="font-size:.8rem">{{ entry.department.code|default:"—" }}</span></td>
-            <td>
-              <span class="badge {% if 'CREATE' in entry.action %}ok{% elif 'FAILED' in entry.action or 'DELETE' in entry.action or entry.action == 'PASSWORD_RESET' %}off{% elif 'SECRET' in entry.action %}v{% else %}b{% endif %}">
-                {{ entry.get_action_display }}
-              </span>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="4" style="text-align:center;color:var(--mute);padding:2rem">لا سجلّات بعد.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-{% endif %}
-
-
-{# ════════════════ إعدادات النظام ════════════════ #}
-<section class="view {% if tab == 'settings' %}on{% endif %}" id="set">
-  <div>
-    <div class="crumb">إدارة النظام / إعدادات النظام</div>
-    <div class="ph"><div><h1>إعدادات النظام</h1><p>بوّابة لمحاور الإعداد.</p></div></div>
-  </div>
-  {# كلُّ بطاقةٍ تفتح شيئاً — بوّاباتُها من nav_gates نفسِها التي تحرس صفحاتِها #}
-  <div class="setg">
-    <a class="card" href="?tab=departments" data-v="dep">
-      <i class="bi bi-diagram-3"></i>
-      <div><b>الأقسام والهيكل</b><small>{{ department_count }} قسم · {{ active_department_count }} نشط</small></div>
-    </a>
-    <a class="card" href="?tab=users" data-v="acc">
-      <i class="bi bi-people-fill"></i>
-      <div><b>الحسابات والأدوار</b><small>{{ staff_count }} حساب · {{ inactive_user_count }} موقوف</small></div>
-    </a>
-    {% if nav.admin %}
-    <a class="card" href="{% url 'sequence_settings' %}">
-      <i class="bi bi-123"></i>
-      <div><b>تسلسل الأرقام</b><small>العدّادات الحاليّة لكلّ سجلّ</small></div>
-    </a>
-    <a class="card" href="{% url 'entity_list' %}">
-      <i class="bi bi-buildings"></i>
-      <div><b>دليل الجهات والعناقيد</b><small>تجميع وتوحيد الجهات</small></div>
-    </a>
-    <a class="card" href="{% url 'network_settings' %}">
-      <i class="bi bi-hdd-network"></i>
-      <div><b>الشبكة وأجهزة المسح</b><small>محطات العمل ووكيل الماسح</small></div>
-    </a>
-    <a class="card" href="{% url 'backup_database' %}">
-      <i class="bi bi-cloud-arrow-down"></i>
-      <div><b>النسخ الاحتياطي</b><small>نسخٌ واستعادة البيانات</small></div>
-    </a>
-    <a class="card" href="{% url 'settings_hub' %}">
-      <i class="bi bi-sliders2"></i>
-      <div><b>كلّ الإعدادات</b><small>الإشعارات · الأمان · البريد</small></div>
-    </a>
-    {% endif %}
-  </div>
-</section>
-
 </main>
 </div>{# /shell #}
 
@@ -1146,10 +916,10 @@ document.querySelectorAll('.modal-bd').forEach(bd=>{
 });
 
 /* ── التنقل: روابطُ حقيقيّة، والنقرةُ تبدّل العرضَ وتكتب ?tab= (التحديثُ يعيدك حيث كنت) ── */
-const TAB_OF={ov:'overview',dep:'departments',acc:'users',ent:'groups',res:'reservations',aud:'audit',set:'settings'};
+const TAB_OF={ov:'overview',dep:'departments',acc:'users'};   /* الدفعة 1: الأربعةُ الأخرى صفحاتٌ في البرنامج */
 function go(v,fromPop){
   const view=document.getElementById(v);
-  if(!view)return false;   /* عرضٌ لا يحمله هذا التحميل (الحجوزات) — يحمّله الرابط */
+  if(!view)return false;   /* عرضٌ لا تحمله الصفحة (رابطٌ قديم في السجلّ) — لا شيء */
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x===view));
   document.querySelectorAll('.admbox a[data-v]').forEach(a=>{
     const on=a.dataset.v===v;
@@ -1463,16 +1233,6 @@ $('#depEditForm')?.addEventListener('submit',e=>{
   }
 });
 
-/* ── بحث في جدول السجلّ ── */
-const audQ=document.getElementById('aud-q');
-if(audQ){
-  audQ.addEventListener('input',()=>{
-    const v=norm(audQ.value);
-    document.querySelectorAll('#aud-tbody tr').forEach(tr=>{
-      tr.hidden=!!v&&!norm(tr.textContent).includes(v);
-    });
-  });
-}
 
 /* ── نافذةُ «حساب جديد» تعود مفتوحةً بقيمها إن رُفض الإرسال ── */
 {% if create_form_values %}openModal('userModal');{% endif %}

@@ -112,7 +112,7 @@ def _editing_group(request):
     التعديلُ برابطٍ لا بـJS: يُنسخ ويُشارَك ويعمل بلا سكربت.
     """
     raw = (request.GET.get('edit') or '').strip()
-    if not raw.isdigit():
+    if not raw.isdecimal():   # «²» رقمٌ عند isdigit ويُسقط int() بخطأ 500
         return None
     return EntityGroup.objects.filter(pk=int(raw)).first()
 
@@ -596,7 +596,7 @@ def entity_merge(request):
     if request.method == "POST":
         canonical_id = (request.POST.get("canonical") or "").strip()
         victim_ids = request.POST.getlist("victim")
-        if not canonical_id.isdigit() or not victim_ids:
+        if not canonical_id.isdecimal() or not victim_ids:
             messages.warning(request, "اختر الجهة الأمّ وجهةً واحدة على الأقل للدمج.")
             return redirect("entity_merge")
         try:
@@ -624,7 +624,7 @@ def entity_merge(request):
     manual_cluster = None
     ids_raw = (request.GET.get("ids") or "").strip()
     if ids_raw:
-        ids = [int(x) for x in ids_raw.split(",") if x.strip().isdigit()]
+        ids = [int(x) for x in ids_raw.split(",") if x.strip().isdecimal()]
         if len(ids) >= 2:
             manual_cluster = build_manual_cluster(ids)
         if ids_raw and manual_cluster is None:
