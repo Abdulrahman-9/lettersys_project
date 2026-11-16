@@ -1,0 +1,36 @@
+{% comment %}
+  _theme_head.html — الكاتبُ الوحيد للوضع الفاتح/الداكن (theme.css لا يقرأ إعدادَ الجهاز بنفسه).
+  يعمل قبل أوّل ورقة أنماط فلا يومض الوضعُ، وفي الصفحات المنقولة وحدها
+  (data-lx-page="v2") فلا تصير صفحةٌ قديمةٌ نصفَ داكنة. الاختيار في
+  localStorage «lx-theme»، وبدونه يتبع الجهاز ويتغيّر معه. الطباعةُ فاتحةٌ دائماً.
+  تضمّنه base.html وصفحةُ التحقّق العامّة (بلا إطار) — نسخةٌ واحدةٌ لا اثنتان.
+{% endcomment %}
+<script>
+  (function () {
+    var root = document.documentElement;
+    if (root.getAttribute('data-lx-page') !== 'v2') return;
+    var saved = null;
+    try { saved = localStorage.getItem('lx-theme'); } catch (e) { /* تخزينٌ محجوب: يتبع الجهاز */ }
+    var media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    function chosen() { return saved === 'dark' || saved === 'light' ? saved : (media && media.matches ? 'dark' : 'light'); }
+    function apply() {
+      var theme = chosen();
+      root.setAttribute('data-bs-theme', theme);
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0c1413' : '#0f766e');
+      document.dispatchEvent(new CustomEvent('lx-theme-change', { detail: theme }));
+    }
+    apply();
+    if (media && media.addEventListener) media.addEventListener('change', function () { if (saved !== 'dark' && saved !== 'light') apply(); });
+    window.addEventListener('beforeprint', function () { root.setAttribute('data-bs-theme', 'light'); });
+    window.addEventListener('afterprint', apply);
+    window.lxTheme = {
+      get: function () { return root.getAttribute('data-bs-theme'); },
+      set: function (theme) {
+        saved = theme;
+        try { localStorage.setItem('lx-theme', theme); } catch (e) { /* يبقى للجلسة وحدها */ }
+        apply();
+      }
+    };
+  })();
+</script>

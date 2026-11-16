@@ -89,7 +89,8 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
             # مساحةُ عمل البريد على الهويّة (11-12): الطاولةُ والدفترُ والكشفُ تقرأ desk.css نفسَه
             ('templates/core/desk_board.html', 'css/desk.css', 20261112),
             ('templates/core/desk_board.html', 'css/queues.css', 20261112),
-            ('templates/core/_desk_document_assets.html', 'css/desk.css', 20261112),
+            # نسخةُ desk.css في ملفٍّ واحد يضمّنه الدفترُ والكشفُ والتقريران (11-15)
+            ('templates/core/_desk_css.html', 'css/desk.css', 20261112),
             ('templates/core/_desk_document_assets.html', 'js/desk_actions.js', 20261112),
             ('templates/base.html', 'js/theme.js', 20261111),
             ('templates/core/login.html', 'js/login.js', 20261111),

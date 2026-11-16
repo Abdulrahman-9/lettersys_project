@@ -2,6 +2,6 @@
   <img src="{% static 'img/mdoc-logo-mark.png' %}" alt="" width="38" height="44">
   <span class="desk-lockup-text">
     <b>{{ org_name|default:"شركة نفط الوسط" }}</b>
-    <span>{{ department.name|default:"قسم المتابعة" }}</span>
+    <span>{% if lockup_sub %}{{ lockup_sub }}{% else %}{{ department.name|default:"قسم المتابعة" }}{% endif %}</span>
   </span>
 </span>

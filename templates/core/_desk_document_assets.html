@@ -1,7 +1,7 @@
 {% load static %}
 {# الوثيقتان داخل base.html: الخطُّ والأيقوناتُ ورموزُ الهويّة منه — وهنا ما يخصّهما وحدَهما #}
 <link rel="stylesheet" href="{% static 'vendor/tom-select/tom-select.default.min.css' %}?v=2.6.2">
-<link rel="stylesheet" href="{% static 'css/desk.css' %}?v=20261112-desk2">
+{% include "core/_desk_css.html" %}
 <script src="{% static 'vendor/tom-select/tom-select.complete.min.js' %}?v=2.6.2" defer></script>
 <script src="{% static 'js/desk_select.js' %}?v=20261020-mail-desk2" defer></script>
 <script src="{% static 'js/desk_actions.js' %}?v=20261112-desk2" defer></script>

@@ -1,79 +1,119 @@
-{% load static %}<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>تقرير إضبارة — {{ entity.name }}</title>
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% if single_book %}بطاقة كتاب{% else %}تقرير إضبارة{% endif %} — {{ entity.name }}{% endblock %}
+
+{% comment %}
+  داخل إطار البرنامج (11-15)، وكان صفحةً قائمةً بذاتها بخطٍّ وألوانٍ غير الهويّة.
+  الورقةُ جزيرةٌ فاتحة بلغة ورقة الدفتر (_sheet_style + desk.css)، والطباعةُ تُخرج الورقةَ وحدَها.
+{% endcomment %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
+{% block extra_css %}
+{% include "core/_sheet_style.html" %}
+{% include "core/_desk_css.html" %}
 <style>
-  :root { --ink:#1e293b; --muted:#64748b; --line:#cbd5e1; --amber:#b45309; --teal:#0f766e; }
-  * { box-sizing:border-box; }
-  body { font-family:"Segoe UI",Tahoma,sans-serif; color:var(--ink); margin:0; background:#f1f5f9; }
-  .sheet { background:#fff; max-width:900px; margin:1rem auto; padding:2rem 2.2rem; box-shadow:0 2px 12px rgba(0,0,0,.08); }
-
-  /* شريط أدوات (شاشة فقط) */
-  .toolbar { max-width:900px; margin:1rem auto 0; display:flex; gap:.5rem; justify-content:flex-end; }
-  .toolbar button, .toolbar a { border:none; border-radius:8px; padding:.55rem 1.2rem; font-weight:700; font-size:.9rem; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; }
-  .toolbar .print { background:var(--amber); color:#fff; }
-  .toolbar .back { background:#fff; color:#475569; border:1px solid var(--line); }
-
-  .rep-head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px double var(--ink); padding-bottom:.9rem; margin-bottom:1.1rem; }
-  .rep-org { font-size:1.05rem; font-weight:800; }
-  .rep-org small { display:block; font-weight:500; color:var(--muted); font-size:.78rem; margin-top:.15rem; }
-  .rep-meta { text-align:left; font-size:.76rem; color:var(--muted); line-height:1.7; }
-  .rep-title { text-align:center; font-size:1.25rem; font-weight:800; margin:.4rem 0 1rem; }
-  .rep-title .ent { color:var(--amber); }
-  .rep-filters { background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px; padding:.6rem .9rem; font-size:.8rem; margin-bottom:1rem; }
-  .rep-filters b { color:var(--ink); }
-  .rep-filters .none { color:var(--muted); }
-
-  .sec-title { font-size:1rem; font-weight:800; margin:1.2rem 0 .5rem; padding:.35rem .7rem; border-radius:6px; display:flex; justify-content:space-between; }
-  .sec-title.out { background:#fff7ed; color:var(--amber); }
-  .sec-title.in  { background:#e9f7f4; color:var(--teal); }
-
-  table.rep { width:100%; border-collapse:collapse; font-size:.8rem; }
-  table.rep th { background:#f1f5f9; border:1px solid var(--line); padding:.4rem .5rem; text-align:right; font-weight:700; }
-  table.rep td { border:1px solid var(--line); padding:.38rem .5rem; vertical-align:top; }
-  table.rep tr:nth-child(even) td { background:#fafbfc; }
-  .num { font-family:monospace; font-weight:700; }
-  .empty { color:var(--muted); padding:.6rem; font-size:.85rem; }
-
-  .rep-foot { margin-top:1.5rem; border-top:1px solid var(--line); padding-top:.7rem; display:flex; justify-content:space-between; font-size:.78rem; color:var(--muted); }
-  .totchip { font-weight:700; color:var(--ink); }
-
-  /* بطاقة كتاب مفرد */
-  .book-card { border:1px solid var(--line); border-radius:10px; overflow:hidden; }
-  .book-card .bc-row { display:flex; border-bottom:1px solid #eef2f7; }
-  .book-card .bc-row:last-child { border-bottom:none; }
-  .book-card .bc-k { width:160px; flex:0 0 auto; background:#f8fafc; font-weight:700; padding:.55rem .8rem; font-size:.82rem; }
-  .book-card .bc-v { padding:.55rem .8rem; font-size:.85rem; }
-
-  @media print {
-    body { background:#fff; }
-    .toolbar { display:none !important; }
-    .sheet { box-shadow:none; margin:0; max-width:none; padding:0; }
-    table.rep th { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    thead { display:table-header-group; }
-    tr { page-break-inside:avoid; }
-    @page { size:A4; margin:1.4cm; }
-  }
+  .dr-sec { display:flex; justify-content:space-between; align-items:baseline; gap:1rem; margin:1.2rem 0 .45rem; padding-bottom:.25rem; border-bottom:1.5px solid var(--line-hard); font-size:.98rem; font-weight:800; }
+  .dr-sec .num { font-size:.9rem; }
+  .dr-none { margin:0; padding:.35rem .1rem; color:var(--muted); font-size:.85rem; }
+  .dr-capped { border-color:var(--amber); }
+  .dr-code { color:var(--muted); font-size:.8rem; font-weight:600; }
+  table.rep.dr-card th { width:9.5rem; background:var(--head); }
+  /* شريطُ التصفية: شبكةٌ تلتفّ، والبحثُ أعرضُ الحقول */
+  .dr-filters { display:grid !important; grid-template-columns:repeat(auto-fill, minmax(11rem, 1fr)); gap:.75rem; width:100%; }
+  .dr-filters .dr-q { grid-column:span 2; }
+  .dr-filters :is(input, select) { width:100%; min-width:0; }
+  .dr-filters .desk-form-actions { grid-column:1 / -1; }
+  @media (max-width:640px) { .dr-filters .dr-q { grid-column:auto; } }
 </style>
-</head>
-<body>
+{% endblock %}
 
-<div class="toolbar">
-  <button type="button" class="print" onclick="window.print()">طباعة</button>
-  <a class="back" href="{% url 'dossier_detail' entity.pk %}">رجوع</a>
+{% block content %}
+<div class="desk-workspace desk-document">
+<a class="desk-skip" href="#report-sheet">تخطَّ إلى التقرير</a>
+<header class="desk-header">
+  <div class="desk-topline">
+    <a class="desk-back" href="{% url 'dossier_detail' entity.pk %}"><i class="bi bi-arrow-right" aria-hidden="true"></i><span>الرجوع إلى الإضبارة</span></a>
+  </div>
+  <div class="desk-heading">
+    <span class="desk-eyebrow">الأضابير · {{ entity.name }}</span>
+    <h1>{% if single_book %}بطاقة كتاب{% else %}تقرير الإضبارة{% endif %}</h1>
+    <p>{% if single_book %}بطاقةُ كتابٍ واحد من الإضبارة، جاهزةٌ للطباعة.{% else %}كتبُ الجهة الصادرة والواردة حسب التصفية المختارة في الإضبارة.{% endif %}</p>
+  </div>
+</header>
+
+{% if not single_book %}
+{# شريطُ التصفية (11-15، طلبُ المالك): خياراتُ الإضبارة نفسُها، فيُضبط نطاقُ الورقة بلا رجوع — ولا يُطبع #}
+<section class="toolbar desk-filter-panel" aria-label="تصفية التقرير">
+  <form method="get" action="" class="dr-filters">
+    <div class="desk-field dr-q">
+      <label for="dr-q">بحث</label>
+      <input id="dr-q" type="search" name="q" value="{{ filters.q }}" placeholder="رقم القيد أو العنوان أو الملاحظة" autocomplete="off">
+    </div>
+    <div class="desk-field">
+      <label for="dr-type">نوع المستند</label>
+      <select id="dr-type" name="document_type">
+        <option value="">كل الأنواع</option>
+        {% for t in available_types %}<option value="{{ t.value }}"{% if filters.document_type == t.value %} selected{% endif %}>{{ t.value }} ({{ t.count }})</option>{% endfor %}
+      </select>
+    </div>
+    <div class="desk-field">
+      <label for="dr-from">من تاريخ</label>
+      <input id="dr-from" type="date" name="date_from" value="{{ filters.date_from|date:'Y-m-d' }}">
+    </div>
+    <div class="desk-field">
+      <label for="dr-to">إلى تاريخ</label>
+      <input id="dr-to" type="date" name="date_to" value="{{ filters.date_to|date:'Y-m-d' }}">
+    </div>
+    <div class="desk-field">
+      <label for="dr-period">مدّة سريعة</label>
+      <select id="dr-period" name="period">
+        <option value="">—</option>
+        {% for p in period_presets %}<option value="{{ p.key }}"{% if p.active %} selected{% endif %}>{{ p.label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="desk-field">
+      <label for="dr-followup">المتابعة</label>
+      <select id="dr-followup" name="followup">
+        <option value="">الكل</option>
+        {% for key, lbl in followup_labels.items %}<option value="{{ key }}"{% if filters.followup == key %} selected{% endif %}>{{ lbl }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="desk-field">
+      <label for="dr-secret">السرّيّة</label>
+      <select id="dr-secret" name="secret_level">
+        <option value="">الكل</option>
+        {% for key, lbl in secret_labels.items %}<option value="{{ key }}"{% if filters.secret_level == key %} selected{% endif %}>{{ lbl }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="desk-field">
+      <label for="dr-sort">الترتيب</label>
+      <select id="dr-sort" name="sort">
+        <option value="-date"{% if filters.sort == '-date' %} selected{% endif %}>الأحدث أولاً</option>
+        <option value="date"{% if filters.sort == 'date' %} selected{% endif %}>الأقدم أولاً</option>
+        <option value="-our_number"{% if filters.sort == '-our_number' %} selected{% endif %}>رقم الكتاب (تنازلي)</option>
+        <option value="our_number"{% if filters.sort == 'our_number' %} selected{% endif %}>رقم الكتاب (تصاعدي)</option>
+        <option value="title"{% if filters.sort == 'title' %} selected{% endif %}>العنوان (أ-ي)</option>
+      </select>
+    </div>
+    <div class="desk-form-actions">
+      <button type="submit" class="desk-btn desk-btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i> تطبيق التصفية</button>
+      {% if filter_summary %}<a class="desk-btn desk-btn-quiet" href="{% url 'dossier_report' entity.pk %}"><i class="bi bi-x-circle" aria-hidden="true"></i> مسح التصفية</a>{% endif %}
+    </div>
+  </form>
+</section>
+{% endif %}
+
+<div class="desk-output-bar">
+  <p class="desk-output-status" role="status"><i class="bi bi-check2-circle" aria-hidden="true"></i>
+    {% if single_book %}البطاقة جاهزة للطباعة.{% else %}التقرير جاهز — الإجمالي: <b class="num">{{ total_count }}</b> كتاب (صادر {{ outgoing_count }} · وارد {{ incoming_count }}).{% endif %}</p>
+  <button type="button" class="desk-btn desk-btn-print" onclick="window.print()"><i class="bi bi-printer" aria-hidden="true"></i> طباعة {% if single_book %}البطاقة{% else %}التقرير{% endif %}</button>
 </div>
 
-<div class="sheet">
-
+<article class="sheet" id="report-sheet" tabindex="-1" data-bs-theme="light" aria-labelledby="report-heading">
   <div class="rep-head">
     <div class="rep-org">
-      {{ org_name }}
-      <small>
-        {% if org.org_section %}{{ org.org_section }}{% endif %}{% if org.org_section and org.org_unit %} — {% endif %}{% if org.org_unit %}{{ org.org_unit }}{% endif %}
-        {% if not org.org_section and not org.org_unit %}تقرير أرشيفي للمراسلات{% endif %}
-      </small>
+      {% include "core/_desk_lockup.html" with lockup_class="desk-lockup-sheet" lockup_sub=org_line %}
     </div>
     <div class="rep-meta">
       تاريخ التوليد: {{ generated_at|date:"Y/m/d H:i" }}<br>
@@ -81,80 +121,86 @@
     </div>
   </div>
 
-  <div class="rep-title">
-    {% if single_book %}بطاقة كتاب{% else %}تقرير إضبارة{% endif %} — <span class="ent">{{ entity.name }}</span>
-    {% if entity.code %}<span style="font-family:monospace;color:#94a3b8;font-size:.8rem"> ({{ entity.code }})</span>{% endif %}
-  </div>
+  <h2 class="rep-title" id="report-heading">
+    {% if single_book %}بطاقة كتاب{% else %}تقرير إضبارة{% endif %} — {{ entity.name }}{% if entity.code %} <span class="dr-code">({{ entity.code }})</span>{% endif %}
+  </h2>
 
   {% if single_book %}
     {% with b=report_book %}
     {% if b %}
-    <div class="book-card">
-      <div class="bc-row"><div class="bc-k">رقم الكتاب</div><div class="bc-v num">{{ b.our_number_display }}</div></div>
-      <div class="bc-row"><div class="bc-k">العنوان</div><div class="bc-v">{{ b.shown_title }}</div></div>
-      <div class="bc-row"><div class="bc-k">نوع المستند</div><div class="bc-v">{{ b.shown_document_type|default:"—" }}</div></div>
-      <div class="bc-row"><div class="bc-k">التاريخ</div><div class="bc-v">{{ b.date|date:"Y/m/d" }}</div></div>
-      <div class="bc-row"><div class="bc-k">الجهة المصدِرة</div><div class="bc-v">{{ b.shown_issuing|default:"—" }}</div></div>
-      <div class="bc-row"><div class="bc-k">الجهة المستلِمة</div><div class="bc-v">{{ b.shown_receiving|default:"—" }}</div></div>
-      <div class="bc-row"><div class="bc-k">مستوى السرية</div><div class="bc-v">{% if b.secret_level != 'normal' %}{{ b.get_secret_level_display }}{% else %}—{% endif %}</div></div>
-      <div class="bc-row"><div class="bc-k">حالة المتابعة</div><div class="bc-v">{{ b.followup_label }}</div></div>
-      {% if b.shown_margin %}<div class="bc-row"><div class="bc-k">ملاحظات</div><div class="bc-v">{{ b.shown_margin }}</div></div>{% endif %}
-    </div>
+    <table class="rep dr-card">
+      <tbody>
+        <tr><th scope="row">رقم الكتاب</th><td class="num">{{ b.our_number_display }}</td></tr>
+        <tr><th scope="row">العنوان</th><td>{{ b.shown_title }}</td></tr>
+        <tr><th scope="row">نوع المستند</th><td>{{ b.shown_document_type|default:"—" }}</td></tr>
+        <tr><th scope="row">التاريخ</th><td class="num">{{ b.date|date:"Y/m/d" }}</td></tr>
+        <tr><th scope="row">الجهة المصدِرة</th><td>{{ b.shown_issuing|default:"—" }}</td></tr>
+        <tr><th scope="row">الجهة المستلِمة</th><td>{{ b.shown_receiving|default:"—" }}</td></tr>
+        <tr><th scope="row">مستوى السرية</th><td>{% if b.secret_level != 'normal' %}{{ b.get_secret_level_display }}{% else %}—{% endif %}</td></tr>
+        <tr><th scope="row">حالة المتابعة</th><td>{{ b.followup_label }}</td></tr>
+        {% if b.shown_margin %}<tr><th scope="row">ملاحظات</th><td>{{ b.shown_margin }}</td></tr>{% endif %}
+      </tbody>
+    </table>
     {% else %}<div class="empty">لم يُعثر على الكتاب.</div>{% endif %}
     {% endwith %}
 
   {% else %}
-    <div class="rep-filters">
+    <div class="desk-filter-summary">
       <b>الفلاتر المطبَّقة:</b>
-      {% if filter_summary %}{% for item in filter_summary %}{{ item }}{% if not forloop.last %} · {% endif %}{% endfor %}{% else %}<span class="none">بلا فلاتر (كل كتب القسم)</span>{% endif %}
+      {% if filter_summary %}{% for item in filter_summary %}<span>{{ item }}</span>{% endfor %}{% else %}<span>بلا فلاتر (كل كتب القسم)</span>{% endif %}
     </div>
     {% if capped %}
-    <div class="rep-filters" style="background:#fff7ed;border-color:#fed7aa;color:#b45309">
-      <b>تنبيه:</b> عُرض حتى {{ report_cap }} كتاب لكل اتجاه (حدّ التقرير). ضيّق الفلاتر (نوع/تاريخ) للحصول على تقرير كامل ودقيق.
+    <div class="desk-filter-summary dr-capped">
+      <b>تنبيه:</b> <span>عُرض حتى {{ report_cap }} كتاب لكل اتجاه (حدّ التقرير). ضيّق الفلاتر (نوع/تاريخ) للحصول على تقرير كامل ودقيق.</span>
     </div>
     {% endif %}
 
     {# ── الصادر ── #}
-    <div class="sec-title out"><span>الكتب الصادرة</span><span>{{ outgoing_count }}</span></div>
+    <h3 class="dr-sec"><span>الكتب الصادرة</span><span class="num">{{ outgoing_count }}</span></h3>
     {% if outgoing %}
     <table class="rep">
-      <thead><tr><th>#</th><th>رقم الكتاب</th><th>نوع المستند</th><th>العنوان</th><th>التاريخ</th><th>الجهة المستلِمة</th><th>السرية</th><th>المتابعة</th></tr></thead>
+      <thead><tr><th scope="col">#</th><th scope="col">رقم الكتاب</th><th scope="col">نوع المستند</th><th scope="col">العنوان</th><th scope="col">التاريخ</th><th scope="col">الجهة المستلِمة</th><th scope="col">السرية</th><th scope="col">المتابعة</th></tr></thead>
       <tbody>
       {% for b in outgoing %}
-        <tr><td>{{ forloop.counter }}</td><td class="num">{{ b.our_number_display }}</td><td>{{ b.shown_document_type|default:"—" }}</td>
-        <td>{{ b.shown_title }}</td><td>{{ b.date|date:"Y/m/d" }}</td><td>{{ b.shown_receiving|default:"—" }}</td>
+        <tr><td class="num">{{ forloop.counter }}</td><td class="num">{{ b.our_number_display }}</td><td>{{ b.shown_document_type|default:"—" }}</td>
+        <td>{{ b.shown_title }}</td><td class="num">{{ b.date|date:"Y/m/d" }}</td><td>{{ b.shown_receiving|default:"—" }}</td>
         <td>{% if b.secret_level != 'normal' %}{{ b.get_secret_level_display }}{% else %}—{% endif %}</td><td>{{ b.followup_label }}</td></tr>
       {% endfor %}
       </tbody>
     </table>
-    {% else %}<div class="empty">لا كتب صادرة مطابقة.</div>{% endif %}
+    {% else %}<p class="dr-none">لا كتب صادرة مطابقة.</p>{% endif %}
 
     {# ── الوارد ── #}
-    <div class="sec-title in"><span>الكتب الواردة</span><span>{{ incoming_count }}</span></div>
+    <h3 class="dr-sec"><span>الكتب الواردة</span><span class="num">{{ incoming_count }}</span></h3>
     {% if incoming %}
     <table class="rep">
-      <thead><tr><th>#</th><th>رقم الكتاب</th><th>نوع المستند</th><th>العنوان</th><th>التاريخ</th><th>الجهة المرسِلة</th><th>السرية</th><th>المتابعة</th></tr></thead>
+      <thead><tr><th scope="col">#</th><th scope="col">رقم الكتاب</th><th scope="col">نوع المستند</th><th scope="col">العنوان</th><th scope="col">التاريخ</th><th scope="col">الجهة المرسِلة</th><th scope="col">السرية</th><th scope="col">المتابعة</th></tr></thead>
       <tbody>
       {% for b in incoming %}
-        <tr><td>{{ forloop.counter }}</td><td class="num">{{ b.our_number_display }}</td><td>{{ b.shown_document_type|default:"—" }}</td>
-        <td>{{ b.shown_title }}</td><td>{{ b.date|date:"Y/m/d" }}</td><td>{{ b.shown_issuing|default:"—" }}</td>
+        <tr><td class="num">{{ forloop.counter }}</td><td class="num">{{ b.our_number_display }}</td><td>{{ b.shown_document_type|default:"—" }}</td>
+        <td>{{ b.shown_title }}</td><td class="num">{{ b.date|date:"Y/m/d" }}</td><td>{{ b.shown_issuing|default:"—" }}</td>
         <td>{% if b.secret_level != 'normal' %}{{ b.get_secret_level_display }}{% else %}—{% endif %}</td><td>{{ b.followup_label }}</td></tr>
       {% endfor %}
       </tbody>
     </table>
-    {% else %}<div class="empty">لا كتب واردة مطابقة.</div>{% endif %}
+    {% else %}<p class="dr-none">لا كتب واردة مطابقة.</p>{% endif %}
 
     <div class="rep-foot">
-      <span>الإجمالي: <span class="totchip">{{ total_count }}</span> كتاب (صادر {{ outgoing_count }} · وارد {{ incoming_count }})</span>
-      <span>LetterSys</span>
+      <span>الإجمالي: <b class="num">{{ total_count }}</b> كتاب (صادر {{ outgoing_count }} · وارد {{ incoming_count }})</span>
+      <span>{{ org_name }}</span>
     </div>
   {% endif %}
-
+</article>
+<p class="desk-sheet-hint">معاينة ورقة A4 · لا تظهر أدوات الصفحة في النسخة المطبوعة.</p>
 </div>
 
+{% if single_book %}
 <script>
-  // طباعة تلقائية لبطاقة الكتاب المفرد (فتحت من زر طباعة الصف)
-  {% if single_book %}window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 400); });{% endif %}
+  // بطاقةُ الكتاب المفرد تُفتح من زرّ طباعة الصفّ: تُطبع بعد أن يكتمل الخطّ لا قبله
+  window.addEventListener('load', function () {
+    var go = function () { window.print(); };
+    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function () { setTimeout(go, 150); });
+  });
 </script>
-</body>
-</html>
+{% endif %}
+{% endblock %}

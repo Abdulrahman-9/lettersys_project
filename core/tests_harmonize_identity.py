@@ -81,10 +81,12 @@ class HarmonizeTests(SimpleTestCase):
     def test_dark_mode_stays_on_migrated_pages(self):
         # الألوانُ الفاتحةُ صارت لكلّ الصفحات بلا بوّابة CSS؛ ما يمنع الداكنَ عن الصفحات القديمة هو هذا السطرُ وحدَه
         # في سكربت الرأس — فلا يُكتب data-bs-theme إلّا في المنقولة (مراجعةُ فيبل 11-15)
-        base = _read('templates/base.html')
+        # الكاتبُ الوحيد صار ملفّاً يضمّنه base.html وصفحةُ التحقّق (11-15)
+        self.assertIn('{% include "_theme_head.html" %}', _read('templates/base.html'))
+        head = _read('templates/_theme_head.html')
         guard = "if (root.getAttribute('data-lx-page') !== 'v2') return;"
-        self.assertIn(guard, base)
-        self.assertLess(base.index(guard), base.index("root.setAttribute('data-bs-theme', theme);"))
+        self.assertIn(guard, head)
+        self.assertLess(head.index(guard), head.index("root.setAttribute('data-bs-theme', theme);"))
 
     def test_the_lifecycle_scope_joined_the_pass(self):
         css = re.sub(r'/\*.*?\*/', '', _read('static/css/lifecycle_design.css'), flags=re.S)

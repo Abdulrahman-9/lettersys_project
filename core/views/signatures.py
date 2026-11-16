@@ -72,7 +72,9 @@ def verify_signature_view(request, token):
         'signer', 'book', 'version').first()
 
     state = verify(signature) if signature else None
+    from core.branding import org_name
     return render(request, 'core/signature_verify.html', {
+        'org_name': org_name(),   # مَن يقرأ الختمَ يرى أيَّ جهةٍ تجيبه
         'token': token,
         'state': state,
         'signature': signature,

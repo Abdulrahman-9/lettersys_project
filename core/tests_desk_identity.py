@@ -57,7 +57,8 @@ class DeskStylesheetTests(SimpleTestCase):
 
     def test_the_documents_take_the_identity_from_the_frame(self):
         src = _read('templates/core/_desk_document_assets.html')
-        self.assertIn("{% static 'css/desk.css' %}", src)
+        self.assertIn('{% include "core/_desk_css.html" %}', src)
+        self.assertIn("{% static 'css/desk.css' %}", _read('templates/core/_desk_css.html'))
         for doubled in ('css/theme.css', 'cairo.css', 'bootstrap-icons'):
             with self.subTest(asset=doubled):
                 self.assertNotIn(doubled, src)

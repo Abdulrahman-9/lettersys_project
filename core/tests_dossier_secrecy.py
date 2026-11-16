@@ -165,10 +165,10 @@ class DossierRowIsStubbedTests(DossierSecrecyTestCase):
     def test_book_card_prints_the_stub_and_no_margin(self):
         resp = self._card(self.clerk)
         self.assertContains(resp, 'بطاقة كتاب')
-        self.assertContains(resp, f'<div class="bc-v">{STUB_TITLE}</div>', html=False)
+        self.assertContains(resp, f'<tr><th scope="row">العنوان</th><td>{STUB_TITLE}</td></tr>', html=False)
         self.assertNotContains(resp, SECRET_TITLE)
         self.assertNotContains(resp, SECRET_MARGIN)
-        self.assertNotContains(resp, '<div class="bc-k">ملاحظات</div>', html=False)
+        self.assertNotContains(resp, '<th scope="row">ملاحظات</th>', html=False)
         self.assertNotContains(resp, SECRET_TYPE)
         self.assertNotContains(resp, COUNTERPART)
 
@@ -194,7 +194,7 @@ class IncomingDirectionIsStubbedTests(DossierSecrecyTestCase):
 
     def test_book_card_of_the_incoming_book_is_stubbed(self):
         resp = self._card(self.clerk, self.secret_in)
-        self.assertContains(resp, f'<div class="bc-v">{STUB_TITLE}</div>', html=False)
+        self.assertContains(resp, f'<tr><th scope="row">العنوان</th><td>{STUB_TITLE}</td></tr>', html=False)
         for leaked in (SECRET_IN_TITLE, SECRET_IN_TYPE, SECRET_IN_MARGIN, SUPPLIER):
             self.assertNotContains(resp, leaked)
 
@@ -370,7 +370,7 @@ class DossierOpensForTheEntitledTests(DossierSecrecyTestCase):
         self.assertNotContains(report, f'<td>{STUB_TITLE}</td>', html=False)
 
         card = self._card(user)
-        self.assertContains(card, f'<div class="bc-v">{SECRET_TITLE}</div>', html=False)
+        self.assertContains(card, f'<tr><th scope="row">العنوان</th><td>{SECRET_TITLE}</td></tr>', html=False)
         self.assertContains(card, SECRET_MARGIN)
         self.assertContains(card, SECRET_TYPE)
         self.assertContains(card, COUNTERPART)
