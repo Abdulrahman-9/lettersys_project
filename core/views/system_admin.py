@@ -437,6 +437,8 @@ def _account_context(request, target):
         # حارسُ ``reset_department_user_password`` نفسُه: لا حسابَك ولا معطَّلاً ولا حسّاساً لغير المدير
         'can_reset': not is_self and target.is_active and (is_admin or not is_sensitive_account(target)),
         'is_self': is_self,
+        # كلمةٌ أُبطلت أو لم تُصدر بعد (قرارُ المالك 11-18) — تُقال، ومديرُ النظام يصدرها
+        'no_password': not target.has_usable_password(),
         'audit_url': (f"{reverse('audit_log')}?actor={target.get_username()}" if can_view_audit(viewer) else ''),
     }
 
@@ -624,6 +626,11 @@ def system_account_new_view(request):
         except (_VE, PermissionDenied) as exc:
             messages.error(request, exc.messages[0] if isinstance(exc, _VE) else str(exc))
         else:
+            if password is None:   # حسّاسٌ أنشأه غيرُ المدير — كلمتُه الأولى من المدير (قرارُ المالك 11-18)
+                messages.success(request, 'أُنشئ حساب «%s». دورُه يفتح السرّيّ، فكلمتُه الأولى يصدرها مدير النظام.'
+                                 % user.get_username())
+                return render(request, 'core/system_admin/account.html',
+                              {**_account_context(request, user), 'temp_password': None})
             messages.success(request, 'أُنشئ حساب «%s».' % user.get_username())
             return _secret_page(render(request, 'core/system_admin/account.html',
                                        {**_account_context(request, user), 'temp_password': password}))

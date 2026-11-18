@@ -271,9 +271,35 @@ def _cancel_exceptions(user):
     return [{'capability': key, 'allowed': allowed} for key, allowed in rows]
 
 
+def void_temporary_password(user, *, by, reason):
+    """يُبطل كلمةً مؤقّتةً لم يغيّرها صاحبُها بعد — قرارُ المالك 11-18 (توصيةُ فيبل).
+
+    رئيسُ القسم يرى الكلمةَ المؤقّتة لمن يعيد كلمتَه أو يُنشئه؛ فإن رفعه بعدها إلى ما يفتح السرّيّ أو يدير غيرَه
+    (``is_sensitive_account``) دخل بحسابه إلى ما لا يملكه هو. الإبطالُ يُغلق ذلك: لا كلمةَ صالحة، ومديرُ النظام
+    يصدر التالية (``reset_department_user_password``). كلمةٌ غيّرها صاحبُها لا تُمسّ. يعيد True إن أُبطلت.
+    """
+    from core.models import UserPassword
+
+    profile = getattr(user, 'profile', None)
+    if profile is None or not profile.must_change_password or not user.has_usable_password():
+        return False
+    with transaction.atomic():
+        user.set_unusable_password()
+        user.save(update_fields=['password'])
+        UserPassword.objects.filter(user=user).delete()
+        # تحت «إعادة تعيين كلمة مرور» بعلامة voided — الأفعالُ قائمةٌ مغلقة، والإبطالُ إعادةٌ إلى «لا كلمة»
+        _log(by, 'PASSWORD_RESET', {'user': user.get_username(), 'voided': True,
+                                    'summary': f'أُبطلت الكلمةُ المؤقّتة لـ{user.get_username()} — {reason}'[:500]})
+    return True
+
+
 def create_department_user(*, by, department, username, first_name='',
                            last_name='', email='', job_title='', role='viewer'):
-    """ينشئ حساباً محلياً بكلمة مؤقتة عشوائية ويُعيدها لعرضٍ واحد."""
+    """ينشئ حساباً محلياً بكلمة مؤقتة عشوائية ويُعيدها لعرضٍ واحد.
+
+    حسابٌ حسّاسٌ يُنشئه غيرُ مدير النظام (مختصُّ بريد أو أرشفة) لا كلمةَ صالحةً له، ويُعاد ``None``:
+    كلمتُه الأولى يصدرها المدير — وإلّا دخل الرئيسُ بحسابٍ يفتح ما لا يفتحه هو (قرارُ المالك 11-18).
+    """
     from core.models import SecuritySettings, UserPassword, UserProfile
     from core.roles import ROLE_GROUP_NAMES, ensure_role_groups
     from core.scoping import ADMIN_ONLY_ROLES, HEAD_GRANTABLE_ROLES
@@ -344,6 +370,14 @@ def create_department_user(*, by, department, username, first_name='',
             'user': user.get_username(), 'department': department.code,
             'job_title': job_title, 'role': role,
         })
+    from core.scoping import is_sensitive_account
+
+    if not _is_account_admin(by) and is_sensitive_account(user):
+        with transaction.atomic():
+            user.set_unusable_password()
+            user.save(update_fields=['password'])
+            UserPassword.objects.filter(user=user).delete()
+        return user, None
     return user, password
 
 

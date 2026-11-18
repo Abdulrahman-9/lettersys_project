@@ -136,6 +136,13 @@ def set_user_override(request, target, key, allowed):
     _audit(request, scope='user', subject=target.get_username(), key=key, before=before, after=after,
            extra={'target_id': target.pk, 'target': target.get_username()})
     clear_capability_cache(target)
+    # استثناءٌ موجبٌ من غير المدير يجعل الحسابَ حسّاساً — والكلمةُ المؤقّتةُ التي رآها تُبطَل (قرارُ المالك 11-18)
+    from core.admin_service import void_temporary_password
+    from core.scoping import can_manage_accounts
+
+    if after and not can_manage_accounts(request.user):
+        void_temporary_password(target, by=request.user,
+                                reason=f'مُنح استثناءَ «{_capability_label(key)}» بيد غير مدير النظام')
     return True
 
 
@@ -239,6 +246,12 @@ def set_user_role(request, target, role):
         flags['is_company_archivist'] = target.groups.filter(name=ARCHIVE_ALL_GROUP_NAME).exists()
     assign_user(target, by=by, **flags)
     clear_capability_cache(target)
+    # قرارُ المالك 11-18: رفعٌ إلى الحسّاس من غير المدير يُبطل كلمةً مؤقّتةً لم تُغيَّر (``void_temporary_password``)
+    from core.admin_service import void_temporary_password
+    from core.scoping import can_manage_accounts, is_sensitive_account
+
+    if not can_manage_accounts(by) and is_sensitive_account(target):
+        void_temporary_password(target, by=by, reason=f'صار «{ROLE_LABELS[role]}» بيد غير مدير النظام')
     UserActivityLog.objects.create(
         user=by, action=EDIT_PERMISSIONS, department=_department_of(by),
         ip_address=client_ip(request), path=(request.path or '')[:500], method=(request.method or '')[:10],
