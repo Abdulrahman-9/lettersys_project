@@ -504,6 +504,13 @@ def dossier_report(request, pk):
     if single:
         report_book = next(iter(outgoing + incoming), None)
 
+    # شريطُ التصفية فوق الورقة (11-15، طلبُ المالك): خياراتُ الإضبارة نفسُها — والنوعُ يُعدّ بكلّ الفلاتر عداه
+    available_types = []
+    if not single:
+        fnt = {**f, "document_type": ""}
+        available_types = _available_types(_type_meta(_apply_filters(out_base, fnt, request.user)),
+                                           _type_meta(_apply_filters(in_base, fnt, request.user)))
+
     from ..models import EmailSettings
     from core.branding import org_name
     org = EmailSettings.get()   # القسمُ والوحدةُ لترويسة التقرير؛ والاسمُ من ``org_name()``
@@ -512,8 +519,14 @@ def dossier_report(request, pk):
         "entity": entity,
         "org": org,
         "org_name": org_name(),
+        # سطرُ الترويسة تحت اسم الشركة: القسمُ والوحدةُ من الإعدادات، وإلّا وصفُ الورقة
+        "org_line": " — ".join(p for p in (org.org_section, org.org_unit) if p) or "تقرير أرشيفي للمراسلات",
         "filters": f,
         "filter_summary": _filter_summary(f),
+        "available_types": available_types,
+        "period_presets": [{"key": k, "label": lbl, "active": f["period"] == k} for k, lbl in _PERIOD_PRESETS],
+        "followup_labels": FOLLOWUP_LABELS,
+        "secret_labels": _SECRET_LABELS,
         "outgoing": outgoing,
         "incoming": incoming,
         "outgoing_count": len(outgoing),

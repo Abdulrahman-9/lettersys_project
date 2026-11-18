@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load ar_counts %}
+{% block title %}حجوزات الأرقام{% endblock %}
+{% comment %}
+  الدفعة 1 (11-16): كانت تبويباً في لوحة الإدارة المستقلّة، فصارت صفحةً في إطار البرنامج بلغة صفحات إدارة
+  النظام (sa-*) كمركز الأقسام. للقراءة فقط — لا تغيّر رقماً ولا حالة. منطقُها في ``_reservation_report``.
+{% endcomment %}
+{% block content %}
+<div class="sa-page">
+  <div class="sa-head">
+    <div><h1>حجوزات الأرقام</h1><p>الحجوزاتُ القائمة كلُّها، وسجلُّ آخر {{ reservation_days }} يوماً. للقراءة فقط: لا تغيّر رقماً ولا حالة.</p></div>
+    <form class="sa-toolbar" method="get">
+      <label for="reservation-days">الفترة</label>
+      <select id="reservation-days" name="days" class="sa-select">
+        {% for option in reservation_day_options %}<option value="{{ option }}"{% if reservation_days == option %} selected{% endif %}>{{ option }} يوماً</option>{% endfor %}
+      </select>
+      <button type="submit" class="sa-btn sm">عرض</button>
+    </form>
+  </div>
+
+  {# الحالةُ بكلمةٍ ونقطة، لا باللون وحده — ونقطةُ «تجاوز المهلة» حمراءُ متى وُجد منه شيء #}
+  <div class="sa-sysbar">
+    <span><span class="sa-dot"></span>نشط ضمن المهلة: <b>{{ reservation_summary.active|grouped }}</b></span>
+    <span><span class="sa-dot{% if reservation_summary.overdue_active %} bad{% endif %}"></span>تجاوز المهلة: <b>{{ reservation_summary.overdue_active|grouped }}</b> بانتظار التنظيف</span>
+    <span><span class="sa-dot warn"></span>ضمن فترة السماح: <b>{{ reservation_summary.cooldown|grouped }}</b> · انتهى سماحُ {{ reservation_summary.elapsed_cooldown|grouped }}</span>
+    <span><span class="sa-dot"></span>استُخدمت في كتاب: <b>{{ reservation_summary.used|grouped }}</b> · أُعيد تدوير {{ reservation_summary.recycled|grouped }}</span>
+    <span>السجلّات المعروضة: <b>{{ reservation_summary.total|grouped }}</b> · منتهية {{ reservation_summary.expired|grouped }} · ملغاة {{ reservation_summary.voided|grouped }}</span>
+  </div>
+
+  <section class="sa-card" aria-label="الحجوزات">
+    <div class="sa-scroll">
+      <table class="sa-reg sa-res">
+        <thead><tr>
+          <th scope="col">الرقم</th><th scope="col">المستخدم</th><th scope="col">القسم</th><th scope="col">النوع</th>
+          <th scope="col">الحالة</th><th scope="col">عمر الإسناد</th><th scope="col">أُسند</th>
+          <th scope="col">آخر نبضة</th><th scope="col">المهلة</th>
+        </tr></thead>
+        <tbody>
+          {% for row in reservation_rows %}
+          <tr>
+            <td class="sa-num"><bdi dir="ltr">{{ row.reservation.formatted }}</bdi>{% if row.reservation.is_recycled %} <span class="sa-chip">مُدوَّر</span>{% endif %}</td>
+            <td>{{ row.reservation.user.get_username }}</td>
+            <td>{{ row.reservation.department.name|default:'—' }}</td>
+            <td>{{ row.reservation.get_kind_display }}</td>
+            <td><span class="sa-chip{% if row.stale %} warn{% endif %}">{{ row.status_label }}</span></td>
+            <td class="sa-when">{{ row.age_label }}</td>
+            <td class="sa-when">{{ row.assigned_at|date:'Y-m-d H:i'|default:'—' }}</td>
+            <td class="sa-when">{{ row.reservation.last_heartbeat|date:'Y-m-d H:i'|default:'—' }}</td>
+            <td class="sa-when">{{ row.deadline|date:'Y-m-d H:i'|default:'—' }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9" class="sa-empty">لا حجوزات قائمة ولا سجلّات في آخر {{ reservation_days }} يوماً. جرّب فترةً أطول.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if reservation_has_legacy %}<p class="sa-hint">«غير متاح» في عمر الإسناد: حجزٌ سابقٌ لإضافة تتبّع الإسناد، فلا يُعرف متى أُسند.</p>{% endif %}
+    {% if reservation_page.paginator.num_pages > 1 %}
+    <nav class="sa-more" aria-label="صفحات الحجوزات">
+      {% if reservation_page.has_previous %}<a class="sa-btn sm" href="?days={{ reservation_days }}&amp;page={{ reservation_page.previous_page_number }}">السابقة</a>{% endif %}
+      <span>صفحة {{ reservation_page.number }} من {{ reservation_page.paginator.num_pages }}</span>
+      {% if reservation_page.has_next %}<a class="sa-btn sm" href="?days={{ reservation_days }}&amp;page={{ reservation_page.next_page_number }}">التالية</a>{% endif %}
+    </nav>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

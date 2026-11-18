@@ -70,15 +70,14 @@ class GrantTests(AdminKeysCase):
         assign_user(self.clerk, by=self.head, is_executor=True)
         self.assertEqual(s.role_of(self.fresh(self.clerk)), 'executor')
 
-    def test_the_panel_offers_execution_to_both_heads(self):
-        for user, columns in ((self.head, {'entry', 'archivist', 'controller', 'executor'}),
-                              (self.unit_head, {'executor'})):
+    def test_the_editor_offers_execution_to_both_heads(self):
+        # الدفعة 2: الدورُ يُغيَّر في محرّر الحساب بما يمنحه الناظر — الشعبةُ لا تمسك سجلّاً: تنفيذٌ أو قارئ
+        for user in (self.head, self.unit_head):
             with self.subTest(user=user.username):
                 self.client.force_login(user)
-                context = self.client.get(reverse('admin_panel') + '?tab=users').context
-                self.assertEqual({col['role'] for col in context['role_columns']}, columns)
-                row = next(r for r in context['people'] if r['user'] == self.clerk)
-                self.assertIn('is_executor', row)
+                response = self.client.get(reverse('system_account', args=[self.clerk.pk]))
+                self.assertEqual(set(dict(response.context['role_options'])), {'executor', 'reader'})
+                self.assertContains(response, '<option value="executor"')
 
 
 class TreeTests(AdminKeysCase):
@@ -149,7 +148,8 @@ class TreeTests(AdminKeysCase):
 class TextTests(AdminKeysCase):
     def test_the_role_names_say_what_the_roles_do(self):
         self.client.force_login(self.root)
-        body = self.client.get(reverse('admin_panel') + '?tab=users').content.decode()
+        # الدفعة 2: أسماءُ الأدوار وشرحُها في «حساب جديد» (والمحرّر) — تبويبُ الحسابات صار قائمةً للقراءة
+        body = self.client.get(reverse('system_account_new')).content.decode()
         self.assertIn('مختصّ البريد', body)
         for stale in ('مشرف المتابعة', 'مشرف متابعة', 'بريد/متابعة', 'سرّيّات كلّ الأقسام'):
             self.assertNotIn(stale, body)

@@ -7,41 +7,12 @@
     <meta name="color-scheme" content="light dark">
     <meta name="description" content="نظام متقدم لإدارة الكتب الواردة والصادرة مع متابعة آلية">
     <meta name="theme-color" content="#ff9233">
-    {% comment %}
-      الكاتبُ الوحيد للوضع الفاتح/الداكن (theme.css لا يقرأ إعدادَ الجهاز بنفسه).
-      يعمل قبل أوّل ورقة أنماط فلا يومض الوضعُ، وفي الصفحات المنقولة وحدها
-      (data-lx-page="v2") فلا تصير صفحةٌ قديمةٌ نصفَ داكنة. الاختيار في
-      localStorage «lx-theme»، وبدونه يتبع الجهاز ويتغيّر معه. الطباعةُ فاتحةٌ دائماً.
-    {% endcomment %}
+    {% include "_theme_head.html" %}
     <script>
       (function () {
         var root = document.documentElement;
         // الخطُّ الذهبيّ تحت الشريط العلويّ ينمو مرّةً في أوّل صفحةٍ من الجلسة، لا مع كلّ انتقال
         try { if (!sessionStorage.getItem('lx-shell-seen')) { root.classList.add('lx-first-paint'); sessionStorage.setItem('lx-shell-seen', '1'); } } catch (e) { /* تخزينٌ محجوب */ }
-        if (root.getAttribute('data-lx-page') !== 'v2') return;
-        var saved = null;
-        try { saved = localStorage.getItem('lx-theme'); } catch (e) { /* تخزينٌ محجوب: يتبع الجهاز */ }
-        var media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
-        function chosen() { return saved === 'dark' || saved === 'light' ? saved : (media && media.matches ? 'dark' : 'light'); }
-        function apply() {
-          var theme = chosen();
-          root.setAttribute('data-bs-theme', theme);
-          var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', theme === 'dark' ? '#0c1413' : '#0f766e');
-          document.dispatchEvent(new CustomEvent('lx-theme-change', { detail: theme }));
-        }
-        apply();
-        if (media && media.addEventListener) media.addEventListener('change', function () { if (saved !== 'dark' && saved !== 'light') apply(); });
-        window.addEventListener('beforeprint', function () { root.setAttribute('data-bs-theme', 'light'); });
-        window.addEventListener('afterprint', apply);
-        window.lxTheme = {
-          get: function () { return root.getAttribute('data-bs-theme'); },
-          set: function (theme) {
-            saved = theme;
-            try { localStorage.setItem('lx-theme', theme); } catch (e) { /* يبقى للجلسة وحدها */ }
-            apply();
-          }
-        };
       })();
     </script>
 
@@ -92,7 +63,7 @@
     </style>
     
     {# Optional per-page CSS block (for legacy templates) #}
-    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261115-colors1">{% endif %}
+    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261118-batch3a">{% endif %}
     {% block extra_css %}{% endblock %}
 
     {% block extra_head %}{% endblock %}
@@ -195,11 +166,11 @@
             </div>
             <div class="app-sidebar-group" role="group" aria-labelledby="navgArchive">
               <div class="app-sidebar-gtitle" id="navgArchive">الأرشيف</div>
-              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' %} active{% endif %}" href="{% url 'book_unified' %}" title="كلّ الكتب">
+              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'book_unified' or request.resolver_match.url_name == 'book_detail' or request.resolver_match.url_name == 'book_edit' or request.resolver_match.url_name == 'book_report' %} active{% endif %}" href="{% url 'book_unified' %}" title="كلّ الكتب">
                 <i class="bi bi-journals" aria-hidden="true"></i>
                 <span>كلّ الكتب</span>
               </a>
-              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dossier_list' or request.resolver_match.url_name == 'dossier_detail' %} active{% endif %}" href="{% url 'dossier_list' %}" title="الأضابير">
+              <a class="app-sidebar-link{% if request.resolver_match.url_name == 'dossier_list' or request.resolver_match.url_name == 'dossier_detail' or request.resolver_match.url_name == 'dossier_report' %} active{% endif %}" href="{% url 'dossier_list' %}" title="الأضابير">
                 <i class="bi bi-folder2-open" aria-hidden="true"></i>
                 <span>الأضابير</span>
               </a>
@@ -237,7 +208,7 @@
             </a>
             {# الحسابات العامة لمدير النظام وحده؛ إدارة القسم لها رابط مستقل أدناه. #}
             {% if nav.roles %}
-            <a class="app-sidebar-link" href="{% url 'admin_panel' %}?tab=users" title="المستخدمون">
+            <a class="app-sidebar-link" href="{% url 'system_accounts' %}" title="المستخدمون">
               <i class="bi bi-person-gear"></i>
               <span>المستخدمون</span>
             </a>
@@ -256,22 +227,11 @@
               <i class="bi bi-diagram-3-fill"></i>
               <span>{% if request.user.is_superuser %}إدارة النظام{% else %}إدارة القسم{% endif %}</span>
             </a>
-            {% if request.resolver_match.url_name == 'admin_panel' %}
-            {% with admin_tab=request.GET.tab|default:'overview' %}
-            <div class="app-sidebar-sub" role="group" aria-label="أقسام الإدارة">
-              <a class="app-sidebar-sublink{% if admin_tab == 'overview' %} active{% endif %}" href="{% url 'admin_panel' %}?tab=overview"><i class="bi bi-speedometer2" aria-hidden="true"></i><span>نظرة عامة</span></a>
-              <a class="app-sidebar-sublink{% if admin_tab == 'departments' %} active{% endif %}" href="{% url 'admin_panel' %}?tab=departments"><i class="bi bi-diagram-2" aria-hidden="true"></i><span>الأقسام والهيكل</span></a>
-              <a class="app-sidebar-sublink{% if admin_tab == 'users' %} active{% endif %}" href="{% url 'admin_panel' %}?tab=users"><i class="bi bi-people" aria-hidden="true"></i><span>الحسابات والأدوار</span></a>
-              {% if nav.roles %}
-              <a class="app-sidebar-sublink{% if admin_tab == 'groups' %} active{% endif %}" href="{% url 'admin_panel' %}?tab=groups"><i class="bi bi-collection" aria-hidden="true"></i><span>العناقيد</span></a>
-              <a class="app-sidebar-sublink{% if admin_tab == 'reservations' %} active{% endif %}" href="{% url 'admin_panel' %}?tab=reservations"><i class="bi bi-list-ol" aria-hidden="true"></i><span>حجوزات الأرقام</span></a>
-              {% endif %}
-              {% if nav.audit %}
-              <a class="app-sidebar-sublink" href="{% url 'audit_log' %}"><i class="bi bi-clock-history" aria-hidden="true"></i><span>سجل الحركات</span></a>
-              {% endif %}
-            </div>
-            {% endwith %}
-            {% endif %}
+            {# الدفعة 2: حساباتُ شجرته صفحةٌ في البرنامج — ومحرّرُ الحساب منها (كانت روابطَ فرعيّة للّوحة المستقلّة لا تُعرض أبداً) #}
+            <a class="app-sidebar-link{% if request.resolver_match.url_name == 'system_accounts' or request.resolver_match.url_name == 'system_account' or request.resolver_match.url_name == 'system_account_new' %} active{% endif %}" href="{% url 'system_accounts' %}" title="الحسابات">
+              <i class="bi bi-people"></i>
+              <span>الحسابات</span>
+            </a>
             {% endif %}
             </div>
             {% endif %}

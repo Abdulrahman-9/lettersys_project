@@ -155,6 +155,12 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
                     raise PermissionDenied('لا يمكن لرئيس القسم إزالة موظّفٍ من نطاقه.')
             else:
                 _guard_department(by, department)
+            # النقلُ يُلغي الاستثناءاتِ أدناه — فلا يُلغي بالنقل ما لا يملك إلغاءه بيده (فيبل 11-16)
+            from core.scoping import foreign_exceptions
+            foreign = foreign_exceptions(by, user)
+            if foreign:
+                raise PermissionDenied('له استثناءاتٌ لا تملك تعديلها (%s)، والنقلُ يُلغيها — فنقلُه عند مدير النظام.'
+                                       % '، '.join(foreign))
             # نقلُ رئيسٍ منحُ رئاسةٍ في مكانٍ جديد: رئيسُ وحدةٍ يُنقل إلى قسم ناقله
             # فيصير رئيساً نظيراً على شجرته كلّها ولا يُدار بعدها إلّا من المدير
             if profile.is_department_head:
@@ -213,10 +219,12 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
                 (is_executor, 'executor', 'is_executor')):
             if flag is None:
                 continue
-            _guard_grant(by, role)
             group, _ = Group.objects.get_or_create(name=ROLE_GROUP_NAMES[role])
             had = user.groups.filter(pk=group.pk).exists()
             if flag != had:
+                # منحاً أو نزعاً — ما لا يمنحه لا ينزعه؛ والعلَمُ الذي لا يتغيّر لا يُحرس (كان يُرفض به
+                # تغييرُ الرئيس دورَ موظّفه: ``set_user_role`` يمرّر الأعلامَ الستّة وفيها أرشيفُ الشركة — الدفعة 2)
+                _guard_grant(by, role)
                 (user.groups.add if flag else user.groups.remove)(group)
                 changes[key] = flag
 
@@ -238,6 +246,13 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
             if role not in roles_for_department(profile.department):
                 raise ValidationError('دورُ «%s» لا يُسند في «%s» — غيّر الدورَ أوّلاً.' % (
                     ROLE_LABELS[role], profile.department.name if profile.department else 'بلا قسم'))
+            # قرارُ المالك 2026‑11‑16: دورٌ واحدٌ لكلّ شخص — الزائدُ استثناءٌ باسمه من محرّر الحساب.
+            from core.scoping import extra_role_memberships
+            # مديرُ النظام يملك كلَّ شيء فعضويّاتُه بلا أثر — لا يُرفض حفظُ صفّه (لقطةُ المالك 11-16: admin بأربع خانات)
+            extra = [] if user.is_superuser else extra_role_memberships(user)
+            if extra:
+                raise ValidationError('للشخص دورٌ واحد: «%s» — و«%s» زيادةٌ تُمنح استثناءً من محرّر الحساب.' % (
+                    ROLE_LABELS[role], '» و«'.join(extra)))
 
         if changes:
             _log(by, 'ASSIGN_USER', {'user': user.get_username(), **changes})
@@ -256,9 +271,35 @@ def _cancel_exceptions(user):
     return [{'capability': key, 'allowed': allowed} for key, allowed in rows]
 
 
+def void_temporary_password(user, *, by, reason):
+    """يُبطل كلمةً مؤقّتةً لم يغيّرها صاحبُها بعد — قرارُ المالك 11-18 (توصيةُ فيبل).
+
+    رئيسُ القسم يرى الكلمةَ المؤقّتة لمن يعيد كلمتَه أو يُنشئه؛ فإن رفعه بعدها إلى ما يفتح السرّيّ أو يدير غيرَه
+    (``is_sensitive_account``) دخل بحسابه إلى ما لا يملكه هو. الإبطالُ يُغلق ذلك: لا كلمةَ صالحة، ومديرُ النظام
+    يصدر التالية (``reset_department_user_password``). كلمةٌ غيّرها صاحبُها لا تُمسّ. يعيد True إن أُبطلت.
+    """
+    from core.models import UserPassword
+
+    profile = getattr(user, 'profile', None)
+    if profile is None or not profile.must_change_password or not user.has_usable_password():
+        return False
+    with transaction.atomic():
+        user.set_unusable_password()
+        user.save(update_fields=['password'])
+        UserPassword.objects.filter(user=user).delete()
+        # تحت «إعادة تعيين كلمة مرور» بعلامة voided — الأفعالُ قائمةٌ مغلقة، والإبطالُ إعادةٌ إلى «لا كلمة»
+        _log(by, 'PASSWORD_RESET', {'user': user.get_username(), 'voided': True,
+                                    'summary': f'أُبطلت الكلمةُ المؤقّتة لـ{user.get_username()} — {reason}'[:500]})
+    return True
+
+
 def create_department_user(*, by, department, username, first_name='',
                            last_name='', email='', job_title='', role='viewer'):
-    """ينشئ حساباً محلياً بكلمة مؤقتة عشوائية ويُعيدها لعرضٍ واحد."""
+    """ينشئ حساباً محلياً بكلمة مؤقتة عشوائية ويُعيدها لعرضٍ واحد.
+
+    حسابٌ حسّاسٌ يُنشئه غيرُ مدير النظام (مختصُّ بريد أو أرشفة) لا كلمةَ صالحةً له، ويُعاد ``None``:
+    كلمتُه الأولى يصدرها المدير — وإلّا دخل الرئيسُ بحسابٍ يفتح ما لا يفتحه هو (قرارُ المالك 11-18).
+    """
     from core.models import SecuritySettings, UserPassword, UserProfile
     from core.roles import ROLE_GROUP_NAMES, ensure_role_groups
     from core.scoping import ADMIN_ONLY_ROLES, HEAD_GRANTABLE_ROLES
@@ -329,6 +370,14 @@ def create_department_user(*, by, department, username, first_name='',
             'user': user.get_username(), 'department': department.code,
             'job_title': job_title, 'role': role,
         })
+    from core.scoping import is_sensitive_account
+
+    if not _is_account_admin(by) and is_sensitive_account(user):
+        with transaction.atomic():
+            user.set_unusable_password()
+            user.save(update_fields=['password'])
+            UserPassword.objects.filter(user=user).delete()
+        return user, None
     return user, password
 
 

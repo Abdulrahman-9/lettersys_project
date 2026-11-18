@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """(ج‑3) إنشاءُ حساب — الأدوارُ بحسب القسم المختار، ثمّ يُفتح محرّرُه بكلمته المؤقّتة مرّةً واحدة (2026‑11‑12).
 
-التصميمُ المعتمد shots_v2/v2_account_new.png. الصفحةُ لمدير النظام وحده؛ والخادمُ يعيد فحصَ الواجهة
+التصميمُ المعتمد shots_v2/v2_account_new.png. الصفحةُ لمدير النظام ولرئيس القسم في شجرته بما يمنحه (الدفعة 2،
+قرارُ المالك 11-16)؛ والخادمُ يعيد فحصَ الواجهة
 (``roles_for_department``): وحدةٌ لا تمسك سجلّاً لا يُنشأ فيها مدخلٌ ولا مختصُّ بريد.
 """
 import json
@@ -37,16 +38,34 @@ class NewAccountCase(TestCase):
 
 
 class PageTests(NewAccountCase):
-    def test_the_page_is_the_system_admins(self):
-        head = User.objects.create_user('c3_head', password='pw-c3-1111')
-        UserProfile.objects.update_or_create(user=head, defaults={'department': self.dept, 'is_department_head': True})
-        self.client.force_login(head)
+    def test_whoever_manages_nobody_is_refused(self):
+        plain = User.objects.create_user('c3_plain', password='pw-c3-1111')
+        UserProfile.objects.update_or_create(user=plain, defaults={'department': self.dept})
+        self.client.force_login(plain)
         self.assertEqual(self.client.get(URL).status_code, 403)
         self.assertEqual(self.client.post(URL, {'username': 'c3_sneak', 'department': self.dept.pk,
                                                 'role': 'reader'}).status_code, 403)
         self.assertFalse(User.objects.filter(username='c3_sneak').exists())
         self.client.force_login(self.root)
         self.assertEqual(self.client.get(URL).status_code, 200)
+
+    def test_a_head_creates_in_his_tree_only_what_he_grants(self):
+        """الدفعة 2: رئيسُ القسم يستعمل الصفحةَ نفسها — أقسامُ شجرته وأدوارُ ما يمنحه، والخادمُ يعيد الفحص."""
+        far = Department.objects.create(name='قسم بعيد', code='نش9')
+        head = User.objects.create_user('c3_head', password='pw-c3-1111')
+        UserProfile.objects.update_or_create(user=head, defaults={'department': self.dept, 'is_department_head': True})
+        self.client.force_login(head)
+        page = self.client.get(URL)
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual({d.pk for d in page.context['departments']}, {self.dept.pk, self.unit.pk})
+        self.assertNotIn('head', page.context['department_roles'][str(self.dept.pk)]['roles'])
+        for username, data in (('c3_far', {'department': far.pk, 'role': 'reader'}),
+                               ('c3_boss', {'department': self.dept.pk, 'role': 'head'})):
+            with self.subTest(username=username):
+                self.create(username=username, **data)
+                self.assertFalse(User.objects.filter(username=username).exists())
+        self.assertEqual(self.create(username='c3_clerk', department=self.dept.pk, role='entry').status_code, 200)
+        self.assertEqual(s.role_of(User.objects.get(username='c3_clerk')), 'entry')
 
     def data(self, name):
         body = self.client.get(URL).content.decode()
@@ -74,7 +93,7 @@ class PageTests(NewAccountCase):
         self.assertIn(s.CAPABILITIES[key].label, meta['entry']['can'])
 
     def test_the_accounts_list_links_here_for_the_system_admin(self):
-        self.assertIn(f'href="{URL}"', self.client.get(reverse('admin_panel') + '?tab=users').content.decode())
+        self.assertIn(f'href="{URL}"', self.client.get(reverse('system_accounts')).content.decode())
 
 
 class CreateTests(NewAccountCase):
@@ -110,7 +129,9 @@ class CreateTests(NewAccountCase):
         body = response.content.decode()
         self.assertIn('ae-secret', body)
         self.assertIn('no-store', response['Cache-Control'])
-        self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+        # same-origin لا no-referrer: مع no-referrer يرسل المتصفّحُ أصلَ نماذج الصفحة «null» فيرفض CSRF كلَّ حفظ
+        # بعد الإنشاء (403 المالك في الإنتاج 11-16) — والكلمةُ في المتن، فيكفي ألّا يغادر العنوانُ الموقع
+        self.assertEqual(response['Referrer-Policy'], 'same-origin')
         editor = reverse('system_account', args=[user.pk])
         forms = re.findall(r'<form method="post"[^>]*>', body)   # العنوانُ عنوانُ الإنشاء: نموذجٌ بلا وجهة يُنشئ ثانيةً
         self.assertEqual([form for form in forms if 'action="' not in form], [])

@@ -56,7 +56,8 @@ class DepartmentPageButtonTests(DeptEntryCase):
         target = f'href="{DESK}?department={self.dept.pk}"'
         self.assertIn(target, self.client.get(reverse('system_department', args=[self.dept.pk])).content.decode())
         body = self.client.get(reverse('system_department', args=[self.unit.pk])).content.decode()
-        self.assertNotIn(f'?department={self.unit.pk}"', body)
+        # زرُّ الإدخال وحده (رابطُ «الموظّفون ⟵ إدارتهم» يحمل ?department= إلى قائمة الحسابات — الدفعة 2)
+        self.assertNotIn(f'href="{DESK}?department={self.unit.pk}"', body)
 
 
 class DeskTargetModeTests(DeptEntryCase):

@@ -54,10 +54,7 @@ class ReservationAdminReportTests(TestCase):
             assigned_at=None, reserved_days_ago=2)
 
         self.client.force_login(self.admin)
-        response = self.client.get(reverse('admin_panel'), {
-            'tab': 'reservations',
-            'days': '7',
-        })
+        response = self.client.get(reverse('system_reservations'), {'days': '7'})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['reservation_summary']['active'], 1)
@@ -66,7 +63,9 @@ class ReservationAdminReportTests(TestCase):
         self.assertEqual(response.context['reservation_summary']['recycled'], 1)
         self.assertContains(response, '2 ساعة')
         self.assertContains(response, 'انتهت المهلة — بانتظار التنظيف')
-        self.assertContains(response, 'غير متاح — حجز سابق لإضافة تتبّع الإسناد')
+        # الحجزُ السابقُ للتتبّع: كلمةٌ في الخليّة وشرحٌ واحدٌ تحت الجدول لا جملةٌ مكرّرةٌ في كلّ صفّ (الدفعة 1)
+        self.assertContains(response, '<td class="sa-when">غير متاح</td>', html=True)
+        self.assertContains(response, 'حجزٌ سابقٌ لإضافة تتبّع الإسناد', count=1)
         self.assertContains(response, cooldown.formatted)
         self.assertNotContains(response, 'client_key')
         self.assertNotContains(response, 'session_key')
@@ -85,7 +84,7 @@ class ReservationAdminReportTests(TestCase):
 
     def test_only_superusers_can_open_reservation_report(self):
         self.client.force_login(self.writer)
-        response = self.client.get(reverse('admin_panel'), {'tab': 'reservations'})
+        response = self.client.get(reverse('system_reservations'))
         self.assertEqual(response.status_code, 403)
 
     def test_days_are_allowlisted_and_recent_history_is_paged(self):
@@ -98,12 +97,11 @@ class ReservationAdminReportTests(TestCase):
             )
         self.client.force_login(self.admin)
 
-        first = self.client.get(reverse('admin_panel'), {
-            'tab': 'reservations', 'days': '999',
-        })
-        second = self.client.get(reverse('admin_panel'), {
-            'tab': 'reservations', 'days': '30', 'page': '2',
-        })
+        first = self.client.get(reverse('system_reservations'), {'days': '999'})
+        second = self.client.get(reverse('system_reservations'), {'days': '30', 'page': '2'})
+        # الدفعة 1: الرابطُ القديم يُحوَّل إلى الصفحة ويحمل الفترةَ والصفحة
+        old = self.client.get(reverse('admin_panel'), {'tab': 'reservations', 'days': '30', 'page': '2'})
+        self.assertEqual(old['Location'], reverse('system_reservations') + '?days=30&page=2')
 
         self.assertEqual(first.context['reservation_days'], 7)
         self.assertEqual(first.context['reservation_page'].paginator.count, 51)

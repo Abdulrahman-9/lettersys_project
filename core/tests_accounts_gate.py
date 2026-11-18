@@ -42,9 +42,11 @@ class AccountsGateTests(TestCase):
         self.client.force_login(self.boss)
         hub = self.client.get(reverse('settings_hub')).content.decode('utf-8')
         entities = self.client.get(reverse('entity_list')).content.decode('utf-8')
-        self.assertIn(reverse('admin_panel'), hub)
+        self.assertIn(reverse('system_accounts'), hub)   # الدفعة 2: بابُ الحسابات قائمتُها في البرنامج
         self.assertRegex(entities, r'href="[^"]*view=groups')
-        self.assertEqual(self.client.get(reverse('admin_panel') + '?tab=users').status_code, 200)
+        # الدفعة 2: الحساباتُ قائمةٌ في البرنامج، والرابطُ القديم يُحوَّل إليها
+        self.assertEqual(self.client.get(reverse('admin_panel') + '?tab=users')['Location'], reverse('system_accounts'))
+        self.assertEqual(self.client.get(reverse('system_accounts')).status_code, 200)
 
     def test_the_nav_gate_is_the_page_gate(self):
         plain = User.objects.create_user('gplain', password='pw-gplain-1111111')
@@ -63,9 +65,9 @@ class PasswordResetTests(TestCase):
         self.clerk = User.objects.create_user('rclerk', password='old-pass-1234567')
 
     def _reset(self, who, target):
+        # الدفعة 2: الكلمةُ المؤقّتة من محرّر الحساب
         self.client.force_login(who)
-        return self.client.post(reverse('admin_panel'), {
-            'action': 'reset_user_password', 'tab': 'users', 'user_id': target.pk})
+        return self.client.post(reverse('system_account', args=[target.pk]), {'action': 'password'})
 
     def test_a_non_superuser_cannot_reset(self):
         staff = User.objects.create_user('rstaff', password='pw-rstaff-1111111', is_staff=True)

@@ -39,14 +39,18 @@ class ThemeSourceGuardsTests(SimpleTestCase):
         self.assertNotIn('[data-theme="dark"]', _read('static/app.css'))
 
     def test_the_head_script_runs_before_any_stylesheet(self):
-        base = _read('templates/base.html')
-        head, m = _head_script(base)
-        self.assertIsNotNone(m, 'سكربتُ الوضع غائبٌ عن الرأس')
-        first_link = re.search(r'<link\s', head)
-        self.assertLess(m.start(), first_link.start(), 'السكربتُ بعد أوّل ورقة أنماط ⟵ وميض')
+        # الكاتبُ في ملفٍّ واحد (11-15) يضمّنه base.html وصفحةُ التحقّق العامّة — قبل أوّل ورقة أنماط في كلتيهما
+        for rel in ('templates/base.html', 'templates/core/signature_verify.html'):
+            with self.subTest(page=rel):
+                head = _read(rel)[:_read(rel).index('</head>')]
+                include = head.find('{% include "_theme_head.html" %}')
+                self.assertGreater(include, -1, 'سكربتُ الوضع غائبٌ عن الرأس')
+                first_link = re.search(r'<link\s', head)
+                self.assertLess(include, first_link.start(), 'السكربتُ بعد أوّل ورقة أنماط ⟵ وميض')
+        self.assertIsNotNone(_head_script(_read('templates/_theme_head.html') + '</head>')[1])
 
     def test_the_head_script_only_touches_migrated_pages(self):
-        _, m = _head_script(_read('templates/base.html'))
+        _, m = _head_script(_read('templates/_theme_head.html') + '</head>')
         script = m.group(1)
         self.assertIn("getAttribute('data-lx-page') !== 'v2'", script)
         self.assertIn("setAttribute('data-bs-theme'", script)

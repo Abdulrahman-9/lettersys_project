@@ -1,0 +1,16 @@
+{% comment %}
+  صفُّ صلاحيّةٍ في المصفوفة أو في «قادمة» (الدفعة 3أ). كلُّ خانةٍ رمزٌ وكلمة — لا حالةَ باللون وحده:
+  المقفلةُ قفلٌ وكلمة، والمعدَّلةُ نقطة (``mod``)، وما لم يُحفظ إطارٌ وكلمة «لم تُحفظ» (role_matrix.js).
+  الزرُّ يحمل قيمةَ الخادم كما هي (``role:key:0|1``) فيبقى زرَّ حفظٍ لنفسه بلا السكربت.
+{% endcomment %}
+<tr id="cap-{{ row.key }}" data-key="{{ row.key }}" data-label="{{ row.label }}">
+  <th scope="row"><span class="rm-label">{{ row.label }}</span>
+    {# على مقفلٍ أو ما لم يُربط لا يسري الاستثناء (``has_capability``) — يُعدّ ويُقال «خامدة» #}
+    {% if row.exceptions %}<a class="rm-ex" href="{{ row.exceptions_url }}">{% if row.locked or not row.wired %}استثناءاتٌ خامدة{% else %}استثناءاتٌ شخصيّة{% endif %}: {{ row.exceptions }}<span class="visually-hidden"> على «{{ row.label }}»</span><span aria-hidden="true"> ←</span></a>{% endif %}
+    {% if row.changed %}<span class="rm-changed"><small>{{ row.last_text }}</small><button type="submit" class="rm-reset" name="reset" value="{{ row.key }}" data-rm-reset="{{ row.label }}" data-rm-count="{{ row.changed }}">رجوع إلى المعتمد</button></span>{% endif %}</th>
+  {% for c in row.cells %}
+  <td>{% if c.locked %}<span class="rm-cell lk{% if c.allowed %} on{% endif %}" role="img" aria-label="{{ row.label }} لدور {{ c.label }}: {% if c.allowed %}يستطيع{% else %}لا يستطيع{% endif %}، مقفل"><i class="bi bi-lock-fill" aria-hidden="true"></i>{{ c.allowed|yesno:'نعم,لا' }}</span>
+    {% elif not row.wired %}<span class="rm-cell nw{% if c.allowed %} on{% endif %}{% if c.row %} mod{% endif %}" role="img" aria-label="{{ row.label }} لدور {{ c.label }}: {% if c.allowed %}يستطيع{% else %}لا يستطيع{% endif %}، لم يُربط حارسها بعد{% if c.row %}، معدَّلة عن المعتمد{% endif %}"><i class="bi {% if c.allowed %}bi-check-lg{% else %}bi-dash{% endif %}" aria-hidden="true"></i>{{ c.allowed|yesno:'نعم,لا' }}</span>
+    {% else %}<button type="submit" name="change" value="{{ c.role }}:{{ row.key }}:{{ c.allowed|yesno:'0,1' }}" class="rm-cell{% if c.allowed %} on{% endif %}{% if c.row %} mod{% endif %}" data-role="{{ c.role }}" data-saved="{{ c.allowed|yesno:'1,0' }}" aria-pressed="{{ c.allowed|yesno:'true,false' }}" aria-label="{{ row.label }} لدور {{ c.label }}{% if c.row %}، معدَّلة عن المعتمد{% endif %}"><i class="bi {% if c.allowed %}bi-check-lg{% else %}bi-dash{% endif %}" aria-hidden="true"></i><span class="rm-word">{{ c.allowed|yesno:'نعم,لا' }}</span><span class="rm-tag" aria-hidden="true">لم تُحفظ</span></button>{% endif %}</td>
+  {% endfor %}
+</tr>

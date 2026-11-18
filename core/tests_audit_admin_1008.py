@@ -32,21 +32,20 @@ class UserRolesTests(TestCase):
     def setUp(self):
         self.client.force_login(self.boss)
 
-    def html(self):
-        return self.client.get(reverse('admin_panel') + '?tab=users').content.decode('utf-8')
+    def html(self, user):
+        # الدفعة 2: الحذفُ في محرّر الحساب، بتأكيد الهويّة
+        return self.client.get(reverse('system_account', args=[user.pk])).content.decode('utf-8')
 
     def create(self, username):
         dept, _ = Department.objects.get_or_create(code='ق-1008', defaults={'name': 'قسم 1008'})
-        return self.client.post(reverse('admin_panel'), {
-            'action': 'create_department_user', 'tab': 'users', 'department': dept.pk,
-            'username': username, 'role': 'viewer'})
+        return self.client.post(reverse('system_account_new'), {
+            'department': dept.pk, 'username': username, 'role': 'reader'})
 
     def test_delete_is_a_confirmed_form_and_not_on_my_row(self):
-        html = self.html()
-        self.assertNotIn('deleteUser(', html)
-        forms = re.findall(r'data-confirm="حذف حساب «([^»]+)»', html)
-        self.assertIn('roles_other', forms)
-        self.assertNotIn('roles_boss', forms)
+        other, mine = self.html(self.other), self.html(self.boss)
+        self.assertNotIn('deleteUser(', other)
+        self.assertEqual(re.findall(r'data-confirm="حذفُ حساب «([^»]+)»', other), ['roles_other'])
+        self.assertEqual(re.findall(r'data-confirm="حذفُ حساب «([^»]+)»', mine), [])
 
     def test_bad_usernames_are_refused(self):
         for bad in ('a b', "x');alert(1);('", '<b>x</b>'):

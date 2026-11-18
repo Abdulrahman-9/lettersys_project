@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}الحسابات والأدوار{% endblock %}
+{% comment %}
+  الدفعة 2 (11-16): تحلّ محلّ تبويب «الحسابات والأدوار» في اللوحة المستقلّة. للقراءة فقط — لا حقلَ في
+  الجدول؛ الصفُّ رابطٌ إلى محرّر الحساب (طريقُ الكتابة الوحيد). التصفيةُ والفرزُ والصفحاتُ من الخادم
+  (``system_accounts_view``). رئيسُ القسم يرى شجرتَه، ولا يُحمَّل له شريطُ النظام فتُحمَّل أنماطُه هنا.
+{% endcomment %}
+{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261118-batch3a">{% endif %}{% endblock %}
+{% block content %}
+<div class="sa-page">
+  <div class="sa-head">
+    <div><h1>الحسابات والأدوار <span class="sa-count">{{ total }}</span></h1>
+      <p>{% if is_admin %}كلّ الحسابات. افتح حساباً لتغيير دوره أو قسمه أو استثناءاته أو كلمة مروره.{% else %}حسابات شجرتك. افتح حساباً لتغيير دوره بالأدوار التي تملك منحها، أو قسمه داخل شجرتك.{% endif %}</p></div>
+    <span class="sa-grow"></span>
+    {% if is_admin %}<a class="sa-btn" href="{% url 'system_roles' %}"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>الأدوار والصلاحيّات</a>{% endif %}
+    {% if can_create %}<a class="sa-btn pri" href="{% url 'system_account_new' %}"><i class="bi bi-person-plus-fill" aria-hidden="true"></i>حساب جديد</a>{% endif %}
+  </div>
+  {% if scope_text %}<p class="sa-scope"><i class="bi bi-diagram-3" aria-hidden="true"></i>نطاقك: <b>{{ scope_text }}</b></p>{% endif %}
+
+  <section class="sa-card" aria-labelledby="accListTitle">
+    <h2 id="accListTitle" class="visually-hidden">قائمة الحسابات</h2>
+    <form class="sa-toolbar" method="get" role="search" aria-label="تصفية الحسابات">
+      <input type="search" id="accQuery" name="q" value="{{ query }}" maxlength="100" placeholder="ابحث بالاسم أو اسم الدخول أو المسمّى" aria-label="بحث بالاسم أو اسم الدخول أو المسمّى">
+      <label class="visually-hidden" for="accRole">الدور</label>
+      <select class="sa-select" id="accRole" name="role">
+        <option value="">كلّ الأدوار</option>
+        {% for key, label in role_options %}<option value="{{ key }}"{% if key == role %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      {% if departments|length > 1 %}
+      <label class="visually-hidden" for="accDepartment">القسم</label>
+      <select class="sa-select" id="accDepartment" name="department">
+        <option value="">كلّ الأقسام</option>
+        {% if is_admin %}<option value="none"{% if no_department %} selected{% endif %}>بلا قسم</option>{% endif %}
+        {% for d in departments %}<option value="{{ d.pk }}"{% if department and d.pk == department.pk %} selected{% endif %}>{{ d.code }} — {{ d.name }}</option>{% endfor %}
+      </select>
+      {% endif %}
+      {% if exception %}<input type="hidden" name="exception" value="{{ exception }}">{% endif %}
+      {% if status != 'all' %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+      {% if sort != 'name' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+      {% if dir == 'desc' %}<input type="hidden" name="dir" value="desc">{% endif %}
+      <button type="submit" class="sa-btn">تصفية</button>
+    </form>
+    {% if exception or role_matrix_url %}
+    {# الطريقُ إلى المصفوفة وبالعكس (الدفعة 3أ) — لمدير النظام وحده #}
+    <p class="sa-acc-context">
+      {% if exception %}<span><i class="bi bi-funnel-fill" aria-hidden="true"></i>أصحاب استثناءٍ شخصيّ على «{{ exception_label }}»</span>
+      {% if exception_note %}<small class="sa-acc-note">{{ exception_note }}</small>{% endif %}
+      <a href="{{ exception_matrix_url }}">صفّها في المصفوفة</a>
+      <a href="{{ exception_clear_url }}">إزالة هذه التصفية</a>{% endif %}
+      {% if role_matrix_url %}<a href="{{ role_matrix_url }}">ما يستطيعه دور «{{ role_label }}» في المصفوفة<span aria-hidden="true"> ←</span></a>{% endif %}
+    </p>
+    {% endif %}
+    <div class="sa-seg sa-acc-status" role="group" aria-label="الحالة">
+      {% for s in statuses %}<a href="{{ s.url }}"{% if s.on %} class="on" aria-current="true"{% endif %}>{{ s.label }} <b>{{ s.count }}</b></a>{% endfor %}
+    </div>
+
+    <div class="sa-scroll">
+      <table class="sa-reg sa-acc">
+        <thead><tr>
+          {% for c in columns %}<th scope="col"{% if c.aria %} aria-sort="{{ c.aria }}"{% endif %}><a class="sa-sort" href="{{ c.url }}">{{ c.label }}{% if c.aria == 'ascending' %}<i class="bi bi-arrow-up" aria-hidden="true"></i>{% elif c.aria == 'descending' %}<i class="bi bi-arrow-down" aria-hidden="true"></i>{% endif %}</a></th>{% endfor %}
+        </tr></thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>
+              {% if row.can_edit %}<a class="sa-acc-name" href="{% url 'system_account' row.user.pk %}">{% firstof row.name row.username %}</a>
+              {% else %}<span class="sa-acc-name">{% firstof row.name row.username %}</span> <span class="sa-chip">{{ row.note }}</span>{% endif %}
+              <small class="sa-acc-sub"><bdi dir="ltr">{{ row.username }}</bdi>{% if row.job_title %} · {{ row.job_title }}{% endif %}</small>
+            </td>
+            <td>{% if row.role == 'admin' %}<span class="sa-chip ok">{{ row.role_label }}</span>{% else %}{{ row.role_label }}{% endif %}{% if exception %} <span class="sa-chip{% if row.exception == 'added' %} ok{% elif row.exception == 'blocked' %} bad{% endif %}"><span class="visually-hidden">استثناء </span>{% if row.exception == 'added' %}مضاف{% elif row.exception == 'blocked' %}محجوب{% else %}خامد{% endif %}</span>{% endif %}</td>
+            <td>{% if row.department %}<span class="sa-stamp small">{{ row.department.code }}</span> {{ row.department.name }}{% else %}<span class="sa-when">بلا قسم</span>{% endif %}</td>
+            <td><span class="sa-chip {% if row.is_active %}ok{% else %}bad{% endif %}">{% if row.is_active %}نشط{% else %}موقوف{% endif %}</span>{% if row.temp_password %} <span class="sa-chip warn">كلمة مؤقّتة</span>{% endif %}</td>
+            <td class="sa-when">{% if row.last_login %}{{ row.last_login|date:'Y-m-d' }}{% else %}لم يدخل بعد{% endif %}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="sa-empty">{% if applied %}لا حساب يطابق {{ applied }}. <a href="{{ clear_url }}">مسح التصفية</a>{% else %}لا حسابات في نطاقك بعد.{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="sa-more" aria-label="صفحات الحسابات">
+      {% if prev_url %}<a class="sa-btn sm" href="{{ prev_url }}">السابقة</a>{% else %}<span></span>{% endif %}
+      <span>صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }} · {{ shown_text }}</span>
+      {% if next_url %}<a class="sa-btn sm" href="{{ next_url }}">التالية</a>{% else %}<span></span>{% endif %}
+    </nav>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

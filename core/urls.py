@@ -55,7 +55,7 @@ urlpatterns = [
     path("<int:pk>/edit/", views.book_edit, name="book_edit"),
     path("<int:pk>/status/", views.book_change_status, name="book_change_status"),
     # الحساباتُ بابٌ واحد: تبويبُ لوحة الإدارة. العنوانُ القديم يبقى للروابط المحفوظة.
-    path("users/", RedirectView.as_view(url='/books/admin/?tab=users')),
+    path("users/", RedirectView.as_view(pattern_name='system_accounts')),
     path("api/book-notes/<int:book_id>/", views.update_book_notes, name="update_book_notes"),
     path("api/attachment/<int:att_id>/ocr/", views.attachment_ocr_text, name="attachment_ocr_text"),
     path("api/book-comments/<int:book_id>/add/", views.add_book_comment, name="add_book_comment"),
@@ -82,6 +82,8 @@ urlpatterns = [
     path("system/department/<int:pk>/", system_admin.system_department_view, name="system_department"),
     path("system/ops/", system_admin.system_ops_view, name="system_ops"),
     path("system/roles/", system_admin.system_roles_view, name="system_roles"),
+    path("system/reservations/", system_admin.system_reservations_view, name="system_reservations"),
+    path("system/accounts/", system_admin.system_accounts_view, name="system_accounts"),
     path("system/ui-kit/", system_admin.system_ui_kit_view, name="system_ui_kit"),
     path("system/account/new/", system_admin.system_account_new_view, name="system_account_new"),
     path("system/account/<int:pk>/", system_admin.system_account_view, name="system_account"),

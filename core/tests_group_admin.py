@@ -92,23 +92,26 @@ class GroupEditFormTests(TestCase):
                                 member_ids=[self.member.pk])
 
     def test_edit_link_prefills_the_form(self):
-        res = self.client.get(reverse('admin_panel'),
-                              {'tab': 'groups', 'edit': self.group.pk})
+        # الدفعة 1: التعديلُ في ورشة العناقيد — والرابطُ القديم يُحوَّل إليها بمعرّفه
+        old = self.client.get(reverse('admin_panel'), {'tab': 'groups', 'edit': self.group.pk})
+        self.assertEqual(old['Location'],
+                         reverse('entity_list') + '?view=groups&edit=%d' % self.group.pk)
+        res = self.client.get(reverse('entity_list'), {'view': 'groups', 'edit': self.group.pk})
 
-        self.assertEqual(res.context['editing'], self.group)
-        self.assertEqual(res.context['member_ids'], {self.member.pk})
+        self.assertEqual(res.context['editing_group'], self.group)
+        self.assertEqual(res.context['editing_member_ids'], {self.member.pk})
 
     def test_no_edit_param_means_a_blank_form(self):
-        res = self.client.get(reverse('admin_panel'), {'tab': 'groups'})
+        res = self.client.get(reverse('entity_list'), {'view': 'groups'})
 
-        self.assertIsNone(res.context['editing'])
+        self.assertIsNone(res.context['editing_group'])
 
     def test_every_active_entity_is_offered(self):
         """عنقودٌ لا يجد عضوَه في القائمة عيبٌ صامت — فلا سقفَ على الجهات."""
         for i in range(30):
             Entity.objects.create(name='جهة %d' % i)
 
-        res = self.client.get(reverse('admin_panel'), {'tab': 'groups'})
+        res = self.client.get(reverse('entity_list'), {'view': 'groups'})
 
-        self.assertEqual(len(res.context['entities']),
+        self.assertEqual(len(res.context['group_entities']),
                          Entity.objects.filter(is_active=True).count())

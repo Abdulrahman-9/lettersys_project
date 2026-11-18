@@ -442,13 +442,13 @@ def _desk_of(referral, by):
     هو مَن يمسك الورقَ فعلاً — يُسلّمه ويستلمه ويطارد المتأخّر. منعُه من
     تحريك الصفوف يدفع العملَ خارج النظام إلى دفترٍ ورقيٍّ موازٍ.
     """
-    from core.scoping import (is_department_head, is_mail_officer,
-                              user_department_id)
+    from core.scoping import has_capability, is_department_head, user_department_id
 
+    # طاولةُ ورقٍ لا بريدٌ إلكترونيّ: مفتاحُ «الدفتر وكشف التسليم» لا العضويّة (الدفعة 0، فيبل 11-16)
     department_id = user_department_id(by)
     return (department_id is not None
             and referral.book.department_id == department_id
-            and (is_department_head(by) or is_mail_officer(by)))
+            and (is_department_head(by) or has_capability(by, 'desk.ledger')))
 
 
 def _guard_target(referral, by):

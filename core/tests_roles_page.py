@@ -108,7 +108,7 @@ class ShowTests(RolesPageCase):
 
     def test_the_accounts_link_is_lit_on_this_page(self):
         body = self.page().content.decode()
-        self.assertRegex(body, r'class="on" href="[^"]*\?tab=users"')
+        self.assertRegex(body, r'class="on" href="/books/system/accounts/"')   # الدفعة 2: القائمةُ في البرنامج
 
     def test_holders_are_counted_without_a_query_per_person(self):
         for i in range(12):
@@ -225,11 +225,11 @@ class MatrixShapeTests(RolesPageCase):
 
 
 class AccountsLinkTests(RolesPageCase):
-    def test_the_accounts_tab_links_here_for_the_system_admin_only(self):
+    def test_the_accounts_list_links_here_for_the_system_admin_only(self):
         self.client.force_login(self.admin)
-        self.assertContains(self.client.get(reverse('admin_panel') + '?tab=users'), URL)
+        self.assertContains(self.client.get(reverse('system_accounts')), URL)
         self.client.force_login(self.head)
-        self.assertNotContains(self.client.get(reverse('admin_panel') + '?tab=users'), URL)
+        self.assertNotContains(self.client.get(reverse('system_accounts')), URL)
 
 
 class WiredOnlyTests(RolesPageCase):
@@ -249,7 +249,9 @@ class WiredOnlyTests(RolesPageCase):
         body = self.client.get(URL).content.decode()
         self.assertNotIn('value="entry:archive.complete:', body)
         self.assertIn('تمام الأرشفة لدور مدخل: لا يستطيع، لم يُربط حارسها بعد"', body)
-        self.assertIn('«الإحالة» و«استلام المُحال وإنجازه»', body)
+        # الدفعة 3أ: ما لم يُربط حارسُه في «قادمة» آخرَ الصفحة لا بين ما يُعدَّل (كانت قائمةً تُسرد في فقرة)
+        self.assertGreater(body.index('id="cap-archive.complete"'), body.index('id="rmLater"'))
+        self.assertLess(body.index('id="cap-referral.receive"'), body.index('id="rmLater"'))
 
     def test_the_wired_set_is_what_the_code_reads(self):
         """كلُّ مفتاحٍ يقرؤه حارسٌ في الكود مسجَّلٌ مربوطاً، ولا مفتاحَ مربوطاً بلا قارئ."""

@@ -39,15 +39,15 @@ class OneDoorTests(TestCase):
         self.client.force_login(self.boss)
 
     def create(self, **fields):
-        return self.client.post(PANEL, {'action': 'create_department_user', 'tab': 'users',
-                                        'role': 'viewer', **fields})
+        # الدفعة 2: «حساب جديد» صفحتُه (system_account_new) — حوارُ اللوحة ذهب مع تبويب الحسابات
+        return self.client.post(reverse('system_account_new'), {'role': 'reader', **fields})
 
     def test_the_old_page_has_no_name_left_to_link_to(self):
         with self.assertRaises(NoReverseMatch):
             reverse('user_roles')
 
-    def test_the_sidebar_leads_to_the_panel_and_the_hub_has_no_second_door(self):
-        self.assertContains(self.client.get(reverse('book_unified')), PANEL + '?tab=users')
+    def test_the_sidebar_leads_to_the_accounts_list_and_the_hub_has_no_second_door(self):
+        self.assertContains(self.client.get(reverse('book_unified')), 'href="%s"' % reverse('system_accounts'))
         hub = self.client.get(reverse('settings_hub'))
         self.assertNotContains(hub, 'data-tab="users"')
         self.assertNotContains(hub, '/books/users/')
@@ -55,7 +55,7 @@ class OneDoorTests(TestCase):
     def test_an_account_without_a_department_is_refused_and_keeps_the_form(self):
         response = self.create(username='nodept', department='', job_title='كاتب')
         self.assertFalse(User.objects.filter(username='nodept').exists())
-        self.assertContains(response, 'اختر قسمَ الحساب الجديد')
+        self.assertContains(response, 'اختر قسمَ الحساب.')
         self.assertContains(response, 'value="كاتب"')
 
     def test_the_chosen_department_is_kept_and_nothing_is_guessed(self):
@@ -81,9 +81,12 @@ class DeleteAccountTests(TestCase):
         UserProfile.objects.update_or_create(user=cls.plain, defaults={'department': cls.dept})
 
     def delete(self, who, target):
+        # الدفعة 2: الحذفُ في محرّر الحساب
         self.client.force_login(who)
-        return self.client.post(PANEL, {'action': 'delete_user', 'tab': 'users',
-                                        'user_id': target.pk}, follow=True)
+        return self.client.post(reverse('system_account', args=[target.pk]), {'action': 'delete'}, follow=True)
+
+    def editor(self, target):
+        return self.client.get(reverse('system_account', args=[target.pk])).content.decode('utf-8')
 
     def test_deleting_leaves_a_trace_that_outlives_the_account(self):
         self.delete(self.boss, self.plain)
@@ -103,17 +106,15 @@ class DeleteAccountTests(TestCase):
     def test_the_account_in_use_is_kept_and_has_no_button(self):
         self.delete(self.boss, self.boss)
         self.assertTrue(User.objects.filter(pk=self.boss.pk).exists())
-        html = self.client.get(PANEL + '?tab=users').content.decode('utf-8')
-        self.assertIn('حذف حساب «del_plain»', html)
-        self.assertNotIn('حذف حساب «del_boss»', html)
+        self.assertIn('حذفُ حساب «del_plain»', self.editor(self.plain))
+        self.assertNotIn('name="action" value="delete"', self.editor(self.boss))
 
     def test_a_department_head_neither_deletes_nor_sees_the_button(self):
         head = User.objects.create_user('del_head', password='pw-del-head-111')
         UserProfile.objects.create(user=head, department=self.dept, is_department_head=True)
         self.delete(head, self.plain)
         self.assertTrue(User.objects.filter(pk=self.plain.pk).exists())
-        html = self.client.get(PANEL + '?tab=users').content.decode('utf-8')
-        self.assertNotIn('حذف حساب «', html)
+        self.assertNotIn('name="action" value="delete"', self.editor(self.plain))
 
 
 class SettingsAuditTests(TestCase):

@@ -58,7 +58,7 @@
             <td class="sa-zero">0</td><td class="sa-zero">0</td>
             <td><span class="sa-spark" role="img" aria-label="{{ orphan.act7 }} حركة في آخر 7 أيام">{% for h in orphan.bars %}<i style="height:{{ h }}px"></i>{% endfor %}</span></td>
             <td class="sa-num">{{ orphan.staff_active }}</td><td class="sa-when">{{ orphan.last|default:'—' }}</td>
-            <td><a class="sa-btn sm" href="{% url 'admin_panel' %}?tab=users">الحسابات</a></td></tr>
+            <td><a class="sa-btn sm" href="{% url 'system_accounts' %}?department=none">الحسابات</a></td></tr>
           {% endif %}
         </tbody>
       </table>

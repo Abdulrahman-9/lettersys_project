@@ -48,7 +48,7 @@
         <div class="sa-rows">{% for c in children %}
           <a href="{% url 'system_department' c.unit.id %}"><span class="sa-stamp small">{{ c.unit.code }}</span><span>{{ c.unit.name }} <small>· {% if c.unit.holds_register %}تمسك سجلّها{% else %}لا تمسك سجلّاً{% endif %}</small></span><span class="{% if c.late %}sa-late{% else %}sa-zero{% endif %}">{{ c.late }}</span></a>
         {% empty %}<p class="sa-empty">لا وحدات تابعة.</p>{% endfor %}</div></section>
-      <section class="sa-card" id="saStaff"><div class="sa-card-head"><h2>الموظّفون</h2><a href="{% url 'admin_panel' %}?tab=users">إدارتهم</a></div>
+      <section class="sa-card" id="saStaff"><div class="sa-card-head"><h2>الموظّفون</h2><a href="{% url 'system_accounts' %}?department={{ unit.id }}">إدارتهم</a></div>
         <div class="sa-rows">{% for p in staff %}
           <div class="row"><i class="bi bi-person" aria-hidden="true"></i><span>{{ p.name }} <small>· {{ p.role }}{% if not p.active %} · معطَّل{% endif %}</small></span><small>{{ p.last|default:'—' }}</small></div>
         {% empty %}<p class="sa-empty">لا حسابات في هذا القسم.</p>{% endfor %}</div></section>

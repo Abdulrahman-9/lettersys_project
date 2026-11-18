@@ -1,52 +1,62 @@
 {% load static %}<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-lx-page="v2">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0f766e">
 <title>التحقّق من التوقيع — {{ token }}</title>
 {% comment %}
   صفحةٌ قائمةٌ بذاتها لا تمتدّ من `base.html`: تُفتح من ورقةٍ خرجت من الشركة،
   فقد يقرؤها مَن ليس مستخدماً — ولا شريطَ تنقّلٍ ولا قائمةَ جانبيّةٍ تعنيه.
-  ونمطٌ مضمَّن لأنّها بلا `base.html` فلا تدخل فخَّ رفعِ نسختَي الكاش.
+  على الهويّة منذ 11-15: رموزُ theme.css، والوضعُ من كاتبه الوحيد (_theme_head.html) فتتبع الجهاز.
 
   **ولا مضمونَ للكتاب هنا**: الاسمُ والصفةُ والوقتُ وحكمُ البصمة. مَن يريد
   المضمونَ يدخل النظام.
 {% endcomment %}
+{% include "_theme_head.html" %}
+<link rel="stylesheet" href="{% static 'vendor/cairo/cairo.css' %}?v=20260705a">
+<link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261115-colors1">
 <style>
-  :root { --ink:#362014; --soft:#6f4631; --faint:#9c7a63; --amber:#b45309;
-          --rule:rgba(111,70,40,.18); --ok:#15803d; --bad:#b91c1c; }
   * { box-sizing:border-box; }
-  body { margin:0; font-family:"Cairo","Segoe UI",Tahoma,sans-serif; color:var(--ink);
-         background:linear-gradient(180deg,#fff8ee,#fde5cc); min-height:100vh;
-         display:flex; align-items:center; justify-content:center; padding:1.5rem; }
-  .card { background:#fff; border:1px solid var(--rule); border-radius:1.1rem;
-          box-shadow:0 18px 44px rgba(77,44,25,.14); max-width:34rem; width:100%;
-          overflow:hidden; }
-  .hd { padding:1.4rem 1.4rem 1.1rem; text-align:center; border-bottom:1px solid var(--rule); }
-  .mark { width:3.4rem; height:3.4rem; border-radius:1rem; margin:0 auto .7rem;
-          display:flex; align-items:center; justify-content:center;
-          font-size:1.7rem; color:#fff; font-weight:800; }
-  .ok  { background:linear-gradient(135deg,#16a34a,#15803d); }
-  .bad { background:linear-gradient(135deg,#dc2626,#991b1b); }
-  .unk { background:linear-gradient(135deg,#9c7a63,#6f4631); }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1.5rem;
+         font-family:"Cairo","Segoe UI",Tahoma,sans-serif; color:var(--lx-ink);
+         background:radial-gradient(70rem 30rem at 50% -8rem, var(--lx-bg-tint), transparent 70%), var(--lx-bg); }
+  .vf { width:100%; max-width:34rem; }
+  .vf-org { display:flex; align-items:center; justify-content:center; gap:.6rem; margin-bottom:1rem; color:var(--lx-mute); font-size:.85rem; font-weight:700; }
+  .vf-org img { width:34px; height:34px; }
+  .card { position:relative; overflow:hidden; background:var(--lx-surface); border:1px solid var(--lx-line);
+          border-radius:var(--lx-radius-lg); box-shadow:var(--lx-shadow-lg); }
+  /* الحافّةُ العلويّة نفسُها في حوارات البرنامج: تركوازٌ إلى ذهبيّ */
+  .card::before { content:""; position:absolute; inset:0 0 auto; height:4px; background:linear-gradient(90deg, var(--lx-pri), var(--lx-accent)); }
+  .hd { padding:1.6rem 1.4rem 1.2rem; text-align:center; border-bottom:1px solid var(--lx-line); }
+  .mark { width:3.4rem; height:3.4rem; border-radius:1rem; margin:0 auto .8rem; display:flex; align-items:center; justify-content:center;
+          font-size:1.6rem; font-weight:800; border:1px solid; }
+  .ok  { background:var(--lx-done-bg); color:var(--lx-done); border-color:var(--lx-done-line); }
+  .bad { background:var(--lx-late-bg); color:var(--lx-late); border-color:var(--lx-late-line); }
+  .unk { background:var(--lx-surface-2); color:var(--lx-mute); border-color:var(--lx-line-strong); }
+  @media (prefers-reduced-motion:no-preference) { .mark { animation:vf-pop var(--lx-dur-4) var(--lx-ease-spring) backwards; } }
+  @keyframes vf-pop { from { transform:scale(.6); opacity:0; } }
   h1 { font-size:1.15rem; font-weight:800; margin:0 0 .3rem; }
-  .lead { font-size:.88rem; color:var(--soft); margin:0; line-height:1.8; }
+  .lead { font-size:.9rem; color:var(--lx-mute); margin:0; line-height:1.8; }
   .bd { padding:1.2rem 1.4rem 1.4rem; }
-  dl { display:grid; grid-template-columns:auto 1fr; gap:.5rem 1rem; margin:0; font-size:.88rem; }
-  dt { color:var(--faint); font-weight:600; }
-  dd { margin:0; font-weight:700; }
-  .digest { font-family:ui-monospace,Consolas,monospace; font-size:.72rem;
-            word-break:break-all; color:var(--soft); font-weight:400; }
-  .foot { margin-top:1.1rem; padding-top:.9rem; border-top:1px dashed var(--rule);
-          font-size:.76rem; color:var(--faint); line-height:1.8; }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:.55rem 1rem; margin:0; font-size:.9rem; }
+  dt { color:var(--lx-mute); font-weight:600; }
+  dd { margin:0; font-weight:700; min-width:0; }
+  .digest { direction:ltr; unicode-bidi:isolate; text-align:right; font-family:ui-monospace,Consolas,monospace; font-size:.74rem;
+            word-break:break-all; color:var(--lx-mute); font-weight:400; }
+  .foot { margin:1.1rem 0 0; padding-top:.9rem; border-top:1px dashed var(--lx-line-strong); font-size:.8rem; color:var(--lx-mute); line-height:1.8; }
+  .foot b { color:var(--lx-ink); }
 </style>
 </head>
 <body>
-<div class="card">
+<main class="vf">
+  <div class="vf-org"><img src="{% static 'img/mdoc-mark.png' %}?v=20261111" alt="" width="34" height="34"><span>{{ org_name }} · التحقّق من توقيعٍ داخليّ</span></div>
+  <div class="card">
 
   {% if not signature %}
     <div class="hd">
-      <div class="mark unk">؟</div>
+      <div class="mark unk" aria-hidden="true">؟</div>
       <h1>هذا الرمزُ لا يقابل توقيعاً</h1>
       <p class="lead">
         تأكّد من نسخ الرمز كاملاً كما هو مطبوعٌ على الختم.
@@ -59,7 +69,7 @@
   {% else %}
     <div class="hd">
       {% if not state.valid %}
-        <div class="mark bad">✕</div>
+        <div class="mark bad" aria-hidden="true">✕</div>
         <h1>توقيعٌ مُبطَل</h1>
         <p class="lead">
           هذا التوقيعُ أُبطل في {{ signature.revoked_at|date:"d/m/Y H:i" }}.
@@ -67,13 +77,13 @@
           والختمُ المطبوعُ لا يزال على الورقة — فالعبرةُ بهذه الصفحة.
         </p>
       {% elif state.matches %}
-        <div class="mark ok">✓</div>
+        <div class="mark ok" aria-hidden="true">✓</div>
         <h1>توقيعٌ صحيحٌ والمستندُ لم يتغيّر</h1>
         <p class="lead">
           بصمةُ الملفّ الآن تطابق البصمةَ المحفوظة لحظةَ التوقيع.
         </p>
       {% else %}
-        <div class="mark bad">✕</div>
+        <div class="mark bad" aria-hidden="true">✕</div>
         <h1>{% if state.matches is None %}تعذّر التحقّق{% else %}المستندُ تغيّر بعد التوقيع{% endif %}</h1>
         <p class="lead">{{ state.reason }}</p>
       {% endif %}
@@ -105,6 +115,7 @@
     </div>
   {% endif %}
 
-</div>
+  </div>
+</main>
 </body>
 </html>

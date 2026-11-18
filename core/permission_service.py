@@ -136,6 +136,13 @@ def set_user_override(request, target, key, allowed):
     _audit(request, scope='user', subject=target.get_username(), key=key, before=before, after=after,
            extra={'target_id': target.pk, 'target': target.get_username()})
     clear_capability_cache(target)
+    # استثناءٌ موجبٌ من غير المدير يجعل الحسابَ حسّاساً — والكلمةُ المؤقّتةُ التي رآها تُبطَل (قرارُ المالك 11-18)
+    from core.admin_service import void_temporary_password
+    from core.scoping import can_manage_accounts
+
+    if after and not can_manage_accounts(request.user):
+        void_temporary_password(target, by=request.user,
+                                reason=f'مُنح استثناءَ «{_capability_label(key)}» بيد غير مدير النظام')
     return True
 
 
@@ -210,22 +217,24 @@ def role_change_preview(target, role):
 def set_user_role(request, target, role):
     """يجعل للشخص دوراً واحداً: يُلغي استثناءاتِه، ويضبط الأعلامَ الستّة كلَّها، ويكتب الأثر.
 
-    لمدير النظام وحده، ولا على نفسه ولا على مدير نظامٍ آخر (``assign_user`` لا يحرسهما للسوبر).
-    والدورُ مقيَّدٌ بقسم الشخص (``roles_for_department``). يعيد True إن تغيّر شيء.
+    لمدير النظام، ولرئيس القسم في شجرته بما يمنحه (الدفعة 2): ``role_change_block`` يقول مَن يغيّر دورَ مَن
+    — لا أحدَ دورَه بنفسه ولا دورَ مديرٍ، ولا رئيسٌ ما لا يمنحه ولا ما عليه استثناءٌ لا يملكه. والدورُ
+    الجديد ممّا يُسند في قسم الشخص (``roles_for_department``) ويمنحه الفاعل (``assignable_roles``).
+    يعيد True إن تغيّر شيء.
     """
     from core.admin_service import assign_user
     from core.roles import ARCHIVE_ALL_GROUP_NAME
-    from core.scoping import can_manage_accounts, roles_for_department
+    from core.scoping import assignable_roles, role_change_block, roles_for_department
 
     by = request.user
-    if not can_manage_accounts(by):
-        raise PermissionDenied('أدوارُ الحسابات يغيّرها مدير النظام وحده.')
-    # ومَن يملك هذا مديرُ نظام، فحسابُه هو يقع هنا أيضاً — لا يغيّر أحدٌ دورَه بنفسه.
-    if target.is_superuser:
-        raise PermissionDenied('دورُ مدير النظام لا يُعدَّل من هنا.')
+    block = role_change_block(by, target)
+    if block:
+        raise PermissionDenied(block)
     department = getattr(getattr(target, 'profile', None), 'department', None)
     if role not in roles_for_department(department):
         raise ValidationError('هذا الدورُ لا يُسند في هذا القسم.')
+    if role not in assignable_roles(by, target):
+        raise PermissionDenied('هذا الدور يمنحه مدير النظام.')
     before = role_of(target)
     if before == role:
         return False
@@ -237,6 +246,12 @@ def set_user_role(request, target, role):
         flags['is_company_archivist'] = target.groups.filter(name=ARCHIVE_ALL_GROUP_NAME).exists()
     assign_user(target, by=by, **flags)
     clear_capability_cache(target)
+    # قرارُ المالك 11-18: رفعٌ إلى الحسّاس من غير المدير يُبطل كلمةً مؤقّتةً لم تُغيَّر (``void_temporary_password``)
+    from core.admin_service import void_temporary_password
+    from core.scoping import can_manage_accounts, is_sensitive_account
+
+    if not can_manage_accounts(by) and is_sensitive_account(target):
+        void_temporary_password(target, by=by, reason=f'صار «{ROLE_LABELS[role]}» بيد غير مدير النظام')
     UserActivityLog.objects.create(
         user=by, action=EDIT_PERMISSIONS, department=_department_of(by),
         ip_address=client_ip(request), path=(request.path or '')[:500], method=(request.method or '')[:10],
@@ -245,4 +260,95 @@ def set_user_role(request, target, role):
                   'summary': f'دورُ {target.get_username()}: «{ROLE_LABELS[before]}» ⟵ «{ROLE_LABELS[role]}»'[:500]},
     )
     return True
+
+
+# ── التحويلُ إلى دورٍ واحد (قرارُ المالك 2026‑11‑16، الدفعة 0) ──────────────────────────────────────
+#: يكتبه ``convert_multi_role_accounts`` وحده، عند النشر وقبل تشغيل الخدمة (فيبل: الوصلُ والتحويلُ إصدارٌ واحد).
+CONVERSION_PATH = 'cli:convert_multi_role_accounts'
+
+
+def one_role_plan(user):
+    """خطّةُ تحويل حسابٍ يجمع دورين إلى دورٍ واحد — **قراءةٌ فقط**، و``None`` لمن له دورٌ واحد.
+
+    يبقى ``role_of`` (الدورُ الذي يعرضه المحرّر)، وتُزال العضويّةُ الزائدة، وكلُّ ما تمنحه زيادةً على
+    الدور الباقي يُصنَّف: مفتاحٌ موصول ⟵ استثناءٌ باسمه (``grant``) · غيرُ موصول ⟵ استثناءٌ خامد (``dormant``،
+    «لم يُربط بعد» في المحرّر) · مقفل ⟵ لا يُنقل (``locked``) · دورُه لا يُسند في القسم ⟵ يُسقط (``dropped``،
+    فيبل: ما يمنعه ``roles_for_department`` لا يعود من باب الاستثناء) · استثناءٌ قائمٌ للمفتاح ⟵ يُترك (``existing``).
+    وتنبيه: التحويلُ **منحٌ جديد** لا حفظ — الدورُ الثاني خامدٌ اليوم في ``has_capability``.
+    """
+    from core.scoping import extra_role_memberships, role_own_groups, roles_for_department
+    from core.scoping import ROLE_ARCHIVIST, ROLE_ENTRY, ROLE_EXECUTOR, ROLE_MAIL
+
+    extra = extra_role_memberships(user)
+    if not extra:
+        return None
+    group_role = {group: role for role in (ROLE_MAIL, ROLE_ARCHIVIST, ROLE_ENTRY, ROLE_EXECUTOR)
+                  for group in role_own_groups(role)}
+    kept = role_of(user)
+    department = getattr(getattr(user, 'profile', None), 'department', None)
+    allowed = roles_for_department(department)
+    existing = set(UserCapabilityOverride.objects.filter(user=user).values_list('capability', flat=True))
+    plan = {'kept': kept, 'kept_assignable': kept in allowed, 'remove': extra,
+            'grant': [], 'dormant': [], 'locked': [], 'dropped': [], 'existing': []}
+    seen = set()
+    for extra_role in sorted({group_role[group] for group in extra}):
+        for key, capability in CAPABILITIES.items():
+            if key in seen or not role_capability(extra_role, key) or role_capability(kept, key):
+                continue
+            seen.add(key)
+            if capability.locked:
+                plan['locked'].append(key)
+            elif extra_role not in allowed:
+                plan['dropped'].append(key)
+            elif key in existing:
+                plan['existing'].append(key)
+            elif key not in WIRED_CAPABILITIES:
+                plan['dormant'].append(key)
+            else:
+                plan['grant'].append(key)
+    return plan
+
+
+def _conversion_log(by, target, scope, metadata, summary):
+    UserActivityLog.objects.create(
+        user=by, action=EDIT_PERMISSIONS, department=_department_of(by), ip_address=None,
+        path=CONVERSION_PATH, method='CLI',
+        metadata={'scope': scope, 'target_id': target.pk, 'target': target.get_username(), **metadata,
+                  'summary': summary[:500]})
+
+
+@transaction.atomic
+def apply_one_role_plan(target, plan, *, by):
+    """ينفّذ خطّةَ ``one_role_plan`` بأثرٍ واحدٍ يسمّي كلَّ ما تغيّر، ويعيد ما يلزم للتراجع.
+
+    لا يمرّ بـ``set_user_role``: يعود مبكراً حين لا يتغيّر الدور ويُلغي الاستثناءات (فيبل 11-16).
+    """
+    from django.contrib.auth.models import Group
+
+    target.groups.remove(*Group.objects.filter(name__in=plan['remove']))
+    created = []
+    for key in plan['grant'] + plan['dormant']:
+        UserCapabilityOverride.objects.create(user=target, capability=key, allowed=True, changed_by=by)
+        created.append(key)
+    clear_capability_cache(target)
+    _conversion_log(by, target, 'role_conversion',
+                    {'kept': plan['kept'], 'removed': plan['remove'], 'granted': plan['grant'],
+                     'dormant': plan['dormant'], 'dropped': plan['dropped'], 'locked': plan['locked']},
+                    f'تحويلُ {target.get_username()} إلى دورٍ واحد «{ROLE_LABELS[plan["kept"]]}»: '
+                    f'أُزيلت {"، ".join(plan["remove"])} وصار {len(created)} استثناءً')
+    return {'removed': list(plan['remove']), 'created': created}
+
+
+@transaction.atomic
+def undo_one_role_plan(target, removed, created, *, by):
+    """يعيد العضويّاتِ المزالة ويحذف الاستثناءاتِ التي أنشأها التحويلُ إن بقيت كما أنشأها."""
+    from django.contrib.auth.models import Group
+
+    for name in removed:
+        target.groups.add(Group.objects.get_or_create(name=name)[0])
+    deleted = UserCapabilityOverride.objects.filter(user=target, capability__in=created, allowed=True).delete()[0]
+    clear_capability_cache(target)
+    _conversion_log(by, target, 'role_conversion_undo', {'restored': list(removed), 'deleted': deleted},
+                    f'تراجعٌ عن تحويل {target.get_username()}: أُعيدت {"، ".join(removed)} وحُذف {deleted} استثناءً')
+    return deleted
 
