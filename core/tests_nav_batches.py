@@ -138,11 +138,20 @@ class SettingsHubStructureTests(TestCase):
         self.staff = as_writer(User.objects.create_user('shs', password='pw-shs-11', is_staff=True))
 
     def test_every_embedded_tab_is_guarded_like_the_hub(self):
-        """كانت صفحةُ إعدادات الماسح بـlogin_required وحدَها: أيُّ مستخدمٍ يفتحها بالمسار."""
+        """كانت صفحةُ إعدادات الماسح بـlogin_required وحدَها: أيُّ مستخدمٍ يفتحها بالمسار.
+
+        2026-11-18 (أمرُ المالك: «دليلٌ سريعٌ للمستخدم»): قسمُ الماسح ودليلُه لمن يمسح من صفحة
+        الإدخال أيضاً (``can_set_up_scanner``) — لا يغيّر إعداداً في الخادم. والقارئُ بلا دورٍ يُرفض."""
         self.client.force_login(self.plain)
-        for name in ('settings_hub', 'scan_settings', 'sequence_settings', 'network_settings'):
+        for name in ('settings_hub', 'sequence_settings', 'network_settings'):
             r = self.client.get(reverse(name))
             self.assertIn(r.status_code, (302, 403), f'{name} مفتوحٌ لغير الموظّف ({r.status_code})')
+        self.assertEqual(self.client.get(reverse('scan_settings')).status_code, 200,
+                         'الكاتبُ لا يصل إلى دليل تجهيز ماسحه')
+        reader = User.objects.create_user('shr', password='pw-shr-11')     # بلا دورٍ ولا موظّف
+        self.client.force_login(reader)
+        self.assertIn(self.client.get(reverse('scan_settings')).status_code, (302, 403),
+                      'قسمُ الماسح مفتوحٌ لقارئٍ لا يمسح')
         self.client.force_login(self.staff)
         for name in ('settings_hub', 'scan_settings'):
             self.assertEqual(self.client.get(reverse(name)).status_code, 200, name)

@@ -1,7 +1,6 @@
 import logging
 import socket
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -10,6 +9,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
+from core.netaddr import approved_https_origin
 from core.scoping import can_manage_accounts
 
 logger = logging.getLogger('lettersys')
@@ -23,19 +23,8 @@ def _package_path():
 @require_GET
 @never_cache
 def device_setup(request):
-    setup_url = reverse('device_setup')
-    secure_setup_url = request.build_absolute_uri(setup_url) if request.is_secure() else ''
-    if not secure_setup_url:
-        host = urlsplit(request.build_absolute_uri('/')).hostname
-        origins = set()
-        for origin in settings.CSRF_TRUSTED_ORIGINS:
-            parsed = urlsplit(origin)
-            if (parsed.scheme == 'https' and parsed.hostname == host
-                    and not parsed.username and not parsed.password
-                    and parsed.path in ('', '/') and not parsed.query and not parsed.fragment):
-                origins.add(origin.rstrip('/'))
-        if len(origins) == 1:
-            secure_setup_url = origins.pop() + setup_url
+    approved = approved_https_origin(request)
+    secure_setup_url = (approved + reverse('device_setup')) if approved else ''
     return render(request, 'core/device_setup.html', {
         'package_available': _package_path().is_file(),
         'agent_port': settings.LETTERSYS_AGENT_PORT,

@@ -195,20 +195,27 @@ class ScanFrontendContractTests(SimpleTestCase):
         with io.open(str(settings.BASE_DIR / rel), encoding='utf-8') as f:
             return f.read()
 
+    FRONTEND = ('static/extraction_smart.js', 'static/js/scan_agent_client.js',
+                'static/js/scanner_settings.js', 'templates/core/scan_settings.html')
+
     def test_frontend_calls_agent_info_not_the_deleted_endpoint(self):
-        for rel in ('static/extraction_smart.js', 'templates/core/scan_settings.html'):
-            src = self._read(rel)
-            self.assertFalse('agent-token' in src, '%s ما يزال ينادي النقطةَ المحذوفة (404)' % rel)
-            self.assertTrue('/books/api/scan/agent-info/' in src, '%s لا يسأل agent-info' % rel)
+        for rel in self.FRONTEND:
+            self.assertFalse('agent-token' in self._read(rel), '%s ما يزال ينادي النقطةَ المحذوفة (404)' % rel)
+        for rel in ('static/extraction_smart.js', 'static/js/scan_agent_client.js'):
+            self.assertTrue('/books/api/scan/agent-info/' in self._read(rel), '%s لا يسأل agent-info' % rel)
+        # قسمُ الماسح يأخذ العنوانَ من المسار المسمّى لا نصّاً حرفيّاً
+        self.assertIn('data-info-url="{% url \'scan_agent_info\' %}"', self._read('templates/core/scan_settings.html'))
 
     def test_frontend_sends_no_token_header(self):
         """الوكيلُ لا يعلن إلّا ``Content-Type``؛ أيُّ ترويسةٍ أخرى تُفشل الطلبَ الاستباقيّ."""
-        for rel in ('static/extraction_smart.js', 'templates/core/scan_settings.html'):
+        for rel in self.FRONTEND:
             self.assertFalse('X-LetterSys-Token' in self._read(rel), rel)
 
     def test_browser_probes_the_local_agent_itself(self):
-        """المسبارُ على حلقة المتصفّح — لا على منفذ الخادم (وهو الجهازُ الخطأ للكاتبة)."""
-        src = self._read('static/extraction_smart.js')
+        """المسبارُ على حلقة المتصفّح — لا على منفذ الخادم (وهو الجهازُ الخطأ للكاتبة).
+        صار في العميل المشترك (2026-11-18)، وصفحةُ الإدخال تمرّ به."""
+        self.assertIn('window.ScanAgentClient.health(', self._read('static/extraction_smart.js'))
+        src = self._read('static/js/scan_agent_client.js')
         self.assertTrue("`http://127.0.0.1:${port}`" in src, 'المسبار لا يبني عنوان الحلقة المحلّيّة')
         self.assertTrue("'/agent/health'" in src, 'لا نداءَ /agent/health في الواجهة')
 

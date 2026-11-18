@@ -1,0 +1,132 @@
+/* قسمُ «الماسح الضوئي» ودليلُ تجهيزه — على رموز الهويّة (theme.css: --lx-*)، فالوضعُ الداكن
+   يأتي معها. التصميمُ المعتمد 2026-11-18. */
+
+.scs { max-width: 1180px; margin: 0 auto; padding: 1.5rem 1rem 3rem; display: grid; gap: 1.25rem; color: var(--lx-ink); }
+
+.scs-head { display: grid; gap: .2rem; }
+.scs-crumb { font-size: .8rem; font-weight: 600; color: var(--lx-mute); }
+.scs-head h1 { margin: 0; font-size: 1.6rem; font-weight: 800; text-wrap: balance; }
+.scs-head p { margin: 0; color: var(--lx-mute); font-size: .9rem; }
+
+/* ── الحالةُ الكلّيّة ── */
+.scs-summary {
+  display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap;
+  background: var(--lx-surface); border: 1px solid var(--lx-line); border-radius: var(--lx-radius);
+  padding: 1.1rem 1.4rem; box-shadow: var(--lx-shadow-sm);
+}
+.scs-summary-ico {
+  width: 52px; height: 52px; border-radius: 14px; flex: none; display: grid; place-items: center;
+  font-size: 1.55rem; background: var(--lx-surface-2); color: var(--lx-mute);
+}
+.scs-summary[data-state="ok"] .scs-summary-ico { background: var(--lx-done-bg); color: var(--lx-done); }
+.scs-summary[data-state="warn"] .scs-summary-ico { background: var(--lx-wait-bg); color: var(--lx-wait); }
+.scs-summary[data-state="bad"] .scs-summary-ico { background: var(--lx-late-bg); color: var(--lx-late); }
+.scs-summary-text { flex: 1 1 260px; min-width: 0; display: grid; gap: .1rem; }
+.scs-summary-title { margin: 0; font-size: 1.2rem; font-weight: 800; }
+.scs-summary[data-state="ok"] .scs-summary-title { color: var(--lx-done); }
+.scs-summary[data-state="warn"] .scs-summary-title { color: var(--lx-wait); }
+.scs-summary[data-state="bad"] .scs-summary-title { color: var(--lx-late); }
+.scs-summary-sub { font-size: .85rem; color: var(--lx-mute); }
+.scs-actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+
+/* ── البطاقات ── */
+.scs-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; align-items: start; }
+@media (max-width: 900px) { .scs-grid { grid-template-columns: minmax(0, 1fr); } }
+.scs-col { display: grid; gap: 1.25rem; min-width: 0; }
+.scs-card {
+  background: var(--lx-surface); border: 1px solid var(--lx-line); border-radius: var(--lx-radius);
+  padding: 1rem 1.25rem; display: grid; gap: .75rem; min-width: 0;
+}
+.scs-card h2 { margin: 0; font-size: 1rem; font-weight: 800; }
+.scs-card-head { display: flex; align-items: center; gap: .6rem; }
+.scs-card-head h2 { flex: 1; }
+.scs-note { margin: 0; font-size: .8rem; color: var(--lx-mute); }
+
+/* ── صفوفُ الحالة ── */
+.scs-rows { list-style: none; margin: 0; padding: 0; }
+.scs-row { display: flex; align-items: center; gap: .9rem; padding: .8rem 0; border-top: 1px solid var(--lx-line); }
+.scs-row:first-child { border-top: 0; padding-top: .2rem; }
+.scs-row-text { flex: 1; min-width: 0; display: grid; gap: .1rem; }
+.scs-row-label { font-weight: 700; font-size: .92rem; }
+.scs-row-detail { font-size: .8rem; color: var(--lx-mute); overflow-wrap: anywhere; }
+.scs-pill {
+  font-size: .75rem; font-weight: 700; padding: .15rem .75rem; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--lx-line-strong); background: var(--lx-surface-2); color: var(--lx-mute);
+}
+.scs-pill[data-tone="ok"] { background: var(--lx-done-bg); color: var(--lx-done); border-color: var(--lx-done-line); }
+.scs-pill[data-tone="warn"] { background: var(--lx-wait-bg); color: var(--lx-wait); border-color: var(--lx-wait-line); }
+.scs-pill[data-tone="bad"] { background: var(--lx-late-bg); color: var(--lx-late); border-color: var(--lx-late-line); }
+.scs-pill[data-tone="busy"] { background: var(--lx-prog-bg); color: var(--lx-prog); border-color: var(--lx-prog-line); }
+
+.scs-fix {
+  border-radius: 10px; padding: .8rem 1rem; display: grid; gap: .5rem;
+  background: var(--lx-wait-bg); border: 1px solid var(--lx-wait-line);
+}
+.scs-fix[data-tone="bad"] { background: var(--lx-late-bg); border-color: var(--lx-late-line); }
+.scs-fix-title { font-weight: 700; font-size: .88rem; color: var(--lx-wait); }
+.scs-fix[data-tone="bad"] .scs-fix-title { color: var(--lx-late); }
+.scs-fix-text { font-size: .83rem; color: var(--lx-ink); }
+
+/* ── الماسحات ── */
+.scs-devices { display: grid; gap: .5rem; }
+.scs-device {
+  display: flex; align-items: center; gap: .6rem; padding: .65rem .9rem; border-radius: 10px;
+  border: 1px solid var(--lx-line); cursor: pointer; margin: 0;
+}
+.scs-device:has(input:checked) { border: 2px solid var(--lx-pri); background: var(--lx-pri-soft); padding: calc(.65rem - 1px) calc(.9rem - 1px); }
+.scs-device:has(input:focus-visible) { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
+.scs-device-name { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+.scs-device-note { font-size: .75rem; color: var(--lx-mute); }
+.scs-empty { font-size: .85rem; color: var(--lx-mute); padding: .3rem 0; display: flex; align-items: center; gap: .5rem; }
+
+.scs-steps { margin: 0; padding-inline-start: 1.3rem; display: grid; gap: .35rem; font-size: .88rem; line-height: 1.7; }
+.scs-code {
+  font-family: Consolas, "Courier New", monospace; font-size: .78rem; padding: 0 .35rem; border-radius: 5px;
+  background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink); direction: ltr; unicode-bidi: isolate;
+}
+
+.scs-spin {
+  width: 14px; height: 14px; border-radius: 50%; display: inline-block; flex: none;
+  border: 2px solid var(--lx-line-strong); border-top-color: var(--lx-pri);
+  animation: scs-spin .8s linear infinite;
+}
+@keyframes scs-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .scs-spin { animation-duration: 2.4s; } }
+
+/* ── دليلُ التجهيز ── */
+.scs-wiz .modal-content { border-radius: 16px; overflow: hidden; border: 0; background: var(--lx-surface); color: var(--lx-ink); }
+.scs-wiz-head { background: var(--lx-pri); color: var(--lx-pri-fill-ink); padding: 1rem 1.4rem; display: flex; align-items: center; gap: .75rem; }
+.scs-wiz-headtext { flex: 1; min-width: 0; }
+.scs-wiz-head h2 { margin: 0; font-size: 1.1rem; font-weight: 800; }
+.scs-wiz-head p { margin: 0; font-size: .8rem; opacity: .85; }
+.scs-wiz-steps {
+  list-style: none; margin: 0; padding: .9rem 1.4rem; display: flex; gap: .4rem; flex-wrap: wrap;
+  border-bottom: 1px solid var(--lx-line); font-size: .78rem; font-weight: 700; color: var(--lx-mute);
+}
+.scs-wiz-steps li { flex: 1 1 110px; display: flex; align-items: center; gap: .4rem; min-width: 0; }
+.scs-wiz-dot {
+  width: 22px; height: 22px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  font-size: .72rem; border: 2px solid var(--lx-line-strong);
+}
+.scs-wiz-steps li[data-st="done"] { color: var(--lx-done); }
+.scs-wiz-steps li[data-st="done"] .scs-wiz-dot { background: var(--lx-done); border-color: var(--lx-done); color: #fff; }
+.scs-wiz-steps li[data-st="current"] { color: var(--lx-pri); }
+.scs-wiz-steps li[data-st="current"] .scs-wiz-dot { background: var(--lx-pri); border-color: var(--lx-pri); color: #fff; }
+.scs-wiz-steps li[data-st="fail"] { color: var(--lx-wait); }
+.scs-wiz-steps li[data-st="fail"] .scs-wiz-dot { background: var(--lx-wait); border-color: var(--lx-wait); color: #fff; }
+.scs-wiz-steps li[data-st="skip"] .scs-wiz-dot { border-style: dashed; }
+.scs-wiz-body { padding: 1.2rem 1.4rem; display: grid; gap: .8rem; min-height: 250px; align-content: start; }
+.scs-wiz-title { margin: 0; font-size: 1.05rem; font-weight: 800; }
+.scs-wiz-title[data-tone="ok"] { color: var(--lx-done); }
+.scs-wiz-title[data-tone="warn"] { color: var(--lx-wait); }
+.scs-wiz-sub { margin: 0; font-size: .86rem; color: var(--lx-mute); }
+.scs-wiz-foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; padding: .8rem 1.4rem; border-top: 1px solid var(--lx-line); background: var(--lx-surface-2); }
+.scs-wiz-count { flex: 1; font-size: .8rem; color: var(--lx-mute); }
+.scs-check { display: flex; align-items: center; gap: .6rem; padding: .5rem .75rem; border: 1px solid var(--lx-line); border-radius: 10px; font-size: .88rem; margin: 0; }
+.scs-wiz-live { display: flex; align-items: center; gap: .55rem; font-size: .84rem; color: var(--lx-pri-soft-ink); }
+
+.scs-report {
+  max-height: 320px; overflow: auto; margin: .5rem 0 0; padding: .8rem; border-radius: 10px;
+  background: var(--lx-surface-2); border: 1px solid var(--lx-line); color: var(--lx-ink);
+  font-size: .8rem; white-space: pre-wrap; overflow-wrap: anywhere;
+}

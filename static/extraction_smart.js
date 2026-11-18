@@ -70,6 +70,10 @@ const CAPTURE_FIELD_BY_ID = {
 };
 const MIN_SCAN_AGENT_VERSION = '1.0.1';
 
+// دليلُ تجهيز الماسح في قسم «الماسح الضوئي» (يفتح المعالج مباشرةً)، ولأيّ حالاتِ الوكيل يُعرض.
+const SCANNER_GUIDE_URL = '/books/settings/scan/?wizard=1';
+const SCANNER_GUIDE_STATES = ['unavailable', 'untrusted', 'outdated', 'no_naps2', 'no_device'];
+
 // «الوكيل لا يثق بعنوان هذا الخادم» — نصٌّ واحدٌ للتوست وفشل المسح: خطوةٌ يفعلها الموظّف
 // (المُثبِّت يكتب العنوانَ ويعيد تشغيل الوكيل)، لا تحريرُ JSON في مجلّد مخفيّ.
 const UNTRUSTED_AGENT_HINT = (origin) =>
@@ -908,16 +912,17 @@ class ExtractionSmartSystem {
         this.setScanStatus('ready', 'جاهز: ' + name);
     }
 
+    // ── فحصُ الوكيل يمرّ بـ ScanAgentClient (static/js/scan_agent_client.js) — المصدرُ الواحد
+    //    لهذه الصفحة ولقسم «الماسح الضوئي» في الإعدادات. الحالةُ (المضيف والصحّة) تبقى هنا.
+
     /** منفذُ الوكيل على حاسبة المتصفّح (من `agent-info`، وإلّا الافتراضُ المشحون). */
     _agentPort() {
-        const p = parseInt(this._agentInfo && this._agentInfo.port, 10);
-        return (p > 0 && p < 65536) ? p : 17865;
+        return window.ScanAgentClient.port(this._agentInfo);
     }
 
     /** المضيفان المسموحان في CSP: 127.0.0.1 ثمّ localhost (بروكسي المتصفّح قد يحجب أحدهما). */
     _agentBases() {
-        const port = this._agentPort();
-        return [`http://127.0.0.1:${port}`, `http://localhost:${port}`];
+        return window.ScanAgentClient.bases(this._agentPort());
     }
 
     /**
@@ -927,9 +932,7 @@ class ExtractionSmartSystem {
      */
     async _fetchAgentInfo() {
         if (this._agentInfo) return this._agentInfo;
-        const r = await this._fetchWithTimeout('/books/api/scan/agent-info/',
-                                               { credentials: 'same-origin' }, 8000);
-        const info = await r.json();
+        const info = await window.ScanAgentClient.info('/books/api/scan/agent-info/');
         this._agentInfo = info;
         this._agentServerCanStart = info.server_can_start === true;
         return info;
@@ -942,19 +945,11 @@ class ExtractionSmartSystem {
      * وترويسةٌ زائدةٌ تُفشل الطلبَ الاستباقيّ لأنّه لا يعلن إلّا `Content-Type`.
      */
     async _agentHealthNow() {
-        for (const base of (this._agentBase ? [this._agentBase] : this._agentBases())) {
-            try {
-                const r = await this._fetchWithTimeout(base + '/agent/health', {}, 2500);
-                if (r.ok) {
-                    this._agentBase = base;
-                    this._agentHealth = await r.json();
-                    this._noteAgentConfigError(this._agentHealth);
-                    return this._agentHealth;
-                }
-            } catch (_) { /* جرّب المضيف التالي */ }
-        }
-        this._agentBase = null; this._agentHealth = null;
-        return null;
+        const hit = await window.ScanAgentClient.health(this._agentBase ? [this._agentBase] : this._agentBases());
+        this._agentBase = hit ? hit.base : null;
+        this._agentHealth = hit ? hit.data : null;
+        if (hit) this._noteAgentConfigError(this._agentHealth);
+        return this._agentHealth;
     }
 
     /**
@@ -991,29 +986,12 @@ class ExtractionSmartSystem {
      * للطلب العاديّ انقطاعَ شبكةٍ لا أكثر.
      */
     async _agentRespondsButRejects() {
-        for (const base of this._agentBases()) {
-            try {
-                await this._fetchWithTimeout(base + '/agent/health', { mode: 'no-cors' }, 2500);
-                return true;
-            } catch (_) { /* جرّب المضيف التالي */ }
-        }
-        return false;
+        return window.ScanAgentClient.respondsButRejects(this._agentBases());
     }
 
     // فحص جاهزية وكيل المسح المحلي وملء قائمة الأجهزة + المؤشّر (بلا مستمع نقر منافس).
     _agentVersionAtLeast(version, minimum = MIN_SCAN_AGENT_VERSION) {
-        const parts = (value) => String(value || '').split('.').map(
-            part => Number.parseInt(part, 10) || 0
-        );
-        const current = parts(version);
-        const required = parts(minimum);
-        const length = Math.max(current.length, required.length);
-        for (let i = 0; i < length; i += 1) {
-            if ((current[i] || 0) !== (required[i] || 0)) {
-                return (current[i] || 0) > (required[i] || 0);
-            }
-        }
-        return true;
+        return window.ScanAgentClient.versionAtLeast(version, minimum);
     }
 
     async _initScanAgent() {
@@ -1044,7 +1022,7 @@ class ExtractionSmartSystem {
                 return;
             }
             if (!hd.naps2_available) { this._agentHealthy = false; setPill('no_naps2', 'NAPS2 غير مثبّت'); hideSelect(); return; }
-            const dd = await (await this._fetchWithTimeout(agentBase + '/agent/devices', {}, 20000)).json();
+            const dd = await window.ScanAgentClient.devices(agentBase, 20000);
             this._scanDevices = dd.devices || [];
             if (!this._scanDevices.length) { this._agentHealthy = true; setPill('no_device', 'لا يوجد ماسح متصل'); hideSelect(); return; }
             if (select) {
@@ -1138,6 +1116,7 @@ class ExtractionSmartSystem {
             const act = b.dataset.action;
             if (act === 'recheck') this._recheckAgent();
             else if (act === 'start') this._startAgentAndVerify();
+            else if (act === 'guide') window.location.assign(SCANNER_GUIDE_URL);
             else if (act === 'close') this._closeAgentHelp();
         });
     }
@@ -1242,12 +1221,15 @@ class ExtractionSmartSystem {
         };
         const c = C[state] || C.checking;
         const label = { recheck: '<i class="bi bi-arrow-clockwise"></i> إعادة الفحص',
-                        start: '<i class="bi bi-play-circle"></i> شغّل الوكيل الآن' };
-        const cls = { recheck: 'sah-btn-ghost', start: 'sah-btn-primary' };
+                        start: '<i class="bi bi-play-circle"></i> شغّل الوكيل الآن',
+                        guide: '<i class="bi bi-signpost-2"></i> دليل التجهيز خطوة بخطوة' };
+        const cls = { recheck: 'sah-btn-ghost', start: 'sah-btn-primary', guide: 'sah-btn-primary' };
+        // كلُّ حالةٍ تحتاج إصلاحاً تدلّ على دليل التجهيز في قسم «الماسح الضوئي» (يفحص ويرشد بـ«موافق»).
+        const actions = SCANNER_GUIDE_STATES.includes(state) ? [...c.actions, 'guide'] : c.actions;
         const stepsHtml = c.steps.length
             ? `<ol class="sah-steps">${c.steps.map(s => `<li>${s}</li>`).join('')}</ol>` : '';
-        const actionsHtml = c.actions.length
-            ? `<div class="sah-actions">${c.actions.map(a =>
+        const actionsHtml = actions.length
+            ? `<div class="sah-actions">${actions.map(a =>
                 `<button type="button" class="sah-btn ${cls[a]}" data-action="${a}">${label[a]}</button>`).join('')}</div>` : '';
         help.innerHTML =
             `<div class="sah-head ${c.tone}"><span class="sah-dot"></span>${c.title}` +
@@ -3071,7 +3053,7 @@ class ExtractionSmartSystem {
             setMsg('البحث عن الماسح…', 'قراءة الأجهزة الموصولة بهذا الجهاز');
             let dd;
             try {
-                dd = await (await this._fetchWithTimeout(agentUrl + '/agent/devices', {}, 20000)).json();
+                dd = await window.ScanAgentClient.devices(agentUrl, 20000);
             } catch (err) {
                 const noResp = err && err.name === 'AbortError';
                 return fail(
@@ -3149,6 +3131,8 @@ class ExtractionSmartSystem {
                 body: fd,
             })).json();
             if (!ud.ok) return fail(ud.error || 'فشل رفع الملف الممسوح');
+            // دليلُ «المسحُ يعمل» لقسم الماسح في الإعدادات: اكتشافُ الجهاز لا يعني أنّه يمسح.
+            try { localStorage.setItem('lettersys_last_scan_ok', String(Date.now())); } catch (_) { /* تخزينٌ محجوب */ }
             if (ud.trimmed_pages > 0) {
                 this.showToast('مسح تلقائي: أُزيلت ' + ud.trimmed_pages + ' صفحة فارغة — تبقّى ' + ud.page_count + ' صفحة.', 'info', 5000);
             }

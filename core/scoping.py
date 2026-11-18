@@ -1180,6 +1180,13 @@ def can_use_entry_desk(user) -> bool:
     return can_enter_book(user) or has_capability(user, 'book.edit')
 
 
+def can_set_up_scanner(user) -> bool:
+    """قسمُ «الماسح الضوئي» ودليلُ تجهيزه: لمن يمسح من صفحة الإدخال، ولجمهور الإدارة الذي
+    كانت الصفحةُ له. لا يغيّر إعداداً في الخادم — يفحص وكيلَ جهاز صاحبه ويدلّه على الإصلاح
+    (طلبُ المالك 2026‑11‑18: «دليلٌ سريعٌ للمستخدم يرشده بالتالي وموافق»)."""
+    return can_use_entry_desk(user) or bool(user.is_staff or user.is_superuser)
+
+
 def can_enter_for(user, department) -> bool:
     """الإدخالُ في دفتر قسمٍ يُختار من صفحته في مركز الأقسام — لمدير النظام وحده، وفي قسمٍ نشطٍ
     يمسك سجلَّه **هو** (مواصفةُ المالك (ب)3). لا صعودَ إلى ماسك: تأكيدٌ يسمّي شعبةً ويستهلك

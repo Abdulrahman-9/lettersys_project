@@ -8,6 +8,7 @@ core.netaddr
 أمنيٌّ لا يُبنى على ترويسةٍ يتحكّم بها العميل.
 """
 import ipaddress
+from urllib.parse import urlsplit
 
 from django.conf import settings
 
@@ -43,3 +44,23 @@ def request_is_loopback(request) -> bool:
         return False
     addr = _remote_addr(request)
     return addr is not None and addr.is_loopback
+
+
+def approved_https_origin(request):
+    """أصلُ HTTPS المعتمد لهذا الخادم، أو ``''`` إن لم يُعرف.
+
+    الصفحةُ نفسُها إن فُتحت بـHTTPS؛ وإلّا أصلُ https **الوحيد** في ``CSRF_TRUSTED_ORIGINS``
+    على المضيف نفسه (بلا مسارٍ ولا بيانات اعتماد). مصدرٌ واحدٌ لصفحة «تجهيز هذا الجهاز»
+    ولقسم «الماسح الضوئي» حين يدلّ الموظّفَ على العنوان الذي يثق به وكيلُه.
+    """
+    if request.is_secure():
+        return request.build_absolute_uri('/').rstrip('/')
+    host = urlsplit(request.build_absolute_uri('/')).hostname
+    origins = set()
+    for origin in settings.CSRF_TRUSTED_ORIGINS:
+        parsed = urlsplit(origin)
+        if (parsed.scheme == 'https' and parsed.hostname == host
+                and not parsed.username and not parsed.password
+                and parsed.path in ('', '/') and not parsed.query and not parsed.fragment):
+            origins.add(origin.rstrip('/'))
+    return origins.pop() if len(origins) == 1 else ''

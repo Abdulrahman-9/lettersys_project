@@ -16,13 +16,14 @@ import subprocess
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 
-from .helpers import guard_required_api, staff_required
+from .helpers import guard_required, guard_required_api
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
-from core.netaddr import request_is_loopback
+from core.netaddr import approved_https_origin, request_is_loopback
 from core.pdf_lock import MUPDF_LOCK
-from core.scoping import can_edit_book, can_open_content, can_use_entry_desk, is_privileged
+from core.scoping import (can_edit_book, can_manage_accounts, can_open_content, can_set_up_scanner,
+                          can_use_entry_desk, is_privileged)
 
 logger = logging.getLogger('lettersys')
 
@@ -47,10 +48,17 @@ def _token_owner_ok(data, user):
 
 
 @login_required
-@staff_required
+@guard_required(can_set_up_scanner, 'قسمُ الماسح الضوئي لمن يمسح من صفحة الإدخال.')
 def scan_settings_page(request):
-    """صفحة حالة الماسح (وكيل NAPS2 المحلي) — الحالة تُجلب عميلياً عبر JS."""
-    return render(request, 'core/scan_settings.html', {})
+    """قسمُ «الماسح الضوئي»: حالةُ الاتصال والاكتشاف ودليلُ التجهيز — كلُّها تُفحص في المتصفّح
+    على وكيل **هذا الجهاز** (scanner_settings.js). الخادمُ يقدّم ما لا يعرفه المتصفّح وحده:
+    العنوانَ المعتمد، وحزمةَ التجهيز (تُنزَّل بـHTTPS وحدَه، كصفحة تجهيز الجهاز)."""
+    from .device_setup import _package_path
+    return render(request, 'core/scan_settings.html', {
+        'approved_origin': approved_https_origin(request),
+        'package_available': request.is_secure() and _package_path().is_file(),
+        'can_manage_workstations': can_manage_accounts(request.user),
+    })
 
 
 @login_required
