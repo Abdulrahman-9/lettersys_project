@@ -625,8 +625,8 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
 <div class="scrim" id="scrim" onclick="closeAll()"></div>
 <aside class="drawer" id="drawer" aria-label="تفاصيل" inert></aside>
 
-{# التأكيد: اللوحةُ مستقلّةٌ لا تحمّل app.js — فتحمل عقدَه نفسَه (data-confirm/-ok/-title/-tone).
-   حين تنتقل إلى base.html مع عائلة الإدارة يُحذف هذا ومستمعُه ويتولّاه app.js #}
+{% comment %}التأكيد: اللوحةُ مستقلّةٌ لا تحمّل app.js — فتحمل عقدَه نفسَه (data-confirm/-ok/-title/-tone).
+   حين تنتقل إلى base.html مع عائلة الإدارة يُحذف هذا ومستمعُه ويتولّاه app.js{% endcomment %}
 <dialog class="ask" id="askDialog" role="alertdialog" aria-labelledby="askTitle" aria-describedby="askMsg">
   <h3 id="askTitle"><span class="ask-ico" aria-hidden="true"><i class="bi"></i></span><span id="askTitleText"></span></h3>
   <p id="askMsg"></p>
