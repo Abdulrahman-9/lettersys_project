@@ -1,13 +1,15 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}{{ target.get_full_name|default:target.get_username }}{% endblock %}
+{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261116-batch2">{% endif %}{% endblock %}
 {% block content %}
 {% comment %}
 محرّرُ الحساب (ج، الشريحة 2) — التصميمُ المعتمد shots_v2/v2_account.png وv2_account_change.png.
-القالبُ يعرض ولا يقرّر: الحالاتُ والأعلامُ والمعاينةُ من system_admin._account_context.
+القالبُ يعرض ولا يقرّر: الحالاتُ والأعلامُ والمعاينةُ من system_admin._account_context — **بحسب الناظر**
+(الدفعة 2): رئيسُ القسم يرى ما يملكه في شجرته، وما لا يملكه يُقال سببُه لا يُخفى.
 {% endcomment %}
 <div class="sa-page" id="aePage" data-url="{% url 'system_account' target.pk %}" data-name="{{ target.get_full_name|default:target.get_username }}">
-  <nav class="sa-crumb" aria-label="مسار الصفحة">إدارة النظام / <a href="{% url 'admin_panel' %}?tab=users">الحسابات والأدوار</a> / <span aria-current="page">{{ target.get_full_name|default:target.get_username }}</span></nav>
+  <nav class="sa-crumb" aria-label="مسار الصفحة">{% if is_admin %}إدارة النظام / {% endif %}<a href="{% url 'system_accounts' %}">الحسابات والأدوار</a> / <span aria-current="page">{{ target.get_full_name|default:target.get_username }}</span></nav>
   <div class="sa-head">
     <div><h1>{{ target.get_full_name|default:target.get_username }}</h1>
       <p>{% if department %}{{ department.name }}{% else %}بلا قسم{% endif %} · {% if target.is_active %}حساب نشط{% else %}حساب معطَّل{% endif %}{% if target.last_login %} · آخر دخول {{ target.last_login|date:"Y-m-d H:i" }}{% endif %}</p></div>
@@ -29,11 +31,13 @@
         <div class="ae-field"><label for="aeUsername">اسم الدخول</label>
           <input class="sa-input" id="aeUsername" value="{{ target.get_username }}" readonly dir="ltr"></div>
         <div class="ae-field"><label for="aeDepartment">القسم</label>
-          <select class="sa-select" id="aeDepartment" name="department" data-initial="{{ department.pk|default:'' }}">
-            <option value=""{% if not department %} selected{% endif %}>بلا قسم</option>
-            {% for d in departments %}<option value="{{ d.pk }}"{% if d.pk == department.pk %} selected{% endif %}>{{ d.name }}{% if d.code %} ({{ d.code }}){% endif %}</option>{% endfor %}
+          <select class="sa-select" id="aeDepartment" name="department" data-initial="{{ department.pk|default:'' }}"{% if move_block %} disabled aria-describedby="aeMoveBlock"{% endif %}>
+            {% if is_admin %}<option value=""{% if not department %} selected{% endif %}>بلا قسم</option>{% endif %}
+            {% for d in departments %}<option value="{{ d.pk }}"{% if d.pk == department.pk %} selected{% endif %}>{{ d.name }}{% if d.code %} ({{ d.code }}){% endif %}{% if not d.is_active %} — معطَّل{% endif %}</option>{% endfor %}
           </select>
-          <small>يحدّد ما يراه الحساب. تغييره يلغي الاستثناءات بعد تأكيد.</small></div>
+          {% if move_block %}<input type="hidden" name="department" value="{{ department.pk|default:'' }}">
+          <small id="aeMoveBlock">{{ move_block }}</small>
+          {% else %}<small>يحدّد ما يراه الحساب. تغييره يلغي الاستثناءات بعد تأكيد.</small>{% endif %}</div>
         <div class="ae-field"><label for="aeJob">المستوى الوظيفي</label>
           <input class="sa-input" id="aeJob" name="job_title" value="{{ profile.job_title|default:'' }}" maxlength="120"></div>
         <label class="ae-check"><input type="checkbox" name="is_active" value="1"{% if target.is_active %} checked{% endif %}{% if is_self %} disabled{% endif %}> الحساب نشط</label>
@@ -43,11 +47,12 @@
       <section class="sa-card" aria-labelledby="aeAccessTitle">
         <div class="sa-card-head"><h2 id="aeAccessTitle">الدخول والأثر</h2></div>
         <div class="ae-links">
-          {% if not is_self %}
+          {% if can_reset %}
           <form method="post" action="{% url 'system_account' target.pk %}">{% csrf_token %}<input type="hidden" name="action" value="password">
             <button type="submit" class="sa-btn" data-confirm="تُنشأ كلمةُ مرورٍ مؤقّتة لـ«{{ target.get_username }}» وتبطل الحالية." data-confirm-ok="أنشئها" data-confirm-tone="safe"><i class="bi bi-key" aria-hidden="true"></i>كلمة مرور مؤقّتة</button></form>
           {% endif %}
-          <a class="sa-btn" href="{{ audit_url }}"><i class="bi bi-clock-history" aria-hidden="true"></i>سجلّ حركاته</a>
+          {% if audit_url %}<a class="sa-btn" href="{{ audit_url }}"><i class="bi bi-clock-history" aria-hidden="true"></i>سجلّ حركاته</a>{% endif %}
+          {% if not can_reset and not is_self and not is_admin %}<small class="sa-hint">كلمةُ مرور حسابٍ حسّاسٍ أو معطَّلٍ يعيدها مدير النظام.</small>{% endif %}
           {% if can_delete %}
           <form method="post" action="{% url 'system_account' target.pk %}">{% csrf_token %}<input type="hidden" name="action" value="delete">
             <button type="submit" class="sa-btn ae-danger" data-confirm="حذفُ حساب «{{ target.get_username }}» نهائيّ ولا يُستردّ." data-confirm-ok="احذف الحساب"><i class="bi bi-trash" aria-hidden="true"></i>حذف الحساب</button></form>
@@ -65,19 +70,24 @@
           <input type="hidden" name="action" value="role">
           <input type="hidden" name="confirm" value="0">
           <div class="ae-field"><label for="aeRole" id="aeRoleLabel">الدور</label>
-            {% if role %}
+            {% if role and role_block %}
+            {# لا يملك تغييرَه: الدورُ يُعرض كما هو، والسببُ مكتوبٌ لا زرٌّ يُرفض عند الحفظ #}
+            <div class="ae-role-select" aria-readonly="true" aria-describedby="aeRoleBlock">{{ role_label }}</div>
+            <small id="aeRoleBlock">{{ role_block }}</small>
+            {% elif role %}
             <select class="ae-role-select" id="aeRole" name="role" data-current="{{ role }}"{% if is_self %} disabled{% endif %}>
               {% for key, label in role_options %}<option value="{{ key }}"{% if key == role %} selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
-            <small>اختيار الدور يملأ الصلاحيّات، ثمّ تضيف أو تحجب لهذا الشخص.</small>
-            {% if extra_memberships %}
-            {# عضويّةٌ من خانات جدول الحسابات لا يعرضها الدورُ الواحد — تُقال صراحةً لا تُخفى #}
+            <small>{% if is_admin %}اختيار الدور يملأ الصلاحيّات، ثمّ تضيف أو تحجب لهذا الشخص.{% else %}تظهر الأدوار التي تملك منحها في قسمه.{% endif %}</small>
+            {% endif %}
+            {% if role and extra_memberships %}
+            {# عضويّةٌ قديمة لا يعرضها الدورُ الواحد — تُقال صراحةً لا تُخفى #}
             <div class="ae-extra" role="note">
               <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
-              <span>يملك أيضاً عضويّة {% for name in extra_memberships %}«{{ name }}»{% if not forloop.last %} و{% endif %}{% endfor %} من جدول الحسابات، لا يعرضها دورُه أعلاه، ولم تعد تمنحه شيئاً بعد توحيد الأدوار — وأمرُ التحويل يجعل ما كانت تمنحه استثناءاتٍ باسمه أو يُسقطه. تغييرُ دوره هنا يزيلها ويُلغي استثناءاتِه؛ ولإبقاء دوره وإزالتِها أزِل خانتَها في جدول الحسابات.</span>
+              <span>يملك أيضاً عضويّة {% for name in extra_memberships %}«{{ name }}»{% if not forloop.last %} و{% endif %}{% endfor %} من الجدول القديم، لا يعرضها دورُه أعلاه، ولم تعد تمنحه شيئاً بعد توحيد الأدوار — وأمرُ التحويل يجعل ما كانت تمنحه استثناءاتٍ باسمه أو يُسقطه. تغييرُ دوره هنا يزيلها ويُلغي استثناءاتِه.</span>
             </div>
             {% endif %}
-            {% else %}
+            {% if not role %}
             <div class="ae-role-select" aria-readonly="true">مدير النظام</div>
             <small>مدير النظام يستطيع كلّ شيء، ولا يُعدَّل دورُه من هنا.</small>
             {% endif %}
@@ -101,8 +111,8 @@
             <span class="ae-row-label">{{ e.label }}</span>
             <span class="ae-badge {% if e.allowed %}added{% else %}blocked{% endif %}">{% if e.allowed %}مضاف{% else %}محجوب{% endif %}</span>
             <span class="ae-who">{% if e.allowed %}أضافها{% else %}حجبها{% endif %} {{ e.by|default:"—" }}{% if e.at %} · {{ e.at|date:"m-d" }}{% endif %}</span>
-            <form method="post" action="{% url 'system_account' target.pk %}">{% csrf_token %}<input type="hidden" name="action" value="override"><input type="hidden" name="key" value="{{ e.key }}"><input type="hidden" name="value" value="reset">
-              <button type="submit" class="ae-act">رجوع إلى الدور</button></form>
+            {% if e.editable %}<form method="post" action="{% url 'system_account' target.pk %}">{% csrf_token %}<input type="hidden" name="action" value="override"><input type="hidden" name="key" value="{{ e.key }}"><input type="hidden" name="value" value="reset">
+              <button type="submit" class="ae-act">رجوع إلى الدور</button></form>{% else %}<span class="ae-act muted">لا يُعدَّل</span>{% endif %}
           </div>
           {% endfor %}
         </div>
@@ -152,4 +162,4 @@
   </div>
 </dialog>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/account_editor.js' %}?v=20261112-c3" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/account_editor.js' %}?v=20261116-batch2" defer></script>{% endblock %}

@@ -44,8 +44,7 @@ class SidebarAdminGateTests(TestCase):
     def test_the_superuser_sees_the_accounts_link(self):
         boss = User.objects.create_superuser('tboss', 't@x.invalid', 'pw-tboss-1111111')
         self.client.force_login(boss)
-        self.assertContains(self.client.get(reverse('book_unified')),
-                            reverse('admin_panel') + '?tab=users')
+        self.assertContains(self.client.get(reverse('book_unified')), reverse('system_accounts'))
 
 
 class MailSyncButtonGateTests(TestCase):

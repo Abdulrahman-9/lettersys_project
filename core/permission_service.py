@@ -210,22 +210,24 @@ def role_change_preview(target, role):
 def set_user_role(request, target, role):
     """يجعل للشخص دوراً واحداً: يُلغي استثناءاتِه، ويضبط الأعلامَ الستّة كلَّها، ويكتب الأثر.
 
-    لمدير النظام وحده، ولا على نفسه ولا على مدير نظامٍ آخر (``assign_user`` لا يحرسهما للسوبر).
-    والدورُ مقيَّدٌ بقسم الشخص (``roles_for_department``). يعيد True إن تغيّر شيء.
+    لمدير النظام، ولرئيس القسم في شجرته بما يمنحه (الدفعة 2): ``role_change_block`` يقول مَن يغيّر دورَ مَن
+    — لا أحدَ دورَه بنفسه ولا دورَ مديرٍ، ولا رئيسٌ ما لا يمنحه ولا ما عليه استثناءٌ لا يملكه. والدورُ
+    الجديد ممّا يُسند في قسم الشخص (``roles_for_department``) ويمنحه الفاعل (``assignable_roles``).
+    يعيد True إن تغيّر شيء.
     """
     from core.admin_service import assign_user
     from core.roles import ARCHIVE_ALL_GROUP_NAME
-    from core.scoping import can_manage_accounts, roles_for_department
+    from core.scoping import assignable_roles, role_change_block, roles_for_department
 
     by = request.user
-    if not can_manage_accounts(by):
-        raise PermissionDenied('أدوارُ الحسابات يغيّرها مدير النظام وحده.')
-    # ومَن يملك هذا مديرُ نظام، فحسابُه هو يقع هنا أيضاً — لا يغيّر أحدٌ دورَه بنفسه.
-    if target.is_superuser:
-        raise PermissionDenied('دورُ مدير النظام لا يُعدَّل من هنا.')
+    block = role_change_block(by, target)
+    if block:
+        raise PermissionDenied(block)
     department = getattr(getattr(target, 'profile', None), 'department', None)
     if role not in roles_for_department(department):
         raise ValidationError('هذا الدورُ لا يُسند في هذا القسم.')
+    if role not in assignable_roles(by, target):
+        raise PermissionDenied('هذا الدور يمنحه مدير النظام.')
     before = role_of(target)
     if before == role:
         return False

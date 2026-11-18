@@ -17,8 +17,8 @@ class UserDeleteGuardTests(TestCase):
         self.client.force_login(self.admin)
 
     def _delete(self, user):
-        return self.client.post(reverse('admin_panel'), {
-            'action': 'delete_user', 'tab': 'users', 'user_id': user.pk})
+        # الدفعة 2: الحذفُ في محرّر الحساب
+        return self.client.post(reverse('system_account', args=[user.pk]), {'action': 'delete'})
 
     def test_an_admin_cannot_delete_the_account_in_use(self):
         User.objects.create_superuser('gadmin2', 'g2@x.co', 'pw-gadmin2-1111')

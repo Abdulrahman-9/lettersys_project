@@ -100,7 +100,7 @@ class MovedTabsTests(TestCase):
         self.assertFalse(EntityGroup.objects.filter(name='عنقود رئيس القسم').exists())
 
     def test_the_kept_tabs_still_open_in_the_panel(self):
-        for tab in ('overview', 'departments', 'users'):
+        for tab in ('overview', 'departments'):   # الدفعة 2: «الحسابات» صارت قائمتَها في البرنامج
             with self.subTest(tab=tab):
                 response = self._old(self.root, tab=tab)
                 self.assertEqual(response.status_code, 200)

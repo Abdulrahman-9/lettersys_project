@@ -237,12 +237,13 @@ class DepartmentManagerScopeTests(AdminPanelTestCase):
         outside = User.objects.create_user('outside', password='outside-pass-123456')
         UserProfile.objects.create(user=outside, department=self.other)
         self.client.force_login(self.manager)
-        response = self.client.get('/books/admin/?tab=users')
-        body = response.content.decode('utf-8')
+        # الدفعة 2: الحساباتُ قائمةٌ في البرنامج، والرابطُ القديم يُحوَّل إليها
+        self.assertEqual(self.client.get('/books/admin/?tab=users')['Location'], '/books/system/accounts/')
+        response = self.client.get('/books/system/accounts/')
         self.assertContains(response, self.unit.name)
         self.assertNotContains(response, self.other.name)
         self.assertNotContains(response, 'outside')
-        self.assertNotContains(response, '?tab=groups')
+        self.assertNotContains(response, '?view=groups')
         self.assertContains(response, '/books/admin/')
         self.assertNotContains(response, '/books/users/')
 
@@ -302,10 +303,11 @@ class DepartmentManagerScopeTests(AdminPanelTestCase):
         fresh = User.objects.get(pk=self.manager.pk)
         self.assertFalse(fresh.groups.filter(
             name__in=(CONTROLLER_GROUP_NAME, ARCHIVIST_GROUP_NAME)).exists())
-        # والصفُّ في اللوحة قراءةٌ لا نموذج
+        # وصفُّه في القائمة بلا رابطٍ إلى المحرّر، والمحرّرُ لا يفتحه (الدفعة 2)
         self.client.force_login(self.manager)
-        self.assertNotContains(self.client.get('/books/admin/?tab=users'),
-                               f'id="assign-user-{self.manager.pk}"')
+        self.assertNotContains(self.client.get('/books/system/accounts/'),
+                               f'href="/books/system/account/{self.manager.pk}/"')
+        self.assertEqual(self.client.get(f'/books/system/account/{self.manager.pk}/').status_code, 404)
 
     def test_moving_a_unit_head_is_for_the_admin(self):
         """نقلُ رئيس وحدةٍ إلى قسم الناقل يجعله رئيساً نظيراً على الشجرة كلّها (فيبل #5)."""
@@ -380,23 +382,23 @@ class DepartmentManagerScopeTests(AdminPanelTestCase):
 
     def test_local_account_creation_returns_one_time_password_and_forces_rotation(self):
         self.client.force_login(self.manager)
-        response = self.client.post('/books/admin/', {
-            'action': 'create_department_user',
+        # الدفعة 2: صفحةُ «حساب جديد» لرئيس القسم أيضاً — بأقسام شجرته وما يمنحه
+        response = self.client.post('/books/system/account/new/', {
             'department': self.dept.pk,   # المدخلُ في الديوان (المستوى 2)
             'username': 'local-clerk',
-            'first_name': 'كاتب',
+            'name': 'كاتب',
             'job_title': 'محرر',
             'role': 'entry',
-            'tab': 'users',
         })
         self.assertEqual(response.status_code, 200)
         user = User.objects.get(username='local-clerk')
         self.assertTrue(user.profile.must_change_password)
         self.assertTrue(user.groups.filter(name=ENTRY_GROUP_NAME).exists())
-        password = response.context['created_credentials']['password']
+        password = response.context['temp_password']
         self.assertTrue(user.check_password(password))
-        # ``@never_cache`` يُلحق max-age=0… — المهمُّ أنّ no-store حاضرة
-        self.assertIn('no-store, private', response['Cache-Control'])
+        # ``@never_cache`` يُلحق max-age=0… — المهمُّ أنّ no-store وprivate حاضرتان
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertIn('private', response['Cache-Control'])
         log = UserActivityLog.objects.get(action='CREATE_USER')
         self.assertNotIn(password, str(log.metadata))
 
@@ -512,22 +514,33 @@ class PanelWritesTests(AdminPanelTestCase):
         resp = self.client.post('/books/admin/', {'action': 'drop_everything'}, follow=True)
         self.assertContains(resp, 'غير معروف')
 
-    def test_assigning_a_role_through_the_form(self):
-        self.client.post('/books/admin/', {
-            'action': 'assign_user', 'tab': 'users',
-            'user_id': self.clerk.pk, 'department': self.dept.pk,
-            'is_department_head': '1',
-        }, follow=True)
+    def test_assigning_a_role_through_the_editor(self):
+        # الدفعة 2: الدورُ يُغيَّر من محرّر الحساب وحده — خاناتُ الجدول ذهبت مع التبويب
+        self.client.post(f'/books/system/account/{self.clerk.pk}/', {
+            'action': 'role', 'role': 'head', 'confirm': '1'}, follow=True)
         self.assertTrue(User.objects.get(pk=self.clerk.pk).profile.is_department_head)
 
-    def test_an_unchecked_box_revokes_the_role(self):
-        """صندوقٌ غيرُ مؤشَّرٍ لا يُرسَل أصلاً — والسحبُ يجب أن يعمل رغم ذلك."""
+    def test_a_new_role_takes_the_old_one_away(self):
+        """دورٌ واحد: اختيارُ القارئ يسحب الرئاسة — لا خانةٌ تُنسى مؤشَّرة."""
         assign_user(self.clerk, is_department_head=True, by=self.root)
-        self.client.post('/books/admin/', {
-            'action': 'assign_user', 'tab': 'users',
-            'user_id': self.clerk.pk, 'department': self.dept.pk,
-        }, follow=True)
+        self.client.post(f'/books/system/account/{self.clerk.pk}/', {
+            'action': 'role', 'role': 'reader', 'confirm': '1'}, follow=True)
         self.assertFalse(User.objects.get(pk=self.clerk.pk).profile.is_department_head)
+
+    def test_the_old_account_writes_are_gone(self):
+        """فيبل 11-16: نقاطُ حفظ الحسابات في اللوحة أُزيلت مع تبويبها — صفحةٌ قديمةٌ مفتوحة كانت تُدير
+        كلمةَ مرورٍ فلا تُعرض، وتقلب الأعلامَ بلا قواعد الدور الواحد."""
+        before = User.objects.get(pk=self.clerk.pk).password
+        for action in ('create_department_user', 'reset_user_password', 'assign_user',
+                       'toggle_user_active', 'delete_user'):
+            with self.subTest(action=action):
+                resp = self.client.post('/books/admin/', {
+                    'action': action, 'user_id': self.clerk.pk, 'username': 'ghost', 'is_active': '0',
+                    'department': self.dept.pk, 'is_department_head': '1'}, follow=True)
+                self.assertContains(resp, 'غير معروف')
+        fresh = User.objects.get(pk=self.clerk.pk)
+        self.assertEqual((fresh.password, fresh.is_active, fresh.profile.is_department_head), (before, True, False))
+        self.assertFalse(User.objects.filter(username='ghost').exists())
 
 
 class TreeRenderingTests(AdminPanelTestCase):
@@ -585,7 +598,7 @@ class MergedPanelTests(AdminPanelTestCase):
 
     def test_the_panel_no_longer_computes_the_reservation_report(self):
         # الدفعة 1: التقريرُ في صفحته (system_reservations) — اللوحةُ لا تحسبه في أيّ تبويب
-        for tab in ('overview', 'users', 'departments'):
+        for tab in ('overview', 'departments'):
             with self.subTest(tab=tab):
                 self.assertNotIn('reservation_summary', self._get(self.root, tab=tab).context)
 
@@ -630,15 +643,20 @@ class MergedPanelTests(AdminPanelTestCase):
         UserProfile.objects.create(user=off, department=self.unit, must_change_password=True)
         self.staff.groups.add(Group.objects.get_or_create(name=ARCHIVIST_GROUP_NAME)[0])
         context = self._get(self.manager).context
+        # الدفعة 2: البطاقةُ رابطٌ إلى قائمة الحسابات بتصفيتها — فعددُها عددُ رقاقة تلك الحالة هناك
+        body = self._get(self.manager).content.decode('utf-8')
+        self.client.force_login(self.manager)
+        listed = self.client.get('/books/system/accounts/').context
+        counts = {chip['key']: chip['count'] for chip in listed['statuses']}
         for kpi, token in (('password_pending_count', 'password'),
                            ('sensitive_role_count', 'sensitive'),
                            ('inactive_user_count', 'inactive')):
             with self.subTest(kpi=kpi):
-                self.assertEqual(context[kpi],
-                                 sum(token in row['status'].split() for row in context['people']))
+                self.assertEqual(context[kpi], counts[token])
+                self.assertIn(f'href="/books/system/accounts/?status={token}"', body)
         self.assertEqual(context['password_pending_count'], 2)
         # الأرشيفيُّ حسّاس: يفتح سرّيّات قسمه (``_department_custodian``)
-        self.assertIn('sensitive', next(r for r in context['people'] if r['user'] == self.staff)['status'])
+        self.assertTrue(next(r for r in listed['rows'] if r['user'] == self.staff)['is_sensitive'])
 
     def test_the_grant_rule_has_one_source(self):
         import inspect
@@ -651,20 +669,24 @@ class MergedPanelTests(AdminPanelTestCase):
             with self.subTest(module=module.__name__):
                 self.assertNotIn("'department_head', 'company_archivist'}", source)
                 self.assertNotIn('_ADMIN_ONLY_ROLES', source)
-        context = self._get(self.manager).context
-        self.assertEqual({value for value, _ in context['role_options']}, scoping.HEAD_GRANTABLE_ROLES)
-        self.assertEqual({col['role'] for col in context['role_columns']},
-                         scoping.HEAD_GRANTABLE_ROLES - {'viewer'})
-        self.assertEqual({value for value, _ in self._get(self.root).context['role_options']},
-                         scoping.HEAD_GRANTABLE_ROLES | scoping.ADMIN_ONLY_ROLES)
+        # الدفعة 2: صفحةُ «حساب جديد» تعرض لكلّ قسمٍ ما يُسند فيه ممّا يمنحه الناظر — من ``grantable_roles``
+        def offered(user):
+            self.client.force_login(user)
+            roles = self.client.get('/books/system/account/new/').context['department_roles']
+            return {scoping.ROLE_GRANT_KEYS[role] for entry in roles.values() for role in entry['roles']}
+        self.assertEqual(offered(self.manager), scoping.HEAD_GRANTABLE_ROLES)
+        # أرشيفُ الشركة صفةٌ لا دورٌ في المصفوفة — يُمنح من المحرّر لا عند الإنشاء
+        self.assertEqual(offered(self.root), scoping.HEAD_GRANTABLE_ROLES | {'department_head'})
 
     def test_a_head_posting_admin_roles_changes_nothing_but_his_own(self):
-        """النموذجُ يُقرأ بما يمنحه الناظر، وغيابُ حقل القسم «لم يُغيَّر» لا «بلا قسم»."""
+        """المحرّرُ يُقرأ بما يمنحه الناظر: الرئاسةُ تُرفض، والمدخلُ يُقبل، والقسمُ لا يتغيّر (الدفعة 2)."""
         UserProfile.objects.filter(user=self.staff).update(department=self.dept)   # المدخلُ في الديوان (المستوى 2)
         self.client.force_login(self.manager)
-        self.client.post('/books/admin/', {
-            'action': 'assign_user', 'tab': 'users', 'user_id': self.staff.pk,
-            'is_department_head': '1', 'is_company_archivist': '1', 'is_entry': '1'})
+        url = f'/books/system/account/{self.staff.pk}/'
+        self.assertContains(self.client.post(url, {'action': 'role', 'role': 'head', 'confirm': '1'}, follow=True),
+                            'يمنحه مدير النظام')
+        self.assertFalse(User.objects.get(pk=self.staff.pk).profile.is_department_head)
+        self.client.post(url, {'action': 'role', 'role': 'entry', 'confirm': '1'})
         fresh = User.objects.get(pk=self.staff.pk)
         self.assertFalse(fresh.profile.is_department_head)
         self.assertFalse(fresh.groups.filter(name=ARCHIVE_ALL_GROUP_NAME).exists())
@@ -684,18 +706,21 @@ class MergedPanelTests(AdminPanelTestCase):
     def test_the_empty_row_spans_every_column(self):
         import re
 
-        for user, columns in ((self.root, 11), (self.manager, 9)):   # (ج‑4) عمودُ «تنفيذ»
+        # الدفعة 2: قائمةُ الحسابات خمسةُ أعمدة للجميع (الدورُ عمودٌ واحد لا خانةٌ لكلّ دور)
+        for user in (self.root, self.manager):
             with self.subTest(user=user.username):
-                body = self._get(user, tab='users').content.decode('utf-8')
-                head = body.split('<table id="userTable">', 1)[1].split('</thead>', 1)[0]
-                self.assertEqual(len(re.findall(r'<th[\s>]', head)), columns)
-                self.assertIn(f'id="user-empty" hidden><td colspan="{columns}"', body)
+                self.client.force_login(user)
+                body = self.client.get('/books/system/accounts/', {'q': 'لا أحد'}).content.decode('utf-8')
+                head = body.split('<table class="sa-reg sa-acc">', 1)[1].split('</thead>', 1)[0]
+                self.assertEqual(len(re.findall(r'<th[\s>]', head)), 5)
+                self.assertIn('<td colspan="5" class="sa-empty">', body)
 
     def test_rows_a_head_cannot_manage_are_read_only(self):
         archive_all = User.objects.create_user('merge-aa', password='merge-aa-pass-1234')
         UserProfile.objects.create(user=archive_all, department=self.unit)
         archive_all.groups.add(Group.objects.get_or_create(name=ARCHIVE_ALL_GROUP_NAME)[0])
-        rows = {r['user'].pk: r for r in self._get(self.manager).context['people']}
+        self.client.force_login(self.manager)
+        rows = {r['user'].pk: r for r in self.client.get('/books/system/accounts/').context['rows']}
         self.assertTrue(rows[self.staff.pk]['can_edit'])
         self.assertFalse(rows[archive_all.pk]['can_edit'])
         self.assertFalse(rows[self.manager.pk]['can_edit'])
@@ -767,9 +792,9 @@ class HeadPasswordResetTests(AdminPanelTestCase):
         self.archivist = member('rs-archivist', self.unit, group=ARCHIVIST_GROUP_NAME)
 
     def _reset(self, by, target):
+        # الدفعة 2: الكلمةُ المؤقّتة من محرّر الحساب — ويُعرض فيه ما أُعيد مرّةً واحدة
         self.client.force_login(by)
-        return self.client.post('/books/admin/', {
-            'action': 'reset_user_password', 'tab': 'users', 'user_id': target.pk})
+        return self.client.post(f'/books/system/account/{target.pk}/', {'action': 'password'})
 
     def test_head_resets_staff_in_his_tree_once(self):
         from core.models import UserPassword
@@ -777,27 +802,26 @@ class HeadPasswordResetTests(AdminPanelTestCase):
         response = self._reset(self.manager, self.staff)
         self.assertEqual(response.status_code, 200)
         self.assertIn('no-store', response['Cache-Control'])
-        credentials = response.context['created_credentials']
-        self.assertTrue(credentials['is_reset'])
         self.staff.refresh_from_db()
-        self.assertTrue(self.staff.check_password(credentials['password']))
+        self.assertTrue(self.staff.check_password(response.context['temp_password']))
         self.assertTrue(self.staff.profile.must_change_password)
         self.assertEqual(UserPassword.objects.filter(user=self.staff).count(), 1)
         self.assertTrue(UserActivityLog.objects.filter(
             user=self.manager, action='PASSWORD_RESET', metadata__user='rs-staff').exists())
 
     def test_head_cannot_reset_outside_sensitive_or_self(self):
-        for target in (self.far, self.unit_head, self.archivist, self.manager):
+        # خارجَ الشجرة وحسابُه هو: لا يُفتح المحرّرُ أصلاً (404)؛ والحسّاسُ يُرفض برسالةٍ ويعود (302)
+        for target, status in ((self.far, 404), (self.manager, 404), (self.unit_head, 302), (self.archivist, 302)):
             with self.subTest(target=target.username):
                 before = User.objects.get(pk=target.pk).password
-                self.assertEqual(self._reset(self.manager, target).status_code, 302)
+                self.assertEqual(self._reset(self.manager, target).status_code, status)
                 self.assertEqual(User.objects.get(pk=target.pk).password, before)
 
     def test_the_admin_resets_a_sensitive_account(self):
         response = self._reset(self.root, self.archivist)
         self.assertEqual(response.status_code, 200)
         self.archivist.refresh_from_db()
-        self.assertTrue(self.archivist.check_password(response.context['created_credentials']['password']))
+        self.assertTrue(self.archivist.check_password(response.context['temp_password']))
 
     def test_inactive_account_is_refused(self):
         User.objects.filter(pk=self.staff.pk).update(is_active=False)
@@ -807,8 +831,12 @@ class HeadPasswordResetTests(AdminPanelTestCase):
 
     def test_the_button_follows_the_guard(self):
         self.client.force_login(self.manager)
-        rows = {r['user'].pk: r for r in self.client.get('/books/admin/?tab=users').context['people']}
-        self.assertTrue(rows[self.staff.pk]['can_reset'])
-        for user in (self.unit_head, self.archivist, self.manager):
+
+        def editor(user):
+            return self.client.get(f'/books/system/account/{user.pk}/')
+        self.assertTrue(editor(self.staff).context['can_reset'])
+        self.assertContains(editor(self.staff), 'name="action" value="password"')
+        for user in (self.unit_head, self.archivist):
             with self.subTest(user=user.username):
-                self.assertFalse(rows[user.pk]['can_reset'])
+                self.assertFalse(editor(user).context['can_reset'])
+                self.assertNotContains(editor(user), 'name="action" value="password"')

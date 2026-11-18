@@ -67,4 +67,24 @@
       });
     });
   }
+
+  // تعديلٌ لم يُحفظ لا يضيع بصمت: المغادرةُ تسأل. كان الحارسُ في جدول اللوحة، والكتابةُ صارت هنا (الدفعة 2).
+  if (account) {
+    var fields = account.querySelectorAll('input:not([type=hidden]), select, textarea');
+    var changed = function (x) {
+      if (x.type === 'checkbox') return x.checked !== x.defaultChecked;
+      if (x.tagName === 'SELECT') {
+        return Array.prototype.some.call(x.options, function (o) { return o.selected !== o.defaultSelected; });
+      }
+      return x.value !== x.defaultValue;
+    };
+    var submitting = false;
+    // بعد مستمع القسم: إرسالٌ أوقفه سؤالُ القسم ليس إرسالاً، فالمغادرةُ بعد «إلغاء» تسأل
+    account.addEventListener('submit', function (event) { submitting = !event.defaultPrevented; });
+    window.addEventListener('beforeunload', function (event) {
+      if (submitting || !Array.prototype.some.call(fields, changed)) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
+  }
 }());

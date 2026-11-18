@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}">
 {# رموزُ الهويّة: الشريطان هنا هما شريطا البرنامج نفسُهما (11-15) #}
 <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261115-colors1">
-{% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261116-batch1">{% endif %}
+{% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261116-batch2">{% endif %}
 <style>
 @font-face{font-family:Cairo;font-weight:200 1000;font-display:swap;
   src:url("{% static 'vendor/cairo/cairo-v31-SLXVc1nY6HkvangtZmpQdkhzfH5lkSscRiyS.woff2' %}") format("woff2")}
@@ -170,10 +170,7 @@ a.kpi.link:hover{transform:translateY(-2px);box-shadow:var(--lx-shadow-md)}
 .fcount{font-size:.78rem;color:var(--mute);font-variant-numeric:tabular-nums}
 .empty-note{text-align:center;color:var(--mute);font-size:.85rem;padding:1rem}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.lens-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .7rem;border-radius:99px;
-  background:var(--lx-surface-2);color:var(--amber);font-weight:700;font-size:.78rem;border:1px solid var(--lx-line)}
 .dtree-row mark{background:var(--lx-wait-line);border-radius:3px;padding:0 1px}
-.cell-in{border:1px solid var(--line);border-radius:8px;padding:.35rem .6rem;font-size:.82rem;background:#fff}
 .pager{display:flex;align-items:center;justify-content:center;gap:.75rem;padding:.75rem;font-size:.82rem;color:var(--mute)}
 table{width:100%;border-collapse:collapse;font-size:.84rem}
 th{text-align:start;font-size:.75rem;color:var(--mute);font-weight:800;
@@ -211,8 +208,6 @@ details .inline-form{border:1px solid var(--line);border-radius:12px;padding:.8r
   pointer-events:none;transition:opacity .25s;z-index:40}
 .scrim.on{opacity:1;pointer-events:auto}
 /* ── إشعار تحميل كلمة المرور ── */
-.cred-box{background:var(--lx-surface-2);border:1px solid var(--lx-line);border-radius:14px;padding:1rem 1.1rem}
-.cred-box code{background:var(--lx-pri-soft);border-radius:6px;padding:.1rem .4rem;font-size:.9rem}
 /* ── إشعارات النظام ── */
 .sys-msg{padding:.6rem 1rem;margin:.5rem 0;border-radius:10px;font-size:.85rem;font-weight:600}
 .sys-msg.success{background:var(--lx-done-bg);color:var(--ok)}
@@ -283,12 +278,7 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
 .dtree-row .lv-badge{width:18px;height:18px;border-radius:4px;display:grid;place-items:center;
   font-size:.7rem;font-weight:800;color:#fff;flex-shrink:0}
 /* خاناتُ الأدوار 20px بلون الفعل؛ والصفُّ الموقوفُ والمعدَّلُ غيرُ المحفوظ موسومان (11-15) */
-.role-box{width:20px;height:20px;cursor:pointer;accent-color:var(--lx-pri)}
-.role-hit{display:inline-grid;place-items:center;min-width:32px;min-height:32px;border-radius:8px;cursor:pointer}
-.role-hit:hover{background:var(--lx-surface-2)}
-tr.is-inactive td,.dtree-row.is-inactive{background:var(--lx-surface-2);color:var(--mute)}
-tr.is-dirty td{background:var(--lx-wait-bg)}
-.dirty-chip{display:block;margin-top:.3rem;font-size:.75rem;font-weight:800;color:var(--lx-wait)}
+.dtree-row.is-inactive{background:var(--lx-surface-2);color:var(--mute)}
 .lv-badge.o{background:var(--secret)}.lv-badge.q{background:var(--lx-hero-b)}.lv-badge.s{background:var(--amber-2)}.lv-badge.w{background:var(--in)}
 </style>
 </head>
@@ -340,7 +330,7 @@ tr.is-dirty td{background:var(--lx-wait-bg)}
       <a href="?tab=departments" data-v="dep" {% if tab == 'departments' %}class="on" aria-current="page"{% endif %}>
         <i class="bi bi-diagram-3-fill"></i>الأقسام والهيكل<em>{{ department_count }}</em>
       </a>
-      <a href="?tab=users" data-v="acc" {% if tab == 'users' %}class="on" aria-current="page"{% endif %}>
+      <a href="{% url 'system_accounts' %}">
         <i class="bi bi-people-fill"></i>الحسابات والأدوار<em>{{ staff_count }}</em>
       </a>
       {% comment %}الدفعة 1: هذا الشريطُ لرئيس القسم وحده — مديرُ النظام يرى شريطَ النظام (فيه الحجوزاتُ والسجلُّ
@@ -377,18 +367,18 @@ tr.is-dirty td{background:var(--lx-wait-bg)}
       <div class="l">حسابات في النطاق</div>
     </div>
     {# البطاقةُ رابطٌ إلى تصفيتها — والعددُ عددُ ما تُظهره (اختبارٌ يحرسه) #}
-    <a class="kpi link" href="?tab=users&amp;status=password" data-v="acc" data-status="password" style="--c:var(--amber-2)">
+    <a class="kpi link" href="{% url 'system_accounts' %}?status=password" style="--c:var(--amber-2)">
       <i class="bi bi-key"></i>
       <div class="n" data-count="{{ password_pending_count }}">{{ password_pending_count }}</div>
       <div class="l">بانتظار تغيير كلمة المرور</div>
       <div class="s">كلمةٌ مؤقّتة لم تُغيَّر</div>
     </a>
-    <a class="kpi link" href="?tab=users&amp;status=inactive" data-v="acc" data-status="inactive" style="--c:var(--danger)">
+    <a class="kpi link" href="{% url 'system_accounts' %}?status=inactive" style="--c:var(--danger)">
       <i class="bi bi-person-slash"></i>
       <div class="n" data-count="{{ inactive_user_count }}">{{ inactive_user_count }}</div>
       <div class="l">حسابات موقوفة</div>
     </a>
-    <a class="kpi link" href="?tab=users&amp;status=sensitive" data-v="acc" data-status="sensitive" style="--c:var(--secret)">
+    <a class="kpi link" href="{% url 'system_accounts' %}?status=sensitive" style="--c:var(--secret)">
       <i class="bi bi-shield-lock"></i>
       <div class="n" data-count="{{ sensitive_role_count }}">{{ sensitive_role_count }}</div>
       <div class="l">أدوار حسّاسة</div>
@@ -401,7 +391,7 @@ tr.is-dirty td{background:var(--lx-wait-bg)}
       <h2>الهيكل التنظيمي</h2>
       <span class="sub">قسم ← شعبة ← وحدة · اختر أيّ عقدة لتفاصيلها{% if org_overdue_total %} · <b class="bad">{{ org_overdue_total }} كتاباً متأخّراً</b>{% endif %}</span>
     </div>
-    <div class="org" id="org" data-reports="{% url 'reports' %}"></div>
+    <div class="org" id="org" data-reports="{% url 'reports' %}" data-accounts="{% url 'system_accounts' %}"></div>
   </div>
 
   <div class="cols">
@@ -449,8 +439,8 @@ tr.is-dirty td{background:var(--lx-wait-bg)}
     <div class="hd"><h2>إجراءات سريعة</h2></div>
     <div class="quick">
       <button onclick="go('dep')"><i class="bi bi-node-plus"></i><b>إنشاء قسم أو شعبة أو وحدة</b><small>ضمن أي مستوى من الشجرة</small></button>
-      <button onclick="go('acc')"><i class="bi bi-person-plus"></i><b>إنشاء حساب محلي</b><small>كلمة مؤقتة تظهر مرة واحدة</small></button>
-      <button onclick="go('acc')"><i class="bi bi-person-badge"></i><b>إسناد دور</b><small>{{ grantable_labels|join:" · " }}</small></button>
+      {% if grantable_labels %}<a href="{% url 'system_account_new' %}"><i class="bi bi-person-plus"></i><b>إنشاء حساب محلي</b><small>كلمة مؤقتة تظهر مرة واحدة</small></a>
+      <a href="{% url 'system_accounts' %}"><i class="bi bi-person-badge"></i><b>إسناد دور</b><small>{{ grantable_labels|join:" · " }}</small></a>{% endif %}
       {% if is_superadmin %}
       <a href="{% url 'entity_list' %}?view=groups"><i class="bi bi-collection"></i><b>ورشة العناقيد</b><small>تجميع الجهات المتشابهة</small></a>
       <a href="{% url 'audit_log' %}"><i class="bi bi-search"></i><b>تتبّع مستخدم</b><small>كل حركاته عبر الأقسام</small></a>
@@ -618,261 +608,8 @@ tr.is-dirty td{background:var(--lx-wait-bg)}
 </div>
 
 
-{# ════════════════ الحسابات ════════════════ #}
-<section class="view {% if tab == 'users' %}on{% endif %}" id="acc">
-  <div>
-    <div class="crumb">إدارة النظام / الحسابات والأدوار</div>
-    <div class="ph">
-      <div><h1>الحسابات والأدوار</h1><p>{% if is_superadmin %}كلّ الحسابات والأدوار.{% else %}حساباتُ شجرتك — تمنح: {{ grantable_labels|join:" · " }}.{% endif %}</p></div>
-      {% if is_superadmin %}<span class="sp"></span><a class="btn" href="{% url 'system_roles' %}"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>الأدوار والصلاحيّات</a>{% endif %}
-    </div>
-  </div>
-
-  {% if created_credentials %}
-  <div class="cred-box" role="status">
-    <h6 style="margin:0 0 .5rem;font-size:.95rem"><i class="bi bi-key-fill" style="color:var(--amber)"></i> {% if created_credentials.is_reset %}أُعيد تعيين كلمة المرور{% else %}كلمة مرور مؤقتة{% endif %} — تظهر مرة واحدة</h6>
-    <p style="margin:0 0 .5rem;font-size:.85rem;color:var(--mute)">انسخها وسلّمها لصاحب الحساب الآن. سيُطلب منه تغييرها عند أول دخول.</p>
-    <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
-      <span>اسم المستخدم: <code>{{ created_credentials.username }}</code></span>
-      <span>كلمة المرور: <code class="user-select-all">{{ created_credentials.password }}</code></span>
-    </div>
-  </div>
-  {% endif %}
-
-  <div class="card" style="padding:0">
-    <div style="padding:.75rem 1rem 0;display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-start">
-      <div class="tools" role="search" id="userFilter" style="flex:1;margin:0">
-        <label class="vh" for="user-q">ابحث في الحسابات</label>
-        <input type="search" id="user-q" placeholder="ابحث بالاسم أو القسم أو المسمّى…" style="min-width:240px" autocomplete="off">
-        <label class="vh" for="user-status">حالة الحساب</label>
-        <select id="user-status">
-          <option value="">كل الحسابات</option>
-          <option value="active">نشط</option>
-          <option value="inactive">موقوف</option>
-          <option value="password">بانتظار تغيير كلمة المرور</option>
-          <option value="sensitive">أدوار حسّاسة</option>
-          <option value="entry">مدخل كتب</option>
-          <option value="nodept">بلا قسم</option>
-        </select>
-        <span class="fcount" id="user-count" aria-live="polite"></span>
-      </div>
-      {% if is_superadmin %}<a class="btn pri" href="{% url 'system_account_new' %}"><i class="bi bi-person-plus-fill" aria-hidden="true"></i> حساب جديد</a>
-      {% else %}<button class="btn pri" onclick="openModal('userModal')">
-        <i class="bi bi-person-plus-fill"></i> حساب جديد
-      </button>{% endif %}
-    </div>
-    <div class="tbl">
-      <table id="userTable">
-        <thead>
-          <tr>
-            <th style="min-width:10rem">الموظّف</th>
-            <th style="min-width:12rem">القسم</th>
-            <th style="min-width:10rem">المسمّى</th>
-            {% for col in role_columns %}<th title="{{ col.title }}">{{ col.label }}</th>{% endfor %}
-            <th>الحالة</th>
-            <th style="width:5rem"><span class="vh">حفظ</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in people %}
-          {# صفٌّ لا يديره الناظر (حسابُه · إداريّ · نظير · أرشيفُ الشركة) يُعرض قراءةً لا نموذجاً يُرفض عند الحفظ #}
-          <tr data-row data-search="{{ row.search }}" data-status="{{ row.status }}" data-lineage="{{ row.lineage }}"{% if not row.is_active %} class="is-inactive"{% endif %}>
-            <td>
-              {% if row.can_edit %}
-              <form method="post" id="assign-user-{{ row.user.pk }}">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="assign_user">
-                <input type="hidden" name="tab" value="users">
-                <input type="hidden" name="user_id" value="{{ row.user.pk }}">
-              </form>
-              {% endif %}
-              {% if is_superadmin %}<a href="{% url 'system_account' row.user.pk %}" style="font-weight:600" title="محرّر الحساب: الدور والاستثناءات">{% firstof row.user.get_full_name row.user.username %}</a>{% else %}<span style="font-weight:600">{% firstof row.user.get_full_name row.user.username %}</span>{% endif %}
-              {% if row.is_admin_account %}<span class="badge v">مدير نظام</span>{% endif %}
-              {% if row.is_self %}<span class="badge b">أنت</span>{% endif %}
-              {% if row.is_head and not row.department %}<span class="badge warn" style="font-size:.62rem" title="رئيس قسم بلا قسم مسنَد — يرى كتبه هو فقط">⚠ بلا قسم</span>{% endif %}
-              <div style="font-size:.76rem;color:var(--mute)">{{ row.user.username }}</div>
-              {% if row.can_edit %}
-              <details>
-                <summary>الاسم والبريد</summary>
-                <div style="margin-top:.4rem;display:grid;gap:.3rem">
-                  <input class="cell-in" name="first_name" value="{{ row.user.first_name }}" maxlength="150" placeholder="الاسم الأول" aria-label="الاسم الأول — {{ row.user.username }}" form="assign-user-{{ row.user.pk }}">
-                  <input class="cell-in" name="last_name" value="{{ row.user.last_name }}" maxlength="150" placeholder="اسم العائلة" aria-label="اسم العائلة — {{ row.user.username }}" form="assign-user-{{ row.user.pk }}">
-                  <input class="cell-in" type="email" name="email" value="{{ row.user.email }}" maxlength="254" placeholder="البريد" aria-label="البريد — {{ row.user.username }}" form="assign-user-{{ row.user.pk }}" spellcheck="false">
-                </div>
-              </details>
-              {% endif %}
-            </td>
-            <td>
-              {% if row.can_edit %}
-              <select class="cell-in" name="department" form="assign-user-{{ row.user.pk }}" aria-label="قسم {{ row.user.username }}" style="width:100%">
-                {% if is_superadmin %}<option value="">— بلا قسم —</option>{% endif %}
-                {% for d in all_departments %}
-                <option value="{{ d.pk }}"{% if row.department and row.department.pk == d.pk %} selected{% endif %}>{{ d.code }} — {{ d.name }}</option>
-                {% endfor %}
-              </select>
-              {% elif row.department %}{{ row.department.code }} — {{ row.department.name }}{% else %}<span style="color:var(--mute)">—</span>{% endif %}
-            </td>
-            <td>
-              {% if row.can_edit %}
-              <input class="cell-in" name="job_title" value="{{ row.job_title }}" maxlength="120" aria-label="مسمّى {{ row.user.username }}" form="assign-user-{{ row.user.pk }}" style="width:100%">
-              {% else %}{{ row.job_title|default:"—" }}{% endif %}
-            </td>
-            {% for cell in row.role_cells %}
-            <td style="text-align:center">
-              {% if row.can_edit %}
-              {# الخانةُ 20px والهدفُ اللافتة كلُّها 32px (WCAG 2.5.8) — في جدولٍ كثيف #}
-              <label class="role-hit" title="{{ cell.title }}"><input type="checkbox" value="1" name="{{ cell.field }}" form="assign-user-{{ row.user.pk }}"{% if cell.checked %} checked{% endif %}
-                aria-label="{{ cell.label }} — {{ row.user.username }}" class="role-box"></label>
-              {% elif cell.checked %}<i class="bi bi-check-lg" style="color:var(--ok)" role="img" aria-label="{{ cell.label }}"></i>
-              {% else %}<span style="color:var(--lx-mute)" aria-hidden="true">—</span>{% endif %}
-            </td>
-            {% endfor %}
-            <td>
-              {% if row.is_active %}<span class="badge ok">نشط</span>{% else %}<span class="badge off">موقوف</span>{% endif %}
-              {% if row.must_change_password %}<span class="badge warn" title="لم يغيّر كلمته المؤقّتة بعد">مؤقّتة</span>{% endif %}
-              {% if row.can_edit %}
-              <form method="post" style="margin-top:.3rem"
-                {% if row.is_active and not row.is_self %}data-confirm="تعطيل حساب «{{ row.user.username }}»؟" data-confirm-ok="عطّل"{% endif %}>
-                {% csrf_token %}
-                <input type="hidden" name="action" value="toggle_user_active">
-                <input type="hidden" name="tab" value="users">
-                <input type="hidden" name="user_id" value="{{ row.user.pk }}">
-                <input type="hidden" name="is_active" value="{% if row.is_active %}0{% else %}1{% endif %}">
-                <button type="submit" class="btn sm {% if row.is_active %}danger{% endif %}"
-                  {% if row.is_self %}disabled title="لا يمكن تعطيل الحساب الحالي"{% endif %}>
-                  {% if row.is_active %}تعطيل{% else %}تفعيل{% endif %}
-                </button>
-              </form>
-              {% endif %}
-              {% if row.can_reset %}
-              <form method="post" style="margin-top:.3rem"
-                data-confirm="إعادة تعيين كلمة مرور «{{ row.user.username }}»؟ ستُولَّد كلمةٌ مؤقّتة تُعرض لك مرّة واحدة، وتُغلق جلساته المفتوحة، ويُطلب منه تغييرها عند أوّل دخول.">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="reset_user_password">
-                <input type="hidden" name="tab" value="users">
-                <input type="hidden" name="user_id" value="{{ row.user.pk }}">
-                <button type="submit" class="btn sm" aria-label="إعادة تعيين كلمة مرور {{ row.user.username }}">
-                  <i class="bi bi-key" aria-hidden="true"></i> كلمة مؤقّتة
-                </button>
-              </form>
-              {% endif %}
-              {% if row.can_delete %}
-              <form method="post" style="margin-top:.3rem"
-                data-confirm="حذف حساب «{{ row.user.username }}» نهائيّاً؟ لا رجوع عنه — ومَن له كتبٌ لا يُحذف، فعطِّله." data-confirm-ok="احذف">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="delete_user">
-                <input type="hidden" name="tab" value="users">
-                <input type="hidden" name="user_id" value="{{ row.user.pk }}">
-                <button type="submit" class="btn sm danger" aria-label="حذف حساب {{ row.user.username }}">
-                  <i class="bi bi-trash3" aria-hidden="true"></i> حذف
-                </button>
-              </form>
-              {% endif %}
-            </td>
-            <td>
-              {% if row.can_edit %}
-              <button type="submit" form="assign-user-{{ row.user.pk }}" class="btn sm pri">حفظ</button>
-              <span class="dirty-chip" hidden>غير محفوظ</span>
-              {% else %}
-              <span style="font-size:.72rem;color:var(--mute)" title="{% if row.is_self %}حسابُك يُعدّله مدير النظام{% else %}دورٌ حسّاس أو حسابٌ إداريّ — يُدار من مدير النظام{% endif %}">{% if row.is_self %}حسابك{% else %}للمدير{% endif %}</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="{{ user_table_columns }}" style="text-align:center;color:var(--mute);padding:2rem">لا مستخدمون في هذا النطاق.</td></tr>
-          {% endfor %}
-          <tr id="user-empty" hidden><td colspan="{{ user_table_columns }}" style="text-align:center;color:var(--mute);padding:2rem">لا حسابات تطابق التصفية.</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div style="padding:.75rem 1rem;background:var(--lx-surface-2);border-top:1px solid var(--line);font-size:.76rem;color:var(--mute)">
-      {% if is_superadmin %}
-      <b>رئيس القسم</b>: يرى السجلّ والكتب السرّية وشُعبه ·
-      <b>مختصّ البريد</b>: طاولة البريد والكتب السرّية وإعدادات بريد الشركة ·
-      <b>مسؤول الأرشفة</b>: إدخال وتقييد وحفظ ورق قسمه · <b>أرشيف الشركة</b>: رفع حدّ القسم.
-      {% else %}
-      تمنح لمن في شجرتك: <b>{{ grantable_labels|join:" · " }}</b>. وحسابُك، والرئيسُ النظير في قسمك،
-      وأرشيفُ الشركة، والحساباتُ الإداريّة تُدار من مدير النظام — وكذلك كلمةُ مرور أيّ حسابٍ حسّاس.
-      {% endif %}
-    </div>
-  </div>
-</section>
-
-
 </main>
 </div>{# /shell #}
-
-{# ── نافذة إنشاء حساب جديد ── #}
-<div class="modal-bd" id="userModal" role="dialog" aria-modal="true" inert aria-labelledby="userModalTitle"{% if create_form_values.error %} aria-describedby="umError"{% endif %}>
-  <div class="modal">
-    <h3 id="userModalTitle"><i class="bi bi-person-plus-fill" style="color:var(--ok)"></i>
-      حساب جديد داخل النطاق
-      <button class="close-btn" onclick="closeModal('userModal')" aria-label="إغلاق">✕</button>
-    </h3>
-    <div style="padding:.6rem .9rem;border-radius:10px;background:var(--lx-wait-bg);border:1px solid var(--lx-wait-line);
-      font-size:.8rem;margin-bottom:1rem;display:flex;gap:.5rem;align-items:flex-start">
-      <i class="bi bi-key-fill" style="color:var(--lx-wait);margin-top:.1rem"></i>
-      <span>ستظهر كلمة المرور المؤقتة <strong>مرة واحدة فقط</strong> بعد الإنشاء — انسخها وسلّمها فوراً.</span>
-    </div>
-    {% if create_form_values.error %}<div class="sys-msg error" role="alert" id="umError"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ create_form_values.error }}</div>{% endif %}
-    {% if created_credentials %}
-    <div class="cred-box" style="margin-bottom:1rem">
-      <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
-        <span>اسم المستخدم: <code>{{ created_credentials.username }}</code></span>
-        <span>كلمة المرور: <code class="user-select-all">{{ created_credentials.password }}</code></span>
-      </div>
-    </div>
-    {% endif %}
-    <form method="post">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="create_department_user">
-      <input type="hidden" name="tab" value="users">
-      <div class="f-grid" style="margin-bottom:.85rem">
-        <div class="f-group">
-          <label for="um-department">القسم</label>
-          <select id="um-department" name="department" required>
-            <option value="">— اختر القسم —</option>
-            {% for d in active_departments %}<option value="{{ d.pk }}"{% if create_form_values.department == d.pk|stringformat:"s" %} selected{% endif %}>{{ d.code }} — {{ d.name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="f-group">
-          <label for="um-username">اسم المستخدم</label>
-          <input id="um-username" name="username" value="{{ create_form_values.username }}" maxlength="150" required autocomplete="off">
-        </div>
-        <div class="f-group">
-          <label for="um-first">الاسم الأول</label>
-          <input id="um-first" name="first_name" value="{{ create_form_values.first_name }}" maxlength="150">
-        </div>
-        <div class="f-group">
-          <label for="um-last">اسم العائلة</label>
-          <input id="um-last" name="last_name" value="{{ create_form_values.last_name }}" maxlength="150">
-        </div>
-        <div class="f-group">
-          <label for="um-title">المسمّى الوظيفي</label>
-          <input id="um-title" name="job_title" value="{{ create_form_values.job_title }}" maxlength="120">
-        </div>
-        <div class="f-group">
-          <label for="um-email">البريد الإلكتروني</label>
-          <input type="email" id="um-email" name="email" value="{{ create_form_values.email }}" autocomplete="email">
-        </div>
-        <div class="f-group" style="grid-column:1/-1">
-          <label for="um-role">الدور</label>
-          <select id="um-role" name="role">
-            {# ما يمنحه الناظرُ وحدَه — ``grantable_roles`` في core/scoping.py #}
-            {% for value, label in role_options %}
-            <option value="{{ value }}"{% if create_form_values.role == value %} selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-          <small>رئيسُ القسم ومختصُّ البريد ومسؤولُ الأرشفة يفتحون سرّيَّ قسمهم.</small>
-        </div>
-      </div>
-      <div style="display:flex;gap:.5rem;justify-content:flex-end">
-        <button type="button" class="btn" onclick="closeModal('userModal')">إلغاء</button>
-        <button type="submit" class="btn pri"><i class="bi bi-person-plus"></i>أنشئ وأظهر كلمة مؤقتة</button>
-      </div>
-    </form>
-  </div>
-</div>
 
 <div class="scrim" id="scrim" onclick="closeAll()"></div>
 <aside class="drawer" id="drawer" aria-label="تفاصيل" inert></aside>
@@ -916,7 +653,7 @@ document.querySelectorAll('.modal-bd').forEach(bd=>{
 });
 
 /* ── التنقل: روابطُ حقيقيّة، والنقرةُ تبدّل العرضَ وتكتب ?tab= (التحديثُ يعيدك حيث كنت) ── */
-const TAB_OF={ov:'overview',dep:'departments',acc:'users'};   /* الدفعة 1: الأربعةُ الأخرى صفحاتٌ في البرنامج */
+const TAB_OF={ov:'overview',dep:'departments'};   /* الدفعتان 1 و2: البقيّةُ صفحاتٌ في البرنامج */
 function go(v,fromPop){
   const view=document.getElementById(v);
   if(!view)return false;   /* عرضٌ لا تحمله الصفحة (رابطٌ قديم في السجلّ) — لا شيء */
@@ -936,7 +673,6 @@ document.addEventListener('click',e=>{
   if(!a||e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey)return;   /* لسانٌ جديد: الرابطُ يعمل */
   if(!go(a.dataset.v))return;
   e.preventDefault();
-  if('status' in a.dataset)setUserFilter({status:a.dataset.status,q:'',lens:null});
 });
 addEventListener('popstate',()=>{
   const t=new URLSearchParams(location.search).get('tab')||'overview';
@@ -999,13 +735,12 @@ function openNode(d){
     <p style="font-size:.82rem">${kids.map(x=>esc(x.n)).join(' · ')}</p>`:''}
     <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem">
       <button type="button" class="btn sm pri" data-act="edit">تعديل القسم</button>
-      <button type="button" class="btn sm" data-act="users">حسابات القسم وشجرته</button>
+      <a class="btn sm" href="${orgEl.dataset.accounts}?department=${d.id}">حسابات القسم وشجرته</a>
       ${d.o&&orgEl.dataset.reports?`<a class="btn sm danger" href="${orgEl.dataset.reports}?dept=${d.id}&amp;bucket=overdue">المتأخرات</a>`:''}
     </div>`;
   drawer.setAttribute('aria-labelledby','drawerTitle');
   drawer.querySelector('#drawerClose').addEventListener('click',closeAll);
   drawer.querySelector('[data-act=edit]').addEventListener('click',()=>{closeAll();go('dep');openDepEdit(d);});
-  drawer.querySelector('[data-act=users]').addEventListener('click',()=>{go('acc');setUserFilter({q:'',status:'',lens:d.id});});
   drawer.inert=false;drawer.classList.add('open');scrim.classList.add('on');
   drawer.querySelector('#drawerClose').focus();
 }
@@ -1094,49 +829,6 @@ function applyDepFilter(){
 depQ?.addEventListener('input',applyDepFilter);
 depStatus?.addEventListener('change',applyDepFilter);
 
-/* ── تصفيةُ الحسابات: نصٌّ · حالة · «ضمن قسم» (القسمُ وشجرتُه من data-lineage) ── */
-const userRows=[...document.querySelectorAll('#userTable tr[data-row]')];
-userRows.forEach(r=>{r._s=norm(r.dataset.search)});
-const userQ=$('#user-q'),userStatus=$('#user-status');
-let lensId=null;
-function applyUserFilter(){
-  if(!userQ)return;
-  const needle=norm(userQ.value),want=userStatus.value;
-  let shown=0;
-  userRows.forEach(r=>{
-    const ok=(!needle||r._s.includes(needle))&&
-      (!want||(' '+r.dataset.status+' ').includes(' '+want+' '))&&
-      (!lensId||(' '+r.dataset.lineage+' ').includes(' '+lensId+' '));
-    r.hidden=!ok;
-    if(ok)shown++;
-  });
-  $('#user-empty').hidden=shown!==0||!userRows.length;
-  $('#user-count').textContent=(needle||want||lensId)?`${shown} من ${userRows.length}`:'';
-}
-function setUserFilter({q=null,status=null,lens}={}){
-  if(!userQ)return;
-  if(q!==null)userQ.value=q;
-  if(status!==null&&[...userStatus.options].some(o=>o.value===status))userStatus.value=status;
-  if(lens!==undefined){
-    lensId=lens&&byId.has(lens)?lens:null;
-    $('#userFilter .lens-chip')?.remove();
-    if(lensId){
-      const chip=document.createElement('button');
-      chip.type='button';chip.className='lens-chip';
-      chip.innerHTML='<i class="bi bi-funnel-fill" aria-hidden="true"></i><span></span><i class="bi bi-x-lg" aria-hidden="true"></i>';
-      chip.querySelector('span').textContent='ضمن: '+byId.get(lensId).n;
-      chip.setAttribute('aria-label','إزالة تصفية القسم '+byId.get(lensId).n);
-      chip.addEventListener('click',()=>{setUserFilter({lens:null});userQ.focus();});
-      $('#userFilter').insertBefore(chip,$('#user-count'));
-    }
-  }
-  applyUserFilter();
-}
-userQ?.addEventListener('input',applyUserFilter);
-userStatus?.addEventListener('change',applyUserFilter);
-setUserFilter({q:params.get('q')||'',status:params.get('status')||'',
-               lens:/^\d+$/.test(params.get('dept')||'')?+params.get('dept'):null});
-
 /* ── تعديل قسم: لا يتبع نفسَه ولا أحداً من أبنائه، وجذرُ الرئيس بلا «يتبع» ولا تعطيل ── */
 function openDepEdit(d){
   $('#depEditId').value=d.id;
@@ -1189,37 +881,6 @@ document.querySelectorAll('form[data-confirm]').forEach(f=>{
   });
 });
 
-/* ── تعديلُ صفٍّ لم يُحفظ لا يضيع بصمت (كان حفظُ صفٍّ يمحو تعديلَ غيره): الصفُّ يُوسَم، والمغادرةُ تسأل ── */
-const dirtyRows=new Set();let submittingId=null;
-const changedFrom=x=>x.type==='checkbox'?x.checked!==x.defaultChecked
-  :x.tagName==='SELECT'?[...x.options].some(o=>o.selected!==o.defaultSelected):x.value!==x.defaultValue;
-function markDirty(e){
-  const f=e.target.form;
-  if(!f||!/^assign-user-\d+$/.test(f.id))return;
-  submittingId=null;   /* إرسالٌ أُوقف (تأكيدٌ رُفض) لا يبقى عالقاً */
-  /* الحقولُ وحدها: زرُّ «حفظ» مربوطٌ بالنموذج وبلا قيمةٍ أصليّة فكان يُعدّ متغيّراً دائماً */
-  const dirty=[...document.querySelectorAll(`:is(input,select,textarea)[form="${f.id}"]`)].some(changedFrom);
-  dirty?dirtyRows.add(f.id):dirtyRows.delete(f.id);   /* أُعيدت القيمُ ⟵ الصفُّ نظيف */
-  const tr=e.target.closest('tr');
-  if(tr){tr.classList.toggle('is-dirty',dirty);tr.querySelector('.dirty-chip')?.toggleAttribute('hidden',!dirty);}
-}
-document.addEventListener('input',markDirty,true);
-document.addEventListener('change',markDirty,true);
-document.addEventListener('submit',e=>{submittingId=e.target.id||'-';},true);
-addEventListener('beforeunload',e=>{
-  if([...dirtyRows].some(id=>id!==submittingId)){e.preventDefault();e.returnValue='';}
-});
-/* ── نقلُ موظّفٍ إلى قسمٍ آخر يُلغي استثناءاتِه — يُسأل كما في محرّر الحساب ── */
-document.querySelectorAll('form[id^="assign-user-"]').forEach(f=>{
-  f.addEventListener('submit',e=>{
-    const sel=document.querySelector(`select[name=department][form="${f.id}"]`);
-    if(!sel)return;
-    const was=([...sel.options].find(o=>o.defaultSelected)||sel.options[0])?.value;
-    if(sel.value!==was&&!confirm(`نقلُ هذا الموظّف إلى «${sel.selectedOptions[0].text}» يُلغي استثناءاتِ حسابه الخاصّة إن وُجدت.\n\nاضغط موافق للمتابعة.`)){
-      e.preventDefault();submittingId=null;
-    }
-  });
-});
 /* ── نقلُ وحدةٍ تحت أبٍ آخر يغيّر مَن يرى كتبَها — يُعرض الأثرُ قبل الحفظ ── */
 $('#depEditForm')?.addEventListener('submit',e=>{
   const sel=$('#depEditParent'),d=byId.get(+$('#depEditId').value);
@@ -1234,8 +895,6 @@ $('#depEditForm')?.addEventListener('submit',e=>{
 });
 
 
-/* ── نافذةُ «حساب جديد» تعود مفتوحةً بقيمها إن رُفض الإرسال ── */
-{% if create_form_values %}openModal('userModal');{% endif %}
 
 /* ── عدّادات متحركة (بخطوةٍ تناسب العدد: 13 ألفاً لا تعدّ واحداً واحداً) ── */
 if(!matchMedia('(prefers-reduced-motion:reduce)').matches){

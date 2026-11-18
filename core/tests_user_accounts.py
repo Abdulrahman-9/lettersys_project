@@ -28,17 +28,17 @@ class OneDoorForAccountsTests(TestCase):
         self.client.force_login(self.admin)
 
     def create(self, username, **extra):
-        return self.client.post(PANEL, {
-            'action': 'create_department_user', 'tab': 'users', 'department': self.dept.pk,
-            'username': username, 'role': 'viewer', **extra})
+        # الدفعة 2: «حساب جديد» صفحتُه — حوارُ اللوحة ذهب مع تبويب الحسابات
+        return self.client.post('/books/system/account/new/', {
+            'department': self.dept.pk, 'username': username, 'role': 'reader', **extra})
 
     def english_groups(self):
         return list(Group.objects.filter(name__in=DEAD_GROUP_NAMES).values_list('name', flat=True))
 
-    def test_the_old_address_leads_to_the_accounts_tab(self):
+    def test_the_old_address_leads_to_the_accounts_list(self):
         response = self.client.get(OLD_URL)
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response['Location'], '/books/admin/?tab=users')
+        self.assertEqual(response['Location'], '/books/system/accounts/')
 
     def test_posting_to_the_old_address_changes_nothing(self):
         victim = User.objects.create_user('victim', 'v@x.co', 'pass12345')
@@ -48,8 +48,8 @@ class OneDoorForAccountsTests(TestCase):
         self.assertFalse(User.objects.filter(username='ghost').exists())
         self.assertTrue(User.objects.filter(pk=victim.pk).exists())
 
-    def test_visiting_the_accounts_tab_creates_no_english_role_group(self):
-        self.client.get(PANEL + '?tab=users')
+    def test_visiting_the_accounts_list_creates_no_english_role_group(self):
+        self.client.get('/books/system/accounts/')
         self.assertEqual(self.english_groups(), [])
 
     def test_creating_a_reader_joins_no_group(self):
@@ -59,10 +59,10 @@ class OneDoorForAccountsTests(TestCase):
         self.assertEqual(get_user_role(newbie), 'viewer')
         self.assertEqual(self.english_groups(), [])
 
-    def test_the_panel_creates_and_deletes(self):
+    def test_the_new_account_page_creates_and_the_editor_deletes(self):
         self.create('temp')
         temp = User.objects.get(username='temp')
-        self.client.post(PANEL, {'action': 'delete_user', 'tab': 'users', 'user_id': temp.pk})
+        self.client.post(f'/books/system/account/{temp.pk}/', {'action': 'delete'})
         self.assertFalse(User.objects.filter(username='temp').exists())
 
     def test_a_created_account_is_not_staff(self):

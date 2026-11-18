@@ -2,7 +2,7 @@
 <nav class="sa-nav" aria-label="إدارة النظام">
   {# مدخلٌ واحدٌ للأقسام: المركزُ ومحرّرُ الهيكل (زرٌّ في رأس المركز) صفحتان لشيءٍ واحد #}
   <a class="{% if u == 'system_centre' or u == 'system_department' or u == 'admin_panel' and tab == 'departments' %}on{% endif %}" href="{% url 'system_centre' %}"{% if u == 'system_centre' %} aria-current="page"{% endif %}><i class="bi bi-diagram-3-fill" aria-hidden="true"></i><span>الأقسام</span></a>
-  <a class="{% if u == 'admin_panel' and tab == 'users' or u == 'system_roles' %}on{% endif %}" href="{% url 'admin_panel' %}?tab=users"><i class="bi bi-people-fill" aria-hidden="true"></i><span>الحسابات والأدوار</span></a>
+  <a class="{% if u == 'system_accounts' or u == 'system_account' or u == 'system_account_new' or u == 'system_roles' %}on{% endif %}" href="{% url 'system_accounts' %}"{% if u == 'system_accounts' %} aria-current="page"{% endif %}><i class="bi bi-people-fill" aria-hidden="true"></i><span>الحسابات والأدوار</span></a>
 
   <div class="sa-nav-group">البيانات</div>
   <a class="{% if u == 'book_unified' or u == 'book_detail' or u == 'book_edit' or u == 'book_report' %}on{% endif %}" href="{% url 'book_unified' %}?tab=all"><i class="bi bi-journals" aria-hidden="true"></i><span>كلّ الكتب</span></a>

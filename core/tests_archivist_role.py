@@ -194,9 +194,10 @@ class ArchivistGrantTests(TestCase):
         self.assertTrue(is_archivist(fresh))
         self.assertFalse(is_mail_officer(fresh))
 
-    def test_the_admin_panel_offers_the_checkbox(self):
+    def test_the_account_editor_offers_the_role(self):
+        # الدفعة 2: الدورُ قائمةٌ واحدة في محرّر الحساب — خاناتُ الجدول ذهبت مع تبويب الحسابات
         self.client.force_login(self.root)
 
-        res = self.client.get('/books/admin/?tab=users')
+        res = self.client.get(f'/books/system/account/{self.worker.pk}/')
 
-        self.assertContains(res, 'name="is_archivist"')
+        self.assertContains(res, '<option value="archivist"')

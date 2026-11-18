@@ -69,7 +69,7 @@ class UsersPageTests(TestCase):
     def test_the_dead_show_password_feature_is_gone(self):
         with self.assertRaises(NoReverseMatch):
             reverse('get_user_password', args=[1])
-        self.assertNotContains(self.client.get('/books/admin/?tab=users'), 'عرض كلمة المرور')
+        self.assertNotContains(self.client.get('/books/system/accounts/'), 'عرض كلمة المرور')
 
 
 class RolesGateTests(TestCase):

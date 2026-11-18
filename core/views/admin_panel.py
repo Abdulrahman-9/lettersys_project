@@ -13,7 +13,6 @@
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q
 from django.shortcuts import redirect, render
@@ -21,20 +20,13 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 
-from core.admin_service import (UNSET, assign_user, create_department,
-                                create_department_user, delete_group, delete_user,
-                                reset_department_user_password, save_group,
-                                update_department)
+from core.admin_service import UNSET, create_department, delete_group, save_group, update_department
 from core.logging_models import UserActivityLog
 from core.models import Department, Entity, EntityGroup
-from core.roles import (ARCHIVE_ALL_GROUP_NAME, ARCHIVIST_GROUP_NAME,
-                        CONTROLLER_GROUP_NAME, ENTRY_GROUP_NAME, EXECUTOR_GROUP_NAME)
-from core.scoping import (can_add_units, can_delete_account, can_manage_accounts, can_manage_departments,
-                          can_manage_user,
-                          grantable_roles, is_sensitive_account, managed_department_ids,
-                          user_department_id)
+from core.scoping import (ROLE_GRANT_KEYS, ROLE_LABELS, can_add_units, can_manage_accounts, can_manage_departments,
+                          grantable_roles, managed_department_ids, user_department_id)
 
-TABS = ('overview', 'departments', 'users', 'groups', 'reservations', 'audit', 'settings')
+TABS = ('overview', 'departments', 'groups', 'reservations', 'audit', 'settings')
 #: الدفعة 1: تبويباتٌ صار لها صفحاتُها في البرنامج (ورشةُ العناقيد · الحجوزات · سجلُّ الحركات · مركزُ الإعدادات)
 MOVED_TABS = ('groups', 'reservations', 'audit', 'settings')
 
@@ -50,36 +42,28 @@ def _moved_tab_url(request, tab):
         query = {key: request.GET[key] for key in ('days', 'page') if request.GET.get(key, '').isdecimal()}
         return reverse('system_reservations') + ('?' + urlencode(query) if query else '')
     return reverse('audit_log' if tab == 'audit' else 'settings_hub')
+
+
+#: حالاتُ قائمة الحسابات التي تحملها روابطُ اللوحة القديمة (بطاقاتُ الأعداد)
+_ACCOUNT_LINK_STATUSES = ('active', 'inactive', 'password', 'sensitive')
+
+
+def _accounts_url(request):
+    """``?tab=users`` القديم ⟵ قائمةُ الحسابات بتصفيته: الحالةُ من قائمةٍ ثابتة، والقسمُ رقمٌ أو لا شيء."""
+    from urllib.parse import urlencode
+
+    query = {}
+    if request.GET.get('status', '') in _ACCOUNT_LINK_STATUSES:
+        query['status'] = request.GET['status']
+    department = request.GET.get('dept', '') or request.GET.get('department', '')
+    if department.isdecimal():
+        query['department'] = department
+    return reverse('system_accounts') + ('?' + urlencode(query) if query else '')
+
+
 ADMIN_ACTIONS = ('CREATE_DEPARTMENT', 'EDIT_DEPARTMENT', 'ASSIGN_USER',
                  'CREATE_USER', 'DELETE_USER', 'CREATE_GROUP', 'EDIT_GROUP', 'DELETE_GROUP',
                  'PASSWORD_RESET', 'EDIT_SETTINGS', 'EDIT_PERMISSIONS')
-
-#: أعمدةُ الأدوار في جدول الحسابات بترتيبها — يظهر منها ما يمنحه الناظرُ وحدَه.
-#: (الدور، مفتاحُ الصفّ، حقلُ النموذج = وسيطُ ``assign_user``، العنوان، التلميح)
-ROLE_COLUMNS = (   # الوصفُ ما يفعله الدورُ اليوم (مصفوفةُ ``core/scoping.py``) لا ما كان يُرجى منه
-    ('entry', 'is_entry', 'is_entry', 'إدخال', 'مدخل — يُدخل الكتب ويعدّلها ويحجز أرقامها'),
-    ('archivist', 'is_archivist', 'is_archivist', 'أرشفة',
-     'مسؤول الأرشفة — يحفظ ورق قسمه ويفتح سرّيّه ويسترجع من السلّة'),
-    ('controller', 'is_controller', 'is_controller', 'بريد',
-     'مختصّ البريد — يمسك ديوان القسم: البريد والطاولة والدفتر والإحالة'),
-    ('executor', 'is_executor', 'is_executor', 'تنفيذ',
-     'موظّف تنفيذ — يستلم المُحال إلى وحدته وينجزه، بلا إدخال'),
-    ('department_head', 'is_head', 'is_department_head', 'رئيس',
-     'رئيس القسم يدير شجرته ويفتح سرّيّ قسمه؛ ومسؤول الشعبة أو الوحدة يدير موظّفيه ولا يفتحه'),
-    ('company_archivist', 'is_company_archivist', 'is_company_archivist', 'أرشيف الشركة',
-     'أرشيف الشركة — لا يوسّع النطاق بعد: يعمل كمسؤول أرشفة قسمه ولا يفتح سرّيّ غيره'),
-)
-#: خياراتُ «حساب جديد» بترتيبها — يظهر منها ما يمنحه الناظر.
-ROLE_OPTIONS = (
-    ('viewer', 'قارئ — يقرأ كتب نطاقه'),
-    ('entry', 'مدخل — يُدخل الكتب ويعدّلها'),
-    ('archivist', 'مسؤول أرشفة — يحفظ ورق قسمه ويفتح سرّيّه'),
-    ('controller', 'مختصّ البريد — يمسك ديوان القسم'),
-    ('executor', 'موظّف تنفيذ — يستلم المُحال وينجزه في وحدته'),
-    ('department_head', 'رئيس قسم أو مسؤول شعبة ووحدة — يدير شجرته'),
-    ('company_archivist', 'أرشيف الشركة — كمسؤول أرشفة قسمه'),
-)
-
 
 @login_required
 @never_cache
@@ -89,6 +73,9 @@ def admin_panel(request):
         raise PermissionDenied('إدارة الأقسام لمدير النظام ورئيس القسم.')
 
     tab = request.GET.get('tab')
+    # الدفعة 2: الحساباتُ صفحةٌ في البرنامج يفتحها كلُّ مَن يفتح اللوحة (والرئيسُ بنطاقه) — والكتابةُ في المحرّر
+    if request.method == 'GET' and tab == 'users':
+        return redirect(_accounts_url(request))
     # الدفعة 1: تبويباتٌ مكرّرة صارت صفحاتٍ في البرنامج — الرابطُ القديم يُحوَّل إليها لمن يملكها،
     # ورئيسُ القسم (لا يملكها) يبقى على «نظرة عامة» كما كان.
     if request.method == 'GET' and tab in MOVED_TABS and can_manage_accounts(request.user):
@@ -101,21 +88,19 @@ def admin_panel(request):
     return _render_panel(request, tab)
 
 
-def _render_panel(request, tab, created_credentials=None, create_form_values=None):
+def _render_panel(request, tab):
+    from core.views.system_admin import account_rows
+
     is_superadmin = can_manage_accounts(request.user)
     department_ids = managed_department_ids(request.user)
     departments = Department.objects.filter(pk__in=department_ids).order_by('code')
-    people = _user_rows(None if is_superadmin else set(department_ids), actor=request.user)
+    # بطاقاتُ الأعداد روابطُ إلى قائمة الحسابات بتصفيتها — فتُعدّ من صفوفها هي (الدفعة 2)
+    people = account_rows(request.user)
     root_department = (Department.objects.filter(
         pk=user_department_id(request.user)).first() if not is_superadmin else None)
     department_rows = _department_rows(None if is_superadmin else set(department_ids))
-    overview = _overview(request.user, department_rows, people,
-                         None if is_superadmin else set(department_ids))
+    overview = _overview(request.user, department_rows, None if is_superadmin else set(department_ids))
     grantable = grantable_roles(request.user)
-    role_columns = [{'role': role, 'field': field, 'label': label, 'title': title, 'row_key': key}
-                    for role, key, field, label, title in ROLE_COLUMNS if role in grantable]
-    for row in people:
-        row['role_cells'] = [dict(col, checked=row[col['row_key']]) for col in role_columns]
 
     # شجرةُ الأقسام لـJS — قائمةٌ لا نصّ: ``json_script`` يرمّزها مرّةً واحدة، وكان
     # ``json.dumps`` قبله يرمّزها مرّتين فيصل نصٌّ لا مصفوفة (deps.filter ليست دالّة).
@@ -152,24 +137,19 @@ def _render_panel(request, tab, created_credentials=None, create_form_values=Non
         'parent_departments': [d for d in departments if d.is_active and d.pk not in unit_ids],
         'unit_ids': unit_ids,
         'can_shape_tree': can_add_units(request.user),
-        'people': people,
         'department_count': len(department_rows),
         'active_department_count': sum(
             row['department'].is_active for row in department_rows),
         'staff_count': len(people),
         'inactive_user_count': sum(not row['is_active'] for row in people),
         # كلُّ عدّادٍ = عددُ ما تُظهره تصفيتُه (data-status): المعطَّلُ معدودٌ في الاثنين
-        'password_pending_count': sum(row['must_change_password'] for row in people),
+        'password_pending_count': sum(row['temp_password'] for row in people),
         'sensitive_role_count': sum(row['is_sensitive'] for row in people),
-        'role_columns': role_columns,
-        'user_table_columns': 5 + len(role_columns),
-        'role_options': [(value, label) for value, label in ROLE_OPTIONS if value in grantable],
-        'grantable_labels': [col['label'] for col in role_columns],
+        # «إسناد دور» في الإجراءات السريعة: ما يمنحه الناظر بأسماء الأدوار الواحدة
+        'grantable_labels': [label for role, label in ROLE_LABELS.items() if ROLE_GRANT_KEYS[role] in grantable],
         # الجهةُ المقابلة في نافذة «وحدة جديدة» (العناقيدُ صارت في ورشتها — الدفعة 1)
         'entities': (Entity.objects.filter(is_active=True).order_by('name')
                     if is_superadmin else Entity.objects.none()),
-        'created_credentials': created_credentials,
-        'create_form_values': create_form_values or {},
         'departments_data': departments_data,
         'health_rows': overview['health_rows'],
         'org_overdue_total': overview['overdue_total'],
@@ -178,7 +158,7 @@ def _render_panel(request, tab, created_credentials=None, create_form_values=Non
     return render(request, 'core/admin_panel.html', context)
 
 
-def _overview(user, department_rows, people, department_ids):
+def _overview(user, department_rows, department_ids):
     """متأخّراتُ كلّ قسم (للشجرتين) وصحّةُ الأقسام وآخرُ الحركات الإداريّة في النطاق."""
     from core.scoping import listed_books, scope_activity_for
     from core.views.filter_helpers import followup_q
@@ -222,56 +202,6 @@ def _overview(user, department_rows, people, department_ids):
 def _handle(request):
     action = request.POST.get('action', '')
     tab = request.POST.get('tab', 'departments')
-    if action == 'create_department_user':
-        try:
-            user, password = _create_department_user(request)
-        except ValidationError as exc:
-            # السببُ يُعرض داخل الحوار المعاد فتحُه لا في شريط الصفحة: الحوارُ يحبس التركيزَ (aria-modal)
-            # فلا يبلغ قارئُ الشاشة ولا لوحةُ المفاتيح ما خارجه (مراجعةُ فيبل 11-16)
-            values = {key: request.POST.get(key, '') for key in (
-                'department', 'username', 'first_name', 'last_name', 'email', 'job_title', 'role')}
-            values['error'] = exc.messages[0]
-            response = _render_panel(request, 'users', create_form_values=values)
-            response['Cache-Control'] = 'no-store, private'
-            return response
-        except PermissionDenied as exc:
-            messages.error(request, str(exc))
-            return redirect(_back_to(request, 'users'))
-        else:
-            messages.success(request, 'أُنشئ الحساب، وستظهر كلمة المرور المؤقتة مرة واحدة.')
-            response = _render_panel(request, 'users', {
-                'username': user.get_username(),
-                'password': password,
-            })
-            response['Cache-Control'] = 'no-store, private'
-            response['Pragma'] = 'no-cache'
-            response['Referrer-Policy'] = 'no-referrer'
-            return response
-
-    if action == 'reset_user_password':
-        try:
-            raw_id = (request.POST.get('user_id') or '').strip()
-            target = User.objects.filter(pk=int(raw_id)).first() if raw_id.isdecimal() else None
-            if target is None:
-                raise ValidationError('المستخدمُ غير موجود.')
-            password = reset_department_user_password(by=request.user, user=target)
-        except ValidationError as exc:
-            messages.error(request, exc.messages[0])
-            return redirect(_back_to(request, 'users'))
-        except PermissionDenied as exc:
-            messages.error(request, str(exc))
-            return redirect(_back_to(request, 'users'))
-        messages.success(request, 'أُعيد تعيين كلمة المرور، وستظهر الكلمة المؤقتة مرة واحدة.')
-        response = _render_panel(request, 'users', {
-            'username': target.get_username(),
-            'password': password,
-            'is_reset': True,
-        })
-        response['Cache-Control'] = 'no-store, private'
-        response['Pragma'] = 'no-cache'
-        response['Referrer-Policy'] = 'no-referrer'
-        return response
-
     try:
         handler = _HANDLERS.get(action)
         if handler is None:
@@ -335,70 +265,6 @@ def _update_department(request):
     return 'حُدِّث القسم «%s».' % department.name
 
 
-def _assign_user(request):
-    user = User.objects.filter(pk=request.POST.get('user_id')).first()
-    if user is None:
-        raise ValidationError('المستخدمُ غير موجود.')
-
-    # يُقرأ ما يمنحه الناظرُ وحدَه (``grantable_roles``)؛ ومربّعٌ غيرُ مؤشَّر لا يُرسَل
-    # فيُقرأ «لا» — النموذجُ يعرض أعمدةَ هذه الأدوار نفسِها لا غيرها.
-    grantable = grantable_roles(request.user)
-    roles = {field: bool(_flag(request.POST.get(field)))
-             for role, _key, field, _label, _title in ROLE_COLUMNS if role in grantable}
-    # حقلٌ غائب = «لم يُغيَّر»، لا «بلا قسم» (الذي يُخرج الموظّفَ من النطاق)
-    department_raw = request.POST.get('department')
-
-    from core.models import UserCapabilityOverride
-    exceptions_before = UserCapabilityOverride.objects.filter(user=user).count()
-    assign_user(
-        user, by=request.user,
-        department=UNSET if department_raw is None else _department(department_raw),
-        job_title=request.POST.get('job_title'),
-        first_name=request.POST.get('first_name'),
-        last_name=request.POST.get('last_name'),
-        email=request.POST.get('email'),
-        **roles,
-    )
-    # نقلُ القسم يُلغي الاستثناءات (admin_service._cancel_exceptions) — يُقال لا يُخفى
-    cancelled = exceptions_before - UserCapabilityOverride.objects.filter(user=user).count()
-    if cancelled > 0:
-        return 'حُدِّث حساب «%s»، وأُلغيت استثناءاتُه (%d) لأنّه نُقل إلى قسمٍ آخر.' % (user.get_username(), cancelled)
-    return 'حُدِّث حساب «%s».' % user.get_username()
-
-
-def _toggle_user_active(request):
-    user = User.objects.filter(pk=request.POST.get('user_id')).first()
-    if user is None:
-        raise ValidationError('المستخدمُ غير موجود.')
-    active = _flag(request.POST.get('is_active'))
-    if active is None:
-        raise ValidationError('حالة الحساب مطلوبة.')
-    assign_user(user, by=request.user, is_active=active)
-    return 'حُدِّثت حالة حساب «%s».' % user.get_username()
-
-
-def _delete_user(request):
-    user = User.objects.filter(pk=request.POST.get('user_id')).first()
-    if user is None:
-        raise ValidationError('المستخدمُ غير موجود.')
-    username = user.get_username()
-    delete_user(by=request.user, user=user)
-    return 'حُذف حساب «%s».' % username
-
-
-def _create_department_user(request):
-    return create_department_user(
-        by=request.user,
-        department=_department(request.POST.get('department')),
-        username=request.POST.get('username', ''),
-        first_name=request.POST.get('first_name', ''),
-        last_name=request.POST.get('last_name', ''),
-        email=request.POST.get('email', ''),
-        job_title=request.POST.get('job_title', ''),
-        role=request.POST.get('role', 'viewer'),
-    )
-
-
 def _save_group(request):
     group = EntityGroup.objects.filter(pk=request.POST.get('id')).first()
 
@@ -429,9 +295,6 @@ def _delete_group(request):
 _HANDLERS = {
     'create_department': _create_department,
     'update_department': _update_department,
-    'assign_user': _assign_user,
-    'toggle_user_active': _toggle_user_active,
-    'delete_user': _delete_user,
     'save_group': _save_group,
     'delete_group': _delete_group,
 }
@@ -483,69 +346,6 @@ def _department_rows(department_ids=None):
     # أيتامٌ (أبٌ محذوفٌ أو حلقةٌ سبقت الحارس) لا يُسقَطون بصمت
     seen = {row['department'].pk for row in rows}
     rows.extend({'department': n, 'depth': 0} for n in nodes if n.pk not in seen)
-    return rows
-
-
-def _user_rows(department_ids=None, actor=None):
-    people = User.objects.all()
-    if department_ids is not None:
-        people = (people.filter(profile__department_id__in=department_ids)
-                  .exclude(is_staff=True))
-    people = (people.select_related('profile', 'profile__department')
-              .prefetch_related('groups')
-              .order_by('username'))
-    parents = dict(Department.objects.values_list('id', 'parent_id'))
-
-    def lineage(department_id):
-        """القسمُ وآباؤه — «حساباتُ هذا القسم» تشمل شجرتَه لا اسمَه وحدَه (دفعة 10‑28)."""
-        chain, seen = [], set()
-        while department_id is not None and department_id not in seen:
-            seen.add(department_id)
-            chain.append(str(department_id))
-            department_id = parents.get(department_id)
-        return ' '.join(chain)
-
-    actor_is_admin = actor is not None and can_manage_accounts(actor)
-    # حاملو الاستثناءات الموجبة مرّةً واحدة لا استعلاماً لكلّ صفّ (``is_sensitive_account``، الدفعة 0)
-    from core.models import UserCapabilityOverride
-    exception_holders = set(UserCapabilityOverride.objects.filter(allowed=True).values_list('user_id', flat=True))
-    rows = []
-    for u in people:
-        names = {g.name for g in u.groups.all()}
-        profile = getattr(u, 'profile', None)
-        department = getattr(profile, 'department', None)
-        row = {
-            'user': u,
-            'department': department,
-            'is_head': bool(getattr(profile, 'is_department_head', False)),
-            'is_controller': CONTROLLER_GROUP_NAME in names,
-            'is_archivist': ARCHIVIST_GROUP_NAME in names,
-            'is_company_archivist': ARCHIVE_ALL_GROUP_NAME in names,
-            'is_entry': ENTRY_GROUP_NAME in names,
-            'is_executor': EXECUTOR_GROUP_NAME in names,
-            'is_active': u.is_active,
-            'is_admin_account': u.is_superuser,
-            'must_change_password': bool(getattr(profile, 'must_change_password', False)),
-            'is_sensitive': is_sensitive_account(u, names, exception_holders),
-            'job_title': getattr(profile, 'job_title', ''),
-            'is_self': u.pk == getattr(actor, 'pk', None),
-            # صفٌّ لا يديره الناظر يُعرض قراءةً لا نموذجاً يُرفض عند الحفظ
-            'can_edit': can_manage_user(actor, u, group_names=names, managed_ids=department_ids)
-                        if actor is not None else False,
-            'lineage': lineage(department.pk if department else None),
-        }
-        # حارسُ ``reset_department_user_password`` نفسُه: لا حسابَك ولا معطَّلاً ولا حسّاساً لغير المدير
-        row['can_reset'] = (row['can_edit'] and u.is_active and not row['is_self']
-                            and (actor_is_admin or not row['is_sensitive']))
-        row['can_delete'] = actor is not None and can_delete_account(actor, u)
-        row['search'] = ' '.join(filter(None, (
-            u.username, u.get_full_name(), u.email, row['job_title'],
-            department.code if department else '', department.name if department else '')))
-        row['status'] = ' '.join(token for token, on in (
-            ('active', u.is_active), ('inactive', not u.is_active),
-            ('password', row['must_change_password']), ('sensitive', row['is_sensitive']),
-            ('entry', row['is_entry']), ('nodept', department is None)) if on)
-        rows.append(row)
     return rows
 
 

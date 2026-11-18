@@ -36,7 +36,7 @@ class PanelDialogsTests(SimpleTestCase):
 
     def test_closed_dialogs_and_drawer_are_inert_in_the_markup(self):
         src = _read(PANEL)
-        for mid in ('depModal', 'depEditModal', 'userModal'):
+        for mid in ('depModal', 'depEditModal'):   # الدفعة 2: «حساب جديد» صفحةٌ لا حوار
             with self.subTest(dialog=mid):
                 self.assertRegex(src, r'<div class="modal-bd" id="%s"[^>]* inert[ >]' % mid)
         self.assertIn('<aside class="drawer" id="drawer" aria-label="تفاصيل" inert>', src)
@@ -75,16 +75,21 @@ class PanelDialogsTests(SimpleTestCase):
 
     def test_every_dialog_field_has_a_paired_label(self):
         src = _read(PANEL)
-        for fid in ('depEditName', 'depEditCode', 'um-department', 'um-username', 'um-first', 'um-last',
-                    'um-title', 'um-email', 'um-role'):
+        for fid in ('depEditName', 'depEditCode'):
             with self.subTest(field=fid):
                 self.assertIn('<label for="%s">' % fid, src)
                 self.assertRegex(src, r'<(input|select)[^>]* id="%s"' % fid)
+        # الدفعة 2: حقولُ «حساب جديد» في صفحتها، بعناوينها المقترنة
+        page = _read('templates/core/system_admin/account_new.html')
+        for fid in ('anName', 'anUser', 'anDept', 'anJob'):
+            with self.subTest(field=fid):
+                self.assertIn('<label for="%s">' % fid, page)
+                self.assertRegex(page, r'<(input|select)[^>]* id="%s"' % fid)
 
-    def test_a_role_box_is_a_32px_target(self):
+    def test_the_close_button_is_a_32px_target(self):
         src = _read(PANEL)
-        self.assertIn('<label class="role-hit" title="{{ cell.title }}"><input type="checkbox"', src)
-        self.assertIn('.role-hit{display:inline-grid;place-items:center;min-width:32px;min-height:32px;', src)
+        # الدفعة 2: خاناتُ الأدوار ذهبت مع تبويب الحسابات (الدورُ في المحرّر قائمةٌ واحدة)
+        self.assertNotIn('role-hit', src)
         # زرُّ ✕ في الحوارات كان 26×23
         self.assertIn('display:inline-grid;place-items:center;min-width:32px;min-height:32px;\n'
                       '  padding:.2rem .4rem;border-radius:8px;font-size:1.1rem;', src)
@@ -92,29 +97,29 @@ class PanelDialogsTests(SimpleTestCase):
     def test_an_inactive_row_keeps_its_contrast(self):
         src = _read(PANEL)
         self.assertNotIn('opacity:.55', src)
-        self.assertIn('class="is-inactive"', src)
-        self.assertIn('tr.is-inactive td,.dtree-row.is-inactive{background:var(--lx-surface-2);color:var(--mute)}', src)
+        self.assertIn("' is-inactive'", src)   # عقدةُ الشجرة المعطَّلة (صفوفُ الحسابات صارت في قائمتها)
+        self.assertIn('.dtree-row.is-inactive{background:var(--lx-surface-2);color:var(--mute)}', src)
 
 
 class PanelLogicGuardsTests(SimpleTestCase):
 
-    def test_an_unsaved_row_is_marked_and_leaving_asks(self):
-        src = _read(PANEL)
-        self.assertIn('<span class="dirty-chip" hidden>غير محفوظ</span>', src)
-        guard = src[src.index('const dirtyRows=new Set()'):]
-        guard = guard[:guard.index('/* ── نقلُ موظّفٍ')]
-        self.assertIn("addEventListener('beforeunload'", guard)
-        self.assertIn('id!==submittingId', guard)
-        self.assertIn("tr.classList.toggle('is-dirty',dirty)", guard)
-        self.assertIn('dirtyRows.delete(f.id)', guard)   # أُعيدت القيمُ ⟵ لا سؤالَ بلا داع
-        # الحقولُ وحدها: زرُّ الحفظ المربوط بالنموذج كان يجعل الصفَّ «معدَّلاً» إلى الأبد (قِيس في المتصفّح)
-        self.assertIn(':is(input,select,textarea)[form="${f.id}"]', guard)
-        self.assertIn('submittingId=null;', guard)
+    def test_an_unsaved_edit_asks_before_leaving(self):
+        # الدفعة 2: الكتابةُ في محرّر الحساب، فالحارسُ معها — كان في صفوف جدول اللوحة
+        self.assertNotIn('dirtyRows', _read(PANEL))
+        js = _read('static/js/account_editor.js')
+        guard = js[js.index('if (account) {\n    var fields'):]
+        self.assertIn("window.addEventListener('beforeunload'", guard)
+        self.assertIn("input:not([type=hidden]), select, textarea", guard)   # الحقولُ وحدها لا الأزرار
+        self.assertIn('o.selected !== o.defaultSelected', guard)              # أُعيدت القيمةُ ⟵ لا سؤال
+        # إرسالٌ أوقفه سؤالُ تغيير القسم ليس إرسالاً — «إلغاء» ثمّ مغادرة تسأل
+        self.assertIn('submitting = !event.defaultPrevented', guard)
 
     def test_moving_a_person_or_a_unit_asks_first(self):
         src = _read(PANEL)
-        self.assertIn('يُلغي استثناءاتِ حسابه الخاصّة', src)
-        self.assertRegex(src, r'sel\.value!==was&&!confirm\(')
+        # الدفعة 2: نقلُ الشخص في محرّر الحساب ويسأل هناك؛ ونقلُ الوحدة باقٍ في اللوحة
+        js = _read('static/js/account_editor.js')
+        self.assertIn('ويُلغي استثناءاته', js)
+        self.assertIn('department.value === department.dataset.initial', js)
         self.assertIn('يغيّر مَن يرى كتبَه ومَن يديره', src)
         self.assertIn("$('#depEditForm')?.addEventListener('submit'", src)
 
@@ -180,7 +185,7 @@ class HiddenAuthorityTests(TestCase):
         self.assertIn('«%s»' % ARCHIVIST_GROUP_NAME, html)
         self.assertIn('لم تعد تمنحه شيئاً بعد توحيد الأدوار', html)   # الدفعة 0: الحرّاسُ تقرأ الصلاحيّة
         self.assertIn('تغييرُ دوره هنا يزيلها ويُلغي استثناءاتِه', html)
-        self.assertIn('أزِل خانتَها في جدول الحسابات', html)
+        self.assertNotIn('جدول الحسابات', html)   # الدفعة 2: لا خاناتِ أدوارٍ في القائمة — الطريقُ هنا
         self.assertNotIn('حفظُ دورٍ هنا يزيلها', html)   # كان خطأً: حفظُ الدور نفسِه لا يغيّر شيئاً (فيبل 11-16)
 
     def test_a_single_role_shows_no_warning(self):
@@ -188,28 +193,30 @@ class HiddenAuthorityTests(TestCase):
         html = self.client.get(reverse('system_account', args=[one.pk])).content.decode('utf-8')
         self.assertNotIn('class="ae-extra"', html)
 
-    def test_saving_a_move_in_the_panel_says_what_was_cancelled(self):
+    def _save(self, person, department, **extra):
+        return self.client.post(reverse('system_account', args=[person.pk]), {
+            'action': 'save', 'department': department.pk, 'confirm_department': '1', 'is_active': '1',
+            'name': '', 'job_title': '', **extra}, follow=True)
+
+    def test_saving_a_move_in_the_editor_says_what_was_cancelled(self):
         person = self._person('a11y_move')
         UserCapabilityOverride.objects.create(user=person, capability='book.enter', allowed=True, changed_by=self.root)
-        resp = self.client.post(reverse('admin_panel'), {'action': 'assign_user', 'tab': 'users', 'user_id': person.pk,
-                                                         'department': self.dept2.pk, 'job_title': ''}, follow=True)
+        resp = self._save(person, self.dept2)
         self.assertContains(resp, 'وأُلغيت استثناءاتُه (1)')
         self.assertFalse(UserCapabilityOverride.objects.filter(user=person).exists())
 
-    def test_a_rejected_new_account_explains_itself_inside_the_dialog(self):
-        """الحوارُ يحبس التركيز — فالسببُ داخله لا في شريط الصفحة (فيبل 11-16)."""
-        resp = self.client.post(reverse('admin_panel'), {'action': 'create_department_user', 'tab': 'users',
-                                                         'username': 'a11y_nodept', 'role': 'viewer'})
+    def test_a_rejected_new_account_keeps_what_was_typed(self):
+        """الدفعة 2: «حساب جديد» صفحةٌ لا حوار — السببُ يُقال مرّةً، وما كُتب يبقى."""
+        resp = self.client.post(reverse('system_account_new'), {'username': 'a11y_nodept', 'role': 'reader'})
         html = resp.content.decode('utf-8')
-        self.assertIn('aria-describedby="umError"', html)
-        self.assertRegex(html, r'<div class="sys-msg error" role="alert" id="umError">[^<]*<i[^>]*></i> اختر قسمَ الحساب الجديد')
-        self.assertEqual(html.count('اختر قسمَ الحساب الجديد'), 1)   # لا شريطَ ثانٍ خارج الحوار
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(html.count('اختر قسمَ الحساب.'), 1)
         self.assertIn('value="a11y_nodept"', html)
+        self.assertFalse(User.objects.filter(username='a11y_nodept').exists())
 
     def test_saving_without_a_move_says_nothing_extra(self):
         person = self._person('a11y_stay')
         UserCapabilityOverride.objects.create(user=person, capability='book.enter', allowed=True, changed_by=self.root)
-        resp = self.client.post(reverse('admin_panel'), {'action': 'assign_user', 'tab': 'users', 'user_id': person.pk,
-                                                         'department': self.dept.pk, 'job_title': 'باقٍ'}, follow=True)
-        self.assertContains(resp, 'حُدِّث حساب «a11y_stay».')
+        resp = self._save(person, self.dept, job_title='باقٍ')
+        self.assertContains(resp, 'حُفظ حساب «a11y_stay».')
         self.assertNotContains(resp, 'أُلغيت استثناءاتُه')

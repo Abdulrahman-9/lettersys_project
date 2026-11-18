@@ -1184,18 +1184,74 @@ def can_edit_role_matrix(user) -> bool:
     return is_privileged(user)
 
 
-def can_edit_exception(by, target, key) -> bool:
+def can_edit_exception(by, target, key, *, by_role=None, manages=None) -> bool:
     """استثناءُ شخص: السوبر، أو رئيسُ القسم لموظّفيه فقط «وضمن ما يملكه هو». ولا أحدَ لنفسه.
 
-    مسؤولُ الشعبة والوحدة مغلقٌ بقرار المالك 2026‑11‑03.
+    مسؤولُ الشعبة والوحدة مغلقٌ بقرار المالك 2026‑11‑03. ``by_role`` و``manages`` (``role_of(by)``
+    و``can_manage_user(by, target)``) محسوبان سلفاً لصفحةٍ تسأل عن كلّ صلاحيّة — لا يتعلّقان بالمفتاح.
     """
     if by.pk == target.pk or CAPABILITIES[key].locked:
         return False
     if is_privileged(by):
         return True
     # بالدور لا بالاستثناء: رئيسٌ مُنح «تشغيل البريد» استثناءً لا يمنحه لموظّفيه (الدفعة 0، فيبل 11-16)
-    return (role_of(by) == ROLE_HEAD and can_manage_user(by, target)
+    if (role_of(by) if by_role is None else by_role) != ROLE_HEAD:
+        return False
+    return (bool(can_manage_user(by, target) if manages is None else manages)
             and role_capability(ROLE_HEAD, key) and has_capability(by, key))
+
+
+# ── محرّرُ الحساب لرئيس القسم (الدفعة 2، قرارُ المالك 11-16) ──────────────────────────────────────────
+#: مفتاحُ الدور في المصفوفة ⟵ مفتاحُ منحه في ``grantable_roles``: الرئيسُ والمسؤولُ كلاهما «رئاسة».
+ROLE_GRANT_KEYS = {
+    ROLE_HEAD: 'department_head', ROLE_UNIT: 'department_head', ROLE_MAIL: 'controller',
+    ROLE_ARCHIVIST: 'archivist', ROLE_ENTRY: 'entry', ROLE_EXECUTOR: 'executor', ROLE_READER: 'viewer',
+}
+
+
+def foreign_exceptions(by, target) -> list:
+    """استثناءاتُ ``target`` التي لا يعدّلها ``by`` بيده — بأسمائها.
+
+    تغييرُ الدور ونقلُ القسم يُلغيان الاستثناءاتِ كلَّها، فمَن لا يملك إلغاءَ استثناءٍ بيده لا يُلغيه بهما
+    (فيبل 11-16: مسؤولُ وحدةٍ ينقل موظّفاً ثمّ يعيده فيمحو حجباً وضعه مديرُ النظام). المفتاحُ اليتيم
+    (أُزيل من السجلّ) لا يعدّله إلّا المدير.
+    """
+    from core.models import UserCapabilityOverride
+
+    if is_privileged(by):
+        return []
+    keys = UserCapabilityOverride.objects.filter(user=target).values_list('capability', flat=True)
+    return [CAPABILITIES[key].label if key in CAPABILITIES else key for key in keys
+            if key not in CAPABILITIES or not can_edit_exception(by, target, key)]
+
+
+def assignable_roles(by, target) -> tuple:
+    """الأدوارُ التي يُسندها ``by`` لـ``target``: ما يُسند في قسمه (``roles_for_department``) ممّا يمنحه."""
+    department = getattr(getattr(target, 'profile', None), 'department', None)
+    allowed = grantable_roles(by)
+    return tuple(role for role in roles_for_department(department) if ROLE_GRANT_KEYS[role] in allowed)
+
+
+def role_change_block(by, target) -> str:
+    """لماذا لا يغيّر ``by`` دورَ ``target`` — جملةٌ تُعرض في المحرّر، أو '' إن كان يملكه.
+
+    مصدرٌ واحدٌ للمحرّر (القسمُ للقراءة مع سببه) ولحارس ``set_user_role``. ما لا يمنحه لا ينزعه:
+    رئيسُ القسم لا يغيّر دورَ مسؤول وحدة (الرئاسةُ يمنحها المدير)، ومسؤولُ الوحدة لا يغيّر دورَ مدخل.
+    """
+    if target.is_superuser:
+        return 'دورُ مدير النظام لا يُعدَّل من هنا.'
+    if getattr(by, 'pk', None) == target.pk:
+        return 'لا يغيّر أحدٌ دورَه بنفسه.'
+    if is_privileged(by):
+        return ''
+    if not can_manage_user(by, target):
+        return 'هذا الحساب خارج ما تديره.'
+    if ROLE_GRANT_KEYS.get(role_of(target)) not in grantable_roles(by):
+        return 'دورُه الحاليّ يمنحه مدير النظام، فتغييرُه عنده.'
+    foreign = foreign_exceptions(by, target)
+    if foreign:
+        return 'له استثناءاتٌ لا تملك تعديلها (%s)، وتغييرُ الدور يُلغيها — فتغييرُه عند مدير النظام.' % '، '.join(foreign)
+    return ''
 
 
 def can_send_referral(book, user) -> bool:

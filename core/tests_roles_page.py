@@ -108,7 +108,7 @@ class ShowTests(RolesPageCase):
 
     def test_the_accounts_link_is_lit_on_this_page(self):
         body = self.page().content.decode()
-        self.assertRegex(body, r'class="on" href="[^"]*\?tab=users"')
+        self.assertRegex(body, r'class="on" href="/books/system/accounts/"')   # الدفعة 2: القائمةُ في البرنامج
 
     def test_holders_are_counted_without_a_query_per_person(self):
         for i in range(12):
@@ -225,11 +225,11 @@ class MatrixShapeTests(RolesPageCase):
 
 
 class AccountsLinkTests(RolesPageCase):
-    def test_the_accounts_tab_links_here_for_the_system_admin_only(self):
+    def test_the_accounts_list_links_here_for_the_system_admin_only(self):
         self.client.force_login(self.admin)
-        self.assertContains(self.client.get(reverse('admin_panel') + '?tab=users'), URL)
+        self.assertContains(self.client.get(reverse('system_accounts')), URL)
         self.client.force_login(self.head)
-        self.assertNotContains(self.client.get(reverse('admin_panel') + '?tab=users'), URL)
+        self.assertNotContains(self.client.get(reverse('system_accounts')), URL)
 
 
 class WiredOnlyTests(RolesPageCase):

@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static dict_utils %}
 {% block title %}حساب جديد{% endblock %}
+{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261116-batch2">{% endif %}{% endblock %}
 {% block content %}
 {% comment %}
 إنشاءُ حساب (ج، الشريحة 3) — التصميمُ المعتمد shots_v2/v2_account_new.png. الأدوارُ تتبع القسم المختار
@@ -8,7 +9,7 @@
 {% endcomment %}
 <form method="post" class="sa-page" id="anForm">
   {% csrf_token %}
-  <nav class="sa-crumb" aria-label="مسار الصفحة">إدارة النظام / <a href="{% url 'admin_panel' %}?tab=users">الحسابات والأدوار</a> / <span aria-current="page">حساب جديد</span></nav>
+  <nav class="sa-crumb" aria-label="مسار الصفحة">{% if nav.system_admin %}إدارة النظام / {% endif %}<a href="{% url 'system_accounts' %}">الحسابات والأدوار</a> / <span aria-current="page">حساب جديد</span></nav>
   <div class="sa-head"><div><h1>حساب جديد</h1><p>يصير الموظّف قادراً على ما يعرضه الدور فور إنشاء الحساب.</p></div></div>
 
   <div class="ae-grid">

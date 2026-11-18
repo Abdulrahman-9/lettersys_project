@@ -4,7 +4,7 @@
 {% block content %}
 <form class="sa-page" method="post" id="rmForm">
   {% csrf_token %}
-  <nav class="sa-crumb" aria-label="مسار الصفحة"><a href="{% url 'admin_panel' %}?tab=users">الحسابات والأدوار</a> / <span aria-current="page">الأدوار والصلاحيّات</span></nav>
+  <nav class="sa-crumb" aria-label="مسار الصفحة"><a href="{% url 'system_accounts' %}">الحسابات والأدوار</a> / <span aria-current="page">الأدوار والصلاحيّات</span></nav>
   <div class="sa-head">
     <div><h1>الأدوار والصلاحيّات</h1><p>ما يفعله كلّ دور. التعديل هنا يسري على كلّ من يحمل الدور، والاستثناء لشخص واحد من حسابه.</p></div>
     {% if matrix.changed %}<button type="submit" class="sa-btn" name="reset" value="all" data-rm-reset="all" data-rm-count="{{ matrix.changed }}"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>رجوع إلى المعتمد كلّه</button>{% endif %}

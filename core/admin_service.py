@@ -155,6 +155,12 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
                     raise PermissionDenied('لا يمكن لرئيس القسم إزالة موظّفٍ من نطاقه.')
             else:
                 _guard_department(by, department)
+            # النقلُ يُلغي الاستثناءاتِ أدناه — فلا يُلغي بالنقل ما لا يملك إلغاءه بيده (فيبل 11-16)
+            from core.scoping import foreign_exceptions
+            foreign = foreign_exceptions(by, user)
+            if foreign:
+                raise PermissionDenied('له استثناءاتٌ لا تملك تعديلها (%s)، والنقلُ يُلغيها — فنقلُه عند مدير النظام.'
+                                       % '، '.join(foreign))
             # نقلُ رئيسٍ منحُ رئاسةٍ في مكانٍ جديد: رئيسُ وحدةٍ يُنقل إلى قسم ناقله
             # فيصير رئيساً نظيراً على شجرته كلّها ولا يُدار بعدها إلّا من المدير
             if profile.is_department_head:
@@ -213,10 +219,12 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
                 (is_executor, 'executor', 'is_executor')):
             if flag is None:
                 continue
-            _guard_grant(by, role)
             group, _ = Group.objects.get_or_create(name=ROLE_GROUP_NAMES[role])
             had = user.groups.filter(pk=group.pk).exists()
             if flag != had:
+                # منحاً أو نزعاً — ما لا يمنحه لا ينزعه؛ والعلَمُ الذي لا يتغيّر لا يُحرس (كان يُرفض به
+                # تغييرُ الرئيس دورَ موظّفه: ``set_user_role`` يمرّر الأعلامَ الستّة وفيها أرشيفُ الشركة — الدفعة 2)
+                _guard_grant(by, role)
                 (user.groups.add if flag else user.groups.remove)(group)
                 changes[key] = flag
 

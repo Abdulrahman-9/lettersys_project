@@ -79,11 +79,17 @@ class RoleFlagsTests(EditorCase):
 
 
 class GuardsTests(EditorCase):
-    def test_only_the_system_admin_and_never_on_self_or_another_admin(self):
+    def test_the_head_changes_what_he_grants_and_never_self_or_an_admin(self):
+        # الدفعة 2 (قرارُ المالك 11-16): رئيسُ القسم على المحرّر نفسه في شجرته بما يمنحه
         user = self.person('c2_guard', self.dept, 'entry')
-        self.request.user = self.person('c2_head', self.dept, 'head')
-        with self.assertRaisesMessage(PermissionDenied, 'أدوارُ الحسابات يغيّرها مدير النظام وحده.'):
-            set_user_role(self.request, user, 'mail')
+        head = self.person('c2_head', self.dept, 'head')
+        self.request.user = head
+        self.assertTrue(set_user_role(self.request, user, 'mail'))
+        self.assertEqual(s.role_of(User.objects.get(pk=user.pk)), 'mail')
+        with self.assertRaisesMessage(PermissionDenied, 'هذا الدور يمنحه مدير النظام.'):
+            set_user_role(self.request, User.objects.get(pk=user.pk), 'head')
+        with self.assertRaisesMessage(PermissionDenied, 'لا يغيّر أحدٌ دورَه بنفسه.'):
+            set_user_role(self.request, head, 'reader')
         self.request.user = self.root
         with self.assertRaises(PermissionDenied):
             set_user_role(self.request, self.root, 'reader')
@@ -135,9 +141,14 @@ class PageTests(EditorCase):
     def url(self, user):
         return reverse('system_account', args=[user.pk])
 
-    def test_the_page_is_the_system_admins(self):
+    def test_the_page_is_the_admins_and_the_heads_in_his_tree(self):
+        # الدفعة 2: رئيسُ القسم يفتحه لموظّفي شجرته بما يمنحه، ومَن لا يدير أحداً يُرفض
         user = self.person('c2_page', self.dept, 'entry')
         self.client.force_login(self.person('c2_pagehead', self.dept, 'head'))
+        head_view = self.client.get(self.url(user))
+        self.assertEqual(head_view.status_code, 200)
+        self.assertNotIn('head', dict(head_view.context['role_options']))
+        self.client.force_login(self.person('c2_pagereader', self.dept, 'reader'))
         self.assertEqual(self.client.get(self.url(user)).status_code, 403)
         self.client.force_login(self.root)
         body = self.client.get(self.url(user)).content.decode()
@@ -186,4 +197,4 @@ class PageTests(EditorCase):
     def test_the_accounts_list_links_to_the_editor(self):
         user = self.person('c2_list', self.dept, 'reader')
         self.client.force_login(self.root)
-        self.assertIn(self.url(user), self.client.get(reverse('admin_panel') + '?tab=users').content.decode())
+        self.assertIn(self.url(user), self.client.get(reverse('system_accounts')).content.decode())

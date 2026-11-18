@@ -100,6 +100,21 @@
 .sa-when { color: var(--sa-mute); font-size: .78rem; white-space: nowrap; }
 /* سجلُّ الحجوزات: خلاياه قصيرة فتبقى على سطرٍ واحد (كانت «وارد داخلي» تنكسر فيتضاعف الصفّ) — والجدولُ يتمرّر في إطاره */
 .sa-res td { white-space: nowrap; }
+/* قائمةُ الحسابات (الدفعة 2): الصفُّ كلُّه رابطٌ إلى المحرّر — رابطُ الاسم ممدودٌ على صفّه، فالنقرةُ في أيّ
+   موضعٍ منه تفتحه، ولوحةُ المفاتيح تصل الرابطَ وحده (لا صفَّ يأخذ التركيز) */
+.sa-acc tbody tr { position: relative; }
+.sa-acc td { white-space: nowrap; }
+.sa-acc td:first-child { white-space: normal; min-width: 12rem; }
+.sa-acc-name { font-weight: 800; }
+a.sa-acc-name::after { content: ""; position: absolute; inset: 0; }
+a.sa-acc-name:focus-visible { outline: 2px solid var(--sa-amber); outline-offset: 2px; border-radius: 4px; }
+.sa-acc-sub { display: block; color: var(--sa-mute); font-size: .74rem; font-weight: 600; }
+.sa-sort { display: inline-flex; align-items: center; gap: .25rem; color: inherit !important; text-decoration: none !important; }
+.sa-sort:hover, .sa-sort:focus-visible { color: var(--sa-ink) !important; }
+.sa-acc-status { margin-bottom: .6rem; }
+.sa-acc-status b { font-variant-numeric: tabular-nums; }
+.sa-count { display: inline-block; margin-inline-start: .35rem; padding: 0 .55rem; border-radius: 99px; background: var(--lx-surface-2); color: var(--sa-mute); font-size: .8rem; font-weight: 800; vertical-align: middle; font-variant-numeric: tabular-nums; }
+.sa-scope { display: inline-flex; align-items: center; gap: .4rem; width: fit-content; margin: 0; padding: .3rem .8rem; border: 1px solid var(--sa-line); border-radius: 99px; background: var(--lx-surface-2); color: var(--sa-soft); font-size: .82rem; font-weight: 700; }
 .sa-empty { margin: 0; padding: .6rem 0; color: var(--sa-mute); font-size: .84rem; }
 .sa-more { display: flex; align-items: center; justify-content: space-between; margin-top: .6rem; padding: .55rem .8rem; border: 1px dashed var(--lx-line-strong); border-radius: 10px; color: var(--sa-mute); font-size: .82rem; }
 .sa-stamp { display: inline-grid; flex: none; place-items: center; min-width: 2.5rem; height: 2.5rem; padding: 0 .35rem; border: 1.5px solid var(--lx-pri); outline: 1px solid var(--lx-line-strong); outline-offset: 2px; border-radius: 50%; background: var(--lx-surface); color: var(--sa-amber); font-size: .72rem; font-weight: 800; transform: rotate(-4deg); }

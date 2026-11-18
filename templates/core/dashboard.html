@@ -210,7 +210,7 @@
     {% if nav.audit %}<li role="option"><a href="{% url 'audit_log' %}"><i class="bi bi-clock-history" aria-hidden="true"></i>سجل الحركات</a></li>{% endif %}
     {% if nav.department_admin %}
     <li role="option"><a href="{% url 'admin_panel' %}"><i class="bi bi-diagram-3" aria-hidden="true"></i>الإدارة — نظرة عامة</a></li>
-    <li role="option"><a href="{% url 'admin_panel' %}?tab=users"><i class="bi bi-people" aria-hidden="true"></i>الإدارة — الحسابات والأدوار</a></li>
+    <li role="option"><a href="{% url 'system_accounts' %}"><i class="bi bi-people" aria-hidden="true"></i>الإدارة — الحسابات والأدوار</a></li>
     {% endif %}
   </ul>
   <p class="db-palette-hint">↑↓ للتنقل · Enter للفتح · أو اكتب رقماً أو عنواناً واضغط Enter للبحث</p>
