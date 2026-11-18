@@ -55,7 +55,7 @@ class PanelDialogsTests(SimpleTestCase):
 
     def test_focus_is_trapped_in_the_open_dialog(self):
         src = _read(PANEL)
-        trap = src[src.index("if(e.key!=='Tab')return;"):]
+        trap = src[src.index("if(e.key!=='Tab'||ask.open)return;"):]   # حواريّةُ التأكيد تحبس نفسها
         trap = trap[:trap.index('});')]
         for needle in ("MODALS.find(m=>m.classList.contains('open'))", 'box.contains(cur)', 'last.focus()', 'first.focus()'):
             self.assertIn(needle, trap)
@@ -101,6 +101,43 @@ class PanelDialogsTests(SimpleTestCase):
         self.assertIn('.dtree-row.is-inactive{background:var(--lx-surface-2);color:var(--mute)}', src)
 
 
+class PanelConfirmDialogTests(SimpleTestCase):
+    """اللوحةُ مستقلّةٌ لا تحمّل app.js. إيداعُ الماسح 5876675 حذف مستمعَها المحلّيّ على ظنّ أنّ
+    حواريّة app.js تتولّاه، فصارت نماذجُ data-confirm فيها تُرسَل بلا سؤال (ومنها حذفُ حسابٍ نهائيّاً
+    على 851d87c). الحواريّةُ هنا تحمل عقدَ app.js نفسَه حتّى تنتقل اللوحةُ إلى base.html."""
+
+    def setUp(self):
+        self.src = _read(PANEL)
+        self.script = self.src[self.src.index('<script>'):self.src.rindex('</script>')]
+
+    def _listener(self):
+        body = self.script[self.script.index("document.addEventListener('submit',e=>{"):]
+        return body[:body.index('},true);')]
+
+    def test_exactly_one_dialog_answers_data_confirm(self):
+        loads_app_js = "static 'app.js'" in self.src
+        has_own = "document.addEventListener('submit',e=>{" in self.script
+        # لا صمت (لا هذا ولا ذاك) ولا سؤالان (كلاهما)
+        self.assertNotEqual(loads_app_js, has_own)
+
+    def test_the_own_dialog_reads_the_declarative_contract(self):
+        body = self._listener()
+        self.assertIn('e.preventDefault();e.stopPropagation();', body)
+        self.assertIn('sub&&sub.dataset.confirm?sub:(form.dataset.confirm?form:null)', body)
+        self.assertIn("form.dataset.confirmed==='1'", body)
+        self.assertIn("danger:src.dataset.confirmTone!=='safe'", body)
+        self.assertIn('form.requestSubmit(sub)', body)
+        self.assertIn('ask.showModal();', self.script)
+        self.assertNotRegex(self.src, r'(?<![\w.])confirm\(')
+
+    def test_escape_on_the_ask_keeps_the_edit_under_it(self):
+        self.assertIn("if(e.key==='Escape'&&!ask.open)closeAll()", self.script)
+        self.assertIn("if(e.key!=='Tab'||ask.open)return;", self.script)
+
+    def test_a_destructive_ask_starts_on_cancel(self):
+        self.assertIn("(danger?$('#askNo'):ok).focus();", self.script)
+
+
 class PanelLogicGuardsTests(SimpleTestCase):
 
     def test_an_unsaved_edit_asks_before_leaving(self):
@@ -120,8 +157,17 @@ class PanelLogicGuardsTests(SimpleTestCase):
         js = _read('static/js/account_editor.js')
         self.assertIn('ويُلغي استثناءاته', js)
         self.assertIn('department.value === department.dataset.initial', js)
+        # نقلُ الوحدة: النصُّ يُكتب حين يتغيّر «يتبع» ويُزال إن عاد، ويُعاد حسابُه لكلّ قسمٍ يُفتح
+        # (كان مستمعَ submit بـconfirm() أصليّة — قاعدةُ جلسة الماسح 11-18 تمنعها)
         self.assertIn('يغيّر مَن يرى كتبَه ومَن يديره', src)
-        self.assertIn("$('#depEditForm')?.addEventListener('submit'", src)
+        self.assertIn("$('#depEditParent')?.addEventListener('change',syncDepMove);", src)
+        sync = src[src.index('function syncDepMove(){'):]
+        sync = sync[:sync.index('\n}\n')]
+        self.assertIn("sel.value===(d.pid!=null?String(d.pid):'')){delete f.dataset.confirm;return;}", sync)
+        self.assertIn('f.dataset.confirm=`', sync)
+        opener = src[src.index('function openDepEdit(d){'):]
+        opener = opener[:opener.index('\n}\n')]
+        self.assertIn('syncDepMove();', opener)
 
     def test_no_text_under_twelve_pixels_in_the_panel(self):
         style = _read(PANEL)

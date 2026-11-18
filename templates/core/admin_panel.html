@@ -251,6 +251,16 @@ details .inline-form{border:1px solid var(--line);border-radius:12px;padding:.8r
   display:inline-grid;place-items:center;min-width:32px;min-height:32px;
   padding:.2rem .4rem;border-radius:8px;font-size:1.1rem;color:var(--mute);line-height:1}
 .modal .close-btn:hover{background:var(--lx-surface-2);color:var(--ink)}
+/* ── حواريّةُ التأكيد (<dialog> في الطبقة العليا: فوق أيّ حوارٍ مفتوح) على هيئة الحوارات أعلاه ── */
+dialog.ask{border:0;border-radius:20px;box-shadow:var(--lx-shadow-lg);padding:1.4rem 1.5rem;
+  width:min(440px,calc(100% - 2rem));background:var(--card);color:var(--ink)}
+dialog.ask::backdrop{background:rgba(20,38,43,.5)}
+dialog.ask h3{margin:0 0 .75rem;font-size:1.05rem;display:flex;align-items:center;gap:.6rem}
+dialog.ask p{margin:0 0 1.2rem;font-size:.88rem;line-height:1.7;white-space:pre-line}
+.ask-ico{display:inline-grid;flex:none;place-items:center;width:2.1rem;height:2.1rem;border-radius:10px;
+  background:var(--lx-pri-soft);color:var(--lx-pri);font-size:1.05rem}
+.ask-ico.is-danger{background:var(--lx-late-bg);color:var(--lx-late)}
+.ask-act{display:flex;gap:.5rem;justify-content:flex-end}
 /* ── شجرة accordion للأقسام ── */
 .dtree{list-style:none;margin:0;padding:0}
 .dtree-node{margin:0}
@@ -560,7 +570,8 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
       تعديل بيانات القسم
       <button class="close-btn" onclick="closeModal('depEditModal')" aria-label="إغلاق">✕</button>
     </h3>
-    <form method="post" id="depEditForm">
+    {# data-confirm يُكتب حين يتغيّر «يتبع» ويُزال إن عاد (syncDepMove) — العنوانُ والزرُّ ثابتان #}
+    <form method="post" id="depEditForm" data-confirm-title="نقل القسم" data-confirm-ok="انقل">
       {% csrf_token %}
       <input type="hidden" name="action" value="update_department">
       <input type="hidden" name="tab" value="departments">
@@ -614,6 +625,17 @@ button.dtree-toggle:focus-visible{outline:2px solid var(--amber)}
 <div class="scrim" id="scrim" onclick="closeAll()"></div>
 <aside class="drawer" id="drawer" aria-label="تفاصيل" inert></aside>
 
+{# التأكيد: اللوحةُ مستقلّةٌ لا تحمّل app.js — فتحمل عقدَه نفسَه (data-confirm/-ok/-title/-tone).
+   حين تنتقل إلى base.html مع عائلة الإدارة يُحذف هذا ومستمعُه ويتولّاه app.js #}
+<dialog class="ask" id="askDialog" role="alertdialog" aria-labelledby="askTitle" aria-describedby="askMsg">
+  <h3 id="askTitle"><span class="ask-ico" aria-hidden="true"><i class="bi"></i></span><span id="askTitleText"></span></h3>
+  <p id="askMsg"></p>
+  <div class="ask-act">
+    <button type="button" class="btn" id="askNo">إلغاء</button>
+    <button type="button" class="btn" id="askOk"></button>
+  </div>
+</dialog>
+
 {# بيانات الشجرة بصيغة JSON آمنة #}
 {{ departments_data|json_script:"depsData" }}
 
@@ -652,6 +674,43 @@ document.querySelectorAll('.modal-bd').forEach(bd=>{
   bd.addEventListener('click',e=>{if(e.target===bd)closeModal(bd.id);});
 });
 
+/* ── التأكيدُ التصريحيّ: <form data-confirm="…" data-confirm-ok="…" data-confirm-tone="safe">
+   (الزرُّ المُرسِل يغلب النموذج). النصُّ يُقرأ عند الإرسال فيتغيّر مع القسم المفتوح. يُلتقط في طور
+   الالتقاط فلا يبلغ الإرسالُ غيرَه قبل الموافقة. لا confirm أصليّة: نافذةُ متصفّحٍ خارج الهويّة —
+   وحذفُ المستمع المحلّيّ 11-18 على ظنّ أنّ app.js هنا ترك نماذجَ اللوحة تُرسَل بلا سؤال. ── */
+const ask=$('#askDialog');
+function askFirst({title,message,okText,danger}){
+  return new Promise(resolve=>{
+    let answer=false;
+    $('#askTitleText').textContent=title||'تأكيد العملية';
+    $('#askMsg').textContent=message||'';
+    const ico=ask.querySelector('.ask-ico');
+    ico.classList.toggle('is-danger',danger);
+    ico.firstElementChild.className='bi '+(danger?'bi-exclamation-triangle':'bi-question-circle');
+    const ok=$('#askOk');
+    ok.textContent=okText||'تأكيد';
+    ok.className='btn '+(danger?'danger':'pri');
+    ok.onclick=()=>{answer=true;ask.close();};
+    $('#askNo').onclick=()=>ask.close();
+    ask.addEventListener('close',()=>resolve(answer),{once:true});   /* Esc وإلغاء ⟵ لا */
+    ask.showModal();
+    (danger?$('#askNo'):ok).focus();   /* الهدّامُ يبدأ على «إلغاء» فلا يُمضيه Enter عابر */
+  });
+}
+document.addEventListener('submit',e=>{
+  const form=e.target,sub=e.submitter;
+  const src=sub&&sub.dataset.confirm?sub:(form.dataset.confirm?form:null);
+  if(!src||form.dataset.confirmed==='1')return;
+  e.preventDefault();e.stopPropagation();
+  askFirst({title:src.dataset.confirmTitle,message:src.dataset.confirm,okText:src.dataset.confirmOk,
+            danger:src.dataset.confirmTone!=='safe'}).then(yes=>{
+    if(!yes)return;
+    form.dataset.confirmed='1';
+    try{sub?form.requestSubmit(sub):form.requestSubmit();}   /* يُبقي الزرَّ المُرسِل (name/value) */
+    finally{delete form.dataset.confirmed;}
+  });
+},true);
+
 /* ── التنقل: روابطُ حقيقيّة، والنقرةُ تبدّل العرضَ وتكتب ?tab= (التحديثُ يعيدك حيث كنت) ── */
 const TAB_OF={ov:'overview',dep:'departments'};   /* الدفعتان 1 و2: البقيّةُ صفحاتٌ في البرنامج */
 function go(v,fromPop){
@@ -688,11 +747,12 @@ function closeAll(){
   MODALS.forEach(m=>{m.classList.remove('open');m.inert=true;});
   if(wasOpen)lastFocus?.focus?.();
 }
-addEventListener('keydown',e=>{if(e.key==='Escape')closeAll()});
+/* Esc على حواريّة التأكيد يُغلقها وحدَها (سلوكُ <dialog>) — لا الحوارَ الذي تحتها بما كُتب فيه */
+addEventListener('keydown',e=>{if(e.key==='Escape'&&!ask.open)closeAll()});
 /* التركيزُ يبقى داخل الحوار أو الدرج المفتوح — كانت 9 من 14 ضغطة Tab تهرب إلى ما خلفه */
 const FOCUSABLE='a[href],button:not([disabled]),input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 addEventListener('keydown',e=>{
-  if(e.key!=='Tab')return;
+  if(e.key!=='Tab'||ask.open)return;   /* <dialog> المفتوح يجعل ما سواه خامداً بنفسه */
   const box=MODALS.find(m=>m.classList.contains('open'))||(drawer.classList.contains('open')?drawer:null);
   if(!box)return;
   const items=[...box.querySelectorAll(FOCUSABLE)].filter(x=>x.getClientRects().length&&!x.closest('[hidden]'));
@@ -841,6 +901,7 @@ function openDepEdit(d){
   [...sel.options].forEach(o=>{const no=o.value!==''&&banned.has(+o.value);o.hidden=no;o.disabled=no||o.dataset.locked==='1';});
   sel.value=d.pid!=null&&!banned.has(d.pid)?String(d.pid):'';
   sel.disabled=isRoot;            /* المعطَّلُ لا يُرسَل ⟵ الأبُ «لم يتغيّر» */
+  syncDepMove();                  /* سؤالُ قسمٍ سابقٍ لا يبقى على هذا */
   $('#depEditParentGroup').hidden=isRoot;
   $('#depEditRootNote').hidden=!isRoot;
   const tf=$('#depToggleForm'),tb=$('#depToggleBtn');
@@ -853,6 +914,8 @@ function openDepEdit(d){
     ?'المعطَّلُ لا يُسند إليه موظّفٌ ولا يُنشأ فيه حساب، وكتبُه باقية.'
     :'القسمُ معطَّل — فعِّله ليُسنَد إليه الموظّفون.';
   tf.dataset.confirm=d.active?`تعطيل «${d.n}»؟`:`تفعيل «${d.n}»؟`;
+  tf.dataset.confirmOk=d.active?'عطّل':'فعّل';
+  if(d.active)delete tf.dataset.confirmTone;else tf.dataset.confirmTone='safe';   /* التفعيلُ ليس هدماً */
   openModal('depEditModal');
 }
 
@@ -874,22 +937,18 @@ function updateDepLevel(){
 }
 $('#modal-dep-name')?.addEventListener('input',updateDepLevel);
 
-/* ── تأكيد الإجراءات الحساسة: حواريّةُ data-confirm الواحدة في app.js تتولّاه (النصُّ يُقرأ
-   عند الإرسال فيتغيّر مع القسم المفتوح). كان هنا مستمعٌ ثانٍ بـconfirm() الأصليّة يسأل
-   **بعد** موافقة الحواريّة — فيُسأل المديرُ مرّتين وثانيتُهما نافذةُ متصفّح. ── */
-
-/* ── نقلُ وحدةٍ تحت أبٍ آخر يغيّر مَن يرى كتبَها — يُعرض الأثرُ قبل الحفظ ── */
-$('#depEditForm')?.addEventListener('submit',e=>{
-  const sel=$('#depEditParent'),d=byId.get(+$('#depEditId').value);
-  if(!sel||sel.disabled||!d)return;
-  if(sel.value===(d.pid!=null?String(d.pid):''))return;
+/* ── نقلُ وحدةٍ تحت أبٍ آخر يغيّر مَن يرى كتبَها — يُعرض الأثرُ قبل الحفظ: النصُّ يُكتب على
+   النموذج حين يتغيّر «يتبع» ويُزال إن عاد كما كان، والتأكيدُ التصريحيّ أعلاه يقرؤه عند الإرسال ── */
+function syncDepMove(){
+  const f=$('#depEditForm'),sel=$('#depEditParent'),d=byId.get(+$('#depEditId').value);
+  if(!f)return;
+  if(!sel||sel.disabled||!d||sel.value===(d.pid!=null?String(d.pid):'')){delete f.dataset.confirm;return;}
   let units=0,members=0,books=0;
   (function walk(x){units++;members+=x.u||0;books+=x.b||0;kidsOf(x.id).forEach(walk);})(d);
   const to=sel.value?sel.selectedOptions[0].text:'قسمٍ مستقلّ بلا أب';
-  if(!confirm(`نقلُ «${d.n}» تحت «${to}» يغيّر مَن يرى كتبَه ومَن يديره:\n${units} وحدة · ${members} حساب · ${books} كتاب.\n\nاضغط موافق للمتابعة.`)){
-    e.preventDefault();submittingId=null;
-  }
-});
+  f.dataset.confirm=`نقلُ «${d.n}» تحت «${to}» يغيّر مَن يرى كتبَه ومَن يديره:\n${units} وحدة · ${members} حساب · ${books} كتاب.`;
+}
+$('#depEditParent')?.addEventListener('change',syncDepMove);
 
 
 
