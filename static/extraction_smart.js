@@ -70,6 +70,12 @@ const CAPTURE_FIELD_BY_ID = {
 };
 const MIN_SCAN_AGENT_VERSION = '1.0.1';
 
+// «الوكيل لا يثق بعنوان هذا الخادم» — نصٌّ واحدٌ للتوست وفشل المسح: خطوةٌ يفعلها الموظّف
+// (المُثبِّت يكتب العنوانَ ويعيد تشغيل الوكيل)، لا تحريرُ JSON في مجلّد مخفيّ.
+const UNTRUSTED_AGENT_HINT = (origin) =>
+    'وكيل المسح يعمل على هذا الجهاز لكنه لا يثق بالعنوان ' + origin + '. من مجلّد إعداد LetterSys '
+    + 'المشترك شغّل 3_Scan_Agent\\INSTALL.bat بنقرٍ عاديّ واكتب y للموافقة، ثمّ اضغط «إعادة الفحص».';
+
 function showExtractionNotice(message, type = 'error', duration = 7000, title = '') {
     if (window.ToastCenter) {
         const options = { delay: duration };
@@ -942,12 +948,34 @@ class ExtractionSmartSystem {
                 if (r.ok) {
                     this._agentBase = base;
                     this._agentHealth = await r.json();
+                    this._noteAgentConfigError(this._agentHealth);
                     return this._agentHealth;
                 }
             } catch (_) { /* جرّب المضيف التالي */ }
         }
         this._agentBase = null; this._agentHealth = null;
         return null;
+    }
+
+    /**
+     * ملفُّ إعداد الوكيل فيه خطأ (رمزٌ من /agent/health، وكيل ≥ 1.2.0) ⟵ توستٌ واحدٌ لكلّ
+     * رمزٍ في الجلسة. الوكيلُ يبقى على آخر إعدادٍ سليم، فالمسحُ لا ينقطع — والتوستُ يقول
+     * لماذا وما العمل. النصُّ يُختار هنا بالرمز: لا يُعرض نصٌّ جاء من الوكيل.
+     */
+    _noteAgentConfigError(hd) {
+        const code = hd && hd.config_error;
+        if (!code) { this._agentConfigErrorShown = null; return; }
+        if (this._agentConfigErrorShown === code) return;
+        this._agentConfigErrorShown = code;
+        const fix = 'أعد تشغيل مُثبِّت LetterSys على هذا الجهاز (INSTALL.bat) بنقرٍ عاديّ ووافق.';
+        const texts = {
+            invalid_json: 'ملفُّ إعداد وكيل المسح على هذا الجهاز تالف، فبقي الوكيلُ يعمل بآخر إعدادٍ سليم. ' + fix,
+            no_list: 'ملفُّ إعداد وكيل المسح بلا قائمة عناوين، فبقي الوكيلُ يعمل بآخر إعدادٍ سليم. ' + fix,
+            no_valid_entries: 'كلُّ العناوين في ملفّ إعداد وكيل المسح غيرُ صالحة، فبقي يعمل بآخر إعدادٍ سليم. ' + fix,
+            unreadable: 'تعذّر على وكيل المسح قراءةُ ملفّ إعداده (قد يكون مفتوحاً في برنامجٍ آخر)، فبقي يعمل بآخر إعدادٍ سليم.',
+            invalid_pairing: 'ملفُّ إعداد وكيل المسح لا يحدّد وضعَ هذا الجهاز، فأُوقف المسحُ احتياطاً. ' + fix,
+        };
+        this.showToast(texts[code] || texts.invalid_json, 'warning', 10000, 'ملفُّ إعداد الوكيل فيه خطأ');
     }
 
     /** أوّلُ مضيفٍ ردّ عليه الوكيل (مع كاش استجابة health)، أو `null`. */
@@ -1060,8 +1088,7 @@ class ExtractionSmartSystem {
         if (!hd) {
             if (await this._agentRespondsButRejects()) {
                 state = 'untrusted'; title = 'الوكيل لا يثق بعنوان هذا الخادم';
-                msg = 'وكيل المسح يعمل على هذا الجهاز لكنه يرفض الصفحات القادمة من '
-                    + window.location.origin + ' — أضف هذا العنوان إلى agent.json ثمّ أعد تشغيل الوكيل.';
+                msg = UNTRUSTED_AGENT_HINT(window.location.origin);
             } else {
                 state = 'unavailable'; title = 'وكيل المسح لا يستجيب';
                 msg = 'توقّف وكيل المسح على هذا الجهاز أو لا يستجيب. شغّله لاستئناف المسح.';
@@ -1190,9 +1217,9 @@ class ExtractionSmartSystem {
                 desc: `وكيل المسح يستجيب على هذا الجهاز لكنه يرفض الصفحات القادمة من <code>${origin}</code> — `
                     + 'قائمةُ الأصول على هذا الجهاز لا تذكر هذا العنوان.',
                 steps: [
-                    `أضف <code>${origin}</code> إلى <code>allowed_origins</code> في <code>%LOCALAPPDATA%\\LetterSys\\agent.json</code>.`,
-                    'أو اطلب من مسؤول النظام إعادةَ تشغيل <code>install_agent.bat</code> بهذا العنوان.',
-                    'أعد تشغيل الوكيل بعد التعديل ثمّ اضغط «إعادة الفحص» — والسطرُ نفسه مكتوبٌ في <code>agent.log</code>.',
+                    'من مجلّد إعداد LetterSys المشترك افتح <code>3_Scan_Agent</code> وانقر مرّتين على <code>INSTALL.bat</code> — نقراً عاديّاً، لا «تشغيل كمسؤول».',
+                    'اكتب <b>y</b> للموافقة، ثمّ ارجع هنا واضغط «إعادة الفحص» — لا حاجة لإعادة تشغيل شيء.',
+                    `للمسؤول: العنوانُ المطلوب في <code>allowed_origins</code> هو <code>${origin}</code>، والسطرُ نفسه في <code>agent.log</code>.`,
                 ], actions: ['recheck'] },
             outdated:   { tone: 'err', title: 'وكيل المسح يحتاج إلى تحديث',
                 desc: 'النسخة المثبّتة لا تحتوي إصلاح إخفاء نوافذ التشغيل ورسائل أخطاء الماسح العربية.', steps: [
@@ -1303,6 +1330,7 @@ class ExtractionSmartSystem {
             .then(r => r.json())
             .then(resp => {
                 if (!resp.success || !resp.data) {
+                    this._hideExtractionOverlay();          // لا يبقى أوفرلاي المسح عالقاً
                     this._showProgressBanner('رمز المسح منتهي الصلاحية — يمكنك الرفع يدوياً', 'warning');
                     return;
                 }
@@ -1333,39 +1361,30 @@ class ExtractionSmartSystem {
                     const fileUrl = `/books/api/scan/serve/${encodeURIComponent(token)}/`;
                     const fileName = data.source_file || 'scanned-document';
                     this.loadScannedFile(fileUrl, fileName, { noAutoExtract: true });
+                } else {
+                    this._hideExtractionOverlay();          // بياناتٌ بلا ملفّ: لا ورقةَ تُرسَم
                 }
             })
             .catch(err => {
                 console.warn('[ScanToken] fetch error:', err);
+                this._hideExtractionOverlay();
                 this._showProgressBanner('تعذّر تحميل بيانات المسح — يمكنك الرفع يدوياً', 'warning');
             });
     }
 
+    /**
+     * رسالةُ مرحلةٍ من مسار المسح/الرفع. كانت شريطاً ثابتاً أعلى الصفحة بألوانٍ مكتوبةٍ
+     * يدويّاً (#1d4ed8…) خارج الهويّة ويغطّي الشريطَ العلويّ؛ صارت: «info» تُكتب في أوفرلاي
+     * المعاينة إن كان ظاهراً (التقدّمُ في مكانٍ واحد)، وما سواها توستُ التطبيق.
+     */
     _showProgressBanner(message, type = 'info') {
-        let banner = document.getElementById('scanProgressBanner');
-        if (!banner) {
-            banner = document.createElement('div');
-            banner.id = 'scanProgressBanner';
-            banner.style.cssText = [
-                'position:fixed;top:0;left:0;right:0;z-index:9999',
-                'padding:10px 20px;text-align:center;font-weight:600',
-                'transition:opacity 0.4s;direction:rtl',
-            ].join(';');
-            document.body.prepend(banner);
+        const sub = document.querySelector('#modalBody .extraction-loading-overlay .overlay-sub');
+        if (type === 'info' && sub) {
+            sub.textContent = message;
+            return;
         }
-        const colors = {
-            info: '#1d4ed8',
-            success: '#15803d',
-            warning: '#b45309',
-            error: '#dc2626',
-        };
-        banner.style.background = colors[type] || colors.info;
-        banner.style.color = '#fff';
-        banner.style.opacity = '1';
-        banner.textContent = message;
-        if (type !== 'info') {
-            setTimeout(() => { banner.style.opacity = '0'; }, 5000);
-        }
+        const duration = { success: 4500, info: 4500, warning: 7000, error: 8000 }[type] || 5000;
+        this.showToast(message, type, duration);
     }
 
     _fillExtractionFields(data) {
@@ -2047,10 +2066,16 @@ class ExtractionSmartSystem {
         this.showToast('لم يعد الحجز فعالًا. راجع الرقم المكتوب على الورقة ثم اضغط زر الحجز؛ لن يُطلب رقم آخر تلقائيًا.', 'warning', 9000, 'تنبيه حجز');
     }
 
-    _releaseCurrentReservation() {
+    async _releaseCurrentReservation() {
         const cur = this._activeReservation();
         if (!cur) return;
-        if (!window.confirm(`هل تؤكد أن الرقم ${cur.r.formatted} غير مكتوب على مستند؟ سيُتاح لزميل آخر.`)) return;
+        // حواريّةُ التطبيق لا confirm() الأصليّة (كان المتصفّحُ يعنونها «172.16.2.16 says»).
+        // التحريرُ يُعيد الرقمَ لزميل — فالتركيزُ يبدأ على «إلغاء» (danger) كي لا يُمضيه Enter عابر.
+        const message = `هل تؤكّد أنّ الرقم ${cur.r.formatted} غير مكتوبٍ على أيّ مستند؟ سيُتاح لزميلٍ آخر.`;
+        const ok = typeof window.confirmDelete === 'function'
+            ? await window.confirmDelete({ title: 'تحرير الرقم المحجوز', message, okText: 'حرّر الرقم' })
+            : window.confirm(message);
+        if (!ok || this._activeReservation()?.r.id !== cur.r.id) return;   // تغيّر الحجزُ أثناء السؤال
         fetch(this.apiEndpoints.reservationVoid, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCookie('csrftoken') },
@@ -2984,10 +3009,11 @@ class ExtractionSmartSystem {
             this.scanCancelButton = cancelBtn;
         }
 
-        // وضع التعديل: شريط المسح مخفيّ → التقدّم وزر الإلغاء داخل أوفرلاي المعاينة (لا يعلق المستخدم)
-        if (this._scanAppendMode) {
-            this._showExtractionOverlay('جارٍ المسح الضوئي…', 'التقاط الصفحات لإلحاقها بالمستند', doCancel);
-        }
+        // التقدّمُ في لوحة المعاينة نفسها، بحركة الرفع ذاتها، من أوّل لحظةٍ حتى تُرسَم الورقة
+        // (displayBlobPreview يزيله حين يرسم) — كان المسحُ العاديّ يكتفي بسطرٍ صغيرٍ بجوار الزرّ
+        // فتبدو الصفحةُ متجمّدةً أثناء انتظار الماسح والرفع. وفي وضع التعديل شريطُ المسح مخفيّ
+        // أصلاً، فالأوفرلاي وزرُّ إلغائه هما كلُّ ما يراه المستخدم.
+        this._showExtractionOverlay('جارٍ تجهيز الماسح…', 'التحقّق من وكيل المسح على هذا الجهاز', doCancel);
 
         if (!btn) { this._endScan(btn, origHTML, scanProgress); return; }
 
@@ -2999,13 +3025,17 @@ class ExtractionSmartSystem {
         }
 
         // ── المسح عبر وكيل NAPS2 المحلي — المسار الوحيد (TWAIN/WIA/ADF → PDF → رفع مباشر) ──
-        const setMsg = (m) => {
+        // مرحلةٌ حقيقيّةٌ من المسار — لا مراحلَ مؤقّتةٌ وهميّة. النصُّ textContent دائماً
+        // (اسمُ الجهاز يأتي من NAPS2، فلا يدخل innerHTML).
+        const setMsg = (m, sub) => {
             const e = scanProgress?.querySelector('.progress-message');
             if (e) e.textContent = m;
-            if (this._scanAppendMode) {   // زامن نصّ التقدّم مع أوفرلاي المعاينة (وضع التعديل)
-                const ov = document.querySelector('#modalBody .extraction-loading-overlay .overlay-text');
-                if (ov) ov.textContent = m;
-            }
+            const ov = document.querySelector('#modalBody .extraction-loading-overlay');
+            if (!ov) return;
+            const t = ov.querySelector('.overlay-text');
+            if (t) t.textContent = m;
+            const s = ov.querySelector('.overlay-sub');
+            if (s && sub != null) s.textContent = sub;
         };
         const fail = (msg, title = 'تعذّر المسح') => {
             if (this._scanCancelled) return;
@@ -3014,7 +3044,7 @@ class ExtractionSmartSystem {
         };
         try {
             // 1) منفذُ الوكيل من الخادم (لا «يعمل» ولا توكِن — الخادمُ لا يرى وكيلَ هذا الجهاز)
-            setMsg('التحقق من وكيل المسح...');
+            setMsg('جارٍ تجهيز الماسح…', 'التحقّق من وكيل المسح على هذا الجهاز');
             try { await this._fetchAgentInfo(); } catch (_) { /* المنفذُ الافتراضيّ يكفي */ }
             if (this._scanCancelled) return;
 
@@ -3023,9 +3053,7 @@ class ExtractionSmartSystem {
             if (!agentUrl) {
                 if (await this._agentRespondsButRejects()) {
                     return fail(
-                        'وكيل المسح يعمل على هذا الجهاز لكنه يرفض الصفحات القادمة من ' + window.location.origin
-                        + ' — أضف هذا العنوان إلى allowed_origins في %LOCALAPPDATA%\\LetterSys\\agent.json '
-                        + '(أو اطلب من مسؤول النظام إعادة تشغيل install_agent.bat به)، ثمّ أعد تشغيل الوكيل.',
+                        UNTRUSTED_AGENT_HINT(window.location.origin),
                         'الوكيل لا يثق بعنوان هذا الخادم');
                 }
                 return fail(
@@ -3040,6 +3068,7 @@ class ExtractionSmartSystem {
             }
 
             // 3) اختيار الجهاز: من القائمة المنسدلة إن وُجدت، وإلا أول جهاز متاح
+            setMsg('البحث عن الماسح…', 'قراءة الأجهزة الموصولة بهذا الجهاز');
             let dd;
             try {
                 dd = await (await this._fetchWithTimeout(agentUrl + '/agent/devices', {}, 20000)).json();
@@ -3062,7 +3091,9 @@ class ExtractionSmartSystem {
             // 4) المسح الأوتوماتيكي بالكامل عبر NAPS2 (يُعيد PDF).
             // الوكيل يكتشف المصدر تلقائياً (وجهان ADF → وجه → زجاج) ويحلّ خطأ «0 صفحات»،
             // والخادم يزيل الصفحات الفارغة تلقائياً → اكتشاف الوجه/الوجهين بلا أي ضبط يدوي.
-            setMsg('جارٍ المسح التلقائي من ' + device.name + '...');
+            setMsg('جارٍ المسح من ' + device.name + '…',
+                this._scanAppendMode ? 'التقاط الصفحات لإلحاقها بالمستند'
+                                     : 'تُسحب الأوراق ويُكتشف الوجهان تلقائيّاً — لا تُغلق الصفحة');
             this.setScanStatus('scanning', 'جارٍ المسح…');
             let sr;
             // مهلة طويلة للمسح متعدد الصفحات (ADF)، لكن عبر AbortController نفسه كي يُجهضه زر الإلغاء فعلاً
@@ -3101,7 +3132,9 @@ class ExtractionSmartSystem {
             if (this._scanCancelled) return;
 
             // 4) رفع الـPDF إلى Django (جلسة + CSRF) — مع إزالة الصفحات الفارغة تلقائياً
-            setMsg('جارٍ تجهيز المستند...');
+            setMsg('جارٍ رفع المستند…', this._autoExtractEnabled()
+                ? 'يتم رفع المستند وقراءة بياناته على الخادم'
+                : 'يتم رفع المستند ومعالجته على الخادم');
             const fd = new FormData();
             fd.append('file', blob, 'scan.pdf');
             // نوعُ الكتاب (التبويب) يرافق الملفَّ: خطّةُ اتّجاه الجهات وسدُّ الصمت يعتمدان عليه (E‑100: 0/100 بدونه)
@@ -3130,6 +3163,8 @@ class ExtractionSmartSystem {
                 await this.appendFromSourceToken(ud.token);   // مسح وإلحاق: يُدرج بنهاية المستند القائم
                 this._hideExtractionOverlay();
             } else {
+                // الأوفرلاي يبقى حتى تُرسَم الورقة (displayBlobPreview يفرّغ اللوحة) — بلا فجوةٍ ساكنة.
+                setMsg('جارٍ عرض المستند…', 'تحميل الصفحات وما قُرئ منها');
                 this._replaceDocument();   // مسحٌ جديد (لا إلحاقٌ ولا إعادةُ تجهيز) = مستندٌ جديد
                 this._loadScanToken(ud.token, { notice: ud.warning || null });
             }
@@ -3235,7 +3270,9 @@ class ExtractionSmartSystem {
             })
             .catch(error => {
                 console.error('[ExtractionSmart] ✗ Failed to load scanned file:', error);
-                this.showToast(`خطأ: ${error.message}`, 'error');
+                this._hideExtractionOverlay();
+                this.showToast(`تعذّر عرض المستند الممسوح (${error.message}) — أعد المسح أو ارفعه يدويّاً.`,
+                               'error', 7000, 'تعذّر عرض المستند');
             });
     }
 
@@ -4634,16 +4671,39 @@ class ExtractionSmartSystem {
             return false;                       // القيمة نفسها — لا داعي للكتابة
         }
 
-        const takeScan = window.confirm(
-            'اختلاف في رقم الصادر:\n\n' +
-            `  ما كتبتَه      : ${input.value}\n` +
-            `  المقروء من المستند: ${extracted}` +
-            (confidence ? `  (ثقة ${Math.round(confidence * 100)}%)` : '') +
-            '\n\nموافق = اعتمد المقروء من المستند\nإلغاء = أبقِ ما كتبتَه'
-        );
-        input.classList.add(takeScan ? 'number-from-scan' : 'number-kept-manual');
-        if (!takeScan) this.showToast('أُبقي رقمك كما كتبتَه.', 'warning', 4000);
-        return takeScan;
+        // اختلاف: رقمُ الموظّف يبقى، والقرارُ في توست التطبيق بزرّين — لا نافذةُ متصفّحٍ
+        // توقف الملءَ في منتصفه. والزوجُ نفسه لا يُسأل عنه مرّتين (البثُّ ثمّ حمولةُ done).
+        const pairKey = `${typed}|${read}`;
+        if (this._numberMismatchAsked === pairKey) return false;
+        this._numberMismatchAsked = pairKey;
+        input.classList.add('number-kept-manual');
+        const shown = input.value;
+        const pct = confidence ? ` (ثقة ${Math.round(confidence * 100)}%)` : '';
+        const message = `كتبتَ «${shown}» والمقروء من المستند «${extracted}»${pct}. رقمُك باقٍ حتى تختار.`;
+        const adopt = () => {
+            if (input.value !== shown) return;          // غيّره الموظّفُ بعد السؤال — يدُه أعلى
+            input.value = extracted;
+            codeFill(() => {
+                try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+            });
+            noteSuggestionFilled(input.id, extracted);
+            input.classList.remove('number-kept-manual');
+            input.classList.add('number-from-scan');
+            if (confidence) {
+                this.updateConfidenceBadge(input.id, confidence);
+                this.setFieldConfidence(input.id, confidence);
+            }
+            this.validateField(input.id);
+        };
+        if (window.ToastCenter && typeof window.ToastCenter.action === 'function') {
+            window.ToastCenter.action('warning', message, [
+                { label: 'اعتمد المقروء', className: 'btn btn-sm btn-warning text-dark fw-semibold', onClick: adopt },
+                { label: 'أبقِ رقمي', className: 'btn btn-sm btn-outline-secondary fw-semibold', onClick: () => {} },
+            ], { title: 'اختلافٌ في رقم الصادر', delay: 0, autohide: false });
+        } else {
+            this.showToast(message, 'warning', 8000, 'اختلافٌ في رقم الصادر');
+        }
+        return false;
     }
 
     applyExtractionResult(data) {

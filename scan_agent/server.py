@@ -18,6 +18,7 @@
 من قرصه ويسلّمه لمتصفّحٍ بعيد، وذاك الجهازُ الخطأ لكلّ كاتبة (وكيلُها يولّد توكِنَه هو).
 النجاح في /agent/scan يُعاد كـ PDF ثنائي؛ الفشل يُعاد كـ JSON.
 """
+import http.client
 import json
 import os
 import sys
@@ -27,8 +28,14 @@ from urllib.parse import urlparse, parse_qs
 
 from . import config, naps2, __version__ as VERSION
 
-# أصولٌ رُفضت وسُجّلت — مرّةً واحدةً لكلّ أصلٍ في العمليّة (لا يُملأ السجلُّ بالتكرار)
+# أصولٌ رُفضت وسُجّلت — مرّةً واحدةً لكلّ أصلٍ ما بقيت القائمةُ كما هي (لا يُملأ السجلُّ
+# بالتكرار)، وتُصفَّر مع كلّ تغيّرٍ في القائمة: أصلٌ يُرفض بعد التعديل يُسجَّل من جديد.
 _LOGGED_ORIGINS = set()
+_LOGGED_GENERATION = [None]
+
+# متى بدأت هذه النسخة — يُكشَف في /agent/health مع رقم العمليّة، فتعرف صفحةُ الإعدادات
+# أيَّ نسخةٍ تردّ (كانت ثلاثُ نسخٍ تعمل معاً ولا يدري أحدٌ أيّها يجيب).
+_STARTED_AT = time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def _split_host_port(value):
@@ -44,11 +51,16 @@ def _split_host_port(value):
 
 def _log_rejected_origin(origin):
     """يكتب الأصلَ المرفوض إلى الشاشة وإلى agent.log — فيُشخَّص العطبُ بلا devtools."""
+    generation = config.origins_generation()
+    if _LOGGED_GENERATION[0] != generation:
+        _LOGGED_ORIGINS.clear()
+        _LOGGED_GENERATION[0] = generation
     key = origin or "(بلا أصل)"
     if key in _LOGGED_ORIGINS:
         return
     _LOGGED_ORIGINS.add(key)
-    line = "رُفض الأصل %s — أضفه إلى %s ثمّ أعد تشغيل الوكيل" % (key, config.config_file())
+    line = ("رُفض الأصل %s — أضفه إلى %s (يُقرأ تلقائيّاً، بلا إعادة تشغيل)"
+            % (key, config.config_file()))
     sys.stderr.write(line + "\n")
     try:
         os.makedirs(config.data_dir(), exist_ok=True)
@@ -111,11 +123,23 @@ class Handler(BaseHTTPRequestHandler):
             return self._expected_port() == 80     # منفذٌ ضمنيٌّ = 80 وحدَه
         return port == self._expected_port()
 
+    def parse_request(self):
+        self._origin_resolved = False             # كلُّ طلبٍ يحسم أصلَه من جديد
+        return super().parse_request()
+
     def _allowed_origin(self):
         """‎(scheme, host, port)‎ للأصل المسموح، أو ``None``. مساواةُ tuple مُقنَّنة —
-        لا بادئةَ ولا احتواء."""
-        norm = config.normalize_origin(self.headers.get("Origin"))
-        return norm if (norm is not None and norm in config.ALLOWED_ORIGINS) else None
+        لا بادئةَ ولا احتواء.
+
+        يُحسم **مرّةً لكلّ طلب**: القائمةُ حيّةٌ تتغيّر مع agent.json، فلو سُئلت مرّتين
+        (البوّابةُ ثمّ ترويساتُ CORS) لأمكن أن يمرّ الطلبُ بقائمةٍ ويُجاب بأخرى.
+        """
+        if not getattr(self, "_origin_resolved", False):
+            norm = config.normalize_origin(self.headers.get("Origin"))
+            allowed = norm is not None and norm in config.allowed_origins()
+            self._origin_norm = norm if allowed else None
+            self._origin_resolved = True
+        return self._origin_norm
 
     def _origin_allowed(self):
         return self._allowed_origin() is not None
@@ -130,7 +154,7 @@ class Handler(BaseHTTPRequestHandler):
         # يُعاد **مدخلُ القائمة المُقنَّن** لا نصُّ الترويسة الخامّ: القيمةُ المُعادة هي
         # ما وثقنا به حرفيّاً، فلا يمرّ إلى ترويسةِ استجابةٍ شيءٌ جاء من العميل ولو
         # تساوى معه بعد التقنين (اختلافُ حالةِ الأحرف أو منفذٌ ضمنيّ).
-        self.send_header("Access-Control-Allow-Origin", _describe_origin(norm))
+        self.send_header("Access-Control-Allow-Origin", config.describe_origin(norm))
         self.send_header("Vary", "Origin")
         # كي يقرأ المتصفح عدد الصفحات من استجابة المسح عبر الأصل المختلف
         self.send_header("Access-Control-Expose-Headers", "X-Scan-Pages")
@@ -243,7 +267,12 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, status)
 
     def _health(self):
-        exe = naps2.locate_exe()
+        # الصحّةُ لا تسقط أبداً بسبب الإعداد: كان agent.json الفاسدُ يقطع الاتّصالَ هنا فتقرأ
+        # الصفحةُ «الوكيلُ متوقّف». وضعٌ غيرُ محدَّد ⟵ لا نخمّن أيَّ NAPS2 نشغّل، ويُكشَف الرمز.
+        try:
+            exe = naps2.locate_exe()
+        except config.AgentConfigError:
+            exe = None
         self._json(200, {
             "ok": True,
             "version": VERSION,
@@ -251,6 +280,12 @@ class Handler(BaseHTTPRequestHandler):
             "naps2_available": bool(exe),
             "naps2_path": exe or "",
             "platform": sys.platform,
+            "pid": os.getpid(),
+            "started_at": _STARTED_AT,
+            # رمزٌ ثابت (invalid_json · no_list · no_valid_entries · unreadable ·
+            # invalid_pairing) أو null —
+            # الصفحةُ تختار نصَّها العربيّ بالرمز ولا تعرض نصّاً جاء من هنا.
+            "config_error": config.origin_status()["config_error"],
         })
 
     def _devices(self):
@@ -323,6 +358,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(504, {"ok": False, "code": "scan_timeout", "error": str(exc)})
         except naps2.ScanDeviceError as exc:
             self._json(409, {"ok": False, "code": "device_not_ready", "error": str(exc)})
+        except config.AgentConfigError as exc:     # قبل ValueError: ليس طلباً خاطئاً بل إعداداً
+            self._json(503, {"ok": False, "code": "config_error", "error": str(exc)})
         except ValueError as exc:
             self._json(400, {"ok": False, "code": "bad_request", "error": str(exc)})
         except RuntimeError:
@@ -351,31 +388,77 @@ def _count_pages(pdf_path):
         return None
 
 
-def _describe_origin(norm):
-    """صياغةُ ‎(scheme, host, port)‎ للعرض: يُخفى المنفذُ الافتراضيّ كما يفعل المتصفّح."""
-    scheme, host, port = norm
-    if (scheme, port) in (("http", 80), ("https", 443)):
-        return "%s://%s" % (scheme, host)
-    return "%s://%s:%d" % (scheme, host, port)
+class AgentHTTPServer(ThreadingHTTPServer):
+    """لا تعمل نسختان من الوكيل معاً على المنفذ نفسه.
+
+    ``ThreadingHTTPServer`` يضبط ``SO_REUSEADDR`` (‏allow_reuse_address = 1)، وعلى ويندوز
+    يعني ذلك أنّ نسخةً ثانيةً **بالخيار نفسه** تربط المنفذَ بلا خطأ — مقيسٌ 2026-11-16: ثلاثُ
+    نسخٍ معاً، وقديمةٌ بقائمةٍ قديمة تردّ بعد «إعادة التشغيل»، وفرعُ «المنفذ مستخدَم» في
+    ``serve()`` لا يقع أبداً. بلا الخيار تُرفض الثانيةُ (10048) والقديمةُ (10013).
+
+    جدولُ الربط المقيس على 127.0.0.1 (2026-11-16، ويندوز 11): الأولى بلا خيار ⟵ الثانيةُ
+    تُرفض بخيارٍ وبلا خيار؛ الأولى بـREUSEADDR ⟵ الثانيةُ بـREUSEADDR **تربط**. و
+    ``SO_EXCLUSIVEADDRUSE`` لم يغيّر خانةً واحدة من الجدول فلم يُضَف: حارسٌ لا يُقاس لا يبقى.
+    وربطٌ على ‎0.0.0.0‎ ينجح في كلّ الحالات لكنّه لا يأخذ اتّصالاتِ 127.0.0.1 (الأخصُّ يغلب).
+    ومقيسٌ أنّ إعادةَ الربط فورَ الإغلاق تنجح رغم اتّصالات TIME_WAIT.
+    """
+    allow_reuse_address = False
+
+
+def running_agent_health(port, timeout=2.0):
+    """صحّةُ وكيلنا القائم على المنفذ (dict)، أو ``None`` إن لم يردّ وكيلُنا.
+
+    ‏``http.client`` لا ``urllib``: الأخيرُ يمرّ بوكيل الشبكة المضبوط في ويندوز. والطلبُ
+    بلا Origin وبمضيف 127.0.0.1:المنفذ، فيمرّ ببوّابتَي الوكيل كما يمرّ ``curl``.
+    """
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+    try:
+        conn.request("GET", "/agent/health")
+        resp = conn.getresponse()
+        data = json.loads(resp.read().decode("utf-8"))
+    except (OSError, ValueError, http.client.HTTPException):
+        return None
+    finally:
+        conn.close()
+    if isinstance(data, dict) and data.get("ok") is True and isinstance(data.get("version"), str):
+        return data
+    return None
+
+
+def _bind_or_explain():
+    """يربط المنفذ، أو يكتب سببَ التعذّر بالعربيّة ويخرج.
+
+    نسخةٌ منّا تعمل أصلاً ⟵ خروجٌ هادئ (0): اختصارُ بدء التشغيل نُقر مرّتين، لا عطل.
+    غيرُ ذلك ⟵ خطأ (1). ورمزُ 10013 لا يعني «نسخةً قديمة» حتماً: ويندوز يحجز نطاقاتِ
+    منافذ لـHyper-V/WSL، فيُسأل المنفذُ أوّلاً ولا يُخمَّن.
+    """
+    try:
+        return AgentHTTPServer((config.HOST, config.PORT), Handler)
+    except OSError as exc:
+        running = running_agent_health(config.PORT)
+        if running is not None:
+            sys.stderr.write(
+                "[تنبيه] وكيلُ المسح يعمل أصلاً على %s:%d (الإصدار %s، العمليّة %s، منذ %s) — "
+                "هذه النسخةُ تخرج ولا حاجةَ لشيء. تعديلُ agent.json يسري فيه تلقائيّاً.\n"
+                % (config.HOST, config.PORT, running.get("version"), running.get("pid", "؟"),
+                   running.get("started_at", "؟")))
+            sys.exit(0)
+        sys.stderr.write(
+            "[خطأ] تعذّر بدء وكيل المسح على %s:%d — %s\n"
+            "المنفذُ يشغله برنامجٌ آخر أو يقع في نطاقٍ يحجزه ويندوز (Hyper-V/WSL — راجعه بـ"
+            "`netsh interface ipv4 show excludedportrange protocol=tcp`). أغلق ذلك البرنامج "
+            "ثمّ شغّل الوكيل من جديد.\n" % (config.HOST, config.PORT, exc))
+        sys.exit(1)
 
 
 def serve():
-    try:
-        httpd = ThreadingHTTPServer((config.HOST, config.PORT), Handler)
-    except OSError as exc:
-        # WinError 10048 / EADDRINUSE: المنفذ مستخدَم (نسخة وكيل أخرى؟)
-        sys.stderr.write(
-            "\n[خطأ] تعذّر بدء وكيل المسح على %s:%d — %s\n"
-            "المنفذ مستخدَم غالباً (قد تعمل نسخة أخرى من الوكيل). أغلقها، "
-            "أو اضبط متغيّر البيئة LETTERSYS_AGENT_PORT لمنفذ آخر.\n"
-            % (config.HOST, config.PORT, exc)
-        )
-        sys.exit(1)
-    print("LetterSys Scan Agent يعمل على http://%s:%d" % (config.HOST, config.PORT))
-    print("ملف الإعداد: %s" % config.config_file())
+    httpd = _bind_or_explain()
+    print("LetterSys Scan Agent يعمل على http://%s:%d (العمليّة %d)"
+          % (config.HOST, config.PORT, os.getpid()))
+    print("ملف الإعداد: %s — تعديلُه يسري تلقائيّاً بلا إعادة تشغيل" % config.config_file())
     print("الأصول المسموح لها بالمسح: %s"
-          % "، ".join(sorted(_describe_origin(o) for o in config.ALLOWED_ORIGINS)))
-    for w in config.ORIGIN_WARNINGS:
+          % "، ".join(sorted(config.describe_origin(o) for o in config.allowed_origins())))
+    for w in config.origin_warnings():
         sys.stderr.write("[تنبيه] %s\n" % w)
     from .workstation import DeviceMonitor
     httpd.device_monitor = DeviceMonitor()

@@ -22,6 +22,15 @@
   // ─── مساعدات عامة ────────────────────────────────────────────────────────────
   function el(id) { return document.getElementById(id); }
 
+  // توستُ التطبيق لا نافذةُ alert الأصليّة (يعنونها المتصفّحُ بعنوان الخادم وتوقف الصفحة).
+  function notify(type, message, title) {
+    if (window.ToastCenter && typeof window.ToastCenter.show === 'function') {
+      window.ToastCenter.show(type, message, title ? { title } : {});
+    } else {
+      console.warn(message);
+    }
+  }
+
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
       return {
@@ -155,7 +164,8 @@
       setTimeout(() => {
         el('copyMasterConfig').innerHTML = '<i class="bi bi-clipboard me-1"></i>نسخ للحافظة';
       }, 2000);
-    }).catch(() => alert(text));
+    }).catch(() => notify('warning',
+      'تعذّر النسخُ التلقائيّ إلى الحافظة — حدّد القيمَ من البطاقة وانسخها يدويّاً.', 'لم يُنسخ'));
   });
 
   // ─── فحص الاتصال بالماستر (HTTP ping) ───────────────────────────────────────
@@ -421,11 +431,11 @@
       if (data.ok) {
         await loadDevices();
         if (data.count === 0) {
-          alert('لم يُعثر على أجهزة LetterSys أخرى على الشبكة.');
+          notify('info', 'لم يُعثر على أجهزة LetterSys أخرى على الشبكة.', 'انتهى المسح');
         }
       }
     } catch (e) {
-      alert('خطأ أثناء مسح الشبكة');
+      notify('error', 'تعذّر مسحُ الشبكة — تحقّق من الاتصال ثمّ أعد المحاولة.', 'خطأ أثناء مسح الشبكة');
     } finally {
       setBusy(btn, false, 'bi-radar', 'مسح الشبكة تلقائياً');
       if (progress) progress.style.display = 'none';

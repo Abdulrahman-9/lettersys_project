@@ -78,7 +78,16 @@
         const message = device.blocked
           ? `رفع إيقاف «${device.name}» والسماح للموظف بتجديد ربطه؟`
           : `إيقاف ربط «${device.name}»؟ لن تسحب أدواته ورقاً جديداً حتى رفع الإيقاف وتجديد الربط.`;
-        if (!window.confirm(message)) return;
+        // حواريّةُ التطبيق (app.js) لا confirm() الأصليّة؛ رفعُ الإيقاف آمنٌ والإيقافُ هدّام.
+        const ok = typeof window.confirmDelete === 'function'
+          ? await window.confirmDelete({
+            title: device.blocked ? 'رفع إيقاف الجهاز' : 'إيقاف ربط الجهاز',
+            message,
+            okText: button.textContent,
+            danger: !device.blocked,
+          })
+          : window.confirm(message);
+        if (!ok) return;
         button.disabled = true;
         try {
           await json(`${root.dataset.apiBase}${device.id}/${device.blocked ? 'unblock' : 'revoke'}/`, {

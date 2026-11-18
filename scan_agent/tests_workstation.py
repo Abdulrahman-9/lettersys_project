@@ -20,7 +20,10 @@ class MonitorTests(unittest.TestCase):
         self.env = mock.patch.dict(os.environ, LOCALAPPDATA=self.folder.name)
         self.env.start()
         self.addCleanup(self.env.stop)
-        self.origins = mock.patch.object(config, 'ALLOWED_ORIGINS', {config.normalize_origin(ORIGIN)})
+        # القائمةُ الحيّة مصدرُها دالّةٌ واحدة؛ هذه الاختباراتُ تقيس الربطَ لا قراءةَ الملفّ
+        # (بعضُها يكتب agent.json بلا قائمةٍ أصلاً لقياس require_pairing).
+        self.origins = mock.patch.object(config, 'allowed_origins',
+                                         return_value=frozenset({config.normalize_origin(ORIGIN)}))
         self.origins.start()
         self.addCleanup(self.origins.stop)
         self.monitor = workstation.DeviceMonitor()
@@ -103,7 +106,8 @@ class MonitorTests(unittest.TestCase):
 
 class PairingEndpointTests(unittest.TestCase):
     def setUp(self):
-        self.origins = mock.patch.object(config, 'ALLOWED_ORIGINS', {config.normalize_origin(ORIGIN)})
+        self.origins = mock.patch.object(config, 'allowed_origins',
+                                         return_value=frozenset({config.normalize_origin(ORIGIN)}))
         self.origins.start()
         self.addCleanup(self.origins.stop)
         self.httpd = ThreadingHTTPServer(('127.0.0.1', 0), server.Handler)

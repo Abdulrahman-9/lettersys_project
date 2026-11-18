@@ -66,11 +66,21 @@ class DeviceMonitor:
         self.scanner_names = []
         self.scanner_checked = None
         try:
-            self.requires_pairing = config.requires_pairing()
+            config.requires_pairing()          # الإقلاعُ على إعدادٍ لا يحدّد الوضعَ يفشل مغلقاً
         except (OSError, ValueError, AttributeError) as exc:
             logger.error('Cannot read managed-client setting: %s', exc)
             raise OSError('Cannot read agent configuration') from exc
         self.data = self._load()
+
+    @property
+    def requires_pairing(self):
+        """الوضعُ المُدار من **المصدر نفسه** الذي يختار NAPS2 (config.requires_pairing): كان
+        هنا مجمَّداً عند الإقلاع وهناك حيّاً، فيمكن أن يختلفا. وقيمةٌ فاسدةٌ أثناء العمل ⟵
+        مُدار (فشلٌ مغلق: لا ورقَ قبل الربط)."""
+        try:
+            return config.requires_pairing()
+        except ValueError:
+            return True
 
     def _write(self, data):
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -115,7 +125,7 @@ class DeviceMonitor:
     def pair(self, payload, origin):
         with self.lock:
             normalized = config.normalize_origin(origin)
-            if not normalized or normalized[0] != 'https' or normalized not in config.ALLOWED_ORIGINS:
+            if not normalized or normalized[0] != 'https' or normalized not in config.allowed_origins():
                 raise ValueError('Pairing requires the configured HTTPS origin')
             if not isinstance(payload, dict) or set(payload) != {
                 'client_uuid', 'server_origin', 'name', 'token', 'pair_nonce'
@@ -167,7 +177,7 @@ class DeviceMonitor:
             try:
                 origin = self.data['server_origin']
                 normalized = config.normalize_origin(origin)
-                if not normalized or normalized[0] != 'https' or normalized not in config.ALLOWED_ORIGINS:
+                if not normalized or normalized[0] != 'https' or normalized not in config.allowed_origins():
                     raise ValueError('Saved server is not in the configured HTTPS allowlist')
                 token = _protect(base64.b64decode(self.data['protected_token'], validate=True), decrypt=True)
                 age = int(time.monotonic() - self.scanner_checked) if self.scanner_checked is not None else None

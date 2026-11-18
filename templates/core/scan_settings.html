@@ -117,8 +117,8 @@
       }
       if (responding) {
         set('dotAgent', 'lblAgent', false,
-            'الوكيل يعمل هنا لكنه يرفض ' + window.location.origin + ' — أضف هذا العنوان إلى allowed_origins ثمّ أعد تشغيله');
-        list.innerHTML = '<li class="muted">أضف عنوان هذا الخادم إلى %LOCALAPPDATA%\\LetterSys\\agent.json (مسؤولُ النظام)</li>';
+            'الوكيل يعمل هنا لكنه لا يثق بالعنوان ' + window.location.origin);
+        list.innerHTML = '<li class="muted">شغّل 3_Scan_Agent\\INSTALL.bat من مجلّد إعداد LetterSys المشترك بنقرٍ عاديّ، واكتب y للموافقة، ثمّ أعد تحميل هذه الصفحة — لا حاجة لإعادة تشغيل شيء.</li>';
       } else {
         set('dotAgent', 'lblAgent', false,
             'وكيل المسح غير مشغّل على هذا الجهاز — شغّل «LetterSys Scan Agent» على الجهاز الذي أمامك (لا على الخادم)');

@@ -12,12 +12,15 @@
 """
 import http.client
 import io
+import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.server import ThreadingHTTPServer
 from unittest import mock
@@ -223,19 +226,32 @@ class ServerGateTests(unittest.TestCase):
         cls.httpd.server_close()
 
     def setUp(self):
-        # قائمةٌ صريحةٌ للقياس: أصلٌ باسمٍ على المنفذ الضمنيّ 80 وأصلٌ بـIP:منفذ.
-        p = mock.patch.object(config, 'ALLOWED_ORIGINS',
-                              {('http', '192.0.2.10', 8000), ('http', 'lettersys', 80)})
-        p.start()
-        self.addCleanup(p.stop)
-        # سجلُّ الأصول المرفوضة إلى مجلّدٍ مؤقّت وstderr مُعلَّق — لا نكتب في بيانات المستخدم
+        # مجلّدٌ مؤقّت للإعداد والسجلّ وstderr مُعلَّق — لا نكتب في بيانات المستخدم.
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
         for patcher in (mock.patch.dict(os.environ, {'LOCALAPPDATA': tmp}),
                         mock.patch('sys.stderr', io.StringIO())):
             patcher.start()
             self.addCleanup(patcher.stop)
+        # القائمةُ **ملفٌّ يقرؤه الوكيل** كما في الإنتاج (لا رقعةً على ثابت): القائمةُ حيّةٌ
+        # تُقرأ من القرص، فرقعةُ ثابتٍ كانت ستُداس بأوّل قراءة. أصلٌ باسمٍ على المنفذ
+        # الضمنيّ 80 وأصلٌ بـIP:منفذ.
+        self.cfg = os.path.join(tmp, 'LetterSys', 'agent.json')
+        os.makedirs(os.path.dirname(self.cfg), exist_ok=True)
+        self._write_origins(['http://192.0.2.10:8000', 'http://lettersys'])
         server._LOGGED_ORIGINS.clear()
+
+    _bump = 0
+
+    def _write_origins(self, origins=None, raw=None):
+        """يكتب agent.json ويدفع زمنَ تعديله ثانيةً كاملة في كلّ مرّة: كتابتان في النبضة
+        نفسها بالحجم نفسه تتساويان في البصمة، والإنتاجُ لا يكتب مرّتين في ميلّي‌ثانية."""
+        text = raw if raw is not None else json.dumps({'allowed_origins': origins})
+        with open(self.cfg, 'w', encoding='utf-8') as f:
+            f.write(text)
+        ServerGateTests._bump += 1
+        stamp = time.time_ns() + ServerGateTests._bump * 1_000_000_000
+        os.utime(self.cfg, ns=(stamp, stamp))
 
     ALLOWED = 'http://192.0.2.10:8000'
 
@@ -481,6 +497,282 @@ class ServerGateTests(unittest.TestCase):
         self.assertFalse(hasattr(server.Handler, '_token_ok'))
         for name in ('TOKEN_FILE', 'TOKEN_DIR'):
             self.assertFalse(hasattr(config, name), 'بقي %s في config' % name)
+
+    # ═══════ القائمةُ الحيّة: تعديلُ agent.json يسري في الوكيل القائم ═══════
+    NEW = 'https://198.51.100.7'
+
+    def test_added_origin_is_trusted_without_restart(self):
+        """العطلُ الذي وقع 2026-11-16: الخادمُ انتقل إلى https فرفض الوكيلُ الصفحة، وإصلاحُ
+        agent.json لم يسرِ إلّا بإعادة تشغيلٍ تُبقي النسخةَ القديمة حيّة. الآن يسري فوراً."""
+        st, _, _ = self._req('/agent/devices', headers={'Origin': self.NEW})
+        self.assertEqual(st, 403)
+        self._write_origins([self.ALLOWED, self.NEW])
+        with mock.patch('scan_agent.naps2.list_devices', return_value=['Canon']):
+            st, body, hdrs = self._req('/agent/devices', headers={'Origin': self.NEW})
+        self.assertEqual(st, 200, body)
+        self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), self.NEW)
+
+    def test_removed_origin_is_refused_without_restart(self):
+        self._write_origins(['http://lettersys'])
+        st, _, hdrs = self._req('/agent/health', headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 403)
+        self.assertNotIn('Access-Control-Allow-Origin', hdrs)
+
+    def test_broken_edit_keeps_last_list_and_health_names_the_error(self):
+        """حفظٌ نصفُ مكتوبٍ أو خطأٌ إملائيّ لا يقطع المسح: تبقى آخرُ قائمةٍ صالحة، والصحّةُ
+        تكشف **رمزاً** تعرض الصفحةُ نصَّه توستاً — لا نصّاً يُلصق في الصفحة."""
+        st, body, _ = self._req('/agent/health', headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 200)
+        self.assertIsNone(json.loads(body)['config_error'])
+        self._write_origins(raw='{"allowed_origins": ["http://192.0.2.10:8000",')
+        st, body, hdrs = self._req('/agent/health', headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 200, 'سقطت الثقةُ مع حفظٍ فاسد')
+        self.assertEqual(hdrs.get('Access-Control-Allow-Origin'), self.ALLOWED)
+        self.assertEqual(json.loads(body)['config_error'], 'invalid_json')
+        self._write_origins([self.ALLOWED])
+        st, body, _ = self._req('/agent/health', headers={'Origin': self.ALLOWED})
+        self.assertIsNone(json.loads(body)['config_error'], 'بقي الخطأ بعد الإصلاح')
+
+    def test_invalid_pairing_flag_reports_instead_of_dropping_the_connection(self):
+        self._write_origins(raw=json.dumps({'allowed_origins': [self.ALLOWED],
+                                            'require_pairing': 'yes'}))
+        st, body, _ = self._req('/agent/health', headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 200, 'سقطت الصحّةُ بإعدادٍ فاسد فتظنّ الصفحةُ الوكيلَ متوقّفاً')
+        data = json.loads(body)
+        self.assertEqual(data['config_error'], 'invalid_pairing')
+        self.assertFalse(data['naps2_available'])
+
+    def test_deleted_file_revokes_to_loopback(self):
+        """الحذفُ إلغاءٌ متعمَّد — لا «آخرَ صالح» هنا. (القائمةُ تُحمَّل أوّلاً: حذفٌ قبل أيّ
+        قراءةٍ هو إقلاعٌ بلا ملفّ، لا إلغاءٌ أثناء العمل.)"""
+        st, _, _ = self._req('/agent/health', headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 200)
+        os.remove(self.cfg)
+        st, _, _ = self._req('/agent/health', headers={'Origin': self.ALLOWED})
+        self.assertEqual(st, 403)
+        st, _, _ = self._req('/agent/health', headers={'Origin': 'http://127.0.0.1:8000'})
+        self.assertEqual(st, 200)
+
+    def test_health_names_the_answering_process(self):
+        st, body, _ = self._req('/agent/health', headers={'Origin': self.ALLOWED})
+        data = json.loads(body)
+        self.assertEqual(data['pid'], os.getpid())
+        self.assertRegex(data['started_at'], r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$')
+
+    def test_rejection_logged_again_after_the_list_changes(self):
+        log = config.log_file()
+        self._req('/agent/health', headers={'Origin': self.NEW})
+        self._req('/agent/health', headers={'Origin': self.NEW})
+        self._write_origins(['http://lettersys'])          # تغيّرت القائمةُ (والجديدُ ما زال خارجها)
+        self._req('/agent/health', headers={'Origin': self.NEW})
+        with open(log, encoding='utf-8') as f:
+            hits = [ln for ln in f if self.NEW in ln]
+        self.assertEqual(len(hits), 2, hits)
+        self.assertNotIn('أعد تشغيل', hits[-1])
+
+
+class LiveOriginListTests(unittest.TestCase):
+    """دلالةُ إعادة التحميل نفسُها — بلا خادم: ما يبقى وما يسقط مع كلّ شكلٍ للملفّ."""
+
+    A = ('http', '192.0.2.10', 8000)
+    B = ('https', '198.51.100.7', 443)
+    LOOPBACK = {('http', '127.0.0.1', 8000), ('http', 'localhost', 8000)}
+
+    def setUp(self):
+        for patcher in (mock.patch('sys.stderr', io.StringIO()),):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        p = mock.patch.dict(os.environ, {'LOCALAPPDATA': self.tmp})
+        p.start()
+        self.addCleanup(p.stop)
+        self.cfg = os.path.join(self.tmp, 'LetterSys', 'agent.json')
+        os.makedirs(os.path.dirname(self.cfg), exist_ok=True)
+        self.n = 0
+
+    def _write(self, text):
+        with open(self.cfg, 'w', encoding='utf-8') as f:
+            f.write(text)
+        self.n += 1
+        stamp = time.time_ns() + self.n * 1_000_000_000
+        os.utime(self.cfg, ns=(stamp, stamp))
+
+    def _list(self, *origins):
+        self._write(json.dumps({'allowed_origins': list(origins)}))
+
+    def test_first_read_of_a_broken_file_is_loopback_only(self):
+        """الإقلاعُ لا «أخيرَ صالح» عنده: الفاسدُ ⟵ الحلقةُ المحلّيّة كما كان دائماً."""
+        self._write('{ not json')
+        self.assertEqual(set(config.allowed_origins()), self.LOOPBACK)
+        self.assertEqual(config.origin_status()['config_error'], 'invalid_json')
+
+    def test_each_broken_shape_keeps_the_last_good_list(self):
+        for raw, code in (('{ not json', 'invalid_json'),
+                          ('', 'invalid_json'),                       # لحظةُ الحفظ: ملفٌّ فارغ
+                          ('{"require_pairing": true}', 'no_list'),
+                          ('{"allowed_origins": ["http://*", "x"]}', 'no_valid_entries')):
+            with self.subTest(code=code, raw=raw):
+                self._list('http://192.0.2.10:8000')
+                self.assertEqual(set(config.allowed_origins()), {self.A})
+                self._write(raw)
+                self.assertEqual(set(config.allowed_origins()), {self.A})
+                self.assertEqual(config.origin_status()['config_error'], code)
+
+    def test_unreadable_file_is_an_error_not_a_deletion(self):
+        """قفلٌ أو صلاحيّةٌ عابرة لا تُلغي الثقة كما يُلغيها الحذف."""
+        self._list('http://192.0.2.10:8000')
+        self.assertEqual(set(config.allowed_origins()), {self.A})
+        self._list('http://192.0.2.10:8000', 'https://198.51.100.7')   # تغيّرت البصمة
+        with mock.patch('scan_agent.config.open', side_effect=PermissionError(13, 'denied'),
+                        create=True):
+            self.assertEqual(set(config.allowed_origins()), {self.A})
+            self.assertEqual(config.origin_status()['config_error'], 'unreadable')
+
+    def test_explicit_empty_list_is_a_valid_revocation(self):
+        self._list('http://192.0.2.10:8000')
+        config.allowed_origins()
+        self._list()
+        self.assertEqual(set(config.allowed_origins()), self.LOOPBACK)
+        self.assertIsNone(config.origin_status()['config_error'])
+
+    def test_partially_valid_file_applies_its_valid_entries(self):
+        self._list('http://192.0.2.10:8000')
+        config.allowed_origins()
+        self._list('https://198.51.100.7', 'http://*')
+        self.assertEqual(set(config.allowed_origins()), {self.B})
+        self.assertIsNone(config.origin_status()['config_error'])
+
+    def test_unchanged_file_is_not_parsed_again(self):
+        self._list('http://192.0.2.10:8000')
+        config.allowed_origins()
+        with mock.patch.object(config, '_read_origins', wraps=config._read_origins) as reader:
+            for _ in range(5):
+                config.allowed_origins()
+        self.assertEqual(reader.call_count, 0)
+
+    def test_reload_is_logged_once_per_change(self):
+        self._list('http://192.0.2.10:8000')
+        config.allowed_origins()
+        err = io.StringIO()
+        with mock.patch('sys.stderr', err):
+            self._list('https://198.51.100.7')
+            config.allowed_origins()
+            config.allowed_origins()
+        self.assertEqual(err.getvalue().count('أُعيدت قراءةُ agent.json'), 1, err.getvalue())
+
+    def test_generation_moves_only_when_the_list_changes(self):
+        self._list('http://192.0.2.10:8000')
+        g1 = config.origins_generation()
+        self._list('http://192.0.2.10:8000')                     # البصمةُ تغيّرت والقائمةُ لا
+        self.assertEqual(config.origins_generation(), g1)
+        self._list('https://198.51.100.7')
+        self.assertEqual(config.origins_generation(), g1 + 1)
+
+    # ═══════ وضعُ الحاسبة المُدارة — من القراءة نفسها، يتصاعد ولا ينزل ═══════
+    def test_managed_mode_escalates_live_but_never_downgrades_live(self):
+        """النزولُ حيّاً كان يفتح NAPS2_CONSOLE القديمَ لحاسبةٍ مُدارة (حكمُ فيبل 11-16)."""
+        self._list('http://192.0.2.10:8000')
+        self.assertFalse(config.requires_pairing())
+        self._write(json.dumps({'allowed_origins': ['http://192.0.2.10:8000'], 'require_pairing': True}))
+        self.assertTrue(config.requires_pairing())
+        self._write(json.dumps({'allowed_origins': ['http://192.0.2.10:8000'], 'require_pairing': False}))
+        self.assertTrue(config.requires_pairing(), 'نزل الوضعُ المُدار بلا إعادة تشغيل')
+
+    def test_half_written_save_keeps_the_last_mode(self):
+        self._write(json.dumps({'allowed_origins': ['http://192.0.2.10:8000'], 'require_pairing': False}))
+        self.assertFalse(config.requires_pairing())
+        self._write('{"allowed_origins": [')
+        self.assertFalse(config.requires_pairing())          # لا استثناءَ يُسقط /agent/health
+
+    def test_broken_file_at_startup_still_fails_closed(self):
+        self._write('{ not json')
+        with self.assertRaises(config.AgentConfigError):
+            config.requires_pairing()
+
+    def test_non_boolean_flag_is_refused_and_reported(self):
+        self._list('http://192.0.2.10:8000')
+        self.assertFalse(config.requires_pairing())
+        self._write(json.dumps({'allowed_origins': ['http://192.0.2.10:8000'], 'require_pairing': 'true'}))
+        with self.assertRaises(config.AgentConfigError):
+            config.requires_pairing()
+        self.assertEqual(config.origin_status()['config_error'], 'invalid_pairing')
+
+    def test_nothing_reads_the_old_import_time_constant(self):
+        """الثابتُ القديم كان يُقرأ مرّةً عند الاستيراد — بقاؤه يُغري بقراءته فيعود العطل."""
+        for name in ('ALLOWED_ORIGINS', 'ORIGIN_WARNINGS'):
+            self.assertFalse(hasattr(config, name), 'بقي %s في config' % name)
+
+
+class ExclusiveBindTests(unittest.TestCase):
+    """لا تعمل نسختان من الوكيل على المنفذ نفسه — مقيسٌ 2026-11-16 أنّ ويندوز كان يسمح."""
+
+    def _serve(self, cls):
+        httpd = cls(('127.0.0.1', 0), server.Handler)
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+        return httpd
+
+    def test_second_agent_cannot_bind_the_same_port(self):
+        first = self._serve(server.AgentHTTPServer)
+        with self.assertRaises(OSError):
+            server.AgentHTTPServer(('127.0.0.1', first.server_address[1]), server.Handler)
+
+    def test_old_style_reuse_server_cannot_hijack_the_port(self):
+        """نسخةٌ قديمة (‏SO_REUSEADDR) أو برنامجٌ آخر لا يربط المنفذَ فوق وكيلنا."""
+        first = self._serve(server.AgentHTTPServer)
+        with self.assertRaises(OSError):
+            ThreadingHTTPServer(('127.0.0.1', first.server_address[1]), server.Handler)
+
+    def test_port_rebinds_immediately_after_the_agent_closes(self):
+        """إعادةُ التشغيل الفوريّة (المُثبِّت يوقف ثمّ يشغّل) لا يحجبها TIME_WAIT."""
+        httpd = server.AgentHTTPServer(('127.0.0.1', 0), server.Handler)
+        port = httpd.server_address[1]
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+        for _ in range(3):                                   # اتّصالاتٌ يغلقها الخادم
+            conn = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
+            conn.request('GET', '/agent/health')
+            conn.getresponse().read()
+            conn.close()
+        httpd.shutdown()
+        httpd.server_close()
+        again = server.AgentHTTPServer(('127.0.0.1', port), server.Handler)
+        again.server_close()
+
+    def _explain(self, port):
+        err = io.StringIO()
+        with mock.patch.object(config, 'PORT', port), mock.patch('sys.stderr', err), \
+                self.assertRaises(SystemExit) as stop:
+            server._bind_or_explain()
+        return stop.exception.code, err.getvalue()
+
+    def test_second_start_exits_quietly_naming_the_running_copy(self):
+        first = self._serve(server.AgentHTTPServer)
+        code, text = self._explain(first.server_address[1])
+        self.assertEqual(code, 0, text)
+        self.assertIn(VERSION, text)
+        self.assertIn(str(os.getpid()), text)
+
+    def test_foreign_listener_is_an_error_not_a_running_agent(self):
+        sock = socket.socket()
+        self.addCleanup(sock.close)
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        sock.bind(('127.0.0.1', 0))
+        sock.listen(1)
+        code, text = self._explain(sock.getsockname()[1])
+        self.assertEqual(code, 1, text)
+        self.assertIn('برنامجٌ آخر', text)
+
+    def test_serve_binds_through_the_exclusive_server(self):
+        """الحارسُ يُقاس على ما يشغّله الإنتاج: serve() يمرّ بـ_bind_or_explain وحدَه."""
+        import inspect
+        src = inspect.getsource(server.serve)
+        self.assertIn('_bind_or_explain()', src)
+        self.assertNotIn('ThreadingHTTPServer(', src)
 
 
 class OriginConfigTests(unittest.TestCase):

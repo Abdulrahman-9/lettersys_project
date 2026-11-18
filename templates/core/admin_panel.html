@@ -1376,12 +1376,9 @@ function updateDepLevel(){
 }
 $('#modal-dep-name')?.addEventListener('input',updateDepLevel);
 
-/* ── تأكيد الإجراءات الحساسة (النصُّ يُقرأ عند الإرسال — يتغيّر مع القسم المفتوح) ── */
-document.querySelectorAll('form[data-confirm]').forEach(f=>{
-  f.addEventListener('submit',e=>{
-    if(f.dataset.confirm&&!confirm(f.dataset.confirm+'\n\nاضغط موافق للمتابعة.'))e.preventDefault();
-  });
-});
+/* ── تأكيد الإجراءات الحساسة: حواريّةُ data-confirm الواحدة في app.js تتولّاه (النصُّ يُقرأ
+   عند الإرسال فيتغيّر مع القسم المفتوح). كان هنا مستمعٌ ثانٍ بـconfirm() الأصليّة يسأل
+   **بعد** موافقة الحواريّة — فيُسأل المديرُ مرّتين وثانيتُهما نافذةُ متصفّح. ── */
 
 /* ── بحث في جدول السجلّ ── */
 const audQ=document.getElementById('aud-q');
