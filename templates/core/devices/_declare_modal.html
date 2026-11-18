@@ -1,0 +1,40 @@
+{% comment %}إعلانُ الخادم: يكتب الخادمُ كوداً من 8 أرقام في ملفٍّ على قرصه ويكتبه المديرُ هنا (حكمُ فيبل:
+خلف Caddy لا يُثبت العنوانُ أنّك على الخادم). يظهر للمدير العامّ وحده.{% endcomment %}
+{% if can_declare %}
+<div class="modal fade" id="dvsDeclareModal" tabindex="-1" aria-labelledby="dvsDeclareTitle" aria-hidden="true"
+     data-start-url="{% url 'device_declare_start' %}" data-finish-url="{% url 'device_declare_finish' %}">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:560px">
+    <form class="modal-content" dir="rtl" id="dvsDeclareForm" novalidate>
+      <div class="modal-header">
+        <h2 class="modal-title h5 fw-bold mb-0" id="dvsDeclareTitle">أعلن هذا الجهاز خادماً</h2>
+        <button type="button" class="btn-close ms-0" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+      <div class="modal-body d-grid gap-3">
+        {% if server_declared and not is_server_here %}
+        <div class="dvs-callout" data-tone="wait" role="note">خادمٌ مُعلَنٌ من متصفّحٍ آخر الآن. إعلانُ هذا المتصفّح يُلغي تسجيلَ ذاك، فيعود بكودٍ إن احتجته.</div>
+        {% endif %}
+        <ol class="dvs-steps" style="grid-template-columns:1fr">
+          <li><span class="dvs-step-n">1</span><div><b>اكتب النظامُ كوداً على قرص الخادم</b><span id="dvsDeclarePathLine">اضغط «اكتب الكود» فيُكتب في الملفّ <span class="dvs-chip-path">{{ declare_path }}</span></span></div></li>
+          <li><span class="dvs-step-n">2</span><div><b>افتح الملفّ على الخادم</b><span>اضغط <span class="dvs-mono">Win + R</span> والصق المسار. أو شغّل على الخادم <span class="dvs-mono">python manage.py devices_gate --declare-code</span></span></div></li>
+          <li><span class="dvs-step-n">3</span><div><b>اكتب الأرقام الثمانية هنا</b><span>صالحةٌ خمس دقائق، ثمّ يُمسح الملفّ.</span></div></li>
+        </ol>
+        <div><button type="button" class="btn btn-outline-primary" id="dvsDeclareStart"><i class="bi bi-pencil-square" aria-hidden="true"></i> اكتب الكود على الخادم</button>
+          <button type="button" class="dvs-icon-btn align-middle" data-copy="{{ declare_path }}" data-copy-label="مسار الملفّ" aria-label="نسخ مسار الملفّ"><i class="bi bi-copy" aria-hidden="true"></i></button></div>
+        <div class="d-grid gap-1">
+          <label for="dvsDeclareCode" class="fw-bold">الكود (8 أرقام)</label>
+          <input type="text" class="form-control dvs-mono" id="dvsDeclareCode" inputmode="numeric" autocomplete="one-time-code" maxlength="12" aria-describedby="dvsDeclareErr" style="font-size:1.4rem;letter-spacing:.3em;text-align:center">
+        </div>
+        <div class="d-grid gap-1">
+          <label for="dvsDeclareName" class="fw-bold">اسم جهاز الخادم</label>
+          <input type="text" class="form-control" id="dvsDeclareName" maxlength="60" value="الخادم">
+        </div>
+        <div class="dvj-err" id="dvsDeclareErr" role="alert" hidden></div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary" id="dvsDeclareSubmit">أعلنه خادماً</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إلغاء</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}

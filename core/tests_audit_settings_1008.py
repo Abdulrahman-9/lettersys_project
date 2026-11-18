@@ -62,7 +62,7 @@ class SettingsHubTruthTests(TestCase):
 
 class SettingsScriptsTests(SimpleTestCase):
     def test_device_delete_uses_the_app_dialog(self):
-        src = (ROOT / 'static' / 'network_settings.js').read_text(encoding='utf-8')
+        src = (ROOT / 'static' / 'js' / 'devices_page.js').read_text(encoding='utf-8')
         # أيُّ confirm() أصليّ — عارٍ أو window.confirm — لا confirmDelete(
         self.assertNotRegex(src, r'(?<!\w)confirm\(')
         self.assertIn('window.confirmDelete({', src)

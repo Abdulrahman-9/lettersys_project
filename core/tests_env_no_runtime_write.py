@@ -21,12 +21,12 @@ from django.contrib.auth.models import User
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from .models import NetworkSettings, SystemSettings
+from .models import SystemSettings
 
 # كلُّ مُعالِجات مسار الإعدادات/الحجز، لا الموضعان المُصلَحان وحدَهما: النمطُ
 # يعود بالنسخِ واللصقِ إلى الجار لا إلى الملفّ نفسِه.
 _MODULES_THAT_MUST_NOT_WRITE = (
-    'core/network_views.py',
+    'core/devices/views.py',
     'core/views/books_sequence.py',
     'core/views/books_api.py',
     'core/views/settings_hub.py',
@@ -204,124 +204,6 @@ class NoEnvWriteFromRequestTests(TestCase):
         self.assertEqual(spy.writes, [], f'كتابةُ ملفٍّ في المشروع: {spy.details}')
         # والقيمةُ حُفظت فعلاً — في القاعدة.
         self.assertEqual(SystemSettings.reservation_ttl(), 99)
-
-    def test_network_save_config_does_not_touch_the_env_file(self):
-        before = self._digest()
-        secret = 'Passw0rd-not-in-any-file'
-        # عنوانُ توثيقٍ (RFC 5737) لا عنوانٌ من شبكة المكتب: المستودعُ عامّ.
-        payload = {
-            'role': 'slave',
-            'device_name': 'x',
-            'master_host': '192.0.2.10',
-            'master_db_port': 5432,
-            'master_db_name': 'lettersys',
-            'master_db_user': 'lettersys_user',
-            'master_db_password': secret,
-        }
-        with override_settings(BASE_DIR=self.tmp), _WriteSpy(self.tmp) as spy:
-            resp = self.c.post(reverse('network-save-config'),
-                               data=json.dumps(payload),
-                               content_type='application/json')
-        self.assertEqual(resp.status_code, 200, resp.content)
-        self.assertEqual(self._digest(), before, 'ملفُّ البيئة تغيّر!')
-        self.assertEqual(self._env_like_files(), ['.env'])
-        # الكاتبُ الوحيدُ المسموحُ في ``BASE_DIR`` من مسار الطلب.
-        self.assertEqual(spy.writes, ['.device_identity.json'],
-                         f'كتابةٌ غيرُ متوقَّعة: {spy.details}')
-        # الكاتبُ الثالثُ داخل ``BASE_DIR`` — ``core/device_identity.py`` يكتب
-        # ``.device_identity.json`` وقتَ التشغيل. خارجُ نطاق هذه الرقعة عمداً،
-        # ويُثبَّت هنا كي لا يُنسى: ACL الإنتاج **يجب** أن يُبقيه قابلاً
-        # للكتابة، وإلّا سقط بصمتٍ وعاد اسمُ الجهاز إلى اسم المضيف.
-        self.assertIn('.device_identity.json',
-                      [q.name for q in self.tmp.iterdir()])
-
-        body = resp.json()
-        self.assertTrue(body['needs_admin_env'])
-        self.assertEqual(
-            body['env_lines'][:4],
-            ['DB_HOST=192.0.2.10', 'DB_PORT=5432',
-             'DB_NAME=lettersys', 'DB_USER=lettersys_user'],
-        )
-        # الكلمةُ لا تُصدَّر بأيّ صورة
-        self.assertNotIn(secret, resp.content.decode('utf-8'))
-
-        # **ولا تُخزَّن.** كان السطرُ ``cfg.set_db_password(pw)`` يزعم التعمية
-        # وهو ``django.core.signing.dumps`` = توقيعٌ + base64: القطعةُ الأولى
-        # تُفكُّ بلا مفتاحٍ إطلاقاً. والاختبارُ القديم ``assertNotEqual(enc,
-        # secret)`` كان ينجح على base64 عاديّة ⟵ حارسٌ يُصادق على العطب.
-        cfg = NetworkSettings.get()
-        self.assertEqual(cfg.master_db_password_enc, '',
-                         'كلمةُ قاعدةِ البيانات خُزِّنت — ولا قارئَ لها في الإنتاج')
-        self.assertFalse(hasattr(cfg, 'set_db_password'),
-                         'دالّةُ «التعمية» الكاذبة عادت')
-        self.assertFalse(hasattr(cfg, 'get_db_password'))
-        # ولا أثرَ للكلمة بأيّ ترميزٍ قابلٍ للفكّ في أيّ عمودٍ من الصفّ.
-        row = ''.join(str(v) for v in NetworkSettings.objects.filter(pk=cfg.pk)
-                      .values().first().values())
-        self.assertNotIn(secret, row)
-        for variant in (secret, f'"{secret}"'):
-            token = base64.urlsafe_b64encode(variant.encode()).decode().rstrip('=')
-            self.assertNotIn(token, row, 'الكلمةُ مخزَّنةٌ بـbase64 (توقيعٌ لا تعمية)')
-
-    def test_a_newline_inside_a_value_is_rejected_not_pasted(self):
-        """الأسطرُ المعروضةُ للنسخ لا يجوز أن يصنعها المُدخَل.
-
-        ``.strip()`` وحدَه يُبقي سطراً جديداً **داخل** القيمة، فقيمةٌ مضيفٍ
-        تحمل فاصلةَ أسطرٍ ثمّ ``DEBUG=True`` كانت تُخرج ذلك سطراً كاملاً في
-        ما يُنسَخ ويُلصَق في ملفّ البيئة بيد مدير النظام.
-        """
-        poisoned = '192.0.2.10' + chr(10) + 'DEBUG=True'
-        cases = (
-            {'role': 'slave', 'master_host': poisoned},
-            {'role': 'slave', 'master_host': '192.0.2.10',
-             'master_db_name': 'lettersys' + chr(10) + 'SECURE_SSL_REDIRECT=False'},
-            {'role': 'slave', 'master_host': '192.0.2.10',
-             'master_db_user': 'u' + chr(13) + 'x'},
-            {'role': 'slave', 'master_host': 'host with space'},
-        )
-        for payload in cases:
-            with override_settings(BASE_DIR=self.tmp):
-                resp = self.c.post(reverse('network-save-config'),
-                                   data=json.dumps(payload),
-                                   content_type='application/json')
-            self.assertEqual(resp.status_code, 400, f'{payload} ⟵ {resp.status_code}')
-            self.assertNotIn('DEBUG=True', resp.content.decode('utf-8'))
-            self.assertFalse(
-                NetworkSettings.objects.filter(is_configured=True).exists(),
-                f'قيمةٌ مسمومةٌ حُفظت: {payload}')
-
-    def test_env_lines_are_never_multi_line(self):
-        """حارسُ الشكل: كلُّ سطرٍ معروضٍ سطرٌ واحدٌ بمفتاحٍ واحد."""
-        payload = {'role': 'slave', 'master_host': 'db.example.invalid',
-                   'master_db_name': 'lettersys', 'master_db_user': 'lettersys_user'}
-        with override_settings(BASE_DIR=self.tmp):
-            resp = self.c.post(reverse('network-save-config'),
-                               data=json.dumps(payload),
-                               content_type='application/json')
-        self.assertEqual(resp.status_code, 200, resp.content)
-        for line in resp.json()['env_lines']:
-            self.assertNotIn(chr(10), line)
-            self.assertNotIn(chr(13), line)
-            self.assertEqual(line.count('='), 1, line)
-
-    def test_standalone_role_promises_nothing(self):
-        with override_settings(BASE_DIR=self.tmp):
-            resp = self.c.post(reverse('network-save-config'),
-                               data=json.dumps({'role': 'standalone'}),
-                               content_type='application/json')
-        self.assertEqual(resp.status_code, 200)
-        body = resp.json()
-        self.assertFalse(body['needs_admin_env'])
-        self.assertEqual(body['env_lines'], [])
-
-    def test_non_staff_cannot_save_network_config(self):
-        plain = Client()
-        plain.force_login(User.objects.create_user('nobody', password='p'))
-        resp = plain.post(reverse('network-save-config'),
-                          data=json.dumps({'role': 'slave'}),
-                          content_type='application/json')
-        self.assertIn(resp.status_code, (302, 403))
-        self.assertFalse(NetworkSettings.objects.filter(is_configured=True).exists())
 
 
 class NoFileWriteInSourceTests(TestCase):

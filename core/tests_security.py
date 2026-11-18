@@ -185,36 +185,15 @@ class EncryptionTestCase(TestCase):
         self.assertEqual(reloaded.smtp_password, plaintext_pwd)
 
 
-class NetworkPingExposureTests(TestCase):
-    """نقطة الفحص الصحي لا تكشف خريطة النشر لغريبٍ عن الشبكة — سجل العيوب ح6.
+class NetworkPingRemovedTests(TestCase):
+    """نقطةُ «اكتشاف الأقران» العامّة (سجل العيوب ح6) حُذفت مع صفحة الرئيس/التابع (2026-11-18):
+    الأجهزةُ تُكتشف حين تفتح النظام بحسابٍ، لا بطَرقٍ مجهولٍ على الشبكة."""
 
-    كانت تُعيد الدور واسم الجهاز والإصدار وعدد الجلسات النشطة لأي طارق.
-    """
-
-    URL = '/books/api/network/ping/'
-    SENSITIVE = ('role', 'name', 'version', 'ip')
-
-    def test_stranger_gets_bare_fingerprint_only(self):
-        # عنوانٌ عامٌّ حقيقيّ عمداً: نطاقات التوثيق (203.0.113.0/24 وأخواتها)
-        # يعدّها ipaddress.is_private خاصّةً، فتُعطي الاختبارَ نجاحاً كاذباً.
-        resp = self.client.get(self.URL, REMOTE_ADDR='8.8.8.8')
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertTrue(data.get('lettersys'))
-        for field in self.SENSITIVE:
-            self.assertNotIn(field, data, f"{field} تسرّب لمتصلٍ خارج الشبكة الخاصة")
-        self.assertNotIn('active_users', data)
-
-    def test_lan_peer_still_gets_identity_for_discovery(self):
-        resp = self.client.get(self.URL, REMOTE_ADDR='192.168.1.50')
-        data = resp.json()
-        for field in self.SENSITIVE:
-            self.assertIn(field, data, f"{field} مفقود — اكتشاف الأقران على LAN ينكسر")
-
-    def test_active_users_never_exposed_even_on_lan(self):
-        """عدّاد الجلسات لا مستهلك له في مسار الأقران — مستهلكه صفحة الأجهزة المحميّة."""
-        for addr in ('192.168.1.50', '127.0.0.1', '8.8.8.8'):
-            self.assertNotIn('active_users', self.client.get(self.URL, REMOTE_ADDR=addr).json())
+    def test_the_old_public_endpoints_are_gone(self):
+        for url in ('/books/api/network/ping/', '/books/api/network/scan-subnet/',
+                    '/books/api/network/devices/'):
+            for addr in ('192.168.1.50', '8.8.8.8'):
+                self.assertEqual(self.client.get(url, REMOTE_ADDR=addr).status_code, 404, url)
 
 
 class AzureKeyEncryptionTests(TestCase):

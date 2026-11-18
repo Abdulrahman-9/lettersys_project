@@ -334,24 +334,6 @@ def retry_failed_emails_task():
         cache.delete(lock)
 
 
-@shared_task(name='core.tasks.network_heartbeat', ignore_result=True)
-def network_heartbeat():
-    """
-    يُحدّث سجل هذا الجهاز في جدول NetworkNode كل دقيقة.
-    يضمن أن حالة is_online=True وlast_seen حديثة دائماً،
-    ويُظهر الجهاز كـ"متصل" في جدول الأجهزة على جميع الشاشات.
-    لا تعمل إذا لم يكن الجهاز مُضبَّطاً بعد.
-    """
-    try:
-        from .models import NetworkSettings
-        from .network_views import _register_self
-        cfg = NetworkSettings.get()
-        if cfg.is_configured:
-            _register_self(cfg)
-    except Exception as exc:
-        logger.warning('[NetworkHeartbeat] error: %s', exc)
-
-
 
 
 # ===================================================

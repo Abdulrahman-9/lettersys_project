@@ -17,7 +17,7 @@ from django.urls import NoReverseMatch, reverse
 from core import roles
 from core.logging_models import UserActivityLog
 from core.models import (AIIntegrationSettings, BackupSettings, Book, BookSequence, Department,
-                         EmailSettings, NetworkSettings, NotificationSettings, SecuritySettings,
+                         EmailSettings, NotificationSettings, SecuritySettings,
                          SystemSettings, UserProfile)
 
 PANEL = '/books/admin/'
@@ -150,10 +150,6 @@ class SettingsAuditTests(TestCase):
             'الاستخراج الخارجيّ': lambda: post(reverse('settings_ai_save'),
                                                {'provider': 'azure', 'azure_endpoint': 'https://e.test'}),
             'البريد الإلكتروني': lambda: post(reverse('mail_settings'), {'smtp_host': 'smtp.new.test'}),
-            'الربط الشبكي': lambda: post(reverse('network-save-config'),
-                                         data=json.dumps({'role': 'standalone', 'this_host': '10.9.8.7',
-                                                          'app_port': 1312}),
-                                         content_type='application/json'),
         }
         for section, call in forms.items():
             with self.subTest(section):

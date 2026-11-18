@@ -54,11 +54,10 @@ class NativeDialogsTests(SimpleTestCase):
         self.assertIn('window.confirmDelete({', src)
         self.assertEqual(src.count('window.confirm('), 1)
 
-    def test_network_settings_has_no_live_alert(self):
-        src = _read('static/network_settings.js')
-        # الباقي احتياطٌ واحدٌ في فرعٍ لا يبلغه إلّا غيابُ ToastCenter
-        self.assertEqual(len(re.findall(r'(?<![\w.])alert\(', src)), 1)
-        self.assertIn("notify('info', 'لم يُعثر على أجهزة LetterSys أخرى على الشبكة.'", src)
+    def test_device_pages_have_no_native_dialogs(self):
+        for rel in ('static/js/devices_page.js', 'static/js/device_join.js'):
+            src = _read(rel)
+            self.assertEqual(re.findall(r'(?<![\w.])(?:alert|confirm|prompt)\(', src), [], rel)
 
     def test_admin_panel_no_longer_asks_twice(self):
         src = _read('templates/core/admin_panel.html')

@@ -7,7 +7,7 @@ from core.views import (admin_panel, audit, desk, lifecycle_api, linking,
 from . import logging_views
 from . import api as api_views
 from . import reservation_api
-from . import network_views
+from .devices import urls as device_urls, views as device_views
 from .views import system_admin
 from core.views import device_setup as device_setup_views
 from django.conf import settings
@@ -140,18 +140,11 @@ urlpatterns = [
     path("api/scan/agent-info/",          views.scan_agent_info,       name="scan_agent_info"),
     path("api/scan/agent-start/",         views.scan_agent_start,      name="scan_agent_start"),
 
-    # ─── الربط الشبكي — Network Binding ────────────────────────────────────────
-    path("settings/network/",                    network_views.network_settings_page,  name="network_settings"),
-    path("api/network/ping/",                    network_views.network_ping,           name="network-ping"),
-    path("api/network/save-config/",             network_views.network_save_config,    name="network-save-config"),
-    path("api/network/test-db/",                 network_views.network_test_db,        name="network-test-db"),
-    path("api/network/test-ping/",               network_views.network_test_ping,      name="network-test-ping"),
-    path("api/network/scan-subnet/",             network_views.network_scan_subnet,    name="network-scan-subnet"),
-    path("api/network/devices/",                 network_views.network_devices,        name="network-devices"),
-    path("api/network/ping-all/",                network_views.network_ping_all,       name="network-ping-all"),
-    path("api/network/device/<int:pk>/delete/",  network_views.network_delete_device,  name="network-delete-device"),
-    path("api/network/local-ip/",                network_views.network_get_local_ip,   name="network-local-ip"),
-    path("api/network/devices/stream/",          network_views.network_devices_stream, name="network-devices-stream"),
+    # ─── الشبكة والأجهزة (2026-11-18): حلّت محلّ صفحة الربط الشبكيّ القديمة (رئيس/تابع) ──────
+    # الاسمُ ``network_settings`` باقٍ: مركزُ الإعدادات يضمّنها في تبويب «الشبكة».
+    path("settings/network/",                    device_views.network_page,             name="network_settings"),
+    path("devices/",                             include(device_urls.page_urlpatterns)),
+    path("api/devices/",                         include(device_urls.api_urlpatterns)),
     path("entities/", views.entity_list, name="entity_list"),
     path("entities/merge/", views.entity_merge, name="entity_merge"),
     path("entities/<int:pk>/", views.entity_detail, name="entity_detail"),

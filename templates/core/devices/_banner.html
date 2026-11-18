@@ -1,0 +1,24 @@
+{% load static %}<link rel="stylesheet" href="{% static 'css/devices.css' %}?v=20261118-devices">
+{% comment %}وضعُ «تنبيه غير المسجّل»: يعمل الجهاز، ويرى هذا الشريط. «لاحقاً» يخفيه ثماني ساعات في هذا المتصفّح.{% endcomment %}
+<div class="dvs-banner" id="dvsBanner" role="region" aria-label="تنبيه تسجيل الجهاز" dir="rtl" hidden>
+  <span class="dvs-ico" data-tone="wait" aria-hidden="true" style="width:34px;height:34px;font-size:1rem;background:var(--lx-surface)"><i class="bi bi-display"></i></span>
+  <div class="dvs-banner-text">
+    <b>هذا الجهاز غير مسجّل</b>
+    <span>سجّله بكودٍ من المسؤول في دقيقة.</span>
+  </div>
+  <a class="btn btn-sm btn-primary" href="{% url 'device_join' %}">سجّل الآن</a>
+  <button type="button" class="btn btn-sm btn-outline-secondary" id="dvsBannerLater">لاحقاً</button>
+</div>
+<script>
+(function () {
+  var bar = document.getElementById('dvsBanner');
+  var key = 'lettersys_device_banner_until';
+  var until = 0;
+  try { until = parseInt(window.localStorage.getItem(key) || '0', 10) || 0; } catch (_) { until = 0; }
+  if (Date.now() >= until) bar.hidden = false;
+  document.getElementById('dvsBannerLater').addEventListener('click', function () {
+    bar.hidden = true;
+    try { window.localStorage.setItem(key, String(Date.now() + 8 * 3600 * 1000)); } catch (_) { /* تخزينٌ محجوب: يعود في الصفحة التالية */ }
+  });
+})();
+</script>

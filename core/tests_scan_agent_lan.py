@@ -176,11 +176,6 @@ class NetAddrHelperTests(TestCase):
         self.assertFalse(request_is_loopback(self._req('not-an-ip')))
         self.assertFalse(is_lan_peer(self._req('')))
 
-    def test_network_views_alias_still_points_at_the_same_rule(self):
-        from core import network_views
-        from core.netaddr import is_lan_peer
-        self.assertIs(network_views._is_lan_peer, is_lan_peer)
-
 
 # ════════════ النصفُ الآخر: ما يفعله المتصفّح ════════════
 # النقطةُ الخلفيّة وحدَها لا تُثبت أنّ الميزةَ حيّة: الواجهةُ كانت لا تزال تنادي

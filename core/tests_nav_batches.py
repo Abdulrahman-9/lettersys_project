@@ -26,7 +26,7 @@ class BackLandsWhereYouCameFromTests(TestCase):
     def test_settings_subpages_cancel_back_into_the_hub(self):
         # الماسحُ صار مدخلاً في الشريط لا تبويباً في المركز، فلا رجوعَ منه إلى المركز (2026‑11‑08).
         self.assertNotIn("settings_hub", open('templates/core/scan_settings.html', encoding='utf-8').read())
-        for tpl, tab in (('sequence_settings', 'sequences'), ('network_settings', 'network')):
+        for tpl, tab in (('sequence_settings', 'sequences'), ('devices/page', 'network')):
             src = open(f'templates/core/{tpl}.html', encoding='utf-8').read()
             self.assertIn(f"{{% url 'settings_hub' %}}?tab={tab}", src, tpl)
             self.assertNotIn("{% url 'book_unified' %}\" class=\"btn btn-sm btn-outline-secondary\">رجوع", src, tpl)
@@ -143,9 +143,15 @@ class SettingsHubStructureTests(TestCase):
         2026-11-18 (أمرُ المالك: «دليلٌ سريعٌ للمستخدم»): قسمُ الماسح ودليلُه لمن يمسح من صفحة
         الإدخال أيضاً (``can_set_up_scanner``) — لا يغيّر إعداداً في الخادم. والقارئُ بلا دورٍ يُرفض."""
         self.client.force_login(self.plain)
-        for name in ('settings_hub', 'sequence_settings', 'network_settings'):
+        for name in ('settings_hub', 'sequence_settings'):
             r = self.client.get(reverse(name))
             self.assertIn(r.status_code, (302, 403), f'{name} مفتوحٌ لغير الموظّف ({r.status_code})')
+        # «الشبكة والأجهزة» (2026-11-18) صارت «هذا الجهاز» لكلّ مستخدم؛ والسجلُّ وأدواتُه للمدير
+        # العامّ وحده (core.devices.tests). فغيرُ الموظّف يرى جهازَه لا السجلّ.
+        page = self.client.get(reverse('network_settings'))
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'id="dvsMe"')
+        self.assertNotContains(page, 'dvsBoardData')
         self.assertEqual(self.client.get(reverse('scan_settings')).status_code, 200,
                          'الكاتبُ لا يصل إلى دليل تجهيز ماسحه')
         reader = User.objects.create_user('shr', password='pw-shr-11')     # بلا دورٍ ولا موظّف
@@ -184,5 +190,5 @@ class SettingsHubStructureTests(TestCase):
     def test_a_plain_user_gets_the_403_page_not_a_login_redirect(self):
         """توحيدُ الحرّاس: مَن هو داخلٌ ولا يملك يرى 403 داخل القشرة لا تحويلاً للدخول."""
         self.client.force_login(self.plain)
-        for name in ('settings_hub', 'network_settings', 'mail_settings'):
+        for name in ('settings_hub', 'mail_settings'):
             self.assertEqual(self.client.get(reverse(name)).status_code, 403, name)

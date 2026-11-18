@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% if is_admin %}الشبكة والأجهزة{% else %}هذا الجهاز{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/devices.css' %}?v=20261118-devices">
+{% endblock %}
+
+{% block content %}
+{% comment %}
+  «الشبكة والأجهزة» (التصميمُ المعتمد 2026-11-18). المديرُ العامّ يرى السجلَّ كلَّه ويصدر الأكوادَ
+  من جهاز الخادم وحده؛ وغيرُه يرى جهازَه. القوائمُ يرسمها devices_page.js من البيانات (textContent
+  وحدَه)، والقواعدُ كلُّها في core/devices/service.py.
+{% endcomment %}
+<div class="dvs" id="devicesPage" dir="rtl"
+     data-admin="{{ is_admin|yesno:'1,0' }}"
+     data-can-approve="{{ can_approve|yesno:'1,0' }}"
+     data-board-url="{% url 'device_board' %}"
+     data-code-url="{% url 'device_issue_code' %}"
+     data-code-state-url="{% url 'device_code_state' 0 %}"
+     data-code-cancel-url="{% url 'device_cancel_code' 0 %}"
+     data-mode-url="{% url 'device_mode' %}"
+     data-action-url="{% url 'device_action' '00000000-0000-0000-0000-000000000000' 'dismiss' %}"
+     data-me-url="{% url 'device_me' %}"
+     data-report-url="{% url 'device_report' %}"
+     data-join-url="{% url 'device_join' %}"
+     data-info-url="{% url 'scan_agent_info' %}"
+     data-approved-origin="{{ approved_origin }}"
+     data-kit-version="{{ kit_version }}"
+     data-address-note="{% if address_change %}صار {{ address_change.new }} بدل {{ address_change.old }}. الأجهزة التي تصل بالاسم لا تتأثّر.{% endif %}">
+  {% csrf_token %}
+
+  <header class="dvs-head">
+    <a href="{% url 'settings_hub' %}?tab=network" class="btn btn-sm btn-outline-secondary settings-embed-hide dvs-back" title="رجوع إلى الإعدادات" aria-label="رجوع إلى الإعدادات"><i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+    <div class="dvs-head-text">
+      <div class="dvs-crumb">الإعدادات › الشبكة والأجهزة</div>
+      {% if is_admin %}
+      <h1>الشبكة والأجهزة</h1>
+      <p>من يتّصل بالنظام، ومن أيّ جهاز، وهل جهازه جاهز. كلُّ جهازٍ ينضمّ بكودٍ من خمسة أرقام يصدر من جهاز الخادم.</p>
+      {% else %}
+      <h1>هذا الجهاز</h1>
+      <p>ترى هنا جهازك وحده: اتّصاله بالنظام وما ينقصه. المسؤول يرى كلّ الأجهزة.</p>
+      {% endif %}
+    </div>
+    <div class="dvs-head-actions">
+      {% if is_admin %}
+      <span class="dvs-live" id="dvsLive" role="status"><span class="dvs-dot" aria-hidden="true"></span><span id="dvsLiveText">مباشر · يتحدّث وحده</span></span>
+      {% endif %}
+      {% if approved_origin %}
+      <button type="button" class="btn btn-outline-secondary" data-copy="{{ approved_origin }}" data-copy-label="رابط النظام"><i class="bi bi-copy" aria-hidden="true"></i> نسخ رابط النظام</button>
+      {% endif %}
+      {% if is_admin and can_approve %}
+      <button type="button" class="btn btn-primary" id="dvsAddDevice"><i class="bi bi-plus-lg" aria-hidden="true"></i> إضافة جهاز</button>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if is_admin %}
+    {% if not server_declared %}
+    <section class="dvs-card" aria-labelledby="dvsDeclareH">
+      <div class="dvs-card-head">
+        <span class="dvs-ico" data-tone="wait" aria-hidden="true"><i class="bi bi-hdd-network"></i></span>
+        <h2 id="dvsDeclareH">لم يُعلَن خادمٌ بعد</h2>
+      </div>
+      <p class="dvs-note">افتح هذه الصفحة على الحاسوب الذي يعمل عليه النظام (<b class="dvs-mono">{{ server_name }}</b>) واضغط «أعلن هذا الجهاز خادماً». يكتب النظامُ كوداً من ثمانية أرقام في ملفٍّ على قرص الخادم، فتكتبه هنا. بعدها تصدر أكوادُ الانضمام وتصل الطلباتُ إلى هذا الجهاز.</p>
+      <div><button type="button" class="btn btn-primary" data-declare-open><i class="bi bi-hdd-network" aria-hidden="true"></i> أعلن هذا الجهاز خادماً</button></div>
+    </section>
+    {% elif not is_server_here %}
+    <section class="dvs-callout" data-tone="prog" role="note">
+      <b>الأكوادُ والموافقاتُ من جهاز الخادم وحده.</b> تقرأ هنا السجلَّ ولا تغيّره. إن كان هذا هو الخادم وضاع تسجيلُه (مُسحت بيانات المتصفّح)
+      <button type="button" class="btn btn-link p-0 align-baseline" data-declare-open>أعلنه خادماً من جديد</button>.
+    </section>
+    {% endif %}
+
+    <section class="dvs-card" aria-labelledby="dvsStepsH">
+      <h2 id="dvsStepsH">كيف يُضاف جهاز</h2>
+      <ol class="dvs-steps">
+        <li><span class="dvs-step-n">1</span><div><b>التجهيز الأوّل، بإشرافك</b><span>{% if share_path %}من <span class="dvs-chip-path">{{ share_path }}</span> {% else %}من المجلّد المشترك {% endif %}يُشغَّل LetterSys-Setup مرّةً لكلّ مستخدم، فيثبّت الثقة والوكيل ويفتح صفحة الانضمام.</span></div></li>
+        <li><span class="dvs-step-n">2</span><div><b>الكود</b><span>تصدر هنا خمسة أرقام صالحة عشر دقائق لجهازٍ واحد. يكتبها الموظّف بعد دخوله ويسمّي جهازه.</span></div></li>
+        <li><span class="dvs-step-n">3</span><div><b>النظام يتحقّق وحده</b><span>الوكيل والماسح والساعة تُفحص تلقائيّاً، ويظهر الجهاز في القائمة أدناه.</span></div></li>
+      </ol>
+      <p class="dvs-note">الأجهزة الحاليّة تثق بالنظام سلفاً، فتبدأ من الخطوة 2.</p>
+    </section>
+
+    <div class="dvs-grid3">
+      <section class="dvs-card" aria-labelledby="dvsSrvH">
+        <div class="dvs-card-head">
+          <span class="dvs-ico" aria-hidden="true"><i class="bi bi-hdd-rack"></i></span>
+          <h2 id="dvsSrvH">الخادم</h2>
+          <span class="dvs-pill" data-tone="done">يعمل</span>
+        </div>
+        <dl class="dvs-dl">
+          <dt>الاسم على الشبكة</dt><dd><span class="dvs-mono">{{ server_name }}</span></dd>
+          <dt>الرابط المعتمد</dt>
+          <dd>{% if approved_origin %}<span class="dvs-mono">{{ approved_origin }}</span><button type="button" class="dvs-icon-btn" data-copy="{{ approved_origin }}" data-copy-label="الرابط المعتمد" aria-label="نسخ الرابط المعتمد"><i class="bi bi-copy" aria-hidden="true"></i></button>{% else %}<span class="dvs-pill" data-tone="wait">لم يُضبط بعد</span>{% endif %}</dd>
+          <dt>العنوان الحاليّ</dt><dd>{% for a in addresses %}<span class="dvs-mono">{{ a }}</span>{% empty %}—{% endfor %} <span class="dvs-note">· من موزّع الشبكة</span></dd>
+          <dt>جهاز الخادم</dt><dd>{% if server_declared %}مُعلَن{% if is_server_here %} · <span class="dvs-pill" data-tone="prog">هذا الجهاز</span>{% endif %}{% else %}<span class="dvs-pill" data-tone="wait">لم يُعلَن</span>{% endif %}</dd>
+          {% if share_path %}<dt>المجلّد المشترك</dt><dd><span class="dvs-mono">{{ share_path }}</span></dd>{% endif %}
+        </dl>
+        {% if address_change %}
+        <div class="dvs-callout" data-tone="prog" role="note"><b>رُصد تغيّرُ العنوان</b> · {{ address_change.at|date:"j F H:i" }}: من <span class="dvs-mono">{{ address_change.old }}</span> إلى <span class="dvs-mono">{{ address_change.new }}</span>. الأجهزة التي تصل بالاسم لا تتأثّر.</div>
+        {% endif %}
+      </section>
+
+      <section class="dvs-card" aria-labelledby="dvsNowH">
+        <div class="dvs-card-head">
+          <span class="dvs-ico" aria-hidden="true"><i class="bi bi-display"></i></span>
+          <h2 id="dvsNowH">الأجهزة الآن</h2>
+        </div>
+        <div class="dvs-stats">
+          <div class="dvs-stat"><b id="dvsCountRegistered">{{ board.counts.registered }}</b><span>أجهزة مسجّلة</span></div>
+          <div class="dvs-stat" data-tone="done"><b id="dvsCountNow">{{ board.counts.now }}</b><span>ظهرت في آخر 3 دقائق</span></div>
+          <div class="dvs-stat" data-tone="wait"><b id="dvsCountAttention">{{ board.counts.attention }}</b><span>تحتاج انتباهاً</span></div>
+          <div class="dvs-stat"><b id="dvsCountScanners">{{ board.counts.scanners }}</b><span>بماسحٍ جاهز</span></div>
+        </div>
+        <p class="dvs-note">«آخر ظهور» هو آخرُ طلبٍ وصل من الجهاز، لا اتّصالٌ دائم.</p>
+      </section>
+
+      <section class="dvs-card" aria-labelledby="dvsGateH">
+        <div class="dvs-card-head">
+          <span class="dvs-ico" aria-hidden="true"><i class="bi bi-shield-check"></i></span>
+          <h2 id="dvsGateH">من يدخل النظام</h2>
+        </div>
+        <fieldset class="dvs-modes" id="dvsModes" {% if not can_approve %}disabled{% endif %}>
+          <legend>ماذا يحدث لجهازٍ غير مسجّل؟</legend>
+          {% for value, label in modes %}
+          <label class="dvs-mode">
+            <input type="radio" name="dvsMode" value="{{ value }}" {% if value == mode %}checked{% endif %}>
+            <span><b>{{ label }}</b><span>{% if value == 'open' %}كما قبل: أيُّ جهازٍ يدخل بكلمة المرور، والتسجيلُ اختياريّ.{% elif value == 'remind' %}يعمل ويرى شريطاً يطلب تسجيله، ويظهر لك في «أجهزة تطلب الانضمام».{% else %}غيرُ المسجّل يرى صفحة الدخول والكود فقط. جهازُ الخادم مسجّلٌ دائماً.{% endif %}</span></span>
+          </label>
+          {% endfor %}
+        </fieldset>
+        <p class="dvs-note">{% if not server_declared %}لا أثرَ للوضع قبل إعلان الخادم. {% endif %}كلمةُ المرور تبقى الحارس؛ التسجيلُ ينظّم من يتّصل ومن أين. وإن أُغلق الباب عليك: <span class="dvs-mono">python manage.py devices_gate --mode remind</span> على الخادم.</p>
+      </section>
+    </div>
+
+    <section class="dvs-card" aria-labelledby="dvsReqH">
+      <div class="dvs-card-head">
+        <span class="dvs-ico" data-tone="wait" aria-hidden="true"><i class="bi bi-person-raised-hand"></i></span>
+        <h2 id="dvsReqH">أجهزة تطلب الانضمام <span class="dvs-pill" data-tone="wait" id="dvsReqCount">{{ board.counts.requests }}</span></h2>
+      </div>
+      <p class="dvs-note">يظهر هنا كلُّ جهازٍ فتح النظام ولم يُسجَّل. لا نمسح الشبكة: مسحُ العناوين يزعج جدارَ الحماية الذي يديره غيرُنا، والجهازُ يُكتشف حين يفتح النظام.</p>
+      <ul class="dvs-list" id="dvsRequests" aria-live="polite"></ul>
+      <div class="dvs-empty" id="dvsRequestsEmpty" hidden>لا طلباتٍ الآن. حين يفتح أحدٌ النظامَ من جهازٍ غير مسجّل يظهر هنا.</div>
+    </section>
+
+    <section class="dvs-card" aria-labelledby="dvsRegH">
+      <div class="dvs-toolbar">
+        <h2 id="dvsRegH" style="flex:1 1 200px">الأجهزة المسجّلة</h2>
+        <label class="dvs-search">
+          <span class="visually-hidden">ابحث باسم الجهاز أو المستخدم</span>
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <input type="search" class="form-control" id="dvsSearch" placeholder="ابحث باسم الجهاز أو المستخدم…" autocomplete="off">
+        </label>
+      </div>
+      <div class="dvs-filters" role="group" aria-label="تصفية الأجهزة" id="dvsFilters">
+        <button type="button" class="dvs-filter" data-filter="all" aria-pressed="true">الكلّ <span class="n" data-count="all"></span></button>
+        <button type="button" class="dvs-filter" data-filter="now" aria-pressed="false">ظهر الآن <span class="n" data-count="now"></span></button>
+        <button type="button" class="dvs-filter" data-filter="attention" aria-pressed="false">يحتاج انتباهاً <span class="n" data-count="attention"></span></button>
+        <button type="button" class="dvs-filter" data-filter="scan" aria-pressed="false">بماسح <span class="n" data-count="scan"></span></button>
+      </div>
+      <div class="dvs-table-wrap">
+        <table class="dvs-table">
+          <thead><tr><th scope="col">الجهاز</th><th scope="col">المستخدمون</th><th scope="col">آخر عنوان</th><th scope="col">آخر ظهور</th><th scope="col">الماسح</th><th scope="col">وكيل المسح</th><th scope="col"><span class="visually-hidden">إجراءات</span></th></tr></thead>
+          <tbody id="dvsRows"></tbody>
+        </table>
+        <div class="dvs-empty" id="dvsRowsEmpty" hidden><span id="dvsRowsEmptyText">لا جهاز يطابق البحث أو التصفية.</span><button type="button" class="btn btn-sm btn-outline-secondary" id="dvsShowAll">إظهار كلّ الأجهزة</button></div>
+      </div>
+      <p class="dvs-note">العنوانُ للمعرفة فقط ويتغيّر مع الشبكة. ويُحفظ عن كلّ جهاز: نوعُ المتصفّح والنظام، وآخرُ عنوانٍ وظهور، ومن استعمله — لا شيءَ غيرُه.</p>
+    </section>
+
+    <section class="dvs-card" aria-labelledby="dvsKitH">
+      <div class="dvs-card-head">
+        <span class="dvs-ico" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
+        <h2 id="dvsKitH">حزمة التجهيز{% if kit_version %} {{ kit_version }}{% endif %}</h2>
+        {% if package_available %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'device_setup_download' %}">تنزيل LetterSys-Setup</a>{% else %}<span class="dvs-pill">غير منشورة على الخادم بعد</span>{% endif %}
+      </div>
+      <p class="dvs-note">الأجهزةُ الجديدة تأخذها أوّلَ مرّة من المجلّد المشترك بإشرافك؛ وبعدها يأتي الإصلاحُ والتحديثُ من الخادم بزرٍّ في «هذا الجهاز». لا متصفّحَ يثبّت برنامجاً وحده.</p>
+    </section>
+    {{ board|json_script:"dvsBoardData" }}
+  {% else %}
+    {% include "core/devices/_this_device.html" %}
+  {% endif %}
+</div>
+
+{% include "core/devices/_declare_modal.html" %}
+{% if is_admin %}
+<div class="modal fade" id="dvsCodeModal" tabindex="-1" aria-labelledby="dvsCodeTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:580px">
+    <div class="modal-content" dir="rtl">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title h5 fw-bold mb-0" id="dvsCodeTitle">كود انضمام جهازٍ جديد</h2>
+          <div class="dvs-note" id="dvsCodeFor"></div>
+        </div>
+        <button type="button" class="btn-close ms-0" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+      <div class="modal-body d-grid gap-3">
+        <div class="dvs-code-box" id="dvsCodeBox" data-state="waiting">
+          <div class="dvs-digits" id="dvsDigits" role="img" aria-label=""></div>
+          <div class="dvs-timer" id="dvsTimer">
+            <div class="dvs-bar"><span id="dvsBar"></span></div>
+            <div class="dvs-timer-row"><span>صالحٌ لجهازٍ واحد · مرّةً واحدة</span><span>متبقٍّ <b id="dvsClock">10:00</b></span></div>
+          </div>
+        </div>
+        <div role="status" aria-live="polite" id="dvsCodeStatus">
+          <div class="dvs-status" id="dvsWaiting"><span class="dvs-dot" aria-hidden="true"></span> بانتظار إدخاله على الجهاز الجديد…</div>
+          <div class="dvs-joined" id="dvsJoined" hidden><span class="dvs-joined-ico" aria-hidden="true"><i class="bi bi-check-lg"></i></span><div><b id="dvsJoinedName"></b><div class="dvs-note" id="dvsJoinedMeta"></div></div></div>
+          <div class="dvs-callout" data-tone="wait" id="dvsCodeOver" hidden></div>
+        </div>
+        <div class="dvs-readout" id="dvsReadout">
+          <b>اقرأ هذا للموظّف</b>
+          <ol>
+            <li>افتح {% if approved_origin %}<span class="dvs-mono">{{ approved_origin }}</span>{% else %}النظام{% endif %} وادخل بحسابك.</li>
+            <li>اكتب الأرقام الخمسة في «انضمام هذا الجهاز».</li>
+            <li>سمِّ الجهاز، والباقي يُفحص وحده.</li>
+          </ol>
+        </div>
+        <p class="dvs-fine">ثلاثةُ أكوادٍ سارية كحدٍّ أقصى · خمسُ محاولاتٍ خاطئة توقف حسابَ المُدخِل ربعَ ساعة · كلُّ كودٍ يُسجَّل في سجلّ الحركات باسمك.</p>
+      </div>
+      <div class="modal-footer justify-content-start gap-2">
+        <button type="button" class="btn btn-outline-secondary" id="dvsCodeCopy">نسخ الكود</button>
+        <button type="button" class="btn btn-outline-danger" id="dvsCodeCancel">إلغاء الكود</button>
+        <button type="button" class="btn btn-outline-secondary" id="dvsCodeAnother" hidden>كودٌ لجهازٍ آخر</button>
+        <button type="button" class="btn btn-primary ms-auto" data-bs-dismiss="modal">تمّ</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="dvsRenameModal" tabindex="-1" aria-labelledby="dvsRenameTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" dir="rtl" id="dvsRenameForm" novalidate>
+      <div class="modal-header">
+        <h2 class="modal-title h5 fw-bold mb-0" id="dvsRenameTitle">إعادة تسمية الجهاز</h2>
+        <button type="button" class="btn-close ms-0" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+      </div>
+      <div class="modal-body d-grid gap-2">
+        <label for="dvsRenameInput" class="fw-bold">الاسم الجديد</label>
+        <input type="text" class="form-control" id="dvsRenameInput" maxlength="60" required aria-describedby="dvsRenameErr">
+        <div class="text-danger small" id="dvsRenameErr" role="alert"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">حفظ</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إلغاء</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/scan_agent_client.js' %}?v=20261118-devices"></script>
+<script src="{% static 'js/devices_common.js' %}?v=20261118-devices"></script>
+<script src="{% static 'js/devices_page.js' %}?v=20261118-devices"></script>
+{% endblock %}

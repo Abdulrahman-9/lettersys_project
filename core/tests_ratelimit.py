@@ -173,36 +173,6 @@ class DeleteBookRateLimitTests(RateLimitBaseTest):
         self.assertEqual(resp.status_code, 429)
 
 
-# ─── network scan — 3/300s ────────────────────────────────────────────────
-
-
-class NetworkScanRateLimitTests(RateLimitBaseTest):
-    """network_scan_subnet محدود بـ 3 طلبات/5 دقائق (staff فقط)."""
-
-    def setUp(self):
-        super().setUp()
-        self.user.is_staff = True
-        self.user.save()
-
-    def test_exceeds_3_returns_429(self):
-        import json, time
-        now = time.time()
-        cache.set(f"rl:network_scan_subnet:u{self.user.id}", [now] * 3, 300)
-        resp = self.client.post(
-            '/books/api/network/scan-subnet/',
-            data=json.dumps({}),
-            content_type='application/json',
-        )
-        self.assertEqual(resp.status_code, 429)
-
-    def test_non_staff_blocked_before_rate_limit(self):
-        """مستخدم عادي يحصل على 302 redirect (user_passes_test)."""
-        self.user.is_staff = False
-        self.user.save()
-        resp = self.client.post('/books/api/network/scan-subnet/')
-        self.assertIn(resp.status_code, [302, 403])
-
-
 # ─── search_entities — 60/60s ─────────────────────────────────────────────
 
 

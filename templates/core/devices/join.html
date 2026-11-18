@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}انضمام هذا الجهاز{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/devices.css' %}?v=20261118-devices">
+{% endblock %}
+
+{% block content %}
+{% comment %}
+  انضمامُ متصفّحٍ بكودٍ من خمسة أرقام (التصميمُ المعتمد، لوحة Join): الكود ⟵ الاسم ⟵ الفحص ⟵ جاهز.
+  صفحةٌ مفتوحةٌ حتّى في وضع «المسجّلة فقط». المنطقُ في device_join.js، والقواعدُ في الخادم.
+{% endcomment %}
+<div class="dvj" id="deviceJoin" dir="rtl"
+     data-check-url="{% url 'device_join_check' %}"
+     data-finish-url="{% url 'device_join_finish' %}"
+     data-request-url="{% url 'device_join_request' %}"
+     data-me-url="{% url 'device_me' %}"
+     data-report-url="{% url 'device_report' %}"
+     data-info-url="{% url 'scan_agent_info' %}"
+     data-page-url="{% url 'network_settings' %}"
+     data-approved-origin="{{ approved_origin }}"
+     data-kit-version="{{ kit_version }}"
+     data-registered="{{ registered|yesno:'1,0' }}"
+     data-server="{{ server_declared|yesno:'1,0' }}">
+  {% csrf_token %}
+
+  {% if registered %}
+  <section class="dvj-card" aria-labelledby="dvjDoneH">
+    <div class="dvj-done">
+      <span class="dvj-done-ico" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+      <h1 id="dvjDoneH" style="color:var(--lx-done)">هذا الجهاز مسجّلٌ باسم «{{ this_device.name }}»</h1>
+      <p>لا يلزم شيء. ترى حالته وملحقاته في «هذا الجهاز».</p>
+      <a class="btn btn-primary" href="{% url 'network_settings' %}">هذا الجهاز</a>
+    </div>
+  </section>
+  {% elif not server_declared %}
+  <section class="dvj-card" aria-labelledby="dvjNoSrvH">
+    <h1 id="dvjNoSrvH">لم يُعلَن خادمُ النظام بعد</h1>
+    <p class="dvs-note" style="font-size:.9rem">لا يمكن تسجيلُ الأجهزة قبل أن يعلن المديرُ العامّ الخادم. يعمل جهازك كالمعتاد.</p>
+    {% if can_declare %}<div><button type="button" class="btn btn-primary" data-declare-open><i class="bi bi-hdd-network" aria-hidden="true"></i> أنا على الخادم: أعلن هذا الجهاز خادماً</button></div>{% endif %}
+    <div><a href="{% url 'dashboard' %}">العودة إلى النظام</a></div>
+  </section>
+  {% else %}
+  <section class="dvj-card" aria-labelledby="dvjH">
+    <div class="d-grid gap-1">
+      <div class="dvj-steplabel" id="dvjStepLabel">الخطوة 1 من 4</div>
+      <h1 id="dvjH">انضمام هذا الجهاز</h1>
+    </div>
+    <ol class="dvj-steps" aria-label="خطوات الانضمام" id="dvjSteps">
+      <li aria-current="step">الكود</li>
+      <li>اسم الجهاز</li>
+      <li>الفحص</li>
+      <li>جاهز</li>
+    </ol>
+
+    <form class="dvj-pane" id="dvjPaneCode" novalidate>
+      <div class="dvj-facts" aria-label="ما عرفناه عن هذا الجهاز" id="dvjFacts"></div>
+      <div class="d-grid gap-2">
+        <label for="dvjCode" class="dvj-label">الكود من مسؤول النظام</label>
+        <div class="dvj-otp" id="dvjOtp">
+          <div class="dvj-cells" aria-hidden="true">
+            <span class="dvj-cell"></span><span class="dvj-cell"></span><span class="dvj-cell"></span><span class="dvj-cell"></span><span class="dvj-cell"></span>
+          </div>
+          <input id="dvjCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" aria-describedby="dvjCodeHelp dvjCodeErr" autofocus>
+        </div>
+        <div class="dvj-help" id="dvjCodeHelp">خمسة أرقام صالحة عشر دقائق. يمكنك لصقها، والأرقام العربيّة تُقبل.</div>
+        <div id="dvjCodeErr" role="alert"><div class="dvj-err" id="dvjCodeErrBox" hidden><i class="bi bi-exclamation-circle" aria-hidden="true"></i><span id="dvjCodeErrText"></span></div></div>
+      </div>
+      <div class="dvj-row">
+        <button type="submit" class="btn btn-primary px-4" id="dvjConnect" disabled>اتّصل</button>
+        <button type="button" class="btn btn-outline-secondary" id="dvjRequest"{% if requested %} hidden{% endif %}>ليس لديّ كود — أرسل طلباً للمسؤول</button>
+      </div>
+      <div role="status" aria-live="polite"><div class="dvs-callout" data-tone="prog" id="dvjRequested"{% if not requested %} hidden{% endif %}>أُرسل طلبك، وظهر للمسؤول في «أجهزة تطلب الانضمام». اطلب منه الكود.</div></div>
+      {% if can_declare %}<div class="dvj-demo">أنت المدير العامّ: إن كان هذا هو الخادم <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-declare-open>أعلنه خادماً</button> بدل الانضمام.</div>{% endif %}
+    </form>
+
+    <form class="dvj-pane" id="dvjPaneName" novalidate hidden>
+      <div class="dvs-callout" data-tone="prog" style="background:var(--lx-done-bg);border-color:var(--lx-done-line);color:var(--lx-done);font-weight:700"><i class="bi bi-check-lg" aria-hidden="true"></i> قُبل الكود. بقي أن تسمّي الجهاز.</div>
+      <div class="d-grid gap-2">
+        <label for="dvjName" class="dvj-label">اسم هذا الجهاز</label>
+        <input id="dvjName" type="text" class="form-control form-control-lg" maxlength="60" aria-describedby="dvjNameHelp dvjNameErr" autocomplete="off">
+        <div class="dvj-help" id="dvjNameHelp">اسمٌ يعرفه الجميع: القسم ورقمٌ قصير، مثل «استقبال-3». يظهر في قائمة الأجهزة عند المسؤول.</div>
+        <div id="dvjNameErr" role="alert"><div class="dvj-err" id="dvjNameErrBox" hidden><i class="bi bi-exclamation-circle" aria-hidden="true"></i><span id="dvjNameErrText"></span></div></div>
+      </div>
+      <fieldset class="d-grid gap-2 border-0 p-0 m-0">
+        <legend class="dvj-label mb-2" style="float:none">هل بهذا الجهاز ماسحٌ موصول؟</legend>
+        <label class="dvj-choice"><input type="radio" name="has_scanner" value="1" checked> نعم، أمسح من هذا الجهاز</label>
+        <label class="dvj-choice"><input type="radio" name="has_scanner" value="0"> لا، هذا الجهاز لا يمسح</label>
+      </fieldset>
+      <div class="dvj-row">
+        <button type="submit" class="btn btn-primary px-4" id="dvjFinish">متابعة</button>
+        <button type="button" class="btn btn-outline-secondary" id="dvjBack">السابق</button>
+      </div>
+    </form>
+
+    <div class="dvj-pane" id="dvjPaneChecks" hidden>
+      <p class="dvs-note" style="font-size:.88rem">نفحص كلّ شيءٍ وحدنا. لا تحتاج إلّا إلى ما يطلبه سطرٌ أصفر، إن ظهر.</p>
+      <ul class="dvj-checks" id="dvjChecks" aria-live="polite"></ul>
+      <div class="dvj-row">
+        <button type="button" class="btn btn-primary px-4" id="dvjDone" disabled>إنهاء</button>
+        <button type="button" class="btn btn-outline-secondary" id="dvjRecheck">أعد الفحص</button>
+        <span class="dvs-note" id="dvjProgress"></span>
+      </div>
+    </div>
+
+    <div class="dvj-pane" id="dvjPaneDone" hidden>
+      <div class="dvj-done">
+        <span class="dvj-done-ico" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+        <h2 id="dvjDoneTitle" tabindex="-1"></h2>
+        <p id="dvjDoneText"></p>
+        <div class="dvj-row" style="justify-content:center">
+          <a class="btn btn-primary px-4" href="{% url 'dashboard' %}">ابدأ العمل</a>
+          {% if scanner_settings_url %}<a class="btn btn-outline-secondary" href="{{ scanner_settings_url }}">إعدادات الماسح</a>{% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% include "core/devices/_declare_modal.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/scan_agent_client.js' %}?v=20261118-devices"></script>
+<script src="{% static 'js/devices_common.js' %}?v=20261118-devices"></script>
+<script src="{% static 'js/device_join.js' %}?v=20261118-devices"></script>
+{% endblock %}

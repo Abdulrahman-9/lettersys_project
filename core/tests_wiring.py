@@ -71,7 +71,6 @@ KNOWN_UNWIRED = {
     'mail-api-bulk-send':       'إرسالٌ جماعيٌّ بلا واجهة',
     'email-test-smtp':          'الصفحةُ تستعمل mail-api-test-smtp لا هذا',
     'entity-email-info':        'واجهةٌ قديمةٌ لبريد الجهة بلا مستهلك',
-    'network-ping':             'المفردُ بلا مستهلك؛ الجارُ network-ping-all موصول',
     'extraction-quick-start':   'مدخلٌ قديمٌ يُعيد التوجيه — يبقى للروابط المحفوظة',
     'extraction-wizard':        'مدخلٌ قديمٌ يُعيد التوجيه — يبقى للروابط المحفوظة',
     'extraction-results-ui':    'صفحةُ نتائجٍ قديمة بلا مدخل (الحيُّ سطحُ الاستخراج الذكيّ)',

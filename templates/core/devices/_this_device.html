@@ -1,0 +1,52 @@
+{% comment %}«هذا الجهاز» — يُرسم من بيانات الخادم، والفحوصُ الحيّة (الخادم والساعة والوكيل) يملؤها devices_page.js.{% endcomment %}
+<section class="dvs-card" aria-labelledby="dvsMeH" id="dvsMe" data-registered="{% if this_device.status == 'active' %}1{% else %}0{% endif %}" data-phone="{{ this_device.is_phone|yesno:'1,0' }}">
+  <div class="dvs-card-head">
+    <span class="dvs-ico" data-tone="{% if this_device.status == 'active' %}done{% else %}wait{% endif %}" aria-hidden="true"><i class="bi {% if this_device.is_phone %}bi-phone{% else %}bi-display{% endif %}"></i></span>
+    <div style="flex:1 1 320px;min-width:0">
+      <h2 id="dvsMeH" style="font-size:1.25rem">
+        {% if this_device.status == 'active' %}{{ this_device.name }} <span style="color:var(--lx-done)">· مسجّل</span>
+        {% else %}هذا الجهاز غير مسجّل{% endif %}
+      </h2>
+      <div class="dvs-note">
+        {% if this_device %}{{ this_device.platform|default:"متصفّح" }}{% if this_device.joined %} · انضمّ {{ this_device.joined }}{% endif %}{% else %}لم يتعرّف النظامُ على هذا المتصفّح بعد.{% endif %}
+      </div>
+    </div>
+    <button type="button" class="btn btn-outline-secondary" id="dvsRecheck"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> إعادة الفحص</button>
+  </div>
+  {% if this_device.status != 'active' %}
+    {% if server_declared %}
+    <div class="dvs-callout" data-tone="wait">سجّله بكودٍ من خمسة أرقام يعطيك إيّاه المسؤول — دقيقةٌ واحدة. <a href="{% url 'device_join' %}" class="fw-bold">انضمام هذا الجهاز</a></div>
+    {% else %}
+    <div class="dvs-callout" data-tone="prog">لم يُعلَن خادمُ النظام بعد، فلا تسجيلَ الآن. يعمل جهازك كالمعتاد.</div>
+    {% endif %}
+  {% endif %}
+</section>
+
+<div class="dvs-grid2">
+  <section class="dvs-card" aria-labelledby="dvsLinkH">
+    <h2 id="dvsLinkH">اتّصال هذا الجهاز</h2>
+    <ul class="dvs-list" id="dvsLinkChecks">
+      <li class="dvs-req" data-check="server"><div class="dvs-req-text"><span class="dvs-req-title">الخادم</span><span class="dvs-req-meta" data-detail>يُفحص…</span></div><span class="dvs-pill" data-pill>…</span></li>
+      <li class="dvs-req" data-check="origin"><div class="dvs-req-text"><span class="dvs-req-title">الرابط</span><span class="dvs-req-meta" data-detail>يُفحص…</span></div><span class="dvs-pill" data-pill>…</span></li>
+      <li class="dvs-req" data-check="clock"><div class="dvs-req-text"><span class="dvs-req-title">ساعة الجهاز</span><span class="dvs-req-meta" data-detail>يُفحص…</span></div><span class="dvs-pill" data-pill>…</span></li>
+      <li class="dvs-req"><div class="dvs-req-text"><span class="dvs-req-title">عنوان الجهاز على الشبكة</span><span class="dvs-req-meta"><span class="dvs-mono">{{ this_device.ip|default:"—" }}</span> · للمعرفة فقط، ويتغيّر مع الشبكة</span></div><span class="dvs-pill">للعرض</span></li>
+      <li class="dvs-req" data-check="app"><div class="dvs-req-text"><span class="dvs-req-title">طريقةُ الفتح</span><span class="dvs-req-meta" data-detail>…</span></div><span class="dvs-pill" data-pill>…</span></li>
+    </ul>
+  </section>
+
+  <section class="dvs-card" aria-labelledby="dvsKitMeH" id="dvsKitMe">
+    <h2 id="dvsKitMeH">ملحقات هذا الجهاز</h2>
+    <div class="dvs-callout" data-tone="prog" id="dvsPhoneNote" hidden>هذا هاتف: البحثُ والقراءةُ والمتابعةُ متاحة، والمسحُ من حاسوبٍ بماسح. لا وكيلَ ولا تنزيلَ على الهاتف.</div>
+    <ul class="dvs-list" id="dvsKitChecks">
+      <li class="dvs-req" data-check="agent"><div class="dvs-req-text"><span class="dvs-req-title">وكيل المسح</span><span class="dvs-req-meta" data-detail>يُفحص…</span></div><span class="dvs-pill" data-pill>…</span></li>
+      <li class="dvs-req" data-check="naps2"><div class="dvs-req-text"><span class="dvs-req-title">برنامج المسح NAPS2</span><span class="dvs-req-meta" data-detail>يُفحص…</span></div><span class="dvs-pill" data-pill>…</span></li>
+      <li class="dvs-req" data-check="scanner"><div class="dvs-req-text"><span class="dvs-req-title">الماسح</span><span class="dvs-req-meta" data-detail>{% if scanner_settings_url %}الاكتشافُ والتجربةُ في قسم الماسح.{% else %}—{% endif %}</span></div>{% if scanner_settings_url %}<a class="fw-bold small" href="{{ scanner_settings_url }}">إعدادات الماسح</a>{% endif %}</li>
+    </ul>
+    <p class="dvs-note"><a href="{% url 'device_setup' %}">تجهيز هذا الجهاز وربطُ وكيل المسح</a> — للجهاز المُدار الذي يطلب ربطَه بالشركة.</p>
+    <div class="dvs-row" id="dvsUpdateRow" hidden>
+      {% if package_available %}<a class="btn btn-primary btn-sm" href="{% url 'device_setup_download' %}">تنزيل التحديث</a>{% endif %}
+      <span class="dvs-note">{% if package_available %}ملفٌّ واحد من الخادم: افتحه مرّةً، ثمّ أعد الفحص.{% else %}اطلب من المسؤول تشغيل LetterSys-Setup من المجلّد المشترك.{% endif %}</span>
+    </div>
+  </section>
+</div>
+<p class="dvs-note">يُحفظ عن هذا الجهاز في النظام: نوعُ المتصفّح والنظام، وآخرُ عنوانٍ وظهور، ومن استعمله، وما تفحصه هذه الصفحةُ من وكيل المسح — لا شيءَ غيرُه.</p>

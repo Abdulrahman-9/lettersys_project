@@ -233,6 +233,13 @@ def can_enroll_workstation(user) -> bool:
     return bool(user.is_authenticated and user.is_active)
 
 
+def can_manage_devices(user) -> bool:
+    """«الشبكة والأجهزة»: إعلانُ الخادم وإصدارُ أكواد الانضمام وقبولُ الطلبات وتغييرُ وضع البوّابة
+    — للمدير العامّ وحده (قرارُ المالك 2026‑11‑18)، و``core.devices.service`` يزيد عليه شرطَ
+    جهاز الخادم. وكلُّ مستخدمٍ يرى «هذا الجهاز» ويطلب الانضمام."""
+    return is_privileged(user)
+
+
 def can_restore_system(user) -> bool:
     """أيحقّ له **استعادةُ نسخةٍ مشفّرةٍ من هذا النظام** إلى قاعدةٍ جديدة
     (``/books/restore-system/``)؟ — لمدير النظام وحدَه (ملاحظةُ التكليف 2026‑10‑07).

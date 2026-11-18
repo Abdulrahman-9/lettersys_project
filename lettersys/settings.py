@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     # تطبيقات المشروع
     'core.apps.CoreConfig',
     'core.workstations.apps.WorkstationsConfig',
+    'core.devices.apps.DevicesConfig',
 ]
 
 # ─── الـ Middleware ───────────────────────────────────────────────────────────
@@ -79,6 +80,8 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'core.middleware.force_password_change.FirstLoginPasswordChangeMiddleware',
+    # الشبكة والأجهزة: يعرف متصفّحَ الطلب ويطبّق وضعَ البوّابة (بعد تغيير كلمة المرور الإلزاميّ)
+    'core.devices.middleware.DeviceMiddleware',
     'core.reservation_identity.ReservationIdentityMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -109,6 +112,8 @@ TEMPLATES = [
                 'core.context_processors.system_settings',
                 # مخصّص — وضع التضمين (?embed=1) لمركز الإعدادات
                 'core.context_processors.embed_mode',
+                # مخصّص — شريطُ «هذا الجهاز غير مسجّل» في وضع التنبيه
+                'core.devices.context_processors.device_banner',
             ],
         },
     },
@@ -410,6 +415,12 @@ WORKSTATION_SETUP_PACKAGE = Path(os.environ.get(
     'LETTERSYS_WORKSTATION_PACKAGE',
     str(BASE_DIR / 'var' / 'workstation' / 'LetterSys-Workstation-Setup.exe'),
 ))
+# نسخةُ عُدّة التجهيز الموزَّعة (الوكيل): «تحديثٌ متاح» يُقاس بها لا بنسخة المستودع (حكمُ فيبل).
+WORKSTATION_KIT_VERSION = os.environ.get('LETTERSYS_WORKSTATION_KIT_VERSION', '').strip()
+# مسارُ المجلّد المشترك كما يكتبه الموظّف (يُعرض للنسخ)، مثل \\FOLLOW2\share\LetterSys — فارغٌ = لا يُعرض.
+WORKSTATION_SHARE_PATH = os.environ.get('LETTERSYS_WORKSTATION_SHARE', '').strip()
+# كودُ إعلان الخادم يُكتب هنا على قرص الخادم (خارج المجلّد المشترك).
+DEVICES_DECLARE_CODE_FILE = os.environ.get('LETTERSYS_DECLARE_CODE_FILE', '').strip()
 _AGENT_ORIGINS = f"http://127.0.0.1:{_AGENT_PORT} http://localhost:{_AGENT_PORT}"
 SECURE_CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "

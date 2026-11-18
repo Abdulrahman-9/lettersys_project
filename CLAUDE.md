@@ -253,6 +253,13 @@ Commands: `rebase_book_numbers` (idempotent, `--dry-run` by default, `--undo CSV
 - `sender_number`: regex بحدود رقمية بدلاً من `icontains` أو `=` مطلق
 - إضافة `title__icontains` + `margin__icontains` لكلا مسارَي البحث (رقمي ونصي) وكـ fallback في `_pg_search`
 
+### آخر تعديلات (2026-11-18) — «الشبكة والأجهزة» (الدفعة 1)
+- **صفحةُ الرئيس/التابع القديمة حُذفت** (`network_views.py` و`device_identity.py` وقالبُها وسكربتُها ونقطةُ `api/network/ping` العامّة)؛ المسارُ `network_settings` باقٍ ويعرض `core/devices`. نموذجا `NetworkNode`/`NetworkSettings` باقيان حتّى هجرةِ حذفٍ لاحقة.
+- **`core/devices`** تطبيقٌ مستقلّ (هجرتُه `devices.0001`): `BrowserDevice` (متصفّح × مستخدم ويندوز، كوكي `lx_device`، التوكِن SHA-256) · `PairingCode` (5 أرقام HMAC، 10 دقائق، مرّةً واحدة، 3 ساريةٌ كحدٍّ أقصى، حرٌّ أو مربوطٌ بطلب) · `DeviceAttempt` (الحدّ: 5/15 د للحساب و30/10 د للجميع — في القاعدة لا الكاش) · `DevicePolicy` (الوضع open/remind/only + جهازُ الخادم).
+- **قرارُ المالك:** الخادمُ = الحاسوبُ الذي يعمل عليه النظام، يعلنه المديرُ العامّ مرّةً من عليه بكودٍ من 8 أرقام يكتبه الخادمُ على قرصه (`DEVICES_DECLARE_CODE_FILE`)؛ والأكوادُ والموافقاتُ من جهاز الخادم وحده؛ والوضعُ عند الإطلاق «تنبيه». **لا شيءَ يحدث قبل إعلان الخادم.**
+- **القواعدُ في `core/devices/service.py` وحده.** المخرجُ إن أُغلق الباب: `python manage.py devices_gate --mode remind` (و`--declare-code` لكوكي خادمٍ ضائع).
+- التسجيلُ **تنظيمٌ لا قفل**: الكوكي يُنسخ، وكلمةُ المرور تبقى الحارس. والكوكي لكلّ اسم مضيف: أعلن الخادم **بعد** الانتقال إلى `https://follow2`.
+
 ### مُعلَّق / قادم
 - فهرس pg_trgm على `our_number` لتسريع `endswith` في قواعد البيانات الكبيرة
 - إضافة `document_type__icontains` للبحث النصي

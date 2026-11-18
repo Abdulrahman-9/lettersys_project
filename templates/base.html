@@ -260,7 +260,7 @@
             <ul class="dropdown-menu app-sidebar-account-menu">
               {% if not nav.password_change_required %}
               <li><a class="dropdown-item" href="{% url 'password_change' %}"><i class="bi bi-key" aria-hidden="true"></i>تغيير كلمة المرور</a></li>
-              <li><a class="dropdown-item" href="{% url 'device_setup' %}"><i class="bi bi-pc-display" aria-hidden="true"></i>تجهيز هذا الجهاز</a></li>
+              <li><a class="dropdown-item" href="{% url 'network_settings' %}"><i class="bi bi-pc-display" aria-hidden="true"></i>هذا الجهاز</a></li>
               <li><hr class="dropdown-divider"></li>
               {% endif %}
               <li>
@@ -277,6 +277,7 @@
 
       <main class="app-main" id="main" tabindex="-1">
     {% endif %}
+    {% if device_banner and not is_embed %}{% include "core/devices/_banner.html" %}{% endif %}
 
     {% block content %}{% endblock %}
 
