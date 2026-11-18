@@ -1,55 +1,66 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}الأدوار والصلاحيّات{% endblock %}
+{% comment %}
+  الدفعة 3أ (11-18) على النموذج المعتمد: المصفوفةُ تتمرّر في إطارها فيثبت رأسُها وعمودُها الأوّل (الثباتُ في
+  النافذة لا يعمل: الجسمُ مقصوصٌ أفقيّاً والشريطُ العلويّ ثابت)؛ عمودُ مدير النظام سطر؛ وما لم يُربط حارسُه في
+  «قادمة» آخرَ الصفحة. الدورُ رابطٌ إلى حامليه، والاستثناءُ رابطٌ إلى أصحابه. الحفظُ كما كان (role_matrix.js).
+{% endcomment %}
 {% block content %}
-<form class="sa-page" method="post" id="rmForm">
+<form class="sa-page rm-page" method="post" id="rmForm">
   {% csrf_token %}
   <nav class="sa-crumb" aria-label="مسار الصفحة"><a href="{% url 'system_accounts' %}">الحسابات والأدوار</a> / <span aria-current="page">الأدوار والصلاحيّات</span></nav>
   <div class="sa-head">
-    <div><h1>الأدوار والصلاحيّات</h1><p>ما يفعله كلّ دور. التعديل هنا يسري على كلّ من يحمل الدور، والاستثناء لشخص واحد من حسابه.</p></div>
+    <div><h1>الأدوار والصلاحيّات</h1><p>ما يفعله كلّ دور. التعديل هنا يسري على كلّ من يحمل الدور، والاستثناء لشخصٍ واحد من محرّر حسابه.</p></div>
+    <span class="sa-grow"></span>
     {% if matrix.changed %}<button type="submit" class="sa-btn" name="reset" value="all" data-rm-reset="all" data-rm-count="{{ matrix.changed }}"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>رجوع إلى المعتمد كلّه</button>{% endif %}
   </div>
 
-  <p class="rm-note" role="note"><i class="bi bi-info-circle-fill" aria-hidden="true"></i><span><b>الصلاحيّة لا تُخرج أحداً عن نطاقه.</b> من يُمنح فعلاً يمارسه على كتب نطاقه فقط: قسمه وشُعبه وما أُحيل إليه. والسرّيّ لا يُفتح بمنحٍ من هنا.<br><b>يسري التعديل الآن على:</b> {{ wired_text }}. وبقيّة الصفوف تعرض ما ستكون عليه، وتُفتح للتعديل حين يُربط حارسها؛ وحتّى ذلك تعمل بالأدوار الحاليّة.</span></p>
+  <ul class="rm-roles" aria-label="الأدوار وحاملوها">
+    {% for r in matrix.roles %}<li><a class="rm-chip" href="{{ r.url }}">{{ r.label }}<small>{{ r.holders_text }}<span aria-hidden="true"> ←</span></small></a></li>{% endfor %}
+  </ul>
+  <p class="rm-admin"><i class="bi bi-shield-check" aria-hidden="true"></i>مدير النظام يستطيع كلّ شيء، فلا عمود له هنا ({{ admins_text }}).</p>
+  <details class="rm-note"><summary>الصلاحيّة لا تُخرج أحداً عن نطاقه</summary>
+    <p>من يُمنح فعلاً يمارسه على كتب نطاقه فقط: قسمه وشُعبه وما أُحيل إليه. والسرّيّ لا يُفتح بمنحٍ من هنا. والصفوف التي لم يُربط حارسها مجموعةٌ في «قادمة» آخر الصفحة، وتُفتح للتعديل حين يُربط؛ وحتّى ذلك تعمل بالأدوار الحاليّة.</p>
+  </details>
+  <nav class="rm-jump" aria-label="مجموعات الصلاحيّات">{% for g in groups %}<a href="#grp-{{ forloop.counter }}">{{ g.name }}</a>{% endfor %}</nav>
+  <ul class="rm-legend" aria-label="دليل الخانات">
+    <li><span class="rm-cell on" aria-hidden="true"><i class="bi bi-check-lg"></i>نعم</span>يستطيع</li>
+    <li><span class="rm-cell" aria-hidden="true"><i class="bi bi-dash"></i>لا</span>لا يستطيع</li>
+    <li><span class="rm-cell lk on" aria-hidden="true"><i class="bi bi-lock-fill"></i>نعم</span>مقفل (قرارك)</li>
+    <li><span class="rm-dot" aria-hidden="true"></span>معدَّلة عن المعتمد</li>
+    <li><span class="rm-cell on pending" aria-hidden="true"><i class="bi bi-check-lg"></i>نعم<span class="rm-tag">لم تُحفظ</span></span>تنتظر الحفظ</li>
+  </ul>
 
-  <section class="sa-card rm-card" aria-labelledby="rmTitle">
-    <h2 class="visually-hidden" id="rmTitle">مصفوفة الأدوار</h2>
-    <ul class="rm-legend" aria-label="دليل الخلايا">
-      <li><span class="rm-cell on" aria-hidden="true"><i class="bi bi-check-lg"></i></span>يستطيع</li>
-      <li><span class="rm-cell" aria-hidden="true"><i class="bi bi-dash"></i></span>لا يستطيع</li>
-      <li><span class="rm-cell lk on" aria-hidden="true"><i class="bi bi-check-lg"></i></span><span class="rm-cell lk" aria-hidden="true"><i class="bi bi-dash"></i></span>مقفل لا يُعدَّل</li>
-      <li><span class="rm-cell on mod" aria-hidden="true"><i class="bi bi-check-lg"></i></span>معدَّلة عن المعتمد</li>
-      <li><span class="rm-cell on pending" aria-hidden="true"><i class="bi bi-check-lg"></i></span>لم تُحفظ بعد</li>
-      <li><span class="rm-cell nw on" aria-hidden="true"><i class="bi bi-check-lg"></i></span>لم يُربط حارسها بعد</li>
-    </ul>
-    <div>
-      <table class="rm">
-        <caption class="visually-hidden">الصفوف صلاحيّات والأعمدة أدوار. انقر خليّةً لتقلبها ثمّ احفظ.</caption>
-        <thead><tr>
-          <th scope="col">الصلاحيّة</th>
-          <th scope="col">مدير النظام<small>{{ admins_text }}</small></th>
-          {% for r in matrix.roles %}<th scope="col" data-role="{{ r.key }}" data-label="{{ r.label }}" data-n="{{ r.holders }}">{{ r.label }}<small>{{ r.holders_text }}</small></th>{% endfor %}
-        </tr></thead>
-        {% for g in matrix.groups %}
-        <tbody>
-          <tr class="rm-group"><th scope="rowgroup" colspan="{{ columns }}">{{ g.name }}</th></tr>
-          {% for row in g.rows %}
-          <tr id="cap-{{ row.key }}" data-key="{{ row.key }}" data-label="{{ row.label }}">
-            <th scope="row"><span class="rm-label">{{ row.label }}{% if row.locked %} <i class="bi bi-lock-fill" role="img" aria-label="مقفل"></i>{% elif not row.wired %}<small class="rm-nw">لم يُربط بعد</small>{% endif %}</span>
-              {% if row.changed %}<span class="rm-changed"><small>{{ row.last_text }}</small><button type="submit" class="rm-reset" name="reset" value="{{ row.key }}" data-rm-reset="{{ row.label }}" data-rm-count="{{ row.changed }}">رجوع إلى المعتمد</button></span>{% endif %}</th>
-            <td><span class="rm-cell lk on" role="img" aria-label="مدير النظام: يستطيع، مقفل"><i class="bi bi-check-lg" aria-hidden="true"></i></span></td>
-            {% for c in row.cells %}
-            <td>{% if c.locked %}<span class="rm-cell lk{% if c.allowed %} on{% endif %}" role="img" aria-label="{{ row.label }} لدور {{ c.label }}: {% if c.allowed %}يستطيع{% else %}لا يستطيع{% endif %}، مقفل"><i class="bi {% if c.allowed %}bi-check-lg{% else %}bi-dash{% endif %}" aria-hidden="true"></i></span>
-              {% elif not row.wired %}<span class="rm-cell nw{% if c.allowed %} on{% endif %}" role="img" aria-label="{{ row.label }} لدور {{ c.label }}: {% if c.allowed %}يستطيع{% else %}لا يستطيع{% endif %}، لم يُربط حارسها بعد"><i class="bi {% if c.allowed %}bi-check-lg{% else %}bi-dash{% endif %}" aria-hidden="true"></i></span>
-              {% else %}<button type="submit" name="change" value="{{ c.role }}:{{ row.key }}:{{ c.allowed|yesno:'0,1' }}" class="rm-cell{% if c.allowed %} on{% endif %}{% if c.row %} mod{% endif %}" data-role="{{ c.role }}" data-saved="{{ c.allowed|yesno:'1,0' }}" aria-pressed="{{ c.allowed|yesno:'true,false' }}" aria-label="{{ row.label }} لدور {{ c.label }}{% if c.row %}، معدَّلة عن المعتمد{% endif %}"><i class="bi {% if c.allowed %}bi-check-lg{% else %}bi-dash{% endif %}" aria-hidden="true"></i></button>{% if c.row %}<span class="rm-mark" aria-hidden="true">معدَّلة</span>{% endif %}{% endif %}</td>
-            {% endfor %}
-          </tr>
-          {% endfor %}
-        </tbody>
-        {% endfor %}
+  <div class="rm-frame" id="rmFrame" tabindex="0" role="region" aria-label="مصفوفة الأدوار">
+    <table class="rm" id="rmTable">
+      <caption class="visually-hidden">الصفوف صلاحيّات والأعمدة أدوار. انقر خانةً لتقلبها ثمّ احفظ.</caption>
+      <thead><tr>
+        <th scope="col">الصلاحيّة</th>
+        {% for r in matrix.roles %}<th scope="col" id="role-{{ r.key }}" data-role="{{ r.key }}" data-label="{{ r.label }}" data-n="{{ r.holders }}">{{ r.label }}<a href="{{ r.url }}">{{ r.holders_text }}<span class="visually-hidden"> بدور {{ r.label }}</span><span aria-hidden="true"> ←</span></a></th>{% endfor %}
+      </tr></thead>
+      {% for g in groups %}
+      <tbody>
+        <tr class="rm-group" id="grp-{{ forloop.counter }}"><th scope="rowgroup">{{ g.name }}</th><td colspan="{{ matrix.roles|length }}"></td></tr>
+        {% for row in g.rows %}{% include 'core/system_admin/_role_row.html' %}{% endfor %}
+      </tbody>
+      {% endfor %}
+    </table>
+  </div>
+
+  {% if later %}
+  <details class="sa-card rm-later" id="rmLater">
+    <summary>قادمة: صلاحيّاتٌ لم يُربط حارسها بعد ({{ later|length }})</summary>
+    <p>تُعرض كما ستكون، ولا تُعدَّل حتّى يُربط حارسها؛ وحتّى ذلك تعمل بالأدوار الحاليّة.</p>
+    <div class="sa-scroll">
+      <table class="rm rm-soon">
+        <caption class="visually-hidden">صلاحيّاتٌ لم يُربط حارسها بعد: تُعرض ولا تُعدَّل.</caption>
+        <thead><tr><th scope="col">الصلاحيّة</th>{% for r in matrix.roles %}<th scope="col">{{ r.label }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in later %}{% include 'core/system_admin/_role_row.html' %}{% endfor %}</tbody>
       </table>
     </div>
-  </section>
+  </details>
+  {% endif %}
 
   <div class="rm-bar" id="rmBar" hidden>
     <span id="rmBarText" role="status" aria-live="polite"></span>
@@ -68,4 +79,4 @@
   </div>
 </dialog>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/role_matrix.js' %}?v=20261108-roles1" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/role_matrix.js' %}?v=20261118-batch3a" defer></script>{% endblock %}

@@ -113,6 +113,13 @@ a.sa-acc-name:focus-visible { outline: 2px solid var(--sa-amber); outline-offset
 .sa-sort:hover, .sa-sort:focus-visible { color: var(--sa-ink) !important; }
 .sa-acc-status { margin-bottom: .6rem; }
 .sa-acc-status b { font-variant-numeric: tabular-nums; }
+/* الطريقُ إلى المصفوفة وبالعكس (الدفعة 3أ): تصفيةُ الاستثناء ودورُ التصفية */
+.sa-acc-context { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1rem; margin: 0 0 .6rem; color: var(--sa-soft); font-size: .82rem; font-weight: 700; }
+.sa-acc-context span { display: inline-flex; align-items: center; gap: .4rem; color: var(--sa-ink); }
+.sa-acc-context i { color: var(--lx-pri); }
+.sa-acc-context a { color: var(--lx-pri); text-decoration: none; }
+.sa-acc-note { color: var(--lx-wait); font-size: .78rem; font-weight: 700; }
+.sa-acc-context a:hover { text-decoration: underline; }
 .sa-count { display: inline-block; margin-inline-start: .35rem; padding: 0 .55rem; border-radius: 99px; background: var(--lx-surface-2); color: var(--sa-mute); font-size: .8rem; font-weight: 800; vertical-align: middle; font-variant-numeric: tabular-nums; }
 .sa-scope { display: inline-flex; align-items: center; gap: .4rem; width: fit-content; margin: 0; padding: .3rem .8rem; border: 1px solid var(--sa-line); border-radius: 99px; background: var(--lx-surface-2); color: var(--sa-soft); font-size: .82rem; font-weight: 700; }
 .sa-empty { margin: 0; padding: .6rem 0; color: var(--sa-mute); font-size: .84rem; }
@@ -191,56 +198,106 @@ a.sa-acc-name:focus-visible { outline: 2px solid var(--sa-amber); outline-offset
 .sa-rows > a { transition: background-color .15s; border-radius: 8px; padding-inline: .4rem; }
 .sa-rows > a:hover { background: var(--lx-surface-2); text-decoration: none; }
 
-/* مصفوفة الأدوار */
-.rm-note { display: flex; gap: .6rem; align-items: flex-start; margin: 0; padding: .75rem 1rem; border: 1px solid var(--sa-line); border-radius: 12px; background: #fff; color: var(--sa-soft); font-size: .84rem; line-height: 1.8; }
-.rm-note > i { color: var(--sa-amber); font-size: 1rem; }
-.rm-note b { color: var(--sa-ink); }
-.rm-card { padding: .5rem .75rem .75rem; }
-.rm-legend { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; margin: 0; padding: .35rem .25rem .7rem; list-style: none; color: var(--sa-soft); font-size: .76rem; font-weight: 700; }
-.rm-legend li { display: inline-flex; align-items: center; gap: .35rem; }
-.rm-legend .rm-cell { width: 1.3rem; height: 1.3rem; border-radius: 5px; font-size: .72rem; cursor: default; }
-.rm { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .84rem; }
-.rm thead th { position: sticky; top: 0; z-index: 1; padding: .5rem .3rem; border-bottom: 2px solid var(--sa-line); background: #fff; color: var(--sa-ink); font-size: .76rem; font-weight: 800; text-align: center; line-height: 1.35; vertical-align: bottom; }
-.rm thead th small { display: block; color: var(--sa-mute); font-size: .68rem; font-weight: 700; }
-.rm thead th:first-child { width: 26%; text-align: start; padding-inline-start: .5rem; }
-.rm td { padding: .28rem .3rem; border-bottom: 1px solid var(--lx-line); text-align: center; }
-.rm tbody th[scope="row"] { padding: .35rem .5rem; border-bottom: 1px solid var(--lx-line); color: var(--sa-ink); font-weight: 700; text-align: start; }
-.rm tbody th[scope="row"] .bi-lock-fill { color: var(--sa-mute); font-size: .72rem; }
-.rm tbody tr[id] { scroll-margin-top: 6rem; }
-.rm tbody tr:target th[scope="row"] { box-shadow: inset -3px 0 0 var(--sa-amber); }
-.rm .rm-group th { padding: .7rem .5rem .25rem; border-bottom: 1px solid var(--sa-line); color: var(--sa-amber); font-size: .74rem; font-weight: 800; text-align: start; }
+/* مصفوفة الأدوار — الدفعة 3أ (11-18) على النموذج المعتمد. الثباتُ في النافذة لا يعمل (الجسمُ مقصوصٌ أفقيّاً
+   والشريطُ العلويّ ثابت)، فالمصفوفةُ تتمرّر في إطارها ويثبت فيه رأسُها وعمودُها الأوّل؛ وكلُّ خانةٍ رمزٌ وكلمة. */
+.rm-roles { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.rm-chip { display: inline-flex; align-items: baseline; gap: .45rem; padding: .35rem .85rem; border: 1px solid var(--sa-line); border-radius: 99px; background: #fff; color: var(--sa-ink); font-size: .84rem; font-weight: 800; text-decoration: none; transition: border-color var(--lx-dur-1) ease; }
+.rm-chip small { color: var(--sa-mute); font-size: .76rem; font-weight: 700; }
+.rm-chip:hover { border-color: var(--lx-pri); color: var(--sa-ink); text-decoration: none; }
+.rm-admin { display: flex; align-items: center; gap: .5rem; margin: 0; color: var(--sa-mute); font-size: .84rem; font-weight: 600; }
+.rm-admin > i { color: var(--lx-pri); }
+.rm-note { padding: .55rem 1rem; border: 1px solid var(--sa-line); border-radius: 12px; background: #fff; font-size: .86rem; }
+.rm-note summary { width: fit-content; color: var(--lx-pri); font-weight: 800; cursor: pointer; }
+.rm-note p { max-width: 74ch; margin: .4rem 0 .15rem; color: var(--sa-soft); line-height: 1.8; }
+.rm-jump { display: flex; flex-wrap: wrap; gap: .4rem; }
+.rm-jump a { padding: .2rem .75rem; border-radius: 99px; background: var(--lx-surface-2); color: var(--sa-soft); font-size: .8rem; font-weight: 800; text-decoration: none; }
+.rm-jump a:hover { background: var(--lx-pri-soft); color: var(--lx-pri-strong); }
+.rm-legend { display: flex; flex-wrap: wrap; gap: .45rem 1.1rem; margin: 0; padding: 0; list-style: none; color: var(--sa-soft); font-size: .8rem; font-weight: 700; }
+.rm-legend li { display: inline-flex; align-items: center; gap: .4rem; }
+.rm-legend .rm-cell { cursor: default; }
+.rm-legend .rm-tag { position: static; margin-inline-start: .1rem; }
+.rm-dot { display: inline-block; flex: none; width: .5rem; height: .5rem; border-radius: 50%; background: var(--lx-accent); }
+
+/* الإطار: ارتفاعُه ما بين الشريط العلويّ وشريط الحفظ، فإذا وصل إليه التمريرُ ظهر كلُّه (لا يُحجب المركَّز) */
+.rm-frame { position: relative; max-height: max(18rem, calc(100dvh - var(--lx-topbar-h) - 8rem)); overflow: auto; border: 1px solid var(--sa-line); border-radius: 14px; background: #fff; }
+.rm-frame:focus-visible { outline: 3px solid var(--lx-pri-strong); outline-offset: 2px; }
+/* المسافةُ مقيسةٌ في role_matrix.js: الصفُّ والخانةُ لا يختبئان تحت الرأس ولا تحت العمود الأوّل */
+.rm-frame tbody tr, .rm-frame .rm-cell { scroll-margin-top: var(--rm-head, 4rem); scroll-margin-inline-start: var(--rm-first, 13rem); }
+.rm-frame tbody th :is(a, button) { scroll-margin-top: var(--rm-head, 4rem); }
+.rm-frame thead th a { scroll-margin-inline-start: var(--rm-first, 13rem); }
+.rm { width: 100%; min-width: 46rem; border-collapse: separate; border-spacing: 0; font-size: .84rem; }
+.rm thead th { position: sticky; top: 0; z-index: 3; padding: .55rem .35rem; border-bottom: 2px solid var(--sa-line); background: #fff; color: var(--sa-ink); font-size: .78rem; font-weight: 800; line-height: 1.35; text-align: center; vertical-align: bottom; }
+.rm thead th a { display: block; margin-top: .15rem; color: var(--lx-pri); font-size: .72rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.rm thead th a:hover { text-decoration: underline; }
+.rm thead th:first-child { inset-inline-start: 0; z-index: 4; min-width: 13rem; padding-inline-start: .8rem; text-align: start; }
+.rm tbody th { position: sticky; inset-inline-start: 0; z-index: 2; padding: .45rem .8rem; border-bottom: 1px solid var(--lx-line); background: #fff; color: var(--sa-ink); font-weight: 700; text-align: start; }
+.rm td { padding: .4rem .3rem; border-bottom: 1px solid var(--lx-line); text-align: center; }
+.rm .rm-group > * { background: var(--lx-surface-2); }
+.rm .rm-group th { padding: .35rem .8rem; color: var(--lx-pri); font-size: .8rem; font-weight: 800; }
+.rm tbody tr:not(.rm-group):hover > * { background: var(--lx-pri-soft); }
+.rm tbody tr:target > th { box-shadow: inset -3px 0 0 var(--lx-accent); }
+.rm .rm-col-on { background: var(--lx-pri-soft); }
+.rm thead th.rm-col-on { box-shadow: inset 0 -3px 0 var(--lx-accent); }
+.rm-ex { display: block; width: fit-content; color: var(--lx-pri); font-size: .72rem; font-weight: 700; text-decoration: none; }
+.rm-ex:hover { text-decoration: underline; }
 .rm-changed { display: flex; flex-wrap: wrap; align-items: center; gap: .1rem .5rem; margin-top: .1rem; }
 .rm-changed small { color: var(--sa-mute); font-size: .7rem; font-weight: 600; }
-.rm-reset { padding: 0 .4rem; border: 0; border-radius: 6px; background: var(--sa-tile); color: var(--sa-amber); font: inherit; font-size: .7rem; font-weight: 800; cursor: pointer; }
+.rm-reset { padding: 0 .4rem; border: 0; border-radius: 6px; background: var(--sa-tile); color: var(--lx-pri-strong); font: inherit; font-size: .7rem; font-weight: 800; cursor: pointer; }
 .rm-reset:hover { background: var(--lx-pri-soft); }
-.rm-cell { display: inline-grid; place-items: center; width: 1.8rem; height: 1.8rem; padding: 0; border: 1px solid var(--lx-line-strong); border-radius: 7px; background: #fff; color: var(--lx-mute); font-size: .92rem; line-height: 1; cursor: pointer; }
+
+/* الخانة: رمزٌ وكلمة. المقفلةُ قفلٌ وكلمة، والمعدَّلةُ نقطة، وما لم يُحفظ إطارٌ متقطّعٌ وكلمةٌ فوق الخانة
+   لا بجانبها — فلا يتّسع العمودُ ولا تقفز الأعمدةُ عند النقر (فيبل 11-18) */
+.rm-cell { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; min-width: 4.4rem; min-height: 2rem; padding: 0 .5rem; border: 1px solid var(--lx-line-strong); border-radius: 8px; background: #fff; color: var(--sa-mute); font: inherit; font-size: .78rem; font-weight: 800; line-height: 1; cursor: pointer; touch-action: manipulation; }
+.rm-cell > .bi { font-size: .9rem; }
 button.rm-cell:hover { border-color: var(--lx-pri); }
 .rm-cell.on { border-color: var(--lx-done-line); background: var(--lx-done-bg); color: var(--sa-ok); }
-.rm-cell.lk { border-color: transparent; background: var(--lx-surface-2); color: var(--lx-mute); cursor: default; }
-.rm-cell.lk.on { background: var(--lx-line); color: var(--lx-ink); }
-.rm-cell.mod { outline: 2px solid var(--sa-amber); outline-offset: 1px; }
-/* لم يُربط حارسُها: تُعرض ولا تُعدَّل */
-.rm-cell.nw { border-style: dashed; background: var(--lx-surface-2); color: var(--lx-mute); cursor: default; }
-.rm-cell.nw.on { border-color: var(--lx-done-line); color: var(--lx-done); }
-.rm-nw { margin-inline-start: .45rem; padding: 0 .4rem; border-radius: 6px; background: var(--lx-surface-2); color: var(--sa-mute); font-size: .66rem; font-weight: 800; }
-.rm-cell.pending { outline: 2px dashed var(--sa-amber); outline-offset: 2px; }
-.rm-cell:focus-visible, .rm-reset:focus-visible { outline: 3px solid var(--lx-pri-strong); outline-offset: 2px; }
-.rm-mark { display: block; margin-top: 2px; color: var(--sa-amber); font-size: .7rem; font-weight: 800; line-height: 1.2; }
-.rm-bar { position: sticky; bottom: .75rem; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .75rem; padding: .7rem 1rem; border-radius: 12px; background: var(--lx-hero-b); color: rgba(255, 255, 255, .92); font-size: .86rem; font-weight: 700; box-shadow: 0 8px 24px rgba(33, 18, 10, .25); }
+.rm-cell.lk, .rm-cell.nw { background: var(--lx-surface-2); cursor: default; }
+.rm-cell.lk { border-color: transparent; }
+.rm-cell.lk > .bi { font-size: .72rem; }
+.rm-cell.nw { border-style: dashed; }
+.rm-cell.lk.on, .rm-cell.nw.on { color: var(--sa-ok); }
+.rm-cell.mod::after { content: ''; flex: none; width: .5rem; height: .5rem; border-radius: 50%; background: var(--lx-accent); }
+.rm-tag { display: none; }
+/* والمنقورةُ آخراً تبقى مركَّزة، وقاعدةُ Bootstrap (button:focus:not(:focus-visible) { outline: 0 }) كانت تمحو
+   إطارَها — فآخرُ ما غيّرتَه كان بلا إطار (مقيسٌ 11-18) */
+.rm-cell.pending, .rm-cell.pending:focus:not(:focus-visible) { outline: 2px dashed var(--lx-accent); outline-offset: 2px; }
+.rm-cell.pending .rm-tag { position: absolute; top: -.6rem; inset-inline: 0; display: block; width: max-content; margin-inline: auto; padding: 0 .4rem; border-radius: 99px; background: var(--lx-wait-bg); box-shadow: 0 0 0 1px var(--lx-wait-line); color: var(--lx-wait); font-size: .64rem; font-weight: 800; line-height: 1.5; white-space: nowrap; }
+.rm-cell:focus-visible, .rm-reset:focus-visible, .rm-chip:focus-visible, .rm-jump a:focus-visible, .rm-ex:focus-visible, .rm thead th a:focus-visible { outline: 3px solid var(--lx-pri-strong); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) { .rm-cell { transition: background-color var(--lx-dur-1) ease, border-color var(--lx-dur-1) ease; } }
+
+/* قادمة: ما لم يُربط حارسُه — مطويّةٌ آخرَ الصفحة، تُعرض ولا تُعدَّل */
+.rm-later { padding: 0; }
+.rm-later > summary { padding: .65rem 1rem; color: var(--sa-soft); font-size: .88rem; font-weight: 800; cursor: pointer; }
+.rm-later > p { max-width: 74ch; margin: 0 1rem .6rem; color: var(--sa-mute); font-size: .8rem; }
+.rm-later .sa-scroll { border-top: 1px solid var(--sa-line); }
+
+.rm-bar { position: sticky; bottom: .75rem; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .75rem; padding: .7rem 1rem; border-radius: 12px; background: var(--lx-hero-b); color: rgba(255, 255, 255, .92); font-size: .86rem; font-weight: 700; box-shadow: 0 8px 24px rgba(33, 18, 10, .25); }
 .rm-bar[hidden] { display: none; }
 .rm-bar b { color: #fff; }
 .rm-bar .rm-ghost { border-color: rgba(255, 255, 255, .45); background: transparent; color: #fff !important; }
 .rm-bar .rm-ghost:hover { background: rgba(255, 255, 255, .08); }
 .rm-bar .sa-btn:focus-visible { outline: 2px solid var(--lx-wait-line); outline-offset: 2px; }
+/* وشريطُ الحفظ الظاهر لا يحجب الخانةَ المركَّزة تحته (role_matrix.js يقيس ارتفاعَه). وزرُّ «العودة للأعلى» العائمُ
+   كان فوق «احفظ» في الجهة نفسها، ورفعُه فوق الشريط يُلقيه على خانات المصفوفة — فيغيب ما دام في الصفحة ما لم يُحفظ
+   (مفتاحُ Home يبقى، app.js) */
+html:has(#rmBar:not([hidden])) { scroll-padding-bottom: calc(var(--rm-bar-h, 3.5rem) + 1.75rem); }
+html:has(#rmBar:not([hidden])) .back-to-top { display: none; }
 .rm-dialog { max-width: 28rem; padding: 1.1rem 1.2rem; border: 1px solid var(--sa-line); border-radius: 14px; color: var(--sa-ink); }
 .rm-dialog::backdrop { background: rgba(20, 38, 43, .45); }
 .rm-dialog h2 { margin: 0 0 .5rem; font-size: 1.05rem; font-weight: 800; }
 .rm-dialog p { margin: 0 0 1rem; color: var(--sa-soft); font-size: .88rem; line-height: 1.8; }
 .rm-dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; }
+@media (max-width: 720px) {
+  /* الهاتف: العمودُ المثبَّت أضيق فتبقى الخاناتُ ظاهرة، واسمُ الصلاحيّة يلتفّ؛ والإطارُ أقصر لأنّ شريطَ الحفظ
+     يلتفّ سطرين (110px مقيسة) — وإلّا دخل رأسُ الإطار تحت الشريط العلويّ عند آخر الصفوف */
+  .rm-frame { max-height: max(18rem, calc(100dvh - var(--lx-topbar-h) - 11rem)); }
+  .rm { min-width: 0; }
+  .rm thead th:first-child, .rm tbody th { min-width: 7.5rem; max-width: 8.5rem; white-space: normal; font-size: .78rem; }
+  .rm-cell { min-width: 3.4rem; padding: 0 .35rem; }
+}
 @media (max-width: 992px) {
   .sa-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sa-two { grid-template-columns: minmax(0, 1fr); }
-  .rm-card { overflow-x: auto; }
   .sa-fields, .sa-fields.two { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -259,6 +316,8 @@ button.rm-cell:hover { border-color: var(--lx-pri); }
 .ae-extra { display: flex; gap: .5rem; align-items: flex-start; margin-top: .6rem; padding: .6rem .8rem; border: 1px solid var(--lx-wait-line); border-radius: 10px; background: var(--lx-wait-bg); color: var(--lx-ink); font-size: .84rem; line-height: 1.8; }
 .ae-extra i { color: var(--lx-wait); margin-top: .2rem; }
 .ae-summary p + p { margin-top: .35rem; color: var(--sa-mute); }
+.ae-summary .ae-matrix a { color: var(--lx-pri); font-size: .82rem; font-weight: 700; text-decoration: none; }
+.ae-summary .ae-matrix a:hover { text-decoration: underline; }
 .ae-rows { display: grid; }
 .ae-row { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .75rem; padding: .55rem 0; border-top: 1px solid var(--sa-line); }
 .ae-row:first-child { border-top: 0; }

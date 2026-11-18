@@ -27,11 +27,13 @@
   const peopleAr = function (n) { return countAr(n, 'موظّف واحد', 'موظّفَين', 'موظّفين', 'موظّفاً'); };
   const isOn = function (cell) { return cell.getAttribute('aria-pressed') === 'true'; };
 
+  // الخانةُ رمزٌ وكلمة (الدفعة 3أ) — تنقلبان معاً، و«لم تُحفظ» فوقها ما دامت تنتظر الحفظ
   function paint(cell) {
     const on = isOn(cell);
     cell.classList.toggle('on', on);
     cell.classList.toggle('pending', pending.has(cell));
     cell.querySelector('i').className = 'bi ' + (on ? 'bi-check-lg' : 'bi-dash');
+    cell.querySelector('.rm-word').textContent = on ? 'نعم' : 'لا';
   }
 
   function touchedRoles() {
@@ -58,6 +60,8 @@
     const reach = n ? ' سيسري على ' + peopleAr(n) + '.' : ' ولا يحمل ' + nobody + ' أحدٌ الآن.';
     barText.replaceChildren(head, document.createTextNode(' ' + what + reach));
     save.textContent = n ? 'احفظ وطبّق على ' + peopleAr(n) : 'احفظ';
+    // ارتفاعُ الشريط (يلتفّ سطرين على الهاتف): ما يُترك للتركيز فوقه (حشوةُ النافذة السفلى)
+    document.documentElement.style.setProperty('--rm-bar-h', bar.offsetHeight + 'px');
   }
 
   function flip(cell) {
@@ -139,4 +143,63 @@
       event.returnValue = '';
     }
   });
+
+  // الإطار: الرأسُ والعمودُ الأوّل ثابتان داخله، فالمسافةُ التي يُحفظ بها المركَّزُ عنهما تُقاس لا تُخمَّن
+  // (الرأسُ يلتفّ سطرين أو ثلاثة بحسب العرض) — مسافةٌ واحدة على الصفّ والخانة (فيبل 11-18).
+  const frame = document.getElementById('rmFrame');
+  if (frame) {
+    const head = frame.querySelector('thead');
+    const first = head.querySelector('th');
+    const measure = function () {
+      frame.style.setProperty('--rm-head', head.offsetHeight + 'px');
+      frame.style.setProperty('--rm-first', first.offsetWidth + 'px');
+    };
+    measure();
+    if (window.ResizeObserver) new ResizeObserver(measure).observe(head);
+  }
+  // والشريطُ يلتفّ من جديد إن تغيّر العرض (تدويرُ الهاتف) — يُقاس كلّما تغيّر لا عند النقر وحده (فيبل 11-18)
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () {
+      if (!bar.hidden) document.documentElement.style.setProperty('--rm-bar-h', bar.offsetHeight + 'px');
+    }).observe(bar);
+  }
+
+  // Chrome لا يعدّ العنصرَ «مخفيّاً» إن غطّاه الرأسُ أو العمودُ الثابتان أو شريطُ الحفظ، فلا يمرّره عند التنقّل
+  // بلوحة المفاتيح (مقيسٌ 11-18: 60 من 91 خانةً تحت الشريط، والهاتفُ تحت العمود). التمريرُ الصريح يحترم المسافات —
+  // وللوحة المفاتيح وحدها (:focus-visible)، فالنقرةُ بالفأرة لا تُزيح الصفحة. والنموذجُ كلُّه لا الإطارُ وحده:
+  // «قادمة» تحت المصفوفة وفيها روابطُ وأزرارُ رجوع (فيبل 11-18).
+  form.addEventListener('focusin', function (event) {
+    const el = event.target;
+    if (el === frame || bar.contains(el) || !el.matches(':focus-visible')) return;
+    if (frame && frame.contains(el)) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });   // مسافتا الرأس والعمود
+    // والنافذة: حشوتُها السفلى لا تُحترم من داخل إطارٍ متمرّر (مقيسٌ: الخانةُ عند 825 والحدُّ 813) — فالشريطُ يُحسب هنا
+    if (!bar.hidden) {
+      const over = el.getBoundingClientRect().bottom - (bar.getBoundingClientRect().top - 8);
+      if (over > 0) window.scrollBy({ top: over, behavior: 'instant' });
+    }
+  });
+
+  // رابطٌ إلى دورٍ (#role-…) يُبرز عمودَه، ورابطٌ إلى صفٍّ في «قادمة» يفتحها — الإعادةُ بعد الحفظ تعود إلى صفّها
+  function follow() {
+    form.querySelectorAll('.rm-col-on').forEach(function (cell) { cell.classList.remove('rm-col-on'); });
+    // بالمعرّف لا بمحدِّد CSS: «#cap-referral.receive» محدِّدًا صنفٌ لا معرّف
+    let id = location.hash.slice(1);
+    try { id = decodeURIComponent(id); } catch (err) { return; }   // «%» مبتورة في الرابط
+    const target = id ? document.getElementById(id) : null;
+    if (!target) return;
+    const later = target.closest('details');
+    if (later && !later.open) {
+      later.open = true;
+      target.scrollIntoView();
+    }
+    if (target.matches('th[data-role]')) {
+      const index = Array.prototype.indexOf.call(target.parentNode.children, target);
+      target.classList.add('rm-col-on');
+      target.closest('table').querySelectorAll('tbody tr:not(.rm-group)').forEach(function (row) {
+        if (row.children[index]) row.children[index].classList.add('rm-col-on');
+      });
+    }
+  }
+  follow();
+  window.addEventListener('hashchange', follow);
 })();

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}{{ target.get_full_name|default:target.get_username }}{% endblock %}
-{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261116-batch2">{% endif %}{% endblock %}
+{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261118-batch3a">{% endif %}{% endblock %}
 {% block content %}
 {% comment %}
 محرّرُ الحساب (ج، الشريحة 2) — التصميمُ المعتمد shots_v2/v2_account.png وv2_account_change.png.
@@ -98,6 +98,7 @@
         <div class="ae-summary">
           {% if summary_can %}<p><b>يستطيع في {{ scope_text }}:</b> {{ summary_can }}.</p>{% endif %}
           {% if summary_cannot %}<p>ولا يستطيع: {{ summary_cannot }}.</p>{% endif %}
+          {% if is_admin %}<p class="ae-matrix"><a href="{% url 'system_roles' %}#role-{{ role }}">دور «{{ role_label }}» في مصفوفة الأدوار<span aria-hidden="true"> ←</span></a></p>{% endif %}
         </div>
         {% endif %}
       </section>

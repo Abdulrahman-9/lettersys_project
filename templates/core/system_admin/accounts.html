@@ -6,7 +6,7 @@
   الجدول؛ الصفُّ رابطٌ إلى محرّر الحساب (طريقُ الكتابة الوحيد). التصفيةُ والفرزُ والصفحاتُ من الخادم
   (``system_accounts_view``). رئيسُ القسم يرى شجرتَه، ولا يُحمَّل له شريطُ النظام فتُحمَّل أنماطُه هنا.
 {% endcomment %}
-{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261116-batch2">{% endif %}{% endblock %}
+{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261118-batch3a">{% endif %}{% endblock %}
 {% block content %}
 <div class="sa-page">
   <div class="sa-head">
@@ -35,11 +35,22 @@
         {% for d in departments %}<option value="{{ d.pk }}"{% if department and d.pk == department.pk %} selected{% endif %}>{{ d.code }} — {{ d.name }}</option>{% endfor %}
       </select>
       {% endif %}
+      {% if exception %}<input type="hidden" name="exception" value="{{ exception }}">{% endif %}
       {% if status != 'all' %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
       {% if sort != 'name' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
       {% if dir == 'desc' %}<input type="hidden" name="dir" value="desc">{% endif %}
       <button type="submit" class="sa-btn">تصفية</button>
     </form>
+    {% if exception or role_matrix_url %}
+    {# الطريقُ إلى المصفوفة وبالعكس (الدفعة 3أ) — لمدير النظام وحده #}
+    <p class="sa-acc-context">
+      {% if exception %}<span><i class="bi bi-funnel-fill" aria-hidden="true"></i>أصحاب استثناءٍ شخصيّ على «{{ exception_label }}»</span>
+      {% if exception_note %}<small class="sa-acc-note">{{ exception_note }}</small>{% endif %}
+      <a href="{{ exception_matrix_url }}">صفّها في المصفوفة</a>
+      <a href="{{ exception_clear_url }}">إزالة هذه التصفية</a>{% endif %}
+      {% if role_matrix_url %}<a href="{{ role_matrix_url }}">ما يستطيعه دور «{{ role_label }}» في المصفوفة<span aria-hidden="true"> ←</span></a>{% endif %}
+    </p>
+    {% endif %}
     <div class="sa-seg sa-acc-status" role="group" aria-label="الحالة">
       {% for s in statuses %}<a href="{{ s.url }}"{% if s.on %} class="on" aria-current="true"{% endif %}>{{ s.label }} <b>{{ s.count }}</b></a>{% endfor %}
     </div>
@@ -57,7 +68,7 @@
               {% else %}<span class="sa-acc-name">{% firstof row.name row.username %}</span> <span class="sa-chip">{{ row.note }}</span>{% endif %}
               <small class="sa-acc-sub"><bdi dir="ltr">{{ row.username }}</bdi>{% if row.job_title %} · {{ row.job_title }}{% endif %}</small>
             </td>
-            <td>{% if row.role == 'admin' %}<span class="sa-chip ok">{{ row.role_label }}</span>{% else %}{{ row.role_label }}{% endif %}</td>
+            <td>{% if row.role == 'admin' %}<span class="sa-chip ok">{{ row.role_label }}</span>{% else %}{{ row.role_label }}{% endif %}{% if exception %} <span class="sa-chip{% if row.exception == 'added' %} ok{% elif row.exception == 'blocked' %} bad{% endif %}"><span class="visually-hidden">استثناء </span>{% if row.exception == 'added' %}مضاف{% elif row.exception == 'blocked' %}محجوب{% else %}خامد{% endif %}</span>{% endif %}</td>
             <td>{% if row.department %}<span class="sa-stamp small">{{ row.department.code }}</span> {{ row.department.name }}{% else %}<span class="sa-when">بلا قسم</span>{% endif %}</td>
             <td><span class="sa-chip {% if row.is_active %}ok{% else %}bad{% endif %}">{% if row.is_active %}نشط{% else %}موقوف{% endif %}</span>{% if row.temp_password %} <span class="sa-chip warn">كلمة مؤقّتة</span>{% endif %}</td>
             <td class="sa-when">{% if row.last_login %}{{ row.last_login|date:'Y-m-d' }}{% else %}لم يدخل بعد{% endif %}</td>

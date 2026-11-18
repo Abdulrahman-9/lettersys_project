@@ -249,7 +249,9 @@ class WiredOnlyTests(RolesPageCase):
         body = self.client.get(URL).content.decode()
         self.assertNotIn('value="entry:archive.complete:', body)
         self.assertIn('تمام الأرشفة لدور مدخل: لا يستطيع، لم يُربط حارسها بعد"', body)
-        self.assertIn('«الإحالة» و«استلام المُحال وإنجازه»', body)
+        # الدفعة 3أ: ما لم يُربط حارسُه في «قادمة» آخرَ الصفحة لا بين ما يُعدَّل (كانت قائمةً تُسرد في فقرة)
+        self.assertGreater(body.index('id="cap-archive.complete"'), body.index('id="rmLater"'))
+        self.assertLess(body.index('id="cap-referral.receive"'), body.index('id="rmLater"'))
 
     def test_the_wired_set_is_what_the_code_reads(self):
         """كلُّ مفتاحٍ يقرؤه حارسٌ في الكود مسجَّلٌ مربوطاً، ولا مفتاحَ مربوطاً بلا قارئ."""

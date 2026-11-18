@@ -259,19 +259,36 @@ def system_reservations_view(request):
 @system_admin_required
 def system_roles_view(request):
     if request.method == 'GET':
+        from urllib.parse import urlencode
+
+        from core.models import UserCapabilityOverride
+
         matrix = permission_service.role_matrix()
         now = timezone.localtime()
+        accounts = reverse('system_accounts')
+        # الاستثناءاتُ الشخصيّة على كلّ صلاحيّة باستعلامٍ واحد — العددُ رابطٌ إلى أصحابها في قائمة الحسابات
+        exceptions = dict(UserCapabilityOverride.objects.order_by().values('capability')
+                          .annotate(n=Count('pk')).values_list('capability', 'n'))
+        # الدفعة 3أ: ما لم يُربط حارسُه ولم يُقفل يُجمع في «قادمة» آخرَ الصفحة — يُعرض ولا يُعدَّل
+        groups, later = [], []
         for group in matrix['groups']:
+            live = []
             for row in group['rows']:
                 if row['last']:
                     by = row['last'].changed_by
                     row['last_text'] = f"عدّلها {by.get_full_name() or by.username if by else 'حساب محذوف'} {system_centre.human_when(row['last'].changed_at, now)}"
+                row['exceptions'] = exceptions.get(row['key'], 0)
+                row['exceptions_url'] = f"{accounts}?{urlencode({'exception': row['key']})}"
+                (live if row['wired'] or row['locked'] else later).append(row)
+            if live:
+                groups.append({'name': group['name'], 'rows': live})
         for role in matrix['roles']:
             role['holders_text'] = _people_ar(role['holders']) if role['holders'] else 'لا أحد'
+            # العددُ عددُ النشطين (``role_holders``)، فالقائمةُ تُفتح على النشطين ليطابقها
+            role['url'] = f"{accounts}?{urlencode({'role': role['key'], 'status': 'active'})}"
         return render(request, 'core/system_admin/roles.html', {
-            'matrix': matrix, 'admins_text': count_ar(matrix['admins'], 'حساب واحد', 'حسابان', 'حسابات', 'حساباً'),
-            'columns': len(matrix['roles']) + 2,
-            'wired_text': ' و'.join(f'«{CAPABILITIES[k].label}»' for k in CAPABILITIES if k in WIRED_CAPABILITIES),
+            'matrix': matrix, 'groups': groups, 'later': later,
+            'admins_text': count_ar(matrix['admins'], 'حساب واحد', 'حسابان', 'حسابات', 'حساباً'),
         })
 
     changes, reset = request.POST.getlist('change'), request.POST.get('reset', '')
@@ -730,12 +747,17 @@ def system_accounts_view(request):
 
     departments = list(Department.objects.filter(pk__in=managed_department_ids(viewer)).order_by('code'))
     present_roles = {row['role'] for row in rows}
-    role_options = [(key, label) for key, label in ((_ADMIN_ROLE, 'مدير النظام'), *MATRIX_ROLES.items())
-                    if key in present_roles]
+    known_roles = dict(((_ADMIN_ROLE, 'مدير النظام'), *MATRIX_ROLES.items()))
 
     query = (request.GET.get('q') or '').strip()[:100]
     role = request.GET.get('role', '')
-    role = role if role in dict(role_options) else ''
+    # دورٌ لا يحمله أحدٌ يبقى تصفيةً تقول «لا حساب» — رابطُ المصفوفة لا يصير «كلّ الحسابات» (فيبل 11-18)
+    role = role if role in known_roles else ''
+    role_options = [(key, label) for key, label in known_roles.items() if key in present_roles or key == role]
+    # أصحابُ استثناءٍ على صلاحيّة — لمدير النظام وحده: لرئيس القسم صفوفٌ لا يفتحها (حسابُه، ونظيرُه)،
+    # والتصفيةُ بمفتاحٍ بعد مفتاح كانت ستكشف استثناءاتِها ومنها حجبُ المدير (فيبل 11-18)
+    exception = request.GET.get('exception', '') if is_admin else ''
+    exception = exception if exception in CAPABILITIES else ''
     raw_department = request.GET.get('department', '')
     department = next((d for d in departments if raw_department.isdecimal() and d.pk == int(raw_department)), None)
     # «بلا قسم» لمدير النظام وحده — نطاقُ الرئيس شجرتُه، فلا حسابَ بلا قسمٍ فيه
@@ -759,6 +781,23 @@ def system_accounts_view(request):
         base = [row for row in base if row['department'] is not None and row['department'].pk in tree]
     elif no_department:
         base = [row for row in base if row['department'] is None]
+    exception_note = ''
+    if exception:
+        from core.models import UserCapabilityOverride
+
+        holding = dict(UserCapabilityOverride.objects.filter(capability=exception).values_list('user_id', 'allowed'))
+        # يسري الاستثناءُ على صلاحيّةٍ مربوطةٍ غير مقفلةٍ لغير مدير النظام (``has_capability``) — وإلّا فهو «خامد»:
+        # مكتوبٌ لا يغيّر شيئاً، كما يقوله المحرّر. لا «مضاف» أخضرَ لقدرةٍ لا يملكها أحد (فيبل 11-18)
+        if CAPABILITIES[exception].locked:
+            exception_note = 'الصلاحيّة مقفلة، فلا يسري عليها استثناء.'
+        elif exception not in WIRED_CAPABILITIES:
+            exception_note = 'لم يُربط حارسها بعد، فالاستثناءات عليها خامدة لا تسري.'
+
+        def effect(row):
+            if exception_note or row['role'] == _ADMIN_ROLE:
+                return 'dormant'
+            return 'added' if holding[row['user'].pk] else 'blocked'
+        base = [{**row, 'exception': effect(row)} for row in base if row['user'].pk in holding]
     tests = {'all': lambda row: True, 'active': lambda row: row['is_active'],
              'inactive': lambda row: not row['is_active'], 'password': lambda row: row['temp_password'],
              # يفتح السرّيّ أو يدير غيرَه (``is_sensitive_account``) — بطاقةُ «أدوار حسّاسة» في اللوحة
@@ -771,6 +810,7 @@ def system_accounts_view(request):
     page = Paginator(shown, ACCOUNTS_PAGE_SIZE).get_page(request.GET.get('page'))
 
     state = {'q': query, 'role': role, 'department': department.pk if department else ('none' if no_department else ''),
+             'exception': exception,
              'status': '' if status == 'all' else status, 'sort': '' if sort == 'name' else sort,
              'dir': '' if direction == 'asc' else direction}
 
@@ -785,9 +825,11 @@ def system_accounts_view(request):
                         'aria': ('ascending' if direction == 'asc' else 'descending') if current else '',
                         'url': url(sort='' if key == 'name' else key,
                                    dir='desc' if current and direction == 'asc' else '', page='')})
+    exception_label = CAPABILITIES[exception].label if exception else ''
     applied = [label for label, on in (
-        (f'البحث «{query}»', query), (f'الدور «{dict(role_options).get(role, "")}»', role),
+        (f'البحث «{query}»', query), (f'الدور «{known_roles.get(role, "")}»', role),
         (f'القسم «{department.name if department else ""}»', department), ('«بلا قسم»', no_department),
+        (f'الاستثناء على «{exception_label}»', exception),
         (f'الحالة «{dict(_ACCOUNT_STATUSES)[status]}»', status != 'all')) if on]
 
     scope_text = ''
@@ -803,6 +845,12 @@ def system_accounts_view(request):
         'department': department, 'departments': departments, 'no_department': no_department,
         'statuses': [{'key': key, 'label': label, 'count': counts[key], 'on': key == status,
                       'url': url(status='' if key == 'all' else key, page='')} for key, label in _ACCOUNT_STATUSES],
+        # الطريقُ إلى المصفوفة وبالعكس (الدفعة 3أ) — المصفوفةُ لمدير النظام وحده
+        'role_matrix_url': (f"{reverse('system_roles')}#role-{role}" if is_admin and role in MATRIX_ROLES else ''),
+        'role_label': known_roles.get(role, ''),
+        'exception': exception, 'exception_label': exception_label, 'exception_note': exception_note,
+        'exception_matrix_url': f"{reverse('system_roles')}#cap-{exception}" if exception else '',
+        'exception_clear_url': url(exception='', page='') if exception else '',
         'status': status, 'sort': sort, 'dir': direction, 'columns': columns,
         'applied': _join_ar(applied), 'clear_url': reverse('system_accounts'),
         'prev_url': url(page=page.previous_page_number()) if page.has_previous() else '',
