@@ -1,62 +1,64 @@
 /* ============================================================
-   document_manager.css — لوحة إدارة مستندات الكتاب (سطح المكتب)
-   واجهة احترافية: بطاقات نظيفة، حالات تمرير، حوارات أنيقة.
+   document_manager.css — لوحة إدارة مستندات الكتاب (وضع التعديل، سطح المكتب)
+   على الهويّة v2 (2026-11-19): متغيّراتُ اللوحة تشير إلى رموز theme.css فيعمل الوضعان.
    ============================================================ */
 .docman{
-  --dm-ink:#1f2933; --dm-soft:#52606d; --dm-muted:#9aa5b1; --dm-line:#e3e8ee;
-  --dm-bg:#ffffff; --dm-band:#f7f9fb; --dm-accent:#0f766e; --dm-accent-soft:#e6f4f2;
-  --dm-danger:#b42318; --dm-danger-soft:#fdecea;
+  --dm-ink:var(--lx-ink); --dm-soft:var(--lx-mute); --dm-muted:var(--lx-mute); --dm-line:var(--lx-line);
+  --dm-bg:var(--lx-surface); --dm-band:var(--lx-surface-2); --dm-accent:var(--lx-pri); --dm-accent-soft:var(--lx-pri-soft);
+  --dm-danger:var(--lx-late); --dm-danger-soft:var(--lx-late-bg);
   position:relative; border:1px solid var(--dm-line); border-radius:14px;
-  background:var(--dm-bg); overflow:hidden; box-shadow:0 1px 3px rgba(16,24,40,.04);
+  background:var(--dm-bg); overflow:hidden; box-shadow:var(--lx-shadow-sm);
   font-family:inherit; color:var(--dm-ink);
 }
 .docman-head{
   display:flex; align-items:center; justify-content:space-between; gap:.6rem;
-  padding:.7rem .9rem; background:linear-gradient(180deg,var(--dm-band),#fff);
+  padding:.7rem .9rem; background:linear-gradient(180deg,var(--dm-band),var(--dm-bg));
   border-bottom:1px solid var(--dm-line);
 }
 .docman-title{display:flex; align-items:center; gap:.45rem; font-weight:800; font-size:.95rem;}
 .docman-title .bi{color:var(--dm-accent);}
 .docman-count{
-  font-size:.72rem; font-weight:800; color:var(--dm-accent);
+  font-size:.72rem; font-weight:800; color:var(--lx-pri-soft-ink);
   background:var(--dm-accent-soft); border-radius:999px; padding:.05rem .5rem; min-width:1.4rem; text-align:center;
+  font-variant-numeric:tabular-nums;
 }
 .docman-add{
-  display:inline-flex; align-items:center; gap:.35rem; font:inherit; font-weight:700; font-size:.82rem;
-  color:#fff; background:var(--dm-accent); border:0; border-radius:9px; padding:.4rem .8rem; cursor:pointer;
-  transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+  display:inline-flex; align-items:center; gap:.35rem; font:inherit; font-weight:700; font-size:.82rem; min-height:32px;
+  color:var(--lx-pri-fill-ink); background:var(--lx-pri-fill); border:0; border-radius:9px; padding:.4rem .8rem; cursor:pointer;
+  transition:transform .12s ease, box-shadow .12s ease, background-color .12s ease;
 }
-.docman-add:hover{background:#0b5d56; transform:translateY(-1px); box-shadow:0 4px 12px rgba(15,118,110,.25);}
+.docman-add:hover{background:var(--lx-pri-strong); transform:translateY(-1px); box-shadow:0 4px 12px rgba(var(--lx-pri-rgb),.25);}
 .docman-add:active{transform:translateY(0);}
+.docman-add:focus-visible,.docman-btn:focus-visible{outline:2px solid var(--lx-pri); outline-offset:2px;}
 
-.docman-body{padding:.6rem; display:flex; flex-direction:column; gap:.5rem; max-height:420px; overflow-y:auto;}
+.docman-body{padding:.6rem; display:flex; flex-direction:column; gap:.5rem; max-height:420px; overflow-y:auto; overscroll-behavior:contain;}
 .docman-loading,.docman-empty{
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.5rem;
   color:var(--dm-muted); font-size:.85rem; text-align:center; padding:1.6rem 1rem;
 }
-.docman-empty .bi{font-size:1.8rem; opacity:.5;}
+.docman-empty .bi{font-size:1.8rem; opacity:.6;}
 
 /* بطاقة مرفق */
 .docman-card{
   display:flex; align-items:center; gap:.7rem .55rem; padding:.6rem .7rem; flex-wrap:wrap;
-  border:1px solid var(--dm-line); border-radius:11px; background:#fff;
+  border:1px solid var(--dm-line); border-radius:11px; background:var(--dm-bg);
   transition:border-color .15s ease, box-shadow .15s ease, transform .12s ease;
 }
-.docman-card:hover{border-color:#cfd8e3; box-shadow:0 3px 10px rgba(16,24,40,.06);}
+.docman-card:hover{border-color:var(--lx-line-strong); box-shadow:var(--lx-shadow-sm);}
 .docman-ic{
   flex:0 0 auto; width:40px; height:40px; border-radius:10px; display:flex; align-items:center;
   justify-content:center; font-size:1.25rem;
 }
-.docman-ic-pdf{background:var(--lx-late-bg); color:#c0392b;}
-.docman-ic-image{background:#eaf5ff; color:#1d6fb8;}
-.docman-ic-other{background:#eef1f4; color:#5b6470;}
+.docman-ic-pdf{background:var(--lx-late-bg); color:var(--lx-late);}
+.docman-ic-image{background:var(--lx-prog-bg); color:var(--lx-prog);}
+.docman-ic-other{background:var(--dm-band); color:var(--dm-soft);}
 .docman-meta{flex:1 1 auto; min-width:0;}
 .docman-name{
   font-weight:700; font-size:.86rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   display:flex; align-items:center; gap:.4rem;
 }
 .docman-badge{
-  flex:0 0 auto; font-size:.62rem; font-weight:800; color:var(--dm-accent);
+  flex:0 0 auto; font-size:.62rem; font-weight:800; color:var(--lx-pri-soft-ink);
   background:var(--dm-accent-soft); border-radius:5px; padding:.04rem .35rem;
 }
 .docman-sub{font-size:.74rem; color:var(--dm-muted); margin-top:.1rem;}
@@ -65,49 +67,50 @@
 
 /* أزرار الإجراء */
 .docman-btn{
-  display:inline-flex; align-items:center; gap:.28rem; font:inherit; font-size:.74rem; font-weight:700;
-  color:var(--dm-soft); background:#fff; border:1px solid var(--dm-line); border-radius:8px;
-  padding:.32rem .55rem; cursor:pointer; white-space:nowrap; transition:all .13s ease;
+  display:inline-flex; align-items:center; gap:.28rem; font:inherit; font-size:.74rem; font-weight:700; min-height:28px;
+  color:var(--dm-soft); background:var(--dm-bg); border:1px solid var(--dm-line); border-radius:8px;
+  padding:.32rem .55rem; cursor:pointer; white-space:nowrap;
+  transition:background-color .13s ease, border-color .13s ease, color .13s ease;
 }
 .docman-btn span{display:inline-block;}
 .docman-btn:hover{border-color:var(--dm-accent); color:var(--dm-accent); background:var(--dm-accent-soft);}
-.docman-btn-view:hover{border-color:#1d6fb8; color:#1d6fb8; background:#eaf5ff;}
+.docman-btn-view:hover{border-color:var(--lx-prog); color:var(--lx-prog); background:var(--lx-prog-bg);}
 .docman-btn-accent{border-color:var(--dm-accent); color:var(--dm-accent); font-weight:800;}
-.docman-btn-accent:hover{background:var(--dm-accent); color:#fff; border-color:var(--dm-accent);}
+.docman-btn-accent:hover{background:var(--lx-pri-fill); color:var(--lx-pri-fill-ink); border-color:var(--lx-pri-fill);}
 .docman-btn-danger{color:var(--dm-danger);}
-.docman-btn-danger:hover{border-color:var(--dm-danger); color:#fff; background:var(--dm-danger);}
-.docman-btn-solid{color:#fff; border:0;}
-.docman-btn-primary.docman-btn-solid{background:var(--dm-accent);}
-.docman-btn-primary.docman-btn-solid:hover{background:#0b5d56;}
-.docman-btn-danger.docman-btn-solid{background:var(--dm-danger);}
-.docman-btn-danger.docman-btn-solid:hover{background:#8f1c14;}
+.docman-btn-danger:hover{border-color:var(--dm-danger); color:var(--lx-surface); background:var(--dm-danger);}
+.docman-btn-solid{border:0;}
+.docman-btn-primary.docman-btn-solid{background:var(--lx-pri-fill); color:var(--lx-pri-fill-ink);}
+.docman-btn-primary.docman-btn-solid:hover{background:var(--lx-pri-strong); color:var(--lx-pri-fill-ink);}
+.docman-btn-danger.docman-btn-solid{background:var(--dm-danger); color:var(--lx-surface);}
+.docman-btn-danger.docman-btn-solid:hover{background:color-mix(in srgb, var(--dm-danger) 85%, var(--lx-ink)); color:var(--lx-surface);}
 
 /* طبقة الانشغال */
 .docman-overlay{
-  position:absolute; inset:0; background:rgba(255,255,255,.78); backdrop-filter:blur(1px);
+  position:absolute; inset:0; background:color-mix(in srgb, var(--dm-bg) 78%, transparent); backdrop-filter:blur(1px);
   display:flex; align-items:center; justify-content:center; gap:.5rem; font-weight:700;
   color:var(--dm-accent); font-size:.9rem; z-index:5;
 }
 
-/* إشعار داخلي (احتياطي إن غاب ToastCenter) */
+/* إشعار داخلي (احتياطي إن غاب ToastCenter) — حبرُه السطح على تعبئة الحالة: مقروءٌ في الوضعين */
 .docman-toast{
   position:absolute; bottom:.7rem; left:50%; transform:translate(-50%,12px); opacity:0;
-  padding:.5rem .9rem; border-radius:9px; font-size:.82rem; font-weight:700; color:#fff;
-  box-shadow:0 6px 18px rgba(16,24,40,.18); transition:all .25s ease; z-index:6; max-width:90%;
+  padding:.5rem .9rem; border-radius:9px; font-size:.82rem; font-weight:700; color:var(--lx-surface);
+  box-shadow:var(--lx-shadow-md); transition:opacity .25s ease, transform .25s ease; z-index:6; max-width:90%;
 }
 .docman-toast.show{opacity:1; transform:translate(-50%,0);}
-.docman-toast-success{background:#0a7d4d;}
+.docman-toast-success{background:var(--lx-done);}
 .docman-toast-error{background:var(--dm-danger);}
 
-/* الحوارات الأنيقة (تأكيد/إدخال) */
+/* الحوارات (تأكيد/إدخال) — سِتارُ حوارات الهويّة (components.css: #04211e) */
 .docman-modal-back{
-  position:fixed; inset:0; background:rgba(15,23,32,.45); display:flex; align-items:center;
-  justify-content:center; z-index:1080; opacity:0; transition:opacity .18s ease;
+  position:fixed; inset:0; background:rgba(4,33,30,.45); backdrop-filter:blur(3px); display:flex; align-items:center;
+  justify-content:center; z-index:1080; opacity:0; transition:opacity .18s ease; overscroll-behavior:contain;
 }
 .docman-modal-back.show{opacity:1;}
 .docman-modal{
-  width:min(420px,92vw); background:#fff; border-radius:14px; overflow:hidden;
-  box-shadow:0 20px 60px rgba(15,23,32,.3); transform:translateY(8px) scale(.98); transition:transform .18s ease;
+  width:min(420px,92vw); background:var(--dm-bg); border:1px solid var(--dm-line); border-radius:16px; overflow:hidden;
+  box-shadow:var(--lx-shadow-lg); transform:translateY(8px) scale(.98); transition:transform .18s ease;
   font-family:inherit; color:var(--dm-ink); direction:rtl;
 }
 .docman-modal-back.show .docman-modal{transform:translateY(0) scale(1);}
@@ -115,9 +118,15 @@
 .docman-modal-body{padding:1rem;}
 .docman-modal-msg{font-size:.9rem; color:var(--dm-soft); line-height:1.7;}
 .docman-input{
-  width:100%; margin-top:.7rem; padding:.5rem .7rem; border:1px solid var(--dm-line); border-radius:9px;
-  font:inherit; font-size:.9rem; outline:none; transition:border-color .13s ease, box-shadow .13s ease;
+  width:100%; margin-top:.7rem; padding:.5rem .7rem; border:1px solid var(--lx-line-strong); border-radius:9px;
+  font:inherit; font-size:.9rem; outline:none; background:var(--dm-bg); color:var(--dm-ink);
+  transition:border-color .13s ease, box-shadow .13s ease;
 }
-.docman-input:focus{border-color:var(--dm-accent); box-shadow:0 0 0 3px var(--dm-accent-soft);}
+.docman-input:focus{border-color:var(--dm-accent); box-shadow:0 0 0 3px rgba(var(--lx-pri-rgb),.18);}
 .docman-modal-foot{display:flex; justify-content:flex-start; gap:.5rem; padding:.8rem 1rem; border-top:1px solid var(--dm-line);}
-.docman-modal-foot .docman-btn{padding:.45rem .9rem; font-size:.85rem;}
+.docman-modal-foot .docman-btn{padding:.45rem .9rem; font-size:.85rem; min-height:36px;}
+
+@media (prefers-reduced-motion: reduce){
+  .docman-add,.docman-card,.docman-toast,.docman-modal,.docman-modal-back{transition:none}
+  .docman-add:hover{transform:none}
+}

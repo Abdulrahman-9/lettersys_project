@@ -452,8 +452,8 @@
       this.dropdown.setAttribute('role', 'listbox');
       this.dropdown.style.cssText = [
         'position:absolute; top:calc(100% + 4px); right:0; left:0;',
-        'background:#fff; border:1px solid #d4c5a9;',
-        'border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.14);',
+        'background:var(--lx-surface); border:1px solid var(--lx-line-strong);',
+        'border-radius:10px; box-shadow:var(--lx-shadow-md);',
         'max-height:280px; overflow-y:auto;',
         'z-index:9999; margin:0; padding:4px 0; list-style:none;',
         'display:none;',
@@ -705,8 +705,8 @@
         li.setAttribute('role', 'option');
         li.style.cssText = [
           'padding:9px 14px; cursor:pointer; font-size:0.88rem;',
-          'line-height:1.5; border-bottom:1px solid #f3ede3;',
-          'color:#4a3728; transition:background .12s;',
+          'line-height:1.5; border-bottom:1px solid var(--lx-line);',
+          'color:var(--lx-ink); transition:background .12s;',
           'display:flex; align-items:center; gap:8px;',
         ].join(' ');
         li.dataset.idx = i;
@@ -758,8 +758,8 @@
 
     _highlightItem() {
       this.dropdown.querySelectorAll('li').forEach((li, i) => {
-        li.style.background = i === this._selectedIdx ? '#fef3e2' : '';
-        li.style.color      = i === this._selectedIdx ? '#92400e' : '#4a3728';
+        li.style.background = i === this._selectedIdx ? 'var(--lx-pri-soft)' : '';
+        li.style.color      = i === this._selectedIdx ? 'var(--lx-pri-soft-ink)' : 'var(--lx-ink)';
       });
     }
 
@@ -769,7 +769,7 @@
       if (idx === -1) return this._escHtml(text);
       return (
         this._escHtml(text.slice(0, idx)) +
-        `<mark style="background:#fde68a;color:#92400e;padding:0 1px;border-radius:2px">${this._escHtml(text.slice(idx, idx + q.length))}</mark>` +
+        `<mark style="background:var(--lx-accent-soft);color:var(--lx-ink);padding:0 1px;border-radius:2px">${this._escHtml(text.slice(idx, idx + q.length))}</mark>` +
         this._escHtml(text.slice(idx + q.length))
       );
     }
