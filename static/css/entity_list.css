@@ -1,217 +1,358 @@
-/* ============================================================
-   صفحة الجهات — كسوة عنبرية دافئة
-   مستخرجة من entity_list.html (كانت inline) ومُعاد تلوينها لتتبع
-   نظام تصميم LetterSys: عنبري/بُنّي دافئ — لا أزرق/بنفسجي SaaS.
-   ============================================================ */
+/* ═══════════════════════════════════════════════════════════════════
+   دليلُ الجهات — الجدولُ والبطاقات (الهويّة الموحّدة، 2026-11-19)
 
-/* ── بطاقة جهة (عرض البطاقات) ── */
-.entity-card {
-  border: 1.5px solid color-mix(in srgb, var(--lx-pri) 14%, transparent);
-  border-radius: 16px;
-  transition: all .3s cubic-bezier(.4, 0, .2, 1);
-  background: linear-gradient(135deg, rgba(255,255,255,.96), color-mix(in srgb, var(--lx-surface-2) 90%, transparent));
-  overflow: hidden;
-  position: relative;
-}
-.entity-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0;
-  width: 4px; height: 100%;
-  background: linear-gradient(180deg, var(--lx-pri), var(--lx-pri));
-  opacity: 0;
-  transition: opacity .3s;
-}
-.entity-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--lx-pri) 15%, transparent);
-  border-color: var(--lx-pri);
-}
-.entity-card:hover::before { opacity: 1; }
+   على رموز theme.css وحدها فيصحّ الوضعان (كانت أبيضَ ثابتاً وحبراً بنّيّاً وأزرقَ/عنبريّاً
+   للاتّجاه). الاتّجاهُ سهمٌ لا لون: ↗ صادرةٌ منها (بلون الفعل، كجزئها من الشريط) و↙ واردةٌ إليها.
 
-.entity-icon {
-  width: 48px; height: 48px;
-  border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.5rem;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--lx-pri) 12%, transparent), color-mix(in srgb, var(--lx-pri) 10%, transparent));
-  flex-shrink: 0;
-}
-.entity-type-badge {
-  padding: .35rem .75rem;
-  border-radius: 8px;
-  font-size: .75rem;
-  font-weight: 600;
-  letter-spacing: .3px;
-}
-.entity-code {
-  background: linear-gradient(135deg, var(--lx-pri-soft), var(--lx-pri-soft));
-  padding: .5rem 1rem;
-  border-radius: 10px;
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
-  font-weight: 600;
-  color: var(--lx-ink);
-  display: inline-block;
-}
+   **الجدولُ يتبع عرضَ حاويته لا الشاشة** (container query): العمودُ الجانبيّ يُطوى ويُفتح
+   (Ctrl+B) فيتغيّر عرضُ الجدول والشاشةُ هي هي. فوق 880px كلُّ الأعمدة، ودونها يختفي
+   «التواصل»، ودون 680px يصير كلُّ صفٍّ بطاقةً بشبكة — كان الهاتفُ يعرض الاسمَ حرفاً في كلّ
+   سطر (عمودُه 20px بعد الأعمدة الثابتة). والإطارُ (البلاطات · الأدوات · الحواريّة) في
+   entities_design.css.
+   ═══════════════════════════════════════════════════════════════════ */
 
-/* ── بطاقات الإحصاء ── */
-.stats-mini-card {
-  background: linear-gradient(135deg, rgba(255,255,255,.96), color-mix(in srgb, var(--lx-surface-2) 94%, transparent));
-  border: 1.5px solid color-mix(in srgb, var(--lx-pri) 14%, transparent);
-  border-radius: 12px;
-  padding: 1rem;
-  transition: all .3s;
-}
-.stats-mini-card:hover {
-  border-color: var(--lx-pri);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--lx-pri) 12%, transparent);
-}
-
-/* ── شرائح الفلترة ── */
-.filter-chip {
-  padding: .5rem 1rem;
-  border-radius: 20px;
-  border: 1.5px solid color-mix(in srgb, var(--lx-pri) 18%, transparent);
-  background: #fff;
-  cursor: pointer;
-  transition: all .3s;
-  font-size: .875rem;
-  font-weight: 500;
-  color: var(--lx-ink);
-  text-decoration: none;
-}
-.filter-chip:hover {
-  border-color: var(--lx-pri);
-  background: var(--lx-surface-2);
-  color: var(--lx-ink);
-}
-.filter-chip.active {
-  background: linear-gradient(135deg, var(--lx-pri), var(--lx-pri));
-  border-color: var(--lx-pri);
-  color: #fff;
-}
-
-/* ── حقل البحث ── */
-.search-box-modern {
-  border: 1.5px solid color-mix(in srgb, var(--lx-pri) 18%, transparent);
-  border-radius: 12px;
-  padding: .75rem 1rem;
-  font-size: .95rem;
-  transition: all .3s;
-}
-.search-box-modern:focus {
-  border-color: var(--lx-pri);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--lx-pri) 12%, transparent);
-  outline: none;
-}
-
-/* ── الجدول الاحترافي ── */
 .entities-table-wrapper {
-  background: #fff;
-  border: 1px solid color-mix(in srgb, var(--lx-pri) 14%, transparent);
-  border-radius: 14px;
+  container: en-table / inline-size;
   overflow: hidden;
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--lx-pri) 5%, transparent);
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  box-shadow: var(--lx-shadow-sm);
 }
+
 .entities-table {
   width: 100%;
   margin: 0;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: .92rem;
+  table-layout: fixed;
+  color: var(--lx-ink);
+  font-size: .9rem;
 }
+
+.en-col-check { width: 2.9rem; }
+.en-col-books { width: 11rem; }
+.en-col-last { width: 8.25rem; }
+.en-col-mail { width: 12rem; }
+.en-col-acts { width: 8.5rem; }
+
 .entities-table thead th {
-  background: linear-gradient(180deg, var(--lx-surface-2), var(--lx-pri-soft));
-  color: var(--lx-ink);
-  font-weight: 700;
-  font-size: .82rem;
-  letter-spacing: .2px;
-  padding: .85rem 1rem;
-  border-bottom: 2px solid color-mix(in srgb, var(--lx-pri) 18%, transparent);
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  padding: .65rem .8rem;
+  background: var(--lx-surface-2);
+  border-bottom: 1px solid var(--lx-line);
+  color: var(--lx-mute);
+  font-size: .76rem;
+  font-weight: 800;
+  text-align: start;
   white-space: nowrap;
 }
-.entities-table tbody td {
-  padding: .75rem 1rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--lx-pri) 8%, transparent);
-  vertical-align: middle;
+
+.entities-table tbody td { padding: .7rem .8rem; border-bottom: 1px solid var(--lx-line); vertical-align: middle; }
+.entities-table tbody tr:last-child td { border-bottom: 0; }
+.entities-table .form-check-input { margin: 0; vertical-align: middle; cursor: pointer; }
+.en-selall { display: none; }
+
+.entities-table tbody tr.entity-item { transition: background-color var(--lx-dur-1) ease; }
+.entities-table tbody tr.entity-item:hover { background: var(--lx-surface-2); }
+
+/* المحدَّدُ: تعبئةٌ خفيفةٌ بلون الفعل وحافّةٌ في أوّل الصفّ (على الخليّة: الجدولُ بحدودٍ منفصلة
+   لا يرسم ظلَّ الصفّ نفسِه) */
+.entities-table tbody tr.is-selected { background: color-mix(in srgb, var(--lx-pri) 9%, var(--lx-surface)); }
+.entities-table tbody tr.is-selected > td:first-child { box-shadow: inset -3px 0 0 var(--lx-pri); }
+
+/* ── الاسمُ ووصفُه ── */
+.en-row-name {
+  display: block;
+  color: var(--lx-ink);
+  font-size: .95rem;
+  font-weight: 800;
+  line-height: 1.55;
+  text-decoration: none;
+  overflow-wrap: anywhere;
 }
-.entities-table tbody tr:hover { background: var(--lx-surface-2); }
-.entities-table tbody tr.is-selected { background: var(--lx-surface-2); }
-.entity-name-cell a { color: var(--lx-ink); font-weight: 600; text-decoration: none; }
-.entity-name-cell a:hover { color: var(--lx-mute); text-decoration: underline; }
+
+.en-row-name:hover { color: var(--lx-pri); text-decoration: underline; text-underline-offset: 3px; }
+.en-row-name:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; border-radius: 4px; }
+
+.en-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .55rem; margin-top: .3rem; }
+
+.en-row-kind { display: inline-flex; align-items: center; gap: .3rem; font-size: .76rem; font-weight: 700; color: var(--lx-mute); }
+
 .entity-code-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: .25rem;
-  background: var(--lx-pri-soft);
-  color: var(--lx-ink);
-  padding: .18rem .55rem;
-  border-radius: 6px;
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
-  font-size: .82rem;
-  font-weight: 600;
-}
-.entity-code-empty { color: var(--lx-mute); font-style: italic; font-size: .82rem; }
-
-/* ── شارة النوع (مُشتقّة من روابط الكتب) ── */
-.etype-pill {
   display: inline-block;
-  padding: .2rem .6rem;
-  border-radius: 999px;
+  max-width: 13rem;
+  overflow: hidden;
+  padding: .04rem .45rem;
+  border-radius: 6px;
+  background: var(--lx-surface-2);
+  box-shadow: inset 0 0 0 1px var(--lx-line);
+  color: var(--lx-ink);
   font-size: .74rem;
-  font-weight: 600;
+  font-weight: 700;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  vertical-align: middle;
+  unicode-bidi: isolate;
 }
-.etype-pill.is-issuer   { background: var(--lx-wait-bg); color: var(--lx-wait); }
-.etype-pill.is-receiver { background: #e0f2f1; color: #1d6b5e; }
-.etype-pill.is-both     { background: var(--lx-pri-soft); color: var(--lx-wait); }
 
-/* ── شارة عدد الكتب (أزرق=وارد / عنبري=صادر — يطابق تمييز صفحة الكتب) ── */
-.book-count-chip {
+.en-row-person { display: inline-flex; align-items: center; gap: .25rem; font-size: .76rem; color: var(--lx-mute); }
+
+/* ── الحركة: المجموعُ ثمّ ↗ الصادرةُ منها (بلون الفعل كجزئها من الشريط) و↙ الواردةُ إليها ── */
+.en-flow-nums { display: flex; align-items: baseline; gap: .6rem; font-variant-numeric: tabular-nums; }
+.en-flow-nums strong { min-width: 2.4rem; color: var(--lx-ink); font-size: 1rem; font-weight: 800; }
+.en-flow-out, .en-flow-in { display: inline-flex; align-items: center; gap: .15rem; color: var(--lx-mute); font-size: .78rem; font-weight: 700; }
+.en-flow-out .bi { color: var(--lx-pri); }
+
+.en-flow-bar { height: .3rem; margin-top: .4rem; overflow: hidden; border-radius: 999px; background: var(--lx-line-strong); }
+.en-flow-bar span { display: block; width: var(--p, 0%); height: 100%; border-radius: inherit; background: var(--lx-pri); }
+.en-flow-none { font-size: .8rem; color: var(--lx-mute); }
+
+.en-last { display: grid; line-height: 1.45; }
+.en-last-date { color: var(--lx-ink); font-size: .86rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.en-last-ago { color: var(--lx-mute); font-size: .74rem; }
+
+/* ── التواصل ── */
+.en-contact { display: grid; gap: .15rem; min-width: 0; font-size: .8rem; }
+
+.en-contact > a, .en-contact > span {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .35rem;
+  min-width: 0;
+  color: var(--lx-ink);
+  text-decoration: none;
+}
+
+.en-contact > * > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.en-contact .bi { flex: none; color: var(--lx-mute); }
+.en-contact > a:hover { color: var(--lx-pri); text-decoration: underline; }
+.en-contact-add { color: var(--lx-mute); font-size: .78rem; text-decoration: none; }
+.en-contact-add:hover { color: var(--lx-pri); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ── إجراءاتُ الصفّ: ظاهرةٌ دائماً بحبرٍ هادئ (كانت تُبهَت إلى 55% حتّى المرور — أيقونةٌ دون
+   3:1 لا تُرى على اللمس) ── */
+.entities-table .row-actions { display: flex; justify-content: flex-end; gap: .2rem; }
+
+.en-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lx-mute);
+  font-size: .95rem;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease, border-color var(--lx-dur-1) ease;
+}
+
+.en-icon-btn:hover { background: var(--lx-surface-2); border-color: var(--lx-line); color: var(--lx-pri); }
+.en-icon-btn.is-danger:hover { background: var(--lx-late-bg); border-color: var(--lx-late-line); color: var(--lx-late); }
+.en-icon-btn.is-ok:hover { background: var(--lx-done-bg); border-color: var(--lx-done-line); color: var(--lx-done); }
+.en-icon-btn:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 1px; }
+
+/* ── حالةُ «لا نتيجة» (partials/entity_list_empty.html) ── */
+.empty-state-row td { padding: 2.75rem 1rem; text-align: center; }
+.en-empty { display: grid; justify-items: center; gap: .3rem; }
+
+.en-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-bottom: .45rem;
+  border-radius: 50%;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri);
+  font-size: 1.5rem;
+}
+
+.en-empty-title { margin: 0; color: var(--lx-ink); font-size: 1rem; font-weight: 800; }
+.en-empty-text { margin: 0; color: var(--lx-mute); font-size: .86rem; }
+.en-empty-text a { color: var(--lx-pri); font-weight: 700; }
+.en-empty-text a:hover { color: var(--lx-pri-strong); }
+
+/* ── أضيق: «التواصل» يختفي — الاسمُ أولى بالعرض ── */
+@container en-table (width < 880px) {
+  .entities-table .en-col-mail,
+  .entities-table tbody tr > td.en-td-mail { display: none; }
+}
+
+/* ── أضيقُ من ذلك (الهاتف، أو عمودٌ جانبيٌّ مفتوحٌ على شاشةٍ صغيرة): كلُّ صفٍّ بطاقة ──
+   تحديد · الاسم ووصفُه / الحركة / آخرُ كتاب · الإجراءات. والرأسُ صفُّ «تحديد الكل» وحدَه. */
+@container en-table (width < 680px) {
+  .entities-table, .entities-table thead, .entities-table tbody { display: block; }
+
+  .entities-table thead tr {
+    display: flex;
+    align-items: center;
+    padding: .5rem .9rem;
+    background: var(--lx-surface-2);
+    border-bottom: 1px solid var(--lx-line);
+  }
+
+  .entities-table thead th { display: none; }
+
+  .entities-table thead th.en-col-check {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    width: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--lx-ink);
+    font-size: .86rem;
+    font-weight: 700;
+  }
+
+  .en-selall { display: inline; cursor: pointer; }
+
+  .entities-table tbody tr.entity-item {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check name name"
+      ".     flow flow"
+      ".     last acts";
+    align-items: center;
+    gap: .45rem .5rem;
+    padding: .85rem .9rem;
+    border-bottom: 1px solid var(--lx-line);
+  }
+
+  .entities-table tbody tr.entity-item:last-child { border-bottom: 0; }
+  .entities-table tbody tr.entity-item > td { display: block; min-width: 0; padding: 0; border: 0; }
+  .entities-table tbody tr.entity-item > td.en-td-mail { display: none; }
+  .entities-table tbody tr.entity-item > td.en-td-check { grid-area: check; align-self: start; padding-top: .2rem; }
+  .entities-table tbody tr.entity-item > td.entity-name-cell { grid-area: name; }
+  .entities-table tbody tr.entity-item > td.en-td-flow { grid-area: flow; }
+  .entities-table tbody tr.entity-item > td.en-td-last { grid-area: last; }
+  .entities-table tbody tr.entity-item > td.en-td-acts { grid-area: acts; }
+
+  .entities-table tbody tr.is-selected { box-shadow: inset -3px 0 0 var(--lx-pri); }
+  .entities-table tbody tr.is-selected > td:first-child { box-shadow: none; }
+
+  .entities-table .form-check-input { width: 1.4rem; height: 1.4rem; }
+  .en-last { display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .45rem; }
+  .entities-table .row-actions { gap: .3rem; }
+  .en-icon-btn { width: 2.75rem; height: 2.75rem; font-size: 1.05rem; }
+
+  .entities-table tbody tr.empty-state-row, .entities-table tbody tr.empty-state-row > td { display: block; }
+}
+
+/* ═════════ عرضُ البطاقات (اختياريّ، مخفيٌّ افتراضيّاً) ═════════ */
+.entity-card {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  height: 100%;
+  padding: .9rem 1rem;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  box-shadow: var(--lx-shadow-sm);
+  transition: border-color var(--lx-dur-2) ease, box-shadow var(--lx-dur-2) ease;
+}
+
+.entity-card:hover { border-color: var(--lx-line-strong); box-shadow: var(--lx-shadow-md); }
+
+.entity-item.is-selected .entity-card {
+  border-color: var(--lx-pri);
+  background: color-mix(in srgb, var(--lx-pri) 6%, var(--lx-surface));
+  box-shadow: inset 0 0 0 1px var(--lx-pri);
+}
+
+.en-card-top { display: flex; align-items: flex-start; gap: .75rem; }
+.en-card-top > .form-check-input { flex: none; width: 1.25rem; height: 1.25rem; margin: .2rem 0 0; cursor: pointer; }
+
+.entity-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
+  background: var(--lx-surface-2);
+  box-shadow: inset 0 0 0 1px var(--lx-line);
+  color: var(--lx-mute);
+  font-size: 1.2rem;
+}
+
+.en-card-body { display: grid; gap: .35rem; flex: 1; min-width: 0; }
+.en-card-name { margin: 0; font-size: 1rem; font-weight: 800; line-height: 1.55; }
+.en-card-name a { color: var(--lx-ink); text-decoration: none; overflow-wrap: anywhere; }
+.en-card-name a:hover { color: var(--lx-pri); text-decoration: underline; text-underline-offset: 3px; }
+.en-card-chips { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+
+.en-chip {
   display: inline-flex;
   align-items: center;
   gap: .3rem;
-  padding: .15rem .5rem;
-  border-radius: 6px;
-  font-size: .78rem;
-  font-weight: 600;
-}
-.book-count-chip.outgoing { background: var(--lx-surface-2); color: #b45309; }
-.book-count-chip.incoming { background: #e7f0fb; color: #1e5a9e; }
-
-.entities-table .row-actions { display: flex; gap: .25rem; justify-content: flex-end; }
-.entities-table .row-actions .btn { padding: .25rem .55rem; font-size: .82rem; }
-
-/* ── مبدّل العرض (جدول / بطاقات) ── */
-.view-toggle {
-  display: inline-flex;
+  padding: .12rem .6rem;
+  border-radius: 999px;
   background: var(--lx-pri-soft);
-  border: 1px solid color-mix(in srgb, var(--lx-pri) 15%, transparent);
-  border-radius: 10px;
-  padding: 3px;
+  color: var(--lx-pri-soft-ink);
+  font-size: .74rem;
+  font-weight: 700;
 }
+
+.en-chip.is-quiet { background: var(--lx-surface-2); color: var(--lx-mute); box-shadow: inset 0 0 0 1px var(--lx-line); }
+.en-card-foot { display: flex; align-items: center; gap: .4rem; margin-top: auto; padding-top: .7rem; border-top: 1px solid var(--lx-line); }
+.en-card-foot .btn.en-btn { flex: 1 1 0; }
+.en-cards-empty { padding: 2.75rem 1rem; text-align: center; background: var(--lx-surface); border: 1px solid var(--lx-line); border-radius: var(--lx-radius); }
+
+/* ── مبدّلُ العرض (جدول / بطاقات) ── */
+.view-toggle { display: inline-flex; gap: .15rem; padding: .2rem; background: var(--lx-surface-2); border: 1px solid var(--lx-line); border-radius: 10px; }
+
 .view-toggle button {
-  border: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.4rem;
+  min-height: 2rem;
+  border: 0;
+  border-radius: 8px;
   background: transparent;
-  padding: .4rem .85rem;
-  border-radius: 7px;
-  font-size: .85rem;
-  font-weight: 600;
   color: var(--lx-mute);
+  font-size: .95rem;
   cursor: pointer;
-  transition: all .18s;
-}
-.view-toggle button.active {
-  background: #fff;
-  color: var(--lx-ink);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--lx-pri) 10%, transparent);
+  transition: background-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease;
 }
 
-.empty-state-row td { padding: 3rem 1rem; }
+.view-toggle button:hover { color: var(--lx-ink); background: var(--lx-surface); }
+.view-toggle button.active { color: var(--lx-pri); background: var(--lx-surface); box-shadow: var(--lx-shadow-sm), inset 0 0 0 1px var(--lx-line-strong); }
+.view-toggle button:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 1px; }
 
-@media (max-width: 768px) {
-  .entities-table .col-hide-md { display: none; }
+/* ── ترقيمُ الصفحات: متغيّراتُ Bootstrap على الرموز (كان النشطُ أزرقَ Bootstrap) ── */
+.en-page .pagination {
+  --bs-pagination-color: var(--lx-pri);
+  --bs-pagination-bg: var(--lx-surface);
+  --bs-pagination-border-color: var(--lx-line);
+  --bs-pagination-hover-color: var(--lx-pri-strong);
+  --bs-pagination-hover-bg: var(--lx-surface-2);
+  --bs-pagination-hover-border-color: var(--lx-line-strong);
+  --bs-pagination-focus-color: var(--lx-pri-strong);
+  --bs-pagination-focus-bg: var(--lx-surface-2);
+  --bs-pagination-focus-box-shadow: 0 0 0 .2rem rgba(var(--lx-pri-rgb), .3);
+  --bs-pagination-active-color: var(--lx-pri-fill-ink);
+  --bs-pagination-active-bg: var(--lx-pri-fill);
+  --bs-pagination-active-border-color: var(--lx-pri-fill);
+  --bs-pagination-disabled-color: var(--lx-mute);
+  --bs-pagination-disabled-bg: var(--lx-surface-2);
+  --bs-pagination-disabled-border-color: var(--lx-line);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 575.98px) {
+  .en-page .pagination { --bs-pagination-padding-x: .85rem; --bs-pagination-padding-y: .55rem; --bs-pagination-font-size: .9rem; }
+}
+
+@media print {
+  .en-col-check, .en-td-check, .en-col-acts, .en-td-acts, .view-toggle, .pagination { display: none !important; }
 }
