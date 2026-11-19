@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load ar_counts %}
 {% block title %}حجوزات الأرقام{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 {% comment %}
   الدفعة 1 (11-16): كانت تبويباً في لوحة الإدارة المستقلّة، فصارت صفحةً في إطار البرنامج بلغة صفحات إدارة
   النظام (sa-*) كمركز الأقسام. للقراءة فقط — لا تغيّر رقماً ولا حالة. منطقُها في ``_reservation_report``.
