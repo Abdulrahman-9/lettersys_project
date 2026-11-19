@@ -1,142 +1,230 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}تجهيز هذا الجهاز — LetterSys{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 {% block extra_css %}
-<style>
-  #deviceSetup .btn { min-block-size: 44px; touch-action: manipulation; }
-  #deviceSetup h2 { scroll-margin-top: 6rem; }
-</style>
+<link rel="stylesheet" href="{% static 'css/device_setup.css' %}?v=20261119-pages">
 {% endblock %}
 {% block content %}
-<section class="container py-4" id="deviceSetup"
-         data-health-url="{% url 'device_setup_health' %}" data-agent-port="{{ agent_port }}">
-  <div class="card border-0 shadow-sm mx-auto" style="max-width: 760px">
-    <div class="card-body p-4">
-      <h1 class="h4 mb-2">تجهيز هذا الجهاز</h1>
-      <p class="text-muted">لا تحتاج إلى كتابة أوامر أو تغيير ملفات. اتبع الخطوة الظاهرة فقط.</p>
-      <div class="border rounded p-3 mb-3">
-        <h2 class="h6">السيرفر والكلاينت ليسا نفس التجهيز</h2>
-        <p class="small mb-2">السيرفر الحالي: <bdi>{{ server_name }}</bdi> — <bdi>{{ server_url }}</bdi>. عليه النظام وقاعدة البيانات وخدمة HTTPS، وتبدأ خدماته مع إقلاع Windows.</p>
-        <p class="small mb-0">الأجهزة الأخرى كلاينت: تستخدم الموقع وأدوات المسح فقط. الحزمة أدناه لا تثبّت سيرفراً أو قاعدة بيانات عليها، ولا تنقل كلمات مرور السيرفر. أداة المسح تبدأ عند دخول الموظف إلى Windows.</p>
-        {% if can_manage_workstations %}
-        <a class="btn btn-outline-primary mt-3" href="{% url 'workstation_board' %}">إدارة أجهزة الكلاينت من السيرفر</a>
-        {% endif %}
+{% comment %}
+  «تجهيز هذا الجهاز» على الهويّة الموحّدة (2026-11-19): مسارٌ واحدٌ من أربع خطوات على خطٍّ رأسيّ، ودليلُ كلّ
+  خطوةٍ ينفتح داخلها. كلُّ فحصٍ يجري في المتصفّح (js/device_setup.js · js/workstation_setup.js) ويكتب حالتَه في
+  سطر خطوته (data-tone): أيقونةٌ ونصٌّ لا لونٌ وحده، وعقدةُ الخطوة تقرأ الحالةَ نفسَها في الورقة (‎:has‎).
+  المعرّفاتُ والطلباتُ والنصوصُ التي تختبرها tests_device_setup كما كانت.
+{% endcomment %}
+<div class="ds" id="deviceSetup"
+     data-health-url="{% url 'device_setup_health' %}" data-agent-port="{{ agent_port }}">
+  <header class="ds-head">
+    <div class="ds-head-text">
+      <nav class="ds-crumb" aria-label="مسار الصفحة">
+        <a href="{% url 'network_settings' %}"><i class="bi bi-chevron-right" aria-hidden="true"></i>هذا الجهاز</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">التجهيز</span>
+      </nav>
+      <h1>تجهيز هذا الجهاز</h1>
+      <p class="ds-lead">لا تحتاج إلى كتابة أوامر أو تغيير ملفات. اتبع الخطوة الظاهرة فقط.</p>
+    </div>
+    {# الحاسوبُ يصل الماسحَ بسلكٍ ويُختم بذهب الشعار — رسمٌ خطّيٌّ ثابت، صامتٌ لقارئ الشاشة #}
+    <svg class="ds-art" viewBox="0 0 220 120" aria-hidden="true" focusable="false">
+      <rect x="118" y="12" width="92" height="62" rx="8"/>
+      <path class="ds-art-soft" d="M192 32 H150 M192 43 H140 M192 54 H160"/>
+      <path d="M164 74 V88 M146 90 H182"/>
+      <path class="ds-art-cable" d="M118 62 C 96 62, 102 96, 80 96"/>
+      <path d="M12 80 L18 70 H80 L86 80"/>
+      <rect x="8" y="80" width="80" height="28" rx="6"/>
+      <path class="ds-art-gold" d="M22 94 H74"/>
+      <g class="ds-art-gold">
+        <circle cx="46" cy="36" r="16"/>
+        <path d="M38 36 L43.5 41.5 L54 31"/>
+      </g>
+    </svg>
+  </header>
+
+  <div class="ds-layout">
+    <section class="ds-card ds-flow" aria-labelledby="dsFlowTitle">
+      <div class="ds-flow-head">
+        <h2 id="dsFlowTitle">تجهيز أدوات محطة العمل والماسح</h2>
+        <p class="ds-muted">إذا كنت تستخدم هذا الجهاز كسيرفر فقط، فلا تحتاج حزمة الكلاينت. الحزمة مخصصة لأجهزة الموظفين وتمنع تركيبها على السيرفر نفسه. إذا كان الماسح موصولاً بالسيرفر، يجهّز مسؤول النظام أدوات مسحه كخطوة مستقلة دون تغيير دوره.</p>
       </div>
-      <h2 class="h6">تجهيز أدوات محطة العمل والماسح</h2>
-      <p class="small text-muted">إذا كنت تستخدم هذا الجهاز كسيرفر فقط، فلا تحتاج حزمة الكلاينت. الحزمة مخصصة لأجهزة الموظفين وتمنع تركيبها على السيرفر نفسه. إذا كان الماسح موصولاً بالسيرفر، يجهّز مسؤول النظام أدوات مسحه كخطوة مستقلة دون تغيير دوره.</p>
-      <div id="setupConnection" class="alert alert-info" role="status" aria-live="polite">
-        جارٍ التحقق من اتصال النظام…
-      </div>
-      <ol class="list-group list-group-numbered mb-4">
-        <li class="list-group-item">
-          <strong>الاتصال الآمن وشهادة الثقة</strong>
-          <p class="small mb-2">افتح النظام عبر HTTPS بعد تجهيز شهادة الثقة. الزر لا يتجاوز تحذيرات المتصفح.</p>
-          <div class="d-flex flex-wrap gap-2">
-            {% if secure_setup_url %}
-            <a class="btn btn-outline-primary" id="secureSetupLink" href="{{ secure_setup_url }}">فتح الاتصال الآمن</a>
-            {% endif %}
-            <button class="btn btn-outline-secondary" type="button" id="showTrustHelp" aria-controls="trustSetupHelp" aria-expanded="false">تجهيز شهادة الثقة</button>
-            <button class="btn btn-outline-secondary" type="button" id="retryConnection">إعادة فحص الاتصال</button>
+
+      <ol class="ds-steps">
+        <li class="ds-step" data-step="secure">
+          <span class="ds-node" aria-hidden="true"><b>1</b></span>
+          <div class="ds-step-body">
+            <h3 class="ds-step-title"><span class="ds-eyebrow">الخطوة 1</span>الاتصال الآمن وشهادة الثقة</h3>
+            <p class="ds-step-text">افتح النظام عبر HTTPS بعد تجهيز شهادة الثقة. الزر لا يتجاوز تحذيرات المتصفح.</p>
+            <div class="ds-actions">
+              {% if secure_setup_url %}
+              <a class="btn btn-outline-primary" id="secureSetupLink" href="{{ secure_setup_url }}"><i class="bi bi-shield-lock" aria-hidden="true"></i>فتح الاتصال الآمن</a>
+              {% endif %}
+              <button class="btn btn-outline-secondary" type="button" id="showTrustHelp" aria-controls="trustSetupHelp" aria-expanded="false"><i class="bi bi-patch-check" aria-hidden="true"></i>تجهيز شهادة الثقة</button>
+              <button class="btn btn-outline-secondary" type="button" id="retryConnection"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>إعادة فحص الاتصال</button>
+            </div>
+            <div id="setupConnection" class="ds-status" data-tone="info" role="status" aria-live="polite">جارٍ التحقق من اتصال النظام…</div>
+            <section id="trustSetupHelp" class="ds-panel" hidden>
+              <h4 tabindex="-1"><i class="bi bi-patch-check" aria-hidden="true"></i>تجهيز شهادة الشركة بأمان</h4>
+              <p class="ds-text">لأول تجهيز، احصل على الحزمة من مسؤول النظام عبر USB أو مشاركة ملفات موثوقة للشركة، وافتحها من حساب الموظف العادي. وافق على شهادة الشركة التي سلّمها لك المسؤول فقط.</p>
+              <p class="ds-muted">المتصفح لا يستطيع تثبيت شهادة Windows وحده. لا ننزّل حزمة الثقة عبر HTTP، ولا تختَر تجاوز تحذير الشهادة. إذا ظهرت رسالة «الاتصال بالشبكة»، اطلب من المسؤول فحص الثقة والشبكة.</p>
+              {% if secure_setup_url %}
+              <div class="ds-actions">
+                <a class="btn btn-outline-primary" href="{{ secure_setup_url }}"><i class="bi bi-shield-lock" aria-hidden="true"></i>جهّزت الشهادة — فتح الرابط الآمن</a>
+              </div>
+              {% else %}
+              <p class="ds-note" data-tone="warning">عنوان HTTPS غير محدد لهذا العنوان؛ اطلب الرابط الآمن من مسؤول النظام.</p>
+              {% endif %}
+            </section>
           </div>
         </li>
-        <li class="list-group-item">
-          <strong>توصيل الماسح وفحص هذا الجهاز</strong>
-          <p class="small mb-2">إذا تستخدم ماسحاً: شغّله ووصل كابله، ثم اضغط الزر. لا يسحب الفحص أي ورقة.</p>
-          <button type="button" class="btn btn-primary" id="checkDevice">
-            <span class="spinner-border spinner-border-sm me-2 d-none" id="deviceCheckSpinner" aria-hidden="true"></span>
-            <span id="deviceCheckLabel">فحص هذا الجهاز</span>
-          </button>
-          <a class="btn btn-outline-secondary" href="{% url 'dashboard' %}">لا أستخدم ماسحاً — متابعة النظام</a>
+
+        <li class="ds-step" data-step="check">
+          <span class="ds-node" aria-hidden="true"><b>2</b></span>
+          <div class="ds-step-body">
+            <h3 class="ds-step-title"><span class="ds-eyebrow">الخطوة 2</span>توصيل الماسح وفحص هذا الجهاز</h3>
+            <p class="ds-step-text">إذا تستخدم ماسحاً: شغّله ووصل كابله، ثم اضغط الزر. لا يسحب الفحص أي ورقة.</p>
+            <p class="ds-hint"><i class="bi bi-info-circle" aria-hidden="true"></i><span>إذا طلب المتصفح السماح بالاتصال بالأجهزة المحلية، اختر «سماح» لتتمكن من استخدام الماسح.</span></p>
+            <div class="ds-actions">
+              <button type="button" class="btn btn-primary" id="checkDevice">
+                <i class="bi bi-search ds-btn-ico" aria-hidden="true"></i>
+                <span class="spinner-border spinner-border-sm d-none" id="deviceCheckSpinner" aria-hidden="true"></span>
+                <span id="deviceCheckLabel">فحص هذا الجهاز</span>
+              </button>
+              <a class="btn btn-outline-secondary" href="{% url 'dashboard' %}">لا أستخدم ماسحاً — متابعة النظام</a>
+            </div>
+            <div id="deviceCheckResult" class="ds-status" data-tone="secondary" role="status" aria-live="polite">الفحص لا يسحب الورق ولا يرفع مستندات.</div>
+            <div class="ds-actions">
+              <button class="btn btn-outline-secondary" type="button" id="showScannerHelp" aria-controls="scannerSetupHelp" aria-expanded="false"><i class="bi bi-wrench-adjustable" aria-hidden="true"></i>الماسح لا يظهر — خطوات الإصلاح</button>
+            </div>
+            <section id="scannerSetupHelp" class="ds-panel" hidden>
+              <h4 tabindex="-1"><i class="bi bi-wrench-adjustable" aria-hidden="true"></i>إعادة إظهار الماسح</h4>
+              <ol class="ds-list">
+                <li>شغّل الماسح ووصل الكابل، وأغلق برامج المسح الأخرى.</li>
+                <li>إن منعت اتصال الأجهزة المحلية في Chrome أو Edge، افتح إعدادات هذا الموقع من الرمز بجانب العنوان واسمح بإذن الشبكة أو الأجهزة المحلية إن ظهر، ثم أعد تحميل الصفحة.</li>
+                <li>إذا بقي غير ظاهر، اطلب من المسؤول تركيب تعريف المصنع الصحيح (TWAIN/WIA). لا تثبّت تعريفاً من مصدر مجهول.</li>
+              </ol>
+              <div class="ds-actions">
+                <button class="btn btn-outline-primary" type="button" id="recheckScanner"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>أكملت الخطوات — إعادة الفحص</button>
+              </div>
+            </section>
+          </div>
         </li>
-        <li class="list-group-item">
-          <strong>تجهيز أدوات الجهاز عند الحاجة</strong>
-          <p class="small mb-2">إن احتاج الجهاز إعداداً، شغّل حزمة التجهيز مرة واحدة ثم أعد الفحص. الأدوات لحواسيب Windows ذات 64 بت فقط.</p>
-          <button class="btn btn-outline-primary" type="button" id="showSetupHelp" aria-controls="deviceSetupHelp" aria-expanded="false">تجهيز أدوات الجهاز خطوة بخطوة</button>
+
+        <li class="ds-step" data-step="tools">
+          <span class="ds-node" aria-hidden="true"><b>3</b></span>
+          <div class="ds-step-body">
+            <h3 class="ds-step-title"><span class="ds-eyebrow">الخطوة 3</span>تجهيز أدوات الجهاز عند الحاجة</h3>
+            <p class="ds-step-text">إن احتاج الجهاز إعداداً، شغّل حزمة التجهيز مرة واحدة ثم أعد الفحص. الأدوات لحواسيب Windows ذات 64 بت فقط.</p>
+            <div class="ds-actions">
+              <button class="btn btn-outline-primary" type="button" id="showSetupHelp" aria-controls="deviceSetupHelp" aria-expanded="false"><i class="bi bi-tools" aria-hidden="true"></i>تجهيز أدوات الجهاز خطوة بخطوة</button>
+            </div>
+            <div id="deviceSetupHelp" class="ds-panel" hidden>
+              <h4 tabindex="-1"><i class="bi bi-tools" aria-hidden="true"></i>خطوة واحدة: تجهيز أدوات المسح</h4>
+              <p class="ds-muted">حزمة أدوات المسح لحواسيب Windows ذات 64 بت، وليست للهاتف. يمكنك استخدام الموقع وتثبيت أيقونته على الأجهزة الأخرى دون هذه الحزمة.</p>
+              {% if package_available and request.is_secure %}
+              <div class="ds-actions">
+                <a class="btn btn-outline-primary" href="{% url 'device_setup_download' %}" id="downloadSetup"><i class="bi bi-download" aria-hidden="true"></i>تنزيل حزمة تجهيز الجهاز</a>
+              </div>
+              <ol class="ds-list">
+                <li>نزّل ملف <bdi dir="ltr" class="ds-mono">LetterSys-Workstation-Setup.exe</bdi> من هذه الصفحة الآمنة وافتحه بالنقر المزدوج من حساب الموظف العادي، وليس «تشغيل كمسؤول».</li>
+                <li>انتظر نافذة التجهيز، ثم وافق على مكونات حزمة الشركة الموثوقة. يفكّ البرنامج ملفاته تلقائياً؛ لا تحتاج أوامر أو استخراجاً يدوياً.</li>
+                <li>وافق على تجهيز هذا الجهاز لخادم الشركة. سيُجهّز البرنامج الشهادة وأدوات المسح والتشغيل التلقائي.</li>
+                <li>عد إلى هذه الصفحة واضغط «فحص هذا الجهاز».</li>
+              </ol>
+              {% elif package_available %}
+              <p class="ds-note" data-tone="warning">أنت تستخدم HTTP. احصل على الحزمة من مسؤول النظام مباشرةً لتجهيز شهادة الثقة، ثم افتح عنوان HTTPS؛ التنزيل من هذه الصفحة غير متاح قبل الاتصال الآمن.</p>
+              {% else %}
+              <p class="ds-note" data-tone="danger">حزمة التجهيز لم ينشرها مسؤول النظام بعد. لا يستطيع المتصفح تثبيت أدوات Windows وحده؛ اطلب الحزمة من المسؤول.</p>
+              {% endif %}
+              <p class="ds-muted">للحزمة المضغوطة الاحتياطية فقط: «استخراج الكل» ثم تشغيل <bdi dir="ltr" class="ds-mono">Setup.vbs</bdi>. إذا لم يظهر ماسح بعد التجهيز، تحقّق من الطاقة والكابل. قد يحتاج تعريف الشركة المصنّعة إلى تركيب بواسطة المسؤول؛ لا يثبت المعالج تعريفاً تخمينياً.</p>
+              <div class="ds-actions">
+                <button class="btn btn-outline-primary" type="button" id="recheckAfterSetup"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>انتهيت من التجهيز — إعادة الفحص</button>
+              </div>
+            </div>
+          </div>
+        </li>
+
+        <li class="ds-step" data-step="pair">
+          <span class="ds-node" aria-hidden="true"><b>4</b></span>
+          <div class="ds-step-body">
+            <h3 class="ds-step-title"><span class="ds-eyebrow">الخطوة 4</span>ربط الجهاز بالشركة</h3>
+            <p class="ds-step-text">بعد اكتشاف أدوات الجهاز في الخطوة 2 تظهر هنا حقول الاسم والموافقة.</p>
+            <div class="ds-actions">
+              <button class="btn btn-outline-primary" type="button" id="goEnrollment" aria-controls="deviceEnrollment"><i class="bi bi-link-45deg" aria-hidden="true"></i>تسمية الجهاز وتفعيل الربط</button>
+            </div>
+            <section id="deviceEnrollment" class="ds-panel" hidden
+                     data-enroll-url="{% url 'workstation_enroll' %}" data-mine-url="{% url 'workstation_mine' %}">
+              <h4 tabindex="-1"><i class="bi bi-link-45deg" aria-hidden="true"></i>اسم الجهاز وربطه بالشركة</h4>
+              <p class="ds-muted">يتفعّل الربط فور تسجيل الدخول والموافقة. تُرسل حالة الاتصال وإصدار الأدوات ونتيجة فحص الماسح، وليس محتوى مستنداتك أو ملفاتك الشخصية.</p>
+              <form id="deviceEnrollmentForm" class="ds-form">
+                {% csrf_token %}
+                <label for="workstationName" class="form-label">اسم يميّز هذا الجهاز</label>
+                <input id="workstationName" name="workstation_name" class="form-control" required maxlength="80"
+                       autocomplete="off" aria-describedby="workstationNameHelp">
+                <p id="workstationNameHelp" class="ds-field-help">مثال: حاسبة بريد الشؤون الإدارية. لا تكتب كلمة مرور هنا.</p>
+                <div class="form-check ds-consent">
+                  <input id="workstationConsent" class="form-check-input" type="checkbox" required>
+                  <label class="form-check-label" for="workstationConsent">أوافق على ربط هذا الجهاز بحسابي ومتابعة حالته تلقائياً عند دخولي إلى Windows.</label>
+                </div>
+                <button class="btn btn-primary" type="submit" id="pairWorkstation">حفظ الاسم وتفعيل الربط</button>
+              </form>
+              <div id="workstationPairResult" class="ds-status" data-tone="secondary" role="status" aria-live="polite">افحص هذا الجهاز أولاً لقراءة هويته المحلية.</div>
+            </section>
+          </div>
         </li>
       </ol>
-      <section id="trustSetupHelp" class="border rounded p-3 mb-3" hidden>
-        <h2 class="h6" tabindex="-1">تجهيز شهادة الشركة بأمان</h2>
-        <p>لأول تجهيز، احصل على الحزمة من مسؤول النظام عبر USB أو مشاركة ملفات موثوقة للشركة، وافتحها من حساب الموظف العادي. وافق على شهادة الشركة التي سلّمها لك المسؤول فقط.</p>
-        <p class="small mb-2">المتصفح لا يستطيع تثبيت شهادة Windows وحده. لا ننزّل حزمة الثقة عبر HTTP، ولا تختَر تجاوز تحذير الشهادة. إذا ظهرت رسالة «الاتصال بالشبكة»، اطلب من المسؤول فحص الثقة والشبكة.</p>
-        {% if secure_setup_url %}
-        <a class="btn btn-outline-primary" href="{{ secure_setup_url }}">جهّزت الشهادة — فتح الرابط الآمن</a>
-        {% else %}
-        <p class="text-warning mb-0">عنوان HTTPS غير محدد لهذا العنوان؛ اطلب الرابط الآمن من مسؤول النظام.</p>
-        {% endif %}
-      </section>
-      <p class="small text-muted mt-2">إذا طلب المتصفح السماح بالاتصال بالأجهزة المحلية، اختر «سماح» لتتمكن من استخدام الماسح.</p>
-      <div id="deviceCheckResult" class="alert alert-secondary mt-3" role="status" aria-live="polite">
-        الفحص لا يسحب الورق ولا يرفع مستندات.
-      </div>
-      <div class="d-flex flex-wrap gap-2 mt-3">
-        <button class="btn btn-outline-primary" type="button" id="goEnrollment" aria-controls="deviceEnrollment">تسمية الجهاز وتفعيل الربط</button>
-        <button class="btn btn-outline-secondary" type="button" id="showScannerHelp" aria-controls="scannerSetupHelp" aria-expanded="false">الماسح لا يظهر — خطوات الإصلاح</button>
-      </div>
-      <section id="scannerSetupHelp" class="border rounded p-3 mt-3" hidden>
-        <h2 class="h6" tabindex="-1">إعادة إظهار الماسح</h2>
-        <ol>
-          <li>شغّل الماسح ووصل الكابل، وأغلق برامج المسح الأخرى.</li>
-          <li>إن منعت اتصال الأجهزة المحلية في Chrome أو Edge، افتح إعدادات هذا الموقع من الرمز بجانب العنوان واسمح بإذن الشبكة أو الأجهزة المحلية إن ظهر، ثم أعد تحميل الصفحة.</li>
-          <li>إذا بقي غير ظاهر، اطلب من المسؤول تركيب تعريف المصنع الصحيح (TWAIN/WIA). لا تثبّت تعريفاً من مصدر مجهول.</li>
-        </ol>
-        <button class="btn btn-outline-primary" type="button" id="recheckScanner">أكملت الخطوات — إعادة الفحص</button>
-      </section>
-      <section id="deviceEnrollment" class="border rounded p-3 mt-3" hidden
-               data-enroll-url="{% url 'workstation_enroll' %}" data-mine-url="{% url 'workstation_mine' %}">
-        <h2 class="h6" tabindex="-1">اسم الجهاز وربطه بالشركة</h2>
-        <p class="small text-muted">يتفعّل الربط فور تسجيل الدخول والموافقة. تُرسل حالة الاتصال وإصدار الأدوات ونتيجة فحص الماسح، وليس محتوى مستنداتك أو ملفاتك الشخصية.</p>
-        <form id="deviceEnrollmentForm">
-          {% csrf_token %}
-          <label for="workstationName" class="form-label">اسم يميّز هذا الجهاز</label>
-          <input id="workstationName" name="workstation_name" class="form-control" required maxlength="80"
-                 autocomplete="off" aria-describedby="workstationNameHelp">
-          <p id="workstationNameHelp" class="small text-muted mt-1">مثال: حاسبة بريد الشؤون الإدارية. لا تكتب كلمة مرور هنا.</p>
-          <div class="form-check my-3">
-            <input id="workstationConsent" class="form-check-input" type="checkbox" required>
-            <label class="form-check-label" for="workstationConsent">أوافق على ربط هذا الجهاز بحسابي ومتابعة حالته تلقائياً عند دخولي إلى Windows.</label>
-          </div>
-          <button class="btn btn-primary" type="submit" id="pairWorkstation">حفظ الاسم وتفعيل الربط</button>
-        </form>
-        <div id="workstationPairResult" class="alert alert-secondary mt-3" role="status" aria-live="polite">افحص هذا الجهاز أولاً لقراءة هويته المحلية.</div>
-      </section>
-      <div id="deviceSetupHelp" class="border rounded p-3 mt-3" hidden>
-        <h2 class="h6" tabindex="-1">خطوة واحدة: تجهيز أدوات المسح</h2>
-        <p class="small text-muted">حزمة أدوات المسح لحواسيب Windows ذات 64 بت، وليست للهاتف. يمكنك استخدام الموقع وتثبيت أيقونته على الأجهزة الأخرى دون هذه الحزمة.</p>
-        {% if package_available and request.is_secure %}
-        <a class="btn btn-outline-primary mb-2" href="{% url 'device_setup_download' %}" id="downloadSetup">
-          تنزيل حزمة تجهيز الجهاز
-        </a>
-        <ol class="mb-2">
-          <li>نزّل ملف <bdi>LetterSys-Workstation-Setup.exe</bdi> من هذه الصفحة الآمنة وافتحه بالنقر المزدوج من حساب الموظف العادي، وليس «تشغيل كمسؤول».</li>
-          <li>انتظر نافذة التجهيز، ثم وافق على مكونات حزمة الشركة الموثوقة. يفكّ البرنامج ملفاته تلقائياً؛ لا تحتاج أوامر أو استخراجاً يدوياً.</li>
-          <li>وافق على تجهيز هذا الجهاز لخادم الشركة. سيُجهّز البرنامج الشهادة وأدوات المسح والتشغيل التلقائي.</li>
-          <li>عد إلى هذه الصفحة واضغط «فحص هذا الجهاز».</li>
-        </ol>
-        {% elif package_available %}
-        <p class="text-warning mb-2">أنت تستخدم HTTP. احصل على الحزمة من مسؤول النظام مباشرةً لتجهيز شهادة الثقة، ثم افتح عنوان HTTPS؛ التنزيل من هذه الصفحة غير متاح قبل الاتصال الآمن.</p>
-        {% else %}
-        <p class="text-danger mb-2">حزمة التجهيز لم ينشرها مسؤول النظام بعد. لا يستطيع المتصفح تثبيت أدوات Windows وحده؛ اطلب الحزمة من المسؤول.</p>
-        {% endif %}
-        <p class="small text-muted mb-0">للحزمة المضغوطة الاحتياطية فقط: «استخراج الكل» ثم تشغيل <bdi>Setup.vbs</bdi>. إذا لم يظهر ماسح بعد التجهيز، تحقّق من الطاقة والكابل. قد يحتاج تعريف الشركة المصنّعة إلى تركيب بواسطة المسؤول؛ لا يثبت المعالج تعريفاً تخمينياً.</p>
-        <button class="btn btn-outline-primary mt-3" type="button" id="recheckAfterSetup">انتهيت من التجهيز — إعادة الفحص</button>
-      </div>
-      <div class="border-top pt-3 mt-4">
-        <h2 class="h6">إضافة أيقونة البرنامج</h2>
-        <button class="btn btn-outline-primary mb-2" type="button" id="installSetupApp">تثبيت أيقونة البرنامج</button>
-        <div id="setupInstallResult" class="small mb-2" role="status" aria-live="polite"></div>
-        <p class="mb-1">استخدم زر «تثبيت» إن ظهر، أو رمز التثبيت قرب شريط العنوان. في Edge: القائمة ⋯ ثم «التطبيقات» ثم تثبيت الموقع. في Chrome: خيار التثبيت من قائمة المتصفح.</p>
-        <p class="small text-muted">على iPhone أو iPad: «مشاركة» ثم «إضافة إلى الشاشة الرئيسية». قد تختلف الخيارات حسب المتصفح.</p>
-        <a class="btn btn-outline-secondary" href="{% url 'dashboard' %}">العودة إلى النظام</a>
-        <a class="btn btn-outline-primary" href="{% url 'book_create_incoming' %}">فتح الإدخال لتجربة ورقة</a>
+    </section>
+
+    <aside class="ds-aside" aria-label="معلومات وإجراءات مساندة">
+      <section class="ds-card" aria-labelledby="dsRolesTitle">
+        <div class="ds-card-head">
+          <span class="ds-ico" aria-hidden="true"><i class="bi bi-hdd-network"></i></span>
+          <h2 id="dsRolesTitle">السيرفر والكلاينت ليسا نفس التجهيز</h2>
+        </div>
+        <dl class="ds-dl">
+          <dt>السيرفر الحالي</dt>
+          <dd><bdi dir="ltr" class="ds-mono">{{ server_name }}</bdi></dd>
+          <dt>عنوانه</dt>
+          <dd><bdi dir="ltr" class="ds-mono">{{ server_url }}</bdi></dd>
+        </dl>
+        <p class="ds-text">عليه النظام وقاعدة البيانات وخدمة HTTPS، وتبدأ خدماته مع إقلاع Windows.</p>
+        <p class="ds-muted">الأجهزة الأخرى كلاينت: تستخدم الموقع وأدوات المسح فقط. الحزمة أدناه لا تثبّت سيرفراً أو قاعدة بيانات عليها، ولا تنقل كلمات مرور السيرفر. أداة المسح تبدأ عند دخول الموظف إلى Windows.</p>
         {% if can_manage_workstations %}
-        <a class="btn btn-outline-primary" href="{% url 'workstation_board' %}">متابعة أجهزة الموظفين</a>
+        <div class="ds-actions ds-actions-stack">
+          <a class="btn btn-outline-primary" href="{% url 'workstation_board' %}"><i class="bi bi-pc-display" aria-hidden="true"></i>إدارة أجهزة الكلاينت من السيرفر</a>
+        </div>
         {% endif %}
-      </div>
-    </div>
+      </section>
+
+      <section class="ds-card" aria-labelledby="dsAppTitle">
+        <div class="ds-card-head">
+          <span class="ds-ico" aria-hidden="true"><i class="bi bi-window-plus"></i></span>
+          <h2 id="dsAppTitle">إضافة أيقونة البرنامج</h2>
+        </div>
+        <div>
+          <div class="ds-actions ds-actions-stack">
+            <button class="btn btn-outline-primary" type="button" id="installSetupApp"><i class="bi bi-download" aria-hidden="true"></i>تثبيت أيقونة البرنامج</button>
+          </div>
+          <div id="setupInstallResult" class="ds-install-result" role="status" aria-live="polite"></div>
+        </div>
+        <p class="ds-text">استخدم زر «تثبيت» إن ظهر، أو رمز التثبيت قرب شريط العنوان. في Edge: القائمة ⋯ ثم «التطبيقات» ثم تثبيت الموقع. في Chrome: خيار التثبيت من قائمة المتصفح.</p>
+        <p class="ds-muted">على iPhone أو iPad: «مشاركة» ثم «إضافة إلى الشاشة الرئيسية». قد تختلف الخيارات حسب المتصفح.</p>
+      </section>
+
+      <section class="ds-card" aria-labelledby="dsDoneTitle">
+        <div class="ds-card-head">
+          <span class="ds-ico" aria-hidden="true"><i class="bi bi-check2-circle"></i></span>
+          <h2 id="dsDoneTitle">بعد التجهيز</h2>
+        </div>
+        <p class="ds-muted">جرّب ورقة من صفحة الإدخال للتأكد من المسح الفعلي.</p>
+        <div class="ds-actions ds-actions-stack">
+          <a class="btn btn-outline-primary" href="{% url 'book_create_incoming' %}"><i class="bi bi-file-earmark-plus" aria-hidden="true"></i>فتح الإدخال لتجربة ورقة</a>
+          <a class="btn btn-outline-secondary" href="{% url 'dashboard' %}"><i class="bi bi-arrow-right" aria-hidden="true"></i>العودة إلى النظام</a>
+        </div>
+      </section>
+    </aside>
   </div>
-</section>
+</div>
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'js/device_setup.js' %}?v=20261013-guided-actions"></script>
-<script src="{% static 'js/workstation_setup.js' %}?v=20261013-guided-actions-errors"></script>
+<script src="{% static 'js/device_setup.js' %}?v=20261119-pages"></script>
+<script src="{% static 'js/workstation_setup.js' %}?v=20261119-pages"></script>
 {% endblock %}
