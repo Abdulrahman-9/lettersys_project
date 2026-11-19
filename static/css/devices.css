@@ -1,21 +1,48 @@
-/* «الشبكة والأجهزة» وصفحةُ الانضمام — على رموز الهويّة (theme.css: --lx-*)، فالداكنُ يأتي معها.
-   التصميمُ المعتمد 2026-11-18 (لوحات Main · IssueCode · Join · ThisDevice · Unregistered · Toasts). */
+/* «الشبكة والأجهزة» وصفحةُ الانضمام وشريطُ «غير مسجّل» — على رموز الهويّة وحدها (theme.css: --lx-*)،
+   فالداكنُ يأتي معها. التصميمُ المعتمد 2026-11-18 (لوحات Main · IssueCode · Join · ThisDevice · Unregistered ·
+   Toasts)، ونقلُ صفحة الشبكة إلى الهويّة v2 في 2026-11-19. لا لونَ خامّاً هنا: الأبيضُ وحده، حبراً على التركواز
+   العميق في علامة الصفحة. */
 
-.dvs { max-width: 1232px; margin: 0 auto; padding: 1.5rem 1rem 3rem; display: grid; gap: 1.25rem; color: var(--lx-ink); }
+/* ── الصفحة: الحاويةُ مرجعُ استعلامات العرض (لا عرضُ الشاشة)، فتصحّ داخل لوحة مركز الإعدادات أيضاً ── */
+.dvs {
+  container: dvs / inline-size;
+  max-width: 1232px; margin: 0 auto; padding: 1.25rem 1rem 3rem;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; color: var(--lx-ink);
+}
+.is-system-admin .dvs { padding: .25rem 0 2rem; }   /* قشرةُ الإدارة تحشو ‎.app-main‎ سلفاً — لا حشوَ مضاعفاً على الهاتف */
+.app-embed-main .dvs { padding: 0; }                 /* داخل لوحة المركز: الإطارُ يحشو */
 .dvs [hidden] { display: none !important; }
 
-.dvs-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; }
-.dvs-head-text { flex: 1 1 420px; min-width: 0; display: grid; gap: .2rem; }
-.dvs-crumb { font-size: .8rem; font-weight: 600; color: var(--lx-mute); }
-.dvs-head h1 { margin: 0; font-size: 1.65rem; font-weight: 800; text-wrap: balance; }
-.dvs-head p { margin: 0; color: var(--lx-mute); font-size: .9rem; max-width: 70ch; line-height: 1.75; }
-.dvs-head-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
-.dvs-back { align-self: center; }
+/* ── الترويسة: علامةُ الصفحة بسطح «القيادة» — تركوازٌ عميق وخطٌّ ذهبيّ كالشريط العلويّ واللوح النشط ── */
+.dvs-head {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "mark text" "actions actions";
+  align-items: center; gap: .9rem 1rem;
+}
+.dvs-mark {
+  grid-area: mark; width: 3rem; height: 3rem; border-radius: 14px; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--lx-hero-a), var(--lx-hero-b)); color: #fff; font-size: 1.35rem;
+  box-shadow: inset 0 -3px 0 var(--lx-accent), var(--lx-shadow-sm);
+}
+.dvs-head-text { grid-area: text; min-width: 0; display: grid; gap: .15rem; }
+.dvs-head-actions { grid-area: actions; display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+@container dvs (min-width: 760px) {
+  .dvs-head { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "mark text actions"; column-gap: 1.25rem; }
+  .dvs-mark { width: 3.5rem; height: 3.5rem; border-radius: 16px; font-size: 1.55rem; }
+  .dvs-head-actions { justify-content: flex-end; max-width: 26rem; }
+}
+.dvs-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: .1rem .45rem; font-size: .8rem; font-weight: 600; color: var(--lx-mute); }
+.dvs-crumbs a {
+  display: inline-flex; align-items: center; gap: .35rem; min-height: 1.75rem; border-radius: 6px;
+  color: var(--lx-pri); font-weight: 700; text-decoration: none;
+}
+.dvs-crumbs a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.dvs-crumbs .bi-chevron-left { font-size: .65rem; }
+.dvs-head h1 { margin: 0; font-size: clamp(1.4rem, 1.1rem + 1.2cqi, 1.75rem); font-weight: 800; line-height: 1.45; text-wrap: balance; }
+.dvs-head p { margin: 0; color: var(--lx-mute); font-size: .9rem; max-width: 70ch; line-height: 1.8; text-wrap: pretty; }
 
 .dvs-live {
-  display: inline-flex; align-items: center; gap: .5rem; font-size: .8rem; font-weight: 700;
-  padding: .3rem .75rem; border-radius: 999px; color: var(--lx-done); background: var(--lx-done-bg);
-  border: 1px solid var(--lx-done-line);
+  display: inline-flex; align-items: center; gap: .5rem; min-height: 2rem; padding: .25rem .8rem; border-radius: 999px;
+  font-size: .8rem; font-weight: 700; color: var(--lx-done); background: var(--lx-done-bg); border: 1px solid var(--lx-done-line);
 }
 .dvs-live[data-state="paused"] { color: var(--lx-mute); background: var(--lx-surface-2); border-color: var(--lx-line-strong); }
 .dvs-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
@@ -26,14 +53,16 @@
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 
-/* ── البطاقات ── */
+/* ── البطاقات (حشوُها في --dvs-pad: الجدولُ يمتدّ إلى حافّتها بالقيمة نفسِها) ── */
 .dvs-card {
-  background: var(--lx-surface); border: 1px solid var(--lx-line); border-radius: var(--lx-radius);
-  padding: 1.1rem 1.35rem; display: grid; gap: .85rem; min-width: 0; align-content: start;
+  --dvs-pad: 1.35rem;
+  background: var(--lx-surface); border: 1px solid var(--lx-line); border-radius: var(--lx-radius); box-shadow: var(--lx-shadow-sm);
+  padding: 1.15rem var(--dvs-pad); display: grid; gap: .85rem; min-width: 0; align-content: start;
 }
-.dvs-card h2 { margin: 0; font-size: 1rem; font-weight: 800; }
-.dvs-card-head { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
-.dvs-card-head h2 { flex: 1 1 auto; }
+@container dvs (max-width: 520px) { .dvs-card { --dvs-pad: 1rem; padding-block: 1rem; } }
+.dvs-card h2 { margin: 0; font-size: 1.02rem; font-weight: 800; line-height: 1.6; }
+.dvs-card-head { display: flex; align-items: center; gap: .6rem .75rem; flex-wrap: wrap; }
+.dvs-card-head h2 { flex: 1 1 10rem; min-width: 0; }
 .dvs-ico {
   width: 40px; height: 40px; border-radius: 12px; flex: none; display: grid; place-items: center;
   background: var(--lx-pri-soft); color: var(--lx-pri); font-size: 1.2rem;
@@ -41,21 +70,42 @@
 .dvs-ico[data-tone="wait"] { background: var(--lx-wait-bg); color: var(--lx-wait); }
 .dvs-ico[data-tone="done"] { background: var(--lx-done-bg); color: var(--lx-done); }
 .dvs-ico[data-tone="prog"] { background: var(--lx-prog-bg); color: var(--lx-prog); }
-.dvs-note { margin: 0; font-size: .8rem; color: var(--lx-mute); line-height: 1.7; }
-.dvs-grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; align-items: start; }
-.dvs-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 1.25rem; align-items: start; }
+.dvs-note { margin: 0; font-size: .84rem; color: var(--lx-mute); line-height: 1.8; }
+.dvs-note a, .dvs-callout a { color: var(--lx-pri); text-underline-offset: 3px; }
+.dvs-pair, .dvs-grid2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+.dvs-grid2 { align-items: start; }
+@container dvs (min-width: 720px) {
+  .dvs-pair, .dvs-grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* «لم يُعلَن خادمٌ بعد»: الحالُ التي ينتظرها كلُّ شيء — شريطٌ كهرمانيّ في أوّل البطاقة والفعلُ في طرفها */
+.dvs-alert {
+  grid-template-columns: auto minmax(0, 1fr); align-items: start; column-gap: 1rem;
+  border-color: var(--lx-wait-line); border-inline-start: 4px solid var(--lx-wait);
+  background: linear-gradient(var(--lx-wait-bg), var(--lx-wait-bg)), var(--lx-surface);
+}
+.dvs-alert-body { display: grid; gap: .3rem; min-width: 0; }
+.dvs-alert-body p { margin: 0; max-width: 82ch; font-size: .875rem; line-height: 1.85; color: var(--lx-ink); }
+.dvs-alert-action { grid-column: 2; }
+@container dvs (min-width: 760px) {
+  .dvs-alert { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+  .dvs-alert-action { grid-column: auto; }
+}
 
 .dvs-pill {
-  display: inline-block; font-size: .75rem; font-weight: 700; padding: .12rem .7rem; border-radius: 999px;
-  white-space: nowrap; border: 1px solid var(--lx-line-strong); background: var(--lx-surface-2); color: var(--lx-mute);
+  display: inline-flex; align-items: center; gap: .3rem; font-size: .75rem; font-weight: 700; line-height: 1.6;
+  padding: .1rem .65rem; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--lx-line-strong); background: var(--lx-surface-2); color: var(--lx-mute);
 }
 .dvs-pill[data-tone="done"] { background: var(--lx-done-bg); color: var(--lx-done); border-color: var(--lx-done-line); }
 .dvs-pill[data-tone="wait"] { background: var(--lx-wait-bg); color: var(--lx-wait); border-color: var(--lx-wait-line); }
 .dvs-pill[data-tone="late"] { background: var(--lx-late-bg); color: var(--lx-late); border-color: var(--lx-late-line); }
 .dvs-pill[data-tone="prog"] { background: var(--lx-prog-bg); color: var(--lx-prog); border-color: var(--lx-prog-line); }
+.dvs-count { min-width: 1.75rem; justify-content: center; margin-inline-start: .3rem; font-variant-numeric: tabular-nums; vertical-align: .1em; }
 
 .dvs-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
 .dvs-mono { font-family: Consolas, 'Cascadia Mono', monospace; font-size: .85em; direction: ltr; unicode-bidi: isolate; }
+.dvs-ver { font-variant-numeric: tabular-nums; }
 .dvs-chip-path {
   font-family: Consolas, monospace; font-size: .78rem; background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink);
   padding: .05rem .4rem; border-radius: 5px; direction: ltr; unicode-bidi: isolate;
@@ -63,80 +113,114 @@
 .dvs-icon-btn {
   width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--lx-line); background: var(--lx-surface);
   color: var(--lx-mute); display: inline-grid; place-items: center; cursor: pointer; flex: none;
+  transition: color var(--lx-dur-1) ease, border-color var(--lx-dur-1) ease, background-color var(--lx-dur-1) ease;
 }
-.dvs-icon-btn:hover { color: var(--lx-ink); border-color: var(--lx-line-strong); }
+.dvs-icon-btn:hover { color: var(--lx-ink); border-color: var(--lx-line-strong); background: var(--lx-surface-2); }
+.dvs-icon-btn[aria-expanded="true"] { color: var(--lx-pri); border-color: var(--lx-pri); }
+.dvs-link { display: inline-flex; align-items: center; gap: .3rem; min-height: 2rem; font-size: .84rem; font-weight: 700; color: var(--lx-pri); text-decoration: none; }
+.dvs-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.dvs-link .bi { font-size: .7rem; }
 
-.dvs-callout { border-radius: 10px; padding: .7rem .85rem; font-size: .82rem; line-height: 1.75; border: 1px solid; }
+/* حلقةُ التركيز واحدةٌ لكلّ ما يُضغط هنا (اللوحةُ لا تعتمد إطارَ المتصفّح الافتراضيّ) */
+:is(.dvs-crumbs a, .dvs-link, .dvs-icon-btn, .dvs-filter):focus-visible,
+.dvs-mode:has(input:focus-visible) { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
+.dvs-table-wrap:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: -2px; }
+
+.dvs-callout { border-radius: 10px; padding: .7rem .85rem; font-size: .84rem; line-height: 1.8; border: 1px solid; color: var(--lx-ink); }
 .dvs-callout[data-tone="prog"] { background: var(--lx-prog-bg); border-color: var(--lx-prog-line); }
 .dvs-callout[data-tone="wait"] { background: var(--lx-wait-bg); border-color: var(--lx-wait-line); }
 .dvs-callout[data-tone="late"] { background: var(--lx-late-bg); border-color: var(--lx-late-line); }
 .dvs-callout b { font-weight: 800; }
 
-/* ── الخطوات ── */
-.dvs-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
-.dvs-steps li { display: flex; gap: .75rem; align-items: flex-start; }
+/* ── الخطوات (والمحدِّدُ للوصف وحده: كان ‎.dvs-steps span‎ يصبغ رقمَ الخطوة ومسارَ الملفّ بالخافت) ── */
+.dvs-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); gap: 1rem 1.5rem; }
+.dvs-steps li { display: flex; gap: .75rem; align-items: flex-start; min-width: 0; }
 .dvs-step-n {
   width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center;
-  background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink); font-weight: 800;
+  background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink); font-weight: 800; font-variant-numeric: tabular-nums;
 }
-.dvs-steps b { font-size: .92rem; display: block; }
-.dvs-steps span { font-size: .82rem; color: var(--lx-mute); line-height: 1.75; }
+.dvs-steps b { font-size: .92rem; display: block; line-height: 1.6; }
+.dvs-steps li > div > span { font-size: .84rem; color: var(--lx-mute); line-height: 1.8; }
 
 /* ── بطاقةُ الخادم ── */
-.dvs-dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .6rem 1rem; font-size: .86rem; align-items: center; }
-.dvs-dl dt { color: var(--lx-mute); font-weight: 400; }
+.dvs-dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .65rem 1rem; font-size: .86rem; align-items: center; }
+.dvs-dl dt { color: var(--lx-mute); font-weight: 600; }
 .dvs-dl dd { margin: 0; font-weight: 700; display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; min-width: 0; overflow-wrap: anywhere; }
+.dvs-dl .dvs-note { font-weight: 400; }
 
-/* ── العدّادات ── */
+/* ── العدّادات: اللونُ لمعناه وحين يكون له معنى (الصفرُ محايد) ── */
 .dvs-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
-.dvs-stat { padding: .7rem .85rem; border-radius: 12px; background: var(--lx-surface-2); border: 1px solid var(--lx-line); }
-.dvs-stat b { display: block; font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; }
-.dvs-stat span { font-size: .8rem; color: var(--lx-mute); }
+.dvs-stat { display: grid; gap: .1rem; padding: .75rem .9rem; border-radius: 12px; background: var(--lx-surface-2); border: 1px solid var(--lx-line); }
+.dvs-stat b { font-size: 1.75rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.dvs-stat span { font-size: .8rem; color: var(--lx-mute); line-height: 1.5; }
 .dvs-stat[data-tone="done"] { background: var(--lx-done-bg); border-color: var(--lx-done-line); }
 .dvs-stat[data-tone="done"] b { color: var(--lx-done); }
 .dvs-stat[data-tone="wait"] { background: var(--lx-wait-bg); border-color: var(--lx-wait-line); }
 .dvs-stat[data-tone="wait"] b { color: var(--lx-wait); }
 
-/* ── وضعُ البوّابة ── */
-.dvs-modes { border: 0; margin: 0; padding: 0; display: grid; gap: .5rem; min-width: 0; }
-.dvs-modes legend { font-size: .8rem; color: var(--lx-mute); padding: 0; margin-bottom: .4rem; float: none; width: auto; }
+/* ── وضعُ البوّابة: ثلاثُ بطاقاتٍ متجاورة؛ والمختارُ بإطارٍ داخليّ لا يزيح شيئاً ── */
+.dvs-modes { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; }
+@container dvs (min-width: 760px) { .dvs-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.dvs-modes legend { float: none; width: auto; padding: 0; margin-bottom: .5rem; font-size: .84rem; font-weight: 600; color: var(--lx-mute); }
 .dvs-mode {
-  display: flex; gap: .65rem; align-items: flex-start; padding: .6rem .75rem; border-radius: 10px; cursor: pointer;
-  border: 1px solid var(--lx-line); background: var(--lx-surface);
+  display: flex; gap: .65rem; align-items: flex-start; min-width: 0; padding: .75rem .85rem; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--lx-line-strong); background: var(--lx-surface);
+  transition: border-color var(--lx-dur-1) ease, background-color var(--lx-dur-1) ease, box-shadow var(--lx-dur-1) ease;
 }
-.dvs-mode:has(input:checked) { border: 2px solid var(--lx-pri); background: var(--lx-pri-soft); padding: calc(.6rem - 1px) calc(.75rem - 1px); }
-.dvs-mode:has(input:disabled) { cursor: not-allowed; opacity: .6; }
-.dvs-mode input { margin-top: .3rem; width: 18px; height: 18px; accent-color: var(--lx-pri); flex: none; }
-.dvs-mode b { font-size: .88rem; display: block; }
-.dvs-mode span { font-size: .78rem; color: var(--lx-mute); line-height: 1.6; }
+.dvs-mode:hover { border-color: var(--lx-pri); }
+.dvs-mode:has(input:checked) { border-color: var(--lx-pri); background: var(--lx-pri-soft); box-shadow: inset 0 0 0 1px var(--lx-pri); }
+.dvs-mode input { margin: .3rem 0 0; width: 18px; height: 18px; accent-color: var(--lx-pri); flex: none; cursor: inherit; }
+.dvs-mode-text { display: grid; gap: .15rem; min-width: 0; }
+.dvs-mode-text b { font-size: .9rem; line-height: 1.6; }
+.dvs-mode-text > span { font-size: .8rem; color: var(--lx-mute); line-height: 1.7; }
+/* للقراءة هنا (ليس جهازَ الخادم): لا تبهيتَ يُسقط التباين — كان ‎opacity:.6‎ يُنزل الوصفَ إلى 2.6:1؛
+   الاختيارُ ظاهرٌ كما هو، والقفلُ في رأس البطاقة يقول لماذا */
+.dvs-modes:disabled .dvs-mode { cursor: default; }
+.dvs-modes:disabled .dvs-mode:not(:has(input:checked)):hover { border-color: var(--lx-line-strong); }
 
-/* ── الطلبات والسجلّ ── */
+/* ── الطلباتُ والسجلّ ── */
 .dvs-list { list-style: none; margin: 0; padding: 0; }
-.dvs-req { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .75rem 0; border-top: 1px solid var(--lx-line); }
-.dvs-req-text { flex: 1 1 280px; min-width: 0; display: grid; gap: .1rem; }
+.dvs-req { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .75rem; padding: .8rem 0; border-top: 1px solid var(--lx-line); }
+.dvs-req-text { flex: 1 1 11rem; min-width: 0; display: grid; gap: .1rem; }
 .dvs-req-title { font-size: .9rem; font-weight: 700; }
-.dvs-req-meta { font-size: .8rem; color: var(--lx-mute); }
+.dvs-req-meta { font-size: .8rem; color: var(--lx-mute); line-height: 1.7; overflow-wrap: anywhere; }
 .dvs-req[data-seen] .dvs-ico { background: var(--lx-surface-2); color: var(--lx-mute); }
-.dvs-subhead { margin: .4rem 0 0; font-size: .8rem; font-weight: 700; color: var(--lx-mute); }
+.dvs-subhead { margin: .4rem 0 0; padding-top: .75rem; border-top: 1px solid var(--lx-line); font-size: .8rem; font-weight: 700; color: var(--lx-mute); }
 
 .dvs-toolbar { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
-.dvs-search { position: relative; flex: 0 1 340px; min-width: 220px; }
+.dvs-grow { flex: 1 1 12rem; min-width: 0; }
+.dvs-search { position: relative; flex: 0 1 21rem; min-width: min(14rem, 100%); }
 .dvs-search i { position: absolute; inset-inline-start: .75rem; top: 50%; transform: translateY(-50%); color: var(--lx-mute); pointer-events: none; }
 .dvs-search input { padding-inline-start: 2.3rem; min-height: 44px; }
 .dvs-filters { display: flex; flex-wrap: wrap; gap: .5rem; }
 .dvs-filter {
-  font: inherit; font-size: .82rem; font-weight: 700; min-height: 36px; padding: 0 .9rem; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: .45rem; min-height: 36px; padding: 0 .85rem; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: .82rem; font-weight: 700;
   border: 1px solid var(--lx-line-strong); background: var(--lx-surface); color: var(--lx-ink);
+  transition: background-color var(--lx-dur-1) ease, border-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease;
 }
+.dvs-filter:hover { border-color: var(--lx-pri); }
 .dvs-filter[aria-pressed="true"] { background: var(--lx-pri-fill); border-color: var(--lx-pri-fill); color: var(--lx-pri-fill-ink); }
-.dvs-filter .n { font-variant-numeric: tabular-nums; opacity: .85; margin-inline-start: .2rem; }
+/* العددُ شارةٌ صغيرة بحبرٍ كامل (كان شفوفاً 85%) */
+.dvs-filter .n {
+  min-width: 1.5em; padding: 0 .4em; border-radius: 999px; line-height: 1.6; text-align: center; font-variant-numeric: tabular-nums;
+  background: var(--lx-surface-2); color: var(--lx-ink);
+}
+.dvs-filter[aria-pressed="true"] .n { background: var(--lx-pri-fill-ink); color: var(--lx-pri-fill); }
 
-.dvs-table-wrap { overflow-x: auto; border-top: 1px solid var(--lx-line); margin: 0 -1.35rem; }
+/* الإطارُ مِحتوى موضعيّ: ما كان مطلقَ الموضع داخل الجدول (عنوانُ عمود الإجراءات المخفيّ) يبقى فيه ويُقصّ معه،
+   وكان يفلت إلى طرف الصفحة فيمدّها 587px على الهاتف */
+.dvs-table-wrap {
+  position: relative; overflow-x: auto; overscroll-behavior-x: contain;
+  border-top: 1px solid var(--lx-line); margin-inline: calc(-1 * var(--dvs-pad));
+}
 .dvs-table { width: 100%; min-width: 960px; border-collapse: collapse; font-size: .86rem; }
 .dvs-table th { text-align: start; font-size: .78rem; font-weight: 700; color: var(--lx-mute); background: var(--lx-surface-2); padding: .6rem 1rem; white-space: nowrap; }
 .dvs-table td { padding: .7rem 1rem; border-top: 1px solid var(--lx-line); vertical-align: middle; }
-.dvs-table th:first-child, .dvs-table td:first-child { padding-inline-start: 1.35rem; }
-.dvs-table th:last-child, .dvs-table td:last-child { padding-inline-end: 1.35rem; text-align: end; }
+.dvs-table tbody tr { transition: background-color var(--lx-dur-1) ease; }
+.dvs-table tbody tr:hover { background: var(--lx-surface-2); }
+.dvs-table th:first-child, .dvs-table td:first-child { padding-inline-start: var(--dvs-pad); }
+.dvs-table th:last-child, .dvs-table td:last-child { padding-inline-end: var(--dvs-pad); text-align: end; }
 .dvs-dev { display: flex; align-items: center; gap: .6rem; min-width: 0; }
 .dvs-dev .dvs-ico { width: 34px; height: 34px; border-radius: 10px; font-size: 1rem; }
 .dvs-dev-name { font-weight: 800; display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
@@ -144,30 +228,44 @@
 .dvs-seen { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; }
 .dvs-seen .dvs-dot { color: var(--lx-line-strong); }
 .dvs-seen[data-now] .dvs-dot { color: var(--lx-done); }
-.dvs-empty { padding: 1.6rem 1rem; text-align: center; color: var(--lx-mute); font-size: .9rem; display: grid; gap: .6rem; justify-items: center; }
+.dvs-empty { padding: 1.5rem 1rem; text-align: center; color: var(--lx-mute); font-size: .88rem; line-height: 1.8; display: grid; gap: .6rem; justify-items: center; }
+.dvs-empty-ico {
+  width: 2.75rem; height: 2.75rem; border-radius: 50%; display: grid; place-items: center; font-size: 1.2rem;
+  background: var(--lx-surface-2); border: 1px solid var(--lx-line); color: var(--lx-mute);
+}
 .dvs-menu .dropdown-item { font-size: .86rem; }
 
+/* ── «هذا الجهاز» ── */
+.dvs-me-text { flex: 1 1 12rem; min-width: 0; display: grid; gap: .1rem; }
+.dvs-card h2.dvs-me-title { font-size: 1.2rem; }
+.dvs-state[data-tone="done"] { color: var(--lx-done); }
+.dvs-foot { padding-inline: .25rem; }
+
 /* ── كودُ الانضمام (حواريّة المسؤول) ── */
+.dvs-code-dialog { --bs-modal-width: 36.25rem; }
 .dvs-code-box { display: grid; justify-items: center; gap: .75rem; padding: 1.1rem .75rem; border-radius: 16px; background: var(--lx-pri-soft); border: 1px solid color-mix(in srgb, var(--lx-pri) 25%, transparent); }
 .dvs-code-box[data-state="used"] { background: var(--lx-done-bg); border-color: var(--lx-done-line); }
 .dvs-code-box[data-state="expired"], .dvs-code-box[data-state="cancelled"] { background: var(--lx-surface-2); border-color: var(--lx-line); }
-.dvs-digits { display: flex; gap: .7rem; direction: ltr; }
+.dvs-digits { display: flex; gap: clamp(.4rem, 2vw, .7rem); direction: ltr; }
+/* خمسُ خاناتٍ تتّسع لعرض الهاتف (كانت 68px ثابتةً: 385px لا تدخل حواريّةَ 390) */
 .dvs-digit {
-  width: 68px; height: 84px; border-radius: 14px; display: grid; place-items: center; background: var(--lx-surface);
-  border: 2px solid var(--lx-pri); font-family: Consolas, 'Cascadia Mono', monospace; font-size: 2.6rem; font-weight: 700;
-  font-variant-numeric: tabular-nums; color: var(--lx-ink); box-shadow: var(--lx-shadow-sm);
+  width: clamp(2.75rem, 14vw, 4.25rem); aspect-ratio: 68 / 84; border-radius: 14px; display: grid; place-items: center;
+  background: var(--lx-surface); border: 2px solid var(--lx-pri); box-shadow: var(--lx-shadow-sm);
+  font-family: Consolas, 'Cascadia Mono', monospace; font-size: clamp(1.75rem, 8vw, 2.6rem); font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--lx-ink);
 }
 .dvs-code-box[data-state="used"] .dvs-digit { border-color: var(--lx-done-line); color: var(--lx-done); }
 .dvs-code-box[data-state="expired"] .dvs-digit, .dvs-code-box[data-state="cancelled"] .dvs-digit { border-color: var(--lx-line-strong); color: var(--lx-mute); text-decoration: line-through; }
 .dvs-timer { width: 100%; max-width: 400px; display: grid; gap: .35rem; }
 .dvs-bar { height: 6px; border-radius: 999px; background: var(--lx-line); overflow: hidden; }
 .dvs-bar > span { display: block; height: 100%; width: 100%; background: var(--lx-pri); border-radius: 999px; transform-origin: right center; transition: transform 1s linear; }
-.dvs-timer-row { display: flex; justify-content: space-between; font-size: .8rem; color: var(--lx-mute); }
-.dvs-timer-row b { color: var(--lx-ink); font-variant-numeric: tabular-nums; }
+.dvs-timer-row { display: flex; justify-content: space-between; gap: .75rem; font-size: .8rem; color: var(--lx-mute); }
+.dvs-timer-row b { color: var(--lx-ink); font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
 .dvs-status { display: flex; align-items: center; gap: .6rem; font-size: .9rem; font-weight: 700; color: var(--lx-pri-soft-ink); min-height: 1.6rem; }
 .dvs-status .dvs-dot { color: var(--lx-pri); animation: dvs-pulse 1.8s infinite; }
 .dvs-joined { display: flex; align-items: center; gap: .75rem; padding: .75rem .9rem; border-radius: 12px; background: var(--lx-done-bg); border: 1px solid var(--lx-done-line); }
-.dvs-joined-ico { width: 36px; height: 36px; border-radius: 50%; background: var(--lx-done); color: #fff; display: grid; place-items: center; flex: none; animation: dvs-pop .32s cubic-bezier(.2,.9,.25,1.2) both; }
+/* حبرُ الأيقونة سطحُ الوضع: الأبيضُ على أخضر الداكن الفاتح كان 1.6:1 */
+.dvs-joined-ico { width: 36px; height: 36px; border-radius: 50%; background: var(--lx-done); color: var(--lx-surface); display: grid; place-items: center; flex: none; animation: dvs-pop .32s cubic-bezier(.2,.9,.25,1.2) both; }
 @keyframes dvs-pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
 .dvs-readout { padding: .75rem .9rem; border-radius: 12px; background: var(--lx-surface-2); border: 1px solid var(--lx-line); font-size: .83rem; }
 .dvs-readout ol { margin: .3rem 0 0; padding-inline-start: 1.2rem; line-height: 1.85; }
@@ -216,7 +314,7 @@
 .dvj-check:first-child { border-top: 0; }
 .dvj-check[data-state="warn"] { background: var(--lx-wait-bg); }
 .dvj-check-ico { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: .9rem; border: 2px solid var(--lx-line); color: var(--lx-mute); background: var(--lx-surface); }
-.dvj-check[data-state="ok"] .dvj-check-ico { background: var(--lx-done); border-color: var(--lx-done); color: #fff; }
+.dvj-check[data-state="ok"] .dvj-check-ico { background: var(--lx-done); border-color: var(--lx-done); color: var(--lx-surface); }
 .dvj-check[data-state="busy"] .dvj-check-ico { border-color: var(--lx-pri); color: var(--lx-pri); background: var(--lx-pri-soft); animation: dvs-pulse 1.6s infinite; }
 .dvj-check[data-state="warn"] .dvj-check-ico { border-color: var(--lx-wait-line); color: var(--lx-wait); background: var(--lx-surface); }
 .dvj-check[data-state="skip"] .dvj-check-ico { color: var(--lx-mute); }
@@ -225,7 +323,7 @@
 .dvj-check-text span { font-size: .8rem; color: var(--lx-mute); overflow-wrap: anywhere; }
 .dvj-check[data-state="warn"] .dvj-check-text span { color: var(--lx-wait); font-weight: 700; }
 .dvj-done { display: grid; justify-items: center; gap: .75rem; text-align: center; padding: .5rem 0; }
-.dvj-done-ico { width: 72px; height: 72px; border-radius: 50%; background: var(--lx-done); color: #fff; display: grid; place-items: center; font-size: 2.2rem; animation: dvs-pop .32s cubic-bezier(.2,.9,.25,1.2) both; }
+.dvj-done-ico { width: 72px; height: 72px; border-radius: 50%; background: var(--lx-done); color: var(--lx-surface); display: grid; place-items: center; font-size: 2.2rem; animation: dvs-pop .32s cubic-bezier(.2,.9,.25,1.2) both; }
 .dvj-done h2 { margin: 0; font-size: 1.45rem; font-weight: 800; color: var(--lx-done); }
 .dvj-done p { margin: 0; color: var(--lx-mute); max-width: 46ch; line-height: 1.8; }
 .dvj-demo { font-size: .76rem; color: var(--lx-mute); }
@@ -243,5 +341,5 @@
 @media (prefers-reduced-motion: reduce) {
   .dvs-live .dvs-dot, .dvs-status .dvs-dot, .dvj-pane, .dvj-otp[data-error] .dvj-cells, .dvj-check[data-state="busy"] .dvj-check-ico,
   .dvs-joined-ico, .dvj-done-ico { animation: none !important; }
-  .dvs-bar > span { transition: none; }
+  .dvs-bar > span, .dvs-mode, .dvs-filter, .dvs-icon-btn, .dvs-table tbody tr { transition: none; }
 }
