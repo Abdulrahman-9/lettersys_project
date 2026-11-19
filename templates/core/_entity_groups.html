@@ -89,7 +89,7 @@
               </span>
             {% else %}
               <form method="post" action="{% url 'admin_panel' %}" class="d-inline"
-                    data-confirm="حذف العنقود «{{ g.name }}» نهائياً؟" data-confirm-ok="احذف">
+                    data-confirm="حذف العنقود «{{ g.name }}» نهائياً؟" data-confirm-title="حذف العنقود" data-confirm-ok="احذف">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="delete_group">
                 <input type="hidden" name="tab" value="groups">

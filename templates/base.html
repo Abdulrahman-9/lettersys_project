@@ -294,7 +294,7 @@
       {% block global_messages %}
       {% for m in messages %}
       {% with tag=m.tags %}
-      <div class="toast fancy-toast" role="alert" aria-live="assertive" aria-atomic="true"
+      <div class="toast fancy-toast" role="{% if 'error' in tag %}alert{% else %}status{% endif %}" aria-live="{% if 'error' in tag %}assertive{% else %}polite{% endif %}" aria-atomic="true"
            data-bs-autohide="true"
            data-bs-delay="{% if 'error' in tag %}6000{% elif 'warning' in tag %}5000{% else %}3800{% endif %}"
            style="--lx-toast-ms: {% if 'error' in tag %}6000{% elif 'warning' in tag %}5000{% else %}3800{% endif %}ms">
@@ -302,13 +302,13 @@
           <div class="toast-accent {% if 'success' in tag %}bg-success{% elif 'warning' in tag %}bg-warning{% elif 'error' in tag %}bg-danger{% else %}bg-primary{% endif %}"></div>
           <div class="ps-2 d-flex align-items-center">
             {% if 'success' in tag %}
-              <i class="bi bi-check-circle-fill fs-4 text-success"></i>
+              <i class="bi bi-check-circle-fill fs-4 text-success" aria-hidden="true"></i>
             {% elif 'warning' in tag %}
-              <i class="bi bi-exclamation-triangle-fill fs-4 text-warning"></i>
+              <i class="bi bi-exclamation-triangle-fill fs-4 text-warning" aria-hidden="true"></i>
             {% elif 'error' in tag %}
-              <i class="bi bi-x-circle-fill fs-4 text-danger"></i>
+              <i class="bi bi-x-circle-fill fs-4 text-danger" aria-hidden="true"></i>
             {% else %}
-              <i class="bi bi-info-circle-fill fs-4 text-primary"></i>
+              <i class="bi bi-info-circle-fill fs-4 text-primary" aria-hidden="true"></i>
             {% endif %}
           </div>
           <div class="toast-body flex-grow-1 fw-semibold">

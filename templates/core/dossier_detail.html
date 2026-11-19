@@ -123,7 +123,7 @@
             </select>
           </div>
           <div class="ff-actions">
-            <a class="btn btn-outline-secondary clear" href="{% url 'dossier_detail' entity.pk %}">مسح الفلاتر</a>
+            <a class="btn btn-outline-secondary clear" href="{% url 'dossier_detail' entity.pk %}">مسح التصفية</a>
             <button type="submit" class="btn btn-primary apply"><i class="bi bi-funnel" aria-hidden="true"></i> تطبيق</button>
           </div>
         </div>
@@ -211,8 +211,8 @@
     {% else %}
       <div class="dd-empty">
         <i class="bi bi-folder2" aria-hidden="true"></i>
-        <p>لا كتب صادرة{% if active_filter_count %} تطابق الفلاتر{% endif %}.</p>
-        {% if active_filter_count %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'dossier_detail' entity.pk %}">مسح الفلاتر</a>{% endif %}
+        <p>لا كتب صادرة{% if active_filter_count %} تطابق التصفية{% endif %}.</p>
+        {% if active_filter_count %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'dossier_detail' entity.pk %}">مسح التصفية</a>{% endif %}
       </div>
     {% endif %}
   </div>
@@ -263,8 +263,8 @@
     {% else %}
       <div class="dd-empty">
         <i class="bi bi-folder2" aria-hidden="true"></i>
-        <p>لا كتب واردة{% if active_filter_count %} تطابق الفلاتر{% endif %}.</p>
-        {% if active_filter_count %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'dossier_detail' entity.pk %}">مسح الفلاتر</a>{% endif %}
+        <p>لا كتب واردة{% if active_filter_count %} تطابق التصفية{% endif %}.</p>
+        {% if active_filter_count %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'dossier_detail' entity.pk %}">مسح التصفية</a>{% endif %}
       </div>
     {% endif %}
   </div>

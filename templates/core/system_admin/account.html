@@ -50,14 +50,14 @@
         <div class="ae-links">
           {% if can_reset %}
           <form method="post" action="{% url 'system_account' target.pk %}">{% csrf_token %}<input type="hidden" name="action" value="password">
-            <button type="submit" class="sa-btn" data-confirm="تُنشأ كلمةُ مرورٍ مؤقّتة لـ«{{ target.get_username }}» وتبطل الحالية." data-confirm-ok="أنشئها" data-confirm-tone="safe"><i class="bi bi-key" aria-hidden="true"></i>كلمة مرور مؤقّتة</button></form>
+            <button type="submit" class="sa-btn" data-confirm="تُنشأ كلمةُ مرورٍ مؤقّتة لـ«{{ target.get_username }}» وتبطل الحالية." data-confirm-title="كلمة مرور مؤقّتة" data-confirm-ok="أنشئها" data-confirm-tone="safe"><i class="bi bi-key" aria-hidden="true"></i>كلمة مرور مؤقّتة</button></form>
           {% endif %}
           {% if audit_url %}<a class="sa-btn" href="{{ audit_url }}"><i class="bi bi-clock-history" aria-hidden="true"></i>سجلّ حركاته</a>{% endif %}
           {% if no_password %}<small class="sa-hint" id="aeNoPassword">لا كلمة مرور صالحة لهذا الحساب بعد — {% if is_admin %}أصدرها بزرّ «كلمة مرور مؤقّتة».{% else %}يصدرها مدير النظام.{% endif %}</small>{% endif %}
           {% if not can_reset and not is_self and not is_admin %}<small class="sa-hint">كلمةُ مرور حسابٍ حسّاسٍ أو معطَّلٍ يعيدها مدير النظام.</small>{% endif %}
           {% if can_delete %}
           <form method="post" action="{% url 'system_account' target.pk %}">{% csrf_token %}<input type="hidden" name="action" value="delete">
-            <button type="submit" class="sa-btn ae-danger" data-confirm="حذفُ حساب «{{ target.get_username }}» نهائيّ ولا يُستردّ." data-confirm-ok="احذف الحساب"><i class="bi bi-trash" aria-hidden="true"></i>حذف الحساب</button></form>
+            <button type="submit" class="sa-btn ae-danger" data-confirm="حذفُ حساب «{{ target.get_username }}» نهائيّ ولا يُستردّ." data-confirm-title="حذف الحساب" data-confirm-ok="احذف الحساب"><i class="bi bi-trash" aria-hidden="true"></i>حذف الحساب</button></form>
           {% endif %}
         </div>
       </section>

@@ -79,9 +79,12 @@ class ThemePagesTests(TestCase):
         self.assertIn('id="loginEye"', html)
 
     def test_a_page_not_yet_migrated_stays_out_of_the_dark(self):
-        user = get_user_model().objects.create_user('theme_clerk', password='pw-theme-1111')
+        # «التنبيهات» كانت المثال حتّى نُقلت في دفعة الصفحات (11-19)؛ الباقي خارج الهويّة صفحاتُ البريد المؤجَّلة
+        user = get_user_model().objects.create_superuser('theme_clerk', password='pw-theme-1111')
         self.client.force_login(user)
-        html = self.client.get(reverse('notifications')).content.decode('utf-8')
+        response = self.client.get(reverse('mail_templates'))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode('utf-8')
         self.assertIn('<html lang="ar" dir="rtl">', html)
         self.assertNotIn('data-lx-page', html.split('<head>')[0])
         # زرّ الوضع في الشريط العلويّ لكلّ صفحة، مخفيٌّ ما لم تُنقل الصفحة (ولا lxTheme فيها)

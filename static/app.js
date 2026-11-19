@@ -1486,6 +1486,8 @@ function buildToastActionButton(action, toastApi) {
 window.ToastCenter = {
   show: function(type, message, opts) {
     type = type || 'info';
+    // «danger» كلمةُ Bootstrap للخطأ: كانت تسقط إلى «معلومة» الزرقاء المهذّبة (صفحةُ الأجهزة)
+    if (type === 'danger') type = 'error';
     opts = opts || {};
 
     var container = createToastContainer();

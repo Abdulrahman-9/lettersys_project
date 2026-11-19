@@ -235,7 +235,7 @@
     <span class="en-bulk-count" role="status" aria-live="polite"><i class="bi bi-check2-square" aria-hidden="true"></i><strong id="selectedCount">0</strong> محدّدة</span>
     {% if showing_inactive %}
     <button type="submit" form="entitiesForm" class="btn btn-sm en-bulk-btn" id="deleteSelectedBtn"
-            data-confirm="استرجاع الجهات المحددة؟" data-confirm-ok="استرجع" data-confirm-tone="safe">
+            data-confirm="استرجاع الجهات المحددة؟ تعود إلى القوائم جهاتٍ نشطة." data-confirm-title="استرجاع الجهات" data-confirm-ok="استرجع" data-confirm-tone="safe">
       <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>استرجاع
     </button>
     {% else %}
@@ -246,7 +246,7 @@
       <button type="submit" form="entitiesForm" formaction="{% url 'entity_set_kind' %}"
               name="kind" value="{{ t.key }}" class="btn btn-sm en-bulk-btn"
               data-kind-label="{{ t.label }}" data-confirm="نقل الجهات المحددة إلى تبويب «{{ t.label }}»؟"
-              data-confirm-ok="انقل" data-confirm-tone="safe">{{ t.label }}</button>
+              data-confirm-title="نقل الجهات إلى «{{ t.label }}»" data-confirm-ok="انقل" data-confirm-tone="safe">{{ t.label }}</button>
       {% endfor %}
     </div>
     <button type="button" class="btn btn-sm en-bulk-btn" id="mergeSelectedBtn" hidden
@@ -254,7 +254,7 @@
       <i class="bi bi-union" aria-hidden="true"></i>دمج (<span id="mergeCount">0</span>)
     </button>
     <button type="submit" form="entitiesForm" class="btn btn-sm en-bulk-btn en-bulk-off" id="deleteSelectedBtn"
-            data-confirm="تعطيل الجهات المحددة؟ ستُخفى من القوائم مع الحفاظ على سجلّاتها." data-confirm-ok="عطّل">
+            data-confirm="تعطيل الجهات المحددة؟ ستُخفى من القوائم مع الحفاظ على سجلّاتها." data-confirm-title="تعطيل الجهات المحددة" data-confirm-ok="عطّل">
       <i class="bi bi-archive" aria-hidden="true"></i>تعطيل
     </button>
     {% endif %}
@@ -351,7 +351,7 @@
                     </button>
                   </form>
                   {% else %}
-                  <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline" data-confirm="تعطيل جهة {{ e.name }}؟ ستُخفى من القوائم مع الحفاظ على سجلّها." data-confirm-ok="عطّل">
+                  <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline" data-confirm="تعطيل جهة {{ e.name }}؟ ستُخفى من القوائم مع الحفاظ على سجلّها." data-confirm-title="تعطيل الجهة" data-confirm-ok="عطّل">
                     {% csrf_token %}
                     <input type="hidden" name="back" value="?{{ request.GET.urlencode }}">
                     <button type="submit" class="en-icon-btn is-danger" title="تعطيل الجهة" aria-label="تعطيل {{ e.name }}">
@@ -419,7 +419,7 @@
               </button>
             </form>
             {% else %}
-            <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline" data-confirm="تعطيل جهة {{ e.name }}؟ ستُخفى من القوائم مع الحفاظ على سجلّها." data-confirm-ok="عطّل">
+            <form method="post" action="{% url 'entity_delete' e.id %}" class="d-inline" data-confirm="تعطيل جهة {{ e.name }}؟ ستُخفى من القوائم مع الحفاظ على سجلّها." data-confirm-title="تعطيل الجهة" data-confirm-ok="عطّل">
               {% csrf_token %}
               <input type="hidden" name="back" value="?{{ request.GET.urlencode }}">
               <button type="submit" class="en-icon-btn is-danger" title="تعطيل الجهة" aria-label="تعطيل {{ e.name }}">

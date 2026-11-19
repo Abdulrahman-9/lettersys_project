@@ -155,3 +155,68 @@ class SharedShellTests(TestCase):
         self.client.force_login(user)
         self.assertEqual(self.client.get(reverse('dashboard')).status_code, 302)
         self.assertEqual(self.client.get(reverse('offline')).status_code, 200)
+
+
+class DialogAndToastTests(SimpleTestCase):
+    """إضافةُ المالك (11-19): الحواريّاتُ والتوستُ والصياغةُ واحدةٌ في كلّ الصفحات."""
+
+    TEMPLATES = sorted((ROOT / 'templates').rglob('*.html'))
+    # خارج الدفعة: اللوحةُ القديمة تتقاعد مع الدفعة 3-2، وصفحاتُ البريد مؤجَّلةٌ بقرار المالك (11-18)
+    NOT_IN_BATCH = ('core/admin_panel.html', 'core/mail/')
+
+    def _in_batch(self, path):
+        rel = path.relative_to(ROOT / 'templates').as_posix()
+        return not rel.startswith(self.NOT_IN_BATCH)
+
+    def test_every_declarative_confirm_names_itself_and_its_button(self):
+        """العنوانُ يقول ما الفعل، والنصُّ عاقبتُه، والزرُّ فعلُه — لا «تأكيد العملية / تأكيد» الافتراضيّان."""
+        seen = 0
+        for path in filter(self._in_batch, self.TEMPLATES):
+            src = path.read_text(encoding='utf-8')
+            for m in re.finditer(r'<(?:form|button|a)\b[^>]*?data-confirm="[^"]*"[^>]*>', src, re.S):
+                seen += 1
+                with self.subTest(template=path.name, line=src.count('\n', 0, m.start()) + 1):
+                    self.assertIn('data-confirm-title="', m.group(0))
+                    self.assertIn('data-confirm-ok="', m.group(0))
+                    self.assertNotRegex(m.group(0), r'data-confirm-ok="(?:تأكيد|نعم|موافق|إلغاء)[ "]')
+        self.assertGreaterEqual(seen, 15)
+
+    def test_the_apps_dialog_starts_on_cancel_when_it_destroys(self):
+        app = (ROOT / 'static/app.js').read_text(encoding='utf-8')
+        self.assertIn("(opts.danger === false ? ok : modal.querySelector('.btn-cancel')).focus();", app)
+        self.assertIn("modal.querySelector('.modal-body').textContent = opts.message || '';", app)
+
+    def test_cancel_comes_first_in_every_dialog_footer(self):
+        """ترتيبٌ واحد: «إلغاء» ثمّ الفعل — كحواريّة التطبيق (نموذجا الأجهزة كانا معكوسَين)."""
+        seen = 0
+        for path in filter(self._in_batch, self.TEMPLATES):
+            src = path.read_text(encoding='utf-8')
+            for m in re.finditer(r'<div class="modal-footer[^"]*">(.*?)</div>', src, re.S):
+                footer = m.group(1)
+                cancel = re.search(r'<button[^>]*>\s*إلغاء\s*</button>', footer)
+                action = re.search(r'<button[^>]*type="submit"', footer)
+                if not (cancel and action):
+                    continue
+                seen += 1
+                with self.subTest(template=path.name):
+                    self.assertLess(cancel.start(), action.start())
+        self.assertGreaterEqual(seen, 3)
+
+    def test_a_server_message_interrupts_only_when_it_is_an_error(self):
+        base = (ROOT / 'templates/base.html').read_text(encoding='utf-8')
+        self.assertIn('''role="{% if 'error' in tag %}alert{% else %}status{% endif %}" '''
+                      '''aria-live="{% if 'error' in tag %}assertive{% else %}polite{% endif %}"''', base)
+        self.assertNotIn('role="alert" aria-live="assertive"', base)
+        app = (ROOT / 'static/app.js').read_text(encoding='utf-8')
+        self.assertIn("toastEl.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');", app)
+
+    def test_one_word_for_clearing_a_filter(self):
+        for path in filter(self._in_batch, self.TEMPLATES):
+            with self.subTest(template=path.name):
+                self.assertNotRegex(path.read_text(encoding='utf-8'), r'مسح الفلاتر|تطابق الفلاتر')
+
+    def test_a_danger_toast_is_an_error_toast(self):
+        """صفحةُ الأجهزة تطلب ‎toast('danger', …)‎: كان الخطأ يظهر «معلومة» زرقاء بنبرةٍ مهذّبة وأربع ثوانٍ."""
+        app = (ROOT / 'static/app.js').read_text(encoding='utf-8')
+        self.assertIn("if (type === 'danger') type = 'error';", app)
+        self.assertLess(app.index("if (type === 'danger') type = 'error';"), app.index('var meta = getToastMeta(type);'))
