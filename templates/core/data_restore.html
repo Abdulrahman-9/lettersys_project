@@ -1,421 +1,461 @@
 {% extends 'base.html' %}
+{% load static ar_counts %}
 {# الرسائلُ تُعرض داخل الصفحة ثابتةً (والخطأُ لا يختفي) — فلا توستَ يكرّرها #}
 {% block global_messages %}{% endblock %}
-{% load static %}
 {% block title %}دمج البيانات من النظام القديم{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/data_restore.css' %}?v=20261119-pages">
+{% endblock %}
 
 {% block content %}
 {% comment %}
-صفحة دمج البيانات — مسار موجَّه بأربع خطوات.
-المبدأ: لا خطوة تكتب شيئاً قبل أن تريك ماذا ستفعل بالضبط.
-الهوية: تركوازي هادئ (منطقة إدارية)، مبنيّ على brand-components.
+صفحة دمج البيانات — مسارٌ موجَّه بأربع محطّاتٍ على خطٍّ واحد، ولوحُ مراحلٍ أعلاها يعكس حالتها ويقفز إليها.
+المبدأ: لا خطوة تكتب شيئاً قبل أن تريك ماذا ستفعل بالضبط — ووسمُ كلّ خطوة يقول هل تقرأ أم تكتب.
+الهويّة الموحّدة (11-19): الألوانُ من رموز theme.css وحدها (css/data_restore.css)، والداكنُ تلقائيّ.
+المعرّفاتُ والأسماءُ وأهدافُ الإرسال كما هي — js/data_restore.js وtests_legacy_merge_bak تقرؤها.
 {% endcomment %}
-<style>
-  .rs-page{ --brand:#0f766e; --brand-2:#0d9488; --brand-strong:#0f766e; --brand-strong-2:#115e59; }
-  .rs-stat{ background:#fff; border:1px solid #e5e7eb; border-radius:.75rem; padding:.75rem .9rem; height:100%; }
-  .rs-stat__n{ font-size:1.45rem; font-weight:700; line-height:1.1; font-variant-numeric:tabular-nums; }
-  .rs-stat__l{ font-size:.75rem; color:#6b7280; }
-  .rs-stat--ok    .rs-stat__n{ color:#0f766e; }
-  .rs-stat--warn  .rs-stat__n{ color:#b45309; }
+<div class="rs-page">
 
-  .rs-step{ border:1px solid #e5e7eb; border-radius:.9rem; background:#fff; margin-bottom:1rem; overflow:hidden; }
-  .rs-step__hd{ display:flex; align-items:flex-start; gap:.75rem; padding:.85rem 1rem; background:#f8fafc; border-bottom:1px solid #eef2f7; }
-  .rs-step__num{ flex:0 0 auto; width:1.9rem; height:1.9rem; border-radius:50%; display:grid; place-items:center;
-                 background:#0f766e; color:#fff; font-weight:700; font-size:.9rem; font-variant-numeric:tabular-nums; }
-  .rs-step__t{ font-weight:700; margin:0; font-size:1rem; }
-  .rs-step__s{ font-size:.8rem; color:#6b7280; margin:.15rem 0 0; }
-  .rs-step__bd{ padding:1rem; }
-  .rs-step[data-state="done"]    .rs-step__num{ background:#059669; }
-  .rs-step[data-state="blocked"] .rs-step__num{ background:#cbd5e1; color:#64748b; }
-  .rs-step[data-state="blocked"] .rs-step__bd{ opacity:.55; }
+  <nav class="rs-crumbs" aria-label="مسار التصفّح">
+    <a href="{% url 'backup_database' %}">النسخ الاحتياطي</a>
+    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+    <span aria-current="page">دمج البيانات من النظام القديم</span>
+  </nav>
 
-  .rs-why{ background:#f0fdfa; border:1px solid #99f6e4; border-radius:.6rem; padding:.7rem .9rem; font-size:.83rem; color:#134e4a; }
-  .rs-why strong{ color:#0f766e; }
-  .rs-out{ margin-top:.9rem; }
-  .rs-out:empty{ display:none; }
-  .rs-table{ font-size:.82rem; }
-  .rs-table td, .rs-table th{ padding:.35rem .5rem; }
-  .rs-num{ font-variant-numeric:tabular-nums; }
-  .rs-danger-zone{ border:1px dashed #fca5a5; background:#fef2f2; border-radius:.6rem; padding:.75rem .9rem; }
-  .rs-page .spinner-border{ vertical-align:-.15em; }
-  @media (prefers-reduced-motion: reduce){ .rs-page *{ animation:none !important; transition:none !important; } }
-</style>
-
-<div class="container py-3 rs-page" style="max-width:1040px;">
-
-  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <header class="rs-head">
+    <span class="rs-head__ico" aria-hidden="true"><i class="bi bi-database-fill-down"></i></span>
     <div>
-      <h4 class="mb-0"><i class="bi bi-database-fill-down me-2"></i>دمج البيانات من النظام القديم</h4>
-      <div class="text-muted small mt-1">يضيف ما استجدّ في قاعدة المراسلات القديمة إلى نظامك — بلا تكرار وبلا مساس بما أدخلتَه هنا.</div>
+      <h1>دمج البيانات من النظام القديم</h1>
+      <p>يضيف ما استجدّ في قاعدة المراسلات القديمة إلى نظامك — بلا تكرار وبلا مساس بما أدخلتَه هنا.</p>
     </div>
-    <a href="{% url 'backup_database' %}" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-shield-lock me-1"></i>نسخة احتياطية أولاً
+    <a href="{% url 'backup_database' %}" class="btn btn-outline-secondary rs-head__act">
+      <i class="bi bi-shield-lock" aria-hidden="true"></i>نسخة احتياطية أولاً
     </a>
-  </div>
+  </header>
 
   {% if messages %}
+  <div class="rs-msgs">
     {% for m in messages %}
-      <div class="alert alert-{% if m.tags == 'error' %}danger{% elif m.tags == 'warning' %}warning{% else %}{{ m.tags|default:'info' }}{% endif %} py-2">{{ m }}</div>
+    <div class="alert alert-{% if m.tags == 'error' %}danger{% elif m.tags == 'warning' %}warning{% elif m.tags == 'success' %}success{% else %}info{% endif %} rs-alert"
+         role="{% if m.tags == 'error' or m.tags == 'warning' %}alert{% else %}status{% endif %}">
+      <i class="bi {% if m.tags == 'error' %}bi-x-octagon{% elif m.tags == 'warning' %}bi-exclamation-triangle{% elif m.tags == 'success' %}bi-check-circle{% else %}bi-info-circle{% endif %}" aria-hidden="true"></i>
+      <div>{{ m }}</div>
+    </div>
     {% endfor %}
+  </div>
   {% endif %}
 
-  {# ── حالة النظام الآن ─────────────────────────────────────────────── #}
-  <div class="row g-2 mb-3" id="rsState">
-    <div class="col-6 col-md-3">
-      <div class="rs-stat">
-        <div class="rs-stat__n" data-stat="books">{{ state.books|default:0 }}</div>
-        <div class="rs-stat__l">كتاب في النظام</div>
+  {# ── حالة النظام الآن — paintState في السكربت يحدّث [data-stat] بالصيغة نفسها (15,703) ── #}
+  <section aria-labelledby="rsStateTitle">
+    <h2 class="visually-hidden" id="rsStateTitle">حالة النظام الآن</h2>
+    <dl class="rs-kpis" id="rsState">
+      <div class="rs-kpi">
+        <dt>كتاب في النظام</dt>
+        <dd><bdi dir="ltr" data-stat="books">{{ state.books|grouped }}</bdi></dd>
       </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="rs-stat rs-stat--ok">
-        <div class="rs-stat__n" data-stat="stamped">{{ state.stamped|default:0 }}</div>
-        <div class="rs-stat__l">مربوط بالمصدر (قابل للدمج بدقّة)</div>
+      <div class="rs-kpi is-ok">
+        <dt>مربوط بالمصدر<small>قابل للدمج بدقّة</small></dt>
+        <dd><bdi dir="ltr" data-stat="stamped">{{ state.stamped|grouped }}</bdi></dd>
       </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="rs-stat rs-stat--warn">
-        <div class="rs-stat__n" data-stat="unstamped">{{ state.unstamped|default:0 }}</div>
-        <div class="rs-stat__l">غير مربوط (كتبك أو غير مطابَق)</div>
+      <div class="rs-kpi is-warn">
+        <dt>غير مربوط<small>كتبك أو غير مطابَق</small></dt>
+        <dd><bdi dir="ltr" data-stat="unstamped">{{ state.unstamped|grouped }}</bdi></dd>
       </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="rs-stat">
-        <div class="rs-stat__n" data-stat="attachments">{{ state.attachments|default:0 }}</div>
-        <div class="rs-stat__l">مرفق</div>
+      <div class="rs-kpi">
+        <dt>مرفق</dt>
+        <dd><bdi dir="ltr" data-stat="attachments">{{ state.attachments|grouped }}</bdi></dd>
       </div>
-    </div>
-  </div>
+    </dl>
+  </section>
 
   {# ── شرح المبدأ ───────────────────────────────────────────────────── #}
-  <details class="mb-3">
-    <summary class="fw-bold small" style="cursor:pointer;">
-      <i class="bi bi-question-circle me-1"></i>كيف يعمل الدمج؟ (اقرأها مرّة واحدة)
+  <details class="rs-how">
+    <summary>
+      <i class="bi bi-question-circle" aria-hidden="true"></i>
+      <span>كيف يعمل الدمج؟</span>
+      <small>اقرأها مرّة واحدة</small>
+      <i class="bi bi-chevron-down rs-chev" aria-hidden="true"></i>
     </summary>
-    <div class="rs-why mt-2">
-      <p class="mb-2">
+    <div class="rs-why rs-how__body">
+      <p>
         النظام القديم يعطي كل مراسلة رقماً داخلياً في جدول سنته (مثل <code>IIMAIL_2025</code>).
         نحفظ هذا المُعرِّف مع كل كتاب في حقل <strong>«مرجع المصدر»</strong>، فيصبح الدمج
         مسألة طرحٍ بسيطة: <strong>ما في المصدر وليس عندنا = جديد</strong>. لا تخمين ولا تشابه أسماء.
       </p>
-      <p class="mb-2">
+      <p>
         لذلك <strong>الخطوة ٢ (المطابقة) إلزامية مرّة واحدة</strong>: هي التي تربط كتبك الحالية
         بصفوفها الأصلية. بدونها لا يعرف النظام أن كتاباً عنده هو نفسه صفٌّ في المصدر، فيُكرّره.
       </p>
-      <p class="mb-0">
+      <p>
         <strong>ثلاثة ضمانات ثابتة:</strong> لا يُحذف أي كتاب أبداً؛ والكتب التي أدخلتَها داخل
         التطبيق ولا وجود لها في المصدر <strong>لا تُلمَس</strong>؛ وكل خطوة تُعايَن قبل أن تُنفَّذ.
       </p>
     </div>
   </details>
 
-  {# ══ الخطوة ١ — المصدر ══════════════════════════════════════════════ #}
-  <section class="rs-step" data-step="1" data-state="active">
-    <div class="rs-step__hd">
-      <span class="rs-step__num">١</span>
-      <div>
-        <h6 class="rs-step__t">اختر مصدر البيانات وتحقّق من الوصول إليه</h6>
-        <p class="rs-step__s">قاعدة SQL Server التي يعمل عليها النظام القديم. القيم أدناه تكفي عادةً.</p>
-      </div>
-    </div>
-    <div class="rs-step__bd">
-      <div class="row g-2">
-        <div class="col-md-3">
-          <label class="form-label small mb-1" for="rsServer">الخادم</label>
-          <input type="text" id="rsServer" class="form-control form-control-sm field-brand" value="{{ form.server|default:'localhost' }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small mb-1" for="rsDatabase">قاعدة البيانات</label>
-          <input type="text" id="rsDatabase" class="form-control form-control-sm field-brand" value="{{ form.database|default:'ARCHMDOC' }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small mb-1" for="rsUser">المستخدم</label>
-          <input type="text" id="rsUser" class="form-control form-control-sm field-brand" value="{{ form.username|default:'sa' }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small mb-1" for="rsPass">كلمة السر</label>
-          <input type="password" id="rsPass" class="form-control form-control-sm field-brand" autocomplete="off"
-                 placeholder="{% if has_saved_password %}محفوظة في .env{% else %}مطلوبة{% endif %}">
-        </div>
-      </div>
-      <div class="form-text mt-1" style="font-size:.72rem;">
-        {% if has_saved_password %}
-          كلمة السر مقروءة من <code>LEGACY_SQL_PASSWORD</code> في ملف <code>.env</code> — اتركِ الحقل فارغاً لاستعمالها.
-        {% else %}
-          لتفادي كتابتها كل مرّة، ضَع <code>LEGACY_SQL_PASSWORD=…</code> في ملف <code>.env</code> ثم أعد تشغيل الخادم.
-        {% endif %}
-      </div>
-      <div class="mt-3">
-        <button type="button" class="btn btn-sm btn-brand" id="rsProbeBtn">
-          <i class="bi bi-plug me-1"></i>افحص الاتصال واعرض الجداول
-        </button>
-      </div>
-      <div class="rs-out" id="rsProbeOut" aria-live="polite"></div>
-    </div>
-  </section>
+  {# ── لوحُ المراحل: مؤشّرُ التقدّم وطريقُ الرجوع إلى أيّ خطوة (السكربتُ يعكس data-state عليه) ── #}
+  <nav class="rs-track" aria-label="مراحل الدمج">
+    <ol>
+      <li data-step="1" data-state="active">
+        <a href="#rsStep1" aria-current="step">
+          <span class="rs-dot" aria-hidden="true"><span class="rs-dot__n">١</span><i class="bi bi-check-lg rs-dot__ok"></i></span>
+          <span class="rs-track__t">المصدر</span>
+          <span class="rs-track__s" data-track-state>الآن</span>
+        </a>
+      </li>
+      <li data-step="2" data-state="blocked">
+        <a href="#rsStep2">
+          <span class="rs-dot" aria-hidden="true"><span class="rs-dot__n">٢</span><i class="bi bi-check-lg rs-dot__ok"></i></span>
+          <span class="rs-track__t">الربط</span>
+          <span class="rs-track__s" data-track-state>لاحقاً</span>
+        </a>
+      </li>
+      <li data-step="3" data-state="blocked">
+        <a href="#rsStep3">
+          <span class="rs-dot" aria-hidden="true"><span class="rs-dot__n">٣</span><i class="bi bi-check-lg rs-dot__ok"></i></span>
+          <span class="rs-track__t">الجديد</span>
+          <span class="rs-track__s" data-track-state>لاحقاً</span>
+        </a>
+      </li>
+      <li data-step="4" data-state="blocked">
+        <a href="#rsStep4">
+          <span class="rs-dot" aria-hidden="true"><span class="rs-dot__n">٤</span><i class="bi bi-check-lg rs-dot__ok"></i></span>
+          <span class="rs-track__t">الدمج</span>
+          <span class="rs-track__s" data-track-state>لاحقاً</span>
+        </a>
+      </li>
+    </ol>
+  </nav>
 
-  {# ══ الخطوة ٢ — المطابقة ════════════════════════════════════════════ #}
-  <section class="rs-step" data-step="2" data-state="blocked">
-    <div class="rs-step__hd">
-      <span class="rs-step__num">٢</span>
-      <div>
-        <h6 class="rs-step__t">اربط كتبك الحالية بصفوفها في المصدر</h6>
-        <p class="rs-step__s">مرّة واحدة فقط. بعدها يصبح كل دمج لاحق دقيقاً بلا احتمال تكرار.</p>
-      </div>
-    </div>
-    <div class="rs-step__bd">
-      <div class="rs-why mb-3">
-        الربط يتمّ بمفتاح <strong>(نوع الكتاب + تاريخه + حجم مرفقه بالبايت)</strong>، ويُدعَم بالعنوان
-        عند غياب المرفق. ولا يُعتمد الربط إلا بعد <strong>تحقّق ببصمة SHA-256</strong> على عيّنة من
-        المرفقات: لو اختلفت بصمة واحدة، يُلغى الختم كلّه ولا يُكتب شيء.
-        الأمر <strong>لا يكتب إلا حقل «مرجع المصدر»</strong> ولا يمسّ رقماً ولا عنواناً ولا مرفقاً.
-      </div>
-      <div class="d-flex flex-wrap gap-2 align-items-center">
-        <button type="button" class="btn btn-sm btn-brand-ghost" id="rsReconcilePreview">
-          <i class="bi bi-eye me-1"></i>معاينة المطابقة
-        </button>
-        <button type="button" class="btn btn-sm btn-brand" id="rsReconcileApply" disabled>
-          <i class="bi bi-link-45deg me-1"></i>اعتماد الربط
-        </button>
-        <span class="text-muted" style="font-size:.75rem;">
-          عيّنة التحقّق:
-          <input type="number" id="rsVerify" class="form-control form-control-sm d-inline-block rs-num"
-                 style="width:5rem;" value="40" min="0" max="300" aria-label="عدد المرفقات التي تُقارَن ببصمتها">
-          مرفقاً
-        </span>
-      </div>
-      <div class="rs-out" id="rsReconcileOut" aria-live="polite"></div>
-    </div>
-  </section>
+  <div class="rs-flow">
 
-  {# ══ الخطوة ٣ — معاينة الفرق ═══════════════════════════════════════ #}
-  <section class="rs-step" data-step="3" data-state="blocked">
-    <div class="rs-step__hd">
-      <span class="rs-step__num">٣</span>
-      <div>
-        <h6 class="rs-step__t">اعرض ما الجديد في المصدر قبل أي كتابة</h6>
-        <p class="rs-step__s">قراءة ميتاداتا فقط — لا يُنقل أي مرفق، وآمنة للتكرار في أي وقت.</p>
-      </div>
-    </div>
-    <div class="rs-step__bd">
-      <button type="button" class="btn btn-sm btn-brand" id="rsDeltaBtn">
-        <i class="bi bi-search me-1"></i>ما الجديد؟
-      </button>
-      <div class="rs-out" id="rsDeltaOut" aria-live="polite"></div>
-    </div>
-  </section>
-
-  {# ══ الخطوة ٤ — الدمج ══════════════════════════════════════════════ #}
-  <section class="rs-step" data-step="4" data-state="blocked">
-    <div class="rs-step__hd">
-      <span class="rs-step__num">٤</span>
-      <div>
-        <h6 class="rs-step__t">نفّذ الدمج</h6>
-        <p class="rs-step__s">يضيف الجديد فقط. الموجود يُتخطّى أو يُحدَّث حسب اختيارك أدناه.</p>
-      </div>
-    </div>
-    <div class="rs-step__bd">
-      <div id="rsMergeForm">
-        {% csrf_token %}
-
-        <div class="mb-3">
-          <div class="form-label small fw-bold mb-1">وضع الدمج</div>
-          <div class="form-check">
-            <input type="radio" class="form-check-input" name="merge_mode" id="rsModeSkip" value="skip_existing" checked>
-            <label class="form-check-label small" for="rsModeSkip">
-              <strong>تخطّي الموجود</strong> — يُضيف الجديد فقط ويملأ الناقص (جهة أو مرفق مفقود). لا يُغيّر أي حقل موجود.
-              <span class="badge text-bg-success align-middle">الموصى به</span>
-            </label>
+    {# ══ الخطوة ١ — المصدر ══════════════════════════════════════════════ #}
+    <section class="rs-step" id="rsStep1" data-step="1" data-state="active" aria-labelledby="rsStep1Title">
+      <div class="rs-step__card">
+        <header class="rs-step__hd">
+          <span class="rs-seal" aria-hidden="true"><span class="rs-seal__n">١</span><i class="bi bi-check-lg rs-seal__ok"></i></span>
+          <div class="rs-step__ttl">
+            <h2 class="rs-step__t" id="rsStep1Title">اختر مصدر البيانات وتحقّق من الوصول إليه</h2>
+            <p class="rs-step__s">قاعدة <bdi>SQL Server</bdi> التي يعمل عليها النظام القديم. القيم أدناه تكفي عادةً.</p>
           </div>
-          <div class="form-check">
-            <input type="radio" class="form-check-input" name="merge_mode" id="rsModeUpdate" value="update_existing">
-            <label class="form-check-label small" for="rsModeUpdate">
-              <strong>تحديث الموجود</strong> — يُضيف الجديد <em>ويُعيد</em> كتابة الحقول من المصدر (العنوان، التاريخ، الحالة، الجهات).
-              <span class="text-danger">أي تعديل أجريتَه داخل التطبيق على هذه الحقول سيُستبدَل</span> — عدا الملاحظات فتُدمَج.
-            </label>
+          <div class="rs-step__tags">
+            <span class="rs-tag is-read"><i class="bi bi-eye" aria-hidden="true"></i>قراءة فقط</span>
+            <span class="rs-tag is-done rs-when" data-when="done"><i class="bi bi-check2" aria-hidden="true"></i>تمّت</span>
           </div>
-        </div>
-
-        <div class="form-check mb-3">
-          <input type="checkbox" class="form-check-input" name="restore_files" id="rsFiles" checked>
-          <label class="form-check-label small" for="rsFiles">
-            إحضار المرفقات (PDF) للكتب الجديدة — لا يُستبدَل مرفق موجود أبداً.
-          </label>
-        </div>
-
-        <div class="rs-danger-zone small mb-3">
-          <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>
-          <strong>قبل الضغط:</strong> خذ نسخة احتياطية إن كان الدمج كبيراً. الجهاز يعمل بذاكرة
-          محدودة، فراجع عدد الجديد في الخطوة ٣ أوّلاً.
-          <br>الدمج يعمل <strong>خارج المتصفّح</strong>: يمكنك إغلاق الصفحة والعودة، وستجد التقدّم كما تركته.
-        </div>
-
-        <button type="button" class="btn btn-sm btn-brand" id="rsMergeBtn">
-          <i class="bi bi-cloud-download me-1"></i>ابدأ الدمج الآن
-        </button>
-      </div>
-
-      {# لوحة المهمّة الحيّة — تظهر عند التشغيل وتُستطلَع كل ثانيتين #}
-      <div id="rsJobPanel" class="mt-3 d-none">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-          <div class="fw-bold small">
-            <span class="spinner-border spinner-border-sm me-1" id="rsJobSpin"></span>
-            مهمّة الدمج <span class="rs-num">#<span id="rsJobId">—</span></span>
-            <span class="badge text-bg-secondary" id="rsJobStatus">—</span>
+        </header>
+        <div class="rs-step__bd">
+          <div class="rs-fields">
+            <div class="rs-field">
+              <label for="rsServer">الخادم</label>
+              <input type="text" id="rsServer" class="form-control" dir="ltr" spellcheck="false" value="{{ form.server|default:'localhost' }}">
+            </div>
+            <div class="rs-field">
+              <label for="rsDatabase">قاعدة البيانات</label>
+              <input type="text" id="rsDatabase" class="form-control" dir="ltr" spellcheck="false" value="{{ form.database|default:'ARCHMDOC' }}">
+            </div>
+            <div class="rs-field">
+              <label for="rsUser">المستخدم</label>
+              <input type="text" id="rsUser" class="form-control" dir="ltr" spellcheck="false" value="{{ form.username|default:'sa' }}">
+            </div>
+            <div class="rs-field">
+              <label for="rsPass">كلمة السر</label>
+              <input type="password" id="rsPass" class="form-control" autocomplete="off" aria-describedby="rsPassHelp"
+                     placeholder="{% if has_saved_password %}محفوظة في &#x2066;.env&#x2069;{% else %}مطلوبة{% endif %}">
+            </div>
           </div>
-          <button type="button" class="btn btn-sm btn-outline-danger" id="rsJobCancel">
-            <i class="bi bi-x-circle me-1"></i>إلغاء
-          </button>
-        </div>
-        <div class="progress" style="height:.55rem;" role="progressbar"
-             aria-label="تقدّم الدمج" aria-valuemin="0" aria-valuemax="100">
-          <div class="progress-bar" id="rsJobBar" style="width:0%;"></div>
-        </div>
-        <div class="small text-muted mt-1" id="rsJobPhase" aria-live="polite">…</div>
-        <div class="rs-out" id="rsJobOut"></div>
-      </div>
-
-      <div class="rs-out" id="rsMergeOut" aria-live="polite"></div>
-    </div>
-  </section>
-
-  {# ── ملخّص آخر عملية ────────────────────────────────────────────── #}
-  {% if summary %}
-  <div class="rs-step" data-state="done">
-    <div class="rs-step__hd">
-      <span class="rs-step__num"><i class="bi bi-check-lg"></i></span>
-      <div><h6 class="rs-step__t">ملخّص آخر دمج</h6></div>
-    </div>
-    <div class="rs-step__bd">
-      <div class="row g-2 small">
-        <div class="col-6 col-md-3"><div class="rs-stat"><div class="rs-stat__n">{{ summary.books|default:0 }}</div><div class="rs-stat__l">كتاب جديد</div></div></div>
-        <div class="col-6 col-md-3"><div class="rs-stat"><div class="rs-stat__n">{{ summary.updated|default:0 }}</div><div class="rs-stat__l">مُحدَّث</div></div></div>
-        <div class="col-6 col-md-3"><div class="rs-stat"><div class="rs-stat__n">{{ summary.skipped|default:0 }}</div><div class="rs-stat__l">متخطّى (موجود)</div></div></div>
-        <div class="col-6 col-md-3"><div class="rs-stat"><div class="rs-stat__n">{{ summary.files|default:0 }}</div><div class="rs-stat__l">مرفق أُضيف</div></div></div>
-      </div>
-      <div class="text-muted small mt-2">
-        بالنوع — وارد داخلي: {{ summary.books_incoming_internal|default:0 }} ·
-        وارد خارجي: {{ summary.books_incoming_external|default:0 }} ·
-        صادر داخلي: {{ summary.books_outgoing_internal|default:0 }} ·
-        صادر خارجي: {{ summary.books_outgoing_external|default:0 }}
-      </div>
-    </div>
-  </div>
-  {% endif %}
-
-  {# ── مسار بديل: من ملف باكاب ────────────────────────────────────── #}
-  <details class="rs-step" style="margin-top:1.25rem;">
-    <summary class="rs-step__hd" style="cursor:pointer; list-style:none;">
-      <span class="rs-step__num" style="background:#94a3b8;"><i class="bi bi-file-earmark-zip"></i></span>
-      <div>
-        <h6 class="rs-step__t">مسار بديل — الاستعادة من ملف باكاب <code>.bak</code></h6>
-        <p class="rs-step__s">استخدمه فقط إذا لم تكن قاعدة المصدر متاحةً مباشرةً على الخادم.</p>
-      </div>
-    </summary>
-    <div class="rs-step__bd">
-      <div class="rs-why mb-3">
-        ملف <code>.bak</code> صيغةٌ خاصّة بـ SQL Server لا تُقرأ إلا باستعادتها داخل خادم SQL محلي.
-        الأداة تفكّ الضغط (إن لزم)، تستعيد إلى قاعدة <strong>مؤقتة تُحذف تلقائياً</strong>،
-        تقرأ حدّ المصدر المحفوظ لتمييز الجديد، تدمج الجديد وحدَه، ثمّ تكتب الحدّ الجديد —
-        كلّه في الخلفية بمؤشّر تقدّمٍ وإلغاء.
-        <strong>احسب المساحة:</strong> الاستعادة تكتب ملف بيانات وملف سجلّ بحجمهما الأصلي —
-        باكاب ١٥ ج.ب قد يحتاج ٣٥ ج.ب حرّة. اختر «مجلّد العمل» على قرصٍ واسع.
-      </div>
-      <form method="post"
-            data-confirm="تأكيد البدء من الملف؟&#10;&#10;يُفَكّ الضغط ثم تُستعاد إلى قاعدة مؤقتة ثم يُحسب الجديد. مع «معاينة فقط» لا يُكتب أيّ كتاب. تعمل في الخلفية وقد تستغرق ساعات حسب الحجم." data-confirm-ok="ابدأ">
-        {% csrf_token %}
-        <div class="mb-2">
-          <label class="form-label small mb-1" for="bakPathInput">مسار ملف الباكاب</label>
-          <div class="input-group input-group-sm">
-            <input type="text" name="bak_path" id="bakPathInput" class="form-control field-brand"
-                   value="{{ form.bak_path }}" placeholder="D:\Backups\archive.zip  أو  D:\Backups\db.bak">
-            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bakBrowseModal">
-              <i class="bi bi-folder2-open me-1"></i>تصفّح
+          <p class="rs-help" id="rsPassHelp">
+            {% if has_saved_password %}
+              كلمة السر مقروءة من <code>LEGACY_SQL_PASSWORD</code> في ملف <code>.env</code> — اتركِ الحقل فارغاً لاستعمالها.
+            {% else %}
+              لتفادي كتابتها كل مرّة، ضَع <code>LEGACY_SQL_PASSWORD=…</code> في ملف <code>.env</code> ثم أعد تشغيل الخادم.
+            {% endif %}
+          </p>
+          <div class="rs-actions">
+            <button type="button" class="btn btn-primary" id="rsProbeBtn">
+              <i class="bi bi-plug" aria-hidden="true"></i>افحص الاتصال واعرض الجداول
             </button>
           </div>
+          <div class="rs-out" id="rsProbeOut" aria-live="polite"></div>
         </div>
-        <div class="row g-2">
-          <div class="col-md-4">
-            <label class="form-label small mb-1" for="bakServer">الخادم</label>
-            <input type="text" name="bak_server" id="bakServer" class="form-control form-control-sm field-brand" value="{{ form.bak_server|default:'localhost' }}">
+      </div>
+    </section>
+
+    {# ══ الخطوة ٢ — المطابقة ════════════════════════════════════════════ #}
+    <section class="rs-step" id="rsStep2" data-step="2" data-state="blocked" aria-labelledby="rsStep2Title">
+      <div class="rs-step__card">
+        <header class="rs-step__hd">
+          <span class="rs-seal" aria-hidden="true"><span class="rs-seal__n">٢</span><i class="bi bi-check-lg rs-seal__ok"></i></span>
+          <div class="rs-step__ttl">
+            <h2 class="rs-step__t" id="rsStep2Title">اربط كتبك الحالية بصفوفها في المصدر</h2>
+            <p class="rs-step__s">مرّة واحدة فقط. بعدها يصبح كل دمج لاحق دقيقاً بلا احتمال تكرار.</p>
           </div>
-          <div class="col-md-4">
-            <label class="form-label small mb-1" for="bakUser">مستخدم الأدمن</label>
-            <input type="text" name="bak_user" id="bakUser" class="form-control form-control-sm field-brand" value="{{ form.bak_user|default:'sa' }}">
+          <div class="rs-step__tags">
+            <span class="rs-tag is-write"><i class="bi bi-pencil-square" aria-hidden="true"></i>يكتب «مرجع المصدر» وحده</span>
+            <span class="rs-tag rs-when" data-when="blocked"><i class="bi bi-hourglass-split" aria-hidden="true"></i>بعد فحص الاتصال</span>
+            <span class="rs-tag is-done rs-when" data-when="done"><i class="bi bi-check2" aria-hidden="true"></i>تمّت</span>
           </div>
-          <div class="col-md-4">
-            <label class="form-label small mb-1" for="bakPass">كلمة السر</label>
-            <input type="password" name="bak_password" id="bakPass" class="form-control form-control-sm field-brand"
-                   autocomplete="off" {% if not has_saved_password %}required{% endif %}
-                   placeholder="{% if has_saved_password %}محفوظة في .env{% endif %}">
+        </header>
+        <div class="rs-step__bd">
+          <div class="rs-why">
+            الربط يتمّ بمفتاح <strong>(نوع الكتاب + تاريخه + حجم مرفقه بالبايت)</strong>، ويُدعَم بالعنوان
+            عند غياب المرفق. ولا يُعتمد الربط إلا بعد <strong>تحقّق ببصمة <bdi>SHA-256</bdi></strong> على عيّنة من
+            المرفقات: لو اختلفت بصمة واحدة، يُلغى الختم كلّه ولا يُكتب شيء.
+            الأمر <strong>لا يكتب إلا حقل «مرجع المصدر»</strong> ولا يمسّ رقماً ولا عنواناً ولا مرفقاً.
           </div>
-          <div class="col-12">
-            <label class="form-label small mb-1" for="bakWorkDir">مجلّد العمل للقاعدة المؤقتة <span class="text-muted">(اختياري)</span></label>
-            <input type="text" name="bak_work_dir" id="bakWorkDir" class="form-control form-control-sm field-brand"
-                   value="{{ form.bak_work_dir }}" placeholder="فارغ = تلقائي — مثال: D:\sql_temp">
+          <div class="rs-actions">
+            <button type="button" class="btn btn-primary" id="rsReconcilePreview">
+              <i class="bi bi-eye" aria-hidden="true"></i>معاينة المطابقة
+            </button>
+            <button type="button" class="btn btn-outline-primary" id="rsReconcileApply" disabled aria-describedby="rsApplyHelp">
+              <i class="bi bi-link-45deg" aria-hidden="true"></i>اعتماد الربط
+            </button>
+            <label class="rs-verify" for="rsVerify">
+              <span>عيّنة التحقّق</span>
+              <input type="number" id="rsVerify" class="form-control rs-num" value="40" min="0" max="300" inputmode="numeric"
+                     aria-label="عيّنة التحقّق: عدد المرفقات التي تُقارَن ببصمتها">
+              <span>مرفقاً</span>
+            </label>
           </div>
+          <p class="rs-help" id="rsApplyHelp">«اعتماد الربط» يُتاح بعد معاينةٍ تجد كتباً تُربط — ويسألك قبل أن يكتب.</p>
+          <div class="rs-out" id="rsReconcileOut" aria-live="polite"></div>
         </div>
-        <div class="mt-3 mb-2">
-          <div class="form-label small fw-bold mb-1">وضع الدمج</div>
-          <div class="form-check">
-            <input type="radio" class="form-check-input" name="merge_mode" id="bakModeSkip" value="skip_existing" checked>
-            <label class="form-check-label small" for="bakModeSkip"><strong>تخطّي الموجود</strong> — الأكثر أماناً</label>
+      </div>
+    </section>
+
+    {# ══ الخطوة ٣ — معاينة الفرق ═══════════════════════════════════════ #}
+    <section class="rs-step" id="rsStep3" data-step="3" data-state="blocked" aria-labelledby="rsStep3Title">
+      <div class="rs-step__card">
+        <header class="rs-step__hd">
+          <span class="rs-seal" aria-hidden="true"><span class="rs-seal__n">٣</span><i class="bi bi-check-lg rs-seal__ok"></i></span>
+          <div class="rs-step__ttl">
+            <h2 class="rs-step__t" id="rsStep3Title">اعرض ما الجديد في المصدر قبل أي كتابة</h2>
+            <p class="rs-step__s">قراءة ميتاداتا فقط — لا يُنقل أي مرفق، وآمنة للتكرار في أي وقت.</p>
           </div>
-          <div class="form-check">
-            <input type="radio" class="form-check-input" name="merge_mode" id="bakModeUpdate" value="update_existing">
-            <label class="form-check-label small" for="bakModeUpdate"><strong>تحديث الموجود</strong> — يستبدل الحقول من المصدر</label>
+          <div class="rs-step__tags">
+            <span class="rs-tag is-read"><i class="bi bi-eye" aria-hidden="true"></i>قراءة فقط</span>
+            <span class="rs-tag rs-when" data-when="blocked"><i class="bi bi-hourglass-split" aria-hidden="true"></i>بعد فحص الاتصال</span>
+            <span class="rs-tag is-done rs-when" data-when="done"><i class="bi bi-check2" aria-hidden="true"></i>تمّت</span>
           </div>
+        </header>
+        <div class="rs-step__bd">
+          <div class="rs-actions">
+            <button type="button" class="btn btn-primary" id="rsDeltaBtn">
+              <i class="bi bi-search" aria-hidden="true"></i>ما الجديد؟
+            </button>
+          </div>
+          <div class="rs-out" id="rsDeltaOut" aria-live="polite"></div>
         </div>
-        <div class="form-check">
-          <input type="checkbox" class="form-check-input" name="restore_files" id="bakRestoreFiles" checked>
-          <label class="form-check-label small" for="bakRestoreFiles">إحضار المرفقات</label>
+      </div>
+    </section>
+
+    {# ══ الخطوة ٤ — الدمج ══════════════════════════════════════════════ #}
+    <section class="rs-step" id="rsStep4" data-step="4" data-state="blocked" aria-labelledby="rsStep4Title">
+      <div class="rs-step__card">
+        <header class="rs-step__hd">
+          <span class="rs-seal" aria-hidden="true"><span class="rs-seal__n">٤</span><i class="bi bi-check-lg rs-seal__ok"></i></span>
+          <div class="rs-step__ttl">
+            <h2 class="rs-step__t" id="rsStep4Title">نفّذ الدمج</h2>
+            <p class="rs-step__s">يضيف الجديد فقط. الموجود يُتخطّى أو يُحدَّث حسب اختيارك أدناه.</p>
+          </div>
+          <div class="rs-step__tags">
+            <span class="rs-tag is-write"><i class="bi bi-pencil-square" aria-hidden="true"></i>يضيف كتباً</span>
+            <span class="rs-tag rs-when" data-when="blocked"><i class="bi bi-hourglass-split" aria-hidden="true"></i>بعد معاينة الجديد</span>
+            <span class="rs-tag is-done rs-when" data-when="done"><i class="bi bi-check2" aria-hidden="true"></i>تمّت</span>
+          </div>
+        </header>
+        <div class="rs-step__bd">
+          <div id="rsMergeForm" class="rs-merge">
+            {% csrf_token %}
+
+            <fieldset class="rs-choices">
+              <legend>وضع الدمج</legend>
+              <label class="rs-choice" for="rsModeSkip">
+                <input type="radio" class="form-check-input" name="merge_mode" id="rsModeSkip" value="skip_existing" checked>
+                <span class="rs-choice__t">تخطّي الموجود <span class="rs-tag is-done">الموصى به</span></span>
+                <span class="rs-choice__d">يُضيف الجديد فقط ويملأ الناقص (جهة أو مرفق مفقود). لا يُغيّر أي حقل موجود.</span>
+              </label>
+              <label class="rs-choice" for="rsModeUpdate">
+                <input type="radio" class="form-check-input" name="merge_mode" id="rsModeUpdate" value="update_existing">
+                <span class="rs-choice__t">تحديث الموجود</span>
+                <span class="rs-choice__d">يُضيف الجديد <em>ويُعيد</em> كتابة الحقول من المصدر (العنوان، التاريخ، الحالة، الجهات).</span>
+                <span class="rs-choice__warn"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i>أي تعديل أجريتَه داخل التطبيق على هذه الحقول سيُستبدَل — عدا الملاحظات فتُدمَج.</span>
+              </label>
+            </fieldset>
+
+            <label class="rs-choice" for="rsFiles">
+              <input type="checkbox" class="form-check-input" name="restore_files" id="rsFiles" checked>
+              <span class="rs-choice__t">إحضار المرفقات (PDF) للكتب الجديدة</span>
+              <span class="rs-choice__d">لا يُستبدَل مرفق موجود أبداً.</span>
+            </label>
+
+            <div class="rs-caution">
+              <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+              <div>
+                <p><strong>قبل الضغط:</strong> خذ نسخة احتياطية إن كان الدمج كبيراً. الجهاز يعمل بذاكرة
+                  محدودة، فراجع عدد الجديد في الخطوة ٣ أوّلاً.</p>
+                <p>الدمج يعمل <strong>خارج المتصفّح</strong>: يمكنك إغلاق الصفحة والعودة، وستجد التقدّم كما تركته.</p>
+              </div>
+            </div>
+
+            <div class="rs-actions">
+              <button type="button" class="btn btn-primary" id="rsMergeBtn">
+                <i class="bi bi-cloud-download" aria-hidden="true"></i>ابدأ الدمج الآن
+              </button>
+            </div>
+          </div>
+
+          {# لوحة المهمّة الحيّة — تظهر عند التشغيل وتُستطلَع كل ثانيتين #}
+          <div id="rsJobPanel" class="rs-job mt-3 d-none">
+            <div class="rs-job__hd">
+              <div class="rs-job__ttl">
+                <span class="spinner-border spinner-border-sm" id="rsJobSpin" aria-hidden="true"></span>
+                مهمّة الدمج <bdi dir="ltr" class="rs-num">#<span id="rsJobId">—</span></bdi>
+                <span class="rs-chip" id="rsJobStatus">—</span>
+              </div>
+              <button type="button" class="btn btn-danger btn-sm" id="rsJobCancel">
+                <i class="bi bi-x-circle" aria-hidden="true"></i>إلغاء
+              </button>
+            </div>
+            <div class="progress rs-progress" role="progressbar"
+                 aria-label="تقدّم الدمج" aria-valuemin="0" aria-valuemax="100">
+              <div class="progress-bar" id="rsJobBar"></div>
+            </div>
+            <div class="rs-job__phase" id="rsJobPhase" aria-live="polite">…</div>
+            <div class="rs-out" id="rsJobOut" aria-live="polite"></div>
+          </div>
+
+          <div class="rs-out" id="rsMergeOut" aria-live="polite"></div>
         </div>
-        <div class="form-check">
-          <input type="checkbox" class="form-check-input" name="dry_run" id="bakDryRun" checked>
-          <label class="form-check-label small" for="bakDryRun">
-            <strong>معاينة فقط</strong> — تستعيد الملفّ وتحسب الجديد بلا كتابة أيّ كتاب
-          </label>
+      </div>
+    </section>
+
+  </div>
+
+  {# ── مسار بديل: من ملف باكاب — نموذجٌ عاديّ يُرسَل بعد حواريّة التطبيق (data-confirm) ── #}
+  <section class="rs-alt">
+    <details class="rs-alt__box">
+      <summary class="rs-alt__hd">
+        <span class="rs-alt__ico" aria-hidden="true"><i class="bi bi-file-earmark-zip"></i></span>
+        <h2 class="rs-alt__t">مسار بديل — الاستعادة من ملف باكاب <code>.bak</code></h2>
+        <span class="rs-alt__s">استخدمه فقط إذا لم تكن قاعدة المصدر متاحةً مباشرةً على الخادم.</span>
+        <span class="rs-tag is-write"><i class="bi bi-hourglass-split" aria-hidden="true"></i>في الخلفية · قد يطول ساعات</span>
+        <i class="bi bi-chevron-down rs-chev" aria-hidden="true"></i>
+      </summary>
+      <div class="rs-alt__bd">
+        <div class="rs-why">
+          ملف <code>.bak</code> صيغةٌ خاصّة بـ <bdi>SQL Server</bdi> لا تُقرأ إلا باستعادتها داخل خادم SQL محلي.
+          الأداة تفكّ الضغط (إن لزم)، تستعيد إلى قاعدة <strong>مؤقتة تُحذف تلقائياً</strong>،
+          تقرأ حدّ المصدر المحفوظ لتمييز الجديد، تدمج الجديد وحدَه، ثمّ تكتب الحدّ الجديد —
+          كلّه في الخلفية بمؤشّر تقدّمٍ وإلغاء.
+          <strong>احسب المساحة:</strong> الاستعادة تكتب ملف بيانات وملف سجلّ بحجمهما الأصلي —
+          باكاب ١٥ ج.ب قد يحتاج ٣٥ ج.ب حرّة. اختر «مجلّد العمل» على قرصٍ واسع.
         </div>
-        <div class="form-check mb-3">
-          <input type="checkbox" class="form-check-input" name="include_held" id="bakIncludeHeld">
-          <label class="form-check-label small" for="bakIncludeHeld">
-            استيراد الصفوف <strong>الموقوفة</strong> أيضاً
-            <span class="text-muted">(قديمةٌ لم تُستورد سابقاً — غالباً تُركت عمداً)</span>
-          </label>
-        </div>
-        <button type="submit" name="action" value="restore_from_bak" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-file-earmark-zip me-1"></i>ابدأ في الخلفية
-        </button>
-      </form>
-    </div>
-  </details>
+        <form method="post" class="rs-bak"
+              data-confirm="تأكيد البدء من الملف؟&#10;&#10;يُفَكّ الضغط ثم تُستعاد إلى قاعدة مؤقتة ثم يُحسب الجديد. مع «معاينة فقط» لا يُكتب أيّ كتاب. تعمل في الخلفية وقد تستغرق ساعات حسب الحجم."
+              data-confirm-title="البدء من ملف الباكاب" data-confirm-ok="ابدأ">
+          {% csrf_token %}
+          <div class="rs-field">
+            <label for="bakPathInput">مسار ملف الباكاب</label>
+            <div class="input-group">
+              <input type="text" name="bak_path" id="bakPathInput" class="form-control" dir="ltr" spellcheck="false"
+                     value="{{ form.bak_path }}" placeholder="D:\Backups\archive.zip  أو  D:\Backups\db.bak">
+              <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bakBrowseModal">
+                <i class="bi bi-folder2-open" aria-hidden="true"></i>تصفّح
+              </button>
+            </div>
+          </div>
+          <div class="rs-fields">
+            <div class="rs-field">
+              <label for="bakServer">الخادم</label>
+              <input type="text" name="bak_server" id="bakServer" class="form-control" dir="ltr" spellcheck="false" value="{{ form.bak_server|default:'localhost' }}">
+            </div>
+            <div class="rs-field">
+              <label for="bakUser">مستخدم الأدمن</label>
+              <input type="text" name="bak_user" id="bakUser" class="form-control" dir="ltr" spellcheck="false" value="{{ form.bak_user|default:'sa' }}">
+            </div>
+            <div class="rs-field">
+              <label for="bakPass">كلمة السر</label>
+              <input type="password" name="bak_password" id="bakPass" class="form-control"
+                     autocomplete="off" {% if not has_saved_password %}required{% endif %}
+                     placeholder="{% if has_saved_password %}محفوظة في &#x2066;.env&#x2069;{% endif %}">
+            </div>
+          </div>
+          <div class="rs-field">
+            <label for="bakWorkDir">مجلّد العمل للقاعدة المؤقتة <small>(اختياري)</small></label>
+            <input type="text" name="bak_work_dir" id="bakWorkDir" class="form-control" dir="ltr" spellcheck="false"
+                   value="{{ form.bak_work_dir }}" placeholder="D:\sql_temp" aria-describedby="bakWorkDirHelp">
+            <p class="rs-help" id="bakWorkDirHelp">فارغ = يُختار تلقائياً. يحتاج مساحةً حرّة بحجم القاعدة المستعادة.</p>
+          </div>
+
+          <fieldset class="rs-choices">
+            <legend>وضع الدمج</legend>
+            <label class="rs-choice" for="bakModeSkip">
+              <input type="radio" class="form-check-input" name="merge_mode" id="bakModeSkip" value="skip_existing" checked>
+              <span class="rs-choice__t">تخطّي الموجود <span class="rs-tag is-done">الأكثر أماناً</span></span>
+            </label>
+            <label class="rs-choice" for="bakModeUpdate">
+              <input type="radio" class="form-check-input" name="merge_mode" id="bakModeUpdate" value="update_existing">
+              <span class="rs-choice__t">تحديث الموجود</span>
+              <span class="rs-choice__warn"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i>يستبدل الحقول من المصدر</span>
+            </label>
+          </fieldset>
+
+          <fieldset class="rs-choices">
+            <legend>الخيارات</legend>
+            <label class="rs-choice" for="bakRestoreFiles">
+              <input type="checkbox" class="form-check-input" name="restore_files" id="bakRestoreFiles" checked>
+              <span class="rs-choice__t">إحضار المرفقات</span>
+            </label>
+            <label class="rs-choice" for="bakDryRun">
+              <input type="checkbox" class="form-check-input" name="dry_run" id="bakDryRun" checked>
+              <span class="rs-choice__t">معاينة فقط</span>
+              <span class="rs-choice__d">تستعيد الملفّ وتحسب الجديد بلا كتابة أيّ كتاب.</span>
+            </label>
+            <label class="rs-choice" for="bakIncludeHeld">
+              <input type="checkbox" class="form-check-input" name="include_held" id="bakIncludeHeld">
+              <span class="rs-choice__t">استيراد الصفوف الموقوفة أيضاً</span>
+              <span class="rs-choice__d">قديمةٌ لم تُستورد سابقاً — غالباً تُركت عمداً.</span>
+            </label>
+          </fieldset>
+
+          <div class="rs-actions">
+            <button type="submit" name="action" value="restore_from_bak" class="btn btn-primary">
+              <i class="bi bi-file-earmark-zip" aria-hidden="true"></i>ابدأ في الخلفية
+            </button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </section>
 
 </div>
 
-{# ── مودال تصفّح ملفات الخادم ─────────────────────────────────────── #}
-<div class="modal fade" id="bakBrowseModal" tabindex="-1" aria-hidden="true" aria-labelledby="bakBrowseTitle">
+{# ── حوارُ تصفّح ملفات الخادم (العناصرُ أزرارٌ تُبلَغ بلوحة المفاتيح) ───────── #}
+<div class="modal fade rs-modal" id="bakBrowseModal" tabindex="-1" aria-hidden="true" aria-labelledby="bakBrowseTitle">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
-      <div class="modal-header py-2">
-        <h6 class="modal-title" id="bakBrowseTitle"><i class="bi bi-folder2-open me-2"></i>اختيار ملف باكاب من جهاز الخادم</h6>
+      <div class="modal-header">
+        <h2 class="modal-title" id="bakBrowseTitle"><span class="lx-dialog-ico" aria-hidden="true"><i class="bi bi-folder2-open"></i></span>اختيار ملف باكاب من جهاز الخادم</h2>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
       </div>
       <div class="modal-body">
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="bakUpBtn" title="للأعلى" aria-label="المجلد الأعلى"><i class="bi bi-arrow-up"></i></button>
-          <input type="text" id="bakCurPath" class="form-control form-control-sm" placeholder="(الأقراص)" readonly aria-label="المسار الحالي">
+        <div class="rs-pathbar">
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="bakUpBtn" title="للأعلى" aria-label="المجلد الأعلى"><i class="bi bi-arrow-up" aria-hidden="true"></i></button>
+          <input type="text" id="bakCurPath" class="form-control" dir="ltr" placeholder="(الأقراص)" readonly aria-label="المسار الحالي">
         </div>
-        <div id="bakQuick" class="mb-2"></div>
-        <div id="bakBrowseList" class="border rounded" style="max-height:340px; overflow-y:auto;">
-          <div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>جارٍ التحميل...</div>
+        <div id="bakQuick" class="rs-quickbar"></div>
+        <div id="bakBrowseList" class="rs-browse">
+          <div class="rs-empty" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>جارٍ التحميل…</div>
         </div>
-        <div class="form-text mt-2">تُعرَض المجلدات وملفات النسخ الاحتياطي فقط (<code>.bak</code> / <code>.zip</code> / <code>.tar.gz</code> / <code>.tgz</code>). ملفات <code>.7z</code> تُستخرج يدوياً ثم يُمرَّر مسار <code>.bak</code>.</div>
+        <p class="rs-help">تُعرَض المجلدات وملفات النسخ الاحتياطي فقط (<code>.bak</code> / <code>.zip</code> / <code>.tar.gz</code> / <code>.tgz</code>). ملفات <code>.7z</code> تُستخرج يدوياً ثم يُمرَّر مسار <code>.bak</code>.</p>
       </div>
     </div>
   </div>
 </div>
 
-<script src="{% static 'js/data_restore.js' %}?v=20261008"></script>
+<script src="{% static 'js/data_restore.js' %}?v=20261119-pages"></script>
 <script>
   window.RESTORE_URLS = {
     probe:     "{% url 'restore_probe' %}",

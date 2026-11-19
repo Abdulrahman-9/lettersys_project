@@ -4,6 +4,10 @@
    المبدأ: كل نداء هنا قراءةٌ رخيصة أو معاينة. الكتابة الوحيدة هي
    «اعتماد الربط» (يكتب حقل مرجع المصدر فقط) و«الدمج» (نموذج POST عادي).
    الرسائل صادقة: صفر نتائج تُعرَض كصفر، لا كنجاح.
+
+   العرض على الهويّة الموحّدة (11-19): أصنافُ css/data_restore.css وحدها — لا ‎.table‎
+   (app.css يلصق خليّتها الأخيرة بخلفيّةٍ بيضاء في الداكن)، ولا شاراتُ Bootstrap الصمّاء،
+   والأرقامُ معزولةُ الاتّجاه، وعناصرُ متصفّح الملفّات أزرارٌ تُبلَغ بلوحة المفاتيح.
    ============================================================ */
 (function () {
   'use strict';
@@ -24,11 +28,14 @@
     return (n === null || n === undefined) ? '—' : Number(n).toLocaleString('en-US');
   }
 
+  // رقمٌ معزولُ الاتّجاه داخل جملةٍ أو خليّة (عقدُ الهويّة §5)
+  function isoNum(n) { return '<bdi dir="ltr">' + num(n) + '</bdi>'; }
+
   function bytes(b) {
     if (!b) return '—';
     var u = ['بايت', 'ك.ب', 'م.ب', 'ج.ب'], i = 0, v = Number(b);
     while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
-    return v.toFixed(i ? 1 : 0) + ' ' + u[i];
+    return '<bdi dir="ltr">' + v.toFixed(i ? 1 : 0) + '</bdi> ' + u[i];
   }
 
   function esc(s) {
@@ -49,20 +56,56 @@
     if (on) {
       btn.dataset.html = btn.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + (label || 'جارٍ التنفيذ…');
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>' + (label || 'جارٍ التنفيذ…');
     } else {
       btn.disabled = false;
       if (btn.dataset.html) btn.innerHTML = btn.dataset.html;
     }
   }
 
+  // أيقونةٌ لكلّ نوع — المعنى لا يُحمل على اللون وحده
+  var ALERT_ICON = {
+    success: 'bi-check-circle',
+    warning: 'bi-exclamation-triangle',
+    danger: 'bi-x-octagon',
+    info: 'bi-info-circle'
+  };
+
   function alertBox(kind, html) {
-    return '<div class="alert alert-' + kind + ' py-2 mb-0 small">' + html + '</div>';
+    return '<div class="alert alert-' + kind + ' rs-alert"><i class="bi ' + (ALERT_ICON[kind] || ALERT_ICON.info) +
+      '" aria-hidden="true"></i><div>' + html + '</div></div>';
+  }
+
+  function table(inner) {
+    return '<div class="rs-scroll"><table class="rs-table">' + inner + '</table></div>';
+  }
+
+  // لوحُ المراحل يعكس حالةَ كلّ خطوة، و«الآن» على أوّل خطوةٍ متاحة (عرضٌ وحده)
+  var TRACK_STATE = { done: 'تمّت', active: 'متاحة', blocked: 'لاحقاً' };
+
+  function syncTrack() {
+    var current = null;
+    for (var n = 1; n <= 4; n++) {
+      var step = document.querySelector('.rs-step[data-step="' + n + '"]');
+      var item = document.querySelector('.rs-track [data-step="' + n + '"]');
+      if (!step || !item) continue;
+      var state = step.getAttribute('data-state');
+      var link = item.querySelector('a');
+      var label = item.querySelector('[data-track-state]');
+      item.setAttribute('data-state', state);
+      if (link) link.removeAttribute('aria-current');
+      if (state === 'active' && current === null) {
+        current = n;
+        if (link) link.setAttribute('aria-current', 'step');
+      }
+      if (label) label.textContent = n === current ? 'الآن' : (TRACK_STATE[state] || '');
+    }
   }
 
   function setStep(n, state) {
     var el = document.querySelector('.rs-step[data-step="' + n + '"]');
     if (el) el.setAttribute('data-state', state);
+    syncTrack();
   }
 
   function creds() {
@@ -107,7 +150,7 @@
   function failure(out, err) {
     out.innerHTML = alertBox('danger',
       '<strong>تعذّر التنفيذ.</strong> ' + esc(err) +
-      '<div class="mt-1" style="font-size:.75rem;">تحقّق من اسم الخادم وقاعدة البيانات وكلمة السر، ' +
+      '<div class="rs-note">تحقّق من اسم الخادم وقاعدة البيانات وكلمة السر، ' +
       'ومن أن خدمة SQL Server تعمل.</div>');
   }
 
@@ -133,16 +176,16 @@
       var rows = d.tables.map(function (t) {
         return '<tr><td><code>' + esc(t.table) + '</code></td>' +
                '<td>' + esc(KIND_LABELS[t.kind] || t.kind) + '</td>' +
-               '<td class="rs-num">' + num(t.rows) + '</td>' +
-               '<td class="rs-num">' + num(t.with_file) + '</td></tr>';
+               '<td class="rs-num">' + isoNum(t.rows) + '</td>' +
+               '<td class="rs-num">' + isoNum(t.with_file) + '</td></tr>';
       }).join('');
 
       out.innerHTML =
-        alertBox('success', '<strong>الاتصال ناجح.</strong> ' + num(d.tables.length) +
-          ' جدولاً، ' + num(d.total_rows) + ' سجلاً، السنوات: ' + esc(d.years.join('، ')) + '.') +
-        '<div class="table-responsive mt-2"><table class="table table-sm rs-table mb-0">' +
-        '<thead><tr><th>الجدول</th><th>النوع</th><th>الصفوف</th><th>بمرفق</th></tr></thead>' +
-        '<tbody>' + rows + '</tbody></table></div>';
+        alertBox('success', '<strong>الاتصال ناجح.</strong> ' + isoNum(d.tables.length) +
+          ' جدولاً، ' + isoNum(d.total_rows) + ' سجلاً، السنوات: ' + esc(d.years.join('، ')) + '.') +
+        table('<thead><tr><th scope="col">الجدول</th><th scope="col">النوع</th>' +
+          '<th scope="col">الصفوف</th><th scope="col">بمرفق</th></tr></thead>' +
+          '<tbody>' + rows + '</tbody>');
 
       setStep(1, 'done');
       setStep(2, 'active');
@@ -191,33 +234,32 @@
         var verifyLine = '';
         if (d.verified_bytes) {
           verifyLine = d.verify_mismatches.length
-            ? '<div class="text-danger mt-1">تحقّق البصمات: ' + num(d.verify_mismatches.length) +
-              ' اختلافاً من ' + num(d.verified_bytes) + ' — لم يُعتمد شيء.</div>'
-            : '<div class="text-success mt-1"><i class="bi bi-shield-check me-1"></i>تحقّق البصمات: ' +
-              num(d.verified_bytes) + ' مرفقاً من <strong>مطابقات الحجم</strong> قُورنت — تطابق تامّ.</div>';
+            ? '<div class="rs-note text-danger"><i class="bi bi-x-octagon" aria-hidden="true"></i>تحقّق البصمات: ' +
+              isoNum(d.verify_mismatches.length) + ' اختلافاً من ' + isoNum(d.verified_bytes) + ' — لم يُعتمد شيء.</div>'
+            : '<div class="rs-note text-success"><i class="bi bi-shield-check" aria-hidden="true"></i>تحقّق البصمات: ' +
+              isoNum(d.verified_bytes) + ' مرفقاً من <strong>مطابقات الحجم</strong> قُورنت — تطابق تامّ.</div>';
         }
         var attn = (d.attention || []).length;
         if (attn) {
-          verifyLine += '<div class="text-warning-emphasis mt-1">' +
-            '<i class="bi bi-eye me-1"></i><strong>' + num(attn) + '</strong> كتاباً رُبط بالعنوان والتاريخ ' +
+          verifyLine += '<div class="rs-note text-warning-emphasis">' +
+            '<i class="bi bi-eye" aria-hidden="true"></i><strong>' + isoNum(attn) + '</strong> كتاباً رُبط بالعنوان والتاريخ ' +
             'لا بحجم المرفق — الفارق طبيعي إن استبدلتَ المرفق داخل التطبيق، وإلا فراجعها.</div>';
         }
 
-        var body =
-          '<table class="table table-sm rs-table mb-0"><tbody>' +
-          '<tr><td>صفوف المصدر</td><td class="rs-num fw-bold">' + num(d.source_rows) + '</td></tr>' +
-          '<tr><td>كتب بلا ربط قبل التشغيل</td><td class="rs-num">' + num(d.books_without_ref) + '</td></tr>' +
-          '<tr><td>مُطابَقة بمفتاح فريد</td><td class="rs-num fw-bold text-success">' + num(d.matched) + '</td></tr>' +
-          '<tr><td class="ps-4 text-muted">منها بحجم المرفق</td><td class="rs-num">' + num(d.matched_by_size) + '</td></tr>' +
-          '<tr><td class="ps-4 text-muted">منها بالعنوان والتاريخ</td><td class="rs-num">' + num(d.matched_by_title) + '</td></tr>' +
-          '<tr><td>ملتبسة (تُركت دون ربط)</td><td class="rs-num">' + num(d.ambiguous) + '</td></tr>' +
-          '<tr><td>كتب بلا مطابقة (كتبك غالباً)</td><td class="rs-num">' + num(d.unmatched_books) + '</td></tr>' +
-          '<tr><td>صفوف مصدر بلا مطالبة</td><td class="rs-num">' + num(d.unclaimed_source_rows) + '</td></tr>' +
-          '</tbody></table>';
+        var body = table('<tbody>' +
+          '<tr><th scope="row">صفوف المصدر</th><td class="rs-num"><strong>' + isoNum(d.source_rows) + '</strong></td></tr>' +
+          '<tr><th scope="row">كتب بلا ربط قبل التشغيل</th><td class="rs-num">' + isoNum(d.books_without_ref) + '</td></tr>' +
+          '<tr><th scope="row">مُطابَقة بمفتاح فريد</th><td class="rs-num text-success"><strong>' + isoNum(d.matched) + '</strong></td></tr>' +
+          '<tr class="rs-sub"><th scope="row">منها بحجم المرفق</th><td class="rs-num">' + isoNum(d.matched_by_size) + '</td></tr>' +
+          '<tr class="rs-sub"><th scope="row">منها بالعنوان والتاريخ</th><td class="rs-num">' + isoNum(d.matched_by_title) + '</td></tr>' +
+          '<tr><th scope="row">ملتبسة (تُركت دون ربط)</th><td class="rs-num">' + isoNum(d.ambiguous) + '</td></tr>' +
+          '<tr><th scope="row">كتب بلا مطابقة (كتبك غالباً)</th><td class="rs-num">' + isoNum(d.unmatched_books) + '</td></tr>' +
+          '<tr><th scope="row">صفوف مصدر بلا مطالبة</th><td class="rs-num">' + isoNum(d.unclaimed_source_rows) + '</td></tr>' +
+          '</tbody>');
 
         if (d.applied) {
           out.innerHTML = alertBox('success',
-            '<strong>تمّ الربط.</strong> خُتم «مرجع المصدر» على ' + num(d.matched) + ' كتاباً.' + verifyLine) + body;
+            '<strong>تمّ الربط.</strong> خُتم «مرجع المصدر» على ' + isoNum(d.matched) + ' كتاباً.' + verifyLine) + body;
           $('rsReconcileApply').disabled = true;
           setStep(2, 'done');
           setStep(3, 'active');
@@ -229,7 +271,7 @@
           setStep(3, 'active');
         } else {
           out.innerHTML = alertBox('warning',
-            '<strong>معاينة — لم يُكتب شيء.</strong> سيُربط ' + num(d.matched) +
+            '<strong>معاينة — لم يُكتب شيء.</strong> سيُربط ' + isoNum(d.matched) +
             ' كتاباً عند الاعتماد.' + verifyLine) + body;
           $('rsReconcileApply').disabled = false;
         }
@@ -253,18 +295,18 @@
 
       var footnotes = '';
       if (t.app_only) {
-        footnotes += '<div class="mt-1" style="font-size:.75rem;">لديك ' + num(t.app_only) +
+        footnotes += '<div class="rs-note">لديك ' + isoNum(t.app_only) +
           ' كتاباً لا وجود له في المصدر — أدخلتَها داخل التطبيق، ولن يمسّها الدمج.</div>';
       }
       if (t.held) {
-        footnotes += '<div class="mt-1" style="font-size:.75rem;">' +
-          '<i class="bi bi-pause-circle me-1"></i><strong>' + num(t.held) + ' صفّاً موقوفاً:</strong> ' +
+        footnotes += '<div class="rs-note">' +
+          '<i class="bi bi-pause-circle" aria-hidden="true"></i><strong>' + isoNum(t.held) + ' صفّاً موقوفاً:</strong> ' +
           'كان موجوداً في المصدر قبل آخر مزامنة ولم يُستورد — غالباً تعميم مكرّر تُرك عمداً. ' +
           '<strong>لا يُضاف تلقائياً</strong> تفادياً لإنشاء نسخة ثانية من كتابٍ عندك.</div>';
       }
       if (!d.has_boundary) {
-        footnotes += '<div class="mt-1 text-warning" style="font-size:.75rem;">' +
-          '<i class="bi bi-exclamation-triangle me-1"></i><strong>لا يوجد حدّ محفوظ لهذا المصدر</strong> — ' +
+        footnotes += '<div class="rs-note text-warning">' +
+          '<i class="bi bi-exclamation-triangle" aria-hidden="true"></i><strong>لا يوجد حدّ محفوظ لهذا المصدر</strong> — ' +
           'فلا سبيل لتمييز صفٍّ استجدّ عن صفٍّ قديم لم يُستورد، وعُدَّ <strong>كل</strong> صفّ ' +
           'غير معروف جديداً. راجع القائمة قبل الدمج، والتقط الحدّ بعده بأمر ' +
           '<code>capture_legacy_boundary</code>.</div>';
@@ -272,31 +314,31 @@
 
       if (!t.new) {
         out.innerHTML = alertBox(t.held ? 'warning' : 'info',
-          '<strong>لا يوجد أي جديد.</strong> كل صفوف المصدر (' + num(t.rows) +
+          '<strong>لا يوجد أي جديد.</strong> كل صفوف المصدر (' + isoNum(t.rows) +
           ') إمّا موجودة عندك أو موقوفة. لا حاجة لتشغيل الخطوة ٤.' + footnotes);
         setStep(3, 'done');
         return;
       }
 
       var rows = d.tables.filter(function (x) { return x.rows; }).map(function (x) {
-        var hl = x.new ? ' class="table-warning"' : '';
+        var hl = x.new ? ' class="is-new"' : '';
         return '<tr' + hl + '><td><code>' + esc(x.table) + '</code></td>' +
                '<td>' + esc(KIND_LABELS[x.kind] || x.kind) + '</td>' +
-               '<td class="rs-num">' + num(x.rows) + '</td>' +
-               '<td class="rs-num">' + num(x.known) + '</td>' +
-               '<td class="rs-num fw-bold">' + num(x.new) + '</td>' +
+               '<td class="rs-num">' + isoNum(x.rows) + '</td>' +
+               '<td class="rs-num">' + isoNum(x.known) + '</td>' +
+               '<td class="rs-num"><strong>' + isoNum(x.new) + '</strong></td>' +
                '<td class="rs-num">' + bytes(x.new_bytes) + '</td>' +
-               '<td class="rs-num">' + (x.held ? num(x.held) : '—') + '</td></tr>';
+               '<td class="rs-num">' + (x.held ? isoNum(x.held) : '—') + '</td></tr>';
       }).join('');
 
       out.innerHTML =
         alertBox('warning',
-          '<strong>يوجد ' + num(t.new) + ' صفّاً جديداً</strong> لم يدخل نظامك بعد، ' +
+          '<strong>يوجد ' + isoNum(t.new) + ' صفّاً جديداً</strong> لم يدخل نظامك بعد، ' +
           'بمرفقات حجمها ' + bytes(t.new_bytes) + '. الخطوة ٤ ستضيفها.' + footnotes) +
-        '<div class="table-responsive mt-2"><table class="table table-sm rs-table mb-0">' +
-        '<thead><tr><th>الجدول</th><th>النوع</th><th>صفوف المصدر</th><th>عندنا</th>' +
-        '<th>جديد</th><th>حجم مرفقاته</th><th>موقوف</th></tr></thead>' +
-        '<tbody>' + rows + '</tbody></table></div>';
+        table('<thead><tr><th scope="col">الجدول</th><th scope="col">النوع</th><th scope="col">صفوف المصدر</th>' +
+          '<th scope="col">عندنا</th><th scope="col">جديد</th><th scope="col">حجم مرفقاته</th>' +
+          '<th scope="col">موقوف</th></tr></thead>' +
+          '<tbody>' + rows + '</tbody>');
 
       setStep(3, 'done');
       setStep(4, 'active');
@@ -309,12 +351,13 @@
   // ── الخطوة ٤: مهمّة الدمج (تعمل خارج المتصفّح) ───────────────────────
   var pollTimer = null;
 
+  // الحالةُ نصٌّ في رقاقةٍ بلون معناها من رموز الهويّة
   var JOB_BADGE = {
-    queued:    ['في الانتظار', 'text-bg-secondary'],
-    running:   ['قيد التنفيذ', 'text-bg-primary'],
-    done:      ['اكتملت', 'text-bg-success'],
-    failed:    ['فشلت', 'text-bg-danger'],
-    cancelled: ['أُلغيت', 'text-bg-warning']
+    queued:    ['في الانتظار', 'is-wait'],
+    running:   ['قيد التنفيذ', 'is-prog'],
+    done:      ['اكتملت', 'is-done'],
+    failed:    ['فشلت', 'is-late'],
+    cancelled: ['أُلغيت', '']
   };
 
   function jobUrl(tpl, id) { return tpl.replace(/0\/?$/, id + '/'); }
@@ -328,14 +371,14 @@
       ['file_unknown_type', 'مرفق بنوع مجهول']
     ].filter(function (p) { return s[p[0]]; })
      .map(function (p) {
-       return '<tr><td>' + p[1] + '</td><td class="rs-num fw-bold">' + num(s[p[0]]) + '</td></tr>';
+       return '<tr><th scope="row">' + p[1] + '</th><td class="rs-num"><strong>' + isoNum(s[p[0]]) + '</strong></td></tr>';
      }).join('');
     var out = rows
-      ? '<table class="table table-sm rs-table mb-0"><tbody>' + rows + '</tbody></table>'
+      ? table('<tbody>' + rows + '</tbody>')
       : alertBox('info', 'لم يتغيّر شيء — لا صفوف جديدة.');
     var ents = s.created_entities || [];
     if (ents.length) {
-      out += '<div class="mt-2 small"><strong>جهات أُنشئت أثناء الدمج (' + num(ents.length) +
+      out += '<div class="rs-note"><strong>جهات أُنشئت أثناء الدمج (' + isoNum(ents.length) +
         ') — راجعها تفادياً للتكرار:</strong><div class="text-muted">' +
         ents.slice(0, 40).map(esc).join(' · ') + (ents.length > 40 ? ' …' : '') + '</div></div>';
     }
@@ -353,10 +396,10 @@
         if (!d.ok) { $('rsJobPhase').textContent = d.error || 'تعذّر قراءة حالة المهمّة.'; return; }
         paintState(d.state);
 
-        var badge = JOB_BADGE[d.status] || [d.status, 'text-bg-secondary'];
+        var badge = JOB_BADGE[d.status] || [d.status, ''];
         var st = $('rsJobStatus');
         st.textContent = badge[0];
-        st.className = 'badge ' + badge[1];
+        st.className = ('rs-chip ' + badge[1]).trim();
         $('rsJobId').textContent = d.id;
         $('rsJobPhase').textContent = d.phase || '…';
 
@@ -385,7 +428,7 @@
             + renderSummary(d.summary);
         } else {
           out.innerHTML = alertBox('danger',
-            '<strong>فشلت المهمّة.</strong><pre class="mb-0 mt-1" style="white-space:pre-wrap; font-size:.72rem;">'
+            '<strong>فشلت المهمّة.</strong><pre class="rs-log">'
             + esc((d.error || '').slice(0, 1200)) + '</pre>');
         }
         $('rsMergeBtn').disabled = false;
@@ -464,6 +507,7 @@
   }
 
   // ── متصفّح ملفات الباكاب ─────────────────────────────────────────────
+  // كلُّ مجلّدٍ وملفٍّ زرٌّ (كانت ‎div‎ بنقرٍ وحده فلا تُبلَغ بلوحة المفاتيح)
   function initBrowser() {
     var modal = $('bakBrowseModal');
     if (!modal) return;
@@ -474,39 +518,41 @@
     function fmtMB(mb) { return mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb.toFixed(1) + ' MB'; }
 
     function load(path) {
-      listEl.innerHTML = '<div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>جارٍ التحميل...</div>';
+      listEl.innerHTML = '<div class="rs-empty" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>جارٍ التحميل…</div>';
       quickEl.innerHTML = '';
       fetch(URLS.browse + '?path=' + encodeURIComponent(path || ''),
             { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          if (data.error) { listEl.innerHTML = '<div class="text-danger p-3 small">' + esc(data.error) + '</div>'; return; }
+          if (data.error) { listEl.innerHTML = '<div class="rs-empty is-error" role="alert">' + esc(data.error) + '</div>'; return; }
           curEl.value = data.path || '';
           parentPath = data.parent;
           upBtn.disabled = (data.parent === null || data.parent === undefined);
           if (data.quick && data.quick.length) {
-            quickEl.innerHTML = '<div class="small text-muted mb-1">وصول سريع:</div>' +
+            quickEl.innerHTML = '<span class="rs-label">وصول سريع:</span>' +
               data.quick.map(function (q) {
-                return '<button type="button" class="btn btn-sm btn-light border me-1 mb-1 bak-nav" data-path="' +
-                  esc(q) + '"><i class="bi bi-star me-1 text-warning"></i>' + esc(q) + '</button>';
+                return '<button type="button" class="rs-quick bak-nav" data-path="' + esc(q) + '">' +
+                  '<i class="bi bi-star-fill" aria-hidden="true"></i><bdi>' + esc(q) + '</bdi></button>';
               }).join('');
           }
           var html = '';
           (data.dirs || []).forEach(function (dname) {
             var full = data.is_root ? dname : (String(data.path).replace(/[\\/]$/, '') + '\\' + dname);
-            html += '<div class="d-flex align-items-center px-3 py-1 border-bottom bak-nav" style="cursor:pointer;" data-path="' +
-              esc(full) + '"><i class="bi bi-folder-fill text-warning me-2"></i><span>' + esc(dname) + '</span></div>';
+            html += '<button type="button" class="rs-entry bak-nav" data-path="' + esc(full) + '">' +
+              '<i class="bi bi-folder-fill is-dir" aria-hidden="true"></i>' +
+              '<span class="visually-hidden">مجلّد: </span><bdi class="rs-entry__name">' + esc(dname) + '</bdi></button>';
           });
           (data.files || []).forEach(function (f) {
             var full = String(data.path).replace(/[\\/]$/, '') + '\\' + f.name;
-            html += '<div class="d-flex align-items-center justify-content-between px-3 py-1 border-bottom bak-pick" style="cursor:pointer;" data-path="' +
-              esc(full) + '"><span><i class="bi bi-file-earmark-zip text-success me-2"></i>' + esc(f.name) +
-              '</span><span class="text-muted small">' + fmtMB(f.size_mb) + '</span></div>';
+            html += '<button type="button" class="rs-entry bak-pick" data-path="' + esc(full) + '">' +
+              '<i class="bi bi-file-earmark-zip is-file" aria-hidden="true"></i>' +
+              '<span class="visually-hidden">ملفّ باكاب: </span><bdi class="rs-entry__name">' + esc(f.name) + '</bdi>' +
+              '<bdi dir="ltr" class="rs-entry__size">' + fmtMB(f.size_mb) + '</bdi></button>';
           });
-          if (!html) html = '<div class="text-muted p-3 small">لا توجد مجلدات فرعية ولا ملفات باكاب هنا.</div>';
+          if (!html) html = '<div class="rs-empty">لا توجد مجلدات فرعية ولا ملفات باكاب هنا.</div>';
           listEl.innerHTML = html;
         })
-        .catch(function () { listEl.innerHTML = '<div class="text-danger p-3 small">تعذّر التحميل.</div>'; });
+        .catch(function () { listEl.innerHTML = '<div class="rs-empty is-error" role="alert">تعذّر التحميل.</div>'; });
     }
 
     listEl.addEventListener('click', function (e) {
@@ -544,6 +590,7 @@
     $('rsMergeBtn').addEventListener('click', startMerge);
     $('rsJobCancel').addEventListener('click', cancelJob);
     initBrowser();
+    syncTrack();
 
     // مهمّة كانت تعمل قبل فتح الصفحة (أو قبل إغلاقها) — نلتقطها ونتابعها
     if (window.RESTORE_LIVE_JOB) {
