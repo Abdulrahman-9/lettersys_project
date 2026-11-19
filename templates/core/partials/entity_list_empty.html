@@ -1,0 +1,21 @@
+{% load qs %}
+{% comment %}
+  حالةُ «لا نتيجة» لدليل الجهات — في الجدول وفي البطاقات (entity_list.html وحدَه).
+  كلُّ حالةٍ تقول لماذا فرغت القائمةُ ومخرجَها بنقرة: البحثُ يُمسح، والعرضُ المرشَّحُ يعود إلى «الكل».
+{% endcomment %}
+<div class="en-empty">
+  <span class="en-empty-icon" aria-hidden="true"><i class="bi {% if search_q %}bi-search{% elif showing_inactive %}bi-archive{% else %}bi-inbox{% endif %}"></i></span>
+  {% if search_q %}
+    <p class="en-empty-title">لا جهات تطابق «<bdi>{{ search_q }}</bdi>»</p>
+    <p class="en-empty-text">جرّب كلمة بحث أخرى، أو <a href="{% qs q='' page='' %}">امسح البحث</a>.</p>
+  {% elif showing_inactive %}
+    <p class="en-empty-title">لا جهات معطّلة</p>
+    <p class="en-empty-text">لم تُعطَّل أي جهة بعد.</p>
+  {% elif kind_filter or lang_filter and lang_filter != 'all' %}
+    <p class="en-empty-title">لا جهات في هذا العرض</p>
+    <p class="en-empty-text"><a href="{% qs kind='' lang='' page='' %}">اعرض كلَّ الجهات النشطة</a></p>
+  {% else %}
+    <p class="en-empty-title">لا توجد جهات مسجلة</p>
+    <p class="en-empty-text"><a href="{% url 'entity_create' %}" data-bs-toggle="modal" data-bs-target="#entityCreateModal">سجّل أوّل جهة</a></p>
+  {% endif %}
+</div>
