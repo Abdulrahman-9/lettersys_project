@@ -1,30 +1,38 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}التنبيهات{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/notifications.css' %}?v=20261007">{% endblock %}
+{# الهويّة الموحّدة (2026‑11‑19): الصفحةُ منقولة — الوضعان من رموز theme.css، ولا لونَ صريحاً في notifications.css #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/notifications.css' %}?v=20261119-pages">{% endblock %}
 
 {% block content %}
 {% comment %}
   «التنبيهات» — اسمٌ واحدٌ للصفحة (كانت «مركز الإشعارات/مركز التنبيهات/حالة الإشعارات»).
   العنوانُ والرابطُ والأولويّةُ من حقول النموذج لا من تحسُّس نصّ الرسالة، وفتحُ الكتاب
   من تنبيهٍ غيرِ مقروء يعلّمه مقروءاً في النقرة نفسها (تدقيقُ نيلسن 2026‑10‑07، A#11–13 · A#19).
+  على الهويّة v2 (2026‑11‑19) — عرضٌ فقط، والسلوكُ كما هو (الروابطُ والنماذجُ وأسماءُ حقولها):
+  · وقتُ التنبيه المطلق ظاهرٌ بجوار «منذ…» (كان في title وحدَه: لا يبلغه اللمسُ ولا لوحةُ المفاتيح).
+  · «فتح» يحمل عنوانَ تنبيهه وصفاً (aria-describedby) — لا «فتح» متشابهةٌ بلا سياقٍ لقارئ الشاشة.
+  · الأزرارُ أزرارُ Bootstrap التي تلوّنها الهويّة؛ والأفعالُ تحت النصّ على الهاتف بأهدافٍ 44px.
 {% endcomment %}
 <div class="nt-page">
   <header class="nt-head">
-    <div>
-      <h1 class="nt-title">التنبيهات</h1>
-      <p class="nt-sub">{% if unread_count %}<strong>{{ unread_count }}</strong> غيرُ مقروء من {{ total_count }}{% elif total_count %}كلُّها مقروءة ({{ total_count }}){% else %}لا تنبيهات{% endif %}</p>
+    <span class="nt-head-ico" aria-hidden="true"><i class="bi bi-bell"></i></span>
+    <div class="nt-heading">
+      <h1 class="nt-title" id="nt-title">التنبيهات</h1>
+      {# سطرُ الحال حين يوجد ما يُعدّ؛ والفراغُ تقوله بطاقتُه تحته مرّةً واحدة (كانا «لا تنبيهات» فوق «لا تنبيهات الآن») #}
+      {% if total_count %}<p class="nt-sub">{% if unread_count %}<span class="nt-dot" aria-hidden="true"></span><strong><bdi dir="ltr">{{ unread_count }}</bdi></strong> غيرُ مقروء من <bdi dir="ltr">{{ total_count }}</bdi>{% else %}<i class="bi bi-check2-circle" aria-hidden="true"></i>كلُّها مقروءة (<bdi dir="ltr">{{ total_count }}</bdi>){% endif %}</p>{% endif %}
     </div>
     {% if unread_count %}
-    <form method="post" action="{% url 'notification_mark_all_read' %}">
+    <form class="nt-head-act" method="post" action="{% url 'notification_mark_all_read' %}">
       {% csrf_token %}
-      <button type="submit" class="nt-btn"><i class="bi bi-check2-all" aria-hidden="true"></i> تعليم الكلّ كمقروء</button>
+      <button type="submit" class="btn btn-primary"><i class="bi bi-check2-all" aria-hidden="true"></i>تعليم الكلّ كمقروء</button>
     </form>
     {% endif %}
   </header>
 
   {% if notifications %}
-  <ul class="nt-list">
+  <ul class="nt-list" aria-labelledby="nt-title">
     {% for n in notifications %}
     <li class="nt-item{% if not n.is_read %} is-unread{% endif %} p-{{ n.priority }}">
       <span class="nt-icon" aria-hidden="true">
@@ -34,47 +42,50 @@
         <div class="nt-line">
           {% if not n.is_read %}<span class="nt-new">جديد</span>{% endif %}
           {% if n.priority != 'info' %}<span class="nt-prio">{{ n.get_priority_display }}</span>{% endif %}
-          <strong class="nt-head-text">{{ n.title|default:n.message|truncatechars:120 }}</strong>
+          <strong class="nt-head-text" id="nt-t-{{ n.id }}">{{ n.title|default:n.message|truncatechars:120 }}</strong>
         </div>
         {% if n.title %}<p class="nt-msg">{{ n.message }}</p>{% endif %}
-        <time class="nt-time" datetime="{{ n.created_at|date:'c' }}" title="{{ n.created_at|date:'Y/m/d H:i' }}">منذ {{ n.created_at|timesince }}</time>
+        <p class="nt-meta"><time class="nt-time" datetime="{{ n.created_at|date:'c' }}">منذ {{ n.created_at|timesince }}<span class="nt-sep" aria-hidden="true"> · </span><bdi class="nt-stamp" dir="ltr">{{ n.created_at|date:'d/m/Y H:i' }}</bdi></time></p>
       </div>
+      {% if n.safe_link or not n.is_read %}
       <div class="nt-acts">
         {% if n.safe_link %}
           {% if n.is_read %}
-          <a class="nt-btn" href="{{ n.safe_link }}">فتح</a>
+          <a class="btn btn-sm btn-outline-primary nt-open" href="{{ n.safe_link }}" aria-describedby="nt-t-{{ n.id }}">فتح<i class="bi bi-arrow-left-short" aria-hidden="true"></i></a>
           {% else %}
           <form method="post" action="{% url 'notification_mark_read' n.id %}">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ n.safe_link }}">
-            <button type="submit" class="nt-btn">فتح</button>
+            <button type="submit" class="btn btn-sm btn-outline-primary nt-open" aria-describedby="nt-t-{{ n.id }}">فتح<i class="bi bi-arrow-left-short" aria-hidden="true"></i></button>
           </form>
           {% endif %}
         {% endif %}
         {% if not n.is_read %}
         <form method="post" action="{% url 'notification_mark_read' n.id %}">
           {% csrf_token %}
-          <button type="submit" class="nt-btn nt-btn-quiet" title="تعليم كمقروء" aria-label="تعليم «{{ n.title|default:n.message|truncatechars:40 }}» كمقروء"><i class="bi bi-check2" aria-hidden="true"></i></button>
+          <button type="submit" class="btn btn-sm btn-outline-secondary nt-mark" title="تعليم كمقروء" aria-label="تعليم «{{ n.title|default:n.message|truncatechars:40 }}» كمقروء"><i class="bi bi-check2" aria-hidden="true"></i></button>
         </form>
         {% endif %}
       </div>
+      {% endif %}
     </li>
     {% endfor %}
   </ul>
 
   {% if page_obj.has_other_pages %}
   <nav class="nt-pager" aria-label="صفحات التنبيهات">
-    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">الأحدث</a>{% endif %}
-    <span>صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">الأقدم</a>{% endif %}
+    {% if page_obj.has_previous %}<a class="btn btn-sm btn-outline-primary" rel="prev" href="?page={{ page_obj.previous_page_number }}"><i class="bi bi-arrow-right" aria-hidden="true"></i>الأحدث</a>{% endif %}
+    <span class="nt-pager-pos">صفحة <bdi dir="ltr">{{ page_obj.number }}</bdi> من <bdi dir="ltr">{{ page_obj.paginator.num_pages }}</bdi></span>
+    {% if page_obj.has_next %}<a class="btn btn-sm btn-outline-primary" rel="next" href="?page={{ page_obj.next_page_number }}">الأقدم<i class="bi bi-arrow-left" aria-hidden="true"></i></a>{% endif %}
   </nav>
   {% endif %}
 
   {% else %}
   <div class="nt-empty">
-    <i class="bi bi-bell-slash" aria-hidden="true"></i>
-    <p>لا تنبيهات الآن. تصلك هنا الإحالاتُ إليك والكتبُ التي تأخّرت.</p>
-    <a class="nt-btn" href="{% url 'dashboard' %}">العودة إلى اللوحة</a>
+    <span class="nt-empty-ico" aria-hidden="true"><i class="bi bi-bell-slash"></i></span>
+    <h2 class="nt-empty-title">لا تنبيهات الآن</h2>
+    <p class="nt-empty-text">تصلك هنا الإحالاتُ إليك والكتبُ التي تأخّرت.</p>
+    <a class="btn btn-primary" href="{% url 'dashboard' %}">العودة إلى اللوحة</a>
   </div>
   {% endif %}
 </div>
