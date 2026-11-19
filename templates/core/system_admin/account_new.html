@@ -1,7 +1,8 @@
 {% extends 'base.html' %}
 {% load static dict_utils %}
 {% block title %}حساب جديد{% endblock %}
-{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261118-batch3a">{% endif %}{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261119-pages">{% endif %}{% endblock %}
 {% block content %}
 {% comment %}
 إنشاءُ حساب (ج، الشريحة 3) — التصميمُ المعتمد shots_v2/v2_account_new.png. الأدوارُ تتبع القسم المختار
@@ -18,7 +19,7 @@
         <div class="sa-card-head"><h2>الحساب</h2></div>
         <div class="ae-field"><label for="anName">الاسم</label>
           <input class="sa-input" id="anName" name="name" value="{{ values.name|default:'' }}" maxlength="300" autocomplete="off"></div>
-        <div class="ae-field"><label for="anUser">اسم الدخول</label>
+        <div class="ae-field"><label for="anUser">اسم الدخول (مطلوب)</label>
           <input class="sa-input" id="anUser" name="username" value="{{ values.username|default:'' }}" maxlength="150" required autocomplete="off" dir="ltr" spellcheck="false"></div>
         <div class="ae-field"><label for="anDept">القسم (مطلوب)</label>
           <select class="sa-select" id="anDept" name="department" required>
@@ -49,7 +50,7 @@
           <p><b>سيستطيع:</b> <span id="anCan"></span></p>
           <p>ولا يستطيع: <span id="anCannot"></span></p>
         </div>
-        <p class="ae-note" style="margin-top:.7rem">الاستثناءات لهذا الشخص تُضاف من حسابه بعد إنشائه.</p>
+        <p class="ae-note">الاستثناءات لهذا الشخص تُضاف من حسابه بعد إنشائه.</p>
       </section>
     </div>
   </div>

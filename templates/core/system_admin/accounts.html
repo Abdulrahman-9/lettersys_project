@@ -1,12 +1,13 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}الحسابات والأدوار{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 {% comment %}
   الدفعة 2 (11-16): تحلّ محلّ تبويب «الحسابات والأدوار» في اللوحة المستقلّة. للقراءة فقط — لا حقلَ في
   الجدول؛ الصفُّ رابطٌ إلى محرّر الحساب (طريقُ الكتابة الوحيد). التصفيةُ والفرزُ والصفحاتُ من الخادم
   (``system_accounts_view``). رئيسُ القسم يرى شجرتَه، ولا يُحمَّل له شريطُ النظام فتُحمَّل أنماطُه هنا.
 {% endcomment %}
-{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261118-batch3a">{% endif %}{% endblock %}
+{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261119-pages">{% endif %}{% endblock %}
 {% block content %}
 <div class="sa-page">
   <div class="sa-head">
