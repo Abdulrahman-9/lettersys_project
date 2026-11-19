@@ -1,85 +1,15 @@
 {% extends "base.html" %}
 {% load static %}
 
+{# الهويّة الموحّدة v2 (2026-11-19): رموزُ theme.css والوضعان — ألوانُ الصفحة كلُّها في extraction_smart.css #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
 {% block title %}استخراج ذكي - نظام متقدم{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261118-toasts">
-<style>
-.scan-agent-status{font:inherit;font-size:.78rem;padding:.2rem .6rem;border-radius:999px;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;white-space:nowrap;border:1px solid transparent;cursor:pointer;transition:filter .15s,box-shadow .15s}
-.scan-agent-status:hover{filter:brightness(.97)}
-.scan-agent-status:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(20,184,166,.35)}
-.scan-agent-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block;flex:none}
-.scan-agent-status[data-state=checking]{color:#475569;background:#f1f5f9}
-.scan-agent-status[data-state=checking]::before{animation:sasPulse 1s ease-in-out infinite}
-@keyframes sasPulse{0%,100%{opacity:.35}50%{opacity:1}}
-.scan-agent-status[data-state=ready]{color:#166534;background:#dcfce7}
-.scan-agent-status[data-state=scanning]{color:#92400e;background:#fef3c7}
-.scan-agent-status[data-state=unavailable],.scan-agent-status[data-state=untrusted],.scan-agent-status[data-state=outdated],.scan-agent-status[data-state=no_naps2],.scan-agent-status[data-state=no_device]{color:#991b1b;background:#fee2e2}
-/* ── لوحة حالة/تعليمات وكيل المسح (popover لكل حالة) ── */
-.scan-agent-wrap{position:relative;display:inline-flex}
-/* موضع fixed يُحسب بالـJS (_positionAgentHelp) ويُقصَر داخل الشاشة — لا يخرج عن الحوّاف مهما كان مكان الزرّ */
-.scan-agent-help{position:fixed;top:0;left:0;z-index:1200;width:320px;max-width:calc(100vw - 16px);background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 32px -8px rgba(15,23,42,.28);padding:14px 15px;text-align:start;direction:rtl}
-.scan-agent-help[hidden]{display:none}
-.sah-head{display:flex;align-items:center;gap:8px;font-weight:800;font-size:.9rem;margin-bottom:4px}
-.sah-head .sah-dot{width:10px;height:10px;border-radius:50%;flex:none}
-.sah-head.ok{color:#166534}.sah-head.ok .sah-dot{background:#16a34a}
-.sah-head.busy{color:#92400e}.sah-head.busy .sah-dot{background:#d97706}
-.sah-head.err{color:#991b1b}.sah-head.err .sah-dot{background:#dc2626}
-.sah-head.info{color:#475569}.sah-head.info .sah-dot{background:#64748b}
-.sah-desc{font-size:.8rem;color:#475569;line-height:1.7;margin:0 0 8px}
-.sah-steps{margin:0 0 10px;padding-inline-start:18px;font-size:.8rem;color:#334155;line-height:1.9}
-.sah-steps code{background:#f1f5f9;border-radius:5px;padding:1px 5px;font-size:.9em;direction:ltr;display:inline-block}
-.sah-actions{display:flex;gap:8px;flex-wrap:wrap}
-.sah-btn{font:inherit;font-size:.8rem;font-weight:700;border-radius:9px;padding:7px 14px;cursor:pointer;border:1px solid transparent;display:inline-flex;align-items:center;gap:6px;transition:filter .15s,background .15s,box-shadow .15s}
-.sah-btn:hover{filter:brightness(1.04)}.sah-btn:active{filter:brightness(.96)}
-.sah-btn:disabled{opacity:.6;cursor:default}
-.sah-btn-primary{background:linear-gradient(135deg,#0f766e,#0d9488 60%,#14b8a6);color:#fff}
-.sah-btn-ghost{background:#fff;border-color:#cbd5e1;color:#334155}
-.sah-btn-ghost:hover{border-color:#94a3b8}
-.sah-close{margin-inline-start:auto;border:0;background:none;color:#94a3b8;cursor:pointer;font-size:1rem;line-height:1;padding:0}
-.sah-close:hover{color:#475569}
-.sah-note{font-size:.72rem;color:#94a3b8;margin-top:8px;line-height:1.6}
-/* أنماط معاينة المستند (DocCanvas) نُقلت إلى static/css/doc_canvas.css — نظافة + بديل مُحسَّن */
-
-/* ── شارة المسح التلقائي الذكي ── */
-.scan-auto-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.76rem;font-weight:700;color:#3730a3;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:999px;padding:.22rem .6rem;white-space:nowrap}
-.scan-auto-badge .bi{font-size:.85rem}
-/* ── مفتاح الاستخراج التلقائي (تفعيل/إطفاء) ── */
-.auto-extract-toggle{font:inherit;font-size:.74rem;font-weight:700;display:inline-flex;align-items:center;gap:5px;padding:.26rem .7rem;border-radius:999px;cursor:pointer;border:1px solid transparent;white-space:nowrap;transition:color .15s,background .15s,border-color .15s}
-.auto-extract-toggle .bi{font-size:.85rem}
-.auto-extract-toggle.is-on{color:#0f766e;background:#f0fdfa;border-color:#99f6e4}
-.auto-extract-toggle.is-on:hover{background:#ccfbf1}
-.auto-extract-toggle.is-off{color:#94a3b8;background:#f8fafc;border-color:#e2e8f0}
-.auto-extract-toggle.is-off .bi{opacity:.5}
-.auto-extract-toggle.is-off:hover{color:#64748b;border-color:#cbd5e1}
-.auto-extract-toggle:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(20,184,166,.35)}
-
-/* ── عنقود الحالة في رأس المعاينة الداكن: تكييف لونيّ فوق التدرّج التركوازي ──
-   الحالة نقطةٌ فقط (اللون يكفي، والنصّ في التلميح)، والوضع التلقائي أيقونةٌ فقط. */
-.preview-scan-status{display:inline-flex;align-items:center;gap:6px;margin-inline-start:auto;flex:none}
-.preview-scan-status .scan-agent-status{font-size:0;gap:0;padding:.34rem;background:rgba(255,255,255,.15);color:#f0fdfa}
-.preview-scan-status .auto-extract-toggle{width:30px;height:30px;padding:0;justify-content:center;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3)}
-.preview-scan-status .auto-extract-toggle.is-on{color:#ccfbf1;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3)}
-.preview-scan-status .auto-extract-toggle.is-on:hover{background:rgba(255,255,255,.26)}
-.preview-scan-status .auto-extract-toggle.is-off,.preview-scan-status .auto-extract-toggle.is-off:hover{color:rgba(255,255,255,.6);background:transparent;border-color:rgba(255,255,255,.25)}
-.preview-scan-status .aet-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.preview-scan-status .scan-agent-status::before{width:10px;height:10px;background:#e2e8f0}
-.preview-scan-status .scan-agent-status[data-state=ready]::before{background:#6ee7b7}
-.preview-scan-status .scan-agent-status[data-state=scanning]::before{background:#fcd34d}
-.preview-scan-status .scan-agent-status[data-state=unavailable]::before,
-.preview-scan-status .scan-agent-status[data-state=untrusted]::before,
-.preview-scan-status .scan-agent-status[data-state=outdated]::before,
-.preview-scan-status .scan-agent-status[data-state=no_naps2]::before,
-.preview-scan-status .scan-agent-status[data-state=no_device]::before{background:#fca5a5}
-.preview-scan-status .scan-auto-badge{font-size:0;gap:0;color:#f0fdfa;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);padding:.28rem .5rem}
-.preview-scan-status .scan-auto-badge .bi{font-size:.85rem}
-/* مستندٌ متعدّد الصفحات: يدخل الترقيم إلى الرأس، فيُخلى له مكان ليبقى اسم الملف ظاهراً */
-.modal-header:has(#previewPager:not([style*="none"])) .scan-auto-badge,
-.modal-header:has(#previewPager:not([style*="none"])) .modal-header-title span{display:none}
-</style>
-<link rel="stylesheet" href="{% static 'css/doc_canvas.css' %}?v=20261115-colors1">
-<link rel="stylesheet" href="{% static 'css/document_manager.css' %}?v=20261115-colors1">
+<link rel="stylesheet" href="{% static 'extraction_smart.css' %}?v=20261119-pages">
+<link rel="stylesheet" href="{% static 'css/doc_canvas.css' %}?v=20261119-pages">
+<link rel="stylesheet" href="{% static 'css/document_manager.css' %}?v=20261119-pages">
 {% endblock %}
 {% block content %}
 <!-- CSRF Token (hidden but available for JS) -->
@@ -88,19 +18,24 @@
 {# ── شريط رأس مدمج (يحلّ بصرياً محل الشريط العلوي المُلغى في وضع التطبيق) ── #}
 <div class="app-page-header">
     <div class="brand">
-        <img src="{% static 'img/md-o-c-logo.png' %}" alt="الشركة">
+        <img src="{% static 'img/mdoc-mark.png' %}?v=20261111" alt="الشركة" width="32" height="32">
         <span>نظام الكتب</span>
     </div>
+    {# زرُّ الوضع بجانب العلامة كما في الشريط العلويّ (المخفيّ هنا على المكتب) — theme.js يربطه بـdata-theme-toggle #}
+    <button type="button" class="lx-theme-toggle app-page-theme" data-theme-toggle aria-pressed="false" aria-label="الوضع الداكن" title="الوضع الداكن">
+        <svg class="lx-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="lx-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
     <div class="header-divider"></div>
     <div class="header-title">
-        <i class="bi bi-upc-scan me-1"></i>الإدخال الذكي
+        <i class="bi bi-upc-scan me-1" aria-hidden="true"></i>الإدخال الذكي
     </div>
     <div class="header-spacer"></div>
     {% if request.user.is_authenticated %}
     <a class="header-action" href="{% url 'notifications' %}" title="التنبيهات">
         <i class="bi bi-bell"></i>
         <span>التنبيهات</span>
-        {% if navbar_unread_notifications %}<span style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:800;">{{ navbar_unread_notifications }}</span>{% endif %}
+        {% if navbar_unread_notifications %}<span class="header-badge">{{ navbar_unread_notifications }}</span>{% endif %}
     </a>
     <div class="header-user">
         <i class="bi bi-person-circle"></i>
@@ -183,7 +118,7 @@
                         <span class="kind-tab-number" id="tabNum_outgoing_external">—</span>
                     </button>
                 </div>
-                <a href="{% url 'sequence_settings' %}" class="kind-tabs-settings" title="إعدادات العدّادات">
+                <a href="{% url 'sequence_settings' %}" class="kind-tabs-settings" title="إعدادات العدّادات" aria-label="إعدادات العدّادات">
                     <i class="bi bi-gear"></i>
                 </a>
             </div>
@@ -210,13 +145,13 @@
                                 <label class="field-label" id="bookNumberLabel">
                                     رقمنا
                                     <span class="field-required">*</span>
-                                    <i class="bi bi-info-circle ms-1" style="opacity:.6; font-size:.85em;" tabindex="0" role="img"
+                                    <i class="bi bi-info-circle ms-1 field-info" tabindex="0" role="img"
                                        title="رقمُ قيدنا يولّده النظام: سلسلةٌ واحدة لكلّ سجلّ بلا بادئة (مثل 2433). كتبُ 2025 وما قبلها تُعرض برقمها ووسمِ سنتها (825 · 2025). هذا ليس العدد المطبوع على المستند — ذاك حقل «العدد»."
                                        aria-label="رقمُ قيدنا يولّده النظام: سلسلةٌ واحدة لكلّ سجلّ بلا بادئة (مثل 2433). كتبُ 2025 وما قبلها تُعرض برقمها ووسمِ سنتها (825 · 2025). هذا ليس العدد المطبوع على المستند — ذاك حقل «العدد»."></i>
                                 </label>
                                 <span class="register-type-chip" id="bookRegisterChip" style="display: none;"></span>
                                 <span class="confidence-badge high" id="bookNumberConfidence" style="display: none;">
-                                    <span class="confidence-indicator" style="background: #16a34a;"></span>
+                                    <span class="confidence-indicator" aria-hidden="true"></span>
                                     <span id="bookNumberConfidenceValue">95%</span>
                                 </span>
                             </div>
@@ -257,7 +192,7 @@
                                     <span class="field-required">*</span>
                                 </label>
                                 <span class="confidence-badge medium" id="dateConfidence" style="display: none;">
-                                    <span class="confidence-indicator" style="background: #d97706;"></span>
+                                    <span class="confidence-indicator" aria-hidden="true"></span>
                                     <span id="dateConfidenceValue">78%</span>
                                 </span>
                             </div>
@@ -287,7 +222,7 @@
                         <div class="form-group-smart" id="senderNumberGroup">
                             <label class="field-label" id="senderNumberLabel">
                                 العدد
-                                <i class="bi bi-info-circle ms-1" style="opacity:.6; font-size:.85em;"
+                                <i class="bi bi-info-circle ms-1 field-info"
                                    title="العدد الحقيقي المطبوع على المستند، كما أصدرته الجهة المرسِلة. انقله كما هو ولا تُصححه. هذا ليس رقم قيدنا — رقمنا يولّده النظام تلقائياً."></i>
                             </label>
                             <input type="text" class="form-control-smart" id="senderNumber" placeholder="مثال: 512 أو 241/و"
@@ -351,7 +286,7 @@
                                 <span class="field-required">*</span>
                             </label>
                             <span class="confidence-badge high" id="titleConfidence" style="display: none;">
-                                <span class="confidence-indicator" style="background: #16a34a;"></span>
+                                <span class="confidence-indicator" aria-hidden="true"></span>
                                 <span id="titleConfidenceValue">92%</span>
                             </span>
                         </div>
@@ -413,15 +348,15 @@
                             </div>
                             <input type="checkbox" id="needsFollowup" class="followup-switch">
                         </div>
-                        <div class="form-group-smart is-hidden" id="dueDateGroup" style="margin-bottom: 0;">
+                        <div class="form-group-smart is-hidden" id="dueDateGroup">
                             <label class="field-label">تاريخ الاستحقاق</label>
                             <input type="date" class="form-control-smart" id="dueDate">
                             <div class="input-hint" id="dueDateHint">
                                 إذا تُرك فارغاً سيتم اقتراح موعد بعد 7 أيام من تاريخنا.
                                 الحالة تُحسَب تلقائياً:
-                                <i class="bi bi-circle-fill" style="color:#3b82f6"></i> قيد المتابعة ·
-                                <i class="bi bi-circle-fill" style="color:#f59e0b"></i> مستحق اليوم ·
-                                <i class="bi bi-circle-fill" style="color:#ef4444"></i> متأخر.
+                                <i class="bi bi-circle-fill fu-dot fu-dot--pending" aria-hidden="true"></i> قيد المتابعة ·
+                                <i class="bi bi-circle-fill fu-dot fu-dot--due" aria-hidden="true"></i> مستحق اليوم ·
+                                <i class="bi bi-circle-fill fu-dot fu-dot--late" aria-hidden="true"></i> متأخر.
                             </div>
                         </div>
                     </div>
@@ -594,8 +529,8 @@
     {# ── حوار الإرسال للجهة: يعرض الجهة والبريد وما سيُرفَق فعلاً قبل أي إرسال ── #}
     <div class="modal fade" id="sendToEntityModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="border-radius:16px;border:0;">
-          <div class="modal-header" style="border-bottom:1px solid #eef2f2;">
+        <div class="modal-content">
+          <div class="modal-header">
             <h5 class="modal-title fw-bold"><i class="bi bi-envelope-paper ms-1"></i> إرسال الكتاب إلى الجهة</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
           </div>
@@ -604,7 +539,7 @@
               <div class="spinner-border spinner-border-sm ms-2"></div> جارٍ تحضير المعاينة…
             </div>
           </div>
-          <div class="modal-footer" style="border-top:1px solid #eef2f2;">
+          <div class="modal-footer">
             <button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
             <button type="button" class="btn btn-primary" id="sendToEntityConfirm" disabled>
               <i class="bi bi-send ms-1"></i> أرسل الآن
@@ -662,7 +597,7 @@
         </div>
         <div class="modal-body" id="modalBody">
             <div class="empty-state" id="dropZone" title="اضغط أو اسحب الملف هنا">
-                <div class="empty-state-icon">📄</div>
+                <div class="empty-state-icon"><i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i></div>
                 <div class="empty-state-text">اسحب الملف هنا أو اضغط للرفع</div>
                 <div class="empty-state-hint">PDF أو صورة JPG/PNG (حتى 10MB) — أو استخدم زر "مسح من السكانر"</div>
             </div>
@@ -711,9 +646,9 @@
 <script src="{% static 'js/date_dmy.js' %}?v=20261104-xp6"></script>
 <script src="{% static 'js/extraction_progress.js' %}?v=20261104-xp6"></script>
 <script src="{% static 'js/scan_agent_client.js' %}?v=20261118-scanner"></script>
-<script src="{% static 'extraction_smart.js' %}?v=20261118-scanner"></script>
+<script src="{% static 'extraction_smart.js' %}?v=20261119-pages"></script>
 <script src="{% static 'js/document_manager.js' %}?v=20261007"></script>
-<script src="{% static 'title_autocomplete.js' %}?v=20260504"></script>
+<script src="{% static 'title_autocomplete.js' %}?v=20261119-pages"></script>
 
 {# ── \u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0646\u0635 \u0627\u0644\u062a\u0646\u0628\u0624\u064a \u0639\u0644\u0649 \u062d\u0642\u0644 \u0627\u0644\u0639\u0646\u0648\u0627\u0646 ── #}
 <script>
@@ -1745,8 +1680,9 @@
     if (header && !document.getElementById('editModeBadge')) {
       const badge = document.createElement('div');
       badge.id = 'editModeBadge';
-      badge.style.cssText = 'background:#fef3c7;color:#92400e;border-radius:8px;padding:.3rem .9rem;font-size:.8rem;font-weight:700;margin-bottom:.5rem;';
-      badge.innerHTML = `<i class="bi bi-pencil-square me-1"></i>وضع التعديل — الكتاب #${EDIT_DATA.our_number}`;
+      badge.className = 'edit-mode-badge';
+      badge.innerHTML = '<i class="bi bi-pencil-square" aria-hidden="true"></i>وضع التعديل — الكتاب <bdi dir="ltr"></bdi>';
+      badge.querySelector('bdi').textContent = '#' + EDIT_DATA.our_number;
       header.parentNode.insertBefore(badge, header);
     }
   }
