@@ -271,4 +271,4 @@ class ClientPinsTests(SimpleTestCase):
         roles = (ROOT / 'templates' / 'core' / 'system_admin' / 'roles.html').read_text(encoding='utf-8')
         self.assertIn("{% static 'js/role_matrix.js' %}?v=20261118-batch3a", roles)
         base = (ROOT / 'templates' / 'base.html').read_text(encoding='utf-8')
-        self.assertIn("{% static 'css/system_admin.css' %}?v=20261118-batch3a", base)
+        self.assertIn("{% static 'css/system_admin.css' %}?v=20261119-pages", base)

@@ -3,9 +3,6 @@
    الألوانُ من رموز ‎theme.css‎ وحدها — الوضعان يتبدّلان بالرموز، لا بقاعدةٍ لكلّ وضع. */
 
 .bk-page {
-  /* حدُّ الحقل: ‎--lx-line-strong‎ يقيس 1.4:1 على البئر (2.1:1 في الداكن) والحدُّ الأدنى لحدود عناصر التحكّم 3:1
-     (WCAG 1.4.11) — مزيجُ الحبر الخافت بالسطح يقيس 3.2–5.6 في الوضعين */
-  --bk-field-line: color-mix(in srgb, var(--lx-mute) 75%, var(--lx-surface));
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
@@ -166,8 +163,6 @@
 .bk-check:hover { border-color: color-mix(in srgb, var(--lx-pri) 45%, var(--lx-line-strong)); }
 .bk-check:has(:checked) { border-color: color-mix(in srgb, var(--lx-pri) 40%, var(--lx-line)); background: var(--lx-pri-soft); }
 .bk-check .form-check-input { flex: none; width: 1.25rem; height: 1.25rem; margin: 0; cursor: pointer; }
-/* حدُّ المربّع فارغاً بحدّ الحقول (المحدَّدُ يأخذ التعبئةَ من theme.css بقاعدته الأعلى) */
-.bk-page .bk-check .form-check-input { border-color: var(--bk-field-line); }
 
 .bk-fields {
   display: grid;
@@ -183,7 +178,7 @@
 /* الحقل بئرٌ بلون الأرضيّة داخل البطاقة: يُعرف بملئه وحدّه معاً — و16px تمنع تكبيرَ الهاتف عند الكتابة */
 .bk-control:is(.form-control, .form-select) {
   min-height: 2.75rem;
-  border-color: var(--bk-field-line);
+  border-color: var(--lx-field-line);
   border-radius: 10px;
   background-color: var(--lx-bg);
   color: var(--lx-ink);
@@ -191,7 +186,7 @@
   font-weight: 600;
 }
 
-.bk-control:is(.form-control, .form-select):hover { border-color: color-mix(in srgb, var(--lx-pri) 70%, var(--bk-field-line)); }
+.bk-control:is(.form-control, .form-select):hover { border-color: color-mix(in srgb, var(--lx-pri) 70%, var(--lx-field-line)); }
 
 .bk-hint { margin: 0; color: var(--lx-mute); font-size: .82rem; line-height: 1.8; }
 .bk-hint time { color: var(--lx-ink); font-weight: 700; }
@@ -234,8 +229,6 @@
 .bk-page .btn.bk-btn-fill { background: var(--lx-pri-fill); box-shadow: var(--lx-shadow-sm); }
 /* المرورُ يرفع التباين في الوضعين: يُمزج بالحبر فيغمق في الفاتح ويفتح في الداكن */
 .bk-page .btn.bk-btn-fill:hover { background: color-mix(in srgb, var(--lx-pri-fill) 86%, var(--lx-ink)); box-shadow: var(--lx-shadow-md); }
-/* Bootstrap يمحو إطارَ التركيز على ‎.btn‎ وقواعدُ الورق تغطّي حلقتَه — فإطارٌ صريح */
-.bk-page .btn.bk-btn:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
 
 /* ── النسخ المتوفّرة: التاريخُ أوّلاً ثمّ الحجم، واسمُ الملفّ تحتهما سطراً واحداً لا يتكسّر ── */
 .bk-files { display: grid; margin: 0; padding: 0; list-style: none; }

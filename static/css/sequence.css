@@ -299,21 +299,7 @@
 
 @keyframes sq-spin { to { transform: rotate(360deg); } }
 
-/* «ثانويّ» Bootstrap: رماديُّه 4.27:1 على أرضيّة الفاتح (مقيسٌ قبل النقل) ⟵ حبرُ الهويّة الخافت في الوضعين
-   (components.css يفعل ذلك للداكن وحده) */
-.sq .btn-outline-secondary {
-  --bs-btn-color: var(--lx-mute);
-  --bs-btn-border-color: var(--lx-line-strong);
-  --bs-btn-hover-color: var(--lx-ink);
-  --bs-btn-hover-bg: var(--lx-surface-2);
-  --bs-btn-hover-border-color: var(--lx-line-strong);
-  --bs-btn-active-color: var(--lx-ink);
-  --bs-btn-active-bg: var(--lx-surface-2);
-  --bs-btn-active-border-color: var(--lx-line-strong);
-}
-
-/* Bootstrap يُطفئ الإطارَ ويرسم الحلقةَ ظلّاً، وظلُّ «الورق المطبوع» في theme.css يغطّيها: إطارٌ صريح للوحة المفاتيح */
-.sq :is(.btn, .btn-close):focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
+.sq .btn-close:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
 
 /* ── الحركة: الأرقامُ «تُختم» مرّةً عند الفتح، ومن طلب تقليلَ الحركة لا يرى شيئاً ── */
 @media (prefers-reduced-motion: no-preference) {

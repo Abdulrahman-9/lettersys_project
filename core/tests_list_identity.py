@@ -26,6 +26,28 @@ LIST_CSS = (
     'static/css/book_unified_mobile.css',
     'static/css/number_hint.css',
 )
+# دفعةُ الصفحات (11-19): أوراقُ الوحدات الستَّ عشرة. خارجها system_admin.css وحدها (حبرٌ على الذهبيّ ينتظر
+# رمزَ ‎--lx-accent-ink‎؛ حارسُها في tests_identity_system)، والورقةُ المطبوعة حبرٌ على أبيض فتُستثنى كتلتُها.
+PAGES_CSS = (
+    'static/css/audit.css',
+    'static/css/backup.css',
+    'static/css/data_restore.css',
+    'static/css/device_setup.css',
+    'static/css/devices.css',
+    'static/css/doc_canvas.css',
+    'static/css/document_manager.css',
+    'static/css/dossiers.css',
+    'static/css/entities_design.css',
+    'static/css/entity_list.css',
+    'static/css/entity_pages.css',
+    'static/css/misc_pages.css',
+    'static/css/notifications.css',
+    'static/css/reports.css',
+    'static/css/sequence.css',
+    'static/css/settings_hub.css',
+    'static/css/trash.css',
+    'static/extraction_smart.css',
+)
 COMMENT = re.compile(r'/\*.*?\*/', re.S)
 STRING = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'')
 DECL = re.compile(r'([\w-]+)\s*:\s*([^;{}]+)')
@@ -38,6 +60,23 @@ def _read(rel):
 def _strip(css):
     """التعليقاتُ فراغاتٌ تحفظ الأسطر، والنصوصُ المقتبسة فارغة."""
     return STRING.sub('""', COMMENT.sub(lambda m: re.sub(r'[^\n]', ' ', m.group(0)), css))
+
+
+def _without_print(css):
+    """الورقةُ بلا كتل ‎@media print‎ (المطبوعُ حبرٌ على أبيض بالعقد، بند 6)."""
+    out, i = [], 0
+    while True:
+        j = css.find('@media print', i)
+        if j < 0:
+            return ''.join(out) + css[i:]
+        out.append(css[i:j])
+        k, depth = css.index('{', j), 0
+        while True:
+            depth += {'{': 1, '}': -1}.get(css[k], 0)
+            k += 1
+            if not depth:
+                break
+        i = k
 
 
 def css_orphans(css):
@@ -97,6 +136,20 @@ class ListIdentitySourceTests(SimpleTestCase):
                 values = ' '.join(m.group(2) for m in DECL.finditer(_strip(_read(rel))))
                 hexes = {h.lower() for h in re.findall(r'#[0-9a-fA-F]{3,8}\b', values)}
                 self.assertLessEqual(hexes, {'#fff'})
+
+    def test_the_page_stylesheets_speak_tokens(self):
+        """أوراقُ دفعة الصفحات: لا لونَ صريحاً على الشاشة إلّا الأبيضَ حبراً، ولا سمةَ الوضع القديم."""
+        for rel in PAGES_CSS:
+            with self.subTest(rel=rel):
+                css = _without_print(_strip(_read(rel)))
+                values = ' '.join(m.group(2) for m in DECL.finditer(css))
+                hexes = {h.lower() for h in re.findall(r'#[0-9a-fA-F]{3,8}\b', values)}
+                self.assertLessEqual(hexes, {'#fff'})
+                self.assertNotIn('[data-theme', css)
+
+    def test_the_print_block_is_cut_whole(self):
+        css = '.a { b: c; }\n@media print { .a { color: #000; } .b { c: d; } }\n.z { y: x; }'
+        self.assertEqual(_without_print(css), '.a { b: c; }\n\n.z { y: x; }')
 
     def test_the_status_edge_paints_on_the_first_cell(self):
         css = _read('static/css/book_unified_table.css')

@@ -76,9 +76,9 @@ class EntityPagesStaticTests(SimpleTestCase):
                     self.assertNotRegex(label, r'<(?:div|p)\b')
 
     def test_secondary_button_reads_on_the_cream_floor(self):
-        css = _sheet()
-        rule = css[css.index('.ep .btn-outline-secondary {'):]
-        self.assertIn('--bs-btn-color: var(--lx-mute);', rule[:rule.index('}')])
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود
+        self.assertNotIn('.btn-outline-secondary', _sheet())
+        self.assertNotIn('--ep-field-line', _sheet())
 
     def test_the_book_table_stacks_on_a_phone(self):
         css = _sheet()

@@ -74,7 +74,8 @@ class NotificationsSourceGuards(SimpleTestCase):
         # ‏transition: all‏ في app.css كان يحرّك حلقةَ التركيز نفسَها فتبدأ باهتة
         css = _sheet_without_comments()
         self.assertNotIn('transition: all', css)
-        self.assertRegex(css, r'\.nt-page \.btn \{[^}]*transition: color var\(--lx-dur-1\) ease, background-color')
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود
+        self.assertNotRegex(css, r'\.nt-page \.btn \{[^}]*transition: color')
         reduce = css[css.index('@media (prefers-reduced-motion: reduce)'):]
         self.assertRegex(reduce, r'^@media \(prefers-reduced-motion: reduce\) \{\s*\.nt-page \.btn \{ transition: none; \}')
 

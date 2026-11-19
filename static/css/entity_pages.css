@@ -8,8 +8,6 @@
    ========================================================================== */
 
 .ep {
-  /* حدُّ الحقل (≥3:1 على السطح والبئر والتعبئة الخفيفة في الوضعين — مقيس): line-strong وحده 1.4:1 */
-  --ep-field-line: color-mix(in srgb, var(--lx-mute) 75%, var(--lx-surface));
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -31,18 +29,6 @@
   gap: .45rem;
   min-height: 40px;
   font-weight: 700;
-}
-
-/* «ثانويّ» Bootstrap على الأرضيّة الكريميّة 4.27:1 (مقيس) — حبرُ الهويّة الخافت كما يفعل components.css للداكن */
-.ep .btn-outline-secondary {
-  --bs-btn-color: var(--lx-mute);
-  --bs-btn-border-color: var(--lx-line-strong);
-  --bs-btn-hover-color: var(--lx-ink);
-  --bs-btn-hover-bg: var(--lx-surface-2);
-  --bs-btn-hover-border-color: var(--lx-line-strong);
-  --bs-btn-active-color: var(--lx-ink);
-  --bs-btn-active-bg: var(--lx-surface-2);
-  --bs-btn-active-border-color: var(--lx-line-strong);
 }
 
 /* ── مسارُ التصفّح ─────────────────────────────────────────────────────── */
@@ -507,7 +493,7 @@
 .ep .form-control,
 .ep .form-select {
   min-height: 44px;
-  border-color: var(--ep-field-line);
+  border-color: var(--lx-field-line);
   border-radius: 10px;
   background-color: var(--lx-surface);
   color: var(--lx-ink);
@@ -540,7 +526,7 @@
   width: 2.6em;
   height: 1.4em;
   margin: 0;
-  border-color: var(--ep-field-line);
+  border-color: var(--lx-field-line);
   cursor: pointer;
 }
 
@@ -697,7 +683,7 @@
   width: 1.25em;
   height: 1.25em;
   margin: 0;
-  border-color: var(--ep-field-line);
+  border-color: var(--lx-field-line);
   cursor: pointer;
 }
 

@@ -91,22 +91,22 @@ class DossierIdentitySourceTests(SimpleTestCase):
         """book_unified_tabs.css يقرأ ‎--border‎ و‎--theme-*‎ — صفحةُ الكتب تعرّفها على حاويتها، وهنا كانت غائبة."""
         body = _rule(_css(), '.dossiers-page, .dossier-detail')
         self.assertIsNotNone(body)
-        for decl in ('--border: var(--lx-line)', '--theme-glow: rgba(var(--lx-pri-rgb), .18)',
-                     '--theme-fill: var(--lx-pri-fill)', '--theme-on: var(--lx-pri-fill-ink)'):
-            with self.subTest(decl=decl):
-                self.assertIn(decl, body)
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود: الورقةُ المشتركة تحمل بدائلَها
+        for name in ('--border', '--theme-'):
+            with self.subTest(name=name):
+                self.assertNotIn(name, _css())
 
     def test_the_active_tab_count_is_full_white(self):
         """82% أبيضُ الورقة المشتركة 4.2:1 عند الطرف الأفتح من اللوح — هنا أبيضُ كامل."""
-        body = _rule(_css(), '.dossiers-page .tab-main.active .tab-count, .dossier-detail .tab-main.active .tab-count')
-        self.assertIsNotNone(body)
-        self.assertRegex(body, r'color:\s*#fff\s*;?\s*$')
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود
+        self.assertNotIn('.tab-main.active .tab-count', _css())
 
     def test_the_search_icon_has_its_own_room(self):
         """الأيقونةُ في جهة inline-end؛ الحشوُ العريضُ هناك لا في الجهة الأخرى."""
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود
         body = _rule(_css(), '.dossier-detail .fb-search input')
         self.assertIsNotNone(body)
-        self.assertRegex(body, r'padding-inline:\s*\.75rem 2\.1rem')
+        self.assertNotIn('padding', body)
 
     def test_the_book_table_stacks_on_a_phone(self):
         """كانت ستّةُ أعمدةٍ تُقصّ داخل البطاقة فتغيب الحالةُ والإجراءاتُ على الهاتف."""

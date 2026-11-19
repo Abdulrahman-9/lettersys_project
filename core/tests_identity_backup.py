@@ -69,18 +69,19 @@ class BackupSourceTests(SimpleTestCase):
     def test_fields_are_sized_for_touch_and_bounded_at_three_to_one(self):
         css = _read(SHEET)
         rule = _rule(css, '.bk-control:is(.form-control, .form-select)')
-        for decl in ('min-height: 2.75rem;', 'font-size: 1rem;', 'border-color: var(--bk-field-line);'):
+        for decl in ('min-height: 2.75rem;', 'font-size: 1rem;', 'border-color: var(--lx-field-line);'):
             with self.subTest(decl=decl):
                 self.assertIn(decl, rule)
-        self.assertIn('--bk-field-line: color-mix(in srgb, var(--lx-mute) 75%, var(--lx-surface));', css)
-        self.assertIn('.bk-page .bk-check .form-check-input { border-color: var(--bk-field-line); }', css)
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود
+        self.assertNotIn('--bk-field-line', css)
 
     def test_the_primary_action_is_filled_with_its_ink_and_focus_is_drawn(self):
         css = _read(SHEET)
         self.assertIn('.bk-page .btn.bk-btn-fill { background: var(--lx-pri-fill);', css)
         ink = css[css.index('.bk-page .btn.bk-btn-fill,'):]
         self.assertIn('{ color: var(--lx-pri-fill-ink); }', ink[:ink.index('}') + 1])
-        self.assertIn('.bk-page .btn.bk-btn:focus-visible { outline: 2px solid var(--lx-pri);', css)
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود
+        self.assertNotIn('.bk-btn:focus-visible', css)
 
 
 @patch('core.views.dashboard.default_backup_dir', return_value=Path('X:/bk-guard-not-touched'))

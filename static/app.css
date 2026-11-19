@@ -831,7 +831,10 @@ body {
 .btn,
 .form-control { 
   border-radius: .6rem;
-  transition: all var(--animation-duration) var(--animation-timing);
+  /* خصائصُ مسمّاة لا all: حلقةُ التركيز لا تذبل داخلةً، ولا يتحرّك ما لم يُقصد */
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: var(--animation-duration);
+  transition-timing-function: var(--animation-timing);
 }
 
 .btn { 
@@ -1704,7 +1707,7 @@ body {
   right: 0;
   z-index: 10;
   min-width: 110px;
-  background: #fff;
+  background: var(--lx-surface, #fff);
   box-shadow: -6px 0 12px rgba(0, 0, 0, 0.05);
 }
 

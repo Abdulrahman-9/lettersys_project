@@ -41,7 +41,6 @@
       <button class="settings-tab" role="tab" type="button" id="settingsTab-network" aria-controls="settingsEmbedWrap" data-tab="network" data-kind="embed" data-embed-url="{% url 'network_settings' %}?embed=1" aria-selected="{% if t == 'network' %}true{% else %}false{% endif %}" tabindex="{% if t == 'network' %}0{% else %}-1{% endif %}"><i class="bi bi-diagram-3-fill" aria-hidden="true"></i><span>الشبكة والأجهزة</span></button>
       <button class="settings-tab" role="tab" type="button" id="settingsTab-ai" aria-controls="settingsPane-ai" data-tab="ai" data-kind="pane" aria-selected="{% if t == 'ai' %}true{% else %}false{% endif %}" tabindex="{% if t == 'ai' %}0{% else %}-1{% endif %}"><i class="bi bi-robot" aria-hidden="true"></i><span>الذكاء الاصطناعي</span></button>
       {# أثرُ المؤشّر القديم بلا عمل: اللوحُ من lx_tabs.js — يُحذف حين يُستبدل وسمُه في tests_settings_hub (طلبٌ للمُدمِج) #}
-      <span class="settings-tab-indicator" id="settingsTabIndicator" hidden></span>
     </div>
     <p class="settings-search-empty" id="settingsSearchEmpty" role="status" aria-live="polite"></p>
   </div>

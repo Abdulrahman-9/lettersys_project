@@ -50,14 +50,11 @@
 
 .nt-head-act { flex: none; margin: 0; }
 
-/* app.css يعطي ‎.btn‎ ‏transition: all‏ فتتحرّك حلقةُ التركيز نفسُها وتبدأ باهتة — هنا الخصائصُ بأسمائها */
 .nt-page .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: .35rem;
-  transition: color var(--lx-dur-1) ease, background-color var(--lx-dur-1) ease, border-color var(--lx-dur-1) ease,
-              box-shadow var(--lx-dur-1) ease, transform var(--lx-dur-1) var(--lx-ease);
 }
 
 .nt-page .btn .bi { font-size: 1.05em; line-height: 1; }

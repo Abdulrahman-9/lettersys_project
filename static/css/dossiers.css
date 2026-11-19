@@ -13,13 +13,7 @@
    غيرَ معرَّفة فسقط حدُّ لوح التبويبات وفواصلُه */
 .dossiers-page,
 .dossier-detail {
-  --border: var(--lx-line);
   --muted: var(--lx-mute);
-  --theme-text: var(--lx-pri-soft-ink);
-  --theme-light: var(--lx-pri-soft);
-  --theme-glow: rgba(var(--lx-pri-rgb), .18);
-  --theme-fill: var(--lx-pri-fill);
-  --theme-on: var(--lx-pri-fill-ink);
   --fold: 10px;                 /* ارتفاعُ لسان المجلّد */
   max-width: 1180px;
   margin: 1.25rem auto 2.5rem;
@@ -134,16 +128,9 @@
   margin-bottom: 1rem;
 }
 
-.tabs-split-3 .tab-main {
-  min-height: 58px;
-  text-decoration: none;
-}
+.tabs-split-3 .tab-main { min-height: 58px; }
 
 .tabs-split-3 .tab-main:hover { text-decoration: none; }
-
-/* العدّادُ على اللوح أبيضُ كاملاً: 82% منه 4.2:1 عند الطرف الأفتح من التدرّج */
-.dossiers-page .tab-main.active .tab-count,
-.dossier-detail .tab-main.active .tab-count { color: #fff; }
 
 /* — البحثُ والترتيب في صفٍّ واحد — */
 .dossier-tools {
@@ -196,7 +183,7 @@
 .ds-field input:focus {
   outline: none;
   border-color: var(--lx-pri);
-  box-shadow: 0 0 0 3px var(--theme-glow);
+  box-shadow: 0 0 0 3px rgba(var(--lx-pri-rgb), .18);
 }
 
 .dossier-search .btn {
@@ -615,15 +602,7 @@
 
 .dossier-detail .fb-search { max-width: 320px; }
 
-/* الرقائقُ هنا روابطُ GET (أزرارٌ في قائمة الكتب) — الورقةُ المشتركة لا تكبح تسطيرَ الرابط */
-.dossier-detail .fb-pill { text-decoration: none; }
-
-/* الحشوُ في جهة الأيقونة: الورقةُ المشتركة تحجز 2rem يميناً والأيقونةُ يسارَ الحقل (inline-end)،
-   فكان آخرُ النصّ الطويل يمرّ تحتها */
-.dossier-detail .fb-search input {
-  min-height: 38px;
-  padding-inline: .75rem 2.1rem;
-}
+.dossier-detail .fb-search input { min-height: 38px; }
 
 .dd-fbar .fb-divider {
   width: 1px;
@@ -704,7 +683,7 @@
   outline: none;
   border-color: var(--lx-pri);
   background-color: var(--lx-surface);
-  box-shadow: 0 0 0 3px var(--theme-glow);
+  box-shadow: 0 0 0 3px rgba(var(--lx-pri-rgb), .18);
 }
 
 .ff-periods { grid-column: 1 / -1; }

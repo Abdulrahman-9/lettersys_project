@@ -9,7 +9,6 @@
    ========================================================================== */
 
 .audit-page {
-  --border: var(--lx-line);              /* يقرؤه لوحُ التبويب (book_unified_tabs.css) */
   --audit-th-h: 2.75rem;                 /* ارتفاعُ رأس الجدول — شريطُ اليوم يلتصق تحته */
   --audit-gutter: color-mix(in srgb, var(--lx-accent) 38%, transparent);
   display: grid;
@@ -103,17 +102,7 @@
   margin: 0;
 }
 
-.audit-tabs .tab-main {
-  min-height: 3.5rem;
-  text-decoration: none;
-}
-
-/* سطرُ التلميح فوق اللوح: الأبيضُ الشفّاف 4.3:1 على طرفه الأفتح — أبيضُ صريح 5.5:1 */
-.audit-tabs .tab-main.active .tab-count { color: #fff; }
-
-/* حلقةُ التركيز: الذهبيّ 2.4:1 على السطح الأبيض — التركواز على السطح، والأبيضُ على اللوح */
-.audit-tabs .tab-main:focus-visible { outline-color: var(--lx-pri); }
-.audit-tabs .tab-main.active:focus-visible { outline-color: #fff; }
+.audit-tabs .tab-main { min-height: 3.5rem; }
 
 /* ── التصفية: تسمياتٌ ظاهرة بحبر النصّ، وحقولٌ بارتفاعٍ واحد. صفٌّ يلتفّ (لا شبكةٌ صلبة):
    الزرّان كتلةٌ واحدة تنزل معاً إلى سطرها إن ضاق المكان — لا يتراكب أحدُهما فوق الآخر ── */
@@ -173,23 +162,8 @@
   font-weight: 700;
 }
 
-.audit-page .btn:focus-visible {
-  outline: 2px solid var(--lx-pri);
-  outline-offset: 2px;
-}
-
-/* «ثانويّ» Bootstrap رماديٌّ ثابت (4.3:1 على الأرضيّة) — حبرُ الهويّة الخافت في الوضعين */
-.audit-page .btn-outline-secondary {
-  --bs-btn-color: var(--lx-mute);
-  --bs-btn-border-color: var(--lx-line-strong);
-  --bs-btn-bg: var(--lx-surface);
-  --bs-btn-hover-color: var(--lx-ink);
-  --bs-btn-hover-bg: var(--lx-surface-2);
-  --bs-btn-hover-border-color: var(--lx-line-strong);
-  --bs-btn-active-color: var(--lx-ink);
-  --bs-btn-active-bg: var(--lx-surface-2);
-  --bs-btn-active-border-color: var(--lx-line-strong);
-}
+/* «ثانويّ» على الهويّة من components.css؛ هنا سطحُه فوق الأرضيّة */
+.audit-page .btn-outline-secondary { --bs-btn-bg: var(--lx-surface); }
 
 /* ── الورقة: سطرُ الحال + الجدول + الصفحات ── */
 .audit-sheet {

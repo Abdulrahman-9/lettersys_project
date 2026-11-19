@@ -29,7 +29,7 @@ class SettingsHubTabstripTests(TestCase):
     def test_hub_renders_single_horizontal_tabstrip(self):
         html = self.client.get(reverse('settings_hub')).content.decode()
         self.assertIn('id="settingsTabstrip"', html)
-        self.assertIn('settings-tab-indicator', html)
+        self.assertIn('data-lx-tabs', html)
         # الأصول الجديدة موصولة (مع cache-busting)
         self.assertIn('css/settings_hub.css', html)
         self.assertIn('js/settings_hub.js', html)

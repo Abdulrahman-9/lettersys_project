@@ -26,6 +26,8 @@
   --lx-mute: #52656b;
   --lx-line: #dfe7e5;
   --lx-line-strong: #c9d6d3;
+  /* حدُّ الحقل والمربّع: 3:1 على السطح في الوضعين (WCAG 1.4.11) — ‎--lx-line-strong‎ يقيس 1.36 */
+  --lx-field-line: color-mix(in srgb, var(--lx-mute) 75%, var(--lx-surface));
 
   /* لونُ الفعل */
   --lx-pri: #0f766e;
@@ -91,6 +93,7 @@
   --lx-mute: #a3b6b2;
   --lx-line: #283a37;
   --lx-line-strong: #36504c;
+  --lx-field-line: color-mix(in srgb, var(--lx-mute) 75%, var(--lx-surface));
 
   --lx-pri: #2dd4bf;
   --lx-pri-rgb: 45, 212, 191;
@@ -230,7 +233,16 @@ html:not([data-lx-legacy]) .btn-secondary:hover {
   box-shadow: inset 0 -2px 0 var(--lx-line-strong), inset 0 0 0 1px var(--lx-line);
 }
 
+/* لوحةُ المفاتيح على كلّ زرّ: Bootstrap يصفّر outline ويرسم حلقتَه ظلّاً، وظلُّ «الورق» أعلاه يطمسها
+   ⟵ حلقةٌ بلون الفعل لا يطمسها ظلّ (دفعةُ الصفحات 11-19: ثلاثُ وحداتٍ قاستها غائبة) */
+html:not([data-lx-legacy]) .btn:focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 2px;
+}
+
 html:not([data-lx-legacy]) .btn-outline-primary {
+  --bs-btn-disabled-color: var(--lx-pri);
+  --bs-btn-disabled-border-color: var(--lx-pri);
   --bs-btn-color: var(--lx-pri);
   --bs-btn-border-color: var(--lx-pri);
   --bs-btn-hover-color: var(--lx-pri-fill-ink);
@@ -239,6 +251,11 @@ html:not([data-lx-legacy]) .btn-outline-primary {
   --bs-btn-active-color: var(--lx-pri-fill-ink);
   --bs-btn-active-bg: var(--lx-pri-strong);
   --bs-btn-focus-shadow-rgb: var(--lx-pri-rgb);
+}
+
+/* حدُّ الحقل من متغيّر Bootstrap نفسِه: حالتا الخطأ والتركيز تضعان border-color صريحاً فتبقيان */
+html:not([data-lx-legacy]) :is(.form-control, .form-select) {
+  --bs-border-color: var(--lx-field-line);
 }
 
 html:not([data-lx-legacy]) .form-control:focus,
@@ -252,7 +269,7 @@ html:not([data-lx-legacy]) .form-check-input:focus {
    والقفزةُ اللطيفة عند المرور باقية */
 html:not([data-lx-legacy]) .form-check-input {
   background-color: var(--lx-surface);
-  border-color: var(--lx-line-strong);
+  border-color: var(--lx-field-line);
 }
 
 html:not([data-lx-legacy]) .form-check-input:hover {

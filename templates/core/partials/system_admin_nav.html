@@ -19,7 +19,7 @@
   <div class="sa-nav-group">النظام</div>
   {# الربطُ الشبكيّ إعدادٌ يُضبط مرّةً فمكانُه الإعدادات، وحالةُ الأجهزة الحيّة في «المحطّات» #}
   <a class="{% if u == 'settings_hub' or u == 'network_settings' or u == 'sequence_settings' %}on{% endif %}" href="{% url 'settings_hub' %}"><i class="bi bi-sliders2" aria-hidden="true"></i><span>الإعدادات</span></a>
-  <a class="{% if u == 'backup_database' %}on{% endif %}" href="{% url 'backup_database' %}"><i class="bi bi-hdd-stack" aria-hidden="true"></i><span>النسخ الاحتياطي</span></a>
+  <a class="{% if u == 'backup_database' or u == 'data_restore' %}on{% endif %}" href="{% url 'backup_database' %}"><i class="bi bi-hdd-stack" aria-hidden="true"></i><span>النسخ الاحتياطي</span></a>
   <a class="{% if u == 'mail_settings' %}on{% endif %}" href="{% url 'mail_settings' %}"><i class="bi bi-envelope" aria-hidden="true"></i><span>البريد</span></a>
   <a class="{% if u == 'scan_settings' %}on{% endif %}" href="{% url 'scan_settings' %}"><i class="bi bi-printer" aria-hidden="true"></i><span>الماسح</span></a>
   <a class="{% if u == 'workstation_board' %}on{% endif %}" href="{% url 'workstation_board' %}"><i class="bi bi-pc-display" aria-hidden="true"></i><span>المحطّات</span></a>

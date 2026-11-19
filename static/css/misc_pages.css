@@ -6,8 +6,6 @@
    ========================================================================== */
 
 .misc-pw {
-  /* حدُّ الحقل 3:1 على سطحه في الوضعين (WCAG 1.4.11) — مزيجٌ من رمزين لا لونٌ صريح */
-  --misc-field-line: color-mix(in srgb, var(--lx-mute) 70%, var(--lx-surface));
   max-width: 35rem;
   margin-inline: auto;
   padding: clamp(.5rem, 2vw, 1.5rem) 0 2.5rem;
@@ -85,7 +83,7 @@
   padding-inline-end: 3.4rem;
   color: var(--lx-ink);
   background-color: var(--lx-surface);
-  border: 1.5px solid var(--misc-field-line);
+  border: 1.5px solid var(--lx-field-line);
   border-radius: var(--lx-radius);
 }
 

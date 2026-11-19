@@ -148,8 +148,8 @@ class DeviceSetupStylesheetTests(SimpleTestCase):
             self.assertRegex(css, r'\.ds-step:has\(\.ds-status\[data-tone="%s"\]\) \.ds-node::after \{ content: "\\f' % tone)
 
     def test_the_secondary_button_reads_on_the_cream(self):
-        block = re.search(r'\.ds \.btn-outline-secondary\s*\{([^}]*)\}', _css()).group(1)
-        self.assertIn('--bs-btn-color: var(--lx-mute)', block)
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود
+        self.assertNotIn('.btn-outline-secondary', _css())
 
     def test_motion_only_for_who_did_not_ask_to_reduce_it(self):
         css = _css()

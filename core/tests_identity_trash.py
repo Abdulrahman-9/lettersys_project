@@ -76,7 +76,9 @@ class TrashSourceTests(SimpleTestCase):
 
     def test_paper_buttons_show_their_focus(self):
         css = _read(SHEET)
-        start = css.index('.trash-page .btn:focus-visible')
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود
+        self.assertNotIn('.btn:focus-visible', css)
+        start = css.index('.trash-sum a:focus-visible')
         self.assertIn('outline: 2px solid var(--lx-pri)', css[start:css.index('}', start)])
 
     def test_phone_rows_become_cards_with_big_targets(self):

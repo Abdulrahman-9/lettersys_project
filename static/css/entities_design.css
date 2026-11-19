@@ -129,8 +129,7 @@
    طلبٌ للمدمج أن يُعمَّم. واللوحُ النشط ينزلق بين الوجهين بانتقالات العرض (نمطُ العمود الجانبيّ
    في theme.css؛ ومَن طلب تقليل الحركة لا انتقالَ عنده أصلاً). */
 .en-page .tabs-split-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.en-page .tab-main, .en-page .tab-main:hover { text-decoration: none; }
-.en-page .tab-main.active .tab-count { color: color-mix(in srgb, #fff 92%, transparent); }
+.en-page .tab-main:hover { text-decoration: none; }
 .en-page .tab-main.active { view-transition-name: en-view-board; }
 html.lx-flipping .en-page .tab-main.active { view-transition-name: none; }
 

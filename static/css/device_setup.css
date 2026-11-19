@@ -273,18 +273,6 @@
 /* عمودٌ بلا التفاف: الالتفافُ في العمود يضع كلَّ زرٍّ في عمودٍ جديدٍ بجانب سابقه فيفيض أفقيّاً (مقيسٌ 44px على الهاتف) */
 .ds-actions-stack { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
 
-/* «ثانويّ» Bootstrap رماديُّه 4.3:1 على الأرضيّة (مقيسٌ قبلُ) ⟵ حبرُ الهويّة الخافت كما في الداكن (components.css) */
-.ds .btn-outline-secondary {
-  --bs-btn-color: var(--lx-mute);
-  --bs-btn-border-color: var(--lx-line-strong);
-  --bs-btn-hover-color: var(--lx-ink);
-  --bs-btn-hover-bg: var(--lx-surface-2);
-  --bs-btn-hover-border-color: var(--lx-line-strong);
-  --bs-btn-active-color: var(--lx-ink);
-  --bs-btn-active-bg: var(--lx-surface-2);
-  --bs-btn-active-border-color: var(--lx-line-strong);
-}
-
 .ds a:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
 
 /* ── الحقول ── */

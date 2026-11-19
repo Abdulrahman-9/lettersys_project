@@ -83,9 +83,9 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
             # الهويّة الموحّدة (11-11): app.css فقد الوضعَ الداكن القديم، وأُضيف المصدرُ الجديد
             # قائمة الكتب على الهويّة (11-12): app.css فقد قواعد ‎#bookTableBody، وtheme.css كسب
             # أشرطةَ التمرير وحالاتِ المتابعة ولوحَ التبويب، وأوراقُ القائمة الخمس على الرموز
-            ('templates/base.html', 'app.css', 20261112),
+            ('templates/base.html', 'app.css', 20261119),
             ('templates/base.html', 'app.js', 20261111),
-            ('templates/base.html', 'css/theme.css', 20261112),
+            ('templates/base.html', 'css/theme.css', 20261119),
             # مساحةُ عمل البريد على الهويّة (11-12): الطاولةُ والدفترُ والكشفُ تقرأ desk.css نفسَه
             ('templates/core/desk_board.html', 'css/desk.css', 20261112),
             ('templates/core/desk_board.html', 'css/queues.css', 20261112),
@@ -98,15 +98,61 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
             ('templates/core/book_unified.html', 'js/book_unified_api.js', 20261112),
             ('templates/core/book_unified.html', 'js/book_column_resize.js', 20261112),
             ('templates/core/book_unified.html', 'css/book_unified.css', 20261112),
-            ('templates/core/book_unified.html', 'css/book_unified_tabs.css', 20261112),
+            ('templates/core/book_unified.html', 'css/book_unified_tabs.css', 20261119),
             ('templates/core/book_unified.html', 'css/book_unified_table.css', 20261112),
             ('templates/core/book_unified.html', 'css/book_unified_mobile.css', 20261112),
             ('templates/core/book_unified.html', 'css/number_hint.css', 20261112),
             ('templates/core/book_unified.html', 'js/lx_tabs.js', 20261112),
-            ('templates/core/extraction_smart_desktop.html', 'extraction_smart.css', 20260929),
-            ('templates/core/reports.html', 'css/reports.css', 20261006),
+            ('templates/core/extraction_smart_desktop.html', 'extraction_smart.css', 20261119),
+            ('templates/core/reports.html', 'css/reports.css', 20261119),
             ('templates/core/book_detail.html', 'css/book_detail_v2.css', 20261112),
             ('templates/core/book_detail.html', 'css/lifecycle_design.css', 20261112),
+            # دفعةُ الصفحات على الهويّة (11-19): ستَّ عشرةَ وحدةً والملفّاتُ المشتركة التي أصلحتها مركزيّاً
+            ('templates/403.html', 'js/misc_pages.js', 20261119),
+            ('templates/404.html', 'js/misc_pages.js', 20261119),
+            ('templates/base.html', 'css/components.css', 20261119),
+            ('templates/base.html', 'css/system_admin.css', 20261119),
+            ('templates/core/admin_panel.html', 'css/system_admin.css', 20261119),
+            ('templates/core/admin_panel.html', 'css/theme.css', 20261119),
+            ('templates/core/audit_log.html', 'css/audit.css', 20261119),
+            ('templates/core/audit_log.html', 'css/book_unified_tabs.css', 20261119),
+            ('templates/core/backup.html', 'css/backup.css', 20261119),
+            ('templates/core/data_restore.html', 'css/data_restore.css', 20261119),
+            ('templates/core/data_restore.html', 'js/data_restore.js', 20261119),
+            ('templates/core/device_setup.html', 'css/device_setup.css', 20261119),
+            ('templates/core/device_setup.html', 'js/device_setup.js', 20261119),
+            ('templates/core/device_setup.html', 'js/workstation_setup.js', 20261119),
+            ('templates/core/devices/_banner.html', 'css/devices.css', 20261119),
+            ('templates/core/devices/join.html', 'css/devices.css', 20261119),
+            ('templates/core/devices/page.html', 'css/devices.css', 20261119),
+            ('templates/core/devices/page.html', 'js/devices_page.js', 20261119),
+            ('templates/core/dossier_detail.html', 'css/book_unified_tabs.css', 20261119),
+            ('templates/core/dossier_detail.html', 'css/dossiers.css', 20261119),
+            ('templates/core/dossier_list.html', 'css/book_unified_tabs.css', 20261119),
+            ('templates/core/dossier_list.html', 'css/dossiers.css', 20261119),
+            ('templates/core/entity_detail.html', 'css/entity_pages.css', 20261119),
+            ('templates/core/entity_form.html', 'css/entity_pages.css', 20261119),
+            ('templates/core/entity_list.html', 'css/book_unified_tabs.css', 20261119),
+            ('templates/core/entity_list.html', 'css/entities_design.css', 20261119),
+            ('templates/core/entity_list.html', 'css/entity_list.css', 20261119),
+            ('templates/core/entity_list.html', 'js/entity_list.js', 20261119),
+            ('templates/core/entity_merge.html', 'css/entity_pages.css', 20261119),
+            ('templates/core/extraction_smart_desktop.html', 'css/doc_canvas.css', 20261119),
+            ('templates/core/extraction_smart_desktop.html', 'css/document_manager.css', 20261119),
+            ('templates/core/extraction_smart_desktop.html', 'extraction_smart.js', 20261119),
+            ('templates/core/extraction_smart_desktop.html', 'title_autocomplete.js', 20261119),
+            ('templates/core/notifications.html', 'css/notifications.css', 20261119),
+            ('templates/core/password_change.html', 'css/misc_pages.css', 20261119),
+            ('templates/core/password_change.html', 'js/misc_pages.js', 20261119),
+            ('templates/core/sequence_settings.html', 'css/sequence.css', 20261119),
+            ('templates/core/settings/hub.html', 'css/settings_hub.css', 20261119),
+            ('templates/core/settings/hub.html', 'js/settings_hub.js', 20261119),
+            ('templates/core/signature_verify.html', 'css/theme.css', 20261119),
+            ('templates/core/system_admin/account.html', 'css/system_admin.css', 20261119),
+            ('templates/core/system_admin/account.html', 'js/account_editor.js', 20261119),
+            ('templates/core/system_admin/account_new.html', 'css/system_admin.css', 20261119),
+            ('templates/core/system_admin/accounts.html', 'css/system_admin.css', 20261119),
+            ('templates/core/trash.html', 'css/trash.css', 20261119),
         )
         for rel, asset, floor in assets:
             with self.subTest(file=rel, asset=asset):
@@ -117,7 +163,7 @@ class UnifiedListKeepsFollowupTests(SimpleTestCase):
         sw = (ROOT / 'static' / 'service-worker.js').read_text(encoding='utf-8')
         m = re.search(r"CACHE_VERSION = 'v(\d+)-", sw)
         self.assertIsNotNone(m, 'CACHE_VERSION')
-        self.assertGreaterEqual(int(m.group(1)), 188)
+        self.assertGreaterEqual(int(m.group(1)), 197)
 
 
 class LifecycleScriptGuardsTests(SimpleTestCase):

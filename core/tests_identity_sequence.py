@@ -66,8 +66,8 @@ class SequenceSourceTests(SimpleTestCase):
 
     def test_the_secondary_button_reads_in_both_themes(self):
         """«إلغاء» كان رماديَّ Bootstrap ‎#6c757d‎ بتباين 4.27:1 على أرضيّة الفاتح (مقيسٌ قبل النقل)."""
-        self.assertRegex(_read(SHEET), r'\.sq \.btn-outline-secondary\s*\{[^}]*--bs-btn-color:\s*var\(--lx-mute\)',
-                         '«إلغاء» عاد إلى رماديّ Bootstrap')
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود
+        self.assertNotIn('.btn-outline-secondary', _read(SHEET))
 
     def test_the_unsaved_mark_only_reads_the_form(self):
         script = _read(TEMPLATE).split('{% block extra_js %}', 1)[1]

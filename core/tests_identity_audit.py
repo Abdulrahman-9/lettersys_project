@@ -73,9 +73,10 @@ class AuditSourceTests(SimpleTestCase):
     def test_the_tab_board_contrast_fixes_hold(self):
         """سطرُ التلميح الأبيضُ الشفّاف 4.3:1 على اللوح، وحلقةُ التركيز الذهبيّة 2.4:1 على الأبيض."""
         css = _read(SHEET)
-        self.assertIn('.audit-tabs .tab-main.active .tab-count { color: #fff; }', css)
-        self.assertIn('.audit-tabs .tab-main:focus-visible { outline-color: var(--lx-pri); }', css)
-        self.assertIn('--bs-btn-color: var(--lx-mute);', _css_rule(css, '.audit-page .btn-outline-secondary'))
+        # المصدرُ الواحد في الملفّ المشترك (حارسُه tests_identity_pages_batch) — النسخةُ المحلّيّة لا تعود
+        for copy in ('.tab-main.active .tab-count', '.tab-main:focus-visible', '--bs-btn-color', '.btn:focus-visible'):
+            with self.subTest(copy=copy):
+                self.assertNotIn(copy, css)
 
 
 class AuditPageTests(TestCase):
