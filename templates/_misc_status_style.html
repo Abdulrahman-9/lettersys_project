@@ -1,0 +1,204 @@
+{% comment %}
+  بطاقةُ الحال — المصدرُ الواحد لأنماط صفحات الخطأ والانقطاع (وحدة misc، 11-19):
+  403 و404 داخل القشرة، و500 وصفحةُ الانقطاع (offline.html) قائمتان بذاتهما.
+  مضمَّنةٌ (inline) لا ورقةٌ مستقلّة عمداً: صفحةُ الانقطاع يقدّمها عاملُ الخدمة من مخبئه، وليس في
+  قشرته من الأنماط غيرُ theme.css وخطِّ Cairo؛ وصفحةُ 500 لا تعتمد إلّا على الحدّ الأدنى.
+  الألوانُ من رموز theme.css وحدَها — فإن غابت الورقةُ صار النصُّ حبراً على أبيض مقروءاً.
+  الختم: رقمُ الخطأ في ختمٍ مزدوجِ الحافّة مائلٍ قليلاً، كختم الوارد في الأرشيف؛ يحطّ مرّةً بنابض،
+  ولا يتحرّك لمن طلب تقليلَ الحركة.
+{% endcomment %}
+<style>
+  /* القائمتان بذاتهما (500 · الانقطاع): أرضيّةُ الهويّة وخطُّها في وسط الشاشة.
+     البادئةُ تعلو ‎html:not([data-lx-legacy]) body‎ في theme.css (التي تضع أرضيّةً مصمتة). */
+  html:not([data-lx-legacy]) body.misc-solo {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem 1rem;
+    font-family: "Cairo", "Segoe UI", Tahoma, sans-serif;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--lx-ink);
+    background: radial-gradient(64rem 28rem at 50% -6rem, var(--lx-bg-tint), transparent 70%), var(--lx-bg);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .misc-solo *,
+  .misc-solo *::before,
+  .misc-solo *::after { box-sizing: border-box; }
+
+  /* أيقوناتُ القائمتين بذاتهما رموزُ SVG مضمَّنة (خطُّ الأيقونات لا يصل من المخبأ) */
+  .misc-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+  .misc-status { width: 100%; display: grid; place-items: center; }
+
+  /* داخل القشرة (403 · 404): البطاقةُ في وسط مساحة المحتوى لا ملتصقةً بأعلاها */
+  .app-main .misc-status { min-height: calc(100dvh - var(--lx-topbar-h) - 7rem); padding: 1rem 0 2rem; }
+
+  .misc-status-card {
+    position: relative;
+    width: 100%;
+    max-width: 35rem;
+    padding: 2.4rem 2rem 1.9rem;
+    overflow: hidden;
+    text-align: center;
+    color: var(--lx-ink);
+    background: var(--lx-surface);
+    border: 1px solid var(--lx-line);
+    border-radius: var(--lx-radius-lg);
+    box-shadow: var(--lx-shadow-sm), var(--lx-shadow-md);
+  }
+
+  /* الحافّةُ العلويّة نفسُها في حوارات البرنامج: تركوازٌ إلى ذهبيّ */
+  .misc-status-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 4px;
+    background: linear-gradient(to left, var(--lx-hero-b), var(--lx-hero-a) 62%, var(--lx-accent));
+  }
+
+  .misc-stamp {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .15rem;
+    margin: 0 0 1.35rem;
+    padding: .55rem 1.3rem .5rem;
+    color: var(--lx-pri);
+    background: var(--lx-pri-soft);
+    border: 4px double currentColor;
+    border-radius: 16px;
+    transform: rotate(-4deg);
+  }
+
+  .misc-stamp.is-late { color: var(--lx-late); background: var(--lx-late-bg); }
+
+  .misc-stamp-top { display: inline-flex; align-items: center; gap: .55rem; }
+
+  .misc-stamp-ico { flex: none; width: 1.75rem; height: 1.75rem; font-size: 1.75rem; line-height: 1; }
+
+  .misc-stamp-code {
+    font-size: 2.75rem;
+    font-weight: 800;
+    line-height: 1.05;
+    direction: ltr;
+    unicode-bidi: isolate;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .misc-stamp-label { font-size: .88rem; font-weight: 800; line-height: 1.5; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .misc-stamp { animation: misc-stamp-in var(--lx-dur-4) var(--lx-ease-spring) 80ms backwards; }
+  }
+
+  @keyframes misc-stamp-in {
+    from { opacity: 0; transform: rotate(-12deg) scale(1.4); }
+  }
+
+  .misc-status h1 {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 800;
+    line-height: 1.55;
+    color: var(--lx-ink);
+    text-wrap: balance;
+  }
+
+  .misc-status-hint {
+    max-width: 30rem;
+    margin: .55rem auto 0;
+    color: var(--lx-mute);
+    line-height: 1.9;
+    text-wrap: pretty;
+  }
+
+  /* لماذا مُنعت (403): نصُّ الحارس نفسُه */
+  .misc-status-reason {
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    margin: 1.15rem 0 0;
+    padding: .75rem .95rem;
+    text-align: start;
+    font-size: .95rem;
+    line-height: 1.85;
+    color: var(--lx-ink);
+    background: var(--lx-surface-2);
+    border: 1px solid var(--lx-line);
+    border-inline-start: 3px solid var(--lx-pri);
+    border-radius: 12px;
+  }
+
+  .misc-status-reason .bi { flex: none; margin-top: .3rem; color: var(--lx-pri); }
+
+  .misc-status-meta { margin: .9rem 0 0; font-size: .86rem; line-height: 1.8; color: var(--lx-mute); }
+
+  .misc-status-meta bdi {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: .84rem;
+    color: var(--lx-ink);
+    overflow-wrap: anywhere;
+  }
+
+  .misc-status-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: .6rem;
+    margin-top: 1.6rem;
+  }
+
+  .misc-status-actions > * {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .45rem;
+    padding-inline: 1.15rem;
+  }
+
+  .misc-status-actions > [hidden] { display: none; }
+
+  /* زرُّ القائمتين بذاتهما (لا Bootstrap فيهما): شكلُ أزرار الهويّة نفسُه — سطحٌ ورقيّ وخطٌّ سفليّ */
+  .misc-btn {
+    border: 0;
+    border-radius: 12px;
+    background: var(--lx-surface);
+    color: var(--lx-pri);
+    font: inherit;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    touch-action: manipulation;
+    box-shadow: inset 0 -2px 0 rgba(var(--lx-pri-rgb), .55),
+                inset 0 0 0 1px rgba(var(--lx-pri-rgb), .28),
+                0 1px 2px rgba(var(--lx-pri-rgb), .1);
+    transition: background-color var(--lx-dur-1) ease, transform var(--lx-dur-1) ease;
+  }
+
+  .misc-btn:hover { background: var(--lx-surface-2); }
+  .misc-btn:active { transform: translateY(1px); }
+  .misc-btn:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 3px; }
+
+  .misc-btn-quiet {
+    color: var(--lx-ink);
+    box-shadow: inset 0 -2px 0 var(--lx-line-strong), inset 0 0 0 1px var(--lx-line);
+  }
+
+  .misc-btn svg { flex: none; width: 1.1em; height: 1.1em; }
+
+  @media (max-width: 575.98px) {
+    .misc-status-card { padding: 2rem 1.15rem 1.35rem; border-radius: var(--lx-radius); }
+    .misc-stamp-code { font-size: 2.35rem; }
+    .misc-status h1 { font-size: 1.22rem; }
+    .misc-status-actions > * { flex: 1 1 100%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .misc-btn { transition: none; }
+  }
+</style>

@@ -1,5 +1,9 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}غير مصرَّح{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+{% block extra_css %}{% include "_misc_status_style.html" %}{% endblock %}
 {% block content %}
-{% include "core/_error_page.html" with code=403 title="ليس لديك صلاحيّةُ الوصول إلى هذه الصفحة" hint="إن كنتَ تظنّ أنّ لك حقّاً فيها فراجع مديرَ النظام." %}
+{% include "core/_error_page.html" with code=403 icon="shield-lock" label="غير مصرَّح" title="ليس لديك صلاحيّةُ الوصول إلى هذه الصفحة" hint="إن كنتَ تظنّ أنّ لك حقّاً فيها فراجع مديرَ النظام." reason=exception %}
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/misc_pages.js' %}?v=20261119-pages"></script>{% endblock %}
