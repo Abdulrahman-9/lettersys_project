@@ -5,120 +5,162 @@
 
 {% block title %}إعدادات العدّادات التسلسلية{% endblock %}
 
-{% block content %}
-<div class="container-fluid" style="max-width: 800px; padding: 24px;">
-    <div class="d-flex align-items-center gap-3 mb-4">
-        <a href="{% url 'settings_hub' %}?tab=sequences" class="btn btn-sm btn-outline-secondary settings-embed-hide" title="رجوع إلى الإعدادات">
-            <i class="bi bi-arrow-right"></i>
-        </a>
-        <div>
-            <h4 class="mb-1 fw-bold">⚙️ إعدادات العدّادات التسلسلية</h4>
-            <p class="text-muted mb-0" style="font-size: 0.9rem;">تحكم بالرقم التسلسلي والبادئة لكل نوع كتاب.</p>
-        </div>
-    </div>
+{# الهويّة الموحّدة (2026-11-19): الوضعان ورموزُ theme.css — sequence.css على الرموز وحدها #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 
-    {% if messages %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/sequence.css' %}?v=20261119-pages">
+{% endblock %}
+
+{% block content %}
+{% comment %}
+  العدّاداتُ قلبُ الصفحة: كلُّ عدّادٍ «لوحةُ ختم» برقمٍ معزولٍ يسارَ‑يمين وأرقامٍ جدوليّة، وصيغتُه من
+  core/numbering.py (الـview يمرّرها في seq.formatted) لا من القالب. الحقولُ وأسماؤها وهدفُ الإرسال كما
+  كانت؛ والدفترُ هو قسمُ العدّادات المعروضة نفسُه (resolve_department في الـview).
+{% endcomment %}
+{% with ledger=sequences.0.obj.department %}
+<div class="sq">
+  <header class="sq-head">
+    <a href="{% url 'settings_hub' %}?tab=sequences" class="btn btn-sm btn-outline-secondary settings-embed-hide sq-back" title="رجوع إلى الإعدادات" aria-label="رجوع إلى الإعدادات"><i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+    {# «#» لا «123»: بجوار العدّادات الحقيقيّة كانت الأيقونةُ تُقرأ رقماً #}
+    <span class="sq-head-ico" aria-hidden="true"><i class="bi bi-hash"></i></span>
+    <div class="sq-head-text">
+      <div class="sq-crumb settings-embed-hide">الإعدادات › العدّادات التسلسلية</div>
+      <h1>العدّادات التسلسلية</h1>
+      {# كان يَعِد بـ«البادئة» وقد أُلغيت (core/numbering.py): الرقمُ مجرّدٌ وسلسلتُه لا تتصفّر #}
+      <p>الرقمُ الذي يأخذه الكتابُ التالي في كلّ سجلّ. لكلّ سجلٍّ سلسلةٌ واحدة لا تبدأ من جديد مع السنة.</p>
+    </div>
+    {% if ledger %}<span class="sq-ledger"><i class="bi bi-journal-bookmark" aria-hidden="true"></i>دفتر {{ ledger.name }}</span>{% endif %}
+  </header>
+
+  {% if messages %}
+  <div class="sq-msgs">
     {% for msg in messages %}
-    <div class="alert alert-{% if 'error' in msg.tags %}danger{% else %}{{ msg.tags }}{% endif %} alert-dismissible fade show" role="alert">
-        {{ msg }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
+    <div class="alert alert-{% if 'error' in msg.tags %}danger{% else %}{{ msg.tags }}{% endif %} alert-dismissible fade show sq-alert" role="{% if 'error' in msg.tags %}alert{% else %}status{% endif %}">
+      <i class="bi {% if 'error' in msg.tags %}bi-exclamation-octagon{% elif 'warning' in msg.tags %}bi-exclamation-triangle{% elif 'success' in msg.tags %}bi-check2-circle{% else %}bi-info-circle{% endif %}" aria-hidden="true"></i>
+      <span>{{ msg }}</span>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
     </div>
     {% endfor %}
-    {% endif %}
+  </div>
+  {% endif %}
 
-    <form method="post">
-        {% csrf_token %}
-        <div class="row g-3">
-            {% for seq in sequences %}
-            <div class="col-md-6">
-                <div class="card border-0 shadow-sm" style="border-radius: 14px;">
-                    <div class="card-body p-3">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            {% if seq.kind == 'incoming_internal' %}
-                            <span style="width:10px;height:10px;border-radius:50%;background:#0f766e;display:inline-block;"></span>
-                            {% elif seq.kind == 'incoming_external' %}
-                            <span style="width:10px;height:10px;border-radius:50%;background:#0369a1;display:inline-block;"></span>
-                            {% elif seq.kind == 'outgoing_internal' %}
-                            <span style="width:10px;height:10px;border-radius:50%;background:#b45309;display:inline-block;"></span>
-                            {% elif seq.kind == 'outgoing_external' %}
-                            <span style="width:10px;height:10px;border-radius:50%;background:#9f1239;display:inline-block;"></span>
-                            {% endif %}
-                            <strong>{{ seq.label }}</strong>
-                        </div>
-                        {% comment %}حقلُ «البادئة» أُزيل: البادئاتُ ملغاة (core/numbering.py) والحقلُ «مهمل» في النموذج،
-                           فمثالُ «و/» كان يَعِد بما لا يحدث (تدقيقُ نيلسن E#15){% endcomment %}
-                        <div>
-                            <label class="form-label fw-semibold" style="font-size:0.85rem;" for="next_{{ seq.kind }}">الرقم التالي</label>
-                            <input type="number" id="next_{{ seq.kind }}" name="next_number_{{ seq.kind }}" value="{{ seq.obj.next_number }}" min="1" class="form-control form-control-sm">
-                        </div>
-                        <div class="text-muted mt-2" style="font-size:0.8rem;">
-                            الرقمُ التالي كما سيظهر: <strong>{{ seq.obj.next_number }}</strong>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
+  <form method="post" class="sq-form" data-sq-form>
+    {% csrf_token %}
+    <section class="sq-section" aria-labelledby="sqCountersH">
+      <div class="sq-section-head">
+        <h2 id="sqCountersH">الأرقامُ التالية</h2>
+        {# القاعدةُ التي يفرضها الخادم تُقال قبل الكتابة لا بعد الرفض (منعُ الخطأ) #}
+        <p class="sq-rule" id="sqRule"><i class="bi bi-shield-check" aria-hidden="true"></i><span>يُقبل الرقمُ الجديد إن جاء بعد آخر رقمٍ صدر في سجلّه؛ وإلّا بقي العدّادُ كما هو — فلا يتكرّر رقم.</span></p>
+      </div>
+      {# ترتيبُ أزرار الأنواع في صفحة الإدخال (ومنها رابطُ هذه الصفحة): الوارد (i) ثمّ الصادر (o)، والداخليّ قبل الخارجيّ — عرضٌ لا يمسّ ترتيبَ الحفظ #}
+      <div class="sq-grid">
+        {% for direction in 'io' %}{% for seq in sequences %}{% if seq.kind|first == direction %}
+        <div class="sq-counter" data-dir="{% if direction == 'i' %}in{% else %}out{% endif %}" data-sq-field role="group" aria-labelledby="sqH_{{ seq.kind }}">
+          <header class="sq-counter-head">
+            <span class="sq-counter-ico" aria-hidden="true"><i class="bi {% if direction == 'i' %}bi-envelope-arrow-down{% else %}bi-envelope-arrow-up{% endif %}"></i></span>
+            <h3 id="sqH_{{ seq.kind }}">{{ seq.label }}</h3>
+          </header>
+          <p class="sq-stamp"><span class="sq-stamp-cap">الرقمُ التالي</span><bdi dir="ltr" class="sq-stamp-n">{{ seq.formatted }}</bdi></p>
+          <div class="sq-edit">
+            <label class="form-label" for="next_{{ seq.kind }}">تعديلُ الرقم التالي<span class="visually-hidden"> — {{ seq.label }}</span></label>
+            <input type="number" id="next_{{ seq.kind }}" name="next_number_{{ seq.kind }}" value="{{ seq.obj.next_number }}" min="1" class="form-control" dir="ltr" autocomplete="off" aria-describedby="sqRule">
+            <span class="sq-changed"><i class="bi bi-pencil" aria-hidden="true"></i>تغيّر — يُحفظ بزرّ «حفظ الإعدادات»</span>
+          </div>
         </div>
-        {# ── قسم إعدادات الحجز الشبكي ── #}
-        <div class="col-12 mt-2">
-            <div class="card border-0 shadow-sm" style="border-radius:14px; border-right: 4px solid #667eea !important; border: 1px solid #e2e8f0;">
-                <div class="card-body p-3">
-                    <div class="d-flex align-items-center gap-2 mb-3">
-                        <span style="font-size:1.3rem;">🌐</span>
-                        <div>
-                            <strong style="font-size:0.95rem;">إعدادات الحجز الشبكي للأرقام الفريدة</strong>
-                            <p class="text-muted mb-0" style="font-size:0.8rem;">
-                                عند استخدام التطبيق من أكثر من جهاز على الشبكة، يحجز كل مستخدم رقماً ذرياً لمدة محددة
-                                لمنع تعارض الأرقام. بعد انقضاء المدة يُلغى الحجز تلقائياً ويُعاد للمجمع.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-md-5">
-                            <label class="form-label fw-semibold" style="font-size:0.85rem;" for="resTtl">
-                                <i class="bi bi-stopwatch" aria-hidden="true"></i> مدة صلاحية الحجز (دقيقة)
-                            </label>
-                            <input type="number" id="resTtl" name="reservation_expire_minutes"
-                                   value="{{ reservation_settings.expire_minutes }}"
-                                   min="{{ reservation_settings.ttl_min }}"
-                                   max="{{ reservation_settings.ttl_max }}"
-                                   class="form-control form-control-sm"
-                                   placeholder="{{ reservation_settings.ttl_default }}">
-                            <div class="form-text">
-                                المدى المسموح: {{ reservation_settings.ttl_min }} –
-                                {{ reservation_settings.ttl_max }} دقيقة.
-                                القيمة الافتراضية: {{ reservation_settings.ttl_default }} دقيقة.
-                            </div>
-                            <div class="form-text">
-                                <i class="bi bi-info-circle me-1"></i>يُطبَّق فوراً على
-                                <strong>الحجوزات الجديدة</strong>؛ والحجوزاتُ القائمة تُكمل
-                                مدّتها القديمة (وقتُ الانتهاء يُبصَم لحظةَ الحجز).
-                            </div>
-                        </div>
-                        <div class="col-md-7 d-flex align-items-end">
-                            <div class="p-2 rounded" style="background:#f0f4ff; border:1px solid #c7d2fe; font-size:0.82rem; width:100%;">
-                                <div class="mb-1"><strong>🔒 الوضع الحالي:</strong>
-                                    {% if reservation_settings.is_custom %}
-                                    <span class="badge" style="background:#16a34a;">مخصص ({{ reservation_settings.expire_minutes }} دق)</span>
-                                    {% else %}
-                                    <span class="badge" style="background:#64748b;">افتراضي ({{ reservation_settings.ttl_default }} دق)</span>
-                                    {% endif %}
-                                </div>
-                                <div class="mb-1"><strong>📡 نمط العمل:</strong> كلُّ مستخدمٍ يُحجز له رقمُه وحدَه</div>
-                                <div><strong>🛡 الحماية:</strong> لا يُعطى رقمٌ لاثنين ولو حفظا في اللحظة نفسها</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {% endif %}{% endfor %}{% endfor %}
+      </div>
+    </section>
 
-        <div class="mt-4 d-flex gap-2">
-            <button type="submit" class="btn btn-primary">
-                <i class="bi bi-check-lg me-1"></i>حفظ الإعدادات
-            </button>
-            <a href="{% url 'settings_hub' %}?tab=sequences" class="btn btn-outline-secondary settings-embed-hide">إلغاء</a>
+    {# ── حجزُ الأرقام على الشبكة ── #}
+    <section class="sq-card" data-sq-field aria-labelledby="sqTtlH">
+      <header class="sq-card-head">
+        <span class="sq-ico" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>
+        <div class="sq-card-title">
+          <h2 id="sqTtlH">حجزُ الأرقام على الشبكة</h2>
+          <p>حين يُدخل أكثرُ من موظّفٍ كتباً في وقتٍ واحد، يُحجز لكلٍّ منهم رقمُه مدّةً محدّدة فلا يأخذه غيرُه؛ وبانقضائها يُلغى الحجزُ تلقائيّاً ويعود الرقمُ متاحاً.</p>
         </div>
-    </form>
+      </header>
+      <div class="sq-ttl">
+        <div class="sq-field">
+          <label class="form-label" for="resTtl">مدّةُ صلاحية الحجز</label>
+          <div class="input-group sq-ttl-input">
+            <input type="number" id="resTtl" name="reservation_expire_minutes"
+                   value="{{ reservation_settings.expire_minutes }}"
+                   min="{{ reservation_settings.ttl_min }}"
+                   max="{{ reservation_settings.ttl_max }}"
+                   class="form-control" dir="ltr" autocomplete="off"
+                   placeholder="{{ reservation_settings.ttl_default }}"
+                   aria-describedby="resTtlRange resTtlNote">
+            <span class="input-group-text">دقيقة</span>
+          </div>
+          <span class="sq-changed"><i class="bi bi-pencil" aria-hidden="true"></i>تغيّرت — تُحفظ بزرّ «حفظ الإعدادات»</span>
+          <div class="form-text" id="resTtlRange">من <bdi dir="ltr" class="sq-num">{{ reservation_settings.ttl_min }}</bdi>&nbsp;إلى <bdi dir="ltr" class="sq-num">{{ reservation_settings.ttl_max }}</bdi>&nbsp;دقيقة · الافتراضيّة <bdi dir="ltr" class="sq-num">{{ reservation_settings.ttl_default }}</bdi>&nbsp;دقيقة.</div>
+          <div class="form-text" id="resTtlNote">تسري فوراً على <strong>الحجوزات الجديدة</strong>؛ والحجوزاتُ القائمة تُكمل مدّتها القديمة (وقتُ الانتهاء يُبصَم لحظةَ الحجز).</div>
+        </div>
+        <dl class="sq-facts">
+          <div>
+            <dt><i class="bi bi-sliders2" aria-hidden="true"></i>الوضعُ الحالي</dt>
+            <dd>{% if reservation_settings.is_custom %}<span class="sq-pill" data-tone="pri">مخصّصة · <bdi dir="ltr" class="sq-num">{{ reservation_settings.expire_minutes }}</bdi>&nbsp;دقيقة</span>{% else %}<span class="sq-pill">الافتراضيّة · <bdi dir="ltr" class="sq-num">{{ reservation_settings.ttl_default }}</bdi>&nbsp;دقيقة</span>{% endif %}</dd>
+          </div>
+          <div>
+            <dt><i class="bi bi-person-check" aria-hidden="true"></i>نمطُ العمل</dt>
+            <dd>كلُّ مستخدمٍ يُحجز له رقمُه وحدَه</dd>
+          </div>
+          <div>
+            <dt><i class="bi bi-shield-lock" aria-hidden="true"></i>الحماية</dt>
+            <dd>لا يُعطى رقمٌ لاثنين ولو حفظا في اللحظة نفسها</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+    <div class="sq-actions">
+      <button type="submit" class="btn btn-primary" data-sq-save><i class="bi bi-check-lg" aria-hidden="true"></i><span>حفظ الإعدادات</span></button>
+      <a href="{% url 'settings_hub' %}?tab=sequences" class="btn btn-outline-secondary settings-embed-hide">إلغاء</a>
+      <p class="sq-pending" data-sq-pending role="status"></p>
+    </div>
+  </form>
 </div>
+{% endwith %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  /* «تغيّر ولم يُحفظ»: زرُّ الحفظ واحدٌ للعدّادات والمدّة معاً، فيرى المديرُ قبل الضغط ما الذي سيتغيّر،
+     و«جارٍ الحفظ…» بعد الضغط. عرضٌ وحده: لا يمسّ النموذجَ ولا قيمَه ولا إرسالَه. */
+  (function () {
+    'use strict';
+    var form = document.querySelector('[data-sq-form]');
+    if (!form) return;
+    var status = form.querySelector('[data-sq-pending]');
+    var save = form.querySelector('[data-sq-save]');
+    var saveIcon = save && save.querySelector('.bi');
+    var saveText = save && save.querySelector('span');
+    var saveLabel = saveText ? saveText.textContent : '';
+    function busy(on) {
+      if (!save) return;
+      save.classList.toggle('is-busy', on);
+      if (on) save.setAttribute('aria-disabled', 'true'); else save.removeAttribute('aria-disabled');
+      saveIcon.className = 'bi ' + (on ? 'bi-arrow-repeat' : 'bi-check-lg');
+      saveText.textContent = on ? 'جارٍ الحفظ…' : saveLabel;
+    }
+    function refresh() {
+      var pending = 0;
+      form.querySelectorAll('[data-sq-field]').forEach(function (box) {
+        var changed = false;
+        box.querySelectorAll('input[type="number"]').forEach(function (input) {
+          if (input.value.trim() !== input.defaultValue.trim()) changed = true;
+        });
+        box.toggleAttribute('data-changed', changed);
+        if (changed) pending += 1;
+      });
+      if (status) status.textContent = pending ? 'تغييراتٌ لم تُحفظ بعد — تُحفظ بزرّ «حفظ الإعدادات».' : '';
+    }
+    form.addEventListener('input', refresh);
+    /* «submit» لا يُطلَق لنموذجٍ يرفضه المتصفّح (المدى) — فلا يبقى الزرُّ معلّقاً */
+    form.addEventListener('submit', function () { busy(true); });
+    window.addEventListener('pageshow', function () { busy(false); refresh(); });
+  })();
+</script>
 {% endblock %}
