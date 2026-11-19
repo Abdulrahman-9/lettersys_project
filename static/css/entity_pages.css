@@ -1,0 +1,835 @@
+/* ==========================================================================
+   صفحاتُ الجهة على الهويّة الموحّدة (11-19): ملفُّ الجهة · إضافتُها وتعديلُها · دمجُ المكرّرات
+   --------------------------------------------------------------------------
+   مقصورٌ على ‎.ep‎ والبادئة ‎ep-‎ (قائمةُ الجهات على ‎en-‎ فلا تقاطع). الألوانُ من رموز theme.css
+   وحدها في الوضعين؛ والاستثناءُ الوحيد ‎#fff‎ حبراً على التركواز العميق (الشعارُ واللوحُ النشط).
+   أخو «ملفّ الكتاب» (book_detail_v2.css): الشعارُ تركوازٌ عميقٌ بخطٍّ ذهبيّ — صدى اللوح المنزلق —
+   وشريطُ حقائقَ بأرقامٍ مجدولة كدفتر السجلّ.
+   ========================================================================== */
+
+.ep {
+  /* حدُّ الحقل (≥3:1 على السطح والبئر والتعبئة الخفيفة في الوضعين — مقيس): line-strong وحده 1.4:1 */
+  --ep-field-line: color-mix(in srgb, var(--lx-mute) 75%, var(--lx-surface));
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1240px;
+  padding: 24px 32px 56px;
+  color: var(--lx-ink);
+}
+
+.ep--narrow { max-width: 1040px; }
+.ep :focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
+.ep-num { font-variant-numeric: tabular-nums; }
+.ep-dash { color: var(--lx-mute); }
+
+/* الأزرارُ أزرارُ Bootstrap على الهويّة (theme.css) — هنا الأيقونةُ والنصُّ في صفٍّ واحد وهدفٌ مريح */
+.ep .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  min-height: 40px;
+  font-weight: 700;
+}
+
+/* «ثانويّ» Bootstrap على الأرضيّة الكريميّة 4.27:1 (مقيس) — حبرُ الهويّة الخافت كما يفعل components.css للداكن */
+.ep .btn-outline-secondary {
+  --bs-btn-color: var(--lx-mute);
+  --bs-btn-border-color: var(--lx-line-strong);
+  --bs-btn-hover-color: var(--lx-ink);
+  --bs-btn-hover-bg: var(--lx-surface-2);
+  --bs-btn-hover-border-color: var(--lx-line-strong);
+  --bs-btn-active-color: var(--lx-ink);
+  --bs-btn-active-bg: var(--lx-surface-2);
+  --bs-btn-active-border-color: var(--lx-line-strong);
+}
+
+/* ── مسارُ التصفّح ─────────────────────────────────────────────────────── */
+.ep-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 13px;
+  color: var(--lx-mute);
+}
+
+.ep-crumbs a {
+  padding: 3px 0;
+  color: var(--lx-pri);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.ep-crumbs a:hover { text-decoration: underline; }
+.ep-crumbs .bi { font-size: 11px; }
+.ep-crumbs [aria-current] { color: var(--lx-ink); font-weight: 700; overflow-wrap: anywhere; }
+
+/* ── رأسُ الصفحة (النموذج والدمج) ──────────────────────────────────────── */
+.ep-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.ep-page-head-text { min-width: 0; flex: 1 1 420px; }
+
+.ep-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: var(--lx-ink);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.ep-lead { margin: 6px 0 0; max-width: 72ch; color: var(--lx-mute); line-height: 1.85; }
+
+.ep-subject {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 6px 0 0;
+  font-weight: 700;
+  color: var(--lx-ink);
+}
+
+.ep-subject .bi { color: var(--lx-pri); }
+
+.ep-code {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--lx-line);
+  border-radius: 6px;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.ep-req { margin-inline-start: 3px; color: var(--lx-late); font-weight: 800; }
+
+/* ── ملفُّ الجهة: الرأس ────────────────────────────────────────────────── */
+.ep-head {
+  padding: 22px 24px 0;
+  border: 1px solid var(--lx-line);
+  border-radius: 16px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+}
+
+.ep-head-top {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  gap: 18px 20px;
+  align-items: start;
+}
+
+/* الشعار: سطحُ «القيادة» — تركوازٌ عميقٌ وخطٌّ ذهبيٌّ كلوح التبويب المنزلق */
+.ep-emblem {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--lx-hero-a) 0%, var(--lx-hero-b) 100%);
+  box-shadow: inset 0 -3px 0 var(--lx-accent), var(--lx-shadow-sm);
+  color: #fff;
+  font-size: 28px;
+}
+
+.ep-head-main { min-width: 0; }
+
+.ep-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--lx-mute);
+}
+
+.ep-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+.ep-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 2px 12px;
+  border: 1px solid color-mix(in srgb, var(--lx-pri) 24%, transparent);
+  border-radius: 999px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.ep-chip--quiet { border-color: var(--lx-line); background: var(--lx-surface-2); color: var(--lx-mute); }
+
+.ep-notes {
+  margin: 12px 0 0;
+  max-width: 75ch;
+  color: var(--lx-mute);
+  line-height: 1.85;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.ep-head-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+/* شريطُ الحقائق: أرقامٌ مجدولةٌ كدفتر السجلّ، وفواصلُ رفيعة */
+.ep-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 20px -24px 0;
+  border-top: 1px solid var(--lx-line);
+}
+
+.ep-fact { min-width: 0; padding: 14px 24px 16px; }
+.ep-fact + .ep-fact { border-inline-start: 1px solid var(--lx-line); }
+.ep-fact dt { margin-bottom: 2px; font-size: 12.5px; font-weight: 700; color: var(--lx-mute); }
+
+.ep-fact dd {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--lx-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.ep-fact--kind dd { font-size: 17px; line-height: 1.6; }
+.ep-fact--kind a { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; color: var(--lx-pri); text-decoration: none; }
+
+.ep-fact-go {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--lx-mute);
+}
+
+.ep-fact--kind a:hover .ep-fact-go { color: var(--lx-pri); text-decoration: underline; }
+
+/* ── لوحُ التبويب المنزلق (js/lx_tabs.js ← ‎.lx-tabs-ind في theme.css) ───── */
+.ep-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid var(--lx-line);
+  border-radius: 14px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+}
+
+.ep-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 8px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--lx-mute);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--lx-dur-2) ease, color var(--lx-dur-3) ease;
+}
+
+.ep-tab + .ep-tab { border-inline-start: 1px solid var(--lx-line); }
+.ep-tab-ico { font-size: 1.2rem; line-height: 1; }
+.ep-tab-label { font-size: 1rem; font-weight: 800; }
+
+.ep-tab-count {
+  min-width: 2.2em;
+  padding: 0 8px;
+  border: 1px solid var(--lx-line);
+  border-radius: 999px;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.7;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ep-tab:not(.active):hover { background: var(--lx-surface-2); color: var(--lx-ink); }
+/* الحلقةُ بلون الحبر: خافتةٌ على السطح، وبيضاءُ على اللوح التركوازيّ */
+.ep .ep-tab:focus-visible { outline: 2px solid currentColor; outline-offset: -5px; border-radius: 10px; }
+
+/* النشط: حبرٌ أبيض فوق اللوح؛ والعدّادُ إطارٌ بالحبر نفسِه */
+.ep-tab.active { color: #fff; }
+.ep-tab.active .ep-tab-count { border-color: currentColor; background: transparent; color: #fff; }
+.ep-tab.active,
+.ep-tab.active + .ep-tab { border-inline-start-color: transparent; }
+
+/* بلا السكربت: التبويبُ النشط يحمل السطحَ والخطَّ الذهبيّ بنفسه */
+.ep-tabs:not(.lx-tabs-on) .ep-tab.active {
+  background: linear-gradient(135deg, var(--lx-hero-a) 0%, var(--lx-hero-b) 100%);
+  box-shadow: inset 0 -3px 0 var(--lx-accent);
+}
+
+/* ── البطاقاتُ والجداول ────────────────────────────────────────────────── */
+.ep-card {
+  border: 1px solid var(--lx-line);
+  border-radius: 16px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+}
+
+.ep-card--table { overflow: hidden; }
+.ep-table-wrap { overflow-x: auto; }
+
+.ep-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: var(--lx-ink);
+}
+
+.ep-table th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--lx-line);
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: start;
+  white-space: nowrap;
+}
+
+.ep-table td { padding: 12px; border-bottom: 1px solid var(--lx-line); vertical-align: middle; }
+.ep-table tbody tr:last-child td { border-bottom: 0; }
+.ep-table th:first-child,
+.ep-table td:first-child { padding-inline-start: 20px; }
+.ep-table th:last-child,
+.ep-table td:last-child { padding-inline-end: 20px; }
+
+/* صفٌّ يفتح المعاينة (data-book-preview): يُرى أنّه يُنقر */
+.ep-table tr.is-previewable { cursor: pointer; }
+.ep-table tr.is-previewable:hover td { background: color-mix(in srgb, var(--lx-pri-soft) 60%, var(--lx-surface)); }
+
+.ep-c-idx { width: 48px; color: var(--lx-mute); font-variant-numeric: tabular-nums; }
+.ep-c-num { white-space: nowrap; }
+
+.ep-c-num a {
+  color: var(--lx-pri);
+  font-weight: 800;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.ep-c-num a:hover { text-decoration: underline; }
+.ep-c-title { min-width: 220px; font-weight: 600; line-height: 1.7; }
+.ep-c-kind,
+.ep-c-date { white-space: nowrap; }
+.ep-c-date { color: var(--lx-mute); font-variant-numeric: tabular-nums; }
+.ep-c-other { min-width: 150px; }
+.ep-c-state { white-space: nowrap; }
+
+/* الاتّجاهُ علامةٌ لا لون: ظرفٌ داخل/خارج (قرارُ المالك «تركوازٌ واحد + علامةُ اتّجاه») */
+.ep-dir { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+.ep-dir .bi { color: var(--lx-mute); font-size: 15px; }
+.ep-stub { color: var(--lx-mute); }
+
+.ep-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  margin: 2px 0;
+  margin-inline-end: 4px;
+  padding: 1px 10px;
+  border: 1px solid var(--lx-line);
+  border-radius: 999px;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ep-cell-label { display: none; }
+
+/* حالاتُ المتابعة الأربع على رموزها (theme.css): نصٌّ وأيقونةٌ لا لونٌ وحدَه */
+.ep-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 2px 10px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ep-state--pending { border-color: var(--followup-pending-line); background: var(--followup-pending-bg); color: var(--followup-pending-text); }
+.ep-state--today { border-color: var(--followup-due-today-line); background: var(--followup-due-today-bg); color: var(--followup-due-today-text); }
+.ep-state--late { border-color: var(--followup-overdue-line); background: var(--followup-overdue-bg); color: var(--followup-overdue-text); }
+.ep-state--done { border-color: var(--followup-archived-line); background: var(--followup-archived-bg); color: var(--followup-archived-text); }
+
+/* ── الترقيم: نافذةٌ حول الحاليّة، ويلتفّ ولا يتجاوز ─────────────────────── */
+.ep-pager { padding: 12px 16px; border-top: 1px solid var(--lx-line); }
+
+.ep-pager .pagination {
+  --bs-pagination-color: var(--lx-pri);
+  --bs-pagination-bg: var(--lx-surface);
+  --bs-pagination-border-color: var(--lx-line);
+  --bs-pagination-hover-color: var(--lx-pri-strong);
+  --bs-pagination-hover-bg: var(--lx-surface-2);
+  --bs-pagination-hover-border-color: var(--lx-line-strong);
+  --bs-pagination-focus-color: var(--lx-pri-strong);
+  --bs-pagination-focus-bg: var(--lx-surface-2);
+  --bs-pagination-focus-box-shadow: 0 0 0 .2rem rgba(var(--lx-pri-rgb), .25);
+  --bs-pagination-active-color: var(--lx-pri-fill-ink);
+  --bs-pagination-active-bg: var(--lx-pri-fill);
+  --bs-pagination-active-border-color: var(--lx-pri-fill);
+  --bs-pagination-disabled-color: var(--lx-mute);
+  --bs-pagination-disabled-bg: var(--lx-surface);
+  --bs-pagination-disabled-border-color: var(--lx-line);
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+}
+
+.ep-pager .page-item .page-link {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  margin: 0;
+  border-radius: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ep-pager .ep-pager-gap .page-link { border-color: transparent; background: transparent; }
+
+/* ── الحالةُ الفارغة ────────────────────────────────────────────────────── */
+.ep-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.ep-empty-ico {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--lx-line);
+  border-radius: 16px;
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
+  font-size: 26px;
+}
+
+.ep-empty p { margin: 0; color: var(--lx-mute); font-weight: 700; }
+
+/* ── النموذج: مجموعاتٌ بعناوينها وحقولٌ بشرحها وخطئها ───────────────────── */
+.ep-form { display: flex; flex-direction: column; gap: 16px; }
+
+/* fieldset: ‎min-width: 0‎ وإلّا اتّسع بمحتواه فتجاوز الهاتف */
+.ep-group { min-width: 0; margin: 0; padding: 18px 22px 22px; }
+
+/* Bootstrap يطفو بالأسطورة فتصير كتلةً داخل البطاقة لا على حدّها — نُبقي ذلك */
+.ep-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.5;
+  color: var(--lx-ink);
+}
+
+.ep-legend-ico,
+.ep-section-ico {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri);
+  font-size: 1.05rem;
+}
+
+.ep-optional { color: var(--lx-mute); font-size: .88rem; font-weight: 600; }
+
+.ep-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+}
+
+.ep-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ep-grid + .ep-grid,
+.ep-grid + .ep-field { margin-top: 18px; }
+.ep-field { min-width: 0; }
+.ep .form-label { margin-bottom: 6px; color: var(--lx-ink); font-size: .95rem; font-weight: 700; }
+.ep-help { margin: 6px 0 0; color: var(--lx-mute); font-size: .84rem; line-height: 1.7; }
+
+.ep-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 6px 0 0;
+  color: var(--lx-late);
+  font-size: .86rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.ep-error .bi { margin-top: 3px; }
+
+/* الحقولُ بحدٍّ مقروء (≥3:1) على السطح — Bootstrap يلوّن خلفيّتها بأرضيّة الصفحة؛ و16px دائماً
+   (design-system.css يصغّرها إلى 13px تحت 375px فيكبّر iOS الصفحةَ عند الكتابة) */
+.ep .form-control,
+.ep .form-select {
+  min-height: 44px;
+  border-color: var(--ep-field-line);
+  border-radius: 10px;
+  background-color: var(--lx-surface);
+  color: var(--lx-ink);
+  font-size: 1rem;
+}
+
+.ep textarea.form-control { min-height: 96px; line-height: 1.8; }
+
+/* الخاطئُ حدُّه أحمرُ «متأخّر» حتّى وهو مركَّز — ولا أيقونةَ Bootstrap بلونٍ صريح */
+.ep-field:has(.ep-error) :is(.form-control, .form-select) { border-color: var(--lx-late); }
+
+.ep-field:has(.ep-error) :is(.form-control, .form-select):focus {
+  border-color: var(--lx-late);
+  box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--lx-late) 18%, transparent);
+}
+
+/* المفاتيح: المفتاحُ والتسميةُ هدفٌ واحدٌ بارتفاعٍ مريح */
+.ep .ep-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+}
+
+.ep .ep-switch .form-check-input {
+  flex: none;
+  float: none;
+  width: 2.6em;
+  height: 1.4em;
+  margin: 0;
+  border-color: var(--ep-field-line);
+  cursor: pointer;
+}
+
+.ep .ep-switch .form-check-label { color: var(--lx-ink); font-weight: 700; cursor: pointer; }
+.ep-field--switch .ep-help { margin-top: 0; }
+
+.ep-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ep-form-actions .btn { min-height: 44px; padding-inline: 22px; }
+
+/* خلاصةُ الأخطاء: تُركَّز بعد الإرسال الفاشل، وكلُّ بندٍ رابطٌ إلى حقله */
+.ep-errors {
+  padding: 14px 18px;
+  border: 1px solid var(--lx-late-line);
+  border-radius: 14px;
+  background: var(--lx-late-bg);
+  color: var(--lx-ink);
+}
+
+.ep-errors:focus,
+.ep-errors:focus-visible { outline: 2px solid var(--lx-late); outline-offset: 2px; }
+
+.ep-errors-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  color: var(--lx-late);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.ep-errors-list { margin: 0; padding-inline-start: 1.4rem; line-height: 1.9; }
+.ep-errors-list a { color: var(--lx-late); font-weight: 700; }
+
+/* ── الدمج: أقسامٌ بعناوين، وعناقيدُ بطاقات ─────────────────────────────── */
+.ep-section { display: flex; flex-direction: column; gap: 12px; }
+
+.ep-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 1.12rem;
+  font-weight: 800;
+}
+
+.ep-section-count {
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+  font-size: .8rem;
+  font-weight: 800;
+  line-height: 1.8;
+  font-variant-numeric: tabular-nums;
+}
+
+/* تنبيهاتُ Bootstrap على ألوان الحالات (theme.css) — هنا الأيقونةُ بجانب النصّ */
+.ep .ep-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+}
+
+.ep-note > .bi { flex: none; margin-top: 5px; }
+.ep-note p { margin: 0; line-height: 1.9; }
+
+.ep-smart {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+  padding: 16px 20px;
+}
+
+.ep-smart-text { flex: 1 1 340px; margin: 0; color: var(--lx-ink); line-height: 1.9; }
+.ep .ep-smart-go { flex: none; min-height: 44px; }
+.ep-smart-go .spinner-border { display: none; }
+.ep-smart-go.is-busy { pointer-events: none; }
+.ep-smart-go.is-busy .spinner-border { display: inline-block; }
+.ep-smart-go.is-busy .bi-search { display: none; }
+
+.ep-cluster {
+  overflow: hidden;
+  border: 1px solid var(--lx-line);
+  border-radius: 16px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+}
+
+.ep-cluster + .ep-cluster { margin-top: 4px; }
+
+.ep-cluster.is-manual {
+  border-color: color-mix(in srgb, var(--lx-pri) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lx-pri) 25%, transparent), var(--lx-shadow-md);
+}
+
+.ep-cluster-hd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--lx-line);
+}
+
+.ep-cluster-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: .98rem;
+  font-weight: 800;
+}
+
+.ep-cluster-title .bi { color: var(--lx-pri); }
+.ep-cluster-key { color: var(--lx-mute); font-size: 12.5px; font-weight: 700; }
+
+.ep-cluster-key bdi {
+  padding: 1px 8px;
+  border: 1px solid var(--lx-line);
+  border-radius: 6px;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+}
+
+.ep-merge-table th.ep-c-pick,
+.ep-merge-table td.ep-c-pick { width: 76px; padding: 0 6px; text-align: center; }
+.ep-merge-table .ep-c-code { width: 104px; }
+.ep-merge-table .ep-c-count { width: 72px; font-variant-numeric: tabular-nums; }
+.ep-merge-table td.ep-c-name { line-height: 1.7; }
+.ep-mname { font-weight: 700; overflow-wrap: anywhere; }
+
+/* اختيارُ «الأمّ» و«تُدمَج»: التسميةُ بعرض الخليّة هدفٌ واحد (≥44px) والحدُّ مقروء (≥3:1) */
+.ep-pick {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-width: 44px;
+  min-height: 48px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.ep .ep-pick .form-check-input {
+  float: none;
+  width: 1.25em;
+  height: 1.25em;
+  margin: 0;
+  border-color: var(--ep-field-line);
+  cursor: pointer;
+}
+
+.ep-pick:has(input:disabled) { cursor: not-allowed; }
+
+/* المقترَحةُ كأمّ: شارةٌ بنصّها، ونجمةٌ ذهبيّةٌ زخرفةً (الذهبُ لا يحمل نصّاً) */
+.ep-suggest {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: 8px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--lx-accent) 45%, transparent);
+  border-radius: 999px;
+  background: var(--lx-accent-soft);
+  color: var(--lx-ink);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.7;
+  vertical-align: middle;
+}
+
+.ep-suggest .bi { color: var(--lx-accent); }
+
+/* الأمُّ المختارة: تعبئةُ الهويّة الخفيفة وخطٌّ على حافّة البداية (ظلٌّ داخليّ لا حدّ: لا تقفز الخليّة).
+   الصفحةُ RTL دائماً، فحافّةُ البداية يمنى: الإزاحةُ السالبة ترسم الخطَّ عليها */
+.ep-merge-table tr.is-canonical td { background: var(--lx-pri-soft); }
+.ep-merge-table tr.is-canonical td:first-child { box-shadow: inset -3px 0 0 var(--lx-pri); }
+.ep-merge-table tr.is-canonical .ep-mname { color: var(--lx-pri-soft-ink); }
+
+.ep-cluster-ft { display: flex; justify-content: flex-start; padding: 12px 20px; border-top: 1px solid var(--lx-line); }
+.ep-cluster-ft .btn { min-height: 44px; padding-inline: 20px; }
+
+/* ── الشاشاتُ الأضيق ────────────────────────────────────────────────────── */
+@media (max-width: 1199.98px) {
+  .ep { padding: 16px 16px 40px; }
+}
+
+@media (max-width: 991.98px) {
+  .ep-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ep-fact:nth-child(3) { border-inline-start: 0; }
+  .ep-fact:nth-child(n + 3) { border-top: 1px solid var(--lx-line); }
+  .ep-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 767.98px) {
+  .ep-head { padding: 18px 16px 0; }
+  .ep-head-top { grid-template-columns: 52px minmax(0, 1fr); gap: 14px; }
+  .ep-emblem { width: 52px; height: 52px; border-radius: 15px; font-size: 23px; }
+  .ep-title { font-size: 22px; }
+  .ep-head-acts { grid-column: 1 / -1; justify-content: stretch; }
+  .ep-head-acts .btn { flex: 1 1 0; min-height: 44px; }
+  .ep-facts { margin-inline: -16px; }
+  .ep-fact { padding: 12px 16px 14px; }
+  .ep-fact dd { font-size: 21px; }
+  .ep-tab { gap: 8px; min-height: 52px; padding: 8px 10px; }
+
+  /* جدولُ الكتب صفوفاً مكدّسة: الرقمُ والحالةُ ثمّ العنوانُ ثمّ النوعُ والتاريخ ثمّ الجهة.
+     رأسُ الجدول باقٍ لقارئ الشاشة ومخفيٌّ للعين */
+  .ep-book-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .ep-book-table,
+  .ep-book-table tbody { display: block; }
+
+  .ep-book-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--lx-line);
+  }
+
+  .ep-book-table tbody tr:last-child { border-bottom: 0; }
+  .ep-book-table tr.is-previewable:hover { background: color-mix(in srgb, var(--lx-pri-soft) 60%, var(--lx-surface)); }
+  .ep-book-table tr.is-previewable:hover td { background: transparent; }
+
+  .ep-book-table td,
+  .ep-book-table td:first-child,
+  .ep-book-table td:last-child {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .ep-book-table .ep-c-idx { display: none; }
+  .ep-book-table .ep-c-num { order: 1; flex: 1 1 auto; font-size: 15px; }
+  .ep-book-table .ep-c-num a { display: inline-block; padding: 3px 0; }
+  .ep-book-table .ep-c-state { order: 2; }
+  .ep-book-table .ep-c-title { order: 3; flex: 1 1 100%; font-size: 15px; }
+  .ep-book-table .ep-c-kind { order: 4; }
+  .ep-book-table .ep-c-date { order: 5; }
+  .ep-book-table .ep-c-other { order: 6; flex: 1 1 100%; }
+  .ep-book-table .ep-cell-label { display: inline; margin-inline-end: 4px; color: var(--lx-mute); font-size: 12.5px; font-weight: 700; }
+
+  .ep-group { padding: 16px 16px 18px; }
+  .ep-grid,
+  .ep-grid--3 { grid-template-columns: minmax(0, 1fr); }
+  .ep-form-actions .btn { flex: 1 1 auto; }
+  .ep-page-head .ep-back { min-height: 44px; }
+
+  .ep-smart { padding: 14px 16px; }
+  .ep .ep-smart-go { flex: 1 1 100%; }
+  .ep-cluster-hd,
+  .ep-cluster-ft { padding-inline: 16px; }
+  .ep-cluster-ft .btn { flex: 1 1 auto; }
+}
+
+@media (max-width: 575.98px) {
+  .ep { padding: 12px 8px 32px; gap: 16px; }
+  .ep-merge-table th,
+  .ep-merge-table td { padding: 10px 8px; }
+  .ep-merge-table th.ep-c-pick,
+  .ep-merge-table td.ep-c-pick { width: 52px; padding: 0 2px; }
+  .ep-merge-table .ep-c-code { width: auto; }
+  .ep-merge-table .ep-c-count { width: 44px; }
+  .ep-merge-table th:first-child,
+  .ep-merge-table td:first-child { padding-inline-start: 8px; }
+  .ep-merge-table th:last-child,
+  .ep-merge-table td:last-child { padding-inline-end: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ep *,
+  .ep *::before,
+  .ep *::after { transition: none !important; }
+}

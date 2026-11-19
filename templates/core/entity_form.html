@@ -1,186 +1,190 @@
 {% extends 'base.html' %}
-{# إدخال/تعديل جهة (اسم، رمز، نوع) #}
-{% block title %}{% if is_edit %}تعديل جهة{% else %}إضافة جهة{% endif %}{% endblock %}
+{% load static %}
+{# إدخال/تعديل جهة (اسم، رمز، تبويب، تواصل، إشعارات) #}
+{% block title %}{% if is_edit %}تعديل جهة{% if editing_entity %} — {{ editing_entity.name }}{% endif %}{% else %}إضافة جهة{% endif %}{% endblock %}
 
-{% block page_sidebar %}
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">ملخص الجهة</div>
-  <div class="app-context-list">
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">إجمالي الجهات</div>
-        <strong>{{ total_entities|default:'-' }}</strong>
-      </div>
-      <span class="app-context-chip is-info"><i class="bi bi-buildings"></i> قاعدة الجهات</span>
-    </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">وضع الصفحة</div>
-        <strong>{% if is_edit %}تعديل{% else %}إضافة{% endif %}</strong>
-      </div>
-      <span class="app-context-chip"><i class="bi bi-pencil-square"></i> نموذج</span>
-    </div>
-  </div>
-</div>
+{% comment %}
+  على الهويّة الموحّدة (11-19): ثلاثُ مجموعاتٍ بعناوينها (fieldset/legend) · المطلوبُ موسوم ·
+  خلاصةُ أخطاءٍ تربط كلَّ حقلٍ بخطئه والتركيزُ عليها بعد الإرسال · الخطأُ تحت حقله ومربوطٌ به.
+  لوحتا العمود الجانبيّ («ملخص الجهة» و«إحصاءات النوع») حُذفتا: كانتا تحت ثنية العمود لمدير النظام وفي الدرج
+  على الهاتف، و«إحصاءات النوع» تعدّ حقلَ etype المتروك (النموذجُ يستبعده عمداً) — أرقامٌ لا تُحدَّث.
+  الحقولُ وأسماؤها والإرسالُ كما هي؛ والمفاتيحُ الثلاثة تُرسم بأيدينا لتأخذ شكلَ المفتاح (اسمُها ومعرّفُها وقيمتُها من النموذج).
+{% endcomment %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">إحصاءات النوع</div>
-  <div class="app-context-list">
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">مصدّرة</div>
-        <strong>{{ type_counts.issuer|default:0 }}</strong>
-      </div>
-      <span class="app-context-chip"><i class="bi bi-arrow-up-right"></i> صادر</span>
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/entity_pages.css' %}?v=20261119-pages">{% endblock %}
+
+{% block content %}
+<div class="ep ep--narrow ep-form-page">
+
+  <nav class="ep-crumbs" aria-label="مسار التصفّح">
+    <a href="{% url 'entity_list' %}">الجهات</a>
+    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+    {% if is_edit and editing_entity %}
+    <a href="{% url 'entity_detail' editing_entity.pk %}">{{ editing_entity.name }}</a>
+    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+    <span aria-current="page">تعديل</span>
+    {% else %}
+    <span aria-current="page">إضافة جهة</span>
+    {% endif %}
+  </nav>
+
+  <header class="ep-page-head">
+    <div class="ep-page-head-text">
+      <h1 class="ep-title">{% if is_edit %}تعديل جهة{% else %}إضافة جهة جديدة{% endif %}</h1>
+      {% if is_edit and editing_entity %}
+      <p class="ep-subject"><i class="bi bi-building" aria-hidden="true"></i><span>{{ editing_entity.name }}</span>{% if editing_entity.code %}<bdi class="ep-code">{{ editing_entity.code }}</bdi>{% endif %}</p>
+      {% endif %}
+      <p class="ep-lead">أدخل اسم الجهة، رمزها (اختياري)، وحدد نوعها. الحقول المعلَّمة بـ<span class="ep-req" aria-hidden="true">*</span><span class="visually-hidden">نجمة</span> مطلوبة.</p>
     </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">مستلمة</div>
-        <strong>{{ type_counts.receiver|default:0 }}</strong>
-      </div>
-      <span class="app-context-chip is-info"><i class="bi bi-arrow-down-left"></i> وارد</span>
-    </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">كلاهما</div>
-        <strong>{{ type_counts.both|default:0 }}</strong>
-      </div>
-      <span class="app-context-chip is-success"><i class="bi bi-arrow-left-right"></i> مزدوج</span>
-    </div>
+    {# وجهةٌ واحدة لـ«رجوع» و«إلغاء» (back_url ثمّ القائمة)، وسهمٌ يمينيٌّ في RTL (تدقيقُ نيلسن D#20) #}
+    <a class="btn btn-outline-secondary ep-back" href="{% if back_url %}{{ back_url }}{% else %}{% url 'entity_list' %}{% endif %}">
+      <i class="bi bi-arrow-right" aria-hidden="true"></i>رجوع
+    </a>
+  </header>
+
+  {% if form.errors %}
+  {# خلاصةٌ تُركَّز بعد الإرسال الفاشل، وكلُّ بندٍ رابطٌ إلى حقله — والخطأُ نفسُه باقٍ تحت الحقل #}
+  <div class="ep-errors" id="ep-error-summary" role="alert" tabindex="-1" aria-labelledby="ep-errors-title">
+    <h2 class="ep-errors-title" id="ep-errors-title"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i>يوجد حقول تحتاج مراجعة.</h2>
+    <ul class="ep-errors-list">
+      {% for err in form.non_field_errors %}<li>{{ err }}</li>{% endfor %}
+      {% for field in form.visible_fields %}{% if field.errors %}<li><a href="#{{ field.id_for_label }}">{{ field.label }}</a>: {{ field.errors|striptags }}</li>{% endif %}{% endfor %}
+    </ul>
   </div>
+  {% endif %}
+
+  <form method="post" novalidate class="ep-form">
+    {# firstof لا يرفع إن غاب next — وسيطُ المرشِّح default:request.GET.next كان يرفع فتسقط الصفحة 500 حين تُفتح بلا ?next= (جولةُ الألوان 11-15) #}
+    {% firstof request.POST.next request.GET.next "" as nxt %}{% if nxt %}<input type="hidden" name="next" value="{{ nxt }}">{% endif %}
+    {% csrf_token %}
+
+    <fieldset class="ep-card ep-group">
+      <legend class="ep-legend">
+        <span class="ep-legend-ico" aria-hidden="true"><i class="bi bi-building"></i></span>
+        <span class="ep-legend-text">بيانات الجهة</span>
+      </legend>
+      <div class="ep-grid">
+        <div class="ep-field">
+          <label class="form-label" for="{{ form.name.id_for_label }}">{{ form.name.label }}{% if form.name.field.required %}<span class="ep-req" aria-hidden="true">*</span>{% endif %}</label>
+          {{ form.name }}
+          {% if form.name.errors %}<p class="ep-error" id="{{ form.name.id_for_label }}-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.name.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="ep-field">
+          <label class="form-label" for="{{ form.code.id_for_label }}">{{ form.code.label }}</label>
+          {{ form.code }}
+          {% if form.code.errors %}<p class="ep-error" id="{{ form.code.id_for_label }}-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.code.errors|striptags }}</p>{% endif %}
+          <p class="ep-help" id="{{ form.code.id_for_label }}-help">أحرف أو أرقام أو نقط (مثال: م.ك.ح أو ش4)</p>
+        </div>
+        <div class="ep-field">
+          <label class="form-label" for="{{ form.kind.id_for_label }}">{{ form.kind.label }}{% if form.kind.field.required %}<span class="ep-req" aria-hidden="true">*</span>{% endif %}</label>
+          {{ form.kind }}
+          {% if form.kind.errors %}<p class="ep-error" id="{{ form.kind.id_for_label }}-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.kind.errors|striptags }}</p>{% endif %}
+          <p class="ep-help" id="{{ form.kind.id_for_label }}-help">{{ form.kind.help_text }}</p>
+        </div>
+        {% if form.is_active %}
+        <div class="ep-field ep-field--switch">
+          <div class="form-check form-switch ep-switch">
+            <input class="form-check-input" type="checkbox" role="switch" name="{{ form.is_active.html_name }}" id="{{ form.is_active.id_for_label }}"{% if form.is_active.value %} checked{% endif %}>
+            <label class="form-check-label" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+          </div>
+          <p class="ep-help" id="{{ form.is_active.id_for_label }}-help">الجهة المعطّلة تُخفى من القوائم وأدوات الاختيار، ويبقى سجلّها وروابطها بالكتب.</p>
+        </div>
+        {% endif %}
+      </div>
+    </fieldset>
+
+    <fieldset class="ep-card ep-group">
+      <legend class="ep-legend">
+        <span class="ep-legend-ico" aria-hidden="true"><i class="bi bi-envelope"></i></span>
+        <span class="ep-legend-text">بيانات الاتصال <span class="ep-optional">(اختياري)</span></span>
+      </legend>
+      <div class="ep-grid">
+        <div class="ep-field">
+          <label class="form-label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+          {{ form.email }}
+          {% if form.email.errors %}<p class="ep-error" id="{{ form.email.id_for_label }}-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.email.errors|striptags }}</p>{% endif %}
+          <p class="ep-help" id="{{ form.email.id_for_label }}-help">يُستخدم لإرسال إشعارات المراسلات الرسمية</p>
+        </div>
+        <div class="ep-field">
+          <label class="form-label" for="{{ form.email_cc.id_for_label }}">{{ form.email_cc.label }}</label>
+          {{ form.email_cc }}
+          {% if form.email_cc.errors %}<p class="ep-error" id="{{ form.email_cc.id_for_label }}-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.email_cc.errors|striptags }}</p>{% endif %}
+          <p class="ep-help" id="{{ form.email_cc.id_for_label }}-help">عناوين إضافية تستلم نسخة من الإشعار، مفصولة بفاصلة</p>
+        </div>
+      </div>
+      <div class="ep-grid ep-grid--3">
+        <div class="ep-field">
+          <label class="form-label" for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+          {{ form.phone }}
+          {% if form.phone.errors %}<p class="ep-error" id="{{ form.phone.id_for_label }}-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.phone.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="ep-field">
+          <label class="form-label" for="{{ form.contact_person.id_for_label }}">{{ form.contact_person.label }}</label>
+          {{ form.contact_person }}
+          {% if form.contact_person.errors %}<p class="ep-error" id="{{ form.contact_person.id_for_label }}-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.contact_person.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="ep-field">
+          <label class="form-label" for="{{ form.address.id_for_label }}">{{ form.address.label }}</label>
+          {{ form.address }}
+          {% if form.address.errors %}<p class="ep-error" id="{{ form.address.id_for_label }}-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.address.errors|striptags }}</p>{% endif %}
+        </div>
+      </div>
+      <div class="ep-field">
+        <label class="form-label" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+        {{ form.notes }}
+        {% if form.notes.errors %}<p class="ep-error" id="{{ form.notes.id_for_label }}-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.notes.errors|striptags }}</p>{% endif %}
+      </div>
+    </fieldset>
+
+    <fieldset class="ep-card ep-group">
+      <legend class="ep-legend">
+        <span class="ep-legend-ico" aria-hidden="true"><i class="bi bi-bell"></i></span>
+        <span class="ep-legend-text">تفضيلات الإشعارات التلقائية</span>
+      </legend>
+      <div class="ep-grid">
+        <div class="ep-field ep-field--switch">
+          <div class="form-check form-switch ep-switch">
+            <input class="form-check-input" type="checkbox" role="switch" name="{{ form.notify_on_receive.html_name }}" id="{{ form.notify_on_receive.id_for_label }}"{% if form.notify_on_receive.value %} checked{% endif %}>
+            <label class="form-check-label" for="{{ form.notify_on_receive.id_for_label }}">{{ form.notify_on_receive.label }}</label>
+          </div>
+          <p class="ep-help" id="{{ form.notify_on_receive.id_for_label }}-help">يُرسَل بريد للجهة عند تسجيل كتاب وارد منها</p>
+        </div>
+        <div class="ep-field ep-field--switch">
+          <div class="form-check form-switch ep-switch">
+            <input class="form-check-input" type="checkbox" role="switch" name="{{ form.notify_on_send.html_name }}" id="{{ form.notify_on_send.id_for_label }}"{% if form.notify_on_send.value %} checked{% endif %}>
+            <label class="form-check-label" for="{{ form.notify_on_send.id_for_label }}">{{ form.notify_on_send.label }}</label>
+          </div>
+          <p class="ep-help" id="{{ form.notify_on_send.id_for_label }}-help">يُرسَل بريد للجهة عند تسجيل كتاب صادر إليها</p>
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="ep-form-actions">
+      <button type="submit" class="btn btn-primary ep-save"><i class="bi bi-save" aria-hidden="true"></i>{% if is_edit %}حفظ التعديل{% else %}حفظ الجهة{% endif %}</button>
+      <a href="{% if back_url %}{{ back_url }}{% else %}{% url 'entity_list' %}{% endif %}" class="btn btn-outline-secondary">إلغاء</a>
+    </div>
+  </form>
 </div>
 {% endblock %}
 
-{% block content %}
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-    <div>
-      <h4 class="fw-bold mb-1">{% if is_edit %}تعديل جهة{% else %}إضافة جهة جديدة{% endif %}</h4>
-      <p class="text-muted mb-0">أدخل اسم الجهة، رمزها (اختياري)، وحدد نوعها.</p>
-    </div>
-    {# وجهةٌ واحدة لـ«رجوع» و«إلغاء» (back_url ثمّ القائمة)، وسهمٌ يمينيٌّ في RTL (تدقيقُ نيلسن D#20) #}
-    <a class="btn btn-outline-secondary" href="{% if back_url %}{{ back_url }}{% else %}{% url 'entity_list' %}{% endif %}">
-      <i class="bi bi-arrow-right me-1"></i>رجوع
-    </a>
-  </div>
-
-  <div class="row g-3">
-    <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          {% if form.errors %}
-          <div class="alert alert-danger small">يوجد حقول تحتاج مراجعة.</div>
-          {% endif %}
-
-          {% if is_edit and editing_entity %}
-          <div class="alert alert-info">
-            <strong>{{ editing_entity.name }}</strong>{% if editing_entity.code %} ({{ editing_entity.code }}){% endif %}
-          </div>
-          {% endif %}
-
-          <form method="post" novalidate class="row g-3">
-            {# firstof لا يرفع إن غاب next — وسيطُ المرشِّح default:request.GET.next كان يرفع فتسقط الصفحة 500 حين تُفتح بلا ?next= (جولةُ الألوان 11-15) #}
-            {% firstof request.POST.next request.GET.next "" as nxt %}{% if nxt %}<input type="hidden" name="next" value="{{ nxt }}">{% endif %}
-            {% csrf_token %}
-            <div class="col-md-6 col-sm-12">
-              <label class="form-label fw-semibold" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
-              {{ form.name }}
-              {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|striptags }}</div>{% endif %}
-            </div>
-            <div class="col-md-6 col-sm-12">
-              <label class="form-label fw-semibold" for="{{ form.code.id_for_label }}">{{ form.code.label }}</label>
-              {{ form.code }}
-              {% if form.code.errors %}<div class="text-danger small mt-1">{{ form.code.errors|striptags }}</div>{% endif %}
-              <div class="form-text">أحرف أو أرقام أو نقط (مثال: م.ك.ح أو ش4)</div>
-            </div>
-            <div class="col-md-6 col-sm-12">
-              <label class="form-label fw-semibold" for="{{ form.kind.id_for_label }}">{{ form.kind.label }}</label>
-              {{ form.kind }}
-              {% if form.kind.errors %}<div class="text-danger small mt-1">{{ form.kind.errors|striptags }}</div>{% endif %}
-              <div class="form-text">{{ form.kind.help_text }}</div>
-            </div>
-            {% if form.is_active %}
-            <div class="col-md-6 col-sm-12 d-flex align-items-center gap-3 pt-4">
-              <div class="form-check">
-                {{ form.is_active }}
-                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
-              </div>
-            </div>
-            {% endif %}
-
-            <!-- ─── بيانات الاتصال ─── -->
-            <div class="col-12 mt-3">
-              <hr class="my-1">
-              <h6 class="text-muted fw-semibold mb-2" style="font-size:0.82rem;letter-spacing:.03em;">
-                <i class="bi bi-envelope me-1"></i> بيانات الاتصال <span class="fw-normal text-muted">(اختياري)</span>
-              </h6>
-            </div>
-            <div class="col-md-6 col-sm-12">
-              <label class="form-label fw-semibold" for="{{ form.email.id_for_label }}">
-                {{ form.email.label }}
-                <span class="badge bg-secondary fw-normal ms-1" style="font-size:.7rem">اختياري</span>
-              </label>
-              {{ form.email }}
-              {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors|striptags }}</div>{% endif %}
-              <div class="form-text">يُستخدم لإرسال إشعارات المراسلات الرسمية</div>
-            </div>
-            <div class="col-md-6 col-sm-12">
-              <label class="form-label fw-semibold" for="{{ form.email_cc.id_for_label }}">{{ form.email_cc.label }}</label>
-              {{ form.email_cc }}
-              {% if form.email_cc.errors %}<div class="text-danger small mt-1">{{ form.email_cc.errors|striptags }}</div>{% endif %}
-              <div class="form-text">عناوين إضافية تستلم نسخة من الإشعار، مفصولة بفاصلة</div>
-            </div>
-            <div class="col-md-4 col-sm-12">
-              <label class="form-label fw-semibold" for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
-              {{ form.phone }}
-            </div>
-            <div class="col-md-4 col-sm-12">
-              <label class="form-label fw-semibold" for="{{ form.contact_person.id_for_label }}">{{ form.contact_person.label }}</label>
-              {{ form.contact_person }}
-            </div>
-            <div class="col-md-4 col-sm-12">
-              <label class="form-label fw-semibold" for="{{ form.address.id_for_label }}">{{ form.address.label }}</label>
-              {{ form.address }}
-            </div>
-            <div class="col-12">
-              <label class="form-label fw-semibold" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
-              {{ form.notes }}
-            </div>
-
-            <!-- ─── تفضيلات الإشعارات ─── -->
-            <div class="col-12 mt-2">
-              <hr class="my-1">
-              <h6 class="text-muted fw-semibold mb-2" style="font-size:0.82rem;letter-spacing:.03em;">
-                <i class="bi bi-bell me-1"></i> تفضيلات الإشعارات التلقائية
-              </h6>
-            </div>
-            <div class="col-md-6 col-sm-12">
-              <div class="form-check form-switch">
-                {{ form.notify_on_receive }}
-                <label class="form-check-label" for="{{ form.notify_on_receive.id_for_label }}">
-                  {{ form.notify_on_receive.label }}
-                  <div class="form-text mt-0">يُرسَل بريد للجهة عند تسجيل كتاب وارد منها</div>
-                </label>
-              </div>
-            </div>
-            <div class="col-md-6 col-sm-12">
-              <div class="form-check form-switch">
-                {{ form.notify_on_send }}
-                <label class="form-check-label" for="{{ form.notify_on_send.id_for_label }}">
-                  {{ form.notify_on_send.label }}
-                  <div class="form-text mt-0">يُرسَل بريد للجهة عند تسجيل كتاب صادر إليها</div>
-                </label>
-              </div>
-            </div>
-
-            <div class="col-12 d-flex gap-2 mt-3">
-              <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>{% if is_edit %}حفظ التعديل{% else %}حفظ الجهة{% endif %}</button>
-              <a href="{% if back_url %}{{ back_url }}{% else %}{% url 'entity_list' %}{% endif %}" class="btn btn-outline-secondary">إلغاء</a>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  // كلُّ حقلٍ يُقرأ مع شرحه وخطئه (aria-describedby)، والخاطئُ موسومٌ (aria-invalid) —
+  // النموذجُ مشتركٌ مع حواريّة قائمة الجهات فلا تُضاف الصفاتُ في forms.py من هنا
+  document.querySelectorAll('.ep-form .ep-field').forEach(function (field) {
+    var input = field.querySelector('input:not([type="hidden"]), select, textarea');
+    if (!input) return;
+    var ids = [];
+    field.querySelectorAll('.ep-error[id], .ep-help[id]').forEach(function (el) { ids.push(el.id); });
+    if (ids.length) input.setAttribute('aria-describedby', ids.join(' '));
+    if (field.querySelector('.ep-error')) input.setAttribute('aria-invalid', 'true');
+  });
+  // بعد الإرسال الفاشل: التركيزُ على الخلاصة (تُقرأ ويُرى مكانُها) — روابطُها تنقل إلى الحقول
+  var summary = document.getElementById('ep-error-summary');
+  if (summary) summary.focus();
+})();
+</script>
 {% endblock %}
