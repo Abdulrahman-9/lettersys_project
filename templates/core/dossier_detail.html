@@ -3,54 +3,68 @@
 
 {% block title %}إضبارة: {{ entity.name }}{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20261115-colors1">{% endblock %}
+{% comment %}
+  على الهويّة الموحّدة (11-19): غلافُ الإضبارة مجلّدٌ لسانُه تبويبُ الجهة، وشريطُ التصفية وتبويبا الاتّجاه
+  مكوّناتُ قائمة الكتب نفسُها (filter-bar · fb-* · tabs-split + لوحُ js/lx_tabs.js المنزلق).
+  شروطُ القالب (السرّيّة والملفّات والسنوات) كما هي حرفاً — حرّاسُها في tests_dossier_secrecy.
+{% endcomment %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20261112-list1">
+<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20261119-pages">
+{% endblock %}
 
 {% block content %}
 <div class="dossier-detail">
 
-  <div class="dd-head">
-    <div class="dd-crumb"><a href="{% url 'dossier_list' %}"><i class="bi bi-chevron-right"></i> كل الأضابير</a></div>
+  <nav class="dd-crumb" aria-label="مسار التصفح">
+    <a href="{% url 'dossier_list' %}"><i class="bi bi-arrow-right" aria-hidden="true"></i> كل الأضابير</a>
+  </nav>
+
+  <header class="dd-head">
+    <span class="dd-label">إضبارة · {{ entity.get_kind_display }}</span>
     <div class="dd-titlerow">
       <div class="dd-title">
-        <div class="ic"><i class="bi bi-folder2-open"></i></div>
-        <div>
-          <h4>{{ entity.name }}</h4>
-          {% if entity.code %}<span class="code">{{ entity.code }}</span>{% endif %}
+        <div class="ic" aria-hidden="true"><i class="bi bi-folder2-open"></i></div>
+        <div class="dd-name">
+          <h1>{{ entity.name }}</h1>
+          {% if entity.code %}<bdi class="code">{{ entity.code }}</bdi>{% endif %}
         </div>
       </div>
       <div class="dd-actions">
-        <a class="btn-entity-card" href="{% url 'entity_detail' entity.pk %}" title="بطاقة الجهة: الرمز والتبويب وبيانات الاتصال">
+        <a class="btn btn-outline-secondary btn-entity-card" href="{% url 'entity_detail' entity.pk %}" title="بطاقة الجهة: الرمز والتبويب وبيانات الاتصال">
           <i class="bi bi-person-vcard" aria-hidden="true"></i> بطاقة الجهة
         </a>
-        <a class="btn-report" href="{% url 'dossier_report' entity.pk %}{% if querystring %}?{{ querystring }}{% endif %}" target="_blank" rel="noopener">
-          <i class="bi bi-printer-fill"></i> طباعة التقرير
+        <a class="btn btn-primary btn-report" href="{% url 'dossier_report' entity.pk %}{% if querystring %}?{{ querystring }}{% endif %}" target="_blank" rel="noopener">
+          <i class="bi bi-printer" aria-hidden="true"></i> طباعة التقرير<span class="visually-hidden"> (في لسان جديد)</span>
         </a>
       </div>
     </div>
-    <div class="dd-stats">
+    <div class="dd-stats" role="group" aria-label="عدد كتب الإضبارة">
       <span class="dd-stat t"><b>{{ total_count }}</b> الإجمالي</span>
-      <span class="dd-stat o"><i class="bi bi-arrow-up-right"></i> <b>{{ outgoing_count }}</b> صادر</span>
-      <span class="dd-stat i"><i class="bi bi-arrow-down-left"></i> <b>{{ incoming_count }}</b> وارد</span>
+      <span class="dd-stat o"><i class="bi bi-envelope-arrow-up" aria-hidden="true"></i> <b>{{ outgoing_count }}</b> صادر</span>
+      <span class="dd-stat i"><i class="bi bi-envelope-arrow-down" aria-hidden="true"></i> <b>{{ incoming_count }}</b> وارد</span>
     </div>
-  </div>
+  </header>
 
-  {# ── شريط فلاتر بنمط «كل الكتب» (fb-*): بحث + رقائق حالة (أيقونة+عدّاد) + متقدّم ── #}
-  <form class="dossier-filters" method="get">
+  {# ── شريط فلاتر بمكوّن «كل الكتب» (filter-bar · fb-*): بحث + رقائق حالة (أيقونة+عدّاد) + متقدّم ── #}
+  <form class="dossier-filters" method="get" role="search" aria-label="تصفية كتب الإضبارة">
     <input type="hidden" name="side" id="dd-side" value="{{ active_side }}">
-    <div class="dd-fbar">
+    <div class="dd-fbar filter-bar">
       <div class="fb-search">
-        <input type="text" name="q" value="{{ filters.q }}" placeholder="ابحث برقم القيد أو العنوان أو الملاحظة..." aria-label="بحث في الإضبارة" autocomplete="off">
-        <i class="bi bi-search fb-search-icon"></i>
+        <input type="search" name="q" value="{{ filters.q }}" placeholder="ابحث برقم القيد أو العنوان أو الملاحظة…" aria-label="بحث في الإضبارة" autocomplete="off" enterkeyhint="search">
+        <i class="bi bi-search fb-search-icon" aria-hidden="true"></i>
       </div>
 
-      <span class="fb-divider"></span>
+      <span class="fb-divider" aria-hidden="true"></span>
 
       {# رقائق حالة المتابعة — روابط GET (تحترم التدهور الرشيق بلا JS) #}
       <div class="fb-pills" role="group" aria-label="فلترة حالة المتابعة">
-        <a class="fb-pill{% if not filters.followup %} active{% endif %}" href="?{{ qs_no_followup }}"{% if not filters.followup %} aria-current="page"{% endif %}><i class="bi bi-list-ul"></i> الكل</a>
+        <a class="fb-pill{% if not filters.followup %} active{% endif %}" data-filter="all" href="?{{ qs_no_followup }}"{% if not filters.followup %} aria-current="page"{% endif %}><i class="bi bi-list-ul" aria-hidden="true"></i> الكل</a>
         {% for c in counter_chips %}
         <a class="fb-pill fb-pill-{{ c.css }}{% if c.active %} active{% endif %}" href="?{% if qs_no_followup %}{{ qs_no_followup }}&{% endif %}followup={{ c.key }}"{% if c.active %} aria-current="page"{% endif %}>
-          <i class="bi {{ c.icon }}"></i> {{ c.label }} <span class="fb-pill-count">{{ c.count }}</span>
+          <i class="bi {{ c.icon }}" aria-hidden="true"></i> {{ c.label }} <span class="fb-pill-count">{{ c.count }}</span>
         </a>
         {% endfor %}
       </div>
@@ -58,7 +72,8 @@
       {# فلترة متقدّمة (details بلا JS — تدهور رشيق) #}
       <details class="dd-advanced"{% if active_filter_count %} open{% endif %}>
         <summary class="fb-advanced-toggle">
-          <i class="bi bi-sliders"></i> متقدّم{% if active_filter_count %} <span class="fb-active-count">{{ active_filter_count }}</span>{% endif %}
+          <i class="bi bi-sliders" aria-hidden="true"></i> متقدّم{% if active_filter_count %} <span class="fb-active-count">{{ active_filter_count }}<span class="visually-hidden"> مرشّحات فعّالة</span></span>{% endif %}
+          <i class="bi bi-chevron-down dd-adv-chev" aria-hidden="true"></i>
         </summary>
         <div class="dd-advanced-panel filter-form">
           <div class="ff-group">
@@ -108,8 +123,8 @@
             </select>
           </div>
           <div class="ff-actions">
-            <a class="clear" href="{% url 'dossier_detail' entity.pk %}">مسح الفلاتر</a>
-            <button type="submit" class="apply"><i class="bi bi-funnel"></i> تطبيق</button>
+            <a class="btn btn-outline-secondary clear" href="{% url 'dossier_detail' entity.pk %}">مسح الفلاتر</a>
+            <button type="submit" class="btn btn-primary apply"><i class="bi bi-funnel" aria-hidden="true"></i> تطبيق</button>
           </div>
         </div>
       </details>
@@ -118,39 +133,40 @@
 
   {% if filter_summary %}
   <div class="active-chips">
+    <span class="ac-lbl">التصفية:</span>
     {% for item in filter_summary %}<span class="chip">{{ item }}</span>{% endfor %}
   </div>
   {% endif %}
 
   {# شريط الملف الثانوي المفتوح — يظهر فقط عند اختيار نوع (يخدم الاتجاهين معاً) #}
   {% if filters.document_type %}
-  <div class="dd-subfile-bar">
+  <nav class="dd-subfile-bar" aria-label="موضعك في خزانة الملفات">
     <a class="sf-back" href="?{% if qs_no_type %}{{ qs_no_type }}&{% endif %}side={{ active_side }}" title="عودة إلى خزانة الملفات">
-      <i class="bi bi-arrow-right"></i> كل الملفات
+      <i class="bi bi-arrow-right" aria-hidden="true"></i> كل الملفات
     </a>
     <span class="sf-open">
       {% if filters.year %}
-        <a href="?{% if qs_no_year %}{{ qs_no_year }}&{% endif %}side={{ active_side }}" class="sf-crumb" title="كلّ سنوات هذا الملفّ"><i class="bi bi-folder2-open"></i> {{ filters.document_type }}</a>
-        <i class="bi bi-chevron-left sf-sep"></i>
-        <i class="bi bi-calendar3"></i> {{ filters.year }}
+        <a href="?{% if qs_no_year %}{{ qs_no_year }}&{% endif %}side={{ active_side }}" class="sf-crumb" title="كلّ سنوات هذا الملفّ"><i class="bi bi-folder2-open" aria-hidden="true"></i> {{ filters.document_type }}</a>
+        <i class="bi bi-chevron-left sf-sep" aria-hidden="true"></i>
+        <span aria-current="page"><i class="bi bi-calendar3" aria-hidden="true"></i> {{ filters.year }}</span>
       {% else %}
-        <i class="bi bi-folder2-open"></i> {{ filters.document_type }}
+        <span aria-current="page"><i class="bi bi-folder2-open" aria-hidden="true"></i> {{ filters.document_type }}</span>
       {% endif %}
       <span class="sf-count">{{ total_count }}</span>
     </span>
-  </div>
+  </nav>
   {% endif %}
 
-  {# تبويبا الاتجاه (JS) — مع تدهور رشيق: بلا JS تظهر اللوحتان مع عناوين #}
+  {# تبويبا الاتجاه (JS) بلوح قائمة الكتب المنزلق — مع تدهور رشيق: بلا JS تظهر اللوحتان مع عناوين #}
   {# التبويبُ الافتراضيّ حيث الكتب: «صادر» الثابتُ كان يهبط على «لا كتب صادرة» (تدقيقُ نيلسن D#5) #}
-  <div class="dd-tabs" role="tablist" aria-label="اتجاه الكتب">
-    <button type="button" class="dd-tab out{% if active_side == 'out' %} active{% endif %}" id="tab-out" role="tab" aria-selected="{% if active_side == 'out' %}true{% else %}false{% endif %}" aria-controls="pane-out" data-pane="pane-out" data-side="out"><i class="bi bi-arrow-up-right"></i> صادر <span class="cnt">{{ outgoing_count }}</span></button>
-    <button type="button" class="dd-tab in{% if active_side == 'in' %} active{% endif %}" id="tab-in" role="tab" aria-selected="{% if active_side == 'in' %}true{% else %}false{% endif %}" aria-controls="pane-in" data-pane="pane-in" data-side="in"><i class="bi bi-arrow-down-left"></i> وارد <span class="cnt">{{ incoming_count }}</span></button>
+  <div class="dd-tabs tabs-split" role="tablist" aria-label="اتجاه الكتب" data-lx-tabs>
+    <button type="button" class="dd-tab tab-main out{% if active_side == 'out' %} active{% endif %}" id="tab-out" role="tab" aria-selected="{% if active_side == 'out' %}true{% else %}false{% endif %}" aria-controls="pane-out" data-pane="pane-out" data-side="out"><i class="bi bi-envelope-arrow-up tab-icon" aria-hidden="true"></i><span class="tab-text"><span class="tab-label">صادر</span><span class="tab-count">{{ outgoing_count }}</span></span></button>
+    <button type="button" class="dd-tab tab-main in{% if active_side == 'in' %} active{% endif %}" id="tab-in" role="tab" aria-selected="{% if active_side == 'in' %}true{% else %}false{% endif %}" aria-controls="pane-in" data-pane="pane-in" data-side="in"><i class="bi bi-envelope-arrow-down tab-icon" aria-hidden="true"></i><span class="tab-text"><span class="tab-label">وارد</span><span class="tab-count">{{ incoming_count }}</span></span></button>
   </div>
 
   {# ── تبويب الصادر ── #}
   <div class="dd-pane{% if active_side == 'out' %} active{% endif %}" id="pane-out" role="tabpanel" aria-labelledby="tab-out" tabindex="0">
-    <div class="dd-pane-title"><i class="bi bi-arrow-up-right"></i> الكتب الصادرة ({{ outgoing_count }})</div>
+    <div class="dd-pane-title"><i class="bi bi-envelope-arrow-up" aria-hidden="true"></i> الكتب الصادرة ({{ outgoing_count }})</div>
     {% if outgoing_groups %}
       {% if not filters.document_type %}
       {# خزانة الملفات: بطاقة مجلد لكل نوع — النقر يفتح الملف الثانوي وحده #}
@@ -159,7 +175,7 @@
         <a class="folder-card out" style="--i:{{ forloop.counter0 }}"
            href="?{% if qs_no_type %}{{ qs_no_type }}&{% endif %}document_type={{ g.type|urlencode }}&side=out"
            title="فتح ملف «{{ g.type }}» ({{ g.count }})">
-          <i class="bi bi-folder-fill fc-icon"></i>
+          <i class="bi bi-folder-fill fc-icon" aria-hidden="true"></i>
           <span class="fc-name">{{ g.type }}</span>
           <span class="fc-count">{{ g.count }}</span>
         </a>
@@ -172,7 +188,7 @@
         <a class="folder-card out year" style="--i:{{ forloop.counter0 }}"
            href="?{% if qs_no_year %}{{ qs_no_year }}&{% endif %}year={{ y.year|default:'' }}&side=out"
            title="فتح ملف «{{ filters.document_type }} / {{ y.label }}» ({{ y.count }})">
-          <i class="bi bi-calendar3 fc-icon"></i>
+          <i class="bi bi-calendar3 fc-icon" aria-hidden="true"></i>
           <span class="fc-name">{{ y.label }}</span>
           <span class="fc-count">{{ y.count }}</span>
         </a>
@@ -182,23 +198,28 @@
       {% for g in outgoing_groups %}
       <div class="type-group dd-subfile">
         <table class="dd-table">
-          <thead><tr><th>رقم الكتاب</th><th>العنوان</th><th>التاريخ</th><th>الجهة المستلمة</th><th>المتابعة</th><th>إجراءات</th></tr></thead>
+          <caption class="visually-hidden">الكتب الصادرة — {{ g.type }}</caption>
+          <thead><tr><th scope="col">رقم الكتاب</th><th scope="col">العنوان</th><th scope="col">التاريخ</th><th scope="col">الجهة المستلمة</th><th scope="col">المتابعة</th><th scope="col">إجراءات</th></tr></thead>
           <tbody>
           {% for b in g.books %}{% include "core/partials/dossier_book_row.html" with b=b side="out" %}{% endfor %}
           </tbody>
         </table>
-        {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذه الجهة ←</a></div>{% endif %}
+        {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذه الجهة <i class="bi bi-arrow-left" aria-hidden="true"></i></a></div>{% endif %}
       </div>
       {% endfor %}
       {% endif %}
     {% else %}
-      <div class="dd-empty">لا كتب صادرة{% if active_filter_count %} تطابق الفلاتر{% endif %}.</div>
+      <div class="dd-empty">
+        <i class="bi bi-folder2" aria-hidden="true"></i>
+        <p>لا كتب صادرة{% if active_filter_count %} تطابق الفلاتر{% endif %}.</p>
+        {% if active_filter_count %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'dossier_detail' entity.pk %}">مسح الفلاتر</a>{% endif %}
+      </div>
     {% endif %}
   </div>
 
   {# ── تبويب الوارد ── #}
   <div class="dd-pane{% if active_side == 'in' %} active{% endif %}" id="pane-in" role="tabpanel" aria-labelledby="tab-in" tabindex="0">
-    <div class="dd-pane-title"><i class="bi bi-arrow-down-left"></i> الكتب الواردة ({{ incoming_count }})</div>
+    <div class="dd-pane-title"><i class="bi bi-envelope-arrow-down" aria-hidden="true"></i> الكتب الواردة ({{ incoming_count }})</div>
     {% if incoming_groups %}
       {% if not filters.document_type %}
       <div class="folder-grid">
@@ -206,7 +227,7 @@
         <a class="folder-card in" style="--i:{{ forloop.counter0 }}"
            href="?{% if qs_no_type %}{{ qs_no_type }}&{% endif %}document_type={{ g.type|urlencode }}&side=in"
            title="فتح ملف «{{ g.type }}» ({{ g.count }})">
-          <i class="bi bi-folder-fill fc-icon"></i>
+          <i class="bi bi-folder-fill fc-icon" aria-hidden="true"></i>
           <span class="fc-name">{{ g.type }}</span>
           <span class="fc-count">{{ g.count }}</span>
         </a>
@@ -219,7 +240,7 @@
         <a class="folder-card in year" style="--i:{{ forloop.counter0 }}"
            href="?{% if qs_no_year %}{{ qs_no_year }}&{% endif %}year={{ y.year|default:'' }}&side=in"
            title="فتح ملف «{{ filters.document_type }} / {{ y.label }}» ({{ y.count }})">
-          <i class="bi bi-calendar3 fc-icon"></i>
+          <i class="bi bi-calendar3 fc-icon" aria-hidden="true"></i>
           <span class="fc-name">{{ y.label }}</span>
           <span class="fc-count">{{ y.count }}</span>
         </a>
@@ -229,17 +250,22 @@
       {% for g in incoming_groups %}
       <div class="type-group dd-subfile">
         <table class="dd-table">
-          <thead><tr><th>رقم الكتاب</th><th>العنوان</th><th>التاريخ</th><th>الجهة المرسِلة</th><th>المتابعة</th><th>إجراءات</th></tr></thead>
+          <caption class="visually-hidden">الكتب الواردة — {{ g.type }}</caption>
+          <thead><tr><th scope="col">رقم الكتاب</th><th scope="col">العنوان</th><th scope="col">التاريخ</th><th scope="col">الجهة المرسِلة</th><th scope="col">المتابعة</th><th scope="col">إجراءات</th></tr></thead>
           <tbody>
           {% for b in g.books %}{% include "core/partials/dossier_book_row.html" with b=b side="in" %}{% endfor %}
           </tbody>
         </table>
-        {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذه الجهة ←</a></div>{% endif %}
+        {% if g.truncated %}<div class="group-more"><a href="{% url 'book_unified' %}?entity_id={{ entity.pk }}&tab=all">عرض كل كتب هذه الجهة <i class="bi bi-arrow-left" aria-hidden="true"></i></a></div>{% endif %}
       </div>
       {% endfor %}
       {% endif %}
     {% else %}
-      <div class="dd-empty">لا كتب واردة{% if active_filter_count %} تطابق الفلاتر{% endif %}.</div>
+      <div class="dd-empty">
+        <i class="bi bi-folder2" aria-hidden="true"></i>
+        <p>لا كتب واردة{% if active_filter_count %} تطابق الفلاتر{% endif %}.</p>
+        {% if active_filter_count %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'dossier_detail' entity.pk %}">مسح الفلاتر</a>{% endif %}
+      </div>
     {% endif %}
   </div>
 
@@ -294,4 +320,8 @@
   });
 })();
 </script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/lx_tabs.js' %}?v=20261112-list1"></script>
 {% endblock %}
