@@ -1,0 +1,25 @@
+{% comment %}
+  ترقيمُ جدولَي «ملفّ الجهة» (11-19) — نافذةٌ حول الصفحة الحاليّة: الأولى · الحاليّة ±2 · الأخيرة،
+  و«…» مكانَ ما بينها؛ كانت كلُّ الصفحات تُرسم فيتجاوز الصفُّ عرضَ الهاتف في جهةٍ كثيرة الكتب.
+  الروابطُ نفسُها: ?{key}=N ويبقى وسيطُ الجدول الآخر (keep_key) كما جاء.
+  page: صفحةُ Paginator · key: وسيطُ هذا الجدول (pi/pr) · keep_key/keep: وسيطُ الآخر وقيمتُه · label: اسمُ الشريط.
+{% endcomment %}
+{% if page.has_other_pages %}
+<nav class="ep-pager" aria-label="{{ label }}">
+  <ul class="pagination">
+    {% if page.has_previous %}
+    <li class="page-item"><a class="page-link" href="?{{ key }}={{ page.previous_page_number }}{% if keep %}&amp;{{ keep_key }}={{ keep }}{% endif %}" aria-label="الصفحة السابقة"><i class="bi bi-chevron-right" aria-hidden="true"></i></a></li>
+    {% endif %}
+    {% for p in page.paginator.page_range %}
+      {% if p == 1 or p == page.paginator.num_pages or p >= page.number|add:-2 and p <= page.number|add:2 %}
+    <li class="page-item{% if p == page.number %} active{% endif %}"><a class="page-link" href="?{{ key }}={{ p }}{% if keep %}&amp;{{ keep_key }}={{ keep }}{% endif %}"{% if p == page.number %} aria-current="page"{% endif %}><bdi dir="ltr">{{ p }}</bdi></a></li>
+      {% elif p == page.number|add:-3 or p == page.number|add:3 %}
+    <li class="page-item disabled ep-pager-gap" aria-hidden="true"><span class="page-link">…</span></li>
+      {% endif %}
+    {% endfor %}
+    {% if page.has_next %}
+    <li class="page-item"><a class="page-link" href="?{{ key }}={{ page.next_page_number }}{% if keep %}&amp;{{ keep_key }}={{ keep }}{% endif %}" aria-label="الصفحة التالية"><i class="bi bi-chevron-left" aria-hidden="true"></i></a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}

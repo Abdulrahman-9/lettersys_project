@@ -1,93 +1,108 @@
 {% extends 'base.html' %}
+{% load static %}
 {# صفحة دمج الجهات المكرّرة — كشف آلي + عنقود يدوي اختياري + دمج مؤكَّد #}
 {% block title %}دمج الجهات المكرّرة{% endblock %}
 
+{% comment %}
+  على الهويّة الموحّدة (11-19): الأنماطُ المضمَّنة (سطحٌ أبيضُ صريح، وصفٌّ «أمّ» بطلاءٍ برتقاليّ دافئ
+  وصنفِ الجدول التحذيريّ من Bootstrap، وخطُّ JetBrains غيرُ المحلّيّ) صارت رموزاً في css/entity_pages.css · عناوينُ حقيقيّة
+  (h1 ثمّ h2 للأقسام وh3 للعناقيد) · اختيارُ «الأمّ» و«تُدمَج» باسمٍ مقروءٍ وهدفِ نقرٍ بعرض الخليّة.
+  النماذجُ وأسماءُ حقولها (canonical · victim) وتأكيدُ data-confirm كما هي.
+{% endcomment %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/entity_pages.css' %}?v=20261119-pages">{% endblock %}
+
 {% block content %}
-<style>
-  .merge-cluster { border: 1px solid color-mix(in srgb, var(--lx-pri) 15%, transparent); border-radius: .9rem; background: #fff; }
-  .merge-cluster.is-manual { border-color: color-mix(in srgb, var(--lx-pri) 55%, transparent); box-shadow: 0 .25rem .9rem color-mix(in srgb, var(--lx-pri) 12%, transparent); }
-  .merge-cluster .table { font-size: .9rem; }
-  .merge-key { font-family: 'JetBrains Mono', monospace; font-size: .78rem; }
-  .merge-cluster tr.table-warning td { background: rgba(249,168,38,.14); }
-  .canon-star { color: var(--lx-mute); }
-  .merge-section-title { font-weight: 800; color: var(--soft-brown, var(--lx-ink)); margin: 1rem 0 .6rem; }
-</style>
+<div class="ep ep-merge">
 
-<div class="container-fluid animate-fade-in">
+  <nav class="ep-crumbs" aria-label="مسار التصفّح">
+    <a href="{% url 'entity_list' %}">الجهات</a>
+    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+    <span aria-current="page">دمج المكرّرات</span>
+  </nav>
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-      <h4 class="fw-bold mb-1">دمج الجهات المكرّرة</h4>
-      <p class="text-muted mb-0 small">راجِع كل عنقود، اختر الجهة الأمّ، ثم ادمج. تنتقل روابط الكتب وبيانات الاتصال الناقصة إلى الأمّ وتُعطَّل البقية.</p>
+  <header class="ep-page-head">
+    <div class="ep-page-head-text">
+      <h1 class="ep-title">دمج الجهات المكرّرة</h1>
+      <p class="ep-lead">راجِع كل عنقود، اختر الجهة الأمّ، ثم ادمج. تنتقل روابط الكتب وبيانات الاتصال الناقصة إلى الأمّ وتُعطَّل البقية.</p>
     </div>
-    <a class="btn btn-outline-secondary" href="{% url 'entity_list' %}">
-      <i class="bi bi-arrow-bar-right"></i> الجهات
-    </a>
-  </div>
+  </header>
 
   {# ── عنقود التحديد اليدوي (من زر "دمج المحدد" في قائمة الجهات) ── #}
   {% if manual_cluster %}
-    <div class="merge-section-title"><i class="bi bi-hand-index-thumb me-1"></i>تحديدك اليدوي</div>
-    <div class="alert alert-info py-2 small mb-2">
-      هذه الجهات اخترتَها بنفسك من القائمة — تجاوزٌ للكشف الآلي (لتكراراتٍ لا يلتقطها التطبيع).
-      الجهة المقترَحة كأمّ مميَّزة بـ<span class="canon-star">★</span>.
+  <section class="ep-section" aria-labelledby="ep-manual-title">
+    <h2 class="ep-section-title" id="ep-manual-title"><span class="ep-section-ico" aria-hidden="true"><i class="bi bi-hand-index-thumb"></i></span>تحديدك اليدوي</h2>
+    <div class="alert alert-info ep-note">
+      <i class="bi bi-info-circle" aria-hidden="true"></i>
+      <p>هذه الجهات اخترتَها بنفسك من القائمة — تجاوزٌ للكشف الآلي (لتكراراتٍ لا يلتقطها التطبيع).
+      الجهة المقترَحة كأمّ تحمل شارة «<i class="bi bi-star-fill" aria-hidden="true"></i> مقترَحة».</p>
     </div>
     <div class="is-manual-wrap">
       {% include 'core/partials/_merge_cluster.html' with c=manual_cluster %}
     </div>
+  </section>
   {% endif %}
 
   {# ── العناقيد المكتشفة آلياً ── #}
-  {% if clusters %}
-    <div class="merge-section-title"><i class="bi bi-magic me-1"></i>مكرّرات مكتشفة آلياً</div>
-    <div class="alert alert-info py-2">
-      عُثر على <strong>{{ clusters|length }}</strong> عنقوداً مكرّراً (تطبيع إملائي: ة/ه، أ/ا، همزات، مسافات).
-      الأولوية لاختيار الأمّ: رمز ← أصحّ إملاءً ← أكثر استخداماً.
+  <section class="ep-section" aria-labelledby="ep-auto-title">
+    <h2 class="ep-section-title" id="ep-auto-title"><span class="ep-section-ico" aria-hidden="true"><i class="bi bi-magic"></i></span>مكرّرات مكتشفة آلياً{% if clusters %} <bdi dir="ltr" class="ep-section-count">{{ clusters|length }}</bdi>{% endif %}</h2>
+    {% if clusters %}
+    <div class="alert alert-info ep-note">
+      <i class="bi bi-info-circle" aria-hidden="true"></i>
+      <p>عُثر على <strong><bdi dir="ltr">{{ clusters|length }}</bdi></strong> عنقوداً مكرّراً (تطبيع إملائي: ة/ه، أ/ا، همزات، مسافات).
+      الأولوية لاختيار الأمّ: رمز ← أصحّ إملاءً ← أكثر استخداماً.</p>
     </div>
     {% for c in clusters %}
       {% include 'core/partials/_merge_cluster.html' with c=c %}
     {% endfor %}
-  {% elif not manual_cluster %}
-    <div class="alert alert-success">
-      <i class="bi bi-check-circle-fill me-1"></i>
-      لا تكرارات إملائية — كل الجهات النشطة فريدة.
+    {% else %}
+    <div class="alert alert-success ep-note">
+      <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+      <p>لا تكرارات إملائية — كل الجهات النشطة فريدة.</p>
     </div>
-  {% endif %}
+    {% endif %}
+  </section>
 
   {# ── الكشف الذكي (الدلالي): تصحيف/التصاق/تشريف — يفوت التطبيع الإملائي ── #}
-  <div class="merge-section-title mt-4">
-    <i class="bi bi-stars me-1"></i>الكشف الذكي (تصحيف وتشريفات)
-  </div>
-  {% if not smart_on %}
-    <div class="alert alert-secondary d-flex justify-content-between align-items-center py-2">
-      <span class="small mb-0">
+  <section class="ep-section" aria-labelledby="ep-smart-title">
+    <h2 class="ep-section-title" id="ep-smart-title"><span class="ep-section-ico" aria-hidden="true"><i class="bi bi-stars"></i></span>الكشف الذكي (تصحيف وتشريفات){% if smart_on and smart_clusters %} <bdi dir="ltr" class="ep-section-count">{{ smart_clusters|length }}</bdi>{% endif %}</h2>
+    {% if not smart_on %}
+    <div class="ep-card ep-smart">
+      <p class="ep-smart-text">
         يكشف ما يفوت التطبيع: خطأً مطبعياً بحرف («المدبر العام»)، التصاق كلمتين
         («المديرالعام»)، وبادئةً تشريفية («السيد رئيس…» ≡ «رئيس…»). مسحٌ أثقل — يعمل بطلبك.
-      </span>
-      <a class="btn btn-sm btn-warning fw-semibold" href="?smart=1">
-        <i class="bi bi-search"></i> ابحث عن مرشّحات ذكية
+      </p>
+      {# المسحُ يستغرق ثوانيَ: الزرُّ يقول إنّه يعمل حتّى تصل الصفحة (ويعود كما كان إن رجعتَ إليها) #}
+      <a class="btn btn-outline-primary ep-smart-go" href="?smart=1" data-ep-busy="جارٍ البحث…">
+        <i class="bi bi-search" aria-hidden="true"></i><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span data-ep-busy-text>ابحث عن مرشّحات ذكية</span>
       </a>
     </div>
-  {% elif smart_clusters %}
-    <div class="alert alert-warning py-2">
-      <strong>{{ smart_clusters|length }}</strong> مرشّحاً — <strong>اقتراحاتٌ للمراجعة لا دمجٌ آلي</strong>.
+    {% elif smart_clusters %}
+    <div class="alert alert-warning ep-note">
+      <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+      <p><strong><bdi dir="ltr">{{ smart_clusters|length }}</bdi></strong> مرشّحاً — <strong>اقتراحاتٌ للمراجعة لا دمجٌ آلي</strong>.
       لا تُدمَج الفروق الدلالية («الفنية» ≠ «الادارية») ولا التبعيات («شعبة X» ≠ «قسم X»)،
-      لكن راجِع كل عنقود بعينك قبل الدمج.
+      لكن راجِع كل عنقود بعينك قبل الدمج.</p>
     </div>
     {% for c in smart_clusters %}
       {% include 'core/partials/_merge_cluster.html' with c=c %}
     {% endfor %}
-  {% else %}
-    <div class="alert alert-success py-2">
-      <i class="bi bi-check-circle-fill me-1"></i>
-      لا مرشّحات ذكية — لا تصحيفات ولا تشريفات مكرّرة.
+    {% else %}
+    <div class="alert alert-success ep-note">
+      <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+      <p>لا مرشّحات ذكية — لا تصحيفات ولا تشريفات مكرّرة.</p>
     </div>
-  {% endif %}
+    {% endif %}
+  </section>
 
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
 (function () {
+  'use strict';
   // عند اختيار جهة أمّاً: تُلغى من قائمة "تُدمَج" ويُبرَز صفّها.
   document.querySelectorAll('form.merge-cluster').forEach(function (form) {
     function sync() {
@@ -95,7 +110,7 @@
       form.querySelectorAll('tr[data-mid]').forEach(function (tr) {
         var isCanon = chosen && tr.dataset.mid === chosen.value;
         var cb = tr.querySelector('input[name="victim"]');
-        tr.classList.toggle('table-warning', !!isCanon);
+        tr.classList.toggle('is-canonical', !!isCanon);
         if (cb) { cb.disabled = !!isCanon; cb.checked = !isCanon; }
       });
     }
@@ -107,6 +122,23 @@
   // إبراز بطاقة التحديد اليدوي
   document.querySelectorAll('.is-manual-wrap form.merge-cluster')
           .forEach(function (f) { f.classList.add('is-manual'); });
+  // زرُّ المسح الذكيّ يقول «جارٍ البحث…» حتّى تصل الصفحة — لا يُعطَّل التنقّل نفسُه
+  document.querySelectorAll('a[data-ep-busy]').forEach(function (link) {
+    var text = link.querySelector('[data-ep-busy-text]');
+    var idle = text ? text.textContent : '';
+    link.addEventListener('click', function (e) {
+      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      link.classList.add('is-busy');
+      link.setAttribute('aria-busy', 'true');
+      if (text) text.textContent = link.getAttribute('data-ep-busy');
+    });
+    // الرجوعُ إلى الصفحة من ذاكرة المتصفّح يعيد الزرَّ إلى حاله
+    window.addEventListener('pageshow', function () {
+      link.classList.remove('is-busy');
+      link.removeAttribute('aria-busy');
+      if (text) text.textContent = idle;
+    });
+  });
 })();
 </script>
 {% endblock %}
