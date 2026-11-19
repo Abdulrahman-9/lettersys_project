@@ -3,8 +3,11 @@
 
 {% block title %}{% if is_admin %}الشبكة والأجهزة{% else %}هذا الجهاز{% endif %}{% endblock %}
 
+{# على الهويّة v2 (2026-11-19): رموزُ الوضعين، والداكنُ يتبع اختيارَ الموظّف أو جهازه #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/devices.css' %}?v=20261118-devices">
+<link rel="stylesheet" href="{% static 'css/devices.css' %}?v=20261119-pages">
 {% endblock %}
 
 {% block content %}
@@ -32,9 +35,12 @@
   {% csrf_token %}
 
   <header class="dvs-head">
-    <a href="{% url 'settings_hub' %}?tab=network" class="btn btn-sm btn-outline-secondary settings-embed-hide dvs-back" title="رجوع إلى الإعدادات" aria-label="رجوع إلى الإعدادات"><i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+    <span class="dvs-mark" aria-hidden="true"><i class="bi {% if is_admin %}bi-diagram-3{% else %}bi-pc-display{% endif %}"></i></span>
     <div class="dvs-head-text">
-      <div class="dvs-crumb">الإعدادات › الشبكة والأجهزة</div>
+      <nav class="dvs-crumbs settings-embed-hide" aria-label="مسار التصفّح">
+        <a href="{% url 'settings_hub' %}?tab=network" title="رجوع إلى الإعدادات"><i class="bi bi-arrow-right" aria-hidden="true"></i>الإعدادات</a>
+        <i class="bi bi-chevron-left" aria-hidden="true"></i><span aria-current="page">الشبكة والأجهزة</span>
+      </nav>
       {% if is_admin %}
       <h1>الشبكة والأجهزة</h1>
       <p>من يتّصل بالنظام، ومن أيّ جهاز، وهل جهازه جاهز. كلُّ جهازٍ ينضمّ بكودٍ من خمسة أرقام يصدر من جهاز الخادم.</p>
@@ -58,13 +64,13 @@
 
   {% if is_admin %}
     {% if not server_declared %}
-    <section class="dvs-card" aria-labelledby="dvsDeclareH">
-      <div class="dvs-card-head">
-        <span class="dvs-ico" data-tone="wait" aria-hidden="true"><i class="bi bi-hdd-network"></i></span>
+    <section class="dvs-card dvs-alert" data-tone="wait" aria-labelledby="dvsDeclareH">
+      <span class="dvs-ico" data-tone="wait" aria-hidden="true"><i class="bi bi-hdd-network"></i></span>
+      <div class="dvs-alert-body">
         <h2 id="dvsDeclareH">لم يُعلَن خادمٌ بعد</h2>
+        <p>افتح هذه الصفحة على الحاسوب الذي يعمل عليه النظام (<b class="dvs-mono">{{ server_name }}</b>) واضغط «أعلن هذا الجهاز خادماً». يكتب النظامُ كوداً من ثمانية أرقام في ملفٍّ على قرص الخادم، فتكتبه هنا. بعدها تصدر أكوادُ الانضمام وتصل الطلباتُ إلى هذا الجهاز.</p>
       </div>
-      <p class="dvs-note">افتح هذه الصفحة على الحاسوب الذي يعمل عليه النظام (<b class="dvs-mono">{{ server_name }}</b>) واضغط «أعلن هذا الجهاز خادماً». يكتب النظامُ كوداً من ثمانية أرقام في ملفٍّ على قرص الخادم، فتكتبه هنا. بعدها تصدر أكوادُ الانضمام وتصل الطلباتُ إلى هذا الجهاز.</p>
-      <div><button type="button" class="btn btn-primary" data-declare-open><i class="bi bi-hdd-network" aria-hidden="true"></i> أعلن هذا الجهاز خادماً</button></div>
+      <div class="dvs-alert-action"><button type="button" class="btn btn-primary" data-declare-open><i class="bi bi-hdd-network" aria-hidden="true"></i> أعلن هذا الجهاز خادماً</button></div>
     </section>
     {% elif not is_server_here %}
     <section class="dvs-callout" data-tone="prog" role="note">
@@ -83,7 +89,7 @@
       <p class="dvs-note">الأجهزة الحاليّة تثق بالنظام سلفاً، فتبدأ من الخطوة 2.</p>
     </section>
 
-    <div class="dvs-grid3">
+    <div class="dvs-pair">
       <section class="dvs-card" aria-labelledby="dvsSrvH">
         <div class="dvs-card-head">
           <span class="dvs-ico" aria-hidden="true"><i class="bi bi-hdd-rack"></i></span>
@@ -108,46 +114,51 @@
           <span class="dvs-ico" aria-hidden="true"><i class="bi bi-display"></i></span>
           <h2 id="dvsNowH">الأجهزة الآن</h2>
         </div>
+        {% comment %}لونُ البلاطة لمعناها وحين يكون له معنى: «ظهرت الآن» خضراءُ ما دام فيها جهاز، و«تحتاج انتباهاً» كهرمانيّةٌ ما دام فيها ما ينتظر — والصفرُ محايد (devices_page.js يحدّثها مع العدد).{% endcomment %}
         <div class="dvs-stats">
           <div class="dvs-stat"><b id="dvsCountRegistered">{{ board.counts.registered }}</b><span>أجهزة مسجّلة</span></div>
-          <div class="dvs-stat" data-tone="done"><b id="dvsCountNow">{{ board.counts.now }}</b><span>ظهرت في آخر 3 دقائق</span></div>
-          <div class="dvs-stat" data-tone="wait"><b id="dvsCountAttention">{{ board.counts.attention }}</b><span>تحتاج انتباهاً</span></div>
+          <div class="dvs-stat"{% if board.counts.now %} data-tone="done"{% endif %}><b id="dvsCountNow">{{ board.counts.now }}</b><span>ظهرت في آخر 3 دقائق</span></div>
+          <div class="dvs-stat"{% if board.counts.attention %} data-tone="wait"{% endif %}><b id="dvsCountAttention">{{ board.counts.attention }}</b><span>تحتاج انتباهاً</span></div>
           <div class="dvs-stat"><b id="dvsCountScanners">{{ board.counts.scanners }}</b><span>بماسحٍ جاهز</span></div>
         </div>
         <p class="dvs-note">«آخر ظهور» هو آخرُ طلبٍ وصل من الجهاز، لا اتّصالٌ دائم.</p>
       </section>
-
-      <section class="dvs-card" aria-labelledby="dvsGateH">
-        <div class="dvs-card-head">
-          <span class="dvs-ico" aria-hidden="true"><i class="bi bi-shield-check"></i></span>
-          <h2 id="dvsGateH">من يدخل النظام</h2>
-        </div>
-        <fieldset class="dvs-modes" id="dvsModes" {% if not can_approve %}disabled{% endif %}>
-          <legend>ماذا يحدث لجهازٍ غير مسجّل؟</legend>
-          {% for value, label in modes %}
-          <label class="dvs-mode">
-            <input type="radio" name="dvsMode" value="{{ value }}" {% if value == mode %}checked{% endif %}>
-            <span><b>{{ label }}</b><span>{% if value == 'open' %}كما قبل: أيُّ جهازٍ يدخل بكلمة المرور، والتسجيلُ اختياريّ.{% elif value == 'remind' %}يعمل ويرى شريطاً يطلب تسجيله، ويظهر لك في «أجهزة تطلب الانضمام».{% else %}غيرُ المسجّل يرى صفحة الدخول والكود فقط. جهازُ الخادم مسجّلٌ دائماً.{% endif %}</span></span>
-          </label>
-          {% endfor %}
-        </fieldset>
-        <p class="dvs-note">{% if not server_declared %}لا أثرَ للوضع قبل إعلان الخادم. {% endif %}كلمةُ المرور تبقى الحارس؛ التسجيلُ ينظّم من يتّصل ومن أين. وإن أُغلق الباب عليك: <span class="dvs-mono">python manage.py devices_gate --mode remind</span> على الخادم.</p>
-      </section>
     </div>
+
+    <section class="dvs-card" aria-labelledby="dvsGateH">
+      <div class="dvs-card-head">
+        <span class="dvs-ico" aria-hidden="true"><i class="bi bi-shield-check"></i></span>
+        <h2 id="dvsGateH">من يدخل النظام</h2>
+        {% if not can_approve %}<span class="dvs-pill"><i class="bi bi-lock" aria-hidden="true"></i>يُغيَّر من جهاز الخادم</span>{% endif %}
+      </div>
+      <fieldset class="dvs-modes" id="dvsModes" {% if not can_approve %}disabled{% endif %}>
+        <legend>ماذا يحدث لجهازٍ غير مسجّل؟</legend>
+        {% for value, label in modes %}
+        <label class="dvs-mode">
+          <input type="radio" name="dvsMode" value="{{ value }}" {% if value == mode %}checked{% endif %}>
+          <span class="dvs-mode-text"><b>{{ label }}</b><span>{% if value == 'open' %}كما قبل: أيُّ جهازٍ يدخل بكلمة المرور، والتسجيلُ اختياريّ.{% elif value == 'remind' %}يعمل ويرى شريطاً يطلب تسجيله، ويظهر لك في «أجهزة تطلب الانضمام».{% else %}غيرُ المسجّل يرى صفحة الدخول والكود فقط. جهازُ الخادم مسجّلٌ دائماً.{% endif %}</span></span>
+        </label>
+        {% endfor %}
+      </fieldset>
+      <p class="dvs-note">{% if not server_declared %}لا أثرَ للوضع قبل إعلان الخادم. {% endif %}كلمةُ المرور تبقى الحارس؛ التسجيلُ ينظّم من يتّصل ومن أين. وإن أُغلق الباب عليك: <span class="dvs-mono">python manage.py devices_gate --mode remind</span> على الخادم.</p>
+    </section>
 
     <section class="dvs-card" aria-labelledby="dvsReqH">
       <div class="dvs-card-head">
         <span class="dvs-ico" data-tone="wait" aria-hidden="true"><i class="bi bi-person-raised-hand"></i></span>
-        <h2 id="dvsReqH">أجهزة تطلب الانضمام <span class="dvs-pill" data-tone="wait" id="dvsReqCount">{{ board.counts.requests }}</span></h2>
+        <h2 id="dvsReqH">أجهزة تطلب الانضمام <span class="dvs-pill dvs-count"{% if board.counts.requests %} data-tone="wait"{% endif %} id="dvsReqCount">{{ board.counts.requests }}</span></h2>
       </div>
       <p class="dvs-note">يظهر هنا كلُّ جهازٍ فتح النظام ولم يُسجَّل. لا نمسح الشبكة: مسحُ العناوين يزعج جدارَ الحماية الذي يديره غيرُنا، والجهازُ يُكتشف حين يفتح النظام.</p>
-      <ul class="dvs-list" id="dvsRequests" aria-live="polite"></ul>
-      <div class="dvs-empty" id="dvsRequestsEmpty" hidden>لا طلباتٍ الآن. حين يفتح أحدٌ النظامَ من جهازٍ غير مسجّل يظهر هنا.</div>
+      {% comment %}القائمةُ تُعاد رسمُها مع التحديث الحيّ، فلا تكون منطقةً حيّة (كانت تُقرأ كلُّها لقارئ الشاشة كلَّ 10 ث)؛
+      الجديدُ يُعلَن جملةً واحدة: توستُ «جهازٌ يطلب الانضمام» لمن يصدر الأكواد، وهذا السطرُ المخفيّ لمن يقرأ فقط.{% endcomment %}
+      <ul class="dvs-list" id="dvsRequests"></ul>
+      <p class="visually-hidden" role="status" id="dvsReqStatus"></p>
+      <div class="dvs-empty" id="dvsRequestsEmpty" hidden><span class="dvs-empty-ico" aria-hidden="true"><i class="bi bi-person-check"></i></span>لا طلباتٍ الآن. حين يفتح أحدٌ النظامَ من جهازٍ غير مسجّل يظهر هنا.</div>
     </section>
 
     <section class="dvs-card" aria-labelledby="dvsRegH">
       <div class="dvs-toolbar">
-        <h2 id="dvsRegH" style="flex:1 1 200px">الأجهزة المسجّلة</h2>
+        <h2 id="dvsRegH" class="dvs-grow">الأجهزة المسجّلة</h2>
         <label class="dvs-search">
           <span class="visually-hidden">ابحث باسم الجهاز أو المستخدم</span>
           <i class="bi bi-search" aria-hidden="true"></i>
@@ -160,12 +171,14 @@
         <button type="button" class="dvs-filter" data-filter="attention" aria-pressed="false">يحتاج انتباهاً <span class="n" data-count="attention"></span></button>
         <button type="button" class="dvs-filter" data-filter="scan" aria-pressed="false">بماسح <span class="n" data-count="scan"></span></button>
       </div>
-      <div class="dvs-table-wrap">
+      {% comment %}الإطارُ يمرّر الجدولَ أفقيّاً وهو «مِحتوى» موضعيّ (position في devices.css): عنوانُ عمود الإجراءات
+      المخفيّ (visually-hidden، مطلقُ الموضع) كان يفلت منه إلى طرف الصفحة فيمدّها 587px على الهاتف.{% endcomment %}
+      <div class="dvs-table-wrap" role="region" aria-labelledby="dvsRegH" tabindex="0">
         <table class="dvs-table">
           <thead><tr><th scope="col">الجهاز</th><th scope="col">المستخدمون</th><th scope="col">آخر عنوان</th><th scope="col">آخر ظهور</th><th scope="col">الماسح</th><th scope="col">وكيل المسح</th><th scope="col"><span class="visually-hidden">إجراءات</span></th></tr></thead>
           <tbody id="dvsRows"></tbody>
         </table>
-        <div class="dvs-empty" id="dvsRowsEmpty" hidden><span id="dvsRowsEmptyText">لا جهاز يطابق البحث أو التصفية.</span><button type="button" class="btn btn-sm btn-outline-secondary" id="dvsShowAll">إظهار كلّ الأجهزة</button></div>
+        <div class="dvs-empty" id="dvsRowsEmpty" hidden><span class="dvs-empty-ico" aria-hidden="true"><i class="bi bi-pc-display"></i></span><span id="dvsRowsEmptyText">لا جهاز يطابق البحث أو التصفية.</span><button type="button" class="btn btn-sm btn-outline-secondary" id="dvsShowAll">إظهار كلّ الأجهزة</button></div>
       </div>
       <p class="dvs-note">العنوانُ للمعرفة فقط ويتغيّر مع الشبكة. ويُحفظ عن كلّ جهاز: نوعُ المتصفّح والنظام، وآخرُ عنوانٍ وظهور، ومن استعمله — لا شيءَ غيرُه.</p>
     </section>
@@ -173,7 +186,7 @@
     <section class="dvs-card" aria-labelledby="dvsKitH">
       <div class="dvs-card-head">
         <span class="dvs-ico" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
-        <h2 id="dvsKitH">حزمة التجهيز{% if kit_version %} {{ kit_version }}{% endif %}</h2>
+        <h2 id="dvsKitH">حزمة التجهيز{% if kit_version %} <bdi dir="ltr" class="dvs-ver">{{ kit_version }}</bdi>{% endif %}</h2>
         {% if package_available %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'device_setup_download' %}">تنزيل LetterSys-Setup</a>{% else %}<span class="dvs-pill">غير منشورة على الخادم بعد</span>{% endif %}
       </div>
       <p class="dvs-note">الأجهزةُ الجديدة تأخذها أوّلَ مرّة من المجلّد المشترك بإشرافك؛ وبعدها يأتي الإصلاحُ والتحديثُ من الخادم بزرٍّ في «هذا الجهاز». لا متصفّحَ يثبّت برنامجاً وحده.</p>
@@ -187,7 +200,7 @@
 {% include "core/devices/_declare_modal.html" %}
 {% if is_admin %}
 <div class="modal fade" id="dvsCodeModal" tabindex="-1" aria-labelledby="dvsCodeTitle" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered" style="max-width:580px">
+  <div class="modal-dialog modal-dialog-centered dvs-code-dialog">
     <div class="modal-content" dir="rtl">
       <div class="modal-header">
         <div>
@@ -201,7 +214,7 @@
           <div class="dvs-digits" id="dvsDigits" role="img" aria-label=""></div>
           <div class="dvs-timer" id="dvsTimer">
             <div class="dvs-bar"><span id="dvsBar"></span></div>
-            <div class="dvs-timer-row"><span>صالحٌ لجهازٍ واحد · مرّةً واحدة</span><span>متبقٍّ <b id="dvsClock">10:00</b></span></div>
+            <div class="dvs-timer-row"><span>صالحٌ لجهازٍ واحد · مرّةً واحدة</span><span>متبقٍّ <b id="dvsClock" dir="ltr">10:00</b></span></div>
           </div>
         </div>
         <div role="status" aria-live="polite" id="dvsCodeStatus">
@@ -253,5 +266,5 @@
 {% block extra_js %}
 <script src="{% static 'js/scan_agent_client.js' %}?v=20261118-devices"></script>
 <script src="{% static 'js/devices_common.js' %}?v=20261118-devices"></script>
-<script src="{% static 'js/devices_page.js' %}?v=20261118-devices"></script>
+<script src="{% static 'js/devices_page.js' %}?v=20261119-pages"></script>
 {% endblock %}

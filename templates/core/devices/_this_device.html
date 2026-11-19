@@ -2,9 +2,9 @@
 <section class="dvs-card" aria-labelledby="dvsMeH" id="dvsMe" data-registered="{% if this_device.status == 'active' %}1{% else %}0{% endif %}" data-phone="{{ this_device.is_phone|yesno:'1,0' }}">
   <div class="dvs-card-head">
     <span class="dvs-ico" data-tone="{% if this_device.status == 'active' %}done{% else %}wait{% endif %}" aria-hidden="true"><i class="bi {% if this_device.is_phone %}bi-phone{% else %}bi-display{% endif %}"></i></span>
-    <div style="flex:1 1 320px;min-width:0">
-      <h2 id="dvsMeH" style="font-size:1.25rem">
-        {% if this_device.status == 'active' %}{{ this_device.name }} <span style="color:var(--lx-done)">· مسجّل</span>
+    <div class="dvs-me-text">
+      <h2 id="dvsMeH" class="dvs-me-title">
+        {% if this_device.status == 'active' %}{{ this_device.name }} <span class="dvs-state" data-tone="done">· مسجّل</span>
         {% else %}هذا الجهاز غير مسجّل{% endif %}
       </h2>
       <div class="dvs-note">
@@ -40,7 +40,7 @@
     <ul class="dvs-list" id="dvsKitChecks">
       <li class="dvs-req" data-check="agent"><div class="dvs-req-text"><span class="dvs-req-title">وكيل المسح</span><span class="dvs-req-meta" data-detail>يُفحص…</span></div><span class="dvs-pill" data-pill>…</span></li>
       <li class="dvs-req" data-check="naps2"><div class="dvs-req-text"><span class="dvs-req-title">برنامج المسح NAPS2</span><span class="dvs-req-meta" data-detail>يُفحص…</span></div><span class="dvs-pill" data-pill>…</span></li>
-      <li class="dvs-req" data-check="scanner"><div class="dvs-req-text"><span class="dvs-req-title">الماسح</span><span class="dvs-req-meta" data-detail>{% if scanner_settings_url %}الاكتشافُ والتجربةُ في قسم الماسح.{% else %}—{% endif %}</span></div>{% if scanner_settings_url %}<a class="fw-bold small" href="{{ scanner_settings_url }}">إعدادات الماسح</a>{% endif %}</li>
+      <li class="dvs-req" data-check="scanner"><div class="dvs-req-text"><span class="dvs-req-title">الماسح</span><span class="dvs-req-meta" data-detail>{% if scanner_settings_url %}الاكتشافُ والتجربةُ في قسم الماسح.{% else %}—{% endif %}</span></div>{% if scanner_settings_url %}<a class="dvs-link" href="{{ scanner_settings_url }}">إعدادات الماسح<i class="bi bi-chevron-left" aria-hidden="true"></i></a>{% endif %}</li>
     </ul>
     <p class="dvs-note"><a href="{% url 'device_setup' %}">تجهيز هذا الجهاز وربطُ وكيل المسح</a> — للجهاز المُدار الذي يطلب ربطَه بالشركة.</p>
     <div class="dvs-row" id="dvsUpdateRow" hidden>
@@ -49,4 +49,4 @@
     </div>
   </section>
 </div>
-<p class="dvs-note">يُحفظ عن هذا الجهاز في النظام: نوعُ المتصفّح والنظام، وآخرُ عنوانٍ وظهور، ومن استعمله، وما تفحصه هذه الصفحةُ من وكيل المسح — لا شيءَ غيرُه.</p>
+<p class="dvs-note dvs-foot">يُحفظ عن هذا الجهاز في النظام: نوعُ المتصفّح والنظام، وآخرُ عنوانٍ وظهور، ومن استعمله، وما تفحصه هذه الصفحةُ من وكيل المسح — لا شيءَ غيرُه.</p>
