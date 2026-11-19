@@ -1,138 +1,147 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}سلة المهملات{% endblock %}
 
-{% block page_sidebar %}
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">ملخص السلة</div>
-  <div class="app-context-list">
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">كتب محذوفة</div>
-        <strong>{{ deleted_books|length }}</strong>
-      </div>
-      <span class="app-context-chip is-danger"><i class="bi bi-trash"></i> كتب</span>
-    </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">مرفقات محذوفة</div>
-        <strong>{{ deleted_attachments|length }}</strong>
-      </div>
-      <span class="app-context-chip"><i class="bi bi-paperclip"></i> مرفقات</span>
-    </div>
-  </div>
-</div>
+{# الهويّة الموحّدة (11-19): رموزُ theme.css والوضعان — ملخّصُ السلّة صار رأسَ الصفحة (كان في العمود فلا يُرى على الهاتف) #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">اختصارات</div>
-  <div class="app-context-list">
-    <a class="app-context-link" href="{% url 'book_unified' %}">
-      <span>العودة للأرشيف</span>
-      <i class="bi bi-journal-text"></i>
-    </a>
-  </div>
-</div>
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/trash.css' %}?v=20261119-pages">
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-  <div>
-    <h4 class="mb-1">سلة المهملات</h4>
-    <p class="text-muted mb-0">استعادة العناصر أو حذفها نهائياً.</p>
-  </div>
-</div>
+<div class="trash-page">
+  <header class="trash-head">
+    <span class="trash-head-ico" aria-hidden="true"><i class="bi bi-trash3"></i></span>
+    <div class="trash-head-copy">
+      <h1>سلة المهملات</h1>
+      <p>ما يُحذف ينتظر هنا ولا يُمحى من تلقاء نفسه. «استعادة» تُعيد الكتاب ومرفقاتِه إلى مكانها{% if can_purge %}، و«حذف&nbsp;نهائي» يمحوه مع ملفّاته بلا رجعة{% else %}، والحذفُ النهائيّ لمدير النظام وحده{% endif %}.</p>
+    </div>
+    <nav class="trash-sum" aria-label="محتوى السلّة">
+      <a href="#trash-books"><span>الكتب</span> <b>{{ deleted_books|length }}</b></a>
+      <a href="#trash-files"><span>المرفقات</span> <b>{{ deleted_attachments|length }}</b></a>
+    </nav>
+  </header>
 
-<div class="card shadow-sm border-0 mb-4">
-  <div class="card-header bg-white">
-    <h6 class="mb-0">الكتب المحذوفة</h6>
-  </div>
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table mb-0 align-middle">
-        <thead class="table-light">
+  <section class="trash-panel" id="trash-books" aria-labelledby="trash-books-h">
+    <div class="trash-panel-head">
+      <h2 id="trash-books-h">الكتب المحذوفة</h2>
+      <span class="trash-count">{{ deleted_books|length }}</span>
+      {% if deleted_books %}<p>الأحدثُ حذفاً أوّلاً.</p>{% endif %}
+    </div>
+    {% if deleted_books %}
+    <div class="trash-scroll">
+      <table class="trash-table trash-books" aria-labelledby="trash-books-h">
+        <thead>
           <tr>
-            <th>الرقم</th>
-            <th>العنوان</th>
-            <th>الجهة</th>
-            <th>تاريخ الحذف</th>
-            <th class="text-end">إجراءات</th>
+            <th scope="col">الرقم</th>
+            <th scope="col">العنوان</th>
+            <th scope="col">الجهة</th>
+            <th scope="col">حُذف في</th>
+            <th scope="col" class="trash-acts-h">إجراءات</th>
           </tr>
         </thead>
         <tbody>
           {% for book in deleted_books %}
           <tr>
-            <td>{{ book.our_number_display|default:"بلا رقم" }}</td>
-            <td>{{ book.title|default:'—' }}</td>
-            <td>{{ book.first_issuing_entity|default:'—' }}</td>
-            <td>{{ book.deleted_at|date:"d/m/Y H:i" }}</td>
-            <td class="text-end">
-              {# لا زرَّ يُعرض ليُرفض: الحقّان من العرض (can_edit_book · is_privileged) #}
-              {% if book.can_restore %}
-              <form method="post" action="{% url 'restore_book' book.id %}" class="d-inline">
-                {% csrf_token %}
-                <button class="btn btn-sm btn-outline-success" type="submit">استعادة</button>
-              </form>
-              {% endif %}
-              {% if can_purge %}
-              <form method="post" action="{% url 'purge_book' book.id %}" class="d-inline">
-                {% csrf_token %}
-                <button class="btn btn-sm btn-outline-danger" type="submit" data-confirm="حذفٌ نهائيّ للكتاب {{ book.our_number_display|default:'بلا رقم' }} ومرفقاته — لا يمكن التراجع عنه. أتمضي؟" data-confirm-ok="احذف نهائيّاً">حذف نهائي</button>
-              </form>
-              {% endif %}
-              {% if not book.can_restore and not can_purge %}<span class="text-muted small">للقسم المالك</span>{% endif %}
+            {# «بلا رقم» نصٌّ عارٍ في خليّته (يقرؤه tests_audit_records_1008)، والرقمُ معزولٌ عن اتّجاه السطر #}
+            {% if book.our_number_display %}<td><bdi dir="ltr" class="trash-no" translate="no">{{ book.our_number_display }}</bdi></td>{% else %}<td>بلا رقم</td>{% endif %}
+            <td>
+              <span class="trash-title">{{ book.title|default:'بدون عنوان' }}</span>
+              <span class="trash-meta"><i class="bi {% if book.is_incoming %}bi-envelope-arrow-down{% else %}bi-envelope-arrow-up{% endif %}" aria-hidden="true"></i>{{ book.kind_label }}</span>
+            </td>
+            {# الطرفُ الآخر كما في القائمة الموحّدة: «من» للوارد و«إلى» للصادر (جهةُ الصادر المُصدِرة قسمُنا نفسُه) #}
+            <td class="trash-party">{% if book.is_incoming %}<span class="trash-dir">من</span> {{ book.first_issuing_entity|default:'—' }}{% else %}<span class="trash-dir">إلى</span> {{ book.first_receiving_entity|default:'—' }}{% endif %}</td>
+            <td class="trash-when" data-label="حُذف في">{% if book.deleted_at %}<time datetime="{{ book.deleted_at|date:'c' }}"><bdi dir="ltr">{{ book.deleted_at|date:"d/m/Y" }}</bdi> <small><bdi dir="ltr">{{ book.deleted_at|date:"H:i" }}</bdi></small></time>{% else %}—{% endif %}</td>
+            <td class="trash-acts-cell">
+              <div class="trash-acts">
+                {# لا زرَّ يُعرض ليُرفض: الحقّان من العرض (can_edit_book · is_privileged) #}
+                {% if book.can_restore %}
+                <form method="post" action="{% url 'restore_book' book.id %}">
+                  {% csrf_token %}
+                  <button class="btn btn-sm btn-primary" type="submit" aria-label="استعادة الكتاب {{ book.our_number_display|default:'بلا رقم' }}"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>استعادة</button>
+                </form>
+                {% endif %}
+                {% if can_purge %}
+                <form method="post" action="{% url 'purge_book' book.id %}" class="trash-purge">
+                  {% csrf_token %}
+                  <button class="btn btn-sm btn-danger" type="submit" aria-label="حذف نهائي للكتاب {{ book.our_number_display|default:'بلا رقم' }}" data-confirm-title="حذفُ الكتاب {{ book.our_number_display|default:'بلا رقم' }} نهائيّاً؟" data-confirm="يُمحى الكتاب ومرفقاته كلّها وملفّاتها من النظام، ولا يمكن التراجع عن ذلك." data-confirm-ok="احذف نهائيّاً"><i class="bi bi-x-octagon" aria-hidden="true"></i>حذف نهائي</button>
+                </form>
+                {% endif %}
+                {% if not book.can_restore and not can_purge %}<span class="trash-chip"><i class="bi bi-lock" aria-hidden="true"></i>للقسم المالك</span>{% endif %}
+              </div>
             </td>
           </tr>
-          {% empty %}
-          <tr><td colspan="5" class="text-center text-muted py-4">لا توجد كتب محذوفة.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </div>
-</div>
+    {% else %}
+    <div class="trash-empty">
+      <span class="trash-empty-ico" aria-hidden="true"><i class="bi bi-check2-circle"></i></span>
+      <p><b>لا كتب محذوفة.</b> ما يُحذف من قائمة الكتب ينتظر هنا حتى يُستعاد.</p>
+    </div>
+    {% endif %}
+  </section>
 
-<div class="card shadow-sm border-0">
-  <div class="card-header bg-white">
-    <h6 class="mb-0">المرفقات المحذوفة</h6>
-  </div>
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table mb-0 align-middle">
-        <thead class="table-light">
+  <section class="trash-panel" id="trash-files" aria-labelledby="trash-files-h">
+    <div class="trash-panel-head">
+      <h2 id="trash-files-h">المرفقات المحذوفة</h2>
+      <span class="trash-count">{{ deleted_attachments|length }}</span>
+      {% if deleted_attachments %}<p>يعود المرفقُ إلى صفحة كتابه، ومرفقُ الكتاب المحذوف يعود مع كتابه.</p>{% endif %}
+    </div>
+    {% if deleted_attachments %}
+    <div class="trash-scroll">
+      <table class="trash-table trash-files" aria-labelledby="trash-files-h">
+        <thead>
           <tr>
-            <th>الملف</th>
-            <th>الكتاب</th>
-            <th>تاريخ الحذف</th>
-            <th class="text-end">إجراءات</th>
+            <th scope="col">الملف</th>
+            <th scope="col">الكتاب</th>
+            <th scope="col">حُذف في</th>
+            <th scope="col" class="trash-acts-h">إجراءات</th>
           </tr>
         </thead>
         <tbody>
           {% for att in deleted_attachments %}
           <tr>
-            <td class="text-truncate" style="max-width:240px">{{ att.file.name|default:'—' }}</td>
-            <td>{{ att.book.our_number_display|default:"بلا رقم" }}</td>
-            <td>{{ att.deleted_at|date:"d/m/Y H:i" }}</td>
-            <td class="text-end">
-              {% if att.can_restore %}
-              <form method="post" action="{% url 'restore_attachment' att.id %}" class="d-inline">
-                {% csrf_token %}
-                <button class="btn btn-sm btn-outline-success" type="submit">استعادة</button>
-              </form>
-              {% endif %}
-              {% if not att.can_restore and not can_purge %}<span class="text-muted small">للقسم المالك</span>{% endif %}
-              {% if can_purge %}
-              <form method="post" action="{% url 'purge_attachment' att.id %}" class="d-inline">
-                {% csrf_token %}
-                <button class="btn btn-sm btn-outline-danger" type="submit" data-confirm="حذفٌ نهائيّ لهذا المرفق — لا يمكن التراجع عنه. أتمضي؟" data-confirm-ok="احذف نهائيّاً">حذف نهائي</button>
-              </form>
-              {% endif %}
+            {# اسمُ الملفّ بلا مسار التخزين، معزولٌ باتّجاهه هو (auto): الأسماءُ الموروثة تبدأ بالعربيّة («قديم-…») فيبعثرها ltr، واللاتينيّةُ تبقى ltr #}
+            <td>{% with name=att.filename|lower %}<span class="trash-file"><i class="bi {% if '.pdf' in name %}bi-file-earmark-pdf{% elif '.jpg' in name or '.jpeg' in name or '.png' in name or '.tif' in name or '.webp' in name %}bi-file-earmark-image{% else %}bi-file-earmark{% endif %}" aria-hidden="true"></i><bdi dir="auto" translate="no">{{ att.filename|default:'—' }}</bdi></span>{% endwith %}</td>
+            <td data-label="الكتاب">{% if att.book.our_number_display %}<bdi dir="ltr" class="trash-no" translate="no">{{ att.book.our_number_display }}</bdi>{% else %}<span class="trash-none">بلا رقم</span>{% endif %}{% if att.book.is_deleted %} <span class="trash-chip is-tag">في السلّة</span>{% endif %}</td>
+            <td class="trash-when" data-label="حُذف في">{% if att.deleted_at %}<time datetime="{{ att.deleted_at|date:'c' }}"><bdi dir="ltr">{{ att.deleted_at|date:"d/m/Y" }}</bdi> <small><bdi dir="ltr">{{ att.deleted_at|date:"H:i" }}</bdi></small></time>{% else %}—{% endif %}</td>
+            <td class="trash-acts-cell">
+              <div class="trash-acts">
+                {% comment %}
+                  مرفقُ كتابٍ في السلّة لا يُستعاد وحده (restore_attachment يرفضه) — يعود حين يُستعاد كتابُه،
+                  فالتلميحُ مكانَ زرٍّ كان يُعرض ليُرفض.
+                {% endcomment %}
+                {% if att.book.is_deleted %}
+                {% if att.can_restore %}<span class="trash-chip is-pri"><i class="bi bi-link-45deg" aria-hidden="true"></i>يعود مع كتابه</span>{% endif %}
+                {% elif att.can_restore %}
+                <form method="post" action="{% url 'restore_attachment' att.id %}">
+                  {% csrf_token %}
+                  <button class="btn btn-sm btn-primary" type="submit" aria-label="استعادة المرفق {{ att.filename }}"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>استعادة</button>
+                </form>
+                {% endif %}
+                {% if can_purge %}
+                <form method="post" action="{% url 'purge_attachment' att.id %}" class="trash-purge">
+                  {% csrf_token %}
+                  <button class="btn btn-sm btn-danger" type="submit" aria-label="حذف نهائي للمرفق {{ att.filename }}" data-confirm-title="حذفُ المرفق نهائيّاً؟" data-confirm="يُمحى الملفّ «{{ att.filename }}» ونسخُه السابقة من النظام، ولا يمكن التراجع عن ذلك." data-confirm-ok="احذف نهائيّاً"><i class="bi bi-x-octagon" aria-hidden="true"></i>حذف نهائي</button>
+                </form>
+                {% endif %}
+                {% if not att.can_restore and not can_purge %}<span class="trash-chip"><i class="bi bi-lock" aria-hidden="true"></i>للقسم المالك</span>{% endif %}
+              </div>
             </td>
           </tr>
-          {% empty %}
-          <tr><td colspan="4" class="text-center text-muted py-4">لا توجد مرفقات محذوفة.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </div>
+    {% else %}
+    <div class="trash-empty">
+      <span class="trash-empty-ico" aria-hidden="true"><i class="bi bi-check2-circle"></i></span>
+      <p><b>لا مرفقات محذوفة.</b> ما يُحذف من مرفقات كتابٍ ينتظر هنا حتى يُستعاد.</p>
+    </div>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

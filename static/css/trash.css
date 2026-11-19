@@ -1,0 +1,304 @@
+/* سلّة المهملات (core/trash.html) على الهويّة الموحّدة v2 — 2026-11-19.
+   رموزُ theme.css وحدها: لا لونَ خامّاً هنا، والوضعان يتبدّلان بالرموز نفسِها.
+   لا ‎.table‎ ولا ‎.card‎ عمداً: app.css يلصق عليهما عموداً أخيراً أبيضَ لاصقاً وصفوفاً تكبُر تحت المؤشّر
+   وبطاقاتٍ تقفز — قواعدُ مشتركة لا تُمسّ هنا، فالصفحةُ تبني جدولَها وألواحَها من أصنافها. */
+
+.trash-page {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 1180px;
+  color: var(--lx-ink);
+}
+
+/* حاشيةُ الصفحة: إطارُ الإدارة يحشو ‎.app-main‎ (system_admin.css) وإطارُ الموظّفين لا يحشوه — فكانت
+   حافّةُ اللوح على 3px من حافّة الهاتف لمختصّ البريد. الحشوُ هنا لغير المدير وحده فلا يتضاعف */
+body:not(.is-system-admin) .trash-page { padding: .5rem .75rem 1.25rem; }
+
+/* ── الرأس: بلاطةُ الأيقونة (لغةُ حواريّة التأكيد) · العنوان والسطرُ الشارح · ملخّصُ السلّة روابطَ قفز ── */
+.trash-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.25rem;
+}
+
+.trash-head-ico {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--lx-radius);
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri);
+  font-size: 1.35rem;
+  box-shadow: inset 0 -2px 0 rgba(var(--lx-pri-rgb), .22);
+}
+
+.trash-head-copy { flex: 1 1 24rem; min-width: 0; }
+.trash-head h1 { margin: 0; font-size: 1.6rem; font-weight: 800; line-height: 1.5; }
+.trash-head p { margin: .2rem 0 0; max-width: 72ch; color: var(--lx-mute); font-size: .92rem; line-height: 1.9; text-wrap: pretty; }
+
+.trash-sum { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.trash-sum a {
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
+  min-height: 44px;
+  padding: .35rem .95rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+  color: var(--lx-ink);
+  font-size: .86rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color var(--lx-dur-1) ease, border-color var(--lx-dur-1) ease;
+}
+
+.trash-sum a:hover { border-color: rgba(var(--lx-pri-rgb), .45); background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink); }
+.trash-sum b { color: var(--lx-pri); font-size: 1.3rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+
+/* ── اللوحان: الكتبُ ثمّ المرفقات ── */
+.trash-panel {
+  border: 1px solid var(--lx-line);
+  border-radius: 18px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+  overflow: hidden;
+}
+
+.trash-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem .65rem;
+  padding: .95rem 1.15rem;
+  border-bottom: 1px solid var(--lx-line);
+}
+
+.trash-panel-head h2 { margin: 0; font-size: 1.05rem; font-weight: 800; line-height: 1.6; }
+.trash-panel-head p { flex-basis: 100%; margin: 0; color: var(--lx-mute); font-size: .82rem; line-height: 1.8; text-wrap: pretty; }
+
+.trash-count {
+  min-width: 1.9rem;
+  padding: .05rem .55rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 999px;
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
+  font-size: .8rem;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── الجدول ── */
+.trash-scroll { overflow-x: auto; }
+
+.trash-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+
+.trash-table th,
+.trash-table td {
+  padding: .8rem 1rem;
+  border-bottom: 1px solid var(--lx-line);
+  text-align: start;
+  vertical-align: middle;
+}
+
+.trash-table thead th {
+  padding-block: .6rem;
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
+  font-size: .78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.trash-table tbody tr:last-child > td { border-bottom: 0; }
+.trash-table tbody tr { transition: background-color var(--lx-dur-1) ease; }
+.trash-table tbody tr:hover,
+.trash-table tbody tr:focus-within { background: var(--lx-surface-2); }
+
+/* رقمُ القيد: «بلا رقم» نصٌّ خافتٌ في الخليّة نفسِها، والرقمُ رقعةٌ بأرقامٍ متساوية العرض معزولةٌ عن اتّجاه السطر */
+.trash-books td:first-child { width: 1%; color: var(--lx-mute); font-weight: 700; white-space: nowrap; }
+
+.trash-no {
+  display: inline-block;
+  padding: .1rem .55rem;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: 8px;
+  color: var(--lx-ink);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.trash-none { color: var(--lx-mute); font-weight: 700; }
+
+.trash-title { display: block; font-weight: 700; line-height: 1.75; overflow-wrap: anywhere; }
+
+.trash-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  margin-top: .1rem;
+  color: var(--lx-mute);
+  font-size: .76rem;
+  font-weight: 700;
+}
+
+.trash-party { line-height: 1.75; overflow-wrap: anywhere; }
+.trash-dir { margin-inline-end: .1rem; color: var(--lx-mute); font-size: .76rem; font-weight: 800; }
+
+.trash-table td.trash-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.trash-when small { display: block; color: var(--lx-mute); font-size: .76rem; }
+
+.trash-file { display: inline-flex; align-items: center; gap: .45rem; font-weight: 700; overflow-wrap: anywhere; }
+.trash-file .bi { flex: none; color: var(--lx-mute); font-size: 1.05rem; }
+.trash-file bdi { min-width: 0; }
+
+/* ── الإجراءات: الاستعادةُ أوّلاً، والحذفُ النهائيّ بعد فاصلٍ رأسيّ — الهدّامُ لا يجاور الآمنَ ملاصقاً ── */
+.trash-table th.trash-acts-h,
+.trash-table td.trash-acts-cell { width: 1%; white-space: nowrap; }
+
+/* بلا التفاف: خليّةُ الأفعال بعرض محتواها (1%)، والتفافُ المرن يجعل ذلك العرضَ أعرضَ زرٍّ وحده فيتكدّسان */
+.trash-acts { display: flex; flex-wrap: nowrap; align-items: center; gap: .5rem; }
+.trash-acts form { margin: 0; }
+.trash-acts .btn { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 34px; padding-inline: .8rem; }
+.trash-acts .btn,
+.trash-sum a { touch-action: manipulation; }
+.trash-purge { padding-inline-start: .6rem; border-inline-start: 1px solid var(--lx-line); }
+
+/* الزرُّ الورقيّ (theme.css) يغلب حلقةَ تركيز Bootstrap بظلّه، وBootstrap يُسقط الحدّ ⟵ حدٌّ ظاهرٌ هنا */
+.trash-page .btn:focus-visible,
+.trash-sum a:focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 2px;
+}
+
+.trash-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .2rem .65rem;
+  border-radius: 999px;
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
+  font-size: .78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.trash-chip.is-pri { background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink); }
+.trash-chip.is-tag { margin-inline-start: .15rem; padding: .05rem .5rem; border: 1px solid var(--lx-line); font-size: .7rem; font-weight: 800; }
+
+/* ── السلّةُ خاليةٌ من صنفٍ ── */
+.trash-empty {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  margin: 1rem 1.15rem 1.15rem;
+  padding: .9rem 1rem;
+  border: 1px dashed var(--lx-line-strong);
+  border-radius: var(--lx-radius);
+  color: var(--lx-mute);
+}
+
+.trash-empty-ico {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 12px;
+  background: var(--lx-done-bg);
+  color: var(--lx-done);
+  font-size: 1.15rem;
+}
+
+.trash-empty p { margin: 0; font-size: .88rem; line-height: 1.8; }
+.trash-empty b { color: var(--lx-ink); }
+
+/* رابطُ «افتحه» في توست الاستعادة (الرسالةُ تحمل ‎.alert-link‎ خارج ‎.alert‎ فيرث حبرَ التوست): لونُ الفعل */
+.toast-stack .alert-link { color: var(--lx-pri); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ── الهاتف: كلُّ صفٍّ بطاقة — الرقمُ وتاريخُ الحذف في رأسها، والأفعالُ في ذيلها بأهدافٍ 44px ── */
+@media (max-width: 767.98px) {
+  .trash-page { gap: 1rem; }
+  .trash-head { align-items: flex-start; gap: .75rem .85rem; }
+  .trash-head-ico { width: 2.6rem; height: 2.6rem; font-size: 1.15rem; }
+  /* البلاطةُ بجوار العنوان لا فوقه وحدها: أساسٌ صفريّ يُبقي النصَّ في سطرها */
+  .trash-head-copy { flex: 1 1 0; }
+  .trash-head h1 { font-size: 1.35rem; }
+  .trash-head p { font-size: .88rem; }
+  .trash-sum { width: 100%; }
+  .trash-sum a { flex: 1 1 0; justify-content: space-between; }
+
+  .trash-panel-head { padding: .85rem .9rem; }
+
+  .trash-table,
+  .trash-table tbody { display: block; }
+
+  .trash-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .trash-table tbody { display: grid; gap: .75rem; padding: .75rem; }
+
+  .trash-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .35rem .75rem;
+    padding: .8rem .9rem;
+    border: 1px solid var(--lx-line);
+    border-radius: var(--lx-radius);
+    background: var(--lx-surface);
+    transition: border-color var(--lx-dur-1) ease;
+  }
+
+  .trash-table tbody tr:hover { background: var(--lx-surface); }
+  .trash-table tbody tr:focus-within { background: var(--lx-surface); border-color: rgba(var(--lx-pri-rgb), .55); }
+
+  .trash-table tbody td { display: block; width: auto; padding: 0; border: 0; }
+
+  /* ‎width: auto‎ مكرَّرٌ عمداً: عرضُ المكتب (1%) لعمودَي الرقم والأفعال أعلى خصوصيّةً من السطر أعلاه */
+  .trash-books tbody tr { grid-template-areas: "no when" "what what" "who who" "acts acts"; }
+  .trash-books td:nth-child(1) { grid-area: no; align-self: center; width: auto; }
+  .trash-books td:nth-child(2) { grid-area: what; }
+  .trash-books td:nth-child(3) { grid-area: who; }
+  .trash-books td:nth-child(4) { grid-area: when; }
+  .trash-books td:nth-child(5) { grid-area: acts; }
+
+  .trash-files tbody tr { grid-template-areas: "file file" "book when" "acts acts"; }
+  .trash-files td:nth-child(1) { grid-area: file; }
+  .trash-files td:nth-child(2) { grid-area: book; align-self: center; }
+  .trash-files td:nth-child(3) { grid-area: when; }
+  .trash-files td:nth-child(4) { grid-area: acts; }
+
+  .trash-files td:nth-child(2)::before { content: attr(data-label); margin-inline-end: .4rem; color: var(--lx-mute); font-size: .74rem; font-weight: 800; }
+
+  /* تاريخُ الحذف سطرٌ واحدٌ خافتٌ في زاوية البطاقة: «حُذف في 10/05/2026 13:29» */
+  .trash-table tbody td.trash-when { align-self: center; color: var(--lx-mute); font-size: .76rem; text-align: end; }
+  .trash-when::before { content: attr(data-label); margin-inline-end: .3rem; font-weight: 800; }
+  .trash-when small { display: inline; margin-inline-start: .25rem; font-size: inherit; }
+
+  .trash-table tbody td.trash-acts-cell { width: auto; margin-top: .45rem; padding-top: .65rem; border-top: 1px solid var(--lx-line); white-space: normal; }
+  .trash-acts form:not(.trash-purge) { flex: 1 1 auto; }
+  .trash-acts form:not(.trash-purge) .btn { width: 100%; }
+  .trash-acts .btn { min-height: 44px; font-size: .88rem; }
+
+  .trash-empty { margin: .75rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trash-sum a,
+  .trash-table tbody tr { transition: none; }
+}
