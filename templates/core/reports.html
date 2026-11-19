@@ -1,11 +1,15 @@
 {% extends "base.html" %}
-{# «سجلّ المتابعة» — صفحة التقارير (المقترحُ المعتمَد 2026‑10‑06): البلاطاتُ فلترُ الحالة، #}
-{# والقسمُ شرائط، وأقدمُ المتأخّرات بحاملها، والجدولُ «بعهدة مَن». المحتوى من ``shown_*`` وحدَها. #}
+{% comment %}
+  «سجلّ المتابعة» — صفحة التقارير (المقترحُ المعتمَد 2026‑10‑06): البلاطاتُ فلترُ الحالة، والقسمُ شرائط،
+  وأقدمُ المتأخّرات بحاملها، والجدولُ «بعهدة مَن». المحتوى من ``shown_*`` وحدَها.
+  على الهويّة الموحّدة منذ 2026‑11‑19 (v2): الوضعان من رموز theme.css، وكلُّ حالةٍ بأيقونتها ونصّها لا بلونها وحده.
+{% endcomment %}
 {% load static ar_counts %}
 {% block title %}التقارير{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/reports.css' %}?v=20261115-colors1">
+<link rel="stylesheet" href="{% static 'css/reports.css' %}?v=20261119-pages">
 {% endblock %}
 
 {% block content %}
@@ -22,12 +26,12 @@
   </div>
 
   <header class="rx-head">
-    <div>
-      <div class="rx-eyebrow"><i class="bi bi-bar-chart-line" aria-hidden="true"></i> التقارير · {{ scope_label }}</div>
+    <div class="rx-head-main">
+      <div class="rx-eyebrow"><i class="bi bi-bar-chart-line" aria-hidden="true"></i>التقارير · {{ scope_label }}</div>
       <h1 class="rx-title">تقرير متابعة الكتب</h1>
       <div class="rx-meta">
-        <span>الحال حتى <b class="num">{{ today|date:"d/m/Y" }}</b></span>
-        <span>أُعدّ <b class="num">{% now "H:i" %}</b></span>
+        <span>الحال حتى <b class="num"><bdi dir="ltr">{{ today|date:"d/m/Y" }}</bdi></b></span>
+        <span>أُعدّ <b class="num"><bdi dir="ltr">{% now "H:i" %}</bdi></b></span>
         <span>بواسطة <b>{{ request.user.get_full_name|default:request.user.username }}</b></span>
         <span>وارد <b class="num">{{ stats.incoming }}</b> · صادر <b class="num">{{ stats.outgoing }}</b></span>
         <span>{% if legacy %}يشمل الورق القديم{% else %}بلا الورق القديم{% endif %}</span>
@@ -42,26 +46,27 @@
       </div>
     </div>
     <div class="rx-head-actions">
-      <a class="rx-btn" href="{% url 'reports_export' %}{% if querystring %}?{{ querystring }}{% endif %}"><i class="bi bi-filetype-csv" aria-hidden="true"></i> تصدير CSV (يفتح في Excel)</a>
-      <button class="rx-btn" type="button" id="printReportBtn"><i class="bi bi-printer" aria-hidden="true"></i> طباعة</button>
+      <a class="rx-btn" href="{% url 'reports_export' %}{% if querystring %}?{{ querystring }}{% endif %}"><i class="bi bi-filetype-csv" aria-hidden="true"></i>تصدير CSV (يفتح في Excel)</a>
+      <button class="rx-btn" type="button" id="printReportBtn"><i class="bi bi-printer" aria-hidden="true"></i>طباعة</button>
     </div>
   </header>
 
-  {# البلاطاتُ هي فلترُ الحالة: كلٌّ رابطٌ يحفظ بقيّة الفلاتر، والمعروضةُ موسومة #}
+  {# البلاطاتُ هي فلترُ الحالة: كلٌّ رابطٌ يحفظ بقيّة الفلاتر، والمعروضةُ موسومة؛ الصفرُ هادئ (data-zero) #}
   <nav class="rx-states" aria-label="حالة المتابعة — اختر لتصفية الجدول">
     {% for t in tiles %}
-    <a class="rx-state rx-state--{{ t.key }}{% if t.on %} is-on{% endif %}" href="{{ t.url }}"{% if t.on %} aria-current="true"{% endif %}>
-      <span class="rx-state-label"><span class="rx-dot" aria-hidden="true"></span>{{ t.label }}</span>
-      <span class="rx-state-num">{{ t.num }}</span>
+    <a class="rx-state rx-state--{{ t.key }}{% if t.on %} is-on{% endif %}" href="{{ t.url }}"{% if t.on %} aria-current="true"{% endif %}{% if not t.num %} data-zero{% endif %}>
+      <span class="rx-state-label"><i class="bi {% if t.key == 'overdue' %}bi-alarm{% elif t.key == 'due_today' %}bi-calendar-event{% elif t.key == 'pending' %}bi-hourglass-split{% elif t.key == 'archived' %}bi-check2-circle{% else %}bi-activity{% endif %}" aria-hidden="true"></i>{{ t.label }}</span>
+      <span class="rx-state-num num">{{ t.num }}</span>
       <span class="rx-state-sub">{{ t.sub }}</span>
       <span class="rx-share" aria-hidden="true"><i style="width:{{ t.share }}%"></i></span>
     </a>
     {% endfor %}
   </nav>
 
+  {# التصفيةُ المطبَّقة موسومةٌ بـ data-set على حقلها #}
   <form class="rx-filters" method="get" aria-label="تصفية التقرير">
     <input type="hidden" name="bucket" value="{{ bucket }}">
-    <label class="rx-field"><small>النوع</small>
+    <label class="rx-field"{% if selected_kind != 'all' %} data-set{% endif %}><small>النوع</small>
       <select name="kind">
         <option value="all" {% if selected_kind == 'all' %}selected{% endif %}>الكلّ</option>
         <option value="incoming" {% if selected_kind == 'incoming' %}selected{% endif %}>كل الوارد</option>
@@ -73,7 +78,7 @@
       </select>
     </label>
     {% if departments|length > 1 %}
-    <label class="rx-field" for="reportDept"><small>القسم</small>
+    <label class="rx-field" for="reportDept"{% if selected_dept %} data-set{% endif %}><small>القسم</small>
       <select name="dept" id="reportDept">
         <option value="">الكلّ</option>
         {% for d in departments %}
@@ -82,18 +87,19 @@
       </select>
     </label>
     {% endif %}
-    <div class="rx-field rx-field--search entity-combo" id="entityCombo">
+    <div class="rx-field rx-field--search entity-combo" id="entityCombo"{% if selected_entity %} data-set{% endif %}>
       <input type="hidden" name="entity" id="entityInput" value="{{ selected_entity }}">
+      <label for="entitySearch"><small>الجهة</small></label>
       <i class="bi bi-search" aria-hidden="true"></i>
       <input type="text" class="entity-combo-search" id="entitySearch" aria-label="الجهة"
              placeholder="ابحث عن جهة…" autocomplete="off" value="{{ selected_entity_name }}"
              role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="entityList">
       <button type="button" class="entity-combo-clear" id="entityClear" title="مسح الجهة"
-              aria-label="مسح الجهة"{% if not selected_entity %} hidden{% endif %}>&times;</button>
-      <ul class="entity-combo-list" id="entityList" role="listbox" hidden>
-        <li class="entity-combo-opt" data-id="" role="option">كل الجهات</li>
+              aria-label="مسح الجهة"{% if not selected_entity %} hidden{% endif %}><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+      <ul class="entity-combo-list" id="entityList" role="listbox" aria-label="الجهات" hidden>
+        <li class="entity-combo-opt" id="entityOptAll" data-id="" role="option">كل الجهات</li>
         {% for e in entities %}
-        <li class="entity-combo-opt" data-id="{{ e.id }}" data-name="{{ e.name }}" role="option"
+        <li class="entity-combo-opt" id="entityOpt{{ e.id }}" data-id="{{ e.id }}" data-name="{{ e.name }}" title="{{ e.name }}" role="option"
             {% if selected_entity == e.id|stringformat:'s' %}aria-selected="true"{% endif %}>{{ e.name }}</li>
         {% endfor %}
       </ul>
@@ -117,21 +123,22 @@
       {% for r in dept_rows %}
       <div class="rx-dept">
         <span class="rx-dept-name">{% if r.department__code %}<span class="rx-code">{{ r.department__code }}</span>{% endif %}{% if r.url %}<a href="{{ r.url }}" title="اعرض هذا القسم وحده">{{ r.label }}</a>{% else %}<span>{{ r.label }}</span>{% endif %}</span>
-        <span class="rx-dept-total" title="{{ followup_labels.active }}">{{ r.active }}</span>
+        <span class="rx-dept-total num" title="{{ followup_labels.active }}">{{ r.active }}<span class="visually-hidden"> {{ followup_labels.active }}</span></span>
         {% if r.active %}
+        {# الشريطُ: القِطَعُ بنقشٍ لا بلونٍ وحده، والأعدادُ في وصفه (قارئُ الشاشة) وفي تلميح كلّ قطعة (الفأرة) #}
         <span class="rx-stack" role="img" style="width:{{ r.bar }}%"
-              aria-label="{{ r.active }} {{ followup_labels.active }}: {{ r.overdue }} {{ followup_labels.overdue }}، {{ r.due_today }} {{ followup_labels.due_today }}، {{ r.pending }} {{ followup_labels.pending }}">{% if r.overdue %}<i class="s-overdue" style="flex-grow:{{ r.overdue }}"></i>{% endif %}{% if r.due_today %}<i class="s-due_today" style="flex-grow:{{ r.due_today }}"></i>{% endif %}{% if r.pending %}<i class="s-pending" style="flex-grow:{{ r.pending }}"></i>{% endif %}</span>
+              aria-label="{{ r.active }} {{ followup_labels.active }}: {{ r.overdue }} {{ followup_labels.overdue }}، {{ r.due_today }} {{ followup_labels.due_today }}، {{ r.pending }} {{ followup_labels.pending }}">{% if r.overdue %}<i class="s-overdue" style="flex-grow:{{ r.overdue }}" title="{{ followup_labels.overdue }}: {{ r.overdue }}"></i>{% endif %}{% if r.due_today %}<i class="s-due_today" style="flex-grow:{{ r.due_today }}" title="{{ followup_labels.due_today }}: {{ r.due_today }}"></i>{% endif %}{% if r.pending %}<i class="s-pending" style="flex-grow:{{ r.pending }}" title="{{ followup_labels.pending }}: {{ r.pending }}"></i>{% endif %}</span>
         {% else %}
         <span class="rx-stack-none">لا متابعة جارية</span>
         {% endif %}
-        <span class="rx-dept-done" title="{{ followup_labels.archived }}">{{ r.archived }} ✓</span>
+        <span class="rx-dept-done num" title="{{ followup_labels.archived }}"><i class="bi bi-check2" aria-hidden="true"></i>{{ r.archived }}<span class="visually-hidden"> {{ followup_labels.archived }}</span></span>
       </div>
       {% endfor %}
       <div class="rx-legend">
-        <span><i class="rx-dot" style="--rx-tone:var(--rx-red)"></i>{{ followup_labels.overdue }}</span>
-        <span><i class="rx-dot" style="--rx-tone:var(--rx-amber)"></i>{{ followup_labels.due_today }}</span>
-        <span><i class="rx-dot" style="--rx-tone:var(--rx-soon)"></i>{{ followup_labels.pending }}</span>
-        <span class="rx-legend-done"><b>✓</b> {{ followup_labels.archived }}</span>
+        <span><i class="rx-key s-overdue" aria-hidden="true"></i>{{ followup_labels.overdue }}</span>
+        <span><i class="rx-key s-due_today" aria-hidden="true"></i>{{ followup_labels.due_today }}</span>
+        <span><i class="rx-key s-pending" aria-hidden="true"></i>{{ followup_labels.pending }}</span>
+        <span class="rx-legend-done"><i class="bi bi-check2" aria-hidden="true"></i>{{ followup_labels.archived }}</span>
       </div>
     </section>
     {% endif %}
@@ -144,8 +151,8 @@
         <li><a href="{% url 'book_detail' b.pk %}">
           <span class="rx-late-days"><b>{{ b.late_days }}</b><small>{{ b.late_days|day_unit_ar }}</small></span>
           <span class="rx-late-body">
-            <span class="rx-late-t">{% if b.restricted %}<span class="rx-secret"><i class="bi bi-lock-fill" aria-hidden="true"></i>{{ b.shown_title }}</span>{% else %}{{ b.shown_title|default:"—" }}{% endif %}</span>
-            <span class="rx-late-m">رقم <b class="num">{{ b.our_number_display|default:"—" }}</b> · {% if b.restricted %}{{ b.department.code|default:"—" }}{% elif b.shown_holder %}بعهدة <b>{{ b.shown_holder }}</b>{% else %}لم تُسجَّل عهدة{% endif %}</span>
+            <span class="rx-late-t" title="{{ b.shown_title|default:'—' }}">{% if b.restricted %}<span class="rx-secret"><i class="bi bi-lock-fill" aria-hidden="true"></i>{{ b.shown_title }}</span>{% else %}{{ b.shown_title|default:"—" }}{% endif %}</span>
+            <span class="rx-late-m">رقم <b class="num"><bdi dir="ltr">{{ b.our_number_display|default:"—" }}</bdi></b> · {% if b.restricted %}{{ b.department.code|default:"—" }}{% elif b.shown_holder %}بعهدة <b>{{ b.shown_holder }}</b>{% else %}لم تُسجَّل عهدة{% endif %}</span>
           </span>
           <i class="bi bi-chevron-left" aria-hidden="true"></i>
         </a></li>
@@ -160,7 +167,7 @@
   <section class="rx-results" aria-labelledby="h-res">
     <div class="rx-results-hd">
       <h2 id="h-res">الكتب</h2><span class="rx-count num">{{ total }}</span>
-      <span class="rx-results-state">{{ bucket_label }}</span>
+      <span class="rx-results-state rx-results-state--{{ bucket }}"><i class="bi {% if bucket == 'overdue' %}bi-alarm{% elif bucket == 'due_today' %}bi-calendar-event{% elif bucket == 'pending' %}bi-hourglass-split{% elif bucket == 'archived' %}bi-check2-circle{% elif bucket == 'active' %}bi-activity{% else %}bi-collection{% endif %}" aria-hidden="true"></i>{{ bucket_label }}</span>
       {% if bucket != 'all' %}<a class="rx-link" href="{{ all_buckets_url }}">اعرض كل الحالات</a>{% endif %}
       <span class="rx-spacer"></span>
       <span class="rx-sort">الترتيب: <b>بتاريخ الاستحقاق</b></span>
@@ -180,19 +187,19 @@
         <tbody>
           {% for b in books %}
           <tr{% if b.restricted %} class="rx-row--secret"{% endif %}>
-            <td><a class="rx-no" href="{% url 'book_detail' b.pk %}" title="فتح الكتاب">{% if b.our_number_display %}<b>{{ b.our_number_display }}</b>{% else %}<b class="rx-no-none">بلا رقم</b>{% endif %}{% if show_department %}<span class="rx-code" title="{{ b.department.name|default:'بلا قسم' }}">{{ b.department.code|default:"—" }}</span>{% endif %}</a></td>
-            <td class="rx-date">{{ b.date|date:"d/m/Y"|default:"—" }}</td>
-            <td>
+            <td class="rx-c-no"><a class="rx-no" href="{% url 'book_detail' b.pk %}" title="فتح الكتاب">{% if b.our_number_display %}<b><bdi dir="ltr">{{ b.our_number_display }}</bdi></b>{% else %}<b class="rx-no-none">بلا رقم</b>{% endif %}{% if show_department %}<span class="rx-code" title="{{ b.department.name|default:'بلا قسم' }}">{{ b.department.code|default:"—" }}</span>{% endif %}</a></td>
+            <td class="rx-date" data-label="تاريخ القيد"><bdi dir="ltr">{{ b.date|date:"d/m/Y"|default:"—" }}</bdi></td>
+            <td class="rx-c-book">
               <div class="rx-t">{% if b.restricted %}<span class="rx-secret"><i class="bi bi-lock-fill" aria-hidden="true"></i>{{ b.shown_title }}</span>{% else %}{{ b.shown_title|default:"—" }}{% endif %}</div>
-              <span class="rx-kind"><i class="rx-dot {% if b.is_outgoing %}k-out{% else %}k-in{% endif %}" aria-hidden="true"></i>{{ b.kind_label }}{% if b.shown_sender_number %} · رقمهم <span class="num">{{ b.shown_sender_number }}</span>{% endif %}{% if b.shown_director_general_number %} · رقم مكتب المدير العام <span class="num">{{ b.shown_director_general_number }}</span>{% endif %}{% if b.shown_sender_date %} في <span class="num">{{ b.shown_sender_date|date:"d/m/Y" }}</span>{% endif %}</span>
+              <span class="rx-kind"><i class="bi {% if b.is_outgoing %}bi-envelope-arrow-up k-out{% else %}bi-envelope-arrow-down k-in{% endif %}" aria-hidden="true"></i>{{ b.kind_label }}{% if b.shown_sender_number %} · رقمهم <bdi class="num">{{ b.shown_sender_number }}</bdi>{% endif %}{% if b.shown_director_general_number %} · رقم مكتب المدير العام <bdi class="num">{{ b.shown_director_general_number }}</bdi>{% endif %}{% if b.shown_sender_date %} في <bdi class="num" dir="ltr">{{ b.shown_sender_date|date:"d/m/Y" }}</bdi>{% endif %}</span>
               {% if b.shown_margin %}<div class="rx-margin">الهامش: {{ b.shown_margin }}</div>{% endif %}
             </td>
-            <td class="rx-party">{% if b.restricted %}<span class="rx-none">—</span>{% else %}{{ b.shown_issuing.0|default:"—" }}{% if b.shown_issuing|length > 1 %} <small>+{{ b.shown_issuing|length|add:"-1" }}</small>{% endif %}<i class="bi bi-arrow-left" aria-hidden="true"></i><span class="visually-hidden">إلى</span>{{ b.shown_receiving.0|default:"—" }}{% if b.shown_receiving|length > 1 %} <small>+{{ b.shown_receiving|length|add:"-1" }}</small>{% endif %}{% endif %}</td>
-            <td class="rx-holder">{% if b.restricted %}<span class="rx-none">—</span>{% elif b.shown_holder %}{{ b.shown_holder }}{% else %}<span class="rx-none" title="لم تُسجَّل عهدة">—</span>{% endif %}</td>
-            <td><span class="rx-chip rx-chip--{{ b.followup_state }}" title="{{ b.followup_text }}">{{ b.followup_phrase }}</span></td>
+            <td class="rx-party" data-label="من ← إلى">{% if b.restricted %}<span class="rx-none">—</span>{% else %}{{ b.shown_issuing.0|default:"—" }}{% if b.shown_issuing|length > 1 %} <small>+{{ b.shown_issuing|length|add:"-1" }}</small>{% endif %}<i class="bi bi-arrow-left" aria-hidden="true"></i><span class="visually-hidden">إلى</span>{{ b.shown_receiving.0|default:"—" }}{% if b.shown_receiving|length > 1 %} <small>+{{ b.shown_receiving|length|add:"-1" }}</small>{% endif %}{% endif %}</td>
+            <td class="rx-holder{% if not b.shown_holder %} is-empty{% endif %}" data-label="بعهدة">{% if b.restricted %}<span class="rx-none">—</span>{% elif b.shown_holder %}{{ b.shown_holder }}{% else %}<span class="rx-none" title="لم تُسجَّل عهدة">—</span>{% endif %}</td>
+            <td class="rx-c-state"><span class="rx-chip rx-chip--{{ b.followup_state }}" title="{{ b.followup_text }}"><i class="bi {% if b.followup_state == 'overdue' %}bi-alarm{% elif b.followup_state == 'due_today' %}bi-calendar-event{% elif b.followup_state == 'pending' %}bi-hourglass-split{% else %}bi-check2-circle{% endif %}" aria-hidden="true"></i>{{ b.followup_phrase }}</span></td>
           </tr>
           {% empty %}
-          <tr><td colspan="6" class="rx-empty-row">لا كتب تطابق هذا التقرير. <a class="rx-link" href="{% url 'reports' %}">مسح التصفية</a></td></tr>
+          <tr><td colspan="6" class="rx-empty-row"><i class="bi bi-inbox" aria-hidden="true"></i>لا كتب تطابق هذا التقرير.{% if bucket != 'all' %}<a class="rx-link" href="{{ all_buckets_url }}">اعرض كل الحالات</a>{% endif %}<a class="rx-link" href="{% url 'reports' %}">مسح التصفية</a></td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -201,9 +208,9 @@
       <span>{% if total %}عرض <b class="num">{{ page_obj.start_index }}–{{ page_obj.end_index }}</b> من <b class="num">{{ total }}</b>{% else %}لا نتائج{% endif %}{% if not legacy %} · الكتبُ المنقولة من الورق القديم غيرُ محسوبة{% endif %}</span>
       {% if page_obj.paginator.num_pages > 1 %}
       <nav class="rx-pager" aria-label="ترقيم الصفحات">
-        {% if page_obj.has_previous %}<a class="rx-link" href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">→ السابقة</a>{% endif %}
+        {% if page_obj.has_previous %}<a class="rx-btn rx-btn--sm" href="?{{ querystring }}&page={{ page_obj.previous_page_number }}" rel="prev"><i class="bi bi-arrow-right" aria-hidden="true"></i>السابقة</a>{% endif %}
         <span class="num">صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }}</span>
-        {% if page_obj.has_next %}<a class="rx-link" href="?{{ querystring }}&page={{ page_obj.next_page_number }}">التالية ←</a>{% endif %}
+        {% if page_obj.has_next %}<a class="rx-btn rx-btn--sm" href="?{{ querystring }}&page={{ page_obj.next_page_number }}" rel="next">التالية<i class="bi bi-arrow-left" aria-hidden="true"></i></a>{% endif %}
       </nav>
       {% endif %}
     </div>
@@ -227,6 +234,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // ── حقل الجهة: بحث + اختيار (combobox خفيف بلا مكتبات) ──
+// الخيارُ النشط يُعلَن لقارئ الشاشة (aria-activedescendant) — التركيزُ يبقى في الحقل
 (function () {
   const combo = document.getElementById('entityCombo');
   if (!combo) return;
@@ -239,7 +247,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const norm = (s) => (s || '').toString().trim().toLowerCase();
   function open()  { list.hidden = false; search.setAttribute('aria-expanded', 'true'); }
-  function close() { list.hidden = true; search.setAttribute('aria-expanded', 'false'); activeIdx = -1; opts.forEach(o => o.classList.remove('active')); }
+  function close() { list.hidden = true; search.setAttribute('aria-expanded', 'false'); search.removeAttribute('aria-activedescendant'); activeIdx = -1; opts.forEach(o => o.classList.remove('active')); }
 
   function applyFilter() {
     const q = norm(search.value);
@@ -277,7 +285,11 @@ document.addEventListener('DOMContentLoaded', function () {
     else if (e.key === 'Escape')    { close(); return; }
     else return;
     opts.forEach(o => o.classList.remove('active'));
-    if (vis[activeIdx]) { vis[activeIdx].classList.add('active'); vis[activeIdx].scrollIntoView({ block: 'nearest' }); }
+    if (vis[activeIdx]) {
+      vis[activeIdx].classList.add('active');
+      search.setAttribute('aria-activedescendant', vis[activeIdx].id);
+      vis[activeIdx].scrollIntoView({ block: 'nearest' });
+    }
   });
 
   document.addEventListener('mousedown', (e) => { if (!combo.contains(e.target)) close(); });
