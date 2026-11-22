@@ -5,7 +5,7 @@
 {% comment %}
   استعادةُ نسخةِ هذا النظام المشفّرة — إلى قاعدةٍ **جديدة**، والقاعدةُ الحيّة لا تُمسّ
   (قرارُ المالك 2026‑10‑07، البند 3). الخطوات: تحقّق ⟵ استعِد بتأكيدٍ مكتوب ⟵ بدّل
-  بيدك بسطرٍ في .env ثمّ أعد تشغيل الخادم. كلُّ رسالةٍ هنا تقول ما حدث وما التالي.
+  بأمر use_restored_database ثمّ أعد تشغيل الخادم (11-22). كلُّ رسالةٍ هنا تقول ما حدث وما التالي.
 {% endcomment %}
 <div class="container py-4" style="max-width:980px" id="sysRestore"
      data-verify-url="{% url 'system_restore_verify' %}" data-start-url="{% url 'system_restore_start' %}"
@@ -21,7 +21,7 @@
   <ol class="small text-muted mb-4">
     <li><strong>تحقّق</strong> من النسخة: تُفكّ وتُعدّ جداولُها وتُقارن بالقاعدة الحاليّة.</li>
     <li><strong>استعِد إلى قاعدةٍ جديدة</strong>: تكتب اسمَ الملفّ تأكيداً، وتجري الاستعادةُ في الخلفية.</li>
-    <li><strong>بدّل</strong> بيدك: سطرٌ واحد في ملفّ البيئة على الخادم ثمّ إعادةُ تشغيل الخادم — والرجوعُ بإعادة السطر.</li>
+    <li><strong>بدّل</strong> بأمرٍ واحد على الخادم (يظهر هنا بعد الاستعادة) ثمّ إعادةُ تشغيل الخادم — والرجوعُ بالأمر نفسه مع <code dir="ltr">--undo</code>.</li>
   </ol>
 
   {% if running %}
@@ -135,13 +135,15 @@
       if (d.status === 'done' && d.summary) {
         result.innerHTML = '';
         var p = document.createElement('p');
-        p.textContent = 'اكتملت: ' + d.summary.books + ' كتاباً في القاعدة الجديدة «' + d.summary.target + '». للتبديل إليها اكتب في ملفّ البيئة على الخادم:';
+        p.textContent = 'اكتملت: ' + d.summary.books + ' كتاباً في القاعدة الجديدة «' + d.summary.target + '». للتبديل إليها شغّل هذا السطرَ في موجّه الأوامر على الخادم:';
         var code = document.createElement('code');
-        code.textContent = d.summary.env_line;
+        // مهامُّ ما قبل 11-22 تحمل سطرَ .env لا الأمر
+        code.textContent = d.summary.command || d.summary.env_line;
         code.dir = 'ltr';
+        code.className = 'd-block user-select-all text-break';
         var after = document.createElement('p');
         after.className = 'mb-0 mt-2';
-        after.textContent = 'ثمّ أعد تشغيل الخادم. للرجوع أعد السطرَ كما كان وأعد التشغيل.';
+        after.textContent = 'ثمّ أعد تشغيل الخادم. للرجوع: الأمرُ نفسُه بـ --undo ثمّ إعادةُ التشغيل.';
         result.append(p, code, after);
       } else {
         result.textContent = d.error || 'لم تكتمل الاستعادة.';

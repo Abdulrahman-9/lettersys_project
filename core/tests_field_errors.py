@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 """خطأُ الحقل بجوار حقله (11-22) — مركزُ الإعدادات والنسخُ الاحتياطيّ وصفحتا الحساب.
 
-كانت الأخطاءُ توستاً في الزاوية بعد التحويل. الحارسُ الأوّل يطابق كلَّ حقلٍ تسمّه الخوادمُ بموضعه
+كانت الأخطاءُ توستاً في الزاوية بعد التحويل. (حقلُ مسار النسخ أُزيل 11-22 مع الحقل نفسه.) الحارسُ الأوّل يطابق كلَّ حقلٍ تسمّه الخوادمُ بموضعه
 في قالب صفحته (وإلّا اختفت الرسالة: التوستُ العامّ يتخطّاها)، والبقيّةُ ترسم الصفحةَ كما يراها المستخدم.
 """
 import re
 from pathlib import Path
-from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -31,7 +30,6 @@ class EveryTaggedFieldHasItsSlotTests(SimpleTestCase):
     # (الملفّ الذي يسمّي الحقول، النمط، القالبُ الذي يعود إليه الطلب)
     SOURCES = (
         ('core/views/settings_hub.py', r"field_error\(request, '(\w+)'", 'templates/core/settings/hub.html'),
-        ('core/views/dashboard.py', r'field_error\(request, "(\w+)"', 'templates/core/backup.html'),
         ('core/admin_service.py', r"code=FIELD_CODE \+ '(\w+)'", 'templates/core/system_admin/account_new.html'),
         ('core/views/system_admin.py', r"code=FIELD_CODE \+ '(\w+)'", 'templates/core/system_admin/account_new.html'),
     )
@@ -86,11 +84,6 @@ class RenderedNextToTheFieldTests(TestCase):
             with self.subTest(view=name):
                 page = self.client.post(reverse(name), data, follow=True).content.decode()
                 self._next_to(page, input_id, text)
-
-    def test_backup_path(self):
-        with mock.patch('core.views.dashboard.create_encrypted_pg_backup', side_effect=OSError('denied')):
-            page = self.client.post(reverse('backup_database'), {'target_directory': 'Z:/لا'}, follow=True)
-        self._next_to(page.content.decode(), 'bkDir', 'تعذّرت كتابةُ النسخة')
 
     def test_new_account(self):
         page = self.client.post(reverse('system_account_new'),

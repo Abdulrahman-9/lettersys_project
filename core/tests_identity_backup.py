@@ -43,7 +43,7 @@ class BackupSourceTests(SimpleTestCase):
     def test_the_page_is_migrated_with_its_own_sheet(self):
         src = _read(TEMPLATE)
         self.assertIn('{% block html_attrs %} data-lx-page="v2"{% endblock %}', src)
-        self.assertIn("{% static 'css/backup.css' %}?v=20261119-pages", src)
+        self.assertIn("{% static 'css/backup.css' %}?v=20261122-backup", src)
 
     def test_the_page_does_not_lean_on_the_system_sheet(self):
         src = _read(TEMPLATE)
@@ -155,9 +155,9 @@ class BackupPageTests(TestCase):
         for name in ('enabled', 'frequency', 'hour', 'retention_days'):
             with self.subTest(form='schedule', name=name):
                 self.assertRegex(schedule.group(2), r'<(?:input|select)\b[^>]*\bname="%s"' % name)
-        for name in ('target_directory', 'file_name'):
-            with self.subTest(form='now', name=name):
-                self.assertRegex(now.group(1), r'<input\b[^>]*\bname="%s"' % name)
+        # «النسخة الآن» بلا مسارٍ ولا اسم (11-22): نسخةٌ في مسارٍ آخر كانت لا تظهر في القائمة ولا تقبلها الاستعادة
+        self.assertNotRegex(now.group(1), r'<(?:input|select|textarea)\b(?![^>]*type="hidden")')
+        self.assertIn('class="bk-parts"', now.group(1))
         # المربّعُ داخل تسميته: هدفٌ واحدٌ بلا منطقةٍ ميّتة بينهما
         self.assertIn('<label class="bk-check" for="bkEnabled"><input type="checkbox" class="form-check-input" '
                       'id="bkEnabled" name="enabled"', schedule.group(2))

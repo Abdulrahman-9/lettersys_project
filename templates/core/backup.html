@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% load static field_errors %}
+{% load static %}
 {% block title %}النسخ الاحتياطي{% endblock %}
 {% block html_attrs %} data-lx-page="v2"{% endblock %}
 {% comment %}
   الهويّة الموحّدة (2026-11-19): أصنافُ الصفحة ‎bk-*‎ في ‎css/backup.css‎ وحدها — لا تعتمد على ‎system_admin.css‎
   (ورقةُ وحدة «النظام»)، فلا رابطَ لها هنا. الحقولُ وأسماؤها ووجهاتُ الإرسال كما كانت.
 {% endcomment %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/backup.css' %}?v=20261119-pages">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/backup.css' %}?v=20261122-backup">{% endblock %}
 {% block content %}
 <div class="bk-page">
   <header class="bk-head">
@@ -55,22 +55,16 @@
       <section class="bk-card" aria-labelledby="bkNow">
         <div class="bk-card-head">
           <h2 id="bkNow"><span class="bk-ico" aria-hidden="true"><i class="bi bi-download"></i></span>نسخة يدويّة الآن</h2>
-          <small>نسخة PostgreSQL مشفّرة بامتداد <bdi class="bk-mono" dir="ltr" translate="no">.dump.enc</bdi></small>
+          <small>النسخة الكاملة نفسها التي يأخذها النسخ التلقائيّ</small>
         </div>
         <form method="post" class="bk-form">
           {% csrf_token %}
-          <div class="bk-fields is-one">
-            <div class="bk-field">
-              <label for="bkDir">مسار الحفظ</label>
-              <input type="text" id="bkDir" name="target_directory" class="form-control bk-control" value="{{ default_directory }}" dir="ltr" spellcheck="false" autocomplete="off" aria-describedby="bkDirHint">
-              {% field_error 'target_directory' 'bkDir' %}
-            </div>
-            <div class="bk-field">
-              <label for="bkName">اسم الملفّ</label>
-              <input type="text" id="bkName" name="file_name" class="form-control bk-control" value="{{ suggested_name }}" dir="ltr" spellcheck="false" autocomplete="off">
-            </div>
-          </div>
-          <p class="bk-hint" id="bkDirHint">يُنشأ المجلّد إن لم يكن موجوداً.</p>
+          {% comment %}لا مسارَ ولا اسمَ يُكتبان (11-22): نسخةٌ في مسارٍ آخر كانت لا تظهر في القائمة ولا تقبلها الاستعادة{% endcomment %}
+          <ul class="bk-parts">
+            <li><i class="bi bi-database-lock" aria-hidden="true"></i><span><b>القاعدة</b> وملفّات الإعداد، مشفّرتين</span></li>
+            <li><i class="bi bi-files" aria-hidden="true"></i><span><b>المرفقات</b> والنماذج، مرآةً تُحدَّث بما تغيّر فقط</span></li>
+          </ul>
+          <p class="bk-hint">تُحفظ في <bdi class="bk-mono" dir="ltr" translate="no">{{ default_directory }}</bdi> وتظهر فوراً في القائمة وفي صفحة الاستعادة. تستغرق ثوانيَ.</p>
           <div class="bk-actions"><button type="submit" class="btn btn-primary bk-btn bk-btn-fill"><i class="bi bi-download" aria-hidden="true"></i>أنشئ النسخة الآن</button></div>
         </form>
       </section>

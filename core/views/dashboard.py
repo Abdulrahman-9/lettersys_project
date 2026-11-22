@@ -7,7 +7,6 @@ Dashboard & Reports Views - لوحة التحكم والتقارير
 import logging
 import os
 from datetime import timedelta
-from subprocess import CalledProcessError
 
 from django.conf import settings
 from django.contrib import messages
@@ -21,9 +20,8 @@ from django.utils.html import format_html
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from ..backup_service import create_encrypted_pg_backup, default_backup_dir, list_db_backups
+from ..backup_service import default_backup_dir, list_db_backups, run_full_backup
 from ..extraction.kinds import get_kind_label
-from ..field_errors import field_error
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       Department, RestoreJob)
 from ..logging_models import UserActivityLog
@@ -775,6 +773,32 @@ def purge_attachment(request, attachment_id):
     return redirect("trash_list")
 
 
+#: أجزاءُ النسخة الكاملة بأسمائها للمدير (مفاتيحُ تقرير ``run_full_backup``)
+_BACKUP_PARTS = (('database', 'القاعدة'), ('config', 'ملفّات الإعداد'),
+                 ('media', 'مرآة المرفقات'), ('models', 'مرآة النماذج'))
+
+
+def _report_backup(request, report):
+    """ما حُفظ في رسالة نجاحٍ واحدة، وكلُّ جزءٍ نقص في رسالته بسببه وطريق إصلاحه."""
+    saved = []
+    if 'database' in report:
+        saved.append('القاعدة «%s»' % os.path.basename(report['database']))
+    if report.get('config'):
+        saved.append('ملفّات الإعداد')
+    for key, label in (('media', 'المرفقات'), ('models', 'النماذج')):
+        mirror = report.get(key)
+        if isinstance(mirror, dict) and not mirror.get('skipped_missing_src'):
+            saved.append('مرآة %s (%d ملفّاً جديداً)' % (label, mirror.get('copied', 0)))
+    if 'database' in report:
+        messages.success(request, 'حُفظت النسخة: ' + ' · '.join(saved) + '.')
+    for key, label in _BACKUP_PARTS:
+        why = report.get(key + '_error')
+        if why:
+            (messages.error if key == 'database' else messages.warning)(request, '%s لم تُنسخ: %s' % (label, why))
+    if not (report.get('encryption_key') or {}).get('exists'):
+        messages.warning(request, 'مفتاحُ التشفير (.encryption_key) غيرُ موجودٍ على الخادم — النسخُ المشفّرة لا تُفتح بدونه.')
+
+
 @staff_required
 def backup_database(request):
     """
@@ -793,24 +817,11 @@ def backup_database(request):
     """
     db_config = settings.DATABASES["default"]
     default_dir = default_backup_dir()
-    suggested_name = f"pg_backup_{timezone.localtime().strftime('%Y%m%d_%H%M')}.dump"
 
     if request.method == "POST":
-        target_directory = request.POST.get("target_directory") or default_dir
-        file_name = request.POST.get("file_name") or suggested_name
-        try:
-            encrypted_path = create_encrypted_pg_backup(target_directory, file_name)
-            messages.success(request, f"تم إنشاء نسخة PostgreSQL احتياطية مشفرة: {encrypted_path}")
-        except FileNotFoundError as exc:
-            logger.error("pg_dump executable is unavailable: %s", exc, exc_info=True)
-            messages.error(request, "تعذر العثور على pg_dump. ثبّت أدوات PostgreSQL أو عيّن PG_DUMP_BIN.")
-        except CalledProcessError as exc:
-            logger.error("pg_dump failed: %s", exc.stderr, exc_info=True)
-            messages.error(request, "فشل pg_dump أثناء إنشاء النسخة الاحتياطية. راجع إعدادات اتصال PostgreSQL.")
-        except OSError as exc:
-            logger.error("Backup file operation failed: %s", exc, exc_info=True)
-            field_error(request, "target_directory", "تعذّرت كتابةُ النسخة أو تشفيرُها في هذا المسار. تحقّق أنّ القرصَ "
-                        "موجودٌ وأنّ لخدمة النظام صلاحيةَ الكتابة فيه، أو اختر مساراً آخر.")
+        # النسخةُ الكاملة نفسُها التي تأخذها المهمّةُ المجدولة، في مجلّد النسخ وحده: نسخةٌ في مسارٍ آخر
+        # كانت لا تظهر في القائمة ولا تقبلها صفحةُ الاستعادة (11-22)
+        _report_backup(request, run_full_backup())
         return redirect("backup_database")
 
     from core import system_ops
@@ -826,7 +837,6 @@ def backup_database(request):
             "database_host": db_config.get("HOST") or "localhost",
             "database_port": db_config.get("PORT") or "5432",
             "default_directory": default_dir,
-            "suggested_name": suggested_name,
             "existing_backups": backups,
             # الجدولةُ هنا لا في مركز الإعدادات (الشريطُ هو المعتمد، 2026‑11‑08)، وحالتُها من مصدر صفحة التشغيل.
             "backup_settings": BackupSettings.get(),
