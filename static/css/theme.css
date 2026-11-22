@@ -302,6 +302,7 @@ html:not([data-lx-legacy]) :is(.form-control, .form-select, .sa-input, .sa-selec
 }
 html:not([data-lx-legacy]) :is(.form-control, .form-select, .sa-input, .sa-select)[aria-invalid="true"]:focus {
   border-color: var(--lx-late);
+  outline-color: var(--lx-late);   /* حلقةُ ‎.sa-input:focus-visible‎ تركوازيّة */
   box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--lx-late) 18%, transparent);
 }
 
