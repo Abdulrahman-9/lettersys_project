@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static l10n %}
+{% load static l10n field_errors %}
 
 {% block title %}الإعدادات{% endblock %}
 
@@ -73,6 +73,7 @@
                 <label class="form-label" for="gen_app_name">اسم النظام</label>
                 <input type="text" id="gen_app_name" name="app_name" maxlength="100" required class="form-control"
                        value="{{ system_settings.app_name|default:'نظام الكتب' }}" placeholder="نظام الكتب">
+                {% field_error 'app_name' 'gen_app_name' %}
               </div>
               <div class="settings-field">
                 <label class="form-label" for="gen_subtitle">سطر الوصف في الترويسة</label>
@@ -184,6 +185,7 @@
                        value="{{ sec_settings.password_min_length }}" aria-describedby="sec_min_len_unit sec_min_len_help">
                 <span class="input-group-text" id="sec_min_len_unit">حرفاً</span>
               </div>
+              {% field_error 'password_min_length' 'sec_min_len' %}
               <div class="settings-help" id="sec_min_len_help">يُطبَّق عند إنشاء المستخدمين وإعادة تعيين كلماتهم، وعند تغيير المستخدم كلمتَه بنفسه.</div>
             </div>
             <div class="settings-actions">
@@ -224,6 +226,7 @@
                 {# unlocalize: الفاصلةُ العشريّة العربيّة («0,4») يرفضها حقلُ الرقم فيظهر فارغاً والقيمةُ محفوظة #}
                 <input type="number" step="0.05" min="0" max="1" class="form-control settings-number" id="ai_threshold"
                        name="low_confidence_threshold" value="{{ ai_settings.low_confidence_threshold|unlocalize }}">
+                {% field_error 'low_confidence_threshold' 'ai_threshold' %}
               </div>
             </fieldset>
             <fieldset class="settings-group">

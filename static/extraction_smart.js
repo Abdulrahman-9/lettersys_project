@@ -2641,47 +2641,17 @@ class ExtractionSmartSystem {
         return Boolean(this.currentFile || (Array.isArray(this.scannedFiles) && this.scannedFiles.length > 0));
     }
 
-    confirmSaveWithoutFile() {
-        return new Promise((resolve) => {
-            if (!window.ToastCenter || typeof window.ToastCenter.action !== 'function') {
-                resolve(window.confirm('لم يتم رفع ملف أو مسحه بعد.\n\nهل ترغب بالاستمرار في حفظ الكتاب بدون صورة أو مرفق؟'));
-                return;
-            }
-
-            let settled = false;
-            const finalize = (result) => {
-                if (settled) return;
-                settled = true;
-                resolve(result);
-            };
-
-            window.ToastCenter.action('warning', 'يمكنك حفظ الكتاب الآن بدون مرفق، أو رفع أو مسح ملف أولاً.', [
-                {
-                    label: 'حفظ بدون مرفق',
-                    className: 'btn btn-sm btn-warning fw-semibold',
-                    onClick: () => finalize(true),
-                },
-                {
-                    label: 'رفع ملف',
-                    className: 'btn btn-sm btn-outline-primary fw-semibold',
-                    onClick: () => {
-                        const fi = document.getElementById('fileInput');
-                        if (fi) {
-                            fi.click();
-                        }
-                        finalize(false);
-                    },
-                }
-            ], {
-                title: 'لا يوجد ملف مرفوع أو ممسوح',
-                delay: 0,
-                autohide: false,
-                onShown: (toastApi) => {
-                    toastApi.element.querySelector('.btn-warning')?.focus();
-                },
-                onHidden: () => finalize(false),
-            });
-        });
+    /** «حفظ بلا ملف؟» بحواريّة التطبيق (11-22) — كان توستاً بزرَّين في زاوية الشاشة يُقرأ كإشعار
+     *  لا كسؤالٍ يوقف الحفظ. ليس هدّاماً: التركيزُ على «احفظ بلا مرفق»، وأيُّ إغلاقٍ عودةٌ إلى النموذج. */
+    async confirmSaveWithoutFile() {
+        const question = {
+            title: 'حفظ الكتاب بلا مرفق؟',
+            message: 'لم يُرفع ملفٌّ ولم يُمسح بعد، فسيُحفظ الكتابُ ببياناته وحدها بلا صورةٍ ولا مرفق.',
+            okText: 'احفظ بلا مرفق', cancelText: 'عُد لإرفاق ملف', danger: false,
+        };
+        return typeof window.confirmDelete === 'function'
+            ? window.confirmDelete(question)
+            : window.confirm(question.message);
     }
 
     /** لون + تسمية نوع السجل — مصدر واحد (يطابق تبويبات النوع). */

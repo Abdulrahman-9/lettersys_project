@@ -30,11 +30,11 @@ PAGES = ('centre', 'department', 'ops', 'roles', 'accounts', 'account_new', 'acc
 SCRIPTS = ('static/js/role_matrix.js', 'static/js/account_editor.js', 'static/js/account_new.js')
 V2 = '{% block html_attrs %} data-lx-page="v2"{% endblock %}'
 BUMP = '?v=20261119-pages'
+SHEET_BUMP = '?v=20261122-pages'   # الورقةُ تغيّرت ثانيةً 11-22 (‎--lx-accent-ink‎)
 
 # الأبيضُ حبرٌ (أو لوحٌ) على التركواز العميق وحده: اللوحُ النشط في العمود، ورأسُ اللوحة المستقلّة، والقسمُ الحاليّ،
-# وشريطُ حفظ المصفوفة. وصورةُ الحساب علامةُ الوضع في العمود المشترك (كلّ صفحات المدير).
+# وشريطُ حفظ المصفوفة. (صورةُ الحساب صارت ‎--lx-accent‎/‎--lx-accent-ink‎ فلا استثناءَ لها.)
 DEEP_TEAL = ('.sa-nav a.on', '.top.sa-top', '.sa-tabs a.on', '.rm-bar')
-MARKER = ('.is-system-admin .app-sidebar-avatar', {'#d99a1e', '#1c1404'})
 RAW = re.compile(r'#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(\s*[\d.][^)]*\)', re.I)
 NAMED = re.compile(r'(?<![-\w])(?:white|black|red|green|blue|gray|grey|orange|yellow|purple|brown|pink|navy|teal|'
                    r'silver|maroon|olive|lime|aqua|fuchsia|beige|ivory|wheat|tan)(?![-\w])', re.I)
@@ -79,8 +79,6 @@ class SheetTokensTests(SimpleTestCase):
             found = [m.group(0) for m in RAW.finditer(body)] + [m.group(0) for m in NAMED.finditer(body)]
             for colour in found:
                 if WHITE.match(colour) and any(ctx in selector for ctx in DEEP_TEAL):
-                    continue
-                if selector == MARKER[0] and colour.lower() in MARKER[1]:
                     continue
                 offences.append('%s → %s' % (selector[-60:], colour))
         self.assertEqual(offences, [], 'ألوانٌ خامٌ خارج الرموز (أو أبيضُ خارج التركواز العميق): %s' % offences)
@@ -173,7 +171,7 @@ class TemplatesAndScriptsTests(SimpleTestCase):
         for name in ('accounts', 'account', 'account_new'):
             with self.subTest(template=name):
                 src = _read(UNIT + name + '.html')
-                self.assertIn("{% static 'css/system_admin.css' %}" + BUMP, src, 'ورقةٌ تغيّرت بلا رفع نسخة')
+                self.assertIn("{% static 'css/system_admin.css' %}" + SHEET_BUMP, src, 'ورقةٌ تغيّرت بلا رفع نسخة')
                 self.assertNotIn('20261118-batch3a', src)
         self.assertIn("{% static 'js/account_editor.js' %}" + BUMP, _read(UNIT + 'account.html'),
                       'سكربتُ المحرّر تغيّر بلا رفع نسخة')

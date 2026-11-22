@@ -73,7 +73,6 @@
               color var(--lx-dur-1) ease, box-shadow var(--lx-dur-1) ease;
 }
 
-.btn.en-btn::before { display: none; }
 .btn.en-btn:hover, .btn.en-btn:active { transform: none; }
 .btn.en-btn:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
 .btn.en-btn-sm { min-height: 2.25rem; padding: .3rem .75rem; font-size: .82rem; }
@@ -429,7 +428,6 @@ html.lx-flipping .en-page .tab-main.active { view-transition-name: none; }
   font-weight: 700;
 }
 
-.btn.en-bulk-btn::before, .btn.en-bulk-clear::before { display: none; }
 .btn.en-bulk-btn:hover, .btn.en-bulk-clear:hover { transform: none; box-shadow: none; }
 .btn.en-bulk-btn:focus-visible, .btn.en-bulk-clear:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .btn.en-bulk-clear { --bs-btn-border-color: transparent; text-decoration: underline; text-underline-offset: 3px; }

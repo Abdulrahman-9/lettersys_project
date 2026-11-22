@@ -101,3 +101,14 @@ class EntryIdentityTests(SimpleTestCase):
         header = tpl[tpl.index('<div class="app-page-header">'):tpl.index('<div\n    class="extraction-container"')]
         self.assertRegex(header, r'<button[^>]*class="lx-theme-toggle app-page-theme"[^>]*data-theme-toggle')
         self.assertIn("badge.className = 'edit-mode-badge';", tpl)
+
+    def test_saving_without_a_file_asks_through_the_app_dialog(self):
+        # «حفظ بلا ملف؟» سؤالٌ يوقف الحفظ: حواريّةُ التطبيق لا توستٌ في الزاوية (11-22)
+        src = _read('static/extraction_smart.js')
+        fn = src[src.index('async confirmSaveWithoutFile()'):]
+        fn = fn[:fn.index('\n    }\n')]
+        self.assertIn('window.confirmDelete(question)', fn)
+        self.assertIn("cancelText: 'عُد لإرفاق ملف', danger: false", fn)
+        self.assertNotIn('ToastCenter', fn)
+        app = _read('static/app.js')
+        self.assertIn("if (opts.cancelText) modal.querySelector('.btn-cancel').textContent = opts.cancelText;", app)

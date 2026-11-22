@@ -358,7 +358,8 @@ def book_change_status(request, pk):
     if request.method == "POST":
         action = (request.POST.get("action") or request.POST.get("final_status") or "").strip()
         if action not in ("archived", "reopen"):
-            messages.error(request, "إجراء غير صالح.")
+            messages.error(request, "لم يُفهم طلبُ تغيير الحالة: المتابعةُ تُنهى أو يُعاد فتحُها فقط. "
+                                    "أعد تحميل الصفحة ثمّ اختر «أنهِ المتابعة» أو «أعِد فتح المتابعة» من جديد.")
             return redirect("book_detail", pk=pk)
 
         if action == "reopen" and not book.due_date:

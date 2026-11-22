@@ -322,7 +322,7 @@
         const ok = await window.confirmDelete({
           title: 'المسجّلة فقط',
           message: 'الجهازُ غيرُ المسجّل لن يرى إلّا صفحة الدخول وإدخال الكود. تأكّد أنّ الموظّفين انضمّوا أوّلاً.',
-          okText: 'فعّله', danger: false,
+          okText: 'فعّله', danger: true,
         });
         if (!ok) { restoreMode(previous); return; }
       }

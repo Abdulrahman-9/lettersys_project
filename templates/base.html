@@ -32,14 +32,14 @@
     <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}?v=20260705a" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'vendor/cairo/cairo.css' %}?v=20260705a">
     <!-- الهويّة الموحّدة: رموزُ الوضعين وتطبيقُها على Bootstrap في الصفحات المنقولة -->
-    <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261119-pages">
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20261122-pages">
     <!-- Design System (موحد للألوان والمسافات) -->
-    <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20260927">
-    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261119-pages">
+    <link rel="stylesheet" href="{% static 'design-system.css' %}?v=20261122-pages">
+    <link rel="stylesheet" href="{% static 'app.css' %}?v=20261122-pages">
     <!-- طبقةُ المكوّنات على الهويّة (لوحتُها الحيّة: /books/system/ui-kit/) -->
     <link rel="stylesheet" href="{% static 'css/components.css' %}?v=20261119-pages">
     <!-- مكوّنات واجهة محايدة اللون (مستوحاة من صفحة الدخول) — اختيارية عبر أصناف .btn-brand/.card-brand/.field-brand -->
-    <link rel="stylesheet" href="{% static 'css/brand-components.css' %}?v=20261115-colors1">
+    <link rel="stylesheet" href="{% static 'css/brand-components.css' %}?v=20261122-pages">
     
     <style>
       /* ضمان طباعة الألوان في جميع المتصفحات */
@@ -63,7 +63,7 @@
     </style>
     
     {# Optional per-page CSS block (for legacy templates) #}
-    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261119-pages">{% endif %}
+    {% if nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261122-pages">{% endif %}
     {% block extra_css %}{% endblock %}
 
     {% block extra_head %}{% endblock %}
@@ -294,6 +294,8 @@
       {% block global_messages %}
       {% for m in messages %}
       {% with tag=m.tags %}
+      {% comment %}خطأُ الحقل يُرسم تحت حقله ({% field_error %}، core/field_errors.py) لا توستاً هنا{% endcomment %}
+      {% if 'lx-field-' not in tag %}
       <div class="toast fancy-toast" role="{% if 'error' in tag %}alert{% else %}status{% endif %}" aria-live="{% if 'error' in tag %}assertive{% else %}polite{% endif %}" aria-atomic="true"
            data-bs-autohide="true"
            data-bs-delay="{% if 'error' in tag %}6000{% elif 'warning' in tag %}5000{% else %}3800{% endif %}"
@@ -317,6 +319,7 @@
           <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="إغلاق"></button>
         </div>
       </div>
+      {% endif %}
       {% endwith %}
       {% endfor %}
       {% endblock global_messages %}
@@ -344,7 +347,7 @@
     <script src="{% static 'logging-system.js' %}"></script>
     
     <!-- نظام إدارة الكتب - JavaScript الحديث -->
-    <script src="{% static 'app.js' %}?v=20261115-colors1"></script>
+    <script src="{% static 'app.js' %}?v=20261122-pages"></script>
     <!-- زرّ الوضع الفاتح/الداكن — يعمل في الصفحات المنقولة وحدها (حيث يُعرَّف lxTheme) -->
     <script src="{% static 'js/theme.js' %}?v=20261111-shell1"></script>
 

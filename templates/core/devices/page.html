@@ -37,10 +37,12 @@
   <header class="dvs-head">
     <span class="dvs-mark" aria-hidden="true"><i class="bi {% if is_admin %}bi-diagram-3{% else %}bi-pc-display{% endif %}"></i></span>
     <div class="dvs-head-text">
+      {% if can_open_settings %}{# الإعداداتُ لمن يدخلها (scoping.can_open_admin_pages) — وإلّا كان الرابطُ يقود إلى 403 #}
       <nav class="dvs-crumbs settings-embed-hide" aria-label="مسار التصفّح">
         <a href="{% url 'settings_hub' %}?tab=network" title="رجوع إلى الإعدادات"><i class="bi bi-arrow-right" aria-hidden="true"></i>الإعدادات</a>
         <i class="bi bi-chevron-left" aria-hidden="true"></i><span aria-current="page">الشبكة والأجهزة</span>
       </nav>
+      {% endif %}
       {% if is_admin %}
       <h1>الشبكة والأجهزة</h1>
       <p>من يتّصل بالنظام، ومن أيّ جهاز، وهل جهازه جاهز. كلُّ جهازٍ ينضمّ بكودٍ من خمسة أرقام يصدر من جهاز الخادم.</p>
@@ -266,5 +268,5 @@
 {% block extra_js %}
 <script src="{% static 'js/scan_agent_client.js' %}?v=20261118-devices"></script>
 <script src="{% static 'js/devices_common.js' %}?v=20261118-devices"></script>
-<script src="{% static 'js/devices_page.js' %}?v=20261119-pages"></script>
+<script src="{% static 'js/devices_page.js' %}?v=20261122-pages"></script>
 {% endblock %}

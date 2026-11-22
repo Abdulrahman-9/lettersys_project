@@ -27,6 +27,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from ..audit_service import record_settings_change, settings_snapshot
+from ..field_errors import field_error
 from ..models import (AIIntegrationSettings, BackupSettings, BookSequence, NotificationSettings,
                       SecuritySettings, SystemSettings)
 from .helpers import staff_required
@@ -62,7 +63,7 @@ def settings_general_save(request):
     back = f"{reverse('settings_hub')}?tab=general"
     app_name = (request.POST.get('app_name') or '').strip()
     if not app_name:
-        messages.error(request, 'اسم النظام مطلوب.')
+        field_error(request, 'app_name', 'اسم النظام مطلوب — لم يُحفظ شيء، والمعروضُ هو الاسمُ المحفوظ.')
         return redirect(back)
 
     obj = SystemSettings.get()
@@ -102,7 +103,7 @@ def settings_security_save(request):
     back = f"{reverse('settings_hub')}?tab=security"
     raw = (request.POST.get('password_min_length') or '').strip()
     if not raw.isdigit():
-        messages.error(request, 'قيمة غير صالحة للحد الأدنى لطول كلمة المرور.')
+        field_error(request, 'password_min_length', 'اكتب عدداً صحيحاً بين 4 و64 — لم يُحفظ شيء.')
         return redirect(back)
 
     cfg = SecuritySettings.get()
@@ -161,7 +162,7 @@ def settings_ai_save(request):
         thr = float(request.POST.get('low_confidence_threshold') or cfg.low_confidence_threshold)
         cfg.low_confidence_threshold = min(1.0, max(0.0, thr))
     except (TypeError, ValueError):
-        messages.error(request, 'حدُّ الثقة رقمٌ بين 0 و1.')
+        field_error(request, 'low_confidence_threshold', 'حدُّ الثقة رقمٌ بين 0 و1 (مثل 0.4) — لم يُحفظ شيءٌ من هذا التبويب.')
         return redirect(back)
     cfg.azure_endpoint = (request.POST.get('azure_endpoint') or '').strip()[:255]
     new_key = (request.POST.get('azure_key') or '').strip()

@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
-{% load static dict_utils %}
+{% load static dict_utils field_errors %}
 {% block title %}حساب جديد{% endblock %}
 {% block html_attrs %} data-lx-page="v2"{% endblock %}
-{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261119-pages">{% endif %}{% endblock %}
+{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261122-pages">{% endif %}{% endblock %}
 {% block content %}
 {% comment %}
 إنشاءُ حساب (ج، الشريحة 3) — التصميمُ المعتمد shots_v2/v2_account_new.png. الأدوارُ تتبع القسم المختار
@@ -18,16 +18,20 @@
       <section class="sa-card">
         <div class="sa-card-head"><h2>الحساب</h2></div>
         <div class="ae-field"><label for="anName">الاسم</label>
-          <input class="sa-input" id="anName" name="name" value="{{ values.name|default:'' }}" maxlength="300" autocomplete="off"></div>
+          <input class="sa-input" id="anName" name="name" value="{{ values.name|default:'' }}" maxlength="300" autocomplete="off">
+          {% field_error 'name' 'anName' %}</div>
         <div class="ae-field"><label for="anUser">اسم الدخول (مطلوب)</label>
-          <input class="sa-input" id="anUser" name="username" value="{{ values.username|default:'' }}" maxlength="150" required autocomplete="off" dir="ltr" spellcheck="false"></div>
+          <input class="sa-input" id="anUser" name="username" value="{{ values.username|default:'' }}" maxlength="150" required autocomplete="off" dir="ltr" spellcheck="false">
+          {% field_error 'username' 'anUser' %}</div>
         <div class="ae-field"><label for="anDept">القسم (مطلوب)</label>
           <select class="sa-select" id="anDept" name="department" required>
             {% for d in departments %}<option value="{{ d.pk }}"{% if values.department == d.pk|stringformat:"s" %} selected{% endif %}>{{ d.name }}{% if d.code %} ({{ d.code }}){% endif %}</option>{% endfor %}
           </select>
-          <small>يحدّد ما يراه والأدوار المتاحة.</small></div>
+          <small>يحدّد ما يراه والأدوار المتاحة.</small>
+          {% field_error 'department' 'anDept' %}</div>
         <div class="ae-field"><label for="anJob">المستوى الوظيفي</label>
-          <input class="sa-input" id="anJob" name="job_title" value="{{ values.job_title|default:'' }}" maxlength="120"></div>
+          <input class="sa-input" id="anJob" name="job_title" value="{{ values.job_title|default:'' }}" maxlength="120">
+          {% field_error 'job_title' 'anJob' %}</div>
         <p class="ae-note">تُولَّد كلمة مرور مؤقّتة، ويُطلب تغييرها عند أوّل دخول.</p>
       </section>
       <button type="submit" class="sa-btn pri ae-save">أنشئ الحساب</button>
@@ -45,6 +49,7 @@
           </label>
           {% endwith %}{% endfor %}
         </fieldset>
+        {% field_error 'role' 'anRoles' %}
         <p class="ae-note" id="anUnitNote" hidden>هذه الوحدة لا تمسك سجلّاً، فلا تظهر فيها أدوار الإدخال والبريد والأرشفة.</p>
         <div class="ae-summary" id="anSummary" aria-live="polite">
           <p><b>سيستطيع:</b> <span id="anCan"></span></p>

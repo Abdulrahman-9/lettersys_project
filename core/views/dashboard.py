@@ -23,6 +23,7 @@ from django.views.decorators.http import require_POST
 
 from ..backup_service import create_encrypted_pg_backup, default_backup_dir, list_db_backups
 from ..extraction.kinds import get_kind_label
+from ..field_errors import field_error
 from ..models import (Attachment, AttachmentVersion, Book, BookHistory, Entity,
                       Department, RestoreJob)
 from ..logging_models import UserActivityLog
@@ -633,6 +634,16 @@ def reports_export(request):
     return resp
 
 
+def _restore_refusal(book, what):
+    """رفضُ الاسترجاع بسببه وطريقه — القاعدةُ في ``scoping.can_restore_book`` (مفتاحُ «الاسترجاع من السلّة»
+    للقسم المالك)، وكانت الرسالةُ «غير مصرح بالاستعادة.» لا تقول لمن يُطلب."""
+    if book.department_id:
+        return (f"لا تملك استرجاعَ {what} من السلّة: الاسترجاعُ لرئيس قسم «{book.department.name}» "
+                "أو مختصّ بريده أو مسؤول أرشفته، ولمدير النظام. اطلبه من أحدهم.")
+    return (f"لا تملك استرجاعَ {what} من السلّة: الكتابُ بلا قسمٍ مالك، فاسترجاعُه لمُنشئه إن ملك "
+            "مفتاحَ «الاسترجاع من السلّة»، ولمدير النظام. اطلبه منه.")
+
+
 @login_required
 @require_POST
 def restore_book(request, pk):
@@ -649,7 +660,7 @@ def restore_book(request, pk):
     book = get_object_or_404(Book.all_objects, pk=pk, is_deleted=True)
     # الاستعادةُ عكسُ الحذف — للقسم المالك وطاولته والمدير (Q1‑ج)
     if not can_restore_book(book, request.user):
-        messages.error(request, "غير مصرح بالاستعادة.")
+        messages.error(request, _restore_refusal(book, "هذا الكتاب"))
         return redirect("trash_list")
     book.is_deleted = False
     book.deleted_at = None
@@ -719,7 +730,7 @@ def restore_attachment(request, attachment_id):
         messages.error(request, "لا يمكن استعادة مرفق لكتاب محذوف.")
         return redirect("trash_list")
     if not can_restore_book(att.book, request.user):
-        messages.error(request, "غير مصرح بالاستعادة.")
+        messages.error(request, _restore_refusal(att.book, "هذا المرفق"))
         return redirect("trash_list")
     att.is_deleted = False
     att.deleted_at = None
@@ -798,7 +809,8 @@ def backup_database(request):
             messages.error(request, "فشل pg_dump أثناء إنشاء النسخة الاحتياطية. راجع إعدادات اتصال PostgreSQL.")
         except OSError as exc:
             logger.error("Backup file operation failed: %s", exc, exc_info=True)
-            messages.error(request, "تعذر كتابة أو تشفير النسخة الاحتياطية في المسار المحدد.")
+            field_error(request, "target_directory", "تعذّرت كتابةُ النسخة أو تشفيرُها في هذا المسار. تحقّق أنّ القرصَ "
+                        "موجودٌ وأنّ لخدمة النظام صلاحيةَ الكتابة فيه، أو اختر مساراً آخر.")
         return redirect("backup_database")
 
     from core import system_ops

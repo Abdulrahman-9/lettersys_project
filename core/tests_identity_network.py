@@ -114,7 +114,7 @@ class NetworkPageSourceGuards(SimpleTestCase):
     def test_changed_assets_are_cache_busted(self):
         page = _read(PAGE)
         self.assertIn("{% static 'css/devices.css' %}?v=20261119-pages", page)
-        self.assertIn("{% static 'js/devices_page.js' %}?v=20261119-pages", page)
+        self.assertIn("{% static 'js/devices_page.js' %}?v=20261122-pages", page)
 
 
 class NetworkPageRenderGuards(DevicesTestBase):
@@ -150,3 +150,18 @@ class NetworkPageRenderGuards(DevicesTestBase):
         self.assertIn('data-lx-page="v2"', page)
         self.assertIn('id="dvsMe"', page)
         self.assertIn('class="dvs-state" data-tone="done"', _read(THIS_DEVICE))
+
+    def test_the_settings_crumb_is_drawn_only_for_whoever_may_open_settings(self):
+        hub = reverse('settings_hub')
+        self.assertIn(hub + '?tab=network', self.server.get(reverse('network_settings')).content.decode())
+        _, clerk = self.user_client()
+        page = clerk.get(reverse('network_settings')).content.decode()
+        # عنوانُ هذه الصفحة نفسُه تحت مسار المركز، فالمفحوصُ رابطُ الفتات بعينه والفتاتُ كلُّه
+        self.assertNotIn(hub + '?tab=network', page, 'رابطُ «الإعدادات» لموظّفٍ لا يدخلها يقود إلى 403')
+        self.assertNotIn('dvs-crumbs', page)
+        self.assertEqual(clerk.get(hub).status_code, 403)
+
+    def test_only_registered_is_confirmed_in_the_danger_tone(self):
+        js = _read(PAGE_JS)
+        block = js[js.index("title: 'المسجّلة فقط'"):][:400]
+        self.assertIn('danger: true', block, 'إغلاقُ الباب على غير المسجّل خطرٌ يُقال بلونه')

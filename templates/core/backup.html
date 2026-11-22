@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static field_errors %}
 {% block title %}النسخ الاحتياطي{% endblock %}
 {% block html_attrs %} data-lx-page="v2"{% endblock %}
 {% comment %}
@@ -63,6 +63,7 @@
             <div class="bk-field">
               <label for="bkDir">مسار الحفظ</label>
               <input type="text" id="bkDir" name="target_directory" class="form-control bk-control" value="{{ default_directory }}" dir="ltr" spellcheck="false" autocomplete="off" aria-describedby="bkDirHint">
+              {% field_error 'target_directory' 'bkDir' %}
             </div>
             <div class="bk-field">
               <label for="bkName">اسم الملفّ</label>

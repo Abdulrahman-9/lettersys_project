@@ -178,6 +178,12 @@ def scope_activity_for(user, qs=None):
                      | Q(book__department_id__in=mine))
 
 
+def can_open_admin_pages(user) -> bool:
+    """صفحاتُ الإدارة بحارس ``staff_required`` — ومنها مركزُ الإعدادات: الموظّفُ أو المدير.
+    الحارسُ يقرأ هذه، والصفحاتُ التي تدلّ على الإعدادات تقرؤها قبل أن ترسم الرابط."""
+    return bool(user.is_staff or user.is_superuser)
+
+
 def can_manage_system(user) -> bool:
     """أيحقّ له إدارةُ البيانات العامّة (الجهات والنسخ وإعدادات النظام)؟
     — صفةُ موظّف Django أو المدير.

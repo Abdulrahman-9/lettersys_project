@@ -150,16 +150,19 @@ class EntityFormTests(TestCase):
         self.assertIn('href="#id_name"', html)
         self.assertIn('id="id_name-error"', html)
 
-    def test_the_hand_drawn_switches_keep_their_names_and_state(self):
+    def test_the_switches_come_from_the_form_with_their_names_and_state(self):
+        # المفاتيحُ من EntityForm نفسه (صنفُ Bootstrap ودورُ switch) لا مرسومةً باليد بجواره
+        sw = 'class="form-check-input" role="switch"'
         html = self.client.get(reverse('entity_edit', args=[self.entity.pk])).content.decode('utf-8')
-        self.assertIn('name="notify_on_send" id="id_notify_on_send" checked>', html)
-        self.assertIn('name="notify_on_receive" id="id_notify_on_receive">', html)
-        self.assertIn('name="is_active" id="id_is_active" checked>', html)
+        self.assertIn('name="notify_on_send" %s id="id_notify_on_send" checked>' % sw, html)
+        self.assertIn('name="notify_on_receive" %s id="id_notify_on_receive">' % sw, html)
+        self.assertIn('name="is_active" %s id="id_is_active" checked>' % sw, html)
+        self.assertIn('<input type="tel" name="phone" class="form-control" autocomplete="off" dir="ltr" inputmode="tel"', html)
         # بعد إرسالٍ فاشل يبقى ما اختاره المستخدم (القيمةُ المربوطة لا قيمةُ القاعدة)
         html = self.client.post(reverse('entity_edit', args=[self.entity.pk]),
                                 {'name': '', 'kind': self.entity.kind, 'notify_on_receive': 'on'}).content.decode('utf-8')
-        self.assertIn('name="notify_on_receive" id="id_notify_on_receive" checked>', html)
-        self.assertIn('name="notify_on_send" id="id_notify_on_send">', html)
+        self.assertIn('name="notify_on_receive" %s id="id_notify_on_receive" checked>' % sw, html)
+        self.assertIn('name="notify_on_send" %s id="id_notify_on_send">' % sw, html)
 
 
 class EntityMergeRenderTests(TestCase):

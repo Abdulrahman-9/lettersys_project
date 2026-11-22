@@ -25,6 +25,8 @@ from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from core.field_errors import FIELD_CODE
+
 #: حارسُ «لم يُمرَّر» — يفترق عن ``None`` التي تعني هنا «اجعله بلا أب/بلا قسم».
 UNSET = object()
 
@@ -149,7 +151,7 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
     with transaction.atomic():
         if department is not UNSET and department != profile.department:
             if department is not None and not department.is_active:
-                raise ValidationError('لا يُسند موظّفٌ إلى قسمٍ معطَّل.')
+                raise ValidationError('لا يُسند موظّفٌ إلى قسمٍ معطَّل.', code=FIELD_CODE + 'department')
             if department is None:
                 if not _is_account_admin(by):
                     raise PermissionDenied('لا يمكن لرئيس القسم إزالة موظّفٍ من نطاقه.')
@@ -174,7 +176,7 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
         if job_title is not None:
             job_title = job_title.strip()
             if len(job_title) > 120:
-                raise ValidationError('المسمّى الوظيفي يتجاوز 120 حرفاً.')
+                raise ValidationError('المسمّى الوظيفي يتجاوز 120 حرفاً.', code=FIELD_CODE + 'job_title')
             if job_title != profile.job_title:
                 changes['job_title'] = job_title
                 profile.job_title = job_title
@@ -184,7 +186,7 @@ def assign_user(user, *, by, department=UNSET, is_department_head=None,
                 continue
             value = value.strip()
             if len(value) > 150:
-                raise ValidationError('الاسم يتجاوز 150 حرفاً.')
+                raise ValidationError('الاسم يتجاوز 150 حرفاً.', code=FIELD_CODE + 'name')
             if getattr(user, field) != value:
                 setattr(user, field, value)
                 changes[field + '_updated'] = True
@@ -306,12 +308,12 @@ def create_department_user(*, by, department, username, first_name='',
 
     # القسمُ يُختار صراحةً: هو نطاقُ ما سيراه صاحبُ الحساب، فلا يُخمَّن له.
     if department is None:
-        raise ValidationError('اختر قسمَ الحساب الجديد.')
+        raise ValidationError('اختر قسمَ الحساب الجديد.', code=FIELD_CODE + 'department')
     _guard_department(by, department)
     if not department.is_active:
-        raise ValidationError('لا يمكن إنشاء حسابٍ في قسمٍ معطَّل.')
+        raise ValidationError('لا يمكن إنشاء حسابٍ في قسمٍ معطَّل.', code=FIELD_CODE + 'department')
     if role not in HEAD_GRANTABLE_ROLES | ADMIN_ONLY_ROLES:
-        raise ValidationError('دورٌ غير معروف.')
+        raise ValidationError('دورٌ غير معروف.', code=FIELD_CODE + 'role')
     _guard_grant(by, role)
 
     username = (username or '').strip()
@@ -320,21 +322,21 @@ def create_department_user(*, by, department, username, first_name='',
     email = (email or '').strip()
     job_title = (job_title or '').strip()
     if not username:
-        raise ValidationError('اسم المستخدم مطلوب.')
+        raise ValidationError('اسم المستخدم مطلوب.', code=FIELD_CODE + 'username')
     if len(username) > 150:
-        raise ValidationError('اسم المستخدم يتجاوز 150 حرفاً.')
+        raise ValidationError('اسم المستخدم يتجاوز 150 حرفاً.', code=FIELD_CODE + 'username')
     try:
         UnicodeUsernameValidator()(username)
         if email:
             validate_email(email)
     except ValidationError as exc:
-        raise ValidationError('تحقّق من اسم المستخدم أو البريد الإلكتروني.') from exc
+        raise ValidationError('تحقّق من اسم المستخدم أو البريد الإلكتروني.', code=FIELD_CODE + 'username') from exc
     if len(first_name) > 150 or len(last_name) > 150:
-        raise ValidationError('الاسم يتجاوز 150 حرفاً.')
+        raise ValidationError('الاسم يتجاوز 150 حرفاً.', code=FIELD_CODE + 'name')
     if len(job_title) > 120:
-        raise ValidationError('المسمّى الوظيفي يتجاوز 120 حرفاً.')
+        raise ValidationError('المسمّى الوظيفي يتجاوز 120 حرفاً.', code=FIELD_CODE + 'job_title')
     if User.objects.filter(username__iexact=username).exists():
-        raise ValidationError('اسم المستخدم مستعملٌ سلفاً.')
+        raise ValidationError('اسم المستخدم مستعملٌ سلفاً.', code=FIELD_CODE + 'username')
 
     password = secrets.token_urlsafe(max(24, SecuritySettings.get().password_min_length))
     with transaction.atomic():
@@ -343,7 +345,7 @@ def create_department_user(*, by, department, username, first_name='',
                 username=username, email=email, first_name=first_name,
                 last_name=last_name, password=password)
         except IntegrityError as exc:
-            raise ValidationError('اسم المستخدم مستعملٌ سلفاً.') from exc
+            raise ValidationError('اسم المستخدم مستعملٌ سلفاً.', code=FIELD_CODE + 'username') from exc
         UserProfile.objects.create(
             user=user, department=department, job_title=job_title,
             must_change_password=True,

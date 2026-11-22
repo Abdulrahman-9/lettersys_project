@@ -85,7 +85,7 @@
         {% if form.is_active %}
         <div class="ep-field ep-field--switch">
           <div class="form-check form-switch ep-switch">
-            <input class="form-check-input" type="checkbox" role="switch" name="{{ form.is_active.html_name }}" id="{{ form.is_active.id_for_label }}"{% if form.is_active.value %} checked{% endif %}>
+            {{ form.is_active }}
             <label class="form-check-label" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
           </div>
           <p class="ep-help" id="{{ form.is_active.id_for_label }}-help">الجهة المعطّلة تُخفى من القوائم وأدوات الاختيار، ويبقى سجلّها وروابطها بالكتب.</p>
@@ -145,14 +145,14 @@
       <div class="ep-grid">
         <div class="ep-field ep-field--switch">
           <div class="form-check form-switch ep-switch">
-            <input class="form-check-input" type="checkbox" role="switch" name="{{ form.notify_on_receive.html_name }}" id="{{ form.notify_on_receive.id_for_label }}"{% if form.notify_on_receive.value %} checked{% endif %}>
+            {{ form.notify_on_receive }}
             <label class="form-check-label" for="{{ form.notify_on_receive.id_for_label }}">{{ form.notify_on_receive.label }}</label>
           </div>
           <p class="ep-help" id="{{ form.notify_on_receive.id_for_label }}-help">يُرسَل بريد للجهة عند تسجيل كتاب وارد منها</p>
         </div>
         <div class="ep-field ep-field--switch">
           <div class="form-check form-switch ep-switch">
-            <input class="form-check-input" type="checkbox" role="switch" name="{{ form.notify_on_send.html_name }}" id="{{ form.notify_on_send.id_for_label }}"{% if form.notify_on_send.value %} checked{% endif %}>
+            {{ form.notify_on_send }}
             <label class="form-check-label" for="{{ form.notify_on_send.id_for_label }}">{{ form.notify_on_send.label }}</label>
           </div>
           <p class="ep-help" id="{{ form.notify_on_send.id_for_label }}-help">يُرسَل بريد للجهة عند تسجيل كتاب صادر إليها</p>

@@ -26,8 +26,8 @@ LIST_CSS = (
     'static/css/book_unified_mobile.css',
     'static/css/number_hint.css',
 )
-# دفعةُ الصفحات (11-19): أوراقُ الوحدات الستَّ عشرة. خارجها system_admin.css وحدها (حبرٌ على الذهبيّ ينتظر
-# رمزَ ‎--lx-accent-ink‎؛ حارسُها في tests_identity_system)، والورقةُ المطبوعة حبرٌ على أبيض فتُستثنى كتلتُها.
+# دفعةُ الصفحات (11-19): أوراقُ الوحدات الستَّ عشرة. خارجها system_admin.css وحدها (حارسُها في
+# tests_identity_system)، والورقةُ المطبوعة حبرٌ على أبيض فتُستثنى كتلتُها.
 PAGES_CSS = (
     'static/css/audit.css',
     'static/css/backup.css',

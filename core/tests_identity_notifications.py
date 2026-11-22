@@ -53,7 +53,7 @@ class NotificationsSourceGuards(SimpleTestCase):
         self.assertNotIn('data-theme', css, 'data-theme صفةٌ ميتةٌ للوضع القديم')
 
     def test_the_template_links_the_sheet_with_this_batch_version(self):
-        self.assertIn("{% static 'css/notifications.css' %}?v=20261119-pages", _read(TEMPLATE))
+        self.assertIn("{% static 'css/notifications.css' %}?v=20261122-pages", _read(TEMPLATE))
 
     def test_no_native_dialog_and_no_inline_colour_in_the_template(self):
         tpl = _read(TEMPLATE)
@@ -67,8 +67,9 @@ class NotificationsSourceGuards(SimpleTestCase):
                          r'\.nt-page :is\(a, button\):focus-visible \{\s*outline: 2px solid var\(--lx-pri\);')
 
     def test_the_legacy_ripple_does_not_wash_the_hover(self):
-        # موجةُ app.css البيضاء فوق «فتح» عند المرور: أبيضُ على تركوازٍ مُبيَّض ~3.1:1
-        self.assertIn('.nt-page .btn::before { content: none; }', _sheet_without_comments())
+        # موجةُ app.css البيضاء فوق «فتح» عند المرور (أبيضُ على تركوازٍ مُبيَّض ~3.1:1) أُزيلت من مصدرها
+        app = re.sub(r'/\*.*?\*/', '', _read('static/app.css'), flags=re.S)
+        self.assertNotRegex(app, r'\.btn(?::hover)?::before\s*\{', 'موجةُ ‎.btn::before‎ عادت إلى app.css')
 
     def test_buttons_name_their_transitions_and_honour_reduced_motion(self):
         # ‏transition: all‏ في app.css كان يحرّك حلقةَ التركيز نفسَها فتبدأ باهتة

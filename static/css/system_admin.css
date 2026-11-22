@@ -13,7 +13,7 @@
 /* العمودُ يتبع الوضعَ كبقيّة البرنامج — أمرُ المالك 11-15 («الداكنُ ستايل والفاتحُ ستايل»): كان داكناً في الوضعين
    بجوار محتوىً فاتح. هو البطاقةُ المشتركة نفسُها (app.css)، وعلامةُ وضع الإدارة عنوانُ «إدارة النظام» أعلاه
    وصورةُ الحساب الكهرمانيّة. */
-.is-system-admin .app-sidebar-avatar { background: #d99a1e; color: #1c1404; box-shadow: none; }
+.is-system-admin .app-sidebar-avatar { background: var(--lx-accent); color: var(--lx-accent-ink); box-shadow: none; }
 .is-system-admin .sidebar-title-text { color: var(--lx-mute); font-size: .72rem; font-weight: 800; }
 .is-system-admin .app-main { padding: 1rem 1.25rem 2rem; }
 @media (min-width: 1200px) {

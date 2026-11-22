@@ -116,7 +116,7 @@
   font-weight: 800;
 }
 
-.db-role { background: var(--lx-accent); color: #2a1c04; }
+.db-role { background: var(--lx-accent); color: var(--lx-accent-ink); }
 .db-dept { background: rgba(255, 255, 255, .12); color: #fff; border: 1px solid rgba(255, 255, 255, .24); font-weight: 700; }
 
 .db-hero-line { margin: 0; font-size: .92rem; color: rgba(255, 255, 255, .9); line-height: 1.8; }

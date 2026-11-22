@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static field_errors %}
 {% block title %}{{ target.get_full_name|default:target.get_username }}{% endblock %}
 {% block html_attrs %} data-lx-page="v2"{% endblock %}
-{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261119-pages">{% endif %}{% endblock %}
+{% block extra_css %}{% if not nav.system_admin %}<link rel="stylesheet" href="{% static 'css/system_admin.css' %}?v=20261122-pages">{% endif %}{% endblock %}
 {% block content %}
 {% comment %}
 محرّرُ الحساب (ج، الشريحة 2) — التصميمُ المعتمد shots_v2/v2_account.png وv2_account_change.png.
@@ -28,7 +28,8 @@
         <input type="hidden" name="confirm_department" value="0">
         <div class="sa-card-head"><h2>الحساب</h2></div>
         <div class="ae-field"><label for="aeName">الاسم</label>
-          <input class="sa-input" id="aeName" name="name" value="{{ target.get_full_name }}" maxlength="300" autocomplete="off"></div>
+          <input class="sa-input" id="aeName" name="name" value="{{ target.get_full_name }}" maxlength="300" autocomplete="off">
+          {% field_error 'name' 'aeName' %}</div>
         <div class="ae-field"><label for="aeUsername">اسم الدخول</label>
           <input class="sa-input" id="aeUsername" value="{{ target.get_username }}" readonly dir="ltr"></div>
         <div class="ae-field"><label for="aeDepartment">القسم</label>
@@ -38,9 +39,11 @@
           </select>
           {% if move_block %}<input type="hidden" name="department" value="{{ department.pk|default:'' }}">
           <small id="aeMoveBlock">{{ move_block }}</small>
-          {% else %}<small>يحدّد ما يراه الحساب. تغييره يلغي الاستثناءات بعد تأكيد.</small>{% endif %}</div>
+          {% else %}<small>يحدّد ما يراه الحساب. تغييره يلغي الاستثناءات بعد تأكيد.</small>{% endif %}
+          {% field_error 'department' 'aeDepartment' %}</div>
         <div class="ae-field"><label for="aeJob">المستوى الوظيفي</label>
-          <input class="sa-input" id="aeJob" name="job_title" value="{{ profile.job_title|default:'' }}" maxlength="120"></div>
+          <input class="sa-input" id="aeJob" name="job_title" value="{{ profile.job_title|default:'' }}" maxlength="120">
+          {% field_error 'job_title' 'aeJob' %}</div>
         <label class="ae-check"><input type="checkbox" name="is_active" value="1"{% if target.is_active %} checked{% endif %}{% if is_self %} disabled{% endif %}> الحساب نشط</label>
         {% if is_self %}<input type="hidden" name="is_active" value="1">{% endif %}
       </form>

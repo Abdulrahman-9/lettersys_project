@@ -19,7 +19,7 @@
   --brand-ease: cubic-bezier(.4, 0, .2, 1);
 }
 
-/* ── الزرّ الأساسي: تدرّج + ارتفاع + موجة من المركز + حلقة تركيز ── */
+/* ── الزرّ الأساسي: تدرّج + ارتفاع + حلقة تركيز (الموجةُ لم تُرسَم قطّ: app.css كان يُخفيها، فحُذفت 11-22) ── */
 .btn-brand{
   position:relative; overflow:hidden; isolation:isolate;
   display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
@@ -32,16 +32,10 @@
   box-shadow:0 8px 24px color-mix(in srgb, var(--brand-strong) 34%, transparent);
   transition:transform .25s var(--brand-ease), box-shadow .25s var(--brand-ease);
 }
-.btn-brand::before{                     /* الموجة */
-  content:""; position:absolute; z-index:-1; inset-block-start:50%; inset-inline-start:50%;
-  width:0; height:0; border-radius:50%; background:rgba(255,255,255,.25);
-  transform:translate(-50%,-50%); transition:width .55s ease, height .55s ease;
-}
 .btn-brand:hover{
   transform:translateY(-2px);
   box-shadow:0 12px 30px color-mix(in srgb, var(--brand-strong) 46%, transparent);
 }
-.btn-brand:hover::before{ width:340px; height:340px; }
 .btn-brand:active{ transform:translateY(0); }
 .btn-brand:focus-visible{
   outline:none;
@@ -121,7 +115,6 @@
 
 @media (prefers-reduced-motion: reduce){
   .btn-brand, .btn-brand-ghost, .card-brand{ transition:none }
-  .btn-brand::before{ transition:none }
   .anim-slide-up{ animation:none }
 }
 
