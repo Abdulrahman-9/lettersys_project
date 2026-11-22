@@ -1,260 +1,219 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}{{ entity.name }} — تفاصيل الجهة{% endblock %}
 
-{% block page_sidebar %}
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">ملف الجهة</div>
-  <div class="app-context-list">
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">اسم الجهة</div>
-        <strong>{{ entity.name }}</strong>
-      </div>
-      <span class="app-context-chip is-info"><i class="bi bi-building"></i> جهة</span>
-    </div>
-    <div class="app-context-item">
-      <div>
-        <div class="app-context-meta">الرمز</div>
-        <strong>{{ entity.code|default:'—' }}</strong>
-      </div>
-      <span class="app-context-chip"><i class="bi bi-upc"></i> تعريف</span>
-    </div>
-  </div>
-</div>
-
-<div class="app-sidebar-panel app-sidebar-context-panel">
-  <div class="app-sidebar-section-title">أقسام السجل</div>
-  <div class="nav nav-pills flex-column gap-2" role="tablist" aria-orientation="vertical">
-    {# التبويبُ يبقى حيث كان المستخدم: ترقيمُ «المستلمة» (?pr=) كان يُعيد الصفحةَ على «المُصدرة» (H3) #}
-    <button class="btn btn-light text-end{% if not request.GET.pr %} active{% endif %}" id="issued-tab" data-bs-toggle="tab" data-bs-target="#issued-pane" type="button" role="tab" aria-selected="{% if request.GET.pr %}false{% else %}true{% endif %}">
-      <i class="bi bi-arrow-up-right text-primary me-1"></i>كتب مُصدرة
-      <span class="badge bg-primary ms-1">{{ issued_count }}</span>
-    </button>
-    <button class="btn btn-light text-end{% if request.GET.pr %} active{% endif %}" id="received-tab" data-bs-toggle="tab" data-bs-target="#received-pane" type="button" role="tab" aria-selected="{% if request.GET.pr %}true{% else %}false{% endif %}">
-      <i class="bi bi-arrow-down-left text-success me-1"></i>كتب مُستلمة
-      <span class="badge bg-success ms-1">{{ received_count }}</span>
-    </button>
-  </div>
-</div>
-
 {% comment %}
-  الصفحةُ لكلّ موظّف (من رقاقة جهةٍ في ملفّ الكتاب)، والدليلُ وتعديلُه لإدارة النظام
-  (`staff_required`) — فالرابطان لمن يفتحهما (`nav.admin`)، لا 403 (تدقيقُ 2026‑10‑08).
+  «ملفُّ الجهة» على الهويّة الموحّدة (11-19) — أخو «ملفّ الكتاب»: شعارٌ تركوازيٌّ عميقٌ بخطٍّ ذهبيّ،
+  وشريطُ حقائقَ بأرقامٍ مجدولة، ولوحُ تبويبٍ منزلق (data-lx-tabs) فوق الجدول.
+  كان مفتاحُ «مُصدرة/مُستلمة» في العمود الجانبيّ وحدَه: تحت ثنية العمود خلف بطاقة الحساب على المكتب،
+  وداخل الدرج على الهاتف، ومخفيّاً حين يُطوى العمود — فصار في المحتوى. المعرّفاتُ وعقدُ التبويب كما هي.
 {% endcomment %}
-{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/entity_pages.css' %}?v=20261119-pages">{% endblock %}
 
 {% block content %}
-<div class="py-4">
-  <!-- بطاقة رأس الجهة -->
-  <div class="card border-0 shadow-sm mb-4">
-    <div class="card-body p-4">
-      <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
-        <div>
-          <div class="d-flex align-items-center gap-2 mb-2">
-            <span class="badge bg-primary-subtle text-primary fs-6 px-3 py-2"><i class="bi bi-building me-1"></i>{{ entity.name }}</span>
-            {% if entity.code %}<span class="badge bg-secondary-subtle text-secondary">{{ entity.code }}</span>{% endif %}
-            {# النوع مُشتَقّ من روابط الكتب الفعلية، لا من حقل يدوي #}
-            {% if issued_count and received_count %}
-              <span class="badge bg-warning-subtle text-warning">مُصدِرة ومستلِمة</span>
-            {% elif issued_count %}
-              <span class="badge bg-info-subtle text-info">جهة مُصدِرة</span>
-            {% elif received_count %}
-              <span class="badge bg-success-subtle text-success">جهة مستلِمة</span>
-            {% else %}
-              <span class="badge bg-secondary-subtle text-secondary">بلا كتب</span>
-            {% endif %}
-          </div>
-          {% if entity.notes %}
-            <p class="text-muted mb-0">{{ entity.notes }}</p>
-          {% endif %}
-        </div>
-        <div class="d-flex gap-2 flex-wrap">
-          {% if entity.is_active %}<a href="{% url 'dossier_detail' entity.pk %}" class="btn btn-sm btn-outline-info"><i class="bi bi-folder2-open me-1" aria-hidden="true"></i>          الإضبارة</a>{% endif %}
-          {% if nav.admin %}
-          <a href="{% url 'entity_list' %}" class="btn btn-sm btn-light"><i class="bi bi-arrow-right me-1"></i>القائمة</a>
-          <a href="{% url 'entity_edit' entity.pk %}?next={% url 'entity_detail' entity.pk %}" class="btn btn-sm btn-dark"><i class="bi bi-pencil-square me-1"></i>تعديل</a>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="ep ep-detail">
 
-  <!-- إحصائيات سريعة -->
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center p-3">
-        <div class="fs-2 fw-bold text-primary">{{ issued_count }}</div>
-        <small class="text-muted">كتاب مُصدر</small>
+  {% comment %}
+    الصفحةُ لكلّ موظّف (من رقاقة جهةٍ في ملفّ الكتاب)، والدليلُ وتعديلُه لإدارة النظام
+    (`staff_required`) — فالرابطان لمن يفتحهما (`nav.admin`)، لا 403 (تدقيقُ 2026‑10‑08).
+  {% endcomment %}
+  {% if nav.admin %}
+  <nav class="ep-crumbs" aria-label="مسار التصفّح">
+    <a href="{% url 'entity_list' %}">الجهات</a>
+    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+    <span aria-current="page">{{ entity.name }}</span>
+  </nav>
+  {% endif %}
+
+  <header class="ep-head">
+    <div class="ep-head-top">
+      <span class="ep-emblem" aria-hidden="true"><i class="bi bi-building"></i></span>
+
+      <div class="ep-head-main">
+        <p class="ep-eyebrow">ملف الجهة{% if entity.code %} <span aria-hidden="true">·</span> <span class="visually-hidden">الرمز</span><bdi class="ep-code">{{ entity.code }}</bdi>{% endif %}</p>
+        <h1 class="ep-title">{{ entity.name }}</h1>
+        <div class="ep-chips">
+          {# النوع مُشتَقّ من روابط الكتب الفعلية، لا من حقل يدوي #}
+          {% if issued_count and received_count %}
+            <span class="ep-chip"><i class="bi bi-arrow-left-right" aria-hidden="true"></i>مُصدِرة ومستلِمة</span>
+          {% elif issued_count %}
+            <span class="ep-chip"><i class="bi bi-box-arrow-up" aria-hidden="true"></i>جهة مُصدِرة</span>
+          {% elif received_count %}
+            <span class="ep-chip"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>جهة مستلِمة</span>
+          {% else %}
+            <span class="ep-chip ep-chip--quiet"><i class="bi bi-dash-circle" aria-hidden="true"></i>بلا كتب</span>
+          {% endif %}
+        </div>
+        {% if entity.notes %}<p class="ep-notes">{{ entity.notes }}</p>{% endif %}
+      </div>
+
+      <div class="ep-head-acts">
+        {% if entity.is_active %}<a href="{% url 'dossier_detail' entity.pk %}" class="btn btn-outline-primary"><i class="bi bi-folder2-open" aria-hidden="true"></i>الإضبارة</a>{% endif %}
+        {% if nav.admin %}
+        <a href="{% url 'entity_edit' entity.pk %}?next={% url 'entity_detail' entity.pk %}" class="btn btn-outline-secondary"><i class="bi bi-pencil-square" aria-hidden="true"></i>تعديل</a>
+        {% endif %}
       </div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center p-3">
-        <div class="fs-2 fw-bold text-success">{{ received_count }}</div>
-        <small class="text-muted">كتاب مُستلم</small>
+
+    <dl class="ep-facts">
+      <div class="ep-fact">
+        <dt>كتاب مُصدر</dt>
+        <dd><bdi dir="ltr" class="ep-num">{{ issued_count }}</bdi></dd>
       </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center p-3">
-        <div class="fs-2 fw-bold text-dark">{{ issued_count|add:received_count }}</div>
-        <small class="text-muted">إجمالي الكتب</small>
+      <div class="ep-fact">
+        <dt>كتاب مُستلم</dt>
+        <dd><bdi dir="ltr" class="ep-num">{{ received_count }}</bdi></dd>
       </div>
-    </div>
-    <div class="col-6 col-md-3">
+      <div class="ep-fact">
+        <dt>إجمالي الكتب</dt>
+        <dd><bdi dir="ltr" class="ep-num">{{ issued_count|add:received_count }}</bdi></dd>
+      </div>
       {% comment %}
         التبويبُ قرارُ المالك (Entity.kind) — كان مخفيّاً هنا وتظهر بطاقةٌ تكرّر شارةَ
-        «مُصدِرة/مستلِمة» التي في الرأس. والبطاقةُ نفسُها بابُ الإضبارة.
+        «مُصدِرة/مستلِمة» التي في الرأس. والحقيقةُ نفسُها بابُ الإضبارة.
       {% endcomment %}
-      <a class="card border-0 shadow-sm text-center p-3 text-decoration-none h-100"{% if entity.is_active %} href="{% url 'dossier_detail' entity.pk %}" title="افتح إضبارة الجهة"{% endif %}>
-        <div class="fs-5 fw-bold text-info">{{ entity.get_kind_display }}</div>
-        <small class="text-muted">التبويب في الأضابير{% if entity.is_active %} · <span class="text-info">افتح الإضبارة <i class="bi bi-folder2-open" aria-hidden="true"></i></span>{% endif %}</small>
-      </a>
-    </div>
-  </div>
+      <div class="ep-fact ep-fact--kind">
+        <dt>التبويب في الأضابير</dt>
+        <dd>{% if entity.is_active %}<a href="{% url 'dossier_detail' entity.pk %}" title="افتح إضبارة الجهة">{{ entity.get_kind_display }}<span class="ep-fact-go">افتح الإضبارة<i class="bi bi-arrow-left-short" aria-hidden="true"></i></span></a>{% else %}{{ entity.get_kind_display }}{% endif %}</dd>
+      </div>
+    </dl>
+  </header>
 
-  <div class="tab-content">
-    <!-- كتب مُصدرة -->
-    <div class="tab-pane fade{% if not request.GET.pr %} show active{% endif %}" id="issued-pane" role="tabpanel">
-      <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
-        <div class="card-body p-0">
+  <section class="ep-books" aria-label="كتب الجهة">
+    {# التبويبُ يبقى حيث كان المستخدم: ترقيمُ «المستلمة» (?pr=) كان يُعيد الصفحةَ على «المُصدرة» (H3) #}
+    <div class="ep-tabs" role="tablist" aria-label="أقسام سجلّ الجهة" data-lx-tabs>
+      <button class="ep-tab{% if not request.GET.pr %} active{% endif %}" id="issued-tab" data-bs-toggle="tab" data-bs-target="#issued-pane" type="button" role="tab" aria-controls="issued-pane" aria-selected="{% if request.GET.pr %}false{% else %}true{% endif %}">
+        <i class="bi bi-box-arrow-up ep-tab-ico" aria-hidden="true"></i>
+        <span class="ep-tab-label">كتب مُصدرة</span>
+        <bdi dir="ltr" class="ep-tab-count">{{ issued_count }}</bdi>
+      </button>
+      <button class="ep-tab{% if request.GET.pr %} active{% endif %}" id="received-tab" data-bs-toggle="tab" data-bs-target="#received-pane" type="button" role="tab" aria-controls="received-pane" aria-selected="{% if request.GET.pr %}true{% else %}false{% endif %}">
+        <i class="bi bi-box-arrow-in-down ep-tab-ico" aria-hidden="true"></i>
+        <span class="ep-tab-label">كتب مُستلمة</span>
+        <bdi dir="ltr" class="ep-tab-count">{{ received_count }}</bdi>
+      </button>
+    </div>
+
+    <div class="tab-content">
+      <!-- كتب مُصدرة -->
+      <div class="tab-pane fade{% if not request.GET.pr %} show active{% endif %}" id="issued-pane" role="tabpanel" aria-labelledby="issued-tab">
+        <div class="ep-card ep-card--table">
           {% if issued_books %}
-          <div class="table-responsive">
-            <table class="table table-hover mb-0 align-middle">
-              <thead class="table-light">
+          <div class="ep-table-wrap">
+            <table class="ep-table ep-book-table">
+              <caption class="visually-hidden">كتب مُصدرة من {{ entity.name }}</caption>
+              <thead>
                 <tr>
-                  <th style="width:50px">#</th>
-                  <th>رقم الكتاب</th>
-                  <th>العنوان</th>
-                  <th>النوع</th>
-                  <th>التاريخ</th>
-                  <th>الجهة المستلمة</th>
-                  <th>الحالة</th>
+                  <th scope="col" class="ep-c-idx">#</th>
+                  <th scope="col" class="ep-c-num">رقم الكتاب</th>
+                  <th scope="col" class="ep-c-title">العنوان</th>
+                  <th scope="col" class="ep-c-kind">النوع</th>
+                  <th scope="col" class="ep-c-date">التاريخ</th>
+                  <th scope="col" class="ep-c-other">الجهة المستلمة</th>
+                  <th scope="col" class="ep-c-state">الحالة</th>
                 </tr>
               </thead>
               <tbody>
                 {% for book in issued_books %}
-                <tr{% if not book.restricted %} style="cursor:pointer" data-book-preview="{{ book.pk }}"{% endif %}>
-                  <td class="text-muted">{{ issued_books.start_index|add:forloop.counter0 }}</td>
-                  <td class="fw-bold">
-                    <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number_display }}</a>
-                  </td>
-                  <td>{% if book.restricted %}<span class="text-muted"><i class="bi bi-lock-fill" aria-hidden="true"></i> {{ stub_title }}</span>{% else %}{{ book.title|truncatechars:60 }}{% endif %}</td>
-                  <td><span class="badge bg-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}-subtle text-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}">{{ book.kind_label }}</span></td>
-                  <td class="text-muted">{{ book.date|date:"d/m/Y" }}</td>
-                  <td>
-                    {% if book.restricted %}<span class="text-muted">—</span>{% else %}
+                <tr{% if not book.restricted %} class="is-previewable" data-book-preview="{{ book.pk }}"{% endif %}>
+                  <td class="ep-c-idx"><bdi dir="ltr">{{ issued_books.start_index|add:forloop.counter0 }}</bdi></td>
+                  <td class="ep-c-num"><a href="{% url 'book_detail' book.pk %}"><bdi dir="ltr">{{ book.our_number_display|default:"بلا رقم" }}</bdi></a></td>
+                  <td class="ep-c-title">{% if book.restricted %}<span class="ep-stub"><i class="bi bi-lock-fill" aria-hidden="true"></i> {{ stub_title }}</span>{% else %}<span{% if book.title|length > 60 %} title="{{ book.title }}"{% endif %}>{{ book.title|truncatechars:60 }}</span>{% endif %}</td>
+                  <td class="ep-c-kind"><span class="ep-dir"><i class="bi {% if 'outgoing' in book.kind %}bi-envelope-arrow-up{% else %}bi-envelope-arrow-down{% endif %}" aria-hidden="true"></i>{{ book.kind_label }}</span></td>
+                  <td class="ep-c-date">{% if book.date %}<bdi dir="ltr">{{ book.date|date:"d/m/Y" }}</bdi>{% else %}<span class="ep-dash">—</span>{% endif %}</td>
+                  <td class="ep-c-other">
+                    <span class="ep-cell-label">إلى</span>
+                    {% if book.restricted %}<span class="ep-dash">—</span>{% else %}
                     {% for e in book.receiving_entities.all %}
-                      <span class="badge bg-light text-dark">{{ e.name }}</span>
+                      <span class="ep-tag">{{ e.name }}</span>
                     {% empty %}
-                      <span class="text-muted">—</span>
+                      <span class="ep-dash">—</span>
                     {% endfor %}{% endif %}
                   </td>
-                  <td>
-                    {% if book.followup_state == 'pending' %}<span class="badge" style="background:rgba(37,99,235,0.15);color:#1e40af;">قيد المتابعة</span>
-                    {% elif book.followup_state == 'due_today' %}<span class="badge" style="background:rgba(217,119,6,0.18);color:#b45309;">مستحق اليوم</span>
-                    {% elif book.followup_state == 'overdue' %}<span class="badge" style="background:rgba(220,38,38,0.18);color:#b91c1c;">متأخر</span>
-                    {% else %}<span class="badge" style="background:rgba(100,116,139,0.18);color:#475569;">مُنجَز / بلا متابعة</span>{% endif %}
+                  <td class="ep-c-state">
+                    {% if book.followup_state == 'pending' %}<span class="ep-state ep-state--pending"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>قيد المتابعة</span>
+                    {% elif book.followup_state == 'due_today' %}<span class="ep-state ep-state--today"><i class="bi bi-hourglass-split" aria-hidden="true"></i>مستحق اليوم</span>
+                    {% elif book.followup_state == 'overdue' %}<span class="ep-state ep-state--late"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i>متأخر</span>
+                    {% else %}<span class="ep-state ep-state--done"><i class="bi bi-check2-circle" aria-hidden="true"></i>مُنجَز / بلا متابعة</span>{% endif %}
                   </td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-          {% if issued_books.has_other_pages %}
-          <div class="p-3 border-top">
-            <nav><ul class="pagination pagination-sm justify-content-center mb-0">
-              {% if issued_books.has_previous %}
-                <li class="page-item"><a class="page-link" href="?pi={{ issued_books.previous_page_number }}{% if request.GET.pr %}&pr={{ request.GET.pr }}{% endif %}">&laquo;</a></li>
-              {% endif %}
-              {% for p in issued_books.paginator.page_range %}
-                <li class="page-item {% if p == issued_books.number %}active{% endif %}"><a class="page-link" href="?pi={{ p }}{% if request.GET.pr %}&pr={{ request.GET.pr }}{% endif %}">{{ p }}</a></li>
-              {% endfor %}
-              {% if issued_books.has_next %}
-                <li class="page-item"><a class="page-link" href="?pi={{ issued_books.next_page_number }}{% if request.GET.pr %}&pr={{ request.GET.pr }}{% endif %}">&raquo;</a></li>
-              {% endif %}
-            </ul></nav>
-          </div>
-          {% endif %}
+          {% include 'core/partials/entity_pages_pager.html' with page=issued_books key='pi' keep_key='pr' keep=request.GET.pr label='صفحات الكتب المُصدرة' %}
           {% else %}
-          <div class="text-center py-5 text-muted">
-            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-            لا توجد كتب مُصدرة من هذه الجهة
+          <div class="ep-empty">
+            <span class="ep-empty-ico" aria-hidden="true"><i class="bi bi-inbox"></i></span>
+            <p>لا توجد كتب مُصدرة من هذه الجهة</p>
           </div>
           {% endif %}
         </div>
       </div>
-    </div>
 
-    <!-- كتب مُستلمة -->
-    <div class="tab-pane fade{% if request.GET.pr %} show active{% endif %}" id="received-pane" role="tabpanel">
-      <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
-        <div class="card-body p-0">
+      <!-- كتب مُستلمة -->
+      <div class="tab-pane fade{% if request.GET.pr %} show active{% endif %}" id="received-pane" role="tabpanel" aria-labelledby="received-tab">
+        <div class="ep-card ep-card--table">
           {% if received_books %}
-          <div class="table-responsive">
-            <table class="table table-hover mb-0 align-middle">
-              <thead class="table-light">
+          <div class="ep-table-wrap">
+            <table class="ep-table ep-book-table">
+              <caption class="visually-hidden">كتب مُستلمة لدى {{ entity.name }}</caption>
+              <thead>
                 <tr>
-                  <th style="width:50px">#</th>
-                  <th>رقم الكتاب</th>
-                  <th>العنوان</th>
-                  <th>النوع</th>
-                  <th>التاريخ</th>
-                  <th>الجهة المصدرة</th>
-                  <th>الحالة</th>
+                  <th scope="col" class="ep-c-idx">#</th>
+                  <th scope="col" class="ep-c-num">رقم الكتاب</th>
+                  <th scope="col" class="ep-c-title">العنوان</th>
+                  <th scope="col" class="ep-c-kind">النوع</th>
+                  <th scope="col" class="ep-c-date">التاريخ</th>
+                  <th scope="col" class="ep-c-other">الجهة المصدرة</th>
+                  <th scope="col" class="ep-c-state">الحالة</th>
                 </tr>
               </thead>
               <tbody>
                 {% for book in received_books %}
-                <tr{% if not book.restricted %} style="cursor:pointer" data-book-preview="{{ book.pk }}"{% endif %}>
-                  <td class="text-muted">{{ received_books.start_index|add:forloop.counter0 }}</td>
-                  <td class="fw-bold">
-                    <a href="{% url 'book_detail' book.pk %}" class="text-decoration-none">{{ book.our_number_display }}</a>
-                  </td>
-                  <td>{% if book.restricted %}<span class="text-muted"><i class="bi bi-lock-fill" aria-hidden="true"></i> {{ stub_title }}</span>{% else %}{{ book.title|truncatechars:60 }}{% endif %}</td>
-                  <td><span class="badge bg-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}-subtle text-{% if 'outgoing' in book.kind %}primary{% else %}success{% endif %}">{{ book.kind_label }}</span></td>
-                  <td class="text-muted">{{ book.date|date:"d/m/Y" }}</td>
-                  <td>
-                    {% if book.restricted %}<span class="text-muted">—</span>{% else %}
+                <tr{% if not book.restricted %} class="is-previewable" data-book-preview="{{ book.pk }}"{% endif %}>
+                  <td class="ep-c-idx"><bdi dir="ltr">{{ received_books.start_index|add:forloop.counter0 }}</bdi></td>
+                  <td class="ep-c-num"><a href="{% url 'book_detail' book.pk %}"><bdi dir="ltr">{{ book.our_number_display|default:"بلا رقم" }}</bdi></a></td>
+                  <td class="ep-c-title">{% if book.restricted %}<span class="ep-stub"><i class="bi bi-lock-fill" aria-hidden="true"></i> {{ stub_title }}</span>{% else %}<span{% if book.title|length > 60 %} title="{{ book.title }}"{% endif %}>{{ book.title|truncatechars:60 }}</span>{% endif %}</td>
+                  <td class="ep-c-kind"><span class="ep-dir"><i class="bi {% if 'outgoing' in book.kind %}bi-envelope-arrow-up{% else %}bi-envelope-arrow-down{% endif %}" aria-hidden="true"></i>{{ book.kind_label }}</span></td>
+                  <td class="ep-c-date">{% if book.date %}<bdi dir="ltr">{{ book.date|date:"d/m/Y" }}</bdi>{% else %}<span class="ep-dash">—</span>{% endif %}</td>
+                  <td class="ep-c-other">
+                    <span class="ep-cell-label">من</span>
+                    {% if book.restricted %}<span class="ep-dash">—</span>{% else %}
                     {% for e in book.issuing_entities.all %}
-                      <span class="badge bg-light text-dark">{{ e.name }}</span>
+                      <span class="ep-tag">{{ e.name }}</span>
                     {% empty %}
-                      <span class="text-muted">—</span>
+                      <span class="ep-dash">—</span>
                     {% endfor %}{% endif %}
                   </td>
-                  <td>
-                    {% if book.followup_state == 'pending' %}<span class="badge" style="background:rgba(37,99,235,0.15);color:#1e40af;">قيد المتابعة</span>
-                    {% elif book.followup_state == 'due_today' %}<span class="badge" style="background:rgba(217,119,6,0.18);color:#b45309;">مستحق اليوم</span>
-                    {% elif book.followup_state == 'overdue' %}<span class="badge" style="background:rgba(220,38,38,0.18);color:#b91c1c;">متأخر</span>
-                    {% else %}<span class="badge" style="background:rgba(100,116,139,0.18);color:#475569;">مُنجَز / بلا متابعة</span>{% endif %}
+                  <td class="ep-c-state">
+                    {% if book.followup_state == 'pending' %}<span class="ep-state ep-state--pending"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>قيد المتابعة</span>
+                    {% elif book.followup_state == 'due_today' %}<span class="ep-state ep-state--today"><i class="bi bi-hourglass-split" aria-hidden="true"></i>مستحق اليوم</span>
+                    {% elif book.followup_state == 'overdue' %}<span class="ep-state ep-state--late"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i>متأخر</span>
+                    {% else %}<span class="ep-state ep-state--done"><i class="bi bi-check2-circle" aria-hidden="true"></i>مُنجَز / بلا متابعة</span>{% endif %}
                   </td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-          {% if received_books.has_other_pages %}
-          <div class="p-3 border-top">
-            <nav><ul class="pagination pagination-sm justify-content-center mb-0">
-              {% if received_books.has_previous %}
-                <li class="page-item"><a class="page-link" href="?pr={{ received_books.previous_page_number }}{% if request.GET.pi %}&pi={{ request.GET.pi }}{% endif %}">&laquo;</a></li>
-              {% endif %}
-              {% for p in received_books.paginator.page_range %}
-                <li class="page-item {% if p == received_books.number %}active{% endif %}"><a class="page-link" href="?pr={{ p }}{% if request.GET.pi %}&pi={{ request.GET.pi }}{% endif %}">{{ p }}</a></li>
-              {% endfor %}
-              {% if received_books.has_next %}
-                <li class="page-item"><a class="page-link" href="?pr={{ received_books.next_page_number }}{% if request.GET.pi %}&pi={{ request.GET.pi }}{% endif %}">&raquo;</a></li>
-              {% endif %}
-            </ul></nav>
-          </div>
-          {% endif %}
+          {% include 'core/partials/entity_pages_pager.html' with page=received_books key='pr' keep_key='pi' keep=request.GET.pi label='صفحات الكتب المُستلمة' %}
           {% else %}
-          <div class="text-center py-5 text-muted">
-            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-            لا توجد كتب مُستلمة لهذه الجهة
+          <div class="ep-empty">
+            <span class="ep-empty-ico" aria-hidden="true"><i class="bi bi-inbox"></i></span>
+            <p>لا توجد كتب مُستلمة لهذه الجهة</p>
           </div>
           {% endif %}
         </div>
       </div>
     </div>
-  </div>
+  </section>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{# اللوحُ المنزلق نفسُه الذي في قائمة الكتب (الملفُّ والنسخةُ نفساهما — كاشٌ واحد) #}
+<script src="{% static 'js/lx_tabs.js' %}?v=20261112-list1"></script>
 {% endblock %}

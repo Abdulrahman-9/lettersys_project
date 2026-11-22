@@ -1,13 +1,14 @@
 {% load static %}{# صفّ كتاب في جدول الإضبارة. متغيّرات: b (الكتاب مُلبَساً بـ_present — المحتوى من shown_* وحدها)، side ('out'|'in')، entity #}
-<tr>
-  <td><a class="num" href="{% url 'book_detail' b.pk %}">{{ b.our_number_display }}</a></td>
+{# على الهويّة (11-19): خليّةُ العنوان td عاريةٌ ورابطُ الرقم a.num بلا سمةٍ زائدة — حرّاسُ السرّيّة يقرؤونهما حرفاً #}
+<tr class="dd-row st-{{ b.followup_state }}">
+  <td class="dd-num"><a class="num" href="{% url 'book_detail' b.pk %}">{{ b.our_number_display|default:"بلا رقم" }}</a></td>
   <td>{{ b.shown_title|truncatechars:55 }}</td>
-  <td>{{ b.date|date:"Y/m/d" }}</td>
-  <td>{% if side == 'out' %}{{ b.shown_receiving|default:"—" }}{% else %}{{ b.shown_issuing|default:"—" }}{% endif %}</td>
-  <td><span class="fs fs-{{ b.followup_state }}">{{ b.followup_label }}</span></td>
-  <td><div class="row-actions">
-    <a class="view" href="{% url 'book_detail' b.pk %}" title="معاينة"><i class="bi bi-eye"></i></a>
-    <a class="edit" href="{% url 'book_edit' b.pk %}" title="تعديل"><i class="bi bi-pencil"></i></a>
-    <a class="print" href="{% url 'dossier_report' entity.pk %}?book_id={{ b.pk }}" target="_blank" rel="noopener" title="طباعة"><i class="bi bi-printer"></i></a>
+  <td class="dd-date"><bdi dir="ltr">{{ b.date|date:"Y/m/d"|default:"—" }}</bdi></td>
+  <td class="dd-party" data-label="{% if side == 'out' %}إلى{% else %}من{% endif %}">{% if side == 'out' %}{{ b.shown_receiving|default:"—" }}{% else %}{{ b.shown_issuing|default:"—" }}{% endif %}</td>
+  <td class="dd-state"><span class="fs fs-{{ b.followup_state }}">{{ b.followup_label }}</span></td>
+  <td class="dd-acts"><div class="row-actions">
+    <a class="view" href="{% url 'book_detail' b.pk %}" title="معاينة" aria-label="معاينة"><i class="bi bi-eye" aria-hidden="true"></i></a>
+    <a class="edit" href="{% url 'book_edit' b.pk %}" title="تعديل" aria-label="تعديل"><i class="bi bi-pencil" aria-hidden="true"></i></a>
+    <a class="print" href="{% url 'dossier_report' entity.pk %}?book_id={{ b.pk }}" target="_blank" rel="noopener" title="طباعة" aria-label="طباعة (في لسان جديد)"><i class="bi bi-printer" aria-hidden="true"></i></a>
   </div></td>
 </tr>

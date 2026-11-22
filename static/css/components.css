@@ -69,9 +69,9 @@ html:not([data-lx-legacy]) .modal-footer > * { margin: 0; }
 
 .lx-dialog-ico.is-danger { background: var(--lx-late-bg); color: var(--lx-late); }
 
-/* «ثانويّ» Bootstrap في الداكن: رماديُّه 3.6:1 على السطح (مقيسٌ في الحوار 11-15) ⟵ حبرُ الهويّة الخافت؛
-   بمتغيّرات الزرّ نفسِه فلا تتغيّر أحجامُه ولا الفاتحُ المعتمَد */
-html:not([data-lx-legacy])[data-bs-theme="dark"] .btn-outline-secondary {
+/* «ثانويّ» Bootstrap: رماديُّه 3.6:1 على السطح الداكن و4.27:1 على الأرضيّة الفاتحة (‎«إغلاق الدليل»‎، مقيسٌ
+   في دفعة الصفحات 11-19) ⟵ حبرُ الهويّة الخافت في الوضعين؛ بمتغيّرات الزرّ نفسِه فلا تتغيّر أحجامُه */
+html:not([data-lx-legacy]) .btn-outline-secondary {
   --bs-btn-color: var(--lx-mute);
   --bs-btn-border-color: var(--lx-line-strong);
   --bs-btn-hover-color: var(--lx-ink);
@@ -80,4 +80,6 @@ html:not([data-lx-legacy])[data-bs-theme="dark"] .btn-outline-secondary {
   --bs-btn-active-color: var(--lx-ink);
   --bs-btn-active-bg: var(--lx-surface-2);
   --bs-btn-active-border-color: var(--lx-line-strong);
+  --bs-btn-disabled-color: var(--lx-mute);
+  --bs-btn-disabled-border-color: var(--lx-line);
 }

@@ -16,7 +16,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 
 from .. import numbering
-from ..scoping import can_manage_accounts, can_manage_mail
+from ..scoping import can_manage_accounts, can_manage_mail, can_open_admin_pages
 
 
 def apply_search_filters(queryset, search_text):
@@ -252,8 +252,7 @@ def staff_required(view_func):
       بزرّ عودة (كانت تحويلاً إلى صفحة الدخول — وهو يُربك مَن هو داخلٌ فعلاً).
     - **غيرُ داخلٍ** ⟵ تحويلٌ إلى الدخول مع ``next`` كما يفعل ``login_required``.
     """
-    return _guarded(view_func, lambda user: user.is_staff or user.is_superuser,
-                    'هذه الصفحةُ لإدارة النظام.')
+    return _guarded(view_func, can_open_admin_pages, 'هذه الصفحةُ لإدارة النظام.')
 
 
 def privileged_required(view_func):

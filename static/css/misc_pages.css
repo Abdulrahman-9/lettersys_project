@@ -1,0 +1,231 @@
+/* ==========================================================================
+   LetterSys — صفحاتُ وحدة «misc» داخل القشرة على الهويّة v2 (11-19): تغييرُ كلمة المرور.
+   بطاقةُ الحال لصفحات 403/404/500/الانقطاع في templates/_misc_status_style.html (مضمَّنة: صفحتا
+   500 والانقطاع لا تعتمدان على ورقةٍ لا يخبّئها عاملُ الخدمة).
+   الألوانُ من رموز theme.css وحدَها (الحارس: core/tests_identity_misc.py).
+   ========================================================================== */
+
+.misc-pw {
+  max-width: 35rem;
+  margin-inline: auto;
+  padding: clamp(.5rem, 2vw, 1.5rem) 0 2.5rem;
+  color: var(--lx-ink);
+}
+
+.misc-head { display: flex; align-items: center; gap: .9rem; margin-bottom: 1.25rem; }
+
+.misc-head-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 15px;
+  font-size: 1.35rem;
+  color: var(--lx-pri);
+  background: var(--lx-pri-soft);
+  border: 1px solid color-mix(in srgb, var(--lx-pri) 22%, transparent);
+}
+
+.misc-head h1 { margin: 0; font-size: 1.45rem; font-weight: 800; line-height: 1.45; }
+.misc-head p { margin: .15rem 0 0; font-size: .95rem; line-height: 1.8; color: var(--lx-mute); }
+
+.misc-note,
+.misc-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  margin: 0 0 1rem;
+  padding: .8rem 1rem;
+  border: 1px solid;
+  border-radius: 14px;
+  font-weight: 700;
+  line-height: 1.75;
+}
+
+.misc-note { color: var(--lx-wait); background: var(--lx-wait-bg); border-color: var(--lx-wait-line); }
+.misc-alert { color: var(--lx-late); background: var(--lx-late-bg); border-color: var(--lx-late-line); }
+.misc-note .bi, .misc-alert .bi { flex: none; margin-top: .15rem; font-size: 1.1rem; }
+.misc-alert p { margin: 0; }
+
+.misc-card {
+  position: relative;
+  overflow: hidden;
+  padding: 1.6rem 1.5rem 1.4rem;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-lg);
+  box-shadow: var(--lx-shadow-sm), var(--lx-shadow-md);
+}
+
+/* الحافّةُ العلويّة نفسُها في حوارات البرنامج وبطاقة الحال: تركوازٌ إلى ذهبيّ */
+.misc-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(to left, var(--lx-hero-b), var(--lx-hero-a) 62%, var(--lx-accent));
+}
+
+.misc-field + .misc-field { margin-top: 1.15rem; }
+
+/* الحاليّةُ للتحقّق منك، والجديدتان بعد خطٍّ — مجموعتان تُريان قبل أن تُقرآ */
+.misc-field-new { padding-top: 1.35rem; border-top: 1px dashed var(--lx-line-strong); }
+.misc-field + .misc-field-new { margin-top: 1.35rem; }
+
+.misc-label { display: block; margin-bottom: .45rem; font-size: .98rem; font-weight: 700; color: var(--lx-ink); }
+
+.misc-pass { position: relative; }
+
+.misc-pw .form-control {
+  min-height: 48px;
+  font-size: 1rem;
+  padding-inline-end: 3.4rem;
+  color: var(--lx-ink);
+  background-color: var(--lx-surface);
+  border: 1.5px solid var(--lx-field-line);
+  border-radius: var(--lx-radius);
+}
+
+/* الخطأ بأحمر «متأخّر» — وأيقونةُ Bootstrap الحمراءُ الصريحة تُسقط (كانت تحت زرّ الإظهار) */
+.misc-pw .form-control.is-invalid {
+  padding-inline-end: 3.4rem;
+  border-color: var(--lx-late);
+  background-image: none;
+}
+
+.misc-pw .form-control.is-invalid:focus { box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--lx-late) 20%, transparent); }
+
+.misc-eye {
+  position: absolute;
+  top: 50%;
+  inset-inline-end: .35rem;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--lx-mute);
+  font-size: 1.15rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease;
+}
+
+.misc-eye:hover { background: var(--lx-pri-soft); color: var(--lx-pri-soft-ink); }
+.misc-eye:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 1px; }
+.misc-eye[aria-pressed="true"] { color: var(--lx-pri); }
+
+.misc-rules {
+  display: grid;
+  gap: .3rem;
+  margin: .55rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: .88rem;
+  line-height: 1.7;
+  color: var(--lx-mute);
+}
+
+.misc-rule { display: flex; align-items: flex-start; gap: .45rem; }
+.misc-rule .bi { flex: none; margin-top: .2rem; font-size: .95rem; }
+.misc-rule.is-met { color: var(--lx-done); }
+
+.misc-match,
+.misc-keyhint {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  margin-top: .5rem;
+  font-size: .88rem;
+  font-weight: 700;
+}
+
+.misc-match.is-ok { color: var(--lx-done); }
+.misc-match.is-bad { color: var(--lx-late); }
+
+.misc-keyhint {
+  padding: .45rem .75rem;
+  border: 1px solid var(--lx-wait-line);
+  border-radius: 10px;
+  color: var(--lx-wait);
+  background: var(--lx-wait-bg);
+}
+
+.misc-match[hidden],
+.misc-keyhint[hidden] { display: none; }
+
+.misc-error { margin-top: .5rem; font-size: .9rem; font-weight: 700; line-height: 1.7; color: var(--lx-late); }
+.misc-error p { display: flex; align-items: flex-start; gap: .45rem; margin: 0; }
+.misc-error .bi { flex: none; margin-top: .2rem; }
+
+.misc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: 1.6rem; }
+
+.misc-actions .btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  padding-inline: 1.2rem;
+  font-weight: 700;
+}
+
+.misc-submit-label { display: inline-flex; align-items: center; gap: .45rem; }
+.misc-submit-busy { display: none; }
+.misc-submit.is-busy .misc-submit-label { display: none; }
+.misc-submit.is-busy .misc-submit-busy { display: inline-flex; align-items: center; gap: .5rem; }
+
+.misc-spin {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: misc-spin .7s linear infinite;
+}
+
+@keyframes misc-spin { to { transform: rotate(360deg); } }
+
+/* التغييرُ الإجباريّ: مخرجٌ صادق بدل «إلغاءٍ» يعود إلى الصفحة نفسِها */
+.misc-later {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .25rem .5rem;
+  margin-top: 1rem;
+  font-size: .92rem;
+  color: var(--lx-mute);
+}
+
+.misc-linkbtn {
+  min-height: 44px;
+  padding: .25rem .5rem;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--lx-pri);
+  text-decoration: underline;
+  text-underline-offset: .2em;
+  cursor: pointer;
+}
+
+.misc-linkbtn:hover { color: var(--lx-pri-strong); }
+.misc-linkbtn:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
+
+@media (max-width: 575.98px) {
+  .misc-card { padding: 1.35rem 1.05rem 1.15rem; border-radius: var(--lx-radius); }
+  .misc-head h1 { font-size: 1.25rem; }
+  .misc-actions .btn { flex: 1 1 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .misc-eye { transition: none; }
+  .misc-spin { animation-duration: 1.6s; }
+}

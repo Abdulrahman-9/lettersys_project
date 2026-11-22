@@ -1,5 +1,9 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}غير موجود{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+{% block extra_css %}{% include "_misc_status_style.html" %}{% endblock %}
 {% block content %}
-{% include "core/_error_page.html" with code=404 title="الصفحةُ غيرُ موجودة" hint="ربّما حُذف الكتابُ أو نُقل إلى سلّة المهملات، أو أنّ الرابطَ قديم." %}
+{% include "core/_error_page.html" with code=404 icon="signpost-split" label="غير موجود" title="الصفحةُ غيرُ موجودة" hint="ربّما حُذف الكتابُ أو نُقل إلى سلّة المهملات، أو أنّ الرابطَ قديم." path=request_path %}
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/misc_pages.js' %}?v=20261119-pages"></script>{% endblock %}

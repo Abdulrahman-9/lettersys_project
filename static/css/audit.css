@@ -1,0 +1,615 @@
+/* ==========================================================================
+   سجلّ الحركات على الهويّة الموحّدة (11-19) — دفترُ مساءلة
+   --------------------------------------------------------------------------
+   يومٌ فوق يوم: شريطُ اليوم يلتصق تحت رأس الجدول فلا يضيع التاريخُ أثناء التمرير، والوقتُ
+   هامشُ الدفتر بخطٍّ ذهبيٍّ خافت (زخرفةٌ لا نصّ). رقمُ الكتاب «ختمٌ» تركوازيّ، والمحجوبُ
+   بنفسجيُّ «السرّيّ» كطوابير الطاولة. ألوانُ الحالات (متأخّر/ينتظر/أُنجز/قيد العمل) لا تُستعار
+   للأفعال — الفعلُ رقاقةٌ محايدة. كلُّ لونٍ رمزٌ من theme.css، والاستثناءُ الوحيد #fff حبراً
+   على التركواز العميق. الهاتف: الصفُّ بطاقة، والعناوينُ تبقى للقارئ الصوتيّ من الجدول نفسه.
+   ========================================================================== */
+
+.audit-page {
+  --audit-th-h: 2.75rem;                 /* ارتفاعُ رأس الجدول — شريطُ اليوم يلتصق تحته */
+  --audit-gutter: color-mix(in srgb, var(--lx-accent) 38%, transparent);
+  display: grid;
+  gap: 1rem;
+  padding: .5rem .75rem 2rem;
+  color: var(--lx-ink);
+}
+
+.audit-page > * { min-width: 0; }
+
+/* ── الرأس ── */
+.audit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem 1.5rem;
+}
+
+.audit-title {
+  display: flex;
+  align-items: flex-start;
+  gap: .85rem;
+  min-width: 0;
+}
+
+.audit-title-ico {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  margin-top: .2rem;
+  border-radius: 14px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri);
+  font-size: 1.35rem;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lx-pri) 20%, transparent);
+}
+
+.audit-eyebrow {
+  display: block;
+  color: var(--lx-mute);
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.audit-title h1 {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: clamp(1.35rem, 2.4vw, 1.7rem);
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.audit-lede {
+  margin: .15rem 0 0;
+  color: var(--lx-mute);
+  font-size: .9rem;
+  line-height: 1.8;
+}
+
+/* صدقُ الواجهة: ما قبل التفعيل لم يُسجَّل — حاشيةٌ على الدفتر لا تنبيه */
+.audit-since {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .5rem;
+  max-width: 27rem;
+  margin: 0;
+  padding: .5rem .85rem;
+  border: 1px dashed var(--lx-line-strong);
+  border-radius: 12px;
+  background: var(--lx-surface);
+  color: var(--lx-mute);
+  font-size: .83rem;
+  line-height: 1.75;
+}
+
+.audit-since i { color: var(--lx-pri); }
+
+.audit-since time {
+  color: var(--lx-ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── التبويبان: لوحُ قائمة الكتب (tabs-split/tab-main) بعمودين، وهما روابط ── */
+.audit-tabs.tabs-split {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.audit-tabs .tab-main { min-height: 3.5rem; }
+
+/* ── التصفية: تسمياتٌ ظاهرة بحبر النصّ، وحقولٌ بارتفاعٍ واحد. صفٌّ يلتفّ (لا شبكةٌ صلبة):
+   الزرّان كتلةٌ واحدة تنزل معاً إلى سطرها إن ضاق المكان — لا يتراكب أحدُهما فوق الآخر ── */
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: .75rem 1rem;
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+}
+
+.audit-field {
+  display: grid;
+  flex: 1 1 9.5rem;
+  gap: .35rem;
+  min-width: 0;
+}
+
+.audit-field-actor,
+.audit-field-action { flex: 1.3 1 11rem; }
+
+/* حقلُ التاريخ له عرضٌ ذاتيٌّ لا ينكمش دونه (Chromium) — فيفيض عن عمودٍ ضيّق */
+.audit-field > * { min-width: 0; }
+
+.audit-field label {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.audit-field :is(.form-control, .form-select) {
+  min-height: 2.6rem;
+  font-size: .92rem;
+}
+
+.audit-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .5rem;
+  margin-inline-start: auto;
+}
+
+.audit-page .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  min-height: 2.6rem;
+  padding-inline: 1rem;
+  font-weight: 700;
+}
+
+/* «ثانويّ» على الهويّة من components.css؛ هنا سطحُه فوق الأرضيّة */
+.audit-page .btn-outline-secondary { --bs-btn-bg: var(--lx-surface); }
+
+/* ── الورقة: سطرُ الحال + الجدول + الصفحات ── */
+.audit-sheet {
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+  overflow: clip;                         /* لا hidden: hidden يصنع حاويةَ تمريرٍ فيُبطل التصاقَ الرأس */
+}
+
+.audit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .25rem .55rem;
+  margin: 0;
+  padding: .7rem 1rem;
+  border-bottom: 1px solid var(--lx-line);
+  color: var(--lx-mute);
+  font-size: .84rem;
+}
+
+.audit-meta b {
+  color: var(--lx-ink);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-meta .bi { color: var(--lx-pri); }
+
+/* ── الجدول ── */
+.audit-table {
+  width: 100%;
+  border-collapse: separate;              /* الرأسُ اللاصق يحمل حدَّه معه */
+  border-spacing: 0;
+  color: var(--lx-ink);
+  font-size: .9rem;
+  line-height: 1.6;
+}
+
+.audit-table :is(th, td) {
+  padding: .6rem .8rem;
+  text-align: start;
+  vertical-align: baseline;
+}
+
+.audit-table thead th {
+  position: sticky;
+  top: var(--lx-topbar-h);
+  z-index: 3;
+  height: var(--audit-th-h);
+  padding-block: 0;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--lx-line-strong);
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
+  font-size: .78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* شريطُ اليوم: يلتصق تحت الرأس — اليومُ الجاري ظاهرٌ ما دامت حركاتُه تمرّ */
+.audit-day th {
+  position: sticky;
+  top: calc(var(--lx-topbar-h) + var(--audit-th-h));
+  z-index: 2;
+  padding: .45rem .8rem;
+  border-bottom: 1px solid var(--lx-line);
+  border-inline-start: 3px solid var(--lx-accent);
+  background: var(--lx-bg);
+  font-weight: 400;
+}
+
+tbody + tbody .audit-day th { border-top: 1px solid var(--lx-line); }
+
+.audit-day-name {
+  color: var(--lx-ink);
+  font-size: .86rem;
+  font-weight: 800;
+}
+
+.audit-day-date {
+  margin-inline-start: .35rem;
+  color: var(--lx-mute);
+  font-size: .82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-today {
+  display: inline-block;
+  margin-inline-start: .5rem;
+  padding: 0 .55rem;
+  border-radius: 999px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+  font-size: .72rem;
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+.audit-row > * {
+  border-top: 1px solid var(--lx-line);
+  transition: background-color var(--lx-dur-1) ease;
+}
+
+.audit-day + .audit-row > * { border-top: 0; }
+
+.audit-row:hover > * { background: var(--lx-surface-2); }
+
+/* الوقتُ هامشُ الدفتر: أرقامٌ متساوية العرض وخطٌّ ذهبيٌّ خافت يفصله عن المتن */
+.audit-c-when {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.audit-row .audit-c-when {
+  border-inline-end: 2px solid var(--audit-gutter);
+  color: var(--lx-ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-c-who {
+  width: 14%;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.audit-c-dept {
+  width: 12%;
+  color: var(--lx-mute);
+  font-size: .84rem;
+}
+
+.audit-c-act { width: 1%; }
+
+.audit-act {
+  display: inline-block;
+  padding: 0 .6rem;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: 999px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font-size: .8rem;
+  font-weight: 700;
+  line-height: 1.75;
+  white-space: nowrap;
+}
+
+/* رقمُ الكتاب ختمٌ تركوازيّ، والعنوانُ رابطٌ بخطٍّ خافت يتركوز تحت اليد */
+.audit-book {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: .5rem;
+  max-width: 100%;
+  min-height: 1.5rem;
+  color: var(--lx-ink);
+  text-decoration: none;
+}
+
+.audit-stamp {
+  flex: none;
+  padding: 0 .45rem;
+  border-radius: 6px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+  font-size: .8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.75;
+  white-space: nowrap;
+}
+
+.audit-book-title,
+.audit-note-text {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+a.audit-book .audit-book-title {
+  text-decoration: underline;
+  text-decoration-color: var(--lx-line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: .3em;
+  transition: color var(--lx-dur-1) ease, text-decoration-color var(--lx-dur-1) ease;
+}
+
+a.audit-book:hover .audit-book-title {
+  color: var(--lx-pri);
+  text-decoration-color: currentColor;
+}
+
+a.audit-book:focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* التركيزُ بلوحة المفاتيح لا يختفي تحت الشريط العلويّ والرأس وشريط اليوم (WCAG 2.4.11) */
+.audit-table a { scroll-margin-top: calc(var(--lx-topbar-h) + var(--audit-th-h) + 4rem); }
+
+.audit-book.is-restricted .audit-stamp {
+  background: var(--lx-secret-bg);
+  color: var(--lx-secret);
+}
+
+.audit-book.is-restricted .audit-book-title {
+  color: var(--lx-secret);
+  font-style: italic;
+}
+
+.audit-c-note,
+.audit-note-text {
+  color: var(--lx-mute);
+  font-size: .84rem;
+}
+
+.audit-c-note { width: 24%; }
+
+.audit-c-count {
+  width: 1%;
+  color: var(--lx-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-table .audit-c-count { text-align: center; }   /* فوق ‎:is(th, td)‎ العامّة */
+
+/* الطيُّ دليلٌ لا تفصيل: ما تكرّر في اليوم يُقرأ قبل غيره */
+.audit-c-count.is-many {
+  color: var(--lx-ink);
+  font-weight: 800;
+}
+
+.audit-c-ip {
+  width: 1%;
+  color: var(--lx-mute);
+  font-size: .82rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.audit-nil { color: var(--lx-mute); }
+
+/* ── الصفحات ── */
+.audit-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .75rem 1rem;
+  border-top: 1px solid var(--lx-line);
+  background: var(--lx-surface-2);
+}
+
+.audit-pager-status {
+  color: var(--lx-mute);
+  font-size: .84rem;
+  text-align: center;
+}
+
+.audit-pager-status b {
+  color: var(--lx-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-pager-slot { min-width: 6rem; }
+
+/* ── الحالةُ الفارغة: تقول لماذا وتعطي مخرجاً ── */
+.audit-empty {
+  display: grid;
+  justify-items: center;
+  gap: .5rem;
+  padding: 3rem 1.25rem;
+  text-align: center;
+}
+
+.audit-empty-ico {
+  display: inline-grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: .25rem;
+  border-radius: 16px;
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
+  font-size: 1.5rem;
+}
+
+.audit-empty p {
+  max-width: 34rem;
+  margin: 0;
+  color: var(--lx-mute);
+  line-height: 1.9;
+  text-wrap: pretty;
+}
+
+.audit-empty .audit-empty-title {
+  color: var(--lx-ink);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.audit-empty .btn { margin-top: .5rem; }
+
+/* ── الهاتف: الصفُّ بطاقة، ورأسُ الجدول يبقى للقارئ الصوتيّ وحده ── */
+@media (max-width: 720px) {
+  .audit-page { gap: .85rem; padding-inline: .5rem; }
+
+  .audit-head { align-items: flex-start; }
+  .audit-title-ico { width: 2.6rem; height: 2.6rem; font-size: 1.15rem; }
+  .audit-since { max-width: none; }
+
+  /* التلميحُ تحت اسم التبويب ترفٌ على الهاتف، والأيقونةُ فوق الاسم كتبويبات الطاولة: الاسمُ سطرٌ واحد */
+  .audit-tabs .tab-count { display: none; }
+  .audit-tabs .tab-main { flex-direction: column; gap: .2rem; padding: .45rem .5rem; }
+  .audit-tabs .tab-main .tab-text { align-items: center; }
+  .audit-tabs .tab-main .tab-label { font-size: .9rem; white-space: nowrap; }
+
+  .audit-filters { gap: .65rem .75rem; padding: .85rem; }
+  .audit-field,
+  .audit-field-actor,
+  .audit-field-action { flex: 1 1 calc(50% - .375rem); }
+  .audit-field :is(.form-control, .form-select) { min-height: 2.75rem; font-size: 1rem; }
+  .audit-field input[type="date"] { padding-inline: .6rem; }
+  .audit-page .btn { min-height: 2.75rem; }
+  .audit-actions { flex: 1 1 100%; }
+  .audit-actions .btn { flex: 1 1 0; }
+
+  .audit-sheet {
+    border: 0;
+    background: none;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .audit-meta { padding: 0 .15rem .6rem; border: 0; }
+
+  .audit-table,
+  .audit-table tbody { display: block; }
+
+  .audit-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .audit-table tbody { margin-bottom: .5rem; }
+
+  /* الشريطُ نفسُه يلتصق (لا خليّتُه): حاويتُه الآن مجموعةُ اليوم فيدفعه اليومُ التالي */
+  .audit-day {
+    display: block;
+    position: sticky;
+    top: var(--lx-topbar-h);
+    z-index: 2;
+    margin-bottom: .5rem;
+  }
+
+  .audit-day th {
+    display: block;
+    position: static;
+    padding: .5rem .8rem;
+    border: 1px solid var(--lx-line);
+    border-inline-start: 3px solid var(--lx-accent);
+    border-radius: 10px;
+    box-shadow: var(--lx-shadow-sm);
+  }
+
+  tbody + tbody .audit-day th { border-top: 1px solid var(--lx-line); }
+
+  /* البطاقة: (مَن … الوقت) ثمّ (الفعل · القسم) ثمّ الكتاب ثمّ التفصيل ثمّ (المرّات · العنوان).
+     شبكةٌ بأعمدةٍ ثلاثة والوضعُ آليّ: ما يُخفى لا يترك سطراً فارغاً */
+  .audit-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: .4rem .6rem;
+    margin-bottom: .6rem;
+    padding: .75rem .85rem;
+    border: 1px solid var(--lx-line);
+    border-radius: var(--lx-radius);
+    background: var(--lx-surface);
+    box-shadow: var(--lx-shadow-sm);
+  }
+
+  /* بخصوصيّة ‎.audit-table :is(th, td)‎ وأكثر — وإلّا بقيت حشوةُ الخليّة فتضخّمت البطاقة */
+  .audit-table .audit-row > * {
+    display: block;
+    width: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .audit-table .audit-row:hover > * { background: none; }
+
+  .audit-c-who { order: 1; grid-column: 1 / 3; font-size: .95rem; }
+  .audit-row .audit-c-when { order: 2; grid-column: 3; border: 0; }
+  .audit-c-act { order: 3; grid-column: 1; }
+  .audit-c-dept { order: 4; grid-column: 2 / 4; }
+  .audit-c-book { order: 5; grid-column: 1 / -1; }
+  .audit-c-note { order: 6; grid-column: 1 / -1; }
+  .audit-c-count { order: 7; grid-column: 1; }
+  .audit-c-ip { order: 8; grid-column: 2 / 4; }
+  .audit-c-count:not(.is-many) + .audit-c-ip { grid-column: 1 / -1; }
+
+  /* ما لا قيمةَ له في البطاقة لا يُرسم: قسمٌ غائب، كتابٌ وتفصيلٌ فارغان، مرّةٌ واحدة، عنوانٌ مجهول */
+  .audit-c-dept:has(> .audit-nil),
+  .audit-c-book:has(> .audit-nil),
+  .audit-c-ip:has(> .audit-nil),
+  .audit-c-note:empty,
+  .audit-c-count:not(.is-many) { display: none; }
+
+  /* الرقمان وحدهما يحتاجان اسماً في البطاقة؛ الكتابُ يعرّفه ختمُه والتفصيلُ لونُه */
+  .audit-table :is(.audit-c-count, .audit-c-ip)::before {
+    content: attr(data-label);
+    content: attr(data-label) / "";
+    margin-inline-end: .35rem;
+    color: var(--lx-mute);
+    font-size: .74rem;
+    font-weight: 700;
+  }
+
+  .audit-book { min-height: 1.75rem; }
+
+  .audit-pager {
+    flex-wrap: wrap;
+    padding: .25rem 0 0;
+    border: 0;
+    background: none;
+  }
+
+  .audit-pager-status { order: -1; flex: 1 1 100%; }
+  .audit-pager .btn,
+  .audit-pager-slot { flex: 1 1 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .audit-row > *,
+  a.audit-book .audit-book-title { transition: none; }
+}

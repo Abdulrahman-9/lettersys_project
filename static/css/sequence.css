@@ -1,0 +1,328 @@
+/* «العدّادات التسلسلية» — على رموز الهويّة وحدها (theme.css: --lx-*)، فالداكنُ يأتي معها (2026-11-19).
+   الأرقامُ قلبُ الصفحة: كلُّ عدّادٍ «لوحةُ ختم» برقمٍ معزولٍ يسارَ‑يمين وأرقامٍ جدوليّة، وصيغتُه من
+   core/numbering.py (الـview يمرّرها). الوارد تركوازٌ والصادر حبرٌ — لغةُ «كلّ الكتب» نفسُها. */
+
+.sq {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2.5rem;
+  display: grid;
+  gap: 1.35rem;
+  color: var(--lx-ink);
+  touch-action: manipulation;
+}
+
+/* النموذجُ يحمل الأقسامَ الثلاثة (العدّادات · الحجز · الحفظ) — بالإيقاع نفسِه */
+.sq-form { display: grid; gap: 1.35rem; min-width: 0; }
+
+/* ── الرأس ─────────────────────────────────────────────────────────────── */
+.sq-head { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; }
+
+.sq-back {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 12px;
+}
+
+/* بلاطةُ الصفحة بسطح «القيادة»: تركوازٌ عميقٌ وخطٌّ ذهبيّ (لوحُ التبويب المنزلق نفسُه) */
+.sq-head-ico {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--lx-hero-a), var(--lx-hero-b));
+  box-shadow: inset 0 -3px 0 var(--lx-accent), var(--lx-shadow-sm);
+  color: #fff;
+  font-size: 1.55rem;
+}
+
+.sq-head-text { flex: 1 1 14rem; min-width: 0; display: grid; gap: .15rem; }
+.sq-crumb { font-size: .8rem; font-weight: 600; color: var(--lx-mute); }
+.sq-head h1 { margin: 0; font-size: 1.6rem; font-weight: 800; line-height: 1.35; text-wrap: balance; }
+.sq-head p { margin: 0; max-width: 64ch; font-size: .9rem; line-height: 1.75; color: var(--lx-mute); text-wrap: pretty; }
+
+.sq-ledger {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .35rem .85rem;
+  border: 1px solid color-mix(in srgb, var(--lx-pri) 28%, transparent);
+  border-radius: 999px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+/* ── الرسائل: تبقى في الصفحة (الخطأُ لا يختفي) — ألوانُها من رموز الحالات عبر theme.css ── */
+.sq-msgs { display: grid; gap: .5rem; }
+.sq-alert { display: flex; align-items: flex-start; gap: .6rem; margin: 0; border-radius: 12px; line-height: 1.75; }
+.sq-alert > .bi { flex: none; font-size: 1.1rem; line-height: 1.6; }
+.sq-alert > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+
+/* ── العدّادات ─────────────────────────────────────────────────────────── */
+.sq-section { display: grid; gap: .85rem; }
+
+.sq-section-head { display: grid; gap: .25rem; }
+
+.sq-section-head h2,
+.sq-card-title h2 { margin: 0; font-size: 1.05rem; font-weight: 800; }
+
+.sq-rule {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: .45rem;
+  max-width: 62ch;
+  font-size: .84rem;
+  line-height: 1.75;
+  color: var(--lx-mute);
+}
+
+.sq-rule .bi { flex: none; color: var(--lx-pri); font-size: 1rem; line-height: 1.6; }
+
+/* أربعةٌ في صفٍّ كأزرار الأنواع في صفحة الإدخال، واثنان في الهاتف */
+.sq-grid { display: grid; gap: .85rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (min-width: 992px) {
+  .sq-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 359.98px) {
+  .sq-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.sq-counter {
+  --sq-tone: var(--lx-pri);
+  --sq-tone-bg: var(--lx-pri-soft);
+  --sq-tone-ink: var(--lx-pri-soft-ink);
+  --sq-tone-line: color-mix(in srgb, var(--lx-pri) 30%, transparent);
+  display: grid;
+  align-content: start;
+  gap: .8rem;
+  min-width: 0;
+  padding: .95rem 1rem 1.05rem;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+  transition: border-color var(--lx-dur-2) ease, box-shadow var(--lx-dur-2) ease;
+}
+
+.sq-counter[data-dir="out"] {
+  --sq-tone: var(--lx-ink);
+  --sq-tone-bg: var(--lx-surface-2);
+  --sq-tone-ink: var(--lx-ink);
+  --sq-tone-line: var(--lx-line-strong);
+}
+
+.sq-counter-head { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+.sq-counter-head h3 { margin: 0; font-size: 1rem; font-weight: 800; line-height: 1.4; }
+
+.sq-counter-ico {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--sq-tone-bg);
+  box-shadow: inset 0 0 0 1px var(--sq-tone-line);
+  color: var(--sq-tone);
+  font-size: 1.05rem;
+}
+
+/* لوحةُ الختم: إطارٌ مزدوجٌ كختم المطّاط، والرقمُ كما سيُختم على الكتاب التالي */
+.sq-stamp {
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: .1rem;
+  padding: .75rem .75rem .85rem;
+  border-radius: 12px;
+  background: var(--sq-tone-bg);
+  box-shadow: inset 0 0 0 1px var(--sq-tone-line), inset 0 0 0 4px var(--sq-tone-bg), inset 0 0 0 5px var(--sq-tone-line);
+  color: var(--sq-tone-ink);
+}
+
+.sq-stamp-cap { font-size: .75rem; font-weight: 700; color: var(--lx-mute); }
+
+.sq-stamp-n {
+  max-width: 100%;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums lining-nums;
+  overflow-wrap: anywhere;
+}
+
+.sq-edit,
+.sq-field { display: grid; gap: .35rem; align-content: start; min-width: 0; }
+
+.sq .form-label { margin: 0; font-size: .84rem; font-weight: 700; color: var(--lx-ink); }
+/* 16px دائماً: design-system.css يصغّر الحقولَ في الشاشات الصغيرة إلى 13px فيكبّر iOS الصفحةَ عند الكتابة */
+.sq .form-control { min-height: 44px; font-size: 1rem; }
+.sq input[type="number"] { font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
+.sq .form-control::placeholder { color: var(--lx-mute); opacity: 1; }
+.sq .form-text { margin: 0; font-size: .8rem; line-height: 1.7; }
+
+/* «تغيّر ولم يُحفظ»: الحفظُ زرٌّ واحدٌ للكلّ، فيُرى ما سيتغيّر قبل الضغط — بكهرمانيّ «ينتظر» */
+.sq-changed {
+  display: none;
+  align-items: center;
+  gap: .35rem;
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--lx-wait);
+}
+
+[data-changed] .sq-changed { display: inline-flex; }
+
+.sq-counter[data-changed],
+.sq-card[data-changed] {
+  border-color: var(--lx-wait-line);
+  box-shadow: 0 0 0 3px var(--lx-wait-bg), var(--lx-shadow-sm);
+}
+
+/* ── حجزُ الأرقام ──────────────────────────────────────────────────────── */
+.sq-card {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1.1rem 1.25rem 1.2rem;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+  transition: border-color var(--lx-dur-2) ease, box-shadow var(--lx-dur-2) ease;
+}
+
+.sq-card-head { display: flex; align-items: flex-start; gap: .75rem; }
+
+.sq-ico {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri);
+  font-size: 1.2rem;
+}
+
+.sq-card-title { display: grid; gap: .2rem; min-width: 0; }
+.sq-card-title p { margin: 0; max-width: 72ch; font-size: .86rem; line-height: 1.8; color: var(--lx-mute); }
+
+.sq-ttl { display: grid; gap: 1rem 1.5rem; align-items: start; }
+
+@media (min-width: 768px) {
+  .sq-ttl { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+.sq-ttl-input { max-width: 15rem; }
+
+.sq-facts {
+  margin: 0;
+  display: grid;
+  gap: .6rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-surface-2);
+}
+
+.sq-facts > div {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, auto) minmax(0, 1fr);
+  gap: .2rem .75rem;
+  align-items: baseline;
+}
+
+.sq-facts dt { display: inline-flex; align-items: center; gap: .4rem; font-size: .82rem; font-weight: 700; color: var(--lx-mute); }
+.sq-facts dt .bi { color: var(--lx-pri); }
+.sq-facts dd { margin: 0; font-size: .86rem; line-height: 1.7; color: var(--lx-ink); }
+
+.sq-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .1rem .7rem;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: 999px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font-size: .8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sq-pill[data-tone="pri"] {
+  border-color: color-mix(in srgb, var(--lx-pri) 30%, transparent);
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+}
+
+.sq-num { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+
+/* ── الحفظ ─────────────────────────────────────────────────────────────── */
+.sq-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .75rem; }
+
+.sq-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  min-height: 44px;
+  padding-inline: 1.15rem;
+  font-weight: 700;
+}
+
+.sq-pending { margin: 0; font-size: .84rem; font-weight: 700; color: var(--lx-wait); }
+.sq-pending:empty { display: none; }
+
+/* «جارٍ الحفظ…»: النقرةُ وصلت — والإرسالُ نفسُه كما كان */
+.sq-actions .btn.is-busy { pointer-events: none; cursor: progress; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .sq-actions .btn.is-busy .bi { animation: sq-spin .8s linear infinite; }
+}
+
+@keyframes sq-spin { to { transform: rotate(360deg); } }
+
+.sq .btn-close:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
+
+/* ── الحركة: الأرقامُ «تُختم» مرّةً عند الفتح، ومن طلب تقليلَ الحركة لا يرى شيئاً ── */
+@media (prefers-reduced-motion: no-preference) {
+  .sq-stamp-n { animation: sq-press var(--lx-dur-3) var(--lx-ease-spring) backwards; }
+  .sq-counter:nth-child(2) .sq-stamp-n { animation-delay: 50ms; }
+  .sq-counter:nth-child(3) .sq-stamp-n { animation-delay: 100ms; }
+  .sq-counter:nth-child(4) .sq-stamp-n { animation-delay: 150ms; }
+}
+
+@keyframes sq-press {
+  from { opacity: 0; transform: scale(1.12); }
+}
+
+/* ── الهاتف: الإطارُ يعطي 8px، والصفحةُ مثلُها ⟵ هامشٌ 16px ── */
+@media (max-width: 575.98px) {
+  .sq,
+  .sq-form { gap: 1.1rem; }
+  .sq { padding: 1rem .5rem 2rem; }
+  .sq-head h1 { font-size: 1.35rem; }
+  .sq-head-ico { display: none; }   /* زخرفة: المحتوى أوّلاً، والعنوانُ بجوار زرّ الرجوع */
+  .sq-counter { gap: .65rem; padding: .8rem .75rem .9rem; }
+  .sq-stamp-n { font-size: 1.95rem; }
+  .sq-card { padding: 1rem .95rem 1.05rem; }
+  .sq-facts > div { grid-template-columns: minmax(0, 1fr); }
+  .sq-actions .btn { flex: 1 1 auto; justify-content: center; }
+}

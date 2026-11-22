@@ -77,7 +77,9 @@ def sequence_settings(request):
     for kind_value, kind_label in BOOK_KIND_CHOICES:
         obj, _ = BookSequence.objects.get_or_create(kind=kind_value, department=department,
                                                     defaults={'next_number': 1})
-        sequences.append({'obj': obj, 'label': kind_label, 'kind': kind_value})
+        # «الرقمُ كما سيُختم» من المصدر الوحيد (core/numbering.py عبر format_number) — لا تنسيقَ في القالب
+        sequences.append({'obj': obj, 'label': kind_label, 'kind': kind_value,
+                          'formatted': BookSequence.format_number(kind_value, obj.next_number)})
 
     # مدّةُ الحجز بيانٌ في القاعدة لا سطرٌ في ``.env``. الشارةُ «مخصَّص» تُقاس
     # بالمقارنة مع الافتراض، لا بـ``hasattr`` على كائن الإعدادات (كان يكذب:

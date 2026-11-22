@@ -3,91 +3,112 @@
 
 {% block title %}الأضابير{% endblock %}
 
+{% comment %}
+  على الهويّة الموحّدة (11-19): الرموزُ والوضعان. التبويباتُ لوحُ قائمة الكتب المنزلق (data-lx-tabs)،
+  والإضبارةُ مجلّدٌ بلسانٍ في أعلاه — لغةُ الخزانة الورقيّة (موجزُ تصميم الأضابير، الاتّجاه «أ»).
+{% endcomment %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20260831">
-<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20261115-colors1">
+<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20261119-pages">
+<link rel="stylesheet" href="{% static 'css/dossiers.css' %}?v=20261119-pages">
 {% endblock %}
 
 {% block content %}
 <div class="dossiers-page">
 
-  <div class="dossiers-head">
-    <div>
-      <h4><i class="bi bi-folder2-open"></i> الأضابير</h4>
-      <p class="dossiers-sub">مجلّدات المراسلات — الجهات التي لها كتب صادرة أو واردة فقط.</p>
+  <header class="dossiers-head">
+    <div class="dossiers-heading">
+      <span class="dossiers-eyebrow">الأرشيف · مجلّدات المراسلات</span>
+      <h1>الأضابير</h1>
+      <p class="dossiers-sub">الجهات التي لها كتب صادرة أو واردة فقط — افتح إضبارة لترى كتبها مقسّمة حسب النوع ثم السنة.</p>
     </div>
-    <div class="dossiers-summary">
+    <div class="dossiers-summary" role="group" aria-label="أعداد التبويب الحالي">
       <span class="summary-chip"><b>{{ totals.departments }}</b> جهة</span>
-      <span class="summary-chip out"><i class="bi bi-arrow-up-right"></i> <b>{{ totals.issued }}</b> صادر</span>
-      <span class="summary-chip in"><i class="bi bi-arrow-down-left"></i> <b>{{ totals.received }}</b> وارد</span>
+      <span class="summary-chip out"><b>{{ totals.issued }}</b><span><i class="bi bi-envelope-arrow-up" aria-hidden="true"></i> صادر</span></span>
+      <span class="summary-chip in"><b>{{ totals.received }}</b><span><i class="bi bi-envelope-arrow-down" aria-hidden="true"></i> وارد</span></span>
     </div>
-  </div>
+  </header>
 
   {% comment %}
-    التبويباتُ الثلاثة — على غرار تبويبَي «وارد/صادر» في قائمة الكتب:
-    الترميزُ نفسُه (`tabs-split` / `tab-main`) وثلاثةُ أعمدةٍ بدل عمودين.
-    وهي **روابطُ خادمٍ** لا أزرار: تعمل بلا JS، وكلٌّ منها عنوانٌ يُنسخ.
+    التبويباتُ الثلاثة — ترميزُ تبويبات قائمة الكتب (`tabs-split` / `tab-main`) ولوحُها المنزلق، بثلاثة أعمدة:
+    لونٌ واحدٌ للنشط أيّاً كان (قرارُ المالك 11-11). وهي **روابطُ خادمٍ** لا أزرار: تعمل بلا JS،
+    وكلٌّ منها عنوانٌ يُنسخ.
   {% endcomment %}
-  <nav class="tabs-split tabs-split-3" role="tablist" aria-label="تبويب الجهات">
+  <nav class="tabs-split tabs-split-3" role="tablist" aria-label="تبويب الجهات" data-lx-tabs>
     {% for t in tabs %}
     <a class="tab-main tab-kind-{{ t.key }}{% if t.key == kind %} active{% endif %}"
        role="tab" aria-selected="{% if t.key == kind %}true{% else %}false{% endif %}"
        href="?kind={{ t.key }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}&sort={{ sort }}">
-      <i class="bi {% if t.key == 'external' %}bi-globe2{% elif t.key == 'internal' %}bi-building{% else %}bi-diagram-3{% endif %} tab-icon"></i>
-      <div class="tab-text">
+      <i class="bi {% if t.key == 'external' %}bi-globe2{% elif t.key == 'internal' %}bi-building{% else %}bi-diagram-3{% endif %} tab-icon" aria-hidden="true"></i>
+      <span class="tab-text">
         <span class="tab-label">{{ t.label }}</span>
-        <span class="tab-count">{{ t.hint }} · {{ t.count }}</span>
-      </div>
+        <span class="tab-count"><span class="tab-hint">{{ t.hint }} · </span>{{ t.count }}</span>
+      </span>
     </a>
     {% endfor %}
   </nav>
 
-  <form class="dossier-search" method="get">
-    <input type="hidden" name="kind" value="{{ kind }}">
-    <input type="hidden" name="sort" value="{{ sort }}">
-    <input type="text" name="q" value="{{ search_q }}" placeholder="ابحث باسم الجهة أو رمزها..." aria-label="بحث في الأضابير">
-    <button type="submit"><i class="bi bi-search"></i> بحث</button>
-  </form>
+  <div class="dossier-tools">
+    <form class="dossier-search" method="get" role="search">
+      <input type="hidden" name="kind" value="{{ kind }}">
+      <input type="hidden" name="sort" value="{{ sort }}">
+      <span class="ds-field">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" name="q" value="{{ search_q }}" placeholder="ابحث باسم الجهة أو رمزها…" aria-label="بحث في الأضابير" autocomplete="off" enterkeyhint="search">
+      </span>
+      <button type="submit" class="btn btn-primary">بحث</button>
+    </form>
 
-  <nav class="dossier-sort" aria-label="ترتيب الأضابير">
-    <span class="ds-lbl">ترتيب:</span>
-    {% for s in sorts %}<a class="pchip{% if s.key == sort %} on" aria-current="true{% endif %}" href="?kind={{ kind }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}&sort={{ s.key }}">{{ s.label }}</a>{% endfor %}
-  </nav>
+    <nav class="dossier-sort" aria-label="ترتيب الأضابير">
+      <span class="ds-lbl">ترتيب</span>
+      <span class="ds-seg">
+        {% for s in sorts %}<a class="pchip{% if s.key == sort %} on{% endif %}"{% if s.key == sort %} aria-current="true"{% endif %} href="?kind={{ kind }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}&sort={{ s.key }}">{{ s.label }}</a>{% endfor %}
+      </span>
+    </nav>
+  </div>
 
   {% if page_obj.object_list %}
-  <div class="dossier-grid">
+  <ul class="dossier-grid">
     {% for e in page_obj.object_list %}
-    <a class="dossier-card" href="{% url 'dossier_detail' e.pk %}">
-      <div class="dc-top">
-        <div class="dc-icon"><i class="bi bi-folder-fill"></i></div>
-        <div>
-          <div class="dc-name">{{ e.name }}</div>
-          {% if e.code %}<div class="dc-code">{{ e.code }}</div>{% endif %}
+    <li>
+      <a class="dossier-card" href="{% url 'dossier_detail' e.pk %}">
+        <div class="dc-top">
+          <div class="dc-icon" aria-hidden="true"><i class="bi bi-folder2-open"></i></div>
+          <div class="dc-id">
+            <div class="dc-name">{{ e.name }}</div>
+            {% if e.code %}<div class="dc-code"><bdi>{{ e.code }}</bdi></div>{% endif %}
+          </div>
         </div>
-      </div>
-      <div class="dc-counts">
-        <div class="dc-badge out{% if not e.issued_count %} zero{% endif %}"><span class="n">{{ e.issued_count }}</span><span>صادر</span></div>
-        <div class="dc-badge in{% if not e.received_count %} zero{% endif %}"><span class="n">{{ e.received_count }}</span><span>وارد</span></div>
-      </div>
-      <div class="dc-last">{% if e.last_date %}آخر كتاب: <time datetime="{{ e.last_date|date:'Y-m-d' }}">{{ e.last_date|date:'Y/m/d' }}</time>{% else %}بلا تاريخ{% endif %}</div>
-    </a>
+        <div class="dc-counts">
+          <div class="dc-badge out{% if not e.issued_count %} zero{% endif %}"><i class="bi bi-envelope-arrow-up" aria-hidden="true"></i><span class="n">{{ e.issued_count }}</span><span>صادر</span></div>
+          <div class="dc-badge in{% if not e.received_count %} zero{% endif %}"><i class="bi bi-envelope-arrow-down" aria-hidden="true"></i><span class="n">{{ e.received_count }}</span><span>وارد</span></div>
+        </div>
+        <div class="dc-last">{% if e.last_date %}<i class="bi bi-clock-history" aria-hidden="true"></i> آخر كتاب: <time datetime="{{ e.last_date|date:'Y-m-d' }}"><bdi dir="ltr">{{ e.last_date|date:'Y/m/d' }}</bdi></time>{% else %}بلا تاريخ{% endif %}</div>
+      </a>
+    </li>
     {% endfor %}
-  </div>
+  </ul>
 
   {% if page_obj.has_other_pages %}
-  <div class="dossier-pager">
-    {% if page_obj.has_previous %}<a href="?q={{ search_q|urlencode }}&kind={{ kind|urlencode }}&sort={{ sort }}&page={{ page_obj.previous_page_number }}">السابق</a>{% endif %}
-    <span class="cur">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}<a href="?q={{ search_q|urlencode }}&kind={{ kind|urlencode }}&sort={{ sort }}&page={{ page_obj.next_page_number }}">التالي</a>{% endif %}
-  </div>
+  <nav class="dossier-pager" aria-label="صفحات الأضابير">
+    {% if page_obj.has_previous %}<a href="?q={{ search_q|urlencode }}&kind={{ kind|urlencode }}&sort={{ sort }}&page={{ page_obj.previous_page_number }}" rel="prev"><i class="bi bi-chevron-right" aria-hidden="true"></i> السابق</a>{% endif %}
+    <span class="cur">صفحة <b>{{ page_obj.number }}</b> من <b>{{ page_obj.paginator.num_pages }}</b></span>
+    {% if page_obj.has_next %}<a href="?q={{ search_q|urlencode }}&kind={{ kind|urlencode }}&sort={{ sort }}&page={{ page_obj.next_page_number }}" rel="next">التالي <i class="bi bi-chevron-left" aria-hidden="true"></i></a>{% endif %}
+  </nav>
   {% endif %}
 
   {% else %}
   <div class="dossier-empty">
-    <i class="bi bi-folder-x"></i>
-    {% if search_q %}لا جهةَ تطابق بحثك «{{ search_q }}».{% else %}لا توجد أضابير بعد — ستظهر الجهاتُ هنا فور ربط كتبٍ بها.{% endif %}
+    <i class="bi bi-folder-x" aria-hidden="true"></i>
+    <p>{% if search_q %}لا جهةَ تطابق بحثك «{{ search_q }}».{% else %}لا توجد أضابير بعد — ستظهر الجهاتُ هنا فور ربط كتبٍ بها.{% endif %}</p>
+    {% if search_q %}<a class="btn btn-outline-secondary btn-sm" href="?kind={{ kind }}&sort={{ sort }}">مسح البحث</a>{% endif %}
   </div>
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/lx_tabs.js' %}?v=20261112-list1"></script>
 {% endblock %}

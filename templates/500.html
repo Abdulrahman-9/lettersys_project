@@ -1,7 +1,72 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>خطأٌ في الخادم</title>
-<style>body{font-family:system-ui,sans-serif;background:#f8f7f4;color:#1f2937;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
-.box{max-width:520px;padding:2rem;text-align:center}.code{font-size:3rem;font-weight:800;color:#b45309}a{color:#1d4ed8}</style></head>
-<body><div class="box"><div class="code">500</div><h1 style="font-size:1.25rem">تعطّل شيءٌ في الخادم</h1>
-<p>سُجِّل الخطأُ. أعِد المحاولة بعد قليل، وإن تكرّر فأخبر مديرَ النظام.</p>
-<p><a href="/">العودة إلى الرئيسة</a></p></div></body></html>
+<html lang="ar" dir="rtl" data-lx-page="v2">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0f766e">
+<link rel="icon" href="data:,">
+<title>خطأٌ في الخادم</title>
+{% comment %}
+  صفحةُ 500 — يرسمها Django **بلا سياق**: server_error يستدعي template.render() عارياً، فلا طلبَ
+  ولا مستخدمَ ولا قاعدة. لذلك تبقى قائمةً بذاتها كما كانت (لا نثق بالقوالب حين يتعطّل الخادم):
+  لا تمتدّ من base.html، ولا وسمَ url (قد يكون الخطأُ في المسارات نفسِها)، ولا وسمَ static، ولا
+  متغيّراتٍ. لا تضمّن إلّا قالبين ثابتين بلا سياق: كاتبَ الوضع الوحيد (_theme_head.html) وبطاقةَ
+  الحال المشتركة مع 403/404 والانقطاع (_misc_status_style.html). عناوينُ الأصول حرفيّةٌ كقشرة عامل
+  الخدمة؛ وإن تعذّرت الأوراقُ بقي النصُّ حبراً على أبيض مقروءاً.
+  الحارس: core/tests_identity_misc.py يرسمها بلا سياقٍ ولا طلب.
+{% endcomment %}
+{% include "_theme_head.html" %}
+<link rel="stylesheet" href="/static/vendor/cairo/cairo.css">
+<link rel="stylesheet" href="/static/css/theme.css">
+{% include "_misc_status_style.html" %}
+</head>
+<body class="misc-solo">
+<svg class="misc-sprite" width="0" height="0" aria-hidden="true" focusable="false">
+  <symbol id="e500-exclamation-octagon" viewBox="0 0 16 16"><path fill="currentColor" d="M4.533 0.16Q4.693 0 4.907 0H11.093Q11.307 0 11.467 0.16L15.84 4.533Q16 4.693 16 4.907V11.093Q16 11.307 15.84 11.467L11.467 15.84Q11.307 16 11.093 16H4.907Q4.693 16 4.533 15.84L0.16 11.467Q0 11.307 0 11.093V4.907Q0 4.693 0.16 4.533ZM5.12 1.013 1.013 5.12V10.88L5.12 14.987H10.88L14.987 10.88V5.12L10.88 1.013ZM6.987 10.987Q6.987 10.56 7.28 10.293Q7.573 10.027 8 10.027Q8.427 10.027 8.72 10.293Q9.013 10.56 9.013 10.987Q9.013 11.413 8.72 11.707Q8.427 12 8 12Q7.573 12 7.28 11.707Q6.987 11.413 6.987 10.987ZM7.093 5.013Q7.093 4.747 7.2 4.507Q7.307 4.267 7.52 4.133Q7.733 4 8 4Q8.267 4 8.48 4.133Q8.693 4.267 8.8 4.507Q8.907 4.747 8.907 5.013L8.533 8.48Q8.533 8.693 8.373 8.853Q8.213 9.013 8 9.013Q7.787 9.013 7.627 8.853Q7.467 8.693 7.467 8.48Z"/></symbol>
+  <symbol id="e500-arrow-right" viewBox="0 0 16 16"><path fill="currentColor" d="M1.013 8Q1.013 7.787 1.147 7.653Q1.28 7.52 1.493 7.52H13.28L10.133 4.373Q9.973 4.213 9.973 4Q9.973 3.787 10.133 3.653Q10.293 3.52 10.507 3.52Q10.72 3.52 10.88 3.627L14.88 7.627Q14.987 7.787 14.987 8Q14.987 8.213 14.88 8.373L10.88 12.373Q10.72 12.48 10.507 12.48Q10.293 12.48 10.133 12.347Q9.973 12.213 9.973 12Q9.973 11.787 10.133 11.627L13.28 8.48H1.493Q1.28 8.48 1.147 8.347Q1.013 8.213 1.013 8Z"/></symbol>
+  <symbol id="e500-house" viewBox="0 0 16 16"><path fill="currentColor" d="M8.693 1.493Q8.427 1.227 8 1.227Q7.573 1.227 7.307 1.493L0.64 8.16Q0.48 8.267 0.48 8.48Q0.48 8.693 0.64 8.853Q0.8 9.013 1.013 9.013Q1.227 9.013 1.333 8.853L2.027 8.213V13.493Q2.027 14.133 2.453 14.56Q2.88 14.987 3.52 14.987H12.48Q13.12 14.987 13.573 14.56Q14.027 14.133 13.973 13.493V8.213L14.667 8.853Q14.773 9.013 14.987 9.013Q15.2 9.013 15.36 8.853Q15.52 8.693 15.52 8.48Q15.52 8.267 15.36 8.16L13.013 5.813V2.507Q13.013 2.293 12.853 2.133Q12.693 1.973 12.48 1.973H11.52Q11.307 1.973 11.147 2.133Q10.987 2.293 10.987 2.507V3.787ZM13.013 7.2V13.493Q13.013 13.707 12.853 13.84Q12.693 13.973 12.48 13.973H3.52Q3.307 13.973 3.147 13.84Q2.987 13.707 2.987 13.493V7.2L8 2.187Z"/></symbol>
+</svg>
+<main class="misc-status" id="main">
+  <div class="misc-status-card">
+    <p class="misc-stamp is-late">
+      <span class="misc-stamp-top"><svg class="misc-stamp-ico" width="28" height="28" aria-hidden="true" focusable="false"><use href="#e500-exclamation-octagon"/></svg><span class="misc-stamp-code">500</span></span>
+      <span class="misc-stamp-label">خطأ في الخادم</span>
+    </p>
+    <h1>تعطّل شيءٌ في الخادم</h1>
+    <p class="misc-status-hint">سُجِّل الخطأُ. أعِد المحاولة بعد قليل، وإن تكرّر فأخبر مديرَ النظام.</p>
+    <p class="misc-status-meta" id="errorTime" hidden>وقتُ الخطأ: <bdi dir="ltr"></bdi> — اذكره لمدير النظام.</p>
+    <div class="misc-status-actions">
+      <button type="button" class="misc-btn" data-history-back hidden>
+        <svg width="18" height="18" aria-hidden="true" focusable="false"><use href="#e500-arrow-right"/></svg><span>رجوع إلى الصفحة السابقة</span>
+      </button>
+      <a class="misc-btn" href="/" data-home>
+        <svg width="18" height="18" aria-hidden="true" focusable="false"><use href="#e500-house"/></svg><span>العودة إلى الرئيسة</span>
+      </a>
+    </div>
+  </div>
+</main>
+<script>
+(function () {
+  'use strict';
+  // وقتُ الخطأ بساعة الجهاز: سجلُّ الخادم مؤرَّخ، فيجد مديرُ النظام السطرَ بما يذكره الموظّف
+  var stamp = document.getElementById('errorTime');
+  if (stamp) {
+    var d = new Date();
+    var two = function (n) { return (n < 10 ? '0' : '') + n; };
+    stamp.querySelector('bdi').textContent = two(d.getHours()) + ':' + two(d.getMinutes()) + ' · '
+      + two(d.getDate()) + '/' + two(d.getMonth() + 1) + '/' + d.getFullYear();
+    stamp.hidden = false;
+  }
+  // «رجوع» حين يكون للنافذة ماضٍ (إليه يعود مَن أرسل نموذجاً فيعيده)، و«الرئيسة» تصير ثانويّة
+  var back = document.querySelector('[data-history-back]');
+  var home = document.querySelector('[data-home]');
+  if (back && window.history.length > 1) {
+    back.hidden = false;
+    if (home) home.classList.add('misc-btn-quiet');
+    back.addEventListener('click', function () { window.history.back(); });
+  }
+}());
+</script>
+</body>
+</html>

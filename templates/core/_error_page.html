@@ -1,31 +1,26 @@
 {% comment %}
-  صفحةُ خطأٍ داخل قشرة التطبيق (تدقيقُ الانتقالات و1/و2): الشريطُ باقٍ وزرُّ العودة
-  يعرف مِن أين جئت — المُحيلُ الداخليّ إن وُجد، وإلّا الداشبورد. 500 وحدَها عارية
-  عمداً: لا نثق بالقوالب حين يتعطّل الخادم.
+  صفحةُ خطأٍ داخل قشرة التطبيق (تدقيقُ الانتقالات و1/و2): الشريطُ باقٍ وزرُّ «العودة» يعرف مِن أين
+  جئت — المُحيلُ الداخليّ إن وُجد (js/misc_pages.js)، وإلّا الرئيسة كرابط الشعار: مركزُ النظام لمديره،
+  واللوحةُ لغيره، والدخولُ لمن لم يدخل. 500 وحدَها قائمةٌ بذاتها: لا نثق بالقوالب حين يتعطّل الخادم.
+  على الهويّة v2 منذ 11-19 (وحدة misc): بطاقةُ الحال في _misc_status_style.html؛ و403 تقول **لماذا**
+  (نصُّ PermissionDenied — جملٌ عربيّةٌ كُتبت للمستخدم)، و404 تذكر العنوانَ المطلوب لمن يبلّغ عنه،
+  و«سلّة المهملات» لمن تُفتح له وحدَه (nav.trash): الرابطُ الظاهر صفحةٌ تُفتح.
 {% endcomment %}
-<div class="container py-5">
-  <div class="row justify-content-center">
-    <div class="col-md-8 col-lg-6 text-center">
-      <div class="display-3 fw-bold" style="color:var(--brand-strong,#1d4ed8)">{{ code }}</div>
-      <h1 class="h4 mt-2">{{ title }}</h1>
-      <p class="text-muted mt-3">{{ hint }}</p>
-      <div class="d-flex justify-content-center gap-2 mt-4">
-        <a class="btn btn-primary" href="{% url 'dashboard' %}" data-error-back><i class="bi bi-arrow-right me-1"></i>العودة</a>
-        {% if code == 404 and request.user.is_authenticated %}<a class="btn btn-outline-secondary" href="{% url 'trash_list' %}">سلّة المهملات</a>{% endif %}
-      </div>
+{% if not request.user.is_authenticated %}{% url 'login' as home %}{% elif nav.system_admin %}{% url 'system_centre' as home %}{% else %}{% url 'dashboard' as home %}{% endif %}
+<section class="misc-status" aria-labelledby="errorTitle">
+  <div class="misc-status-card">
+    <p class="misc-stamp">
+      <span class="misc-stamp-top"><i class="bi bi-{{ icon }} misc-stamp-ico" aria-hidden="true"></i><span class="misc-stamp-code">{{ code }}</span></span>
+      <span class="misc-stamp-label">{{ label }}</span>
+    </p>
+    <h1 id="errorTitle">{{ title }}</h1>
+    <p class="misc-status-hint">{{ hint }}</p>
+    {% if reason %}<p class="misc-status-reason"><i class="bi bi-info-circle" aria-hidden="true"></i><span><b>السبب:</b> {{ reason }}</span></p>{% endif %}
+    {% if path %}<p class="misc-status-meta">العنوانُ المطلوب: <bdi dir="ltr">{{ path }}</bdi></p>{% endif %}
+    <div class="misc-status-actions">
+      <a class="btn btn-primary" href="{{ home }}" data-error-back><i class="bi bi-arrow-right" aria-hidden="true"></i>العودة</a>
+      <a class="btn btn-outline-secondary" href="{{ home }}" data-home-alt hidden><i class="bi bi-house" aria-hidden="true"></i>الرئيسة</a>
+      {% if code == 404 and nav.trash %}<a class="btn btn-outline-secondary" href="{% url 'trash_list' %}"><i class="bi bi-trash3" aria-hidden="true"></i>سلّة المهملات</a>{% endif %}
     </div>
   </div>
-</div>
-<script>
-(function () {
-  var a = document.querySelector('[data-error-back]');
-  var ref = document.referrer || '';
-  try {
-    if (a && ref && new URL(ref).origin === window.location.origin
-        && new URL(ref).pathname !== window.location.pathname
-        && new URL(ref).pathname.indexOf('/login') !== 0) {
-      a.setAttribute('href', ref);
-    }
-  } catch (e) {}
-})();
-</script>
+</section>

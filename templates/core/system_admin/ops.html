@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}تشغيل النظام{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 {% block content %}
 <div class="sa-page">
   <div class="sa-head"><div><h1>تشغيل النظام</h1><p>المهامّ المجدولة وأخطاء الخادم. أفعال الموظّفين في <a href="{% url 'audit_log' %}">سجلّ الحركات</a>.</p></div></div>

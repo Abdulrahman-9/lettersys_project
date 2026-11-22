@@ -151,7 +151,8 @@ function resolveToastCenter() {
  * حواريّةُ التأكيد الواحدة للتطبيق — بدل confirm() الأصليّة التي يعنونها المتصفّحُ
  * بعنوان الخادم ويكسر بها اتّجاهَ الصفحة (تدقيقُ نيلسن H4).
  *
- *   confirmDelete('نصّ')  أو  confirmDelete({ title, message, okText, danger })
+ *   confirmDelete('نصّ')  أو  confirmDelete({ title, message, okText, cancelText, danger })
+ *   (cancelText حين لا تكفي «إلغاء»: يسمّي ما يعود إليه المستخدم، مثل «عُد لإرفاق ملف»)
  *
  * النصُّ يُكتب textContent — لا HTML أبداً، فلا يحتاج المستدعي تهريباً. وأيُّ إغلاقٍ
  * (× · Esc · الخلفيّة) إلغاءٌ: كان الوعدُ يبقى معلّقاً إلى الأبد إلّا بزرّ «إلغاء».
@@ -206,6 +207,7 @@ function createConfirmModal(opts) {
   const ok = modal.querySelector('.btn-confirm');
   ok.textContent = opts.okText || 'تأكيد';
   ok.classList.add(opts.danger === false ? 'btn-primary' : 'btn-danger');
+  if (opts.cancelText) modal.querySelector('.btn-cancel').textContent = opts.cancelText;
   return modal;
 }
 
@@ -1486,6 +1488,8 @@ function buildToastActionButton(action, toastApi) {
 window.ToastCenter = {
   show: function(type, message, opts) {
     type = type || 'info';
+    // «danger» كلمةُ Bootstrap للخطأ: كانت تسقط إلى «معلومة» الزرقاء المهذّبة (صفحةُ الأجهزة)
+    if (type === 'danger') type = 'error';
     opts = opts || {};
 
     var container = createToastContainer();
@@ -1794,3 +1798,19 @@ async function performUpdate() {
     }
   }
 }
+
+/* خطأُ الحقل تحت حقله ({% field_error %} · core/field_errors.py، 11-22): يُربط بحقله فيُقرأ معه
+   ويُوسَم خاطئاً، والتركيزُ على أوّل حقلٍ خاطئ — كان توستاً في الزاوية بعد التحويل. */
+document.addEventListener('DOMContentLoaded', function () {
+  let first = null;
+  document.querySelectorAll('[data-field-error-for]').forEach(function (err) {
+    const input = document.getElementById(err.dataset.fieldErrorFor);
+    if (!input) return;
+    input.setAttribute('aria-invalid', 'true');
+    const ids = (input.getAttribute('aria-describedby') || '').split(' ').filter(Boolean);
+    if (!ids.includes(err.id)) ids.unshift(err.id);
+    input.setAttribute('aria-describedby', ids.join(' '));
+    if (!first) first = input;
+  });
+  if (first) first.focus();
+});

@@ -2031,7 +2031,7 @@ class ExtractionSmartSystem {
         const msg = `أنت تحجز الرقم ${res.formatted} وزملاؤك بانتظاره. إن لم تكتبه على المستند حرّره ليُعاد تدويره؛ وإن كتبته أبقِه وأكمل الحفظ.`;
         if (window.ToastCenter && typeof window.ToastCenter.action === 'function') {
             window.ToastCenter.action('warning', msg, [
-                { label: 'أُبقيه (كتبته)', className: 'btn btn-sm btn-warning text-dark fw-semibold',
+                { label: 'أُبقيه (كتبته)', className: 'btn btn-sm btn-warning fw-semibold',
                   onClick: () => { this._lastActivity = Date.now(); this._idleWarned = false; } },
                 { label: 'حرّره ليُدوَّر', className: 'btn btn-sm btn-outline-danger fw-semibold',
                   onClick: () => this._releaseCurrentReservation() },
@@ -2641,58 +2641,28 @@ class ExtractionSmartSystem {
         return Boolean(this.currentFile || (Array.isArray(this.scannedFiles) && this.scannedFiles.length > 0));
     }
 
-    confirmSaveWithoutFile() {
-        return new Promise((resolve) => {
-            if (!window.ToastCenter || typeof window.ToastCenter.action !== 'function') {
-                resolve(window.confirm('لم يتم رفع ملف أو مسحه بعد.\n\nهل ترغب بالاستمرار في حفظ الكتاب بدون صورة أو مرفق؟'));
-                return;
-            }
-
-            let settled = false;
-            const finalize = (result) => {
-                if (settled) return;
-                settled = true;
-                resolve(result);
-            };
-
-            window.ToastCenter.action('warning', 'يمكنك حفظ الكتاب الآن بدون مرفق، أو رفع أو مسح ملف أولاً.', [
-                {
-                    label: 'حفظ بدون مرفق',
-                    className: 'btn btn-sm btn-warning text-dark fw-semibold',
-                    onClick: () => finalize(true),
-                },
-                {
-                    label: 'رفع ملف',
-                    className: 'btn btn-sm btn-outline-primary fw-semibold',
-                    onClick: () => {
-                        const fi = document.getElementById('fileInput');
-                        if (fi) {
-                            fi.click();
-                        }
-                        finalize(false);
-                    },
-                }
-            ], {
-                title: 'لا يوجد ملف مرفوع أو ممسوح',
-                delay: 0,
-                autohide: false,
-                onShown: (toastApi) => {
-                    toastApi.element.querySelector('.btn-warning')?.focus();
-                },
-                onHidden: () => finalize(false),
-            });
-        });
+    /** «حفظ بلا ملف؟» بحواريّة التطبيق (11-22) — كان توستاً بزرَّين في زاوية الشاشة يُقرأ كإشعار
+     *  لا كسؤالٍ يوقف الحفظ. ليس هدّاماً: التركيزُ على «احفظ بلا مرفق»، وأيُّ إغلاقٍ عودةٌ إلى النموذج. */
+    async confirmSaveWithoutFile() {
+        const question = {
+            title: 'حفظ الكتاب بلا مرفق؟',
+            message: 'لم يُرفع ملفٌّ ولم يُمسح بعد، فسيُحفظ الكتابُ ببياناته وحدها بلا صورةٍ ولا مرفق.',
+            okText: 'احفظ بلا مرفق', cancelText: 'عُد لإرفاق ملف', danger: false,
+        };
+        return typeof window.confirmDelete === 'function'
+            ? window.confirmDelete(question)
+            : window.confirm(question.message);
     }
 
     /** لون + تسمية نوع السجل — مصدر واحد (يطابق تبويبات النوع). */
     _kindMeta(kind) {
         const M = {
-            incoming_internal: { label: 'وارد داخلي', bg: '#f0fdfa', fg: '#0f766e' },
-            incoming_external: { label: 'وارد خارجي', bg: '#f0f9ff', fg: '#0369a1' },
-            outgoing_internal: { label: 'صادر داخلي', bg: '#fff7ed', fg: '#b45309' },
-            outgoing_external: { label: 'صادر خارجي', bg: '#fff1f2', fg: '#9f1239' },
+            incoming_internal: { label: 'وارد داخلي', bg: 'var(--lx-pri-soft)', fg: 'var(--lx-pri-soft-ink)' },
+            incoming_external: { label: 'وارد خارجي', bg: 'var(--lx-pri-soft)', fg: 'var(--lx-pri-soft-ink)' },
+            outgoing_internal: { label: 'صادر داخلي', bg: 'var(--lx-surface-2)', fg: 'var(--lx-ink)' },
+            outgoing_external: { label: 'صادر خارجي', bg: 'var(--lx-surface-2)', fg: 'var(--lx-ink)' },
         };
-        return M[kind] || { label: 'سجل', bg: '#e5e7eb', fg: '#374151' };
+        return M[kind] || { label: 'سجل', bg: 'var(--lx-surface-2)', fg: 'var(--lx-mute)' };
     }
 
     /** مودال التكرار: قائمة المطابقات + معاينة سريعة لكل كتاب، ويُعيد Promise<boolean>
@@ -2865,7 +2835,7 @@ class ExtractionSmartSystem {
                             </div>
                         </div>`).join('') + `</div>`;
                 footer.innerHTML =
-                    (canProceed ? `<button type="button" class="btn btn-sm ${hard ? 'btn-danger' : 'btn-warning text-dark'} fw-semibold" data-act="proceed">${hard ? 'حفظ رغم التكرار' : 'متابعة الحفظ'}</button>` : '') +
+                    (canProceed ? `<button type="button" class="btn btn-sm ${hard ? 'btn-danger' : 'btn-warning'} fw-semibold" data-act="proceed">${hard ? 'حفظ رغم التكرار' : 'متابعة الحفظ'}</button>` : '') +
                     `<button type="button" class="btn btn-sm btn-outline-secondary fw-semibold" data-act="cancel">إلغاء الإدخال</button>`;
                 footer.querySelector('[data-act="cancel"]').onclick = () => finish(false);
                 const pb = footer.querySelector('[data-act="proceed"]'); if (pb) pb.onclick = () => finish(true);
@@ -3993,14 +3963,14 @@ class ExtractionSmartSystem {
                 };
                 img.onerror = (err) => {
                     console.error('[ExtractionSmart] ✗ Image load failed:', err);
-                    modalBody.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 20px;">خطأ في تحميل الصورة</div>';
+                    modalBody.innerHTML = '<div style="color: var(--lx-late); text-align: center; padding: 20px;">خطأ في تحميل الصورة</div>';
                 };
                 modalBody.appendChild(img);
                 modalBody.classList.add('has-image');
                 console.log('[ExtractionSmart] ✓ Image element appended');
             } catch (e) {
                 console.error('[ExtractionSmart] ✗ Image creation error:', e);
-                modalBody.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 20px;">خطأ: ' + e.message + '</div>';
+                modalBody.innerHTML = '<div style="color: var(--lx-late); text-align: center; padding: 20px;">خطأ: ' + e.message + '</div>';
             }
         } else if (isPdf) {
             // PDF: يُرسَم كصور خادم (PyMuPDF) عبر token — يلائم اللوحة دائماً (لا embed)
@@ -4021,7 +3991,7 @@ class ExtractionSmartSystem {
             fileDiv.style.alignItems = 'center';
             fileDiv.style.justifyContent = 'center';
             fileDiv.style.minHeight = '350px';
-            fileDiv.innerHTML = '<div style="font-size: 4rem; margin-bottom: 20px; opacity: 0.7;">📎</div><div style="font-size: 1.1rem; font-weight: 600; color: #1e293b; margin-bottom: 10px;">ملف</div><div style="font-size: 0.85rem; color: #64748b; word-break: break-word; max-width: 280px;">' + (fileName || 'unknown') + '</div>';
+            fileDiv.innerHTML = '<div style="font-size: 4rem; margin-bottom: 20px; opacity: 0.7;">📎</div><div style="font-size: 1.1rem; font-weight: 600; color: var(--lx-ink); margin-bottom: 10px;">ملف</div><div style="font-size: 0.85rem; color: var(--lx-mute); word-break: break-word; max-width: 280px;">' + (fileName || 'unknown') + '</div>';
             modalBody.appendChild(fileDiv);
             modalBody.classList.add('has-image');
             console.log('[ExtractionSmart] ✓ Generic file display created');
@@ -4142,7 +4112,7 @@ class ExtractionSmartSystem {
                 img.src = e.target.result;
                 container.appendChild(img);
             } else if (file.type === 'application/pdf') {
-                container.innerHTML = '<div style="text-align: center; color: #94a3b8;"><div style="font-size: 3rem; margin-bottom: 10px;">📄</div><div>ملف PDF</div></div>';
+                container.innerHTML = '<div style="text-align: center; color: var(--lx-mute);"><div style="font-size: 3rem; margin-bottom: 10px;">📄</div><div>ملف PDF</div></div>';
             }
 
             modalBody.innerHTML = '';
@@ -4293,7 +4263,7 @@ class ExtractionSmartSystem {
         if (modalBody) {
             modalBody.innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-state-icon">📄</div>
+                    <div class="empty-state-icon"><i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i></div>
                     <div class="empty-state-text">لم يتم تحميل ملف بعد</div>
                 </div>
             `;
@@ -4681,7 +4651,7 @@ class ExtractionSmartSystem {
         };
         if (window.ToastCenter && typeof window.ToastCenter.action === 'function') {
             window.ToastCenter.action('warning', message, [
-                { label: 'اعتمد المقروء', className: 'btn btn-sm btn-warning text-dark fw-semibold', onClick: adopt },
+                { label: 'اعتمد المقروء', className: 'btn btn-sm btn-warning fw-semibold', onClick: adopt },
                 { label: 'أبقِ رقمي', className: 'btn btn-sm btn-outline-secondary fw-semibold', onClick: () => {} },
             ], { title: 'اختلافٌ في رقم الصادر', delay: 0, autohide: false });
         } else {
@@ -5136,13 +5106,13 @@ class ExtractionSmartSystem {
             item.className = 'entity-suggestion-item';
             item.dataset.id = e.id;
             item.dataset.name = e.name || '';
-            item.style.cssText = 'padding:12px 15px;border-bottom:1px solid #e2e8f0;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:all 0.2s;background:white;';
+            item.style.cssText = 'padding:12px 15px;border-bottom:1px solid var(--lx-line);cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background-color 0.2s, transform 0.2s;background:var(--lx-surface);color:var(--lx-ink);';
             item.addEventListener('mouseover', () => {
-                item.style.background = '#f0f9ff';
+                item.style.background = 'var(--lx-pri-soft)';
                 item.style.transform = 'translateX(4px)';
             });
             item.addEventListener('mouseout', () => {
-                item.style.background = 'white';
+                item.style.background = 'var(--lx-surface)';
                 item.style.transform = 'translateX(0)';
             });
 
@@ -5150,27 +5120,27 @@ class ExtractionSmartSystem {
             left.style.flex = '1';
 
             const nameDiv = document.createElement('div');
-            nameDiv.style.cssText = 'font-weight:600;color:#1e293b;font-size:0.95rem;';
+            nameDiv.style.cssText = 'font-weight:600;color:var(--lx-ink);font-size:0.95rem;';
             nameDiv.textContent = e.name || '';
             left.appendChild(nameDiv);
 
             const metaRow = document.createElement('div');
-            metaRow.style.cssText = 'font-size:0.8rem;color:#94a3b8;margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;';
+            metaRow.style.cssText = 'font-size:0.8rem;color:var(--lx-mute);margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;';
 
             if (e.code) {
                 const codeBadge = document.createElement('span');
-                codeBadge.style.cssText = 'background:#dbeafe;color:#0369a1;padding:3px 8px;border-radius:4px;font-weight:600;font-size:0.85rem;';
+                codeBadge.style.cssText = 'background:var(--lx-pri-soft);color:var(--lx-pri-soft-ink);padding:3px 8px;border-radius:4px;font-weight:600;font-size:0.85rem;';
                 codeBadge.textContent = e.code;
                 metaRow.appendChild(codeBadge);
             }
 
             const typeBadge = document.createElement('span');
-            typeBadge.style.cssText = 'background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:4px;';
+            typeBadge.style.cssText = 'background:var(--lx-surface-2);color:var(--lx-mute);padding:2px 8px;border-radius:4px;';
             typeBadge.textContent = typeLabel;
             metaRow.appendChild(typeBadge);
 
             const matchBadge = document.createElement('span');
-            matchBadge.style.color = '#cbd5e1';
+            matchBadge.style.color = 'var(--lx-mute)';
             matchBadge.textContent = matchLabel;
             metaRow.appendChild(matchBadge);
 
@@ -5817,7 +5787,7 @@ class ExtractionSmartSystem {
               <i class="bi ${icon}"></i>
               <span class="flex-grow-1 text-truncate">${this._escapeHtml(f.name)}</span>
               <span class="text-muted small">${this._escapeHtml(f.size_label)}</span>
-              ${note ? `<span class="badge bg-light text-dark">${note}</span>` : ''}
+              ${note ? `<span class="badge bg-body-secondary text-body">${note}</span>` : ''}
             </li>`;
 
         let files = '';

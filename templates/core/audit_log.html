@@ -1,154 +1,212 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}سجل الحركات{% endblock %}
+{% block title %}سجلّ الحركات{% endblock %}
+
+{# الهويّة الموحّدة (11-19): رموزُ theme.css والوضعان — دفترُ مساءلة: يومٌ فوق يوم، والوقتُ هامشُه #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/book_unified_tabs.css' %}?v=20261119-pages">
+<link rel="stylesheet" href="{% static 'css/audit.css' %}?v=20261119-pages">
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
+{% now "Y-m-d" as today_key %}
+{% firstof filters.actor filters.action filters.date_from filters.date_to as any_filter %}
+<div class="audit-page">
 
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-    <h5 class="mb-0 fw-bold">
-      <i class="bi bi-shield-check text-primary me-2"></i>سجل الحركات
-    </h5>
+  <header class="audit-head">
+    <div class="audit-title">
+      <span class="audit-title-ico" aria-hidden="true"><i class="bi bi-clock-history"></i></span>
+      <div>
+        <span class="audit-eyebrow">الرقابة</span>
+        <h1>سجلّ الحركات</h1>
+        <p class="audit-lede">مَن أنشأ وعدّل وفرّق، ومَن اطّلع وطبع وصدّر — الأحدث أوّلاً، في حدود نطاقك.</p>
+      </div>
+    </div>
     {% if first_record %}
-      <span class="text-muted" style="font-size:.82rem">
-        <i class="bi bi-info-circle me-1"></i>
-        السجل يبدأ من {{ first_record|date:"Y/m/d" }} — ما قبله لم يُسجَّل.
-      </span>
+      <p class="audit-since">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        <span>السجل يبدأ من <time dir="ltr" datetime="{{ first_record|date:'c' }}">{{ first_record|date:"d/m/Y" }}</time> — ما قبله لم يُسجَّل.</span>
+      </p>
     {% endif %}
+  </header>
+
+  {% comment %}
+    التبويبان روابطُ خادمٍ (كلٌّ منهما عنوانٌ يُنسخ ويعمل بلا JS) بترميز لوح قائمة الكتب نفسِه:
+    tabs-split/tab-main من book_unified_tabs.css، واللوحُ المنزلق من lx_tabs.js.
+  {% endcomment %}
+  <div class="tabs-split audit-tabs" role="tablist" aria-label="نوع الحركات" data-lx-tabs>
+    <a class="tab-main{% if tab == 'books' %} active{% endif %}" role="tab"
+       aria-selected="{% if tab == 'books' %}true{% else %}false{% endif %}" href="?tab=books">
+      <i class="bi bi-journal-text tab-icon" aria-hidden="true"></i>
+      <span class="tab-text">
+        <span class="tab-label">حركات الكتب</span>
+        <span class="tab-count">إنشاء · تعديل · تفريق · عهدة</span>
+      </span>
+    </a>
+    <a class="tab-main{% if tab == 'users' %} active{% endif %}" role="tab"
+       aria-selected="{% if tab == 'users' %}true{% else %}false{% endif %}" href="?tab=users">
+      <i class="bi bi-eye tab-icon" aria-hidden="true"></i>
+      <span class="tab-text">
+        <span class="tab-label">نشاط المستخدمين</span>
+        <span class="tab-count">دخول · اطّلاع · طباعة · تصدير</span>
+      </span>
+    </a>
   </div>
 
-  <ul class="nav nav-pills mb-3" style="font-size:.9rem">
-    <li class="nav-item">
-      <a class="nav-link {% if tab == 'books' %}active{% endif %}"
-         href="?tab=books">
-        <i class="bi bi-journal-text me-1"></i>حركات الكتب
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link {% if tab == 'users' %}active{% endif %}"
-         href="?tab=users">
-        <i class="bi bi-eye me-1"></i>نشاط المستخدمين
-      </a>
-    </li>
-  </ul>
-
-  <form method="get" class="card border-0 shadow-sm rounded-4 mb-3">
+  <form method="get" class="audit-filters" role="search" aria-label="تصفية السجل">
     <input type="hidden" name="tab" value="{{ tab }}">
-    <div class="card-body p-3 d-flex flex-wrap gap-2 align-items-end">
-      <div>
-        <label for="actor" class="form-label text-muted mb-1" style="font-size:.8rem">الموظّف</label>
-        <input type="text" class="form-control form-control-sm" id="actor" name="actor"
-               value="{{ filters.actor }}" placeholder="الاسم أو اسم المستخدم" style="min-width:11rem">
-      </div>
-      <div>
-        <label for="action" class="form-label text-muted mb-1" style="font-size:.8rem">الحركة</label>
-        <select class="form-select form-select-sm" id="action" name="action" style="min-width:12rem">
-          <option value="">كل الحركات</option>
-          {% for value, label in actions %}
-            <option value="{{ value }}" {% if filters.action == value %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label for="date_from" class="form-label text-muted mb-1" style="font-size:.8rem">من</label>
-        <input type="date" class="form-control form-control-sm" id="date_from"
-               name="date_from" value="{{ filters.date_from }}">
-      </div>
-      <div>
-        <label for="date_to" class="form-label text-muted mb-1" style="font-size:.8rem">إلى</label>
-        <input type="date" class="form-control form-control-sm" id="date_to"
-               name="date_to" value="{{ filters.date_to }}">
-      </div>
-      <button type="submit" class="btn btn-sm btn-primary">
-        <i class="bi bi-funnel me-1"></i>تصفية
+    <div class="audit-field audit-field-actor">
+      <label for="actor">الموظّف</label>
+      <input type="text" class="form-control" id="actor" name="actor"
+             value="{{ filters.actor }}" placeholder="الاسم أو اسم الدخول" enterkeyhint="search">
+    </div>
+    <div class="audit-field audit-field-action">
+      <label for="action">الحركة</label>
+      <select class="form-select" id="action" name="action">
+        <option value="">كل الحركات</option>
+        {% for value, label in actions %}
+          <option value="{{ value }}" {% if filters.action == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="audit-field">
+      <label for="date_from">من تاريخ</label>
+      <input type="date" class="form-control" id="date_from"
+             name="date_from" value="{{ filters.date_from }}">
+    </div>
+    <div class="audit-field">
+      <label for="date_to">إلى تاريخ</label>
+      <input type="date" class="form-control" id="date_to"
+             name="date_to" value="{{ filters.date_to }}">
+    </div>
+    <div class="audit-actions">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-funnel" aria-hidden="true"></i>تصفية
       </button>
-      <a href="?tab={{ tab }}" class="btn btn-sm btn-outline-secondary">إلغاء</a>
+      {% if any_filter %}
+        <a href="?tab={{ tab }}" class="btn btn-outline-secondary">
+          <i class="bi bi-x-circle" aria-hidden="true"></i>مسح التصفية
+        </a>
+      {% endif %}
     </div>
   </form>
 
-  <div class="card border-0 shadow-sm rounded-4">
-    <div class="card-body p-0">
-      {% if rows %}
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0" style="font-size:.86rem">
-            <thead class="table-light">
-              <tr>
-                <th style="width:10rem">الوقت</th>
-                <th style="width:11rem">مَن</th>
-                <th style="width:9rem">القسم</th>
-                <th style="width:10rem">الحركة</th>
-                <th>{% if tab == 'users' %}الكتاب / التفصيل{% else %}الكتاب{% endif %}</th>
+  <section class="audit-sheet" aria-labelledby="audit-sheet-title">
+    <h2 class="visually-hidden" id="audit-sheet-title">{% if tab == 'users' %}نشاط المستخدمين{% else %}حركات الكتب{% endif %}</h2>
+    {% if rows %}
+      <p class="audit-meta" id="audit-meta">
+        <span><b>{{ page_obj.paginator.count }}</b> حركة{% if any_filter %} تطابق التصفية{% endif %}</span>
+        <span class="audit-meta-sep" aria-hidden="true">·</span>
+        <span><i class="bi bi-sort-down" aria-hidden="true"></i> الأحدث أوّلاً</span>
+        {% if page_obj.has_other_pages %}
+          <span class="audit-meta-sep" aria-hidden="true">·</span>
+          <span>صفحة <b>{{ page_obj.number }}</b> من <b>{{ page_obj.paginator.num_pages }}</b></span>
+        {% endif %}
+      </p>
+
+      {% regroup rows by when|date:"Y-m-d" as days %}
+      <table class="audit-table{% if tab == 'users' %} is-users{% endif %}" aria-describedby="audit-meta">
+        <caption class="visually-hidden">{% if tab == 'users' %}نشاط المستخدمين{% else %}حركات الكتب{% endif %} مجمّعةً حسب اليوم، الأحدث أوّلاً</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="audit-c-when" aria-sort="descending">الوقت</th>
+            <th scope="col" class="audit-c-who">مَن</th>
+            <th scope="col" class="audit-c-dept">القسم</th>
+            <th scope="col" class="audit-c-act">الحركة</th>
+            <th scope="col" class="audit-c-book">{% if tab == 'users' %}الكتاب / التفصيل{% else %}الكتاب{% endif %}</th>
+            {% if tab == 'users' %}
+              <th scope="col" class="audit-c-count">مرّات</th>
+              <th scope="col" class="audit-c-ip">عنوان IP</th>
+            {% else %}
+              <th scope="col" class="audit-c-note">التفصيل</th>
+            {% endif %}
+          </tr>
+        </thead>
+        {% for day in days %}
+          <tbody>
+            {% with first=day.list.0 %}
+              <tr class="audit-day">
+                <th scope="rowgroup" colspan="{% if tab == 'users' %}7{% else %}6{% endif %}">
+                  <span class="audit-day-name">{{ first.when|date:"l" }}</span>
+                  <time class="audit-day-date" dir="ltr" datetime="{{ day.grouper }}">{{ first.when|date:"d/m/Y" }}</time>
+                  {% if day.grouper == today_key %}<span class="audit-today">اليوم</span>{% endif %}
+                </th>
+              </tr>
+            {% endwith %}
+            {% for row in day.list %}
+              <tr class="audit-row">
+                <th scope="row" class="audit-c-when"><time dir="ltr" datetime="{{ row.when|date:'c' }}"><span class="visually-hidden">{{ row.when|date:"d/m/Y" }} </span>{{ row.when|date:"H:i" }}</time></th>
+                <td class="audit-c-who"><bdi>{{ row.who }}</bdi></td>
+                <td class="audit-c-dept">{% if row.department %}{{ row.department }}{% else %}<span class="audit-nil">—</span>{% endif %}</td>
+                <td class="audit-c-act"><span class="audit-act">{{ row.action }}</span></td>
+                <td class="audit-c-book" data-label="{% if row.book_title %}الكتاب{% else %}التفصيل{% endif %}">
+                  {% if row.book_id %}
+                    <a class="audit-book" href="{% url 'book_detail' row.book_id %}"{% if row.book_title|length > 90 %} title="{{ row.book_title }}"{% endif %}>
+                      <span class="audit-stamp">{% if row.book_number %}<bdi dir="ltr">{{ row.book_number }}</bdi>{% else %}بلا رقم{% endif %}</span>
+                      <span class="audit-book-title">{{ row.book_title|default:"بلا عنوان" }}</span>
+                    </a>
+                  {% elif row.book_title %}
+                    {# كتابٌ سرّيٌّ لا يملك القارئُ محتواه: رقمُه وعنوانٌ محجوب بلا رابط — بنفسجيُّ «السرّيّ» كطوابير الطاولة #}
+                    <span class="audit-book is-restricted">
+                      <span class="audit-stamp">{% if row.book_number %}<bdi dir="ltr">{{ row.book_number }}</bdi>{% else %}بلا رقم{% endif %}</span>
+                      <span class="audit-book-title"><i class="bi bi-shield-lock" aria-hidden="true"></i> {{ row.book_title }}</span>
+                    </span>
+                  {% elif row.note %}
+                    <span class="audit-note-text"{% if row.note|length > 120 %} title="{{ row.note }}"{% endif %}>{{ row.note }}</span>
+                  {% else %}
+                    <span class="audit-nil">—</span>
+                  {% endif %}
+                </td>
                 {% if tab == 'users' %}
-                  <th style="width:5rem">مرات</th>
-                  <th style="width:8rem">عنوان IP</th>
+                  <td class="audit-c-count{% if row.count > 1 %} is-many{% endif %}" data-label="مرّات"><bdi dir="ltr">{{ row.count }}</bdi></td>
+                  <td class="audit-c-ip" data-label="عنوان IP">{% if row.ip %}<bdi dir="ltr">{{ row.ip }}</bdi>{% else %}<span class="audit-nil">—</span>{% endif %}</td>
                 {% else %}
-                  <th style="width:16rem">التفصيل</th>
+                  <td class="audit-c-note" data-label="التفصيل">{% if row.note %}<span class="audit-note-text"{% if row.note|length > 120 %} title="{{ row.note }}"{% endif %}>{{ row.note }}</span>{% endif %}</td>
                 {% endif %}
               </tr>
-            </thead>
-            <tbody>
-              {% for row in rows %}
-                <tr>
-                  <td class="text-nowrap" style="font-variant-numeric:tabular-nums">
-                    {{ row.when|date:"Y/m/d H:i" }}
-                  </td>
-                  <td class="fw-semibold">{{ row.who }}</td>
-                  <td class="text-muted">{{ row.department|default:"—" }}</td>
-                  <td>{{ row.action }}</td>
-                  <td>
-                    {% if row.book_number %}
-                      {% if row.book_id %}
-                        <a href="{% url 'book_detail' row.book_id %}" class="text-decoration-none">
-                          <span style="font-variant-numeric:tabular-nums">{{ row.book_number }}</span>
-                          <span class="text-muted">— {{ row.book_title|truncatechars:45 }}</span>
-                        </a>
-                      {% else %}
-                        <span style="font-variant-numeric:tabular-nums">{{ row.book_number }}</span>
-                        <span class="text-muted fst-italic">— {{ row.book_title }}</span>
-                      {% endif %}
-                    {% else %}
-                      <span class="text-muted">{{ row.note|default:"—" }}</span>
-                    {% endif %}
-                  </td>
-                  {% if tab == 'users' %}
-                    <td style="font-variant-numeric:tabular-nums">{{ row.count }}</td>
-                    <td class="text-muted" style="font-size:.8rem">{{ row.ip|default:"—" }}</td>
-                  {% else %}
-                    <td class="text-muted">{{ row.note|truncatechars:70 }}</td>
-                  {% endif %}
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <div class="text-center text-muted py-5">
-          <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
-          لا حركات مطابقة.
-        </div>
-      {% endif %}
-    </div>
+            {% endfor %}
+          </tbody>
+        {% endfor %}
+      </table>
 
-    {% if page_obj.has_other_pages %}
-      <div class="card-footer bg-white d-flex justify-content-between align-items-center py-2">
-        <span class="text-muted" style="font-size:.82rem">
-          صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }}
-          ({{ page_obj.paginator.count }} حركة)
-        </span>
-        <div class="btn-group btn-group-sm">
+      {% if page_obj.has_other_pages %}
+        <nav class="audit-pager" aria-label="صفحات السجل">
           {% if page_obj.has_previous %}
-            <a class="btn btn-outline-secondary"
-               href="?tab={{ tab }}&actor={{ filters.actor|urlencode }}&action={{ filters.action|urlencode }}&date_from={{ filters.date_from|urlencode }}&date_to={{ filters.date_to|urlencode }}&page={{ page_obj.previous_page_number }}">السابق</a>
+            <a class="btn btn-outline-secondary" rel="prev"
+               href="?tab={{ tab }}&actor={{ filters.actor|urlencode }}&action={{ filters.action|urlencode }}&date_from={{ filters.date_from|urlencode }}&date_to={{ filters.date_to|urlencode }}&page={{ page_obj.previous_page_number }}"><i class="bi bi-arrow-right" aria-hidden="true"></i>السابق</a>
+          {% else %}
+            <span class="audit-pager-slot"></span>
           {% endif %}
+          <span class="audit-pager-status">صفحة <b>{{ page_obj.number }}</b> من <b>{{ page_obj.paginator.num_pages }}</b> · {{ page_obj.paginator.count }} حركة</span>
           {% if page_obj.has_next %}
-            <a class="btn btn-outline-secondary"
-               href="?tab={{ tab }}&actor={{ filters.actor|urlencode }}&action={{ filters.action|urlencode }}&date_from={{ filters.date_from|urlencode }}&date_to={{ filters.date_to|urlencode }}&page={{ page_obj.next_page_number }}">التالي</a>
+            <a class="btn btn-outline-secondary" rel="next"
+               href="?tab={{ tab }}&actor={{ filters.actor|urlencode }}&action={{ filters.action|urlencode }}&date_from={{ filters.date_from|urlencode }}&date_to={{ filters.date_to|urlencode }}&page={{ page_obj.next_page_number }}">التالي<i class="bi bi-arrow-left" aria-hidden="true"></i></a>
+          {% else %}
+            <span class="audit-pager-slot"></span>
           {% endif %}
-        </div>
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="audit-empty">
+        <span class="audit-empty-ico" aria-hidden="true"><i class="bi bi-journal-x"></i></span>
+        <p class="audit-empty-title">لا حركات مطابقة</p>
+        {% if any_filter %}
+          <p>لا شيء في هذا التبويب يطابق التصفية. وسّع المدّة أو جرّب اسماً آخر.</p>
+          <a class="btn btn-outline-secondary" href="?tab={{ tab }}"><i class="bi bi-x-circle" aria-hidden="true"></i>مسح التصفية</a>
+        {% else %}
+          <p>لم تُسجَّل في نطاقك حركاتٌ من هذا النوع بعد.</p>
+          <a class="btn btn-outline-secondary" href="?tab={% if tab == 'users' %}books{% else %}users{% endif %}">{% if tab == 'users' %}اعرض حركات الكتب{% else %}اعرض نشاط المستخدمين{% endif %}</a>
+        {% endif %}
       </div>
     {% endif %}
-  </div>
+  </section>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/lx_tabs.js' %}?v=20261112-list1"></script>
 {% endblock %}

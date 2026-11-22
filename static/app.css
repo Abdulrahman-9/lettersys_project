@@ -831,7 +831,10 @@ body {
 .btn,
 .form-control { 
   border-radius: .6rem;
-  transition: all var(--animation-duration) var(--animation-timing);
+  /* خصائصُ مسمّاة لا all: حلقةُ التركيز لا تذبل داخلةً، ولا يتحرّك ما لم يُقصد */
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: var(--animation-duration);
+  transition-timing-function: var(--animation-timing);
 }
 
 .btn { 
@@ -839,23 +842,8 @@ body {
   overflow: hidden;
 }
 
-.btn::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  transform: translate(-50%, -50%);
-  transition: width 0.6s, height 0.6s;
-}
-
-.btn:hover::before {
-  width: 300px;
-  height: 300px;
-}
+/* لا موجةَ بيضاءَ عند المرور (‎.btn::before‎ أُزيلت 11-22): كانت تُبيّض أزرارَ الورق في الداكن وتخفض تباينَ
+   الأبيض على التركواز إلى ~3.1:1، فأطفأتها الصفحاتُ واحدةً واحدة. المرورُ يرفع التباينَ ولا يخفضه. */
 
 .btn:hover { 
   transform: translateY(-2px);
@@ -1704,7 +1692,7 @@ body {
   right: 0;
   z-index: 10;
   min-width: 110px;
-  background: #fff;
+  background: var(--lx-surface, #fff);
   box-shadow: -6px 0 12px rgba(0, 0, 0, 0.05);
 }
 
@@ -2909,14 +2897,6 @@ select.keyboard-focus:not(:focus) {
    بطاقات معاينة نظام تصميم LetterSys (buttons.html / form-fields.html).
    كتلة override مُلحقة. للتراجع: احذف هذه الكتلة كاملةً.
 ═══════════════════════════════════════════════════════════════════ */
-
-/* لا حلقة موجة (ripple) على الأزرار المُعاد تنسيقها — لا تناسب الورق المطبوع */
-.btn-brand::before,
-.btn-primary::before,
-.btn-success::before,
-.btn-danger::before,
-.btn-secondary::before,
-.btn-info::before { display: none; }
 
 /* القاعدة المشتركة: خلفية كريمية موحّدة، حواف ناعمة، حركة هادئة */
 .btn-brand,

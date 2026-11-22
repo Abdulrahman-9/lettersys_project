@@ -18,7 +18,7 @@
   overflow: hidden;
   background: var(--lx-surface);
   box-shadow: var(--lx-shadow-sm);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, var(--lx-line));
 }
 
 .tab-main {
@@ -33,12 +33,13 @@
   cursor: pointer;
   font-family: inherit;
   color: var(--lx-mute);
+  text-decoration: none;   /* التبويبُ رابطٌ في السجلّ والأضابير والجهات */
   transition: background var(--lx-dur-2) ease, color var(--lx-dur-3) ease;
   overflow: hidden;
 }
 
 .tab-main + .tab-main {
-  border-inline-start: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border, var(--lx-line));
 }
 
 .tab-main .tab-icon {
@@ -78,17 +79,21 @@
 
 .tab-main:hover .tab-icon { transform: scale(1.08); }
 
+/* الذهبيُّ 2.45:1 على السطح الأبيض ⟵ لونُ الفعل على غير النشط، والأبيضُ على اللوح العميق */
 .tab-main:focus-visible {
-  outline: 2px solid var(--lx-accent);
+  outline: 2px solid var(--lx-pri);
   outline-offset: -4px;
   border-radius: 10px;
 }
 
-/* — النشط: حبرٌ أبيض فوق اللوح؛ والأيقونةُ والعدّاد أخفّ قليلاً — */
-.tab-main.active { color: #fff; }
+.tab-main.active:focus-visible { outline-color: #fff; }
 
-.tab-main.active .tab-icon,
-.tab-main.active .tab-count { color: rgba(255, 255, 255, 0.82); }
+/* — النشط: حبرٌ أبيض فوق اللوح؛ الأيقونةُ أخفّ قليلاً، والعدّادُ نصٌّ فأبيضُ كاملاً
+   (‎.82‎ كان 4.24:1 عند طرف ‎--lx-hero-a‎) — */
+.tab-main.active,
+.tab-main.active .tab-count { color: #fff; }
+
+.tab-main.active .tab-icon { color: rgba(255, 255, 255, 0.82); }
 
 /* بلا السكربت: التبويبُ النشط يحمل السطحَ والخطَّ الذهبيّ بنفسه */
 .tabs-split:not(.lx-tabs-on) .tab-main.active {
@@ -117,7 +122,7 @@
   gap: 0.7rem;
   padding: 0.5rem 0.7rem;
   background: var(--lx-surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, var(--lx-line));
   border-radius: 12px;
   margin: 0 0 0.55rem;
   flex-wrap: wrap;
@@ -134,8 +139,9 @@
 
 .fb-search input {
   width: 100%;
-  padding: 0.45rem 2rem 0.45rem 0.7rem;
-  border: 1px solid var(--border);
+  padding-block: 0.45rem;
+  padding-inline: 0.7rem 2rem;   /* الأيقونةُ وزرُّ المسح عند نهاية السطر */
+  border: 1px solid var(--border, var(--lx-line));
   border-radius: 10px;
   background: var(--lx-surface-2);
   color: var(--lx-ink);
@@ -149,7 +155,7 @@
   outline: none;
   background: var(--lx-surface);
   border-color: var(--lx-pri);
-  box-shadow: 0 0 0 3px var(--theme-glow);
+  box-shadow: 0 0 0 3px var(--theme-glow, rgba(var(--lx-pri-rgb), .18));
 }
 
 .fb-search-icon {
@@ -185,7 +191,7 @@
   background: var(--lx-surface-2);
   border-radius: 10px;
   padding: 0.18rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, var(--lx-line));
 }
 
 .fb-scope-btn {
@@ -212,7 +218,7 @@
 .fb-scope-btn.active {
   background: var(--lx-surface);
   color: var(--lx-pri);
-  box-shadow: var(--lx-shadow-sm), inset 0 0 0 1px var(--border);
+  box-shadow: var(--lx-shadow-sm), inset 0 0 0 1px var(--border, var(--lx-line));
 }
 
 .fb-scope-btn i { font-size: 0.85rem; }
@@ -231,12 +237,13 @@
   gap: 0.32rem;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, var(--lx-line));
   background: var(--lx-surface);
   color: var(--lx-mute);
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
+  text-decoration: none;   /* الرقاقةُ رابطٌ في صفحة الأضابير */
   transition: border-color var(--lx-dur-2) ease, color var(--lx-dur-2) ease, background var(--lx-dur-2) ease;
   white-space: nowrap;
 }
@@ -256,7 +263,7 @@
 
 .fb-pill:hover {
   border-color: var(--lx-pri-2);
-  color: var(--theme-text);
+  color: var(--theme-text, var(--lx-pri-soft-ink));
 }
 
 .fb-pill:focus-visible,
@@ -282,8 +289,8 @@
 
 /* «الكلّ» بلون الهويّة */
 .fb-pill[data-filter="all"].active {
-  color: var(--theme-text);
-  background: var(--theme-light);
+  color: var(--theme-text, var(--lx-pri-soft-ink));
+  background: var(--theme-light, var(--lx-pri-soft));
 }
 
 /* — زرُّ الفلترة المتقدّمة — */
@@ -292,7 +299,7 @@
   align-items: center;
   gap: 0.3rem;
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, var(--lx-line));
   border-radius: 10px;
   background: var(--lx-surface);
   color: var(--lx-mute);
@@ -306,12 +313,12 @@
 .fb-advanced-toggle:hover,
 .fb-advanced-toggle[aria-expanded="true"] {
   border-color: var(--lx-pri-2);
-  color: var(--theme-text);
+  color: var(--theme-text, var(--lx-pri-soft-ink));
 }
 
 .fb-advanced-toggle .fb-active-count {
-  background: var(--theme-fill);
-  color: var(--theme-on);
+  background: var(--theme-fill, var(--lx-pri-fill));
+  color: var(--theme-on, var(--lx-pri-fill-ink));
   font-size: 0.68rem;
   border-radius: 999px;
   padding: 0.05rem 0.4rem;
@@ -324,7 +331,7 @@
   width: 100%;
   display: none;
   padding: 0.7rem 0.4rem 0;
-  border-top: 1px dashed var(--border);
+  border-top: 1px dashed var(--border, var(--lx-line));
   margin-top: 0.45rem;
 }
 
@@ -348,7 +355,7 @@
 .fb-advanced-item select {
   width: 100%;
   padding: 0.35rem 0.55rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, var(--lx-line));
   border-radius: 8px;
   font-size: 0.83rem;
   background: var(--lx-surface-2);
@@ -360,7 +367,7 @@
   outline: none;
   border-color: var(--lx-pri);
   background: var(--lx-surface);
-  box-shadow: 0 0 0 2px var(--theme-glow);
+  box-shadow: 0 0 0 2px var(--theme-glow, rgba(var(--lx-pri-rgb), .18));
 }
 
 @keyframes fbFadeIn {

@@ -230,7 +230,7 @@
           <h2 id="h-signs">التواقيع</h2><span class="spacer"></span>
           {% if can_sign_book and attachment_series %}
           <form method="post" action="{% url 'sign_attachment' book.attachments.first.pk %}"
-                data-confirm="توقيعُ المستند يُنشئ نسخةً مختومة — أتمضي؟" data-confirm-ok="وقّع" data-confirm-tone="safe">
+                data-confirm="توقيعُ المستند يُنشئ نسخةً مختومة — أتمضي؟" data-confirm-title="توقيع المستند" data-confirm-ok="وقّع" data-confirm-tone="safe">
             {% csrf_token %}
             <button type="submit" class="bx-tag"><i class="bi bi-pen" aria-hidden="true"></i>وقّع المستند</button>
           </form>
@@ -250,7 +250,7 @@
           </div>
           {% if sg.is_valid and sg.can_revoke %}
           <form method="post" action="{% url 'revoke_signature' sg.pk %}"
-                data-confirm="إبطالُ التوقيع لا يحذفه — يبقى في القائمة موسوماً «مُبطَل». أتمضي؟" data-confirm-ok="أبطِل التوقيع">
+                data-confirm="إبطالُ التوقيع لا يحذفه — يبقى في القائمة موسوماً «مُبطَل». أتمضي؟" data-confirm-title="إبطال التوقيع" data-confirm-ok="أبطِل التوقيع">
             {% csrf_token %}
             <button type="submit" class="bx-row-act">إبطال</button>
           </form>
