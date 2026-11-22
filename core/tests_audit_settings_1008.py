@@ -51,7 +51,7 @@ class SettingsHubTruthTests(TestCase):
         hub = self.html()
         backup = self.client.get(reverse('backup_database')).content.decode('utf-8')
         for html, field in [(hub, f) for f in ('app_name', 'brand_subtitle', 'password_min_length')] + [
-                (backup, f) for f in ('enabled', 'frequency', 'hour', 'retention_days', 'target_directory', 'file_name')]:
+                (backup, f) for f in ('enabled', 'frequency', 'hour', 'retention_days')]:
             with self.subTest(field=field):
                 tag = re.search(r'<(?:input|select)\b[^>]*\bname="%s"[^>]*>' % field, html)
                 self.assertIsNotNone(tag, field)

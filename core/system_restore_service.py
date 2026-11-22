@@ -11,10 +11,12 @@
 اسمُ قاعدةٍ مؤرَّخٌ ليس الحيّةَ ولا موجوداً · ``pg_restore`` موجود · المحتوى نسخةُ
 ``PGDMP`` بعد الفكّ. ثمّ الصريحُ في مجلّدٍ مؤقّتٍ خارج المستودع يُحذف في ``finally``.
 """
+import logging
 import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from django.conf import settings
@@ -23,6 +25,8 @@ from django.utils import timezone
 
 from core import backup_verify as bv
 from core.backup_service import DB_BACKUP_PATTERN, default_backup_dir
+
+logger = logging.getLogger(__name__)
 
 #: اسمُ القاعدة الجديدة: مؤرَّخٌ وبأحرفٍ آمنة — لا يُبنى من مدخلات المستخدم أبداً.
 TARGET_RE = re.compile(r'^lettersys_r_\d{8}_\d{4}$')
@@ -141,19 +145,63 @@ def restore_into_new_database(file_name, target, *, directory=None, report=None)
         raise RestoreRefused('المحتوى ليس نسخةَ قاعدةٍ صالحة (رأسُ PGDMP غائب).')
 
     tempdir = bv.make_secure_tempdir()
+    created = False
     try:
         dump = bv.write_private(tempdir / 'restore.dump', plain)
         del plain
         report('إنشاءُ القاعدة الجديدة')
         create_database(target)
+        created = True
         report('استعادةُ الجداول')
         subprocess.run([str(pg_restore), *_pg_args(target), str(dump)], env=_pg_env(),
                        check=True, capture_output=True, timeout=6 * 3600)
+        report('عدُّ الكتب')
+        books = count_books(target)
+        if not books:
+            raise RestoreRefused(f'انتهت الاستعادةُ والقاعدةُ «{target}» بلا كتب.')
+    except Exception as exc:
+        # ما أنشأه هذا الاستدعاءُ يُزال قبل أن يُرفع الفشل (11-22): كانت تبقى قاعدةٌ نصفُ مستعادة
+        # و«احذفها بيدك». ما لم يُنشأ بعدُ لا يُمسّ — والرفعُ يمضي في الحالين.
+        if not created:
+            raise
+        note = discard_new_database(target)
+        if isinstance(exc, subprocess.CalledProcessError):
+            logger.error('pg_restore into %s rc=%s stderr=%s', target, exc.returncode, (exc.stderr or b'')[-4000:])
+            raise RestoreRefused(f'توقّفت الاستعادةُ برمز {exc.returncode} — التفصيلُ في سجلّ الخادم. {note}') from exc
+        if isinstance(exc, RestoreRefused):
+            raise RestoreRefused(f'{exc} {note}') from exc
+        logger.exception('restore into %s failed', target)
+        raise RestoreRefused(f'فشلت الاستعادة ({type(exc).__name__}) — التفصيلُ في سجلّ الخادم. {note}') from exc
     finally:
         shutil.rmtree(tempdir, ignore_errors=True)
 
-    report('عدُّ الكتب')
-    books = count_books(target)
-    if not books:
-        raise RestoreRefused(f'انتهت الاستعادةُ والقاعدةُ «{target}» بلا كتب — لا تبدّل إليها.')
-    return {'target': target, 'books': books, 'env_line': f'DB_NAME={target}'}
+    return {'target': target, 'books': books, 'command': switch_command(target)}
+
+
+def drop_restored_database(target) -> bool:
+    """يُسقط قاعدةَ استعادةٍ فاشلة — بحارسَين قبل أيّ ``DROP``: الاسمُ مؤرَّخٌ من صنعنا (``TARGET_RE``)،
+    وليس القاعدةَ الحيّة. يعيد ``True`` إن سقطت."""
+    from django.db import DatabaseError
+
+    if not TARGET_RE.match(target or '') or target == settings.DATABASES['default']['NAME']:
+        return False
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('DROP DATABASE IF EXISTS "%s"' % target)   # الاسمُ من TARGET_RE لا من المستخدم
+    except DatabaseError:
+        logger.exception('drop_restored_database: تعذّر إسقاط %s', target)
+        return False
+    return True
+
+
+def discard_new_database(target) -> str:
+    """يُزيل القاعدةَ الناقصة ويقول ما جرى بلغة المدير."""
+    if drop_restored_database(target):
+        return f'أُزيلت القاعدةُ الناقصة «{target}»، والقاعدةُ الحاليّة لم تُمسّ — أعد المحاولة.'
+    return (f'وتعذّرت إزالةُ القاعدة الناقصة «{target}» — لا تبدّل إليها، واحذفها من PostgreSQL. '
+            'القاعدةُ الحاليّة لم تُمسّ.')
+
+
+def switch_command(target) -> str:
+    """سطرُ التبديل كما يُلصق في موجّه الأوامر على الخادم (``use_restored_database``)."""
+    return f'"{sys.executable}" "{Path(settings.BASE_DIR) / "manage.py"}" use_restored_database {target}'

@@ -257,3 +257,48 @@ ssh-keyscan -H <العنوان> | gh secret set DEPLOY_KNOWN_HOSTS --repo Abdulr
 كذلك `.env` فيه `DEBUG=True` و`ALLOWED_HOSTS=*` — يُضبطان قبل النشر. (لأجل
 `ALLOWED_HOSTS=*` أُضيف `core/ws_security.py` لأن `AllowedHostsOriginValidator`
 يصير بلا أثر معها، فحارس المصدر للـWebSocket صار مستقلّاً.)
+
+## الاستعادة — 2026-11-22
+
+### على الخادم نفسه (القاعدةُ وحدها)
+
+من صفحة «استعادة نسخة النظام» (`/books/restore-system/`): **تحقّق** ⟵ **استعِد إلى قاعدةٍ جديدة**
+(`lettersys_r_YYYYMMDD_HHMM`، والحاليّةُ لا تُمسّ؛ إن فشلت أُزيلت الناقصةُ تلقائيّاً) ⟵ الصفحةُ تعرض
+سطراً يُلصق في موجّه الأوامر على الخادم:
+
+```
+"D:\lettersys\venv\Scripts\python.exe" "D:\lettersys\app\manage.py" use_restored_database lettersys_r_20261122_1015
+```
+
+ثمّ أعد تشغيل خدمة LetterSys. الصفحةُ نفسُها تذكر بعدها «القاعدة الحاليّة» — إن بقي الاسمُ القديم فـ`DB_NAME`
+مضبوطٌ في بيئة الخدمة نفسها (يغلب `.env`). **الرجوع:** الأمرُ نفسُه بـ`--undo` ثمّ إعادةُ التشغيل.
+الأمرُ يغيّر سطرَ `DB_NAME=` وحده، ويحفظ الاسمَ السابق في `var/db_switch.json` (لا نسخةَ من `.env`: فيه كلمةُ المرور).
+
+### على جهازٍ جديد (القرصُ تلف أو الجهازُ تغيّر)
+
+ما في مجلّد النسخ (`D:\trackbackup` افتراضاً): `pg_backup_*.dump.enc` (القاعدة) · `config_*.tar.enc` (`.env`)
+· `media_mirror\` (المرفقات) · `models_mirror\` (أوزان القارئ). **والمفتاحُ `.encryption_key` ليس فيها عمداً**
+(مفتاحٌ بجانب ما يفتحه ليس تشفيراً) — بلا نسخته المحفوظة خارج الخادم لا يُفتح شيءٌ ممّا سبق.
+
+1. نصّب PostgreSQL 16 وPython والتطبيقَ في `D:\lettersys\app` مع البيئة الافتراضيّة، كما في أوّل هذا الدليل.
+2. ضع `.encryption_key` المحفوظ في `D:\lettersys\app\`.
+3. فُكّ أحدث `config_*.tar.enc` وأخرج `.env` (الملفُّ المفكوك فيه كلمةُ مرور القاعدة: احذفه بعد الإخراج):
+   ```
+   cd D:\lettersys\app
+   D:\lettersys\venv\Scripts\python.exe -c "import sys; from cryptography.fernet import Fernet; k=open('.encryption_key','rb').read(); p=sys.argv[1]; open(p[:-4],'wb').write(Fernet(k).decrypt(open(p,'rb').read()))" D:\trackbackup\config_20261122_0900.tar.enc
+   tar -xf D:\trackbackup\config_20261122_0900.tar -C D:\lettersys\app
+   del D:\trackbackup\config_20261122_0900.tar
+   ```
+4. القاعدة: أنشئها باسم `DB_NAME` ومالكُها `DB_USER` (من `.env`)، وفُكّ أحدث نسخةٍ بالسطر نفسه، ثمّ:
+   ```
+   "C:\Program Files\PostgreSQL\16\bin\createdb.exe" -U postgres -O <DB_USER> lettersys
+   "C:\Program Files\PostgreSQL\16\bin\pg_restore.exe" -U <DB_USER> -h localhost --no-owner --no-privileges --exit-on-error -d lettersys D:\trackbackup\pg_backup_20261122_0900.dump
+   del D:\trackbackup\pg_backup_20261122_0900.dump
+   ```
+5. المرآتان إلى مكانيهما (`MEDIA_ROOT` من `.env`):
+   ```
+   robocopy D:\trackbackup\media_mirror D:\lettersys_data\media /E
+   robocopy D:\trackbackup\models_mirror D:\lettersys\app\var\models /E
+   ```
+6. `manage.py migrate --check` (لا شيءَ معلّق) · `manage.py models_healthcheck --strict --load` ·
+   `manage.py collectstatic --noinput` · شغّل الخدمة، وافتح كتاباً له مرفقٌ للتأكّد أنّ ملفّه يُفتح.

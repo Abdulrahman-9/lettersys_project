@@ -191,6 +191,12 @@
 .bk-hint { margin: 0; color: var(--lx-mute); font-size: .82rem; line-height: 1.8; }
 .bk-hint time { color: var(--lx-ink); font-weight: 700; }
 
+/* ما تحفظه «النسخة الآن» — قائمةٌ لا حقول (11-22) */
+.bk-parts { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.bk-parts li { display: flex; align-items: flex-start; gap: .6rem; color: var(--lx-ink); font-size: .92rem; line-height: 1.7; }
+.bk-parts .bi { color: var(--lx-pri); font-size: 1.05rem; margin-top: .15rem; }
+.bk-parts b { color: var(--lx-ink); }
+
 .bk-note {
   display: flex;
   align-items: flex-start;

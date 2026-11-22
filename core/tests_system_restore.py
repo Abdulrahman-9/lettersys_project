@@ -83,11 +83,60 @@ class ServiceRefusalTests(_BackupDir):
 
         with mock.patch.object(bv, 'make_secure_tempdir', side_effect=tracked), \
                 mock.patch('core.system_restore_service.subprocess.run',
-                           side_effect=subprocess.CalledProcessError(1, 'pg_restore')):
-            with self.assertRaises(subprocess.CalledProcessError):
+                           side_effect=subprocess.CalledProcessError(1, 'pg_restore')), \
+                mock.patch('core.system_restore_service.drop_restored_database', return_value=True) as drop:
+            with self.assertRaises(svc.RestoreRefused) as ctx:
                 svc.restore_into_new_database('db_20261007.dump.enc', 'lettersys_r_20261007_1200')
         self.assertEqual(len(made), 1)
         self.assertFalse(made[0].exists())
+        # القاعدةُ الناقصة تُزال ويُقال ذلك (11-22) — كانت «احذفها بيدك»
+        drop.assert_called_once_with('lettersys_r_20261007_1200')
+        self.assertIn('برمز 1', str(ctx.exception))
+        self.assertIn('أُزيلت القاعدةُ الناقصة «lettersys_r_20261007_1200»', str(ctx.exception))
+
+    @mock.patch('core.system_restore_service.count_books', return_value=0)
+    @mock.patch('core.system_restore_service.subprocess.run')
+    @mock.patch('core.system_restore_service.create_database')
+    @mock.patch('core.system_restore_service.database_exists', return_value=False)
+    @mock.patch.object(bv, 'resolve_pg_restore', return_value=Path('pg_restore'))
+    @mock.patch.object(bv, 'decrypt_if_needed', return_value=(PLAIN, 'sha'))
+    def test_an_empty_restore_is_dropped_too(self, *_mocks):
+        with mock.patch('core.system_restore_service.drop_restored_database', return_value=False) as drop:
+            with self.assertRaises(svc.RestoreRefused) as ctx:
+                svc.restore_into_new_database('db_20261007.dump.enc', 'lettersys_r_20261007_1200')
+        drop.assert_called_once_with('lettersys_r_20261007_1200')
+        self.assertIn('بلا كتب', str(ctx.exception))
+        self.assertIn('تعذّرت إزالةُ القاعدة الناقصة', str(ctx.exception))   # والإسقاطُ الفاشل يُقال
+
+    @mock.patch('core.system_restore_service.subprocess.run')
+    @mock.patch('core.system_restore_service.database_exists', return_value=False)
+    @mock.patch.object(bv, 'resolve_pg_restore', return_value=Path('pg_restore'))
+    @mock.patch.object(bv, 'decrypt_if_needed', return_value=(PLAIN, 'sha'))
+    def test_nothing_is_dropped_when_creation_itself_failed(self, _dec, _pg, _exists, run):
+        with mock.patch('core.system_restore_service.create_database', side_effect=svc.RestoreRefused('لا CREATEDB')), \
+                mock.patch('core.system_restore_service.drop_restored_database') as drop:
+            with self.assertRaises(svc.RestoreRefused):
+                svc.restore_into_new_database('db_20261007.dump.enc', 'lettersys_r_20261007_1200')
+        drop.assert_not_called()
+        run.assert_not_called()
+
+
+class DropGuardTests(TestCase):
+    """الإسقاطُ لا يبلغ SQL إلّا لاسمٍ مؤرَّخٍ من صنعنا ليس الحيّة."""
+
+    def test_only_our_dated_names_reach_drop(self):
+        live = settings.DATABASES['default']['NAME']
+        with mock.patch('core.system_restore_service.connection') as conn:
+            for name in ('lettersys', live, 'lettersys_r_x', 'lettersys_r_20261122_1015; DROP', ''):
+                with self.subTest(name=name):
+                    self.assertFalse(svc.drop_restored_database(name))
+            # والحارسُ الثاني وحده: قاعدةٌ مستعادة صارت هي الحيّة بعد التبديل لا تُسقَط
+            with mock.patch.dict(settings.DATABASES['default'], {'NAME': 'lettersys_r_20261122_1015'}):
+                self.assertFalse(svc.drop_restored_database('lettersys_r_20261122_1015'))
+            conn.cursor.assert_not_called()
+            self.assertTrue(svc.drop_restored_database('lettersys_r_20261122_1015'))
+            sql = conn.cursor.return_value.__enter__.return_value.execute.call_args[0][0]
+            self.assertEqual(sql, 'DROP DATABASE IF EXISTS "lettersys_r_20261122_1015"')
 
 
 class PageGateTests(_BackupDir):
