@@ -21,6 +21,13 @@
     return n;
   };
   const icon = (name) => { const i = el('i', `bi ${name}`); i.setAttribute('aria-hidden', 'true'); return i; };
+  // العنوانُ (127.0.0.1) معزولٌ عن الجملة العربيّة حولَه
+  const ltr = (text) => { const b = el('bdi', 'dvs-mono', text); b.dir = 'ltr'; return b; };
+  // لونُ البلاطة/الشارة لمعناه وحين يكون له معنى: العددُ صفرٌ ⟵ محايد
+  const tone = (node, value) => {
+    if (!node) return;
+    if (value) node.dataset.tone = value; else delete node.dataset.tone;
+  };
 
   L.bindCopy(document);
   L.bindDeclare();
@@ -58,6 +65,9 @@
       $('dvsCountAttention').textContent = c.attention ?? 0;
       $('dvsCountScanners').textContent = c.scanners ?? 0;
       $('dvsReqCount').textContent = c.requests ?? 0;
+      tone($('dvsCountNow').closest('.dvs-stat'), c.now ? 'done' : '');
+      tone($('dvsCountAttention').closest('.dvs-stat'), c.attention ? 'wait' : '');
+      tone($('dvsReqCount'), c.requests ? 'wait' : '');
       const rows = board.rows || [];
       document.querySelectorAll('[data-count]').forEach((n) => {
         n.textContent = rows.filter(tests[n.dataset.count]).length;
@@ -66,14 +76,17 @@
 
     function requestItem(r, seen) {
       const li = el('li', 'dvs-req');
+      li.dataset.id = r.id;
       if (seen) li.dataset.seen = '1';
       const ico = el('span', 'dvs-ico');
+      ico.setAttribute('aria-hidden', 'true');
       if (!seen) ico.dataset.tone = 'wait';
       ico.appendChild(icon(r.is_phone ? 'bi-phone' : 'bi-display'));
       const text = el('div', 'dvs-req-text');
       text.appendChild(el('span', 'dvs-req-title', r.title));
-      text.appendChild(el('span', 'dvs-req-meta',
-        `${seen ? 'ظهر' : 'طلب'} · ${r.who} · من ${r.ip} · ${r.when}`));
+      const meta = el('span', 'dvs-req-meta');
+      meta.append(`${seen ? 'ظهر' : 'طلب'} · ${r.who} · من `, ltr(r.ip), ` · ${r.when}`);
+      text.appendChild(meta);
       li.append(ico, text);
       if (canApprove) {
         const issue = el('button', `btn btn-sm ${seen ? 'btn-outline-primary' : 'btn-primary'}`, 'أصدر كوداً لهذا الجهاز');
@@ -130,9 +143,11 @@
         && (!q || r.name.includes(q) || r.users.includes(q) || r.platform.toLowerCase().includes(q.toLowerCase())));
       rows.forEach((r) => {
         const tr = el('tr');
+        tr.dataset.id = r.id;
         const devCell = el('td');
         const dev = el('div', 'dvs-dev');
         const ico = el('span', 'dvs-ico');
+        ico.setAttribute('aria-hidden', 'true');
         ico.appendChild(icon(r.is_server ? 'bi-hdd-rack' : (r.is_phone ? 'bi-phone' : 'bi-display')));
         const names = el('div');
         const nameLine = el('div', 'dvs-dev-name', r.name);
@@ -150,7 +165,7 @@
         seen.append(dot, document.createTextNode(r.seen));
 
         const ipCell = el('td');
-        ipCell.appendChild(el('span', 'dvs-mono', r.ip));
+        ipCell.appendChild(ltr(r.ip));
         const seenCell = el('td');
         seenCell.appendChild(seen);
         const scanCell = el('td');
@@ -171,14 +186,46 @@
 
     function render() { renderCounts(); renderRequests(); renderRows(); }
 
+    // بصمةُ ما يُرسم: التحديثُ كلَّ 10 ث كان يعيد بناءَ القائمتين ولو لم يتغيّر شيء،
+    // فيُسقط التركيزَ عن زرّ «إجراءات» تحت يد المستخدم (ويغلق قائمتَه).
+    const drawn = (b) => JSON.stringify([b.rows, b.requests, b.seen, b.counts]);
+
+    // إن أُعيد الرسمُ والتركيزُ في صفّ: يعود إلى الزرّ نفسِه في الصفّ نفسِه (data-id)
+    function keepFocus(draw) {
+      const active = document.activeElement;
+      const row = active && active.closest ? active.closest('#dvsRows [data-id], #dvsRequests [data-id]') : null;
+      const index = row ? [...row.querySelectorAll('button')].indexOf(active) : -1;
+      const listId = row ? row.parentElement.id : '';
+      const key = row ? row.dataset.id : '';
+      draw();
+      if (!key || index < 0) return;
+      const again = [...$(listId).children].find((n) => n.dataset.id === key);
+      if (!again) return;
+      const target = again.querySelectorAll('button')[index];
+      // بندُ قائمةٍ أُغلقت بإعادة الرسم مخفيّ ⟵ زرُّها
+      const pick = target && target.offsetParent !== null ? target : again.querySelector('button');
+      if (pick) pick.focus();
+    }
+
+    // القائمةُ ليست منطقةً حيّة (كانت تُقرأ كلُّها مع كلّ تحديث)؛ تغيّرُ العدد يُعلَن جملةً واحدة —
+    // لمن يقرأ فقط: من يصدر الأكواد يُعلمه توستُ «جهازٌ غير مسجّل يطلب الانضمام».
+    function announceCount() {
+      if (canApprove) return;
+      const n = (board.counts || {}).requests || 0;
+      $('dvsReqStatus').textContent = n ? `أجهزة تطلب الانضمام الآن: ${n}` : 'لا طلباتِ انضمامٍ الآن.';
+    }
+
     async function refresh(announce) {
       try {
         const res = await L.api(cfg.boardUrl);
         if (!res.ok) throw new Error(String(res.status));
         const fresh = (res.data.requests || []).filter((r) => !knownRequests.has(r.id));
+        const changed = drawn(res.data) !== drawn(board);
+        const countChanged = (res.data.counts || {}).requests !== (board.counts || {}).requests;
         board = res.data;
         knownRequests = new Set((board.requests || []).map((r) => r.id));
-        render();
+        if (changed) keepFocus(render);
+        if (countChanged) announceCount();
         setLive(true);
         if (announce && canApprove) fresh.forEach(announceRequest);
       } catch (_) {
@@ -197,7 +244,9 @@
       const live = $('dvsLive');
       if (!live) return;
       live.dataset.state = ok && !document.hidden ? 'live' : 'paused';
-      $('dvsLiveText').textContent = ok ? (document.hidden ? 'متوقّفٌ مؤقّتاً' : 'مباشر · يتحدّث وحده') : 'تعذّر التحديث · نحاول';
+      const text = ok ? (document.hidden ? 'متوقّفٌ مؤقّتاً' : 'مباشر · يتحدّث وحده') : 'تعذّر التحديث · نحاول';
+      // role=status: يُقرأ حين يتغيّر نصُّه وحدَه، لا مع كلّ تحديث
+      if ($('dvsLiveText').textContent !== text) $('dvsLiveText').textContent = text;
     }
 
     function schedule() {
@@ -273,7 +322,7 @@
         const ok = await window.confirmDelete({
           title: 'المسجّلة فقط',
           message: 'الجهازُ غيرُ المسجّل لن يرى إلّا صفحة الدخول وإدخال الكود. تأكّد أنّ الموظّفين انضمّوا أوّلاً.',
-          okText: 'فعّله', danger: false,
+          okText: 'فعّله', danger: true,
         });
         if (!ok) { restoreMode(previous); return; }
       }

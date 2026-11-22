@@ -1,262 +1,1250 @@
-/* أنماط الأضابير (المستوى 1 + المستوى 2) — مشتركة بين dossier_list و dossier_detail */
+/* ══════════════════════════════════════════════════════════════════════════
+   الأضابير — القائمة (المستوى 1) والإضبارة (المستوى 2) على الهويّة الموحّدة (11-19)
+   - كلُّ لونٍ من رموز theme.css فيعمل الوضعان معاً؛ لا لونَ صريحاً إلّا الأبيضَ حبراً على التركواز العميق.
+   - التبويباتُ ولوحُها المنزلق وشريطُ التصفية ورقائقُه مكوّناتُ قائمة الكتب نفسُها (book_unified_tabs.css
+     + js/lx_tabs.js): هنا متغيّراتُها وما يخصّ الأضابير وحده — لا نسخةَ ثانيةً من شيءٍ واحد.
+   - لغةُ الخزانة الورقيّة (موجزُ تصميم الأضابير 09-11، الاتّجاه «أ»): الإضبارةُ مجلّدٌ بلسانٍ في أعلاه —
+     بطاقاتُ القائمة، وغلافُ الإضبارة، وملفّاتُ النوع والسنة داخلها.
+   - الاتّجاهُ علامةٌ لا لونُ صفحة (قرارُ المالك 11-11): ظرفٌ خارجٌ بالحبر، وظرفٌ داخلٌ بالتركواز.
+   ══════════════════════════════════════════════════════════════════════════ */
 
-/* ── المستوى 1: شبكة الأقسام ── */
-.dossiers-page { max-width: 1180px; margin: 1.5rem auto; padding: 0 1rem; direction: rtl; }
-.dossiers-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem; }
-.dossiers-head h4 { font-weight:800; color:#1e293b; margin:0; display:flex; align-items:center; gap:.5rem; }
-.dossiers-head h4 i { color:#b45309; }
-.dossiers-sub { color:var(--lx-mute); font-size:.85rem; margin:.2rem 0 0; }
-.dossiers-summary { display:flex; gap:.6rem; flex-wrap:wrap; }
-.summary-chip { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:.5rem .9rem; font-size:.8rem; color:#475569; font-weight:600; display:flex; align-items:center; gap:.4rem; }
-.summary-chip b { color:#1e293b; font-size:1rem; }
-.summary-chip.out { color:#b45309; } .summary-chip.in { color:#1e5a9e; }
-.dossier-sort { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; margin:-.4rem 0 1rem; font-size:.8rem; }
-.dossier-sort .ds-lbl { color:var(--lx-mute); font-weight:600; }
-.dc-last { margin-top:.55rem; font-size:.74rem; color:var(--lx-mute); font-variant-numeric:tabular-nums; }
-.dc-badge.out.zero, .dc-badge.in.zero { background:#f8fafc; color:var(--lx-mute); border-color:#e2e8f0; font-weight:600; }
-.dossier-search { display:flex; gap:.5rem; margin-bottom:1rem; max-width:420px; }
-.dossier-search input { flex:1; border:1px solid #d1d5db; border-radius:8px; padding:.5rem .8rem; font-size:.9rem; }
-.dossier-search button { border:none; background:#b45309; color:#fff; border-radius:8px; padding:.5rem 1rem; font-weight:600; cursor:pointer; }
-.dossier-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; }
-@media (max-width:992px){ .dossier-grid{ grid-template-columns:repeat(2,1fr);} }
-@media (max-width:640px){ .dossier-grid{ grid-template-columns:1fr;} }
-.dossier-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1.1rem; transition:.15s; display:flex; flex-direction:column; gap:.75rem; text-decoration:none; }
-.dossier-card:hover { border-color:#b45309; box-shadow:0 4px 14px rgba(180,83,9,.1); transform:translateY(-2px); }
-.dc-top { display:flex; align-items:center; gap:.6rem; }
-.dc-icon { width:42px; height:42px; flex:0 0 auto; border-radius:10px; background:var(--lx-wait-bg); color:#b45309; display:flex; align-items:center; justify-content:center; font-size:1.3rem; }
-.dc-name { font-weight:700; color:#1e293b; font-size:.98rem; line-height:1.3; }
-.dc-code { color:var(--lx-mute); font-size:.74rem; font-family:monospace; }
-.dc-counts { display:flex; gap:.5rem; }
-.dc-badge { flex:1; border-radius:8px; padding:.45rem .5rem; text-align:center; font-size:.78rem; font-weight:700; display:flex; flex-direction:column; gap:.1rem; }
-.dc-badge.out { background:var(--lx-pri-soft); color:var(--lx-pri-soft-ink); border:1px solid color-mix(in srgb, var(--lx-pri) 28%, var(--lx-line)); }
-.dc-badge.in  { background:var(--lx-prog-bg); color:#1e5a9e; border:1px solid var(--lx-prog-line); }
-.dc-badge .n { font-size:1.15rem; }
-.dossier-empty { text-align:center; padding:4rem 1rem; color:var(--lx-mute); }
-.dossier-empty i { font-size:3rem; display:block; margin-bottom:.5rem; opacity:.6; }
-.dossier-pager { display:flex; justify-content:center; gap:.4rem; margin-top:1.5rem; }
-.dossier-pager a, .dossier-pager span { border:1px solid #e5e7eb; border-radius:8px; padding:.4rem .8rem; font-size:.85rem; color:#475569; text-decoration:none; }
-.dossier-pager .cur { background:#b45309; color:#fff; border-color:#b45309; }
-
-/* ── المستوى 2: تفاصيل القسم ── */
-.dossier-detail { max-width: 1180px; margin: 1.5rem auto; padding: 0 1rem; direction: rtl; }
-.dd-head { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1.1rem 1.25rem; margin-bottom:1rem; }
-.dd-crumb { font-size:.8rem; margin-bottom:.5rem; }
-.dd-crumb a { color:#b45309; text-decoration:none; }
-.dd-titlerow { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-.dd-title { display:flex; align-items:center; gap:.6rem; }
-.dd-title .ic { width:46px; height:46px; border-radius:11px; background:var(--lx-wait-bg); color:#b45309; display:flex; align-items:center; justify-content:center; font-size:1.4rem; flex:0 0 auto; }
-.dd-title h4 { margin:0; font-weight:800; color:#1e293b; }
-.dd-title .code { color:var(--lx-mute); font-size:.78rem; font-family:monospace; }
-.dd-stats { display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.9rem; }
-.dd-stat { border-radius:10px; padding:.5rem .9rem; font-size:.8rem; font-weight:700; }
-.dd-stat b { font-size:1rem; font-variant-numeric:tabular-nums; }
-.dd-stat.t { background:#f1f5f9; color:#334155; } .dd-stat.o { background:var(--lx-surface-2); color:#b45309; } .dd-stat.i { background:var(--lx-prog-bg); color:#1e5a9e; }
-.btn-report { border:none; background:#0f766e; color:#fff; border-radius:9px; padding:.5rem 1rem; font-weight:700; font-size:.85rem; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; white-space:nowrap; }
-.btn-report:hover { background:#0d655e; color:#fff; }
-.dd-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
-.btn-entity-card { border:1px solid #99d5cf; background:#fff; color:#0f766e; border-radius:9px; padding:.45rem .9rem; font-weight:700; font-size:.85rem; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; white-space:nowrap; }
-.btn-entity-card:hover { background:#f0fdfa; color:#0d655e; }
-.btn-entity-card:focus-visible, .btn-report:focus-visible { outline:2px solid #0f766e; outline-offset:2px; }
-
-.filter-bar { background:#fff; border:1px solid #e5e7eb; border-radius:12px; margin-bottom:1rem; overflow:hidden; }
-.filter-bar > summary { list-style:none; cursor:pointer; padding:.7rem 1rem; font-weight:700; color:#1e293b; display:flex; align-items:center; gap:.5rem; background:#f8fafc; }
-.filter-bar > summary::-webkit-details-marker { display:none; }
-.filter-bar > summary .badge-n { background:#b45309; color:#fff; border-radius:999px; padding:0 .5rem; font-size:.75rem; }
-.filter-bar > summary .chev { margin-inline-start:auto; transition:.2s; color:var(--lx-mute); }
-.filter-bar[open] > summary .chev { transform:rotate(90deg); }
-.filter-form { padding:1rem; display:grid; grid-template-columns:repeat(3,1fr); gap:.75rem; align-items:end; }
-@media (max-width:900px){ .filter-form{ grid-template-columns:1fr 1fr;} }
-@media (max-width:560px){ .filter-form{ grid-template-columns:1fr;} }
-.ff-group { display:flex; flex-direction:column; gap:.25rem; }
-.ff-group label { font-size:.75rem; font-weight:600; color:var(--lx-mute); }
-.ff-group input, .ff-group select { border:1px solid #d1d5db; border-radius:8px; padding:.45rem .6rem; font-size:.86rem; background:#fff; }
-.ff-actions { grid-column:1/-1; display:flex; gap:.5rem; justify-content:flex-end; padding-top:.25rem; }
-.ff-actions .apply { border:none; background:#b45309; color:#fff; border-radius:8px; padding:.5rem 1.2rem; font-weight:700; cursor:pointer; }
-.ff-actions .clear { border:1px solid #d1d5db; background:#fff; color:#475569; border-radius:8px; padding:.5rem 1.2rem; font-weight:600; text-decoration:none; }
-.active-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:1rem; }
-.chip { background:var(--lx-pri-soft); color:var(--lx-pri-soft-ink); border:1px solid color-mix(in srgb, var(--lx-pri) 28%, var(--lx-line)); border-radius:999px; padding:.2rem .7rem; font-size:.76rem; font-weight:600; }
-
-.dd-tabs { display:flex; gap:.5rem; margin-bottom:1rem; }
-.dd-tab { border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:.55rem 1.2rem; font-weight:700; font-size:.9rem; cursor:pointer; color:var(--lx-mute); display:flex; align-items:center; gap:.4rem; }
-.dd-tab.active.out { background:#b45309; color:#fff; border-color:#b45309; }
-.dd-tab.active.in  { background:#1e5a9e; color:#fff; border-color:#1e5a9e; }
-.dd-tab .cnt { background:rgba(0,0,0,.12); border-radius:999px; padding:0 .5rem; font-size:.78rem; }
-/* تدهور رشيق: بلا JS تظهر اللوحتان (لا يُخفى محتوى)؛ JS يضيف dd-js فيُفعّل التبويب */
-.dd-pane-title { font-weight:800; color:#334155; margin:.4rem 0 .6rem; display:none; }
-.dd-js .dd-tabs { display:flex; }
-.dd-js .dd-pane:not(.active) { display:none; }
-.dd-js .dd-pane-title { display:none; }
-body:not(.dd-js) .dd-tabs { display:none; }       /* بلا JS: التبويبات بلا فائدة → عناوين أقسام بدلاً منها */
-body:not(.dd-js) .dd-pane-title { display:block; }
-
-.type-group { background:#fff; border:1px solid #e5e7eb; border-radius:12px; margin-bottom:.75rem; overflow:hidden; }
-.type-group > summary { list-style:none; cursor:pointer; padding:.75rem 1rem; font-weight:700; color:#1e293b; display:flex; align-items:center; gap:.5rem; background:#f8fafc; }
-.type-group > summary::-webkit-details-marker { display:none; }
-.type-group > summary .chev { margin-inline-start:auto; transition:.2s; color:var(--lx-mute); }
-.type-group[open] > summary .chev { transform:rotate(90deg); }
-.type-group .gcount { background:#e2e8f0; color:#475569; border-radius:999px; padding:0 .55rem; font-size:.78rem; }
-.dd-table { width:100%; border-collapse:collapse; font-size:.85rem; }
-.dd-table th { background:#fafbfc; color:var(--lx-mute); font-weight:600; text-align:right; padding:.5rem .75rem; font-size:.78rem; border-bottom:1px solid #eef2f7; }
-.dd-table td { padding:.5rem .75rem; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
-.dd-table tr:last-child td { border-bottom:none; }
-.dd-table a.num { color:#b45309; font-weight:700; text-decoration:none; font-family:monospace; }
-.fs { border-radius:999px; padding:.1rem .55rem; font-size:.72rem; font-weight:700; white-space:nowrap; }
-.fs-pending{ background:var(--lx-prog-bg); color:var(--lx-prog); } .fs-due_today{ background:var(--lx-wait-bg); color:var(--lx-wait); }
-.fs-overdue{ background:var(--lx-late-bg); color:var(--lx-late); } .fs-archived{ background:#f1f5f9; color:var(--lx-mute); }
-
-/* ── شريط فلاتر بنمط «كل الكتب» (fb-*) — يعيد استخدام متغيّرات app.css مع بدائل آمنة ── */
-.dd-fbar { display:flex; align-items:center; gap:.55rem; padding:.5rem .7rem; background:#fff;
-  border:1px solid var(--border,#e2e8f0); border-radius:.7rem; margin:0 0 .9rem; flex-wrap:wrap;
-  box-shadow:0 1px 3px rgba(0,0,0,.03); }
-.dd-fbar .fb-search { position:relative; flex:1 1 240px; min-width:200px; max-width:380px; }
-.dd-fbar .fb-search input { width:100%; padding:.45rem 2rem .45rem .7rem; border:1px solid var(--border,#e2e8f0);
-  border-radius:.5rem; background:#f8fafc; font-size:.88rem; transition:all .2s ease; }
-.dd-fbar .fb-search input:focus { outline:none; background:#fff; border-color:var(--theme-accent,#0f766e);
-  box-shadow:0 0 0 3px var(--theme-glow,rgba(15,118,110,.12)); }
-.dd-fbar .fb-search-icon { position:absolute; inset-inline-end:.65rem; top:50%; transform:translateY(-50%);
-  color:var(--lx-mute); pointer-events:none; font-size:.95rem; }
-.dd-fbar .fb-divider { width:1px; align-self:stretch; background:var(--border,#e2e8f0); margin:.1rem .05rem; }
-.fb-pills { display:inline-flex; flex-wrap:wrap; gap:.32rem; }
-.fb-pill { display:inline-flex; align-items:center; gap:.32rem; padding:.35rem .7rem; border-radius:999px;
-  border:1px solid var(--border,#e2e8f0); background:#fff; color:var(--lx-mute); font-size:.78rem; font-weight:700;
-  cursor:pointer; text-decoration:none; transition:all .18s ease; white-space:nowrap; }
-.fb-pill i { font-size:.85rem; }
-.fb-pill .fb-pill-count { font-variant-numeric:tabular-nums; font-weight:700; font-size:.7rem;
-  background:rgba(0,0,0,.05); border-radius:999px; padding:.05rem .4rem; margin-inline-start:.15rem; }
-.fb-pill:hover { border-color:var(--theme-accent,#0f766e); color:var(--theme-text,#0f172a); }
-.fb-pill.active { border-color:var(--theme-primary,#0f766e); background:var(--theme-primary,#0f766e); color:#fff; }
-.fb-pill.active .fb-pill-count { background:rgba(255,255,255,.22); color:#fff; }
-.fb-pill.fb-pill-pending.active   { background:var(--followup-pending,#2563eb);   border-color:var(--followup-pending,#2563eb);   color:#fff; }
-.fb-pill.fb-pill-due-today.active { background:var(--followup-due-today,#d97706); border-color:var(--followup-due-today,#d97706); color:#fff; }
-.fb-pill.fb-pill-overdue.active   { background:var(--followup-overdue,#dc2626);   border-color:var(--followup-overdue,#dc2626);   color:#fff; }
-.fb-pill.fb-pill-archived.active  { background:var(--followup-archived,#64748b);  border-color:var(--followup-archived,#64748b);  color:#fff; }
-/* زر «متقدّم» + لوحه (details بلا JS) */
-.dd-advanced { margin-inline-start:auto; }
-.dd-advanced[open] { flex:1 1 100%; }
-.dd-advanced > summary { list-style:none; display:inline-flex; align-items:center; gap:.3rem; padding:.4rem .75rem;
-  border:1px solid var(--border,#e2e8f0); border-radius:.5rem; background:#fff; color:var(--lx-mute); font-size:.8rem;
-  font-weight:700; cursor:pointer; transition:all .18s ease; }
-.dd-advanced > summary::-webkit-details-marker { display:none; }
-.dd-advanced > summary:hover { border-color:var(--theme-accent,#0f766e); color:var(--theme-text,#0f172a); }
-.dd-advanced .fb-active-count { background:var(--theme-primary,#0f766e); color:#fff; font-size:.68rem;
-  border-radius:999px; padding:.05rem .4rem; font-weight:800; }
-.dd-advanced-panel { margin-top:.6rem; }
-
-/* ── اختصارات الفترة (presets) — روابط GET ── */
-.ff-periods { grid-column:1 / -1; }
-.ff-periods-lbl { display:block; font-size:.75rem; font-weight:600; color:var(--lx-mute); margin-bottom:.25rem; }
-.ff-periods-lbl small { font-weight:400; color:var(--lx-mute); }
-.period-chips { display:flex; flex-wrap:wrap; gap:.4rem; }
-.pchip { display:inline-block; text-decoration:none; border:1px solid #d1d5db; background:#fff; color:#475569;
-  border-radius:999px; padding:.32rem .8rem; font-size:.8rem; font-weight:600; cursor:pointer; transition:all .15s; }
-.pchip:hover { border-color:#b45309; color:#b45309; }
-.pchip.on { background:var(--lx-surface-2); border-color:var(--lx-line-strong); color:#b45309; font-weight:700; }
-.row-actions { display:flex; gap:.3rem; }
-.row-actions a { width:30px; height:30px; border-radius:7px; display:inline-flex; align-items:center; justify-content:center; text-decoration:none; border:1px solid #e5e7eb; color:#475569; transition:.12s; }
-.row-actions a.view:hover { background:var(--lx-prog-bg); color:#1e5a9e; border-color:var(--lx-prog-line); }
-.row-actions a.edit:hover { background:var(--lx-wait-bg); color:#b45309; border-color:var(--lx-wait-line); }
-.row-actions a.print:hover { background:#ecfdf5; color:#0f766e; border-color:#a7f3d0; }
-.group-more { padding:.5rem 1rem; font-size:.8rem; }
-.group-more a { color:#b45309; text-decoration:none; font-weight:600; }
-.dd-empty { text-align:center; padding:3rem 1rem; color:var(--lx-mute); }
-
-/* ═══ خزانة الملفات الثانوية — تقسيم كل إضبارة إلى ملفات حسب النوع ═══ */
-.dd-subfile-bar { display:flex; align-items:center; gap:10px; margin:10px 0 2px; }
-.sf-back {
-    display:inline-flex; align-items:center; gap:5px; font-size:.8rem; font-weight:600;
-    color:#0f766e; text-decoration:none; border:1px solid #99f6e4; background:#f0fdfa;
-    border-radius:999px; padding:4px 12px; transition:background .15s, box-shadow .15s;
-}
-.sf-back:hover { background:#ccfbf1; color:#0f766e; box-shadow:0 3px 8px -4px rgba(15,118,110,.4); }
-.sf-open { display:inline-flex; align-items:center; gap:7px; font-weight:700; font-size:.9rem; color:#1e293b; }
-.sf-open .bi { color:#b45309; }
-.sf-count {
-    font-size:.72rem; font-weight:700; background:#e2e8f0; color:#475569;
-    border-radius:999px; padding:1px 9px; font-variant-numeric:tabular-nums;
+/* ── متغيّراتُ الصفحتين ──
+   الخمسةُ الأولى تقرؤها ورقةُ التبويبات المشتركة، وتعرّفها صفحةُ الكتب على حاويتها؛ كانت هنا
+   غيرَ معرَّفة فسقط حدُّ لوح التبويبات وفواصلُه */
+.dossiers-page,
+.dossier-detail {
+  --muted: var(--lx-mute);
+  --fold: 10px;                 /* ارتفاعُ لسان المجلّد */
+  max-width: 1180px;
+  margin: 1.25rem auto 2.5rem;
+  padding: 0 1rem;
+  color: var(--lx-ink);
 }
 
-.folder-grid {
-    display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr));
-    gap:10px; padding:4px 0 8px;
-}
-.folder-card {
-    display:flex; flex-direction:column; align-items:flex-start; gap:6px;
-    padding:12px 14px; border-radius:12px; text-decoration:none; position:relative;
-    background:#fff; border:1px solid #e2e8f0; color:#1e293b;
-    transition:transform .16s, box-shadow .16s, border-color .16s;
-    /* backwards لا both — fill-mode:both يكسر :hover بعد انتهاء الحركة */
-    animation:fcIn .3s cubic-bezier(.4, 0, .2, 1) backwards;
-    animation-delay:calc(var(--i, 0) * 30ms);
-}
-.folder-card:hover {
-    transform:translateY(-2px); border-color:var(--fc, #0f766e); color:#1e293b;
-    box-shadow:0 8px 18px -10px color-mix(in srgb, var(--fc, #0f766e) 55%, transparent);
-}
-.folder-card .fc-icon { font-size:1.35rem; color:var(--fc, var(--lx-mute)); }
-.folder-card.out { --fc:#b45309; }
-.folder-card.in  { --fc:#1e5a9e; }
-.fc-name { font-size:.84rem; font-weight:700; line-height:1.4; }
-.fc-count {
-    position:absolute; top:10px; inset-inline-end:12px; font-size:.72rem; font-weight:700;
-    background:color-mix(in srgb, var(--fc, #64748b) 12%, #fff); color:var(--fc, #475569);
-    border-radius:999px; padding:1px 9px; font-variant-numeric:tabular-nums;
-}
-@keyframes fcIn { from { opacity:0; transform:translateY(6px); } }
-.dd-subfile .dd-table { margin-top:4px; }
-@media (prefers-reduced-motion: reduce) {
-    .folder-card { animation:none; transition:none; }
+/* حلقةُ التركيز الواحدة لكلّ ما يُنقر في الصفحتين */
+.dossiers-page :is(a, button, summary):focus-visible,
+.dossier-detail :is(a, button, summary):focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 2px;
 }
 
+/* ── لسانُ المجلّد: بطاقةُ الإضبارة وملفّاتُ النوع والسنة — حدُّه يلتحم بحدّ البطاقة ── */
+.dossier-card::before,
+.folder-card::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% - 1px);
+  inset-inline-start: -1px;
+  width: 42%;
+  height: var(--fold);
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-bottom: 0;
+  border-start-start-radius: 9px;
+  border-start-end-radius: 9px;
+  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--lx-pri) 45%, transparent);   /* شريطُ اللسان: يُقرأ مجلّداً */
+  transition: border-color var(--lx-dur-2) ease;
+}
 
-/* ── تبويبات صفحة الأضابير الثلاثة ─────────────────────────────
-   تُعيد استعمال .dd-tab نفسِها (صفحة التفاصيل) — لا نمطَ ثانٍ لشيءٍ واحد.
-   `.dd-tab.active.out/.in` أخصُّ (ثلاثةُ أصناف) فتبقى لتبويبَي الاتّجاه. */
-/* ── تبويباتُ الأضابير الثلاثة ─────────────────────────────────
-   الترميزُ من `book_unified_tabs.css` (tabs-split/tab-main) — لا نمطَ ثانٍ
-   لشيءٍ واحد. وهنا الفرقان فقط: ثلاثةُ أعمدةٍ بدل عمودين، ولونُ كلّ تبويب. */
-.tabs-split-3 { grid-template-columns: repeat(3, 1fr); }
+/* ════════════ المستوى 1: قائمةُ الأضابير ════════════ */
 
-/* تبويباتُ الكتب أزرارٌ وهذه روابط — فيلزم كبحُ تسطير الرابط ولونِه.
-   (كشفته اللقطةُ: النصُّ كان مسطَّراً تحت كلّ تبويب.) */
-.tabs-split-3 .tab-main { text-decoration: none; color: #475569; }
+.dossiers-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.dossiers-heading {
+  min-width: 0;
+  padding-inline-start: 1rem;
+  border-inline-start: 4px solid var(--lx-pri);
+}
+
+.dossiers-eyebrow {
+  display: block;
+  color: var(--lx-pri-strong);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.dossiers-heading h1 {
+  margin: .15rem 0 0;
+  font-size: clamp(1.45rem, 3vw, 1.9rem);
+  font-weight: 800;
+  line-height: 1.5;
+  color: var(--lx-ink);
+}
+
+.dossiers-sub {
+  max-width: 62ch;
+  margin: .2rem 0 0;
+  color: var(--lx-mute);
+  font-size: .9rem;
+  line-height: 1.8;
+}
+
+/* أعدادُ التبويب الحاليّ: شريطٌ واحدٌ بفواصل — الرقمُ فوق كلمته */
+.dossiers-summary {
+  display: flex;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-radius: 14px;
+  box-shadow: var(--lx-shadow-sm);
+  overflow: hidden;
+}
+
+.summary-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 5.5rem;
+  padding: .5rem 1rem;
+  color: var(--lx-mute);
+  font-size: .76rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.summary-chip + .summary-chip { border-inline-start: 1px solid var(--lx-line); }
+
+.summary-chip b {
+  color: var(--lx-ink);
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-chip.in b { color: var(--lx-pri); }
+.summary-chip i { margin-inline-end: .15rem; }
+
+/* — التبويباتُ الثلاثة: ترميزُ قائمة الكتب ولوحُها؛ هنا العمودُ الثالث وما يخصّ الروابط — */
+.tabs-split-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.tabs-split-3 .tab-main { min-height: 58px; }
+
 .tabs-split-3 .tab-main:hover { text-decoration: none; }
-.tabs-split-3 .tab-main:focus-visible { outline: 2px solid #0f766e; outline-offset: -2px; }
 
-.tab-main.tab-kind-external.active {
-  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%); color: #fff;
+/* — البحثُ والترتيب في صفٍّ واحد — */
+.dossier-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem 1.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
 }
-.tab-main.tab-kind-external.active .tab-icon,
-.tab-main.tab-kind-external.active .tab-count { color: #ccfbf1; }
-.tab-main.tab-kind-external.active::after { background: var(--lx-pri); }
 
-.tab-main.tab-kind-internal.active {
-  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #fff;
+.dossier-search {
+  display: flex;
+  gap: .5rem;
+  flex: 1 1 320px;
+  max-width: 460px;
 }
-.tab-main.tab-kind-internal.active .tab-icon,
-.tab-main.tab-kind-internal.active .tab-count { color: #dbeafe; }
-.tab-main.tab-kind-internal.active::after { background: var(--lx-pri); }
 
-.tab-main.tab-kind-unit.active {
-  background: linear-gradient(135deg, var(--lx-hero-b) 0%, var(--lx-pri) 100%); color: #fff;
+.ds-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
 }
-.tab-main.tab-kind-unit.active .tab-icon,
-.tab-main.tab-kind-unit.active .tab-count { color: var(--lx-pri); }
-.tab-main.tab-kind-unit.active::after { background: var(--lx-pri); }
 
-/* الشاشةُ الضيّقة: عمودٌ واحدٌ وإلّا انسحق النصّ. */
+.ds-field > i {
+  position: absolute;
+  inset-inline-start: .8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--lx-mute);
+  pointer-events: none;
+}
+
+.ds-field input {
+  width: 100%;
+  min-height: 42px;
+  padding-block: .45rem;
+  padding-inline: 2.3rem .8rem;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: 12px;
+  background-color: var(--lx-surface);
+  color: var(--lx-ink);
+  font: inherit;
+  font-size: .92rem;
+  transition: border-color var(--lx-dur-2) ease, box-shadow var(--lx-dur-2) ease;
+}
+
+.ds-field input::placeholder { color: var(--lx-mute); opacity: 1; }
+
+.ds-field input:focus {
+  outline: none;
+  border-color: var(--lx-pri);
+  box-shadow: 0 0 0 3px rgba(var(--lx-pri-rgb), .18);
+}
+
+.dossier-search .btn {
+  min-height: 42px;
+  padding-inline: 1.15rem;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.dossier-sort {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.ds-lbl {
+  color: var(--lx-mute);
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+/* الترتيبُ مفتاحٌ مجزّأ (كنطاق قائمة الكتب): المختارُ سطحٌ مرتفع بحبر الهويّة */
+.ds-seg {
+  display: inline-flex;
+  gap: .15rem;
+  padding: .2rem;
+  background: var(--lx-surface-2);
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+}
+
+.ds-seg .pchip {
+  min-height: 34px;
+  padding: .3rem .85rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lx-mute);
+  font-weight: 700;
+}
+
+.ds-seg .pchip:hover {
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+}
+
+.ds-seg .pchip.on {
+  background: var(--lx-surface);
+  color: var(--lx-pri);
+  font-weight: 800;
+  box-shadow: var(--lx-shadow-sm), inset 0 0 0 1px var(--lx-line);
+}
+
+/* — شبكةُ الأضابير: مجلّدٌ لكلّ جهة — */
+.dossier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  gap: calc(var(--fold) + .9rem) 1rem;
+  margin: 0;
+  padding: var(--fold) 0 0;
+  list-style: none;
+}
+
+.dossier-grid > li {
+  display: flex;
+  min-width: 0;
+}
+
+.dossier-card {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .8rem;
+  padding: .95rem 1rem .85rem;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  border-start-start-radius: 3px;
+  box-shadow: var(--lx-shadow-sm);
+  color: var(--lx-ink);
+  text-decoration: none;
+  transition: border-color var(--lx-dur-2) ease, box-shadow var(--lx-dur-2) ease,
+              transform var(--lx-dur-2) var(--lx-ease);
+}
+
+.dossier-card:hover,
+.dossier-card:hover::before { border-color: color-mix(in srgb, var(--lx-pri) 60%, var(--lx-line)); }
+
+.dossier-card:hover {
+  color: var(--lx-ink);
+  box-shadow: var(--lx-shadow-md);
+  transform: translateY(-2px);
+}
+
+.dossier-card:active { transform: translateY(0); }
+
+.dc-top {
+  display: flex;
+  align-items: flex-start;
+  gap: .7rem;
+}
+
+.dc-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri);
+  font-size: 1.2rem;
+}
+
+.dc-id { min-width: 0; }
+
+.dc-name {
+  color: var(--lx-ink);
+  font-size: .98rem;
+  font-weight: 800;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.dc-code {
+  margin-top: .05rem;
+  color: var(--lx-mute);
+  font-size: .76rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.dc-counts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+}
+
+.dc-badge {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  min-width: 0;
+  padding: .4rem .6rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.dc-badge i { font-size: .95rem; }
+
+.dc-badge .n {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-badge.in {
+  background: var(--lx-pri-soft);
+  border-color: color-mix(in srgb, var(--lx-pri) 26%, var(--lx-line));
+  color: var(--lx-pri-soft-ink);
+}
+
+/* الصفرُ هادئ: إطارٌ متقطّع بلا تعبئة — يُرى ولا ينافس */
+.dc-badge.zero {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--lx-line-strong);
+  color: var(--lx-mute);
+  font-weight: 600;
+}
+
+.dc-last {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin-top: auto;
+  padding-top: .6rem;
+  border-top: 1px dashed var(--lx-line);
+  color: var(--lx-mute);
+  font-size: .76rem;
+}
+
+.dc-last time {
+  color: var(--lx-ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* — الصفحات — */
+.dossier-pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: .5rem;
+  margin-top: 1.75rem;
+}
+
+.dossier-pager a,
+.dossier-pager .cur {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  min-height: 40px;
+  padding: .35rem 1rem;
+  border-radius: 12px;
+  font-size: .86rem;
+  font-weight: 700;
+}
+
+.dossier-pager a {
+  border: 1px solid var(--lx-line-strong);
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  text-decoration: none;
+  transition: border-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease;
+}
+
+.dossier-pager a:hover {
+  border-color: var(--lx-pri);
+  color: var(--lx-pri);
+}
+
+.dossier-pager .cur { color: var(--lx-mute); }
+
+.dossier-pager .cur b {
+  color: var(--lx-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* — الفراغ: سببُه وخطوتُه التالية — */
+.dossier-empty,
+.dd-empty {
+  display: grid;
+  justify-items: center;
+  gap: .55rem;
+  padding: 2.75rem 1rem;
+  border: 1px dashed var(--lx-line-strong);
+  border-radius: var(--lx-radius);
+  background: var(--lx-surface);
+  color: var(--lx-mute);
+  text-align: center;
+}
+
+.dossier-empty > i,
+.dd-empty > i {
+  color: var(--lx-pri);
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.dossier-empty p,
+.dd-empty p {
+  margin: 0;
+  color: var(--lx-ink);
+  font-weight: 600;
+}
+
+/* ════════════ المستوى 2: الإضبارة ════════════ */
+
+.dd-crumb { margin-bottom: .35rem; }
+
+.dd-crumb a {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  min-height: 36px;
+  border-radius: 8px;
+  color: var(--lx-mute);
+  font-size: .85rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.dd-crumb a:hover { color: var(--lx-pri); }
+
+/* غلافُ الإضبارة: مجلّدٌ لسانُه بطاقةُ تبويب الجهة */
+.dd-head {
+  position: relative;
+  margin: 1.65rem 0 1rem;
+  padding: 1.1rem 1.25rem 1rem;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  border-start-start-radius: 3px;
+  box-shadow: var(--lx-shadow-sm);
+}
+
+.dd-label {
+  position: absolute;
+  bottom: calc(100% - 1px);
+  inset-inline-start: -1px;
+  max-width: calc(100% - 2rem);
+  padding: .2rem 1rem .25rem;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-bottom: 0;
+  border-start-start-radius: 10px;
+  border-start-end-radius: 10px;
+  color: var(--lx-pri-strong);
+  font-size: .76rem;
+  font-weight: 800;
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dd-titlerow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dd-title {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  min-width: 0;
+}
+
+.dd-title .ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 13px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri);
+  font-size: 1.5rem;
+}
+
+.dd-name { min-width: 0; }
+
+.dd-name h1 {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: clamp(1.3rem, 2.6vw, 1.7rem);
+  font-weight: 800;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dd-name .code {
+  color: var(--lx-mute);
+  font-size: .8rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.dd-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+
+.dd-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  min-height: 40px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dd-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: 1rem;
+  padding-top: .9rem;
+  border-top: 1px dashed var(--lx-line);
+}
+
+.dd-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .35rem .85rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.dd-stat b {
+  color: var(--lx-ink);
+  font-size: 1.1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-stat.o { color: var(--lx-ink); }
+
+.dd-stat.i {
+  background: var(--lx-pri-soft);
+  border-color: color-mix(in srgb, var(--lx-pri) 26%, var(--lx-line));
+  color: var(--lx-pri-soft-ink);
+}
+
+.dd-stat.i b { color: var(--lx-pri-soft-ink); }
+
+/* — شريطُ التصفية: مكوّنُ قائمة الكتب (filter-bar · fb-*) — هنا ما يخصّه في الإضبارة — */
+.dd-fbar { margin-bottom: 1rem; }
+
+.dossier-detail .fb-search { max-width: 320px; }
+
+.dossier-detail .fb-search input { min-height: 38px; }
+
+.dd-fbar .fb-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--lx-line);
+}
+
+.dd-advanced { margin-inline-start: auto; }
+
+.dd-advanced > summary {
+  list-style: none;
+  min-height: 34px;
+  user-select: none;
+}
+
+.dd-advanced > summary::-webkit-details-marker { display: none; }
+
+.dd-adv-chev {
+  font-size: .75rem;
+  transition: transform var(--lx-dur-2) var(--lx-ease);
+}
+
+/* مفتوحاً يأخذ صفّاً كاملاً واللوحُ تحته بعرضه — كتلةً لا مرنةً: Chromium لا يطبّق flex على محتوى
+   <details> المُشقَّب، فكان اللوحُ ينكمش إلى نصف الشريط. الزرُّ يبقى في طرفه (inline-end) */
+.dd-advanced[open] { flex: 1 1 100%; }
+
+.dd-advanced[open] > .fb-advanced-toggle {
+  display: flex;
+  width: fit-content;
+  margin-inline-start: auto;
+  border-color: var(--lx-pri-2);
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+}
+
+.dd-advanced[open] .dd-adv-chev { transform: rotate(180deg); }
+
+.dd-advanced-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .8rem 1rem;
+  align-items: end;
+  margin-top: .65rem;
+  padding: .9rem .25rem .3rem;
+  border-top: 1px dashed var(--lx-line);
+}
+
+.ff-group {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  min-width: 0;
+}
+
+.ff-group label,
+.ff-periods-lbl {
+  color: var(--lx-mute);
+  font-size: .76rem;
+  font-weight: 700;
+}
+
+.ff-periods-lbl small { font-weight: 500; }
+
+.ff-group :is(input, select) {
+  width: 100%;
+  min-height: 40px;
+  padding: .4rem .7rem;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: 10px;
+  background-color: var(--lx-surface-2);
+  color: var(--lx-ink);
+  font: inherit;
+  font-size: .88rem;
+  transition: border-color var(--lx-dur-2) ease, box-shadow var(--lx-dur-2) ease, background-color var(--lx-dur-2) ease;
+}
+
+.ff-group :is(input, select):focus {
+  outline: none;
+  border-color: var(--lx-pri);
+  background-color: var(--lx-surface);
+  box-shadow: 0 0 0 3px rgba(var(--lx-pri-rgb), .18);
+}
+
+.ff-periods { grid-column: 1 / -1; }
+
+.period-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+
+.pchip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: .25rem .85rem;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: 999px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font-size: .8rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color var(--lx-dur-1) ease, background-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease;
+}
+
+.pchip:hover {
+  border-color: var(--lx-pri);
+  color: var(--lx-pri);
+}
+
+.pchip.on {
+  border-color: var(--lx-pri);
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+  font-weight: 800;
+}
+
+.ff-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: .5rem;
+  padding-top: .2rem;
+}
+
+.ff-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  min-height: 40px;
+  padding-inline: 1.2rem;
+  font-weight: 700;
+}
+
+/* — ما يضيّق النتائجَ الآن — */
+.active-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  margin: -.25rem 0 1rem;
+}
+
+.ac-lbl {
+  color: var(--lx-mute);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.active-chips .chip {
+  padding: .2rem .75rem;
+  border: 1px solid color-mix(in srgb, var(--lx-pri) 28%, var(--lx-line));
+  border-radius: 999px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+/* — موضعُك في الخزانة: «كلّ الملفّات» ⟵ النوع ⟵ السنة — */
+.dd-subfile-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem .75rem;
+  margin: 0 0 1rem;
+}
+
+.sf-back {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  min-height: 34px;
+  padding: .2rem .85rem;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: 999px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font-size: .8rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease;
+}
+
+.sf-back:hover {
+  border-color: var(--lx-pri);
+  color: var(--lx-pri);
+}
+
+.sf-open {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .4rem;
+  color: var(--lx-ink);
+  font-size: .95rem;
+  font-weight: 800;
+}
+
+.sf-open .bi { color: var(--lx-pri); }
+
+.sf-open .sf-crumb {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sf-open .sf-crumb:hover {
+  color: var(--lx-pri);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sf-sep { font-size: .75em; }
+
+.sf-count {
+  min-width: 1.8rem;
+  padding: .05rem .55rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 999px;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+  font-size: .74rem;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* — تبويبا الاتّجاه: لوحُ قائمة الكتب بعمودين —
+   تدهورٌ رشيق: بلا JS تظهر اللوحتان بعنوانَيهما (لا يُخفى محتوى)؛ السكربتُ يضيف dd-js فيُفعّل التبويب */
+.dd-tabs.tabs-split {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.dd-js .dd-tabs { display: grid; }
+.dd-js .dd-pane:not(.active) { display: none; }
+.dd-js .dd-pane-title { display: none; }
+body:not(.dd-js) .dd-tabs { display: none; }
+
+.dd-pane-title {
+  display: none;
+  margin: .5rem 0 .75rem;
+  color: var(--lx-ink);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+body:not(.dd-js) .dd-pane-title { display: block; }
+
+.dd-pane:focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 4px;
+  border-radius: var(--lx-radius);
+}
+
+/* — خزانةُ الملفّات: مجلّدٌ لكلّ نوع (ولكلّ سنةٍ داخله) — */
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: calc(var(--fold) + .75rem) .75rem;
+  padding: var(--fold) 0 .5rem;
+}
+
+.folder-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .5rem;
+  min-height: 98px;
+  padding: .85rem .9rem .8rem;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  border-start-start-radius: 3px;
+  box-shadow: var(--lx-shadow-sm);
+  color: var(--lx-ink);
+  text-decoration: none;
+  transition: border-color var(--lx-dur-2) ease, box-shadow var(--lx-dur-2) ease,
+              transform var(--lx-dur-2) var(--lx-ease);
+  /* backwards لا both — fill-mode:both يكسر :hover بعد انتهاء الحركة */
+  animation: fcIn var(--lx-dur-3) var(--lx-ease) backwards;
+  animation-delay: calc(min(var(--i, 0), 12) * 30ms);
+}
+
+.folder-card:hover,
+.folder-card:hover::before { border-color: color-mix(in srgb, var(--lx-pri) 60%, var(--lx-line)); }
+
+.folder-card:hover {
+  color: var(--lx-ink);
+  box-shadow: var(--lx-shadow-md);
+  transform: translateY(-2px);
+}
+
+.folder-card .fc-icon {
+  color: var(--lx-pri);
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.fc-name {
+  font-size: .9rem;
+  font-weight: 800;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fc-count {
+  position: absolute;
+  top: .65rem;
+  inset-inline-end: .7rem;
+  min-width: 1.9rem;
+  padding: .05rem .5rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 999px;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+  font-size: .74rem;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes fcIn { from { opacity: 0; transform: translateY(6px); } }
+
+/* — جدولُ الملفّ المفتوح — */
+.type-group {
+  margin-bottom: .9rem;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  box-shadow: var(--lx-shadow-sm);
+  overflow: hidden;
+}
+
+.dd-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--lx-ink);
+  font-size: .875rem;
+}
+
+.dd-table th {
+  padding: .6rem .8rem;
+  background: var(--lx-surface-2);
+  border-bottom: 1px solid var(--lx-line-strong);
+  color: var(--lx-mute);
+  font-size: .76rem;
+  font-weight: 800;
+  text-align: start;
+  white-space: nowrap;
+}
+
+.dd-table td {
+  padding: .6rem .8rem;
+  border-bottom: 1px solid var(--lx-line);
+  vertical-align: middle;
+}
+
+.dd-table tbody tr:last-child td { border-bottom: 0; }
+
+.dd-table tbody tr { transition: background-color var(--lx-dur-1) ease; }
+.dd-table tbody tr:hover { background: var(--lx-surface-2); }
+
+/* حالةُ المتابعة الحيّة شريطٌ عند بداية الصفّ (كقائمة الكتب) — المُنجَزُ هو الأصل فيبقى بلا شريط */
+.dd-row > td:first-child { border-inline-start: 3px solid transparent; }
+.dd-row.st-pending > td:first-child { border-inline-start-color: var(--followup-pending); }
+.dd-row.st-due_today > td:first-child { border-inline-start-color: var(--followup-due-today); }
+.dd-row.st-overdue > td:first-child { border-inline-start-color: var(--followup-overdue); }
+
+.dd-num { white-space: nowrap; }
+
+.dd-table a.num {
+  color: var(--lx-pri);
+  font-weight: 800;
+  text-decoration: none;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-table a.num:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dd-date {
+  color: var(--lx-mute);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-party { color: var(--lx-ink); }
+
+/* شارةُ المتابعة: نقطةٌ وكلمة (لا لونَ وحده)؛ والمُنجَزُ — الأكثرُ — هادئٌ بلا تعبئة */
+.fs {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .12rem .6rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: .74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.fs::before {
+  content: "";
+  width: .45rem;
+  height: .45rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.fs-pending   { background: var(--followup-pending-bg);   border-color: var(--followup-pending-line);   color: var(--followup-pending-text); }
+.fs-due_today { background: var(--followup-due-today-bg); border-color: var(--followup-due-today-line); color: var(--followup-due-today-text); }
+.fs-overdue   { background: var(--followup-overdue-bg);   border-color: var(--followup-overdue-line);   color: var(--followup-overdue-text); }
+.fs-archived  { background: transparent;                  border-color: var(--followup-archived-line);  color: var(--followup-archived-text); font-weight: 700; }
+
+.row-actions {
+  display: flex;
+  gap: .3rem;
+}
+
+.row-actions a {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--lx-line);
+  border-radius: 9px;
+  background: var(--lx-surface);
+  color: var(--lx-mute);
+  text-decoration: none;
+  transition: border-color var(--lx-dur-1) ease, color var(--lx-dur-1) ease, background-color var(--lx-dur-1) ease;
+}
+
+.row-actions a:hover {
+  border-color: var(--lx-pri);
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+}
+
+.group-more {
+  padding: .65rem 1rem;
+  border-top: 1px solid var(--lx-line);
+  background: var(--lx-surface-2);
+  font-size: .82rem;
+}
+
+.group-more a {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  min-height: 28px;
+  color: var(--lx-pri);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.group-more a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ════════════ الشاشاتُ الضيّقة ════════════ */
+
+@media (max-width: 900px) {
+  .dd-advanced-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 768px) {
+  .dd-fbar .fb-divider { display: none; }
+  .dossier-detail .fb-search { max-width: none; }
+}
+
+/* الجدولُ صفوفٌ مكدّسة: الرقمُ والحالة · العنوان · التاريخُ والطرفُ الآخرُ والإجراءات —
+   كانت الأعمدةُ الثلاثةُ الأخيرة تُقصّ خارج البطاقة فلا تُبلغ الحالةُ ولا الإجراءات على الهاتف */
+@media (max-width: 700px) {
+  .dd-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .dd-table,
+  .dd-table tbody { display: block; }
+
+  .dd-table tr.dd-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "num   num   state"
+      "title title title"
+      "date  party acts";
+    align-items: center;
+    gap: .35rem .75rem;
+    padding: .75rem .9rem;
+    border-bottom: 1px solid var(--lx-line);
+    border-inline-start: 3px solid transparent;
+  }
+
+  .dd-table tbody tr.dd-row:last-child { border-bottom: 0; }
+
+  .dd-row.st-pending { border-inline-start-color: var(--followup-pending); }
+  .dd-row.st-due_today { border-inline-start-color: var(--followup-due-today); }
+  .dd-row.st-overdue { border-inline-start-color: var(--followup-overdue); }
+
+  .dd-table .dd-row > td {
+    display: block;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+
+  .dd-row > td:nth-child(1) { grid-area: num; }
+  .dd-row > td:nth-child(2) { grid-area: title; font-weight: 600; line-height: 1.7; }
+  .dd-row > td:nth-child(3) { grid-area: date; font-size: .8rem; }
+  .dd-row > td:nth-child(4) { grid-area: party; font-size: .8rem; color: var(--lx-mute); overflow-wrap: anywhere; }
+  .dd-row > td:nth-child(5) { grid-area: state; justify-self: end; }
+  .dd-row > td:nth-child(6) { grid-area: acts; }
+
+  .dd-party::before {
+    content: attr(data-label) ": ";
+    font-weight: 700;
+  }
+
+  .row-actions a {
+    width: 36px;
+    height: 36px;
+  }
+}
+
 @media (max-width: 720px) {
-  .tabs-split-3 { grid-template-columns: 1fr; }
-}
-.dd-tab.kind.active {
-  background: var(--brand, #0f766e);
-  border-color: var(--brand, #0f766e);
-  color: #fff;
-}
-.dd-tab.kind:focus-visible { outline: 2px solid var(--brand, #0f766e); outline-offset: 2px; }
+  /* التبويباتُ الثلاثة تبقى صفّاً (لوحُها المنزلق أفقيٌّ): الأيقونةُ فوق الكلمة، والعدُّ وحده */
+  .tabs-split-3 .tab-main {
+    flex-direction: column;
+    gap: .2rem;
+    padding: .5rem .3rem;
+    min-height: 64px;
+  }
 
-/* ── ملفّاتُ السنوات داخل النوع (قراراتُ الدورة §4.5) ── */
-.folder-card.year .fc-icon { color: #0f766e; }
-.folder-grid-years { margin-top: .25rem; }
-.sf-open .sf-crumb { color: inherit; text-decoration: none; }
-.sf-open .sf-crumb:hover { text-decoration: underline; }
-.sf-open .sf-sep { font-size: .8em; opacity: .6; margin: 0 2px; }
+  .tabs-split-3 .tab-main .tab-text {
+    align-items: center;
+    text-align: center;
+  }
+
+  .tabs-split-3 .tab-main .tab-label {
+    font-size: .86rem;
+    line-height: 1.35;
+  }
+
+  .tabs-split-3 .tab-hint { display: none; }
+}
+
+@media (max-width: 576px) {
+  .dossiers-page,
+  .dossier-detail {
+    margin-top: .75rem;
+    padding: 0 .25rem;
+  }
+
+  .dossiers-summary { width: 100%; }
+  .summary-chip { flex: 1; min-width: 0; padding-inline: .5rem; }
+
+  .dossier-search { flex-basis: 100%; max-width: none; }
+
+  .dossier-sort { width: 100%; }
+  .ds-seg { flex: 1; }
+  .ds-seg .pchip { flex: 1; justify-content: center; min-height: 40px; padding-inline: .4rem; }
+
+  /* بطاقةُ الإضبارة سطرٌ مضغوط: الاسمُ ثمّ آخرُ كتابٍ والعدّادان — كانت 200px لكلّ جهة */
+  .dossier-grid { gap: calc(var(--fold) + .65rem); }
+
+  .dossier-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "top  top"
+      "last counts";
+    align-items: center;
+    gap: .55rem .75rem;
+    padding: .8rem .85rem;
+  }
+
+  .dc-top { grid-area: top; }
+  .dc-icon { width: 34px; height: 34px; font-size: 1.05rem; }
+
+  .dc-counts {
+    grid-area: counts;
+    display: flex;
+    gap: .35rem;
+  }
+
+  .dc-badge { padding: .25rem .5rem; }
+  .dc-badge .n { font-size: .95rem; }
+
+  .dc-last {
+    grid-area: last;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    flex-wrap: wrap;
+  }
+
+  .dd-head { padding: 1rem .9rem .9rem; }
+  .dd-title .ic { width: 42px; height: 42px; font-size: 1.25rem; }
+  .dd-actions { width: 100%; }
+  .dd-actions .btn { flex: 1; justify-content: center; min-height: 44px; }
+
+  .dossier-detail .fb-pill { min-height: 36px; }
+  .dd-advanced-panel { grid-template-columns: 1fr; }
+  .ff-actions .btn { flex: 1; justify-content: center; min-height: 44px; }
+
+  /* حقولٌ بخطّ 16px: أصغرُ منه يكبّر iOS الصفحةَ عند التركيز */
+  .ds-field input,
+  .dossier-detail .fb-search input,
+  .ff-group :is(input, select) {
+    min-height: 44px;
+    font-size: 1rem;
+  }
+
+  .folder-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dossier-card,
+  .folder-card,
+  .dossier-card::before,
+  .folder-card::before,
+  .dd-adv-chev {
+    animation: none;
+    transition: none;
+  }
+
+  .dossier-card:hover,
+  .folder-card:hover { transform: none; }
+}

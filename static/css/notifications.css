@@ -1,36 +1,226 @@
-/* «التنبيهات» — أرضٌ هادئة وتيلٌ واحدٌ للفعل، بلا نبضٍ دائم (تدقيقُ نيلسن 2026‑10‑07، A#19) */
-.nt-page { --nt-teal: #0f766e; --nt-line: #e5e1d8; --nt-muted: #6b6457; --nt-quiet: #f4f2ee;
-  max-width: 920px; margin: 0 auto; padding: 8px 0 24px; }
-.nt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.nt-title { font-size: 1.35rem; font-weight: 800; margin: 0; }
-.nt-sub { margin: 2px 0 0; color: var(--nt-muted); font-size: .9rem; }
-.nt-list { list-style: none; margin: 0; padding: 0; background: #fff; border: 1px solid var(--nt-line); border-radius: 12px; }
-.nt-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--nt-line); }
-.nt-item:first-child { border-top: 0; }
-.nt-item.is-unread { background: #f0fdfa; box-shadow: inset -3px 0 0 var(--nt-teal); }
-.nt-icon { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--nt-quiet); color: var(--nt-muted); }
-.nt-item.is-unread .nt-icon { color: var(--nt-teal); background: #ccfbf1; }
-.nt-item.p-warning .nt-icon { color: #b45309; background: #fef3c7; }
-.nt-item.p-urgent .nt-icon { color: #b91c1c; background: #fee2e2; }
-.nt-body { flex: 1; min-width: 0; }
-.nt-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.nt-head-text { font-weight: 700; }
-.nt-new, .nt-prio { font-size: .72rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
-.nt-new { background: var(--nt-teal); color: #fff; }
-.nt-prio { background: #fef3c7; color: #92400e; }
-.p-urgent .nt-prio { background: #fee2e2; color: #991b1b; }
-.nt-msg { margin: 4px 0 0; color: #3f3a32; font-size: .9rem; }
-.nt-time { display: block; margin-top: 4px; color: var(--nt-muted); font-size: .8rem; }
-.nt-acts { display: flex; gap: 6px; align-items: center; flex: none; }
+/* «التنبيهات» على الهويّة الموحّدة (2026‑11‑19): رموزُ theme.css وحدَها، فالوضعان منها بلا قاعدةٍ لكلّ وضع.
+   أرضٌ هادئة وتيلٌ واحدٌ للفعل، بلا نبضٍ دائم (تدقيقُ نيلسن 2026‑10‑07، A#19).
+   غيرُ المقروء ثلاثُ إشاراتٍ لا لونٌ وحدَه: شريطٌ على حافّة البداية · غسلةُ تركواز · شارةُ «جديد». */
+
+.nt-page {
+  max-width: 960px;
+  margin-inline: auto;
+  padding-block: .5rem 1.5rem;
+  color: var(--lx-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── الرأس: بلاطةُ «القيادة» (تركوازٌ عميق وخطٌّ ذهبيّ — لغةُ لوح التبويب) ثمّ العنوانُ وسطرُ الحال ── */
+.nt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .75rem 1rem;
+  margin-block-end: 1rem;
+}
+
+.nt-head-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--lx-hero-a), var(--lx-hero-b));
+  box-shadow: inset 0 -3px 0 var(--lx-accent), var(--lx-shadow-sm);
+  color: #fff; /* الاستثناءُ الوحيد: حبرٌ أبيض على التركواز العميق (BRIEF §2.2) */
+  font-size: 1.3rem;
+}
+
+.nt-heading { flex: 1 1 14rem; min-width: 0; }
+.nt-title { margin: 0; font-size: clamp(1.35rem, 2.4vw, 1.6rem); font-weight: 800; line-height: 1.4; }
+.nt-sub { margin: .15rem 0 0; color: var(--lx-mute); font-size: .9rem; line-height: 1.7; }
+.nt-sub strong { color: var(--lx-ink); font-weight: 800; }
+.nt-sub .bi { margin-inline-end: .35rem; color: var(--lx-done); }
+
+.nt-dot {
+  display: inline-block;
+  width: .5rem;
+  height: .5rem;
+  margin-inline-end: .4rem;
+  border-radius: 50%;
+  background: var(--lx-pri);
+  vertical-align: .1em;
+}
+
+.nt-head-act { flex: none; margin: 0; }
+
+.nt-page .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+}
+
+.nt-page .btn .bi { font-size: 1.05em; line-height: 1; }
+
+
+/* ── القائمة: ورقةٌ واحدة بفواصلَ رفيعة، الأحدثُ أوّلاً ── */
+.nt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  box-shadow: var(--lx-shadow-sm);
+}
+
+/* الصفُّ نفسُه لا يُنقر — فلا تلوينَ له تحت المؤشّر (ما يبدو قابلاً للنقر يجب أن يكون كذلك) */
+.nt-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "icon body acts";
+  align-items: start;
+  gap: .25rem .9rem;
+  padding: .95rem 1.15rem;
+  border-block-start: 1px solid var(--lx-line);
+}
+
+.nt-item:first-child { border-block-start: 0; }
+
+.nt-item.is-unread { background: color-mix(in srgb, var(--lx-pri-soft) 55%, var(--lx-surface)); }
+
+.nt-item.is-unread::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+  background: var(--lx-pri);
+}
+
+/* بلاطةُ الأولويّة: المقروءُ هادئ، وغيرُ المقروء تركوازيٌّ على سطحٍ أبيض فوق الغسلة،
+   والتحذيرُ والعاجلُ بلونَي حالتيهما («ينتظر» و«متأخّر») في الحالتين — الأولويّةُ معنًى لا يُطفأ بالقراءة */
+.nt-icon {
+  grid-area: icon;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 10px;
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
+  font-size: 1.05rem;
+}
+
+.nt-item.is-unread .nt-icon {
+  background: var(--lx-surface);
+  color: var(--lx-pri);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lx-pri) 30%, var(--lx-line));
+}
+
+.nt-item.p-warning .nt-icon { background: var(--lx-wait-bg); color: var(--lx-wait); box-shadow: inset 0 0 0 1px var(--lx-wait-line); }
+.nt-item.p-urgent .nt-icon { background: var(--lx-late-bg); color: var(--lx-late); box-shadow: inset 0 0 0 1px var(--lx-late-line); }
+
+.nt-body { grid-area: body; min-width: 0; }
+.nt-line { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem; }
+
+.nt-head-text { color: var(--lx-ink); font-weight: 600; line-height: 1.7; overflow-wrap: anywhere; }
+.nt-item.is-unread .nt-head-text { font-weight: 800; }
+
+.nt-new,
+.nt-prio {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 .55rem;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+
+.nt-new { background: var(--lx-pri-fill); color: var(--lx-pri-fill-ink); }
+.nt-prio { background: var(--lx-wait-bg); color: var(--lx-wait); box-shadow: inset 0 0 0 1px var(--lx-wait-line); }
+.p-urgent .nt-prio { background: var(--lx-late-bg); color: var(--lx-late); box-shadow: inset 0 0 0 1px var(--lx-late-line); }
+
+.nt-msg { max-width: 64ch; margin: .2rem 0 0; color: var(--lx-ink); font-size: .9rem; line-height: 1.8; overflow-wrap: anywhere; text-wrap: pretty; }
+.nt-meta { margin: .3rem 0 0; color: var(--lx-mute); font-size: .8rem; line-height: 1.6; }
+.nt-stamp { white-space: nowrap; }
+
+/* الأفعال: «فتح» تركوازيّ، و«تعليم كمقروء» أهدأُ منه — أهدافٌ 36px على المكتب و44px على الهاتف */
+.nt-acts { grid-area: acts; display: flex; align-items: center; gap: .5rem; }
 .nt-acts form { margin: 0; }
-.nt-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--nt-teal); color: var(--nt-teal);
-  background: #fff; border-radius: 8px; padding: 5px 12px; font: inherit; font-size: .85rem; font-weight: 700;
-  text-decoration: none; cursor: pointer; }
-.nt-btn:hover, .nt-btn:focus-visible { background: var(--nt-teal); color: #fff; }
-.nt-btn-quiet { border-color: var(--nt-line); color: var(--nt-muted); padding: 5px 9px; }
-.nt-pager { display: flex; justify-content: center; gap: 16px; margin-top: 12px; font-size: .9rem; }
-.nt-pager a { color: var(--nt-teal); font-weight: 700; }
-.nt-empty { text-align: center; padding: 48px 16px; background: #fff; border: 1px solid var(--nt-line); border-radius: 12px; color: var(--nt-muted); }
-.nt-empty .bi { font-size: 2.5rem; display: block; margin-bottom: 8px; }
-.nt-empty .nt-btn { margin-top: 8px; }
+.nt-acts .btn { min-height: 36px; }
+.nt-open { padding-inline: .8rem .6rem; font-weight: 700; }
+.nt-mark { width: 36px; padding-inline: 0; }
+
+/* الحلقةُ ظاهرةٌ بلون الفعل (حلقةُ Bootstrap شفّافةٌ بربع اللون: لا تبلغ 3:1) */
+.nt-page :is(a, button):focus-visible {
+  outline: 2px solid var(--lx-pri);
+  outline-offset: 2px;
+}
+
+/* ── التنقّل بين الصفحات ── */
+.nt-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem 1rem;
+  margin-block-start: 1rem;
+}
+
+.nt-pager .btn { min-height: 36px; }
+.nt-pager-pos { color: var(--lx-mute); font-size: .875rem; }
+
+/* ── الفراغ: حالةٌ واحدة وطريقٌ للخارج ── */
+.nt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .6rem;
+  padding: 2.5rem 1.25rem;
+  text-align: center;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  box-shadow: var(--lx-shadow-sm);
+}
+
+.nt-empty-ico {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+  font-size: 1.6rem;
+}
+
+.nt-empty-title { margin: .35rem 0 0; color: var(--lx-ink); font-size: 1.05rem; font-weight: 800; text-wrap: balance; }
+.nt-empty-text { margin: 0; max-width: 34rem; color: var(--lx-mute); font-size: .9rem; line-height: 1.8; text-wrap: pretty; }
+.nt-empty .btn { margin-block-start: .4rem; min-height: 40px; }
+
+/* تقليلُ الحركة: لا انتقالَ ولا رفعةَ تحت المؤشّر (قاعدةُ Bootstrap المماثلة تغلبها ‎transition: all‏ في app.css) */
+@media (prefers-reduced-motion: reduce) {
+  .nt-page .btn { transition: none; }
+  .nt-page .btn:hover { transform: none; }
+}
+
+/* ── الهاتف: الأفعالُ تحت النصّ (المحتوى أوّلاً) وأهدافُها 44px ── */
+@media (max-width: 575.98px) {
+  .nt-head-act .btn,
+  .nt-acts .btn,
+  .nt-pager .btn,
+  .nt-empty .btn { min-height: 44px; }
+
+  .nt-item {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "icon body" ". acts";
+    padding: .9rem 1rem;
+  }
+
+  .nt-acts { margin-block-start: .5rem; }
+  .nt-open { padding-inline: 1rem .8rem; }
+  .nt-mark { width: 44px; }
+}

@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load ar_counts static %}
 {% block title %}مركز الأقسام{% endblock %}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
 {% block extra_css %}{% if server_strip %}<link rel="stylesheet" href="{% static 'css/server_status.css' %}?v=20261122-status">{% endif %}{% endblock %}
 {% block content %}
 {% if server_strip %}{% include 'core/server_status/_strip.html' %}{% endif %}

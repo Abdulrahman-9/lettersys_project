@@ -42,9 +42,10 @@
 
   // ── شريط التحديد: يظهر بالتحديد وحدَه ويلتصق بأسفل الشاشة ──
   function refreshSelection() {
-    document.querySelectorAll('.entities-table tbody tr.entity-item').forEach(tr => {
-      const cb = tr.querySelector('.row-check');
-      tr.classList.toggle('is-selected', !!(cb && cb.checked));
+    // الصفُّ والبطاقةُ المحدَّدان يُرسمان محدَّدَين (عرضٌ فقط — الحالةُ في المربّع نفسِه)
+    document.querySelectorAll('.entities-table tbody tr.entity-item, #entitiesGrid .entity-item').forEach(item => {
+      const cb = item.querySelector('.row-check');
+      item.classList.toggle('is-selected', !!(cb && cb.checked));
     });
     const checked = checkedBoxes().length;
     if (selectedCountEl) selectedCountEl.textContent = checked;

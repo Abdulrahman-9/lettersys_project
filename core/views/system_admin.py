@@ -18,6 +18,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_http_methods
 
 from core import permission_service, system_centre, system_ops
+from core.field_errors import FIELD_CODE, error_for
 from core.logging_models import UserActivityLog
 from core.models import Book, BookNumberReservation, BookReferral, BookSequence, Department, UserProfile
 from core.roles import get_user_role
@@ -560,7 +561,10 @@ def system_account_view(request, pk):
             with transaction.atomic():
                 message, password, back = _account_post(request, target)
         except (_VE, PermissionDenied) as exc:
-            messages.error(request, exc.messages[0] if isinstance(exc, _VE) else str(exc))
+            if isinstance(exc, _VE):
+                error_for(request, exc)           # تحت حقله إن سمّاه رمزُه، وإلّا توست
+            else:
+                messages.error(request, str(exc))
             return redirect('system_account', pk=pk)
         messages.success(request, message)
         if back:
@@ -636,16 +640,19 @@ def system_account_new_view(request):
         department = next((d for d in departments if raw.isdecimal() and d.pk == int(raw)), None)
         try:
             if department is None:
-                raise _VE('اختر قسمَ الحساب.')
+                raise _VE('اختر قسمَ الحساب.', code=FIELD_CODE + 'department')
             if values['role'] not in roles_here(department):
-                raise _VE('اختر دوراً يُسند في هذا القسم.')
+                raise _VE('اختر دوراً يُسند في هذا القسم.', code=FIELD_CODE + 'role')
             first, _, last = values['name'].partition(' ')
             user, password = create_department_user(   # ذرّيّةٌ في داخلها
                 by=request.user, department=department, username=values['username'],
                 first_name=first, last_name=last.strip(), job_title=values['job_title'],
                 role=ROLE_GRANT_KEYS[values['role']])
         except (_VE, PermissionDenied) as exc:
-            messages.error(request, exc.messages[0] if isinstance(exc, _VE) else str(exc))
+            if isinstance(exc, _VE):
+                error_for(request, exc)           # تحت حقله إن سمّاه رمزُه، وإلّا توست
+            else:
+                messages.error(request, str(exc))
         else:
             if password is None:   # حسّاسٌ أنشأه غيرُ المدير — كلمتُه الأولى من المدير (قرارُ المالك 11-18)
                 messages.success(request, 'أُنشئ حساب «%s». دورُه يفتح السرّيّ، فكلمتُه الأولى يصدرها مدير النظام.'

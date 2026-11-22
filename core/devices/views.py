@@ -14,7 +14,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from core.netaddr import approved_https_origin
-from core.scoping import can_manage_devices, can_set_up_scanner
+from core.scoping import can_manage_devices, can_open_admin_pages, can_set_up_scanner
 
 from . import service
 from .middleware import gate_exempt
@@ -107,6 +107,7 @@ def network_page(request):
     context = _common(request, pol)
     context.update({
         'is_admin': is_admin,
+        'can_open_settings': can_open_admin_pages(request.user),
         'mode': pol.mode,
         'modes': DevicePolicy.MODE_CHOICES,
         'this_device': _this_device(request, pol),

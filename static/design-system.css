@@ -237,9 +237,9 @@
     padding: var(--space-1) var(--space-2);
   }
   
-  /* تصغير الحقول */
+  /* تصغير الحقول — حشوُها وحده: خطُّها 16px دائماً، فما دونها يجعل iOS يكبّر الصفحةَ عند الكتابة (11-22) */
   .form-control, .form-select {
-    font-size: var(--font-size-sm);
+    font-size: 1rem;
     padding: var(--space-2) var(--space-3);
   }
   

@@ -103,11 +103,20 @@ def find_pg_restore():
     return find_pg_tool("pg_restore", "PG_RESTORE_BIN")
 
 
+class PgDumpMissing(FileNotFoundError):
+    """``pg_dump`` غيرُ موجود — صنفٌ مستقلّ لأنّ ``FileNotFoundError`` العامّ يرميه أيضاً مسارٌ على قرصٍ
+    غائب، فكانت صفحةُ النسخ تقول «تعذّر العثور على pg_dump» لقرصٍ غير موصول (11-22)."""
+
+
+#: سقفُ ``pg_dump``: النسخةُ اليوم 6.8 م.ب في ثوانٍ — تعليقٌ لنصف ساعة عطلٌ لا انتظار.
+PG_DUMP_TIMEOUT = 30 * 60
+
+
 def _build_pg_dump_command(db_config, output_path):
     """يبني أمر pg_dump (صيغة custom مشفّرة لاحقاً)."""
     pg_dump_bin = _find_pg_dump()
     if not pg_dump_bin:
-        raise FileNotFoundError(
+        raise PgDumpMissing(
             "تعذّر العثور على pg_dump — ثبّت أدوات PostgreSQL أو اضبط PG_DUMP_BIN.")
 
     command = [
@@ -130,8 +139,10 @@ def _build_pg_dump_command(db_config, output_path):
 def create_encrypted_pg_backup(target_dir=None, file_name=None) -> Path:
     """
     ينشئ نسخة pg_dump مشفّرة ويعيد مسار الملف المشفّر (``*.dump.enc``).
-    يرمي ``FileNotFoundError`` (pg_dump مفقود) أو ``subprocess.CalledProcessError``
-    (فشل الاستخراج) أو ``OSError`` (فشل كتابة/تشفير) — يلتقطها المُستدعي.
+    يرمي ``PgDumpMissing`` (pg_dump مفقود) أو ``subprocess.CalledProcessError`` (فشل الاستخراج) أو
+    ``subprocess.TimeoutExpired`` أو ``OSError`` (المسار/القرص أو فشل الكتابة والتشفير) — ونصُّها
+    للمستخدم من ``describe_backup_error``. **والصريحُ لا يبقى على القرص في أيّ حال**: التشذيبُ لا يعرف
+    إلّا ``*.dump.enc``، فنسخةٌ صريحةٌ ناقصة كانت ستبقى قاعدةً مكشوفةً إلى الأبد.
     """
     from .encryption import encrypt_file
 
@@ -151,14 +162,13 @@ def create_encrypted_pg_backup(target_dir=None, file_name=None) -> Path:
     if db_config.get("PASSWORD"):
         env["PGPASSWORD"] = str(db_config["PASSWORD"])
 
-    subprocess.run(
-        _build_pg_dump_command(db_config, target_path),
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    return Path(encrypt_file(target_path))
+    command = _build_pg_dump_command(db_config, target_path)   # PgDumpMissing قبل أيّ ملفّ
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True, env=env, timeout=PG_DUMP_TIMEOUT)
+        return Path(encrypt_file(target_path))
+    finally:
+        # encrypt_file يحذف الصريحَ عند النجاح؛ وهنا عند أيّ فشلٍ قبله أو فيه
+        target_path.unlink(missing_ok=True)
 
 
 #: نمطُ نسخةِ القاعدة المشفّرة — **مصدرٌ واحد** لصفحة النسخ وصفحة الاستعادة والتشذيب
@@ -337,3 +347,66 @@ def encryption_key_status(backup_dir=None) -> dict:
             break
 
     return status
+
+
+# ══════════════════════════════════════════════════════════════════
+#  النسخةُ الكاملة — مسارٌ واحد لزرّ «النسخة الآن» وللمهمّة المجدولة (11-22)
+#
+#  كان الزرّ ينسخ القاعدةَ وحدها والمهمّةُ تنسخ القاعدةَ والإعدادَ والمرآتين: نسختان بمعنيين
+#  تحت اسمٍ واحد. المرآةُ تدريجيّة (0.4 ث مقيسة) فالكاملةُ لا تُبطئ الزرّ.
+# ══════════════════════════════════════════════════════════════════
+
+def describe_backup_error(exc) -> str:
+    """سببُ فشل جزءٍ من النسخة وطريقُ إصلاحه — نصٌّ واحد للصفحة وللسجلّ."""
+    if isinstance(exc, PgDumpMissing):
+        return "تعذّر العثور على pg_dump — ثبّت أدوات PostgreSQL على الخادم أو اضبط PG_DUMP_BIN."
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return "توقّف pg_dump بعد نصف ساعة بلا نهاية — تحقّق أنّ خدمة PostgreSQL تعمل ثمّ أعد المحاولة."
+    if isinstance(exc, subprocess.CalledProcessError):
+        return "فشل pg_dump أثناء استخراج القاعدة — راجع اتّصال PostgreSQL في ملفّ البيئة؛ التفصيلُ في سجلّ الخادم."
+    if isinstance(exc, OSError):
+        return ("تعذّرت الكتابةُ في مجلّد النسخ — تحقّق أنّ القرصَ موصولٌ وفيه مساحة "
+                "وأنّ لخدمة النظام صلاحيةَ الكتابة فيه.")
+    return f"فشلٌ غيرُ متوقَّع ({type(exc).__name__}) — التفصيلُ في سجلّ الخادم."
+
+
+def run_full_backup() -> dict:
+    """نسخةٌ كاملة الآن: القاعدة والإعدادُ مشفّرَين، ومرآتا المرفقات والنماذج، ثمّ التشذيب.
+
+    فشلُ جزءٍ لا يُسقط البقيّة — نسخةٌ ناقصةٌ خيرٌ من لا شيء — والتقريرُ يقول أيّها نقص ولماذا
+    (``<part>_error`` نصُّ ``describe_backup_error``). لا يمسّ ``last_run_at``: ذاك للمهمّة المجدولة.
+    """
+    from .models import BackupSettings
+
+    directory = default_backup_dir()
+    report = {}
+
+    try:
+        report['database'] = str(create_encrypted_pg_backup())
+    except Exception as exc:
+        logger.exception('[backup] فشل نسخ القاعدة: %s', exc)
+        report['database_error'] = describe_backup_error(exc)
+
+    try:
+        config_path = create_encrypted_config_backup()
+        report['config'] = str(config_path) if config_path else None
+    except Exception as exc:
+        logger.exception('[backup] فشل نسخ ملفّات الإعداد: %s', exc)
+        report['config_error'] = describe_backup_error(exc)
+
+    for label, source in (('media', settings.MEDIA_ROOT),
+                          ('models', settings.BASE_DIR / 'var' / 'models')):
+        try:
+            report[label] = mirror_tree(source, directory / f'{label}_mirror')
+        except Exception as exc:
+            logger.exception('[backup] فشل مرآة %s: %s', label, exc)
+            report[f'{label}_error'] = describe_backup_error(exc)
+
+    # لا يُنسخ المفتاح تلقائيّاً — لكن يُنبَّه إن كان مفقوداً أو مُلقىً هنا.
+    key = encryption_key_status(directory)
+    report['encryption_key'] = key
+    if not key['exists']:
+        logger.error('[backup] .encryption_key مفقود — النسخ المشفّرة لن تُفتح!')
+
+    report['pruned'] = prune_old_backups(directory, BackupSettings.get().retention_days)
+    return report

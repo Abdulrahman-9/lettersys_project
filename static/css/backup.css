@@ -1,0 +1,363 @@
+/* صفحة النسخ الاحتياطي على الهويّة الموحّدة (v2، 2026-11-19).
+   أصنافُها ‎bk-*‎ وحدها: لا تعتمد على ‎system_admin.css‎ (ورقةُ وحدة «النظام») فلا يغيّرها تعديلُ تلك.
+   الألوانُ من رموز ‎theme.css‎ وحدها — الوضعان يتبدّلان بالرموز، لا بقاعدةٍ لكلّ وضع. */
+
+.bk-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  max-width: 82rem;
+  color: var(--lx-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── الرأس ── */
+.bk-head h1 { margin: 0; font-size: 1.5rem; font-weight: 800; line-height: 1.4; }
+.bk-head p { margin: .2rem 0 0; color: var(--lx-mute); font-size: .9rem; line-height: 1.9; }
+
+/* معرّفاتٌ تقنيّة (القاعدة، المسار، الامتداد): لاتينيّةٌ معزولة بحبر النصّ لا بلون الرابط */
+.bk-mono {
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: .86em;
+  overflow-wrap: anywhere;
+}
+
+.bk-db {
+  display: inline-block;
+  padding: 0 .45rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 6px;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+  line-height: 1.75;
+}
+
+/* ── حالة النسخ: هادئةٌ حين تسلم، ملوّنةٌ بمعناها حين لا تسلم ── */
+.bk-status {
+  --bk-tone: var(--lx-done);
+  --bk-tone-bg: var(--lx-done-bg);
+  --bk-tone-line: var(--lx-done-line);
+  display: flex;
+  align-items: center;
+  gap: .9rem;
+  padding: .85rem 1.1rem;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+}
+
+.bk-status.is-warn { --bk-tone: var(--lx-wait); --bk-tone-bg: var(--lx-wait-bg); --bk-tone-line: var(--lx-wait-line); }
+.bk-status.is-bad { --bk-tone: var(--lx-late); --bk-tone-bg: var(--lx-late-bg); --bk-tone-line: var(--lx-late-line); }
+.bk-status:is(.is-warn, .is-bad) { border-color: var(--bk-tone-line); background: var(--bk-tone-bg); }
+
+.bk-status-ico {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
+  background: var(--bk-tone-bg);
+  color: var(--bk-tone);
+  font-size: 1.35rem;
+  box-shadow: inset 0 0 0 1px var(--bk-tone-line);
+}
+
+.bk-status:is(.is-warn, .is-bad) .bk-status-ico { background: var(--lx-surface); }
+.bk-status-body { min-width: 0; }
+.bk-status h2 { margin: 0; color: var(--bk-tone); font-size: 1.05rem; font-weight: 800; line-height: 1.5; }
+.bk-status p { margin: .1rem 0 0; color: var(--lx-ink); font-size: .88rem; line-height: 1.7; }
+
+/* ── التخطيط: ما يُفعل يميناً (الجدولة · النسخ الآن · الاستعادة)، وما هو موجودٌ يساراً (الملفّات) ── */
+.bk-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.bk-stack { display: grid; gap: 1rem; min-width: 0; }
+
+.bk-card {
+  display: grid;
+  gap: .9rem;
+  align-content: start;
+  min-width: 0;
+  padding: 1.1rem 1.2rem 1.2rem;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-sm);
+}
+
+.bk-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .35rem .75rem;
+}
+
+.bk-card-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.bk-card-head small { color: var(--lx-mute); font-size: .8rem; font-weight: 600; line-height: 1.7; }
+
+.bk-ico {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 10px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri);
+  font-size: 1rem;
+}
+
+.bk-count {
+  display: inline-block;
+  min-width: 1.6rem;
+  padding: 0 .5rem;
+  border-radius: 999px;
+  background: var(--lx-surface-2);
+  box-shadow: inset 0 0 0 1px var(--lx-line);
+  color: var(--lx-mute);
+  font-size: .8rem;
+  font-weight: 800;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* ── النماذج ── */
+.bk-form { display: grid; gap: .9rem; }
+
+/* مربّعُ التفعيل وتسميتُه هدفٌ واحد (لا منطقةَ ميّتة بينهما)، ويتلوّن السطرُ بما اختير */
+.bk-check {
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 2.75rem;
+  padding: .35rem .9rem;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: 10px;
+  background: var(--lx-surface-2);
+  color: var(--lx-ink);
+  font-size: .92rem;
+  font-weight: 700;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background-color var(--lx-dur-1) ease, border-color var(--lx-dur-1) ease;
+}
+
+.bk-check:hover { border-color: color-mix(in srgb, var(--lx-pri) 45%, var(--lx-line-strong)); }
+.bk-check:has(:checked) { border-color: color-mix(in srgb, var(--lx-pri) 40%, var(--lx-line)); background: var(--lx-pri-soft); }
+.bk-check .form-check-input { flex: none; width: 1.25rem; height: 1.25rem; margin: 0; cursor: pointer; }
+
+.bk-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: .75rem 1rem;
+}
+
+/* المسارُ واسمُ الملفّ سطرٌ لكلٍّ منهما: جنباً إلى جنب كان الاسمُ يُقصّ عند «‎.dum‎» فيخفي امتدادَه */
+.bk-fields.is-one { grid-template-columns: minmax(0, 1fr); }
+.bk-field { display: grid; gap: .35rem; align-content: start; min-width: 0; }
+.bk-field > label { color: var(--lx-ink); font-size: .84rem; font-weight: 700; line-height: 1.6; }
+
+/* الحقل بئرٌ بلون الأرضيّة داخل البطاقة: يُعرف بملئه وحدّه معاً — و16px تمنع تكبيرَ الهاتف عند الكتابة */
+.bk-control:is(.form-control, .form-select) {
+  min-height: 2.75rem;
+  border-color: var(--lx-field-line);
+  border-radius: 10px;
+  background-color: var(--lx-bg);
+  color: var(--lx-ink);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.bk-control:is(.form-control, .form-select):hover { border-color: color-mix(in srgb, var(--lx-pri) 70%, var(--lx-field-line)); }
+
+.bk-hint { margin: 0; color: var(--lx-mute); font-size: .82rem; line-height: 1.8; }
+.bk-hint time { color: var(--lx-ink); font-weight: 700; }
+
+/* ما تحفظه «النسخة الآن» — قائمةٌ لا حقول (11-22) */
+.bk-parts { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.bk-parts li { display: flex; align-items: flex-start; gap: .6rem; color: var(--lx-ink); font-size: .92rem; line-height: 1.7; }
+.bk-parts .bi { color: var(--lx-pri); font-size: 1.05rem; margin-top: .15rem; }
+.bk-parts b { color: var(--lx-ink); }
+
+.bk-note {
+  display: flex;
+  align-items: flex-start;
+  gap: .55rem;
+  margin: 0;
+  padding: .6rem .85rem;
+  border: 1px solid var(--lx-wait-line);
+  border-radius: 10px;
+  background: var(--lx-wait-bg);
+  color: var(--lx-ink);
+  font-size: .86rem;
+  line-height: 1.8;
+}
+
+.bk-note > i { flex: none; margin-top: .15rem; color: var(--lx-wait); }
+
+.bk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; }
+
+/* الزرّان من أزرار Bootstrap (ورقيٌّ تركوازيٌّ بقواعد theme.css)، والفعلُ الأساسيّ مملوءٌ بالتعبئة وحبرها */
+.bk-page .btn.bk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  min-height: 2.75rem;
+  padding: .5rem 1.25rem;
+  border-radius: 10px;
+  font-size: .92rem;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
+.bk-page .btn.bk-btn-fill,
+.bk-page .btn.bk-btn-fill:hover,
+.bk-page .btn.bk-btn-fill:active { color: var(--lx-pri-fill-ink); }
+.bk-page .btn.bk-btn-fill { background: var(--lx-pri-fill); box-shadow: var(--lx-shadow-sm); }
+/* المرورُ يرفع التباين في الوضعين: يُمزج بالحبر فيغمق في الفاتح ويفتح في الداكن */
+.bk-page .btn.bk-btn-fill:hover { background: color-mix(in srgb, var(--lx-pri-fill) 86%, var(--lx-ink)); box-shadow: var(--lx-shadow-md); }
+
+/* ── النسخ المتوفّرة: التاريخُ أوّلاً ثمّ الحجم، واسمُ الملفّ تحتهما سطراً واحداً لا يتكسّر ── */
+.bk-files { display: grid; margin: 0; padding: 0; list-style: none; }
+
+.bk-file {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "ico when size" "ico name name";
+  align-items: center;
+  gap: .05rem .75rem;
+  padding: .6rem 0;
+  border-top: 1px solid var(--lx-line);
+}
+
+.bk-file:first-child { padding-top: .1rem; border-top: 0; }
+
+.bk-file-ico {
+  display: grid;
+  grid-area: ico;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 9px;
+  background: var(--lx-surface-2);
+  color: var(--lx-mute);
+  font-size: 1rem;
+  box-shadow: inset 0 0 0 1px var(--lx-line);
+}
+
+.bk-file.is-newest .bk-file-ico { background: var(--lx-pri-soft); color: var(--lx-pri); box-shadow: none; }
+
+.bk-file-when {
+  display: flex;
+  grid-area: when;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .2rem .5rem;
+  min-width: 0;
+  font-size: .9rem;
+  font-weight: 700;
+}
+
+.bk-file-size { grid-area: size; color: var(--lx-mute); font-size: .82rem; font-weight: 600; white-space: nowrap; }
+.bk-file-name { grid-area: name; min-width: 0; color: var(--lx-mute); font-size: .8rem; }
+
+.bk-tag {
+  display: inline-block;
+  padding: 0 .5rem;
+  border-radius: 999px;
+  background: var(--lx-pri-soft);
+  color: var(--lx-pri-soft-ink);
+  font-size: .75rem;
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+.bk-more {
+  margin: 0;
+  padding: .55rem .8rem;
+  border: 1px dashed var(--lx-line-strong);
+  border-radius: 10px;
+  color: var(--lx-mute);
+  font-size: .84rem;
+  line-height: 1.7;
+}
+
+.bk-empty {
+  display: grid;
+  justify-items: center;
+  gap: .3rem;
+  margin: 0;
+  padding: 1.25rem .75rem;
+  border: 1px dashed var(--lx-line-strong);
+  border-radius: 12px;
+  color: var(--lx-mute);
+  font-size: .88rem;
+  line-height: 1.8;
+  text-align: center;
+}
+
+.bk-empty > i { color: var(--lx-pri); font-size: 1.5rem; }
+
+/* ── الاستعادة: سطران لكلّ طريق — اسمُه ثمّ ما يفعله — والسهمُ يتقدّم يساراً تحت اليد ── */
+.bk-links { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+
+.bk-link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .75rem;
+  min-height: 3.25rem;
+  padding: .65rem .8rem;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  text-decoration: none;
+  transition: background-color var(--lx-dur-1) ease, border-color var(--lx-dur-1) ease;
+}
+
+.bk-link:hover { border-color: color-mix(in srgb, var(--lx-pri) 45%, var(--lx-line)); background: var(--lx-surface-2); color: var(--lx-ink); }
+.bk-link:focus-visible { outline: 2px solid var(--lx-pri); outline-offset: 2px; }
+.bk-link > .bk-ico { width: 2.1rem; height: 2.1rem; }
+.bk-link-text { min-width: 0; }
+.bk-link-text b { display: block; font-size: .92rem; font-weight: 800; line-height: 1.6; }
+.bk-link-text small { display: block; color: var(--lx-mute); font-size: .8rem; line-height: 1.7; }
+.bk-link-go { color: var(--lx-mute); font-size: .95rem; transition: transform var(--lx-dur-1) var(--lx-ease), color var(--lx-dur-1) ease; }
+.bk-link:hover .bk-link-go { color: var(--lx-pri); transform: translateX(-3px); }
+
+/* ── الهاتف واللوح ── */
+@media (max-width: 991.98px) {
+  .bk-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 575.98px) {
+  .bk-head h1 { font-size: 1.35rem; }
+  .bk-status { align-items: flex-start; padding: .8rem .9rem; }
+  .bk-card { padding: 1rem; }
+  .bk-actions > .btn.bk-btn { flex: 1 1 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bk-check, .bk-link, .bk-link-go { transition: none; }
+  .bk-link:hover .bk-link-go { transform: none; }
+  .bk-page .btn.bk-btn:hover, .bk-page .btn.bk-btn:active { transform: none; }
+}

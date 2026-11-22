@@ -12,8 +12,9 @@
   let registered = false;
   let pairing = false;
 
+  // الحالةُ في data-tone (أيقونةٌ ولونٌ من device_setup.css) — كسطر الحالة في device_setup.js
   function status(tone, message) {
-    result.className = `alert alert-${tone} mt-3`;
+    result.dataset.tone = tone;
     result.textContent = message;
   }
 

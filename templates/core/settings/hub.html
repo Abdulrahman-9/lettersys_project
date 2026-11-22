@@ -1,244 +1,279 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static l10n field_errors %}
 
 {% block title %}الإعدادات{% endblock %}
 
+{# الهويّة الموحّدة (11-19): رموزُ --lx-* والوضعان، ولوحُ التبويب المنزلق المشترك (data-lx-tabs) #}
+{% block html_attrs %} data-lx-page="v2"{% endblock %}
+
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/settings_hub.css' %}?v=20260913">
+<link rel="stylesheet" href="{% static 'css/settings_hub.css' %}?v=20261119-pages">
 {% endblock %}
 
 {% block content %}
+{% comment %}
+  التبويبُ النشط يُعلَّم من الخادم أيضاً (?tab=): كانت اللوحاتُ كلُّها مخفيّةً حتّى يعمل السكربت،
+  وكلُّ حفظٍ يعود إلى ?tab=<لوحته> — فتُرسم الصفحةُ فارغةً ثمّ تقفز اللوحة. السكربتُ يبقى صاحبَ
+  التبديل، والقيمةُ المجهولة (?tab=scan) لا تعلّم شيئاً فيختار السكربتُ «عام» كما كان.
+{% endcomment %}
+{% with t=request.GET.tab|default:"general" %}
 <div class="settings-hub">
 
-  <div class="settings-hub-head">
-    <span class="settings-hub-badge"><i class="bi bi-sliders2"></i></span>
-    <div>
-      <h4>الإعدادات</h4>
-      <p>مركز واحد لكل إعدادات النظام — لا تغادره أبداً.</p>
+  <header class="settings-hub-head">
+    <span class="settings-hub-badge" aria-hidden="true"><i class="bi bi-sliders2"></i></span>
+    <div class="settings-hub-title">
+      <h1>الإعدادات</h1>
+      <p>ما يُضبط مرّةً للنظام كلّه. والبريدُ والنسخُ الاحتياطيّ والماسحُ صفحاتٌ في القائمة.</p>
     </div>
-    <div class="settings-hub-search">
-      <i class="bi bi-search"></i>
-      <input type="search" id="settingsTabSearch" placeholder="ابحث في الأقسام…" aria-label="بحث في أقسام الإعدادات" autocomplete="off">
+    <div class="settings-hub-search" role="search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input type="search" id="settingsTabSearch" placeholder="ابحث في الأقسام…" aria-label="بحث في أقسام الإعدادات" aria-controls="settingsTabstrip" autocomplete="off">
     </div>
-  </div>
+  </header>
 
-  {# ── الشريط الأفقي ── #}
+  {# ── الشريط: لوحٌ واحدٌ ينزلق إلى التبويب النشط (js/lx_tabs.js)، وتبويبٌ واحدٌ في ترتيب Tab ── #}
   <div class="settings-tabstrip-shell" id="settingsTabstripShell">
-    <div class="settings-tabstrip" id="settingsTabstrip" role="tablist" aria-label="أقسام الإعدادات">
-      <button class="settings-tab" role="tab" data-tab="general"       data-kind="pane"     aria-selected="true"  type="button"><i class="bi bi-card-heading"></i><span>عام</span></button>
-      <button class="settings-tab" role="tab" data-tab="notifications" data-kind="pane"     aria-selected="false" type="button"><i class="bi bi-bell-fill"></i><span>الإشعارات</span></button>
-      <button class="settings-tab" role="tab" data-tab="security"      data-kind="pane"     aria-selected="false" type="button"><i class="bi bi-shield-lock-fill"></i><span>الأمان</span></button>
-      <button class="settings-tab" role="tab" data-tab="sequences"     data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'sequence_settings' %}?embed=1"><i class="bi bi-123"></i><span>العدّادات التسلسلية</span></button>
-      <button class="settings-tab" role="tab" data-tab="network"       data-kind="embed"    aria-selected="false" type="button" data-embed-url="{% url 'network_settings' %}?embed=1"><i class="bi bi-diagram-3-fill"></i><span>الشبكة والأجهزة</span></button>
-      <button class="settings-tab" role="tab" data-tab="ai" data-kind="pane" aria-selected="false" type="button"><i class="bi bi-robot"></i><span>الذكاء الاصطناعي</span></button>
-      <span class="settings-tab-indicator" id="settingsTabIndicator"></span>
+    <div class="settings-tabstrip" id="settingsTabstrip" role="tablist" aria-label="أقسام الإعدادات" data-lx-tabs>
+      <button class="settings-tab" role="tab" type="button" id="settingsTab-general" aria-controls="settingsPane-general" data-tab="general" data-kind="pane" aria-selected="{% if t == 'general' %}true{% else %}false{% endif %}" tabindex="{% if t == 'general' %}0{% else %}-1{% endif %}"><i class="bi bi-card-heading" aria-hidden="true"></i><span>عام</span></button>
+      <button class="settings-tab" role="tab" type="button" id="settingsTab-notifications" aria-controls="settingsPane-notifications" data-tab="notifications" data-kind="pane" aria-selected="{% if t == 'notifications' %}true{% else %}false{% endif %}" tabindex="{% if t == 'notifications' %}0{% else %}-1{% endif %}"><i class="bi bi-bell-fill" aria-hidden="true"></i><span>الإشعارات</span></button>
+      <button class="settings-tab" role="tab" type="button" id="settingsTab-security" aria-controls="settingsPane-security" data-tab="security" data-kind="pane" aria-selected="{% if t == 'security' %}true{% else %}false{% endif %}" tabindex="{% if t == 'security' %}0{% else %}-1{% endif %}"><i class="bi bi-shield-lock-fill" aria-hidden="true"></i><span>الأمان</span></button>
+      <button class="settings-tab" role="tab" type="button" id="settingsTab-sequences" aria-controls="settingsEmbedWrap" data-tab="sequences" data-kind="embed" data-embed-url="{% url 'sequence_settings' %}?embed=1" aria-selected="{% if t == 'sequences' %}true{% else %}false{% endif %}" tabindex="{% if t == 'sequences' %}0{% else %}-1{% endif %}"><i class="bi bi-123" aria-hidden="true"></i><span>العدّادات التسلسلية</span></button>
+      <button class="settings-tab" role="tab" type="button" id="settingsTab-network" aria-controls="settingsEmbedWrap" data-tab="network" data-kind="embed" data-embed-url="{% url 'network_settings' %}?embed=1" aria-selected="{% if t == 'network' %}true{% else %}false{% endif %}" tabindex="{% if t == 'network' %}0{% else %}-1{% endif %}"><i class="bi bi-diagram-3-fill" aria-hidden="true"></i><span>الشبكة والأجهزة</span></button>
+      <button class="settings-tab" role="tab" type="button" id="settingsTab-ai" aria-controls="settingsPane-ai" data-tab="ai" data-kind="pane" aria-selected="{% if t == 'ai' %}true{% else %}false{% endif %}" tabindex="{% if t == 'ai' %}0{% else %}-1{% endif %}"><i class="bi bi-robot" aria-hidden="true"></i><span>الذكاء الاصطناعي</span></button>
+      {# أثرُ المؤشّر القديم بلا عمل: اللوحُ من lx_tabs.js — يُحذف حين يُستبدل وسمُه في tests_settings_hub (طلبٌ للمُدمِج) #}
     </div>
+    <p class="settings-search-empty" id="settingsSearchEmpty" role="status" aria-live="polite"></p>
   </div>
 
   {# الرسائل تظهر عبر نظام toast الموحّد في base.html #}
 
-  {# ── اللوحات ── #}
   <div class="settings-panes" id="settingsPanes">
 
-    {# لوحة تضمين مشتركة لكل الأدوات الثقيلة (?embed=1) #}
-    <div class="settings-embed-wrap" id="settingsEmbedWrap" style="display:none">
+    {# لوحةُ تضمينٍ واحدة للأداتين الثقيلتين (?embed=1)؛ اسمُها وعنوانُ إطارها من التبويب النشط (settings_hub.js) #}
+    <div class="settings-embed-wrap" id="settingsEmbedWrap" role="tabpanel" aria-labelledby="settingsTab-{% if t == 'network' %}network{% else %}sequences{% endif %}" style="display:none">
       <div class="settings-embed-skeleton" aria-hidden="true">
-        <div class="sk sk-title"></div>
-        <div class="sk" style="width:72%"></div>
-        <div class="sk" style="width:100%"></div>
-        <div class="sk" style="width:88%"></div>
-        <div class="sk" style="width:94%"></div>
-        <div class="sk" style="width:60%"></div>
+        <span class="sk sk-title"></span><span class="sk"></span><span class="sk"></span><span class="sk"></span><span class="sk"></span><span class="sk"></span>
       </div>
       <iframe class="settings-embed-frame" id="settingsEmbedFrame" title="أداة الإعدادات" loading="lazy"></iframe>
     </div>
 
     {# ── عام ── #}
-    <div class="settings-pane" data-pane="general">
-      <div class="settings-pane-card">
-        <div class="settings-pane-head">
-          <span class="settings-pane-icon" style="--accent:#0f766e;"><i class="bi bi-card-heading"></i></span>
-          <div>
-            <h5 class="mb-1 fw-bold">هوية النظام</h5>
-            <p class="text-muted mb-0">الاسم وسطر الوصف الظاهران في ترويسة كل الصفحات.</p>
-          </div>
-        </div>
+    <div class="settings-pane{% if t == 'general' %} is-active{% endif %}" data-pane="general" role="tabpanel" id="settingsPane-general" aria-labelledby="settingsTab-general">
+      <section class="settings-pane-card">
+        <header class="settings-pane-head">
+          <span class="settings-pane-icon" aria-hidden="true"><i class="bi bi-card-heading"></i></span>
+          <h2 id="settingsIdentityTitle">هوية النظام</h2>
+          <p>الاسم وسطر الوصف الظاهران في ترويسة كل الصفحات.</p>
+        </header>
         <div class="settings-pane-body">
-          <form method="post" action="{% url 'settings_general_save' %}">
+          <form method="post" action="{% url 'settings_general_save' %}" class="settings-brand">
             {% csrf_token %}
-            <div class="mb-3">
-              <label class="form-label fw-semibold" for="gen_app_name">اسم النظام</label>
-              <input type="text" id="gen_app_name" name="app_name" maxlength="100" required class="form-control"
-                     value="{{ system_settings.app_name|default:'نظام الكتب' }}" placeholder="نظام الكتب">
+            <div class="settings-brand-fields">
+              <div class="settings-field">
+                <label class="form-label" for="gen_app_name">اسم النظام</label>
+                <input type="text" id="gen_app_name" name="app_name" maxlength="100" required class="form-control"
+                       value="{{ system_settings.app_name|default:'نظام الكتب' }}" placeholder="نظام الكتب">
+                {% field_error 'app_name' 'gen_app_name' %}
+              </div>
+              <div class="settings-field">
+                <label class="form-label" for="gen_subtitle">سطر الوصف في الترويسة</label>
+                <input type="text" id="gen_subtitle" name="brand_subtitle" maxlength="200" class="form-control"
+                       value="{{ system_settings.brand_subtitle|default:'' }}" placeholder="وصف مختصر يظهر أسفل الاسم">
+              </div>
             </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold" for="gen_subtitle">سطر الوصف في الترويسة</label>
-              <input type="text" id="gen_subtitle" name="brand_subtitle" maxlength="200" class="form-control"
-                     value="{{ system_settings.brand_subtitle|default:'' }}" placeholder="وصف مختصر يظهر أسفل الاسم">
+            {# معاينةٌ بصريّة للشريط العلويّ تتبع الحقلين (settings_hub.js) — تكرارٌ لهما فتُخفى عن قارئ الشاشة #}
+            <figure class="settings-brand-preview" aria-hidden="true">
+              <figcaption>هكذا يظهر في الشريط العلويّ</figcaption>
+              <div class="settings-brand-bar">
+                <img src="{% static 'img/mdoc-mark.png' %}?v=20261111" alt="" width="38" height="38">
+                <span class="settings-brand-text">
+                  <b data-brand-preview="gen_app_name" data-fallback="نظام الكتب">{{ system_settings.app_name|default:'نظام الكتب' }}</b>
+                  {# الافتراضيُّ هو نفسُه الذي يعرضه base.html حين يُترك السطرُ فارغاً #}
+                  <small data-brand-preview="gen_subtitle" data-fallback="أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة">{{ system_settings.brand_subtitle|default:'أرشفة موحدة ومتابعة تشغيلية ضمن واجهة ديسكتوب ثابتة' }}</small>
+                </span>
+              </div>
+              <p>المعاينةُ تتبع ما تكتبه، والشريطُ نفسُه لا يتغيّر حتّى تحفظ.</p>
+            </figure>
+            <div class="settings-actions">
+              <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> حفظ</button>
             </div>
-            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
           </form>
         </div>
-      </div>
+      </section>
       {% if nav.roles %}
       {# إسنادُ القسم والدور كان بلا مدخلٍ في المركز ولا الشريط (تدقيقُ نيلسن F#4) — يُفتح خارج الإطار #}
-      <div class="settings-pane-card">
-        <div class="settings-pane-head">
-          <span class="settings-pane-icon" style="--accent:#0f766e;"><i class="bi bi-diagram-3"></i></span>
-          <div>
-            <h5 class="mb-1 fw-bold">الأقسام والأدوار</h5>
-            <p class="text-muted mb-0">الأقسامُ والحساباتُ وأدوارُها في «الأقسام» و«الحسابات والأدوار» من الشريط.</p>
-          </div>
-        </div>
+      <section class="settings-pane-card">
+        <header class="settings-pane-head">
+          <span class="settings-pane-icon" aria-hidden="true"><i class="bi bi-diagram-3"></i></span>
+          <h2 id="settingsRolesTitle">الأقسام والأدوار</h2>
+          <p>الأقسامُ والحساباتُ وأدوارُها في «الأقسام» و«الحسابات والأدوار» من الشريط.</p>
+        </header>
         <div class="settings-pane-body">
-          <p class="mb-1"><span class="fw-semibold">وضع التشغيل:</span> {{ system_settings.get_deployment_profile_display }}
-            · <span class="fw-semibold">القسم الافتراضيّ:</span> {{ default_department.name|default:'—' }}</p>
-          <p class="text-muted small mb-0">ما يُدخله أو يحجزه حسابٌ بلا قسم — ومنه مدير النظام — يقع في القسم الافتراضيّ. والحسابُ الجديد يُختار قسمُه عند إنشائه.</p>
+          <dl class="settings-facts">
+            <div><dt>وضع التشغيل:</dt><dd>{{ system_settings.get_deployment_profile_display }}</dd></div>
+            <div><dt>القسم الافتراضيّ:</dt><dd>{{ default_department.name|default:'—' }}</dd></div>
+          </dl>
+          <p class="settings-help mb-0">ما يُدخله أو يحجزه حسابٌ بلا قسم — ومنه مدير النظام — يقع في القسم الافتراضيّ. والحسابُ الجديد يُختار قسمُه عند إنشائه.</p>
         </div>
-      </div>
+      </section>
       {% endif %}
     </div>
 
     {# ── الإشعارات ── #}
-    <div class="settings-pane" data-pane="notifications">
-      <div class="settings-pane-card">
-        <div class="settings-pane-head">
-          <span class="settings-pane-icon" style="--accent:#b45309;"><i class="bi bi-bell-fill"></i></span>
-          <div>
-            <h5 class="mb-1 fw-bold">سياسة إشعارات التأخّر</h5>
-            <p class="text-muted mb-0">تتحكّم بما يفعله فحصُ الكتب المتأخّرة (<code dir="ltr">notify_overdue_books</code>) حين يُشغَّل.</p>
-          </div>
-        </div>
+    <div class="settings-pane{% if t == 'notifications' %} is-active{% endif %}" data-pane="notifications" role="tabpanel" id="settingsPane-notifications" aria-labelledby="settingsTab-notifications">
+      <section class="settings-pane-card">
+        <header class="settings-pane-head">
+          <span class="settings-pane-icon" aria-hidden="true"><i class="bi bi-bell-fill"></i></span>
+          <h2 id="settingsNotifTitle">سياسة إشعارات التأخّر</h2>
+          <p>تتحكّم بما يفعله فحصُ الكتب المتأخّرة (<code dir="ltr">notify_overdue_books</code>) حين يُشغَّل.</p>
+        </header>
         <div class="settings-pane-body">
           <form method="post" action="{% url 'settings_notifications_save' %}">
             {% csrf_token %}
-            <div class="form-check form-switch mb-3">
-              <input class="form-check-input" type="checkbox" role="switch" id="ov_enabled" name="overdue_enabled" {% if notif_settings.overdue_enabled %}checked{% endif %}>
-              <label class="form-check-label fw-semibold" for="ov_enabled">تفعيل إشعارات التأخّر</label>
-              <div class="text-muted small">عند الإيقاف لا يُرسَل أي إشعار تأخّر.</div>
+            <div class="form-check form-switch settings-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="ov_enabled" name="overdue_enabled" aria-describedby="ov_enabled_help" {% if notif_settings.overdue_enabled %}checked{% endif %}>
+              <label class="form-check-label" for="ov_enabled">تفعيل إشعارات التأخّر</label>
+              <div class="settings-help" id="ov_enabled_help">عند الإيقاف لا يُرسَل أي إشعار تأخّر.</div>
             </div>
-            <div class="form-check form-switch mb-3">
-              <input class="form-check-input" type="checkbox" role="switch" id="ov_admins" name="notify_admins" {% if notif_settings.notify_admins %}checked{% endif %}>
-              <label class="form-check-label fw-semibold" for="ov_admins">إشعار المدراء داخل النظام</label>
-            </div>
-            <div class="form-check form-switch mb-3">
-              <input class="form-check-input" type="checkbox" role="switch" id="ov_creator" name="notify_creator" {% if notif_settings.notify_creator %}checked{% endif %}>
-              <label class="form-check-label fw-semibold" for="ov_creator">إشعار مُنشئ الكتاب</label>
-            </div>
-            <div class="form-check form-switch mb-4">
-              <input class="form-check-input" type="checkbox" role="switch" id="ov_email" name="email_admins" {% if notif_settings.email_admins %}checked{% endif %}>
-              <label class="form-check-label fw-semibold" for="ov_email">إرسال بريد ملخّص للمدراء</label>
-              <div class="text-muted small">يتطلّب تفعيل إعدادات البريد.</div>
-            </div>
+            <fieldset class="settings-group settings-subgroup">
+              <legend>قنواتُ الإشعار</legend>
+              <div class="form-check form-switch settings-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="ov_admins" name="notify_admins" {% if notif_settings.notify_admins %}checked{% endif %}>
+                <label class="form-check-label" for="ov_admins">إشعار المدراء داخل النظام</label>
+              </div>
+              <div class="form-check form-switch settings-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="ov_creator" name="notify_creator" {% if notif_settings.notify_creator %}checked{% endif %}>
+                <label class="form-check-label" for="ov_creator">إشعار مُنشئ الكتاب</label>
+              </div>
+              <div class="form-check form-switch settings-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="ov_email" name="email_admins" aria-describedby="ov_email_help" {% if notif_settings.email_admins %}checked{% endif %}>
+                <label class="form-check-label" for="ov_email">إرسال بريد ملخّص للمدراء</label>
+                <div class="settings-help" id="ov_email_help">يتطلّب تفعيل إعدادات البريد.</div>
+              </div>
+            </fieldset>
             {% if last_overdue_notice %}
-            <div class="text-muted small mb-3">آخرُ إشعار تأخّرٍ أُرسل: <span class="num">{{ last_overdue_notice|date:"d/m/Y H:i" }}</span></div>
+            <p class="settings-status"><i class="bi bi-clock-history" aria-hidden="true"></i><span>آخرُ إشعار تأخّرٍ أُرسل: <bdi dir="ltr" class="num">{{ last_overdue_notice|date:"d/m/Y H:i" }}</bdi></span></p>
             {% else %}
-            <div class="alert alert-warning py-2 small mb-3">
-              <i class="bi bi-exclamation-triangle-fill ms-1"></i>
-              لم يُرسَل أيُّ إشعار تأخّرٍ قطّ — الفحصُ لا يجري وحدَه: يلزمه أن يُجدوَل الأمرُ يوميّاً على الخادم، وإلّا فلا أثرَ لهذه المفاتيح.
-              والمتأخّرُ ظاهرٌ في كلّ الأحوال في اللوحة والطاولات.
+            <div class="alert alert-warning settings-alert">
+              <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+              <p>لم يُرسَل أيُّ إشعار تأخّرٍ قطّ — الفحصُ لا يجري وحدَه: يلزمه أن يُجدوَل الأمرُ يوميّاً على الخادم، وإلّا فلا أثرَ لهذه المفاتيح. والمتأخّرُ ظاهرٌ في كلّ الأحوال في اللوحة والطاولات.</p>
             </div>
             {% endif %}
-            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
+            <div class="settings-actions">
+              <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> حفظ</button>
+            </div>
           </form>
         </div>
-      </div>
+      </section>
     </div>
 
     {# ── الأمان ── #}
-    <div class="settings-pane" data-pane="security">
-      <div class="settings-pane-card">
-        <div class="settings-pane-head">
-          <span class="settings-pane-icon" style="--accent:#9f1239;"><i class="bi bi-shield-lock-fill"></i></span>
-          <div>
-            <h5 class="mb-1 fw-bold">الأمان</h5>
-            <p class="text-muted mb-0">سياسة كلمات مرور المستخدمين الجُدد.</p>
-          </div>
-        </div>
+    <div class="settings-pane{% if t == 'security' %} is-active{% endif %}" data-pane="security" role="tabpanel" id="settingsPane-security" aria-labelledby="settingsTab-security">
+      <section class="settings-pane-card">
+        <header class="settings-pane-head">
+          <span class="settings-pane-icon" aria-hidden="true"><i class="bi bi-shield-lock-fill"></i></span>
+          <h2 id="settingsSecurityTitle">الأمان</h2>
+          <p>سياسةُ كلمات المرور للحسابات كلّها.</p>
+        </header>
         <div class="settings-pane-body">
           <form method="post" action="{% url 'settings_security_save' %}">
             {% csrf_token %}
-            <div class="mb-3" style="max-width:280px;">
-              <label class="form-label fw-semibold" for="sec_min_len">الحد الأدنى لطول كلمة المرور</label>
-              <input type="number" id="sec_min_len" name="password_min_length" min="4" max="64" required class="form-control"
-                     value="{{ sec_settings.password_min_length }}">
-              <div class="text-muted small mt-1">يُطبَّق عند إنشاء المستخدمين وإعادة تعيين كلماتهم، وعند تغيير المستخدم كلمتَه بنفسه.</div>
+            <div class="settings-field">
+              <label class="form-label" for="sec_min_len">الحد الأدنى لطول كلمة المرور</label>
+              <div class="input-group settings-number">
+                <input type="number" id="sec_min_len" name="password_min_length" min="4" max="64" required class="form-control"
+                       value="{{ sec_settings.password_min_length }}" aria-describedby="sec_min_len_unit sec_min_len_help">
+                <span class="input-group-text" id="sec_min_len_unit">حرفاً</span>
+              </div>
+              {% field_error 'password_min_length' 'sec_min_len' %}
+              <div class="settings-help" id="sec_min_len_help">يُطبَّق عند إنشاء المستخدمين وإعادة تعيين كلماتهم، وعند تغيير المستخدم كلمتَه بنفسه.</div>
             </div>
-            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg ms-1"></i> حفظ</button>
+            <div class="settings-actions">
+              <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> حفظ</button>
+            </div>
           </form>
         </div>
-      </div>
+      </section>
     </div>
 
     {# ── الذكاء الاصطناعيّ: داخل المركز بدل قذف المستخدم إلى لوحة جانغو (مراجعة 2026‑09‑13) ── #}
-    <div class="settings-pane" data-pane="ai">
-      <div class="settings-pane-card">
-        <div class="settings-pane-head">
-          <div>
-            <h5 class="mb-1 fw-bold">الاستخراج بمزوّدٍ خارجيّ</h5>
-            <p class="text-muted mb-0">الاستخراجُ يعمل محلّيّاً على الخادم. تفعيلُ مزوّدٍ خارجيّ يجعل صورَ الكتب تُرسَل إلى خدمةٍ خارج الشركة عند تعذّر القراءة المحلّيّة.</p>
-          </div>
-        </div>
+    <div class="settings-pane{% if t == 'ai' %} is-active{% endif %}" data-pane="ai" role="tabpanel" id="settingsPane-ai" aria-labelledby="settingsTab-ai">
+      <section class="settings-pane-card">
+        <header class="settings-pane-head">
+          <span class="settings-pane-icon" aria-hidden="true"><i class="bi bi-robot"></i></span>
+          <h2 id="settingsAiTitle">الاستخراج بمزوّدٍ خارجيّ</h2>
+          <p>الاستخراجُ يعمل محلّيّاً على الخادم. تفعيلُ مزوّدٍ خارجيّ يجعل صورَ الكتب تُرسَل إلى خدمةٍ خارج الشركة عند تعذّر القراءة المحلّيّة.</p>
+        </header>
         <div class="settings-pane-body">
-          <div class="alert alert-warning py-2 small">
-            <i class="bi bi-exclamation-triangle-fill ms-1"></i>
-            كتبُ الشركة — وفيها السرّيّ — تخرج إلى خارجها حين يُفعَّل هذا. لا تُفعّله إلّا بقرارٍ إداريٍّ مكتوب.
+          <div class="alert alert-warning settings-alert">
+            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+            <p>كتبُ الشركة — وفيها السرّيّ — تخرج إلى خارجها حين يُفعَّل هذا. لا تُفعّله إلّا بقرارٍ إداريٍّ مكتوب.</p>
           </div>
-          <form method="post" action="{% url 'settings_ai_save' %}" class="row g-3">
+          <form method="post" action="{% url 'settings_ai_save' %}">
             {% csrf_token %}
-            <div class="col-12">
-              <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" role="switch" id="ai_enabled" name="enabled" {% if ai_settings.enabled %}checked{% endif %}>
-                <label class="form-check-label" for="ai_enabled">تفعيلُ الربط بمزوّدٍ خارجيّ</label>
-              </div>
+            <div class="form-check form-switch settings-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="ai_enabled" name="enabled" {% if ai_settings.enabled %}checked{% endif %}>
+              <label class="form-check-label" for="ai_enabled">تفعيلُ الربط بمزوّدٍ خارجيّ</label>
             </div>
-            <div class="col-md-6">
-              <label class="form-label" for="ai_provider">المزوّد</label>
-              <select class="form-select" id="ai_provider" name="provider">
-                {% for val, label in ai_settings.PROVIDER_CHOICES %}
-                  <option value="{{ val }}" {% if ai_settings.provider == val %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label" for="ai_threshold">حدُّ الثقة الذي يُستدعى عنده الخارجيّ (0–1)</label>
-              <input type="number" step="0.05" min="0" max="1" class="form-control" id="ai_threshold"
-                     name="low_confidence_threshold" value="{{ ai_settings.low_confidence_threshold }}">
-            </div>
-            <div class="col-12">
-              <div class="form-check form-switch">
+            <fieldset class="settings-group">
+              <legend>متى يُستدعى</legend>
+              <div class="form-check form-switch settings-switch">
                 <input class="form-check-input" type="checkbox" role="switch" id="ai_fallback" name="fallback_on_low_confidence" {% if ai_settings.fallback_on_low_confidence %}checked{% endif %}>
                 <label class="form-check-label" for="ai_fallback">استدعِ الخارجيَّ عند ضعف الثقة المحلّيّة</label>
               </div>
-            </div>
-            <div class="col-md-7">
-              <label class="form-label" for="ai_endpoint">عنوانُ الخدمة</label>
-              <input type="url" class="form-control" id="ai_endpoint" name="azure_endpoint" dir="ltr"
-                     value="{{ ai_settings.azure_endpoint }}" placeholder="https://…">
-            </div>
-            <div class="col-md-5">
-              <label class="form-label" for="ai_key">المفتاح</label>
-              <input type="password" class="form-control" id="ai_key" name="azure_key" dir="ltr"
-                     autocomplete="new-password" placeholder="{% if ai_settings.azure_key %}محفوظٌ — اتركه فارغاً للإبقاء عليه{% else %}لا مفتاحَ محفوظ{% endif %}">
-              {% if ai_settings.azure_key %}
-                <div class="form-check mt-1">
-                  <input class="form-check-input" type="checkbox" id="ai_clear_key" name="clear_key">
-                  <label class="form-check-label small text-danger" for="ai_clear_key">امسح المفتاحَ المحفوظ</label>
+              <div class="settings-field">
+                <label class="form-label" for="ai_threshold">حدُّ الثقة الذي يُستدعى عنده الخارجيّ (0–1)</label>
+                {# unlocalize: الفاصلةُ العشريّة العربيّة («0,4») يرفضها حقلُ الرقم فيظهر فارغاً والقيمةُ محفوظة #}
+                <input type="number" step="0.05" min="0" max="1" class="form-control settings-number" id="ai_threshold"
+                       name="low_confidence_threshold" value="{{ ai_settings.low_confidence_threshold|unlocalize }}">
+                {% field_error 'low_confidence_threshold' 'ai_threshold' %}
+              </div>
+            </fieldset>
+            <fieldset class="settings-group">
+              <legend>الخدمة</legend>
+              <div class="row g-3">
+                <div class="col-md-5">
+                  <label class="form-label" for="ai_provider">المزوّد</label>
+                  <select class="form-select" id="ai_provider" name="provider">
+                    {% for val, label in ai_settings.PROVIDER_CHOICES %}
+                      <option value="{{ val }}" {% if ai_settings.provider == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
                 </div>
-              {% endif %}
-            </div>
-            <div class="col-12">
-              <button type="submit" class="btn btn-primary"><i class="bi bi-check2 ms-1"></i> حفظ</button>
+                <div class="col-md-7">
+                  <label class="form-label" for="ai_endpoint">عنوانُ الخدمة</label>
+                  <input type="url" class="form-control" id="ai_endpoint" name="azure_endpoint" dir="ltr"
+                         value="{{ ai_settings.azure_endpoint }}" placeholder="https://…">
+                </div>
+                <div class="col-md-7">
+                  <label class="form-label" for="ai_key">المفتاح</label>
+                  {# حالةُ المفتاح نصٌّ دائمٌ تحت الحقل — كانت عنصرَ placeholder عربيّاً في حقلٍ LTR يختفي مع أوّل حرف #}
+                  <input type="password" class="form-control" id="ai_key" name="azure_key" dir="ltr"
+                         autocomplete="new-password" aria-describedby="ai_key_state">
+                  <div class="settings-help" id="ai_key_state">{% if ai_settings.azure_key %}<i class="bi bi-check2-circle" aria-hidden="true"></i> مفتاحٌ محفوظ — اتركه فارغاً للإبقاء عليه.{% else %}لا مفتاحَ محفوظ.{% endif %}</div>
+                  {% if ai_settings.azure_key %}
+                    <div class="form-check settings-danger-check">
+                      <input class="form-check-input" type="checkbox" id="ai_clear_key" name="clear_key">
+                      <label class="form-check-label text-danger" for="ai_clear_key">امسح المفتاحَ المحفوظ</label>
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            </fieldset>
+            <div class="settings-actions">
+              <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> حفظ</button>
             </div>
           </form>
         </div>
-      </div>
+      </section>
     </div>
 
   </div>
 </div>
+{% endwith %}
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/settings_hub.js' %}?v=20260913"></script>
+<script src="{% static 'js/lx_tabs.js' %}?v=20261112-list1"></script>
+<script src="{% static 'js/settings_hub.js' %}?v=20261119-pages"></script>
 {% endblock %}

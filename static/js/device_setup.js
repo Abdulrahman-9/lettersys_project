@@ -14,7 +14,8 @@
   function reveal(panel, trigger) {
     panel.hidden = false;
     if (trigger) trigger.setAttribute('aria-expanded', 'true');
-    panel.querySelector('h2')?.focus();
+    // عنوانُ الدليل h4 داخل خطوته (h2 المسار ثمّ h3 الخطوة) — التركيزُ عليه كما كان
+    panel.querySelector('h2, h3, h4')?.focus();
     panel.scrollIntoView({ block: 'nearest', behavior: 'auto' });
   }
 
@@ -63,8 +64,9 @@
       : 'إن لم تظهر نافذة التثبيت، استخدم خيار تثبيت الموقع من قائمة المتصفح كما هو موضح أدناه. عدم ظهورها لا يعني أن النظام لا يعمل.';
   });
 
+  // الحالةُ في data-tone لا في أصناف اللون: الورقةُ ترسم لونَها وأيقونتَها معاً، وعقدةُ الخطوة تقرأها (:has)
   function status(element, tone, message) {
-    element.className = `alert alert-${tone} mt-3`;
+    element.dataset.tone = tone;
     element.textContent = message;
   }
 

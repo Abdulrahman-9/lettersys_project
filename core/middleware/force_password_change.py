@@ -20,6 +20,8 @@ class FirstLoginPasswordChangeMiddleware:
                 allowed_paths = {
                     reverse('password_change'),
                     reverse('logout'),
+                    # عاملُ الخدمة يجلب صفحةَ الانقطاع عند التثبيت: لو حُوِّلت لخُزِّنت صفحةُ كلمة المرور مكانَها
+                    reverse('offline'),
                 }
                 asset_paths = (
                     urlsplit(settings.STATIC_URL).path,

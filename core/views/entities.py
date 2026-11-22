@@ -414,20 +414,7 @@ def entity_create(request):
     else:
         form = EntityForm()
     return render(request, "core/entity_form.html",
-                  {"form": form, "is_edit": False, **_form_sidebar_context()})
-
-
-def _form_sidebar_context():
-    return {
-        "total_entities": Entity.objects.count(),
-        "recent_entities": list(Entity.objects.order_by("-id").values_list("name", flat=True)[:5]),
-        "suggested_entities": [],
-        "type_counts": {
-            "issuer": Entity.objects.filter(etype="issuer").count(),
-            "receiver": Entity.objects.filter(etype="receiver").count(),
-            "both": Entity.objects.filter(etype="both").count(),
-        },
-    }
+                  {"form": form, "is_edit": False})
 
 
 @staff_required
@@ -459,7 +446,6 @@ def entity_edit(request, pk):
             "is_edit": True,
             "editing_entity": entity,
             "back_url": _entity_back(request, entity),
-            **_form_sidebar_context(),
         },
     )
 
@@ -523,7 +509,10 @@ def entity_set_kind(request):
     selected = request.POST.getlist("selected")
 
     if kind not in KINDS:
-        messages.error(request, "تبويب غير معروف.")
+        # لا يُعاد نصُّ الطلب في الرسالة: هو مدخلُ مستخدم
+        messages.error(request, "لم يُنقل شيء: التبويبُ المطلوب ليس من تبويبات الأضابير (%s). "
+                                "أعد تحميل الصفحة ثمّ اختره من أزرار «نقل إلى:» أعلى القائمة."
+                                % "، ".join(KIND_LABELS[k] for k in KINDS))
         return redirect("entity_list")
     if not selected:
         messages.info(request, "لم يتم تحديد أي جهة.")

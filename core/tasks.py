@@ -383,54 +383,18 @@ def scheduled_backup():
 
     فصار ثلاثة أجزاء: القاعدة مشفَّرةً، وملفّات الإعداد مشفَّرةً، ومرآةً
     تدريجيّةً للوسائط وأوزان النماذج. فشلُ جزءٍ لا يُسقط البقيّة — نسخةٌ
-    ناقصةٌ خيرٌ من لا شيء، والتقرير يقول أيّها نقص.
+    ناقصةٌ خيرٌ من لا شيء، والتقرير يقول أيّها نقص. الأجزاءُ في ``backup_service.run_full_backup``
+    — المسارُ نفسُه لزرّ «النسخة الآن» (11-22)؛ هنا الموعدُ و``last_run_at`` وحدهما.
     """
     from .models import BackupSettings
-    from .backup_service import (
-        create_encrypted_config_backup,
-        create_encrypted_pg_backup,
-        default_backup_dir,
-        encryption_key_status,
-        mirror_tree,
-        prune_old_backups,
-    )
+    from .backup_service import run_full_backup
 
     cfg = BackupSettings.get()
     now = timezone.localtime()
     if not _backup_is_due(cfg, now):
         return {'skipped': True}
 
-    directory = default_backup_dir()
-    report = {}
-
-    try:
-        report['database'] = str(create_encrypted_pg_backup())
-    except Exception as exc:
-        logger.exception('[scheduled_backup] فشل نسخ القاعدة: %s', exc)
-        report['database_error'] = str(exc)
-
-    try:
-        config_path = create_encrypted_config_backup()
-        report['config'] = str(config_path) if config_path else None
-    except Exception as exc:
-        logger.exception('[scheduled_backup] فشل نسخ ملفّات الإعداد: %s', exc)
-        report['config_error'] = str(exc)
-
-    for label, source in (('media', settings.MEDIA_ROOT),
-                          ('models', settings.BASE_DIR / 'var' / 'models')):
-        try:
-            report[label] = mirror_tree(source, directory / f'{label}_mirror')
-        except Exception as exc:
-            logger.exception('[scheduled_backup] فشل مرآة %s: %s', label, exc)
-            report[f'{label}_error'] = str(exc)
-
-    # لا يُنسخ المفتاح تلقائيّاً — لكن يُنبَّه إن كان مفقوداً أو مُلقىً هنا.
-    key = encryption_key_status(directory)
-    report['encryption_key'] = key
-    if not key['exists']:
-        logger.error('[scheduled_backup] .encryption_key مفقود — النسخ المشفّرة لن تُفتح!')
-
-    report['pruned'] = prune_old_backups(directory, cfg.retention_days)
+    report = run_full_backup()
     # فشلُ نسخ القاعدة لا يُحسب تنفيذاً لليوم: تعيد المهمّةُ الساعيّة المحاولةَ.
     if 'database' in report:
         cfg.last_run_at = timezone.now()

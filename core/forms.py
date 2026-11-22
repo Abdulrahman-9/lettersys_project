@@ -89,6 +89,16 @@ class DeskFilterForm(forms.Form):
         return cleaned
 
 
+class TelInput(forms.TextInput):
+    """حقلُ هاتف: لوحةُ الأرقام على الهاتف، ولا تحقّقَ من الشكل (الأرقامُ المحلّيّة متنوّعة)."""
+    input_type = "tel"
+
+
+#: بياناتُ الجهة لا بياناتُ الكاتب: الإكمالُ التلقائيّ كان سيملأ بريدَه وهاتفَه هو
+_ENTITY_TEXT = {"class": "form-control", "autocomplete": "off"}
+_ENTITY_SWITCH = {"class": "form-check-input", "role": "switch"}
+
+
 class EntityForm(forms.ModelForm):
     class Meta:
         model = Entity
@@ -117,15 +127,18 @@ class EntityForm(forms.ModelForm):
             "kind": "أنت تختاره — لا يُستنتج من الاسم. يحدّد تبويبَ الجهة في صفحة الأضابير.",
         }
         widgets = {
-            "name":           forms.TextInput(attrs={"class": "form-control"}),
-            "code":           forms.TextInput(attrs={"class": "form-control"}),
+            "name":           forms.TextInput(attrs=_ENTITY_TEXT),
+            "code":           forms.TextInput(attrs=_ENTITY_TEXT),
             "kind":           forms.Select(attrs={"class": "form-select"}),
-            "email":          forms.EmailInput(attrs={"class": "form-control", "dir": "ltr", "placeholder": "example@domain.com"}),
-            "email_cc":       forms.TextInput(attrs={"class": "form-control", "dir": "ltr", "placeholder": "addr1@domain.com, addr2@domain.com"}),
-            "phone":          forms.TextInput(attrs={"class": "form-control", "dir": "ltr"}),
-            "address":        forms.TextInput(attrs={"class": "form-control"}),
-            "contact_person": forms.TextInput(attrs={"class": "form-control"}),
+            "email":          forms.EmailInput(attrs={**_ENTITY_TEXT, "dir": "ltr", "placeholder": "example@domain.com"}),
+            "email_cc":       forms.TextInput(attrs={**_ENTITY_TEXT, "dir": "ltr", "placeholder": "addr1@domain.com, addr2@domain.com"}),
+            "phone":          TelInput(attrs={**_ENTITY_TEXT, "dir": "ltr", "inputmode": "tel"}),
+            "address":        forms.TextInput(attrs=_ENTITY_TEXT),
+            "contact_person": forms.TextInput(attrs=_ENTITY_TEXT),
             "notes":          forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "is_active":         forms.CheckboxInput(attrs=_ENTITY_SWITCH),
+            "notify_on_receive": forms.CheckboxInput(attrs=_ENTITY_SWITCH),
+            "notify_on_send":    forms.CheckboxInput(attrs=_ENTITY_SWITCH),
         }
 
     #: خيارُ «اقترح من الاسم» في نموذج الإنشاء وحده — القرارُ يبقى للمالك:

@@ -3,13 +3,12 @@
 
 تُطلقها صفحةُ «استعادة نسخة النظام» (``/books/restore-system/``) بعد تأكيدٍ مكتوب، وتُستطلَع
 حالتُها من ``restore_job_status`` كمهامّ الدمج. لا تكتب في القاعدة الحيّة شيئاً؛ والتبديلُ
-إلى القاعدة الجديدة سطرٌ في ``.env`` يكتبه المالكُ بيده (``DB_NAME=…``) ثمّ إعادةُ تشغيل الخادم.
+إلى القاعدة الجديدة أمرٌ يشغّله المالكُ (``use_restored_database``) ثمّ إعادةُ تشغيل الخادم.
 
     python manage.py restore_system_backup --job 12
 """
 import logging
 import os
-import subprocess
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -47,15 +46,9 @@ class Command(BaseCommand):
             summary = restore_into_new_database(
                 params.get('file', ''), params.get('target', ''), report=lambda phase: job.touch(phase=phase))
         except (RestoreRefused, bv.VerifyError) as exc:
+            # فشلُ pg_restore يصل RestoreRefused من الخدمة بعد إزالة القاعدة الناقصة (11-22)
             fail(str(exc))
             raise CommandError(str(exc))
-        except subprocess.CalledProcessError as exc:
-            # تفصيلُ pg_restore في سجلّ الخادم وحدَه — قد يحمل مساراتٍ مؤقّتة؛ الصفحةُ تأخذ الرمز.
-            logger.error('restore_system_backup job=%s pg_restore rc=%s stderr=%s',
-                         job.pk, exc.returncode, (exc.stderr or b'')[-4000:])
-            fail(f'توقّفت الاستعادةُ برمز {exc.returncode} — التفصيلُ في سجلّ الخادم. '
-                 f'القاعدةُ «{params.get("target")}» نصفُ مستعادة: لا تبدّل إليها، واحذفها بيدك.')
-            raise CommandError('pg_restore failed')
         except Exception as exc:
             fail(f'فشلت الاستعادة: {type(exc).__name__} — التفصيلُ في سجلّ الخادم.')
             logger.exception('restore_system_backup job=%s failed', job.pk)
@@ -64,4 +57,4 @@ class Command(BaseCommand):
         RestoreJob.objects.filter(pk=job.pk).update(
             status=RestoreJob.STATUS_DONE, finished_at=timezone.now(), phase='اكتملت', summary=summary)
         self.stdout.write(self.style.SUCCESS(
-            f"اكتملت: {summary['books']} كتاباً في «{summary['target']}». للتبديل: {summary['env_line']} ثمّ أعد تشغيل الخادم."))
+            f"اكتملت: {summary['books']} كتاباً في «{summary['target']}». للتبديل: {summary['command']} ثمّ أعد تشغيل الخادم."))

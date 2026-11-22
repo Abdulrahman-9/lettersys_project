@@ -56,10 +56,8 @@
       var count = Number(account.dataset.exceptions || 0);
       var message = 'تغيير القسم يحدّد ما يراه الحساب' +
         (count ? '، ويُلغي استثناءاته (' + count + ')' : '') + '. ويُسجَّل ذلك في سجلّ الحركات.';
-      var ask = typeof window.confirmDelete === 'function'
-        ? window.confirmDelete({ title: 'تغيير القسم', message: message, okText: 'غيّر القسم', danger: false })
-        : Promise.resolve(window.confirm(message));
-      ask.then(function (ok) {
+      // حواريّةُ التطبيق الواحدة (app.js، تُحمَّل في كلّ صفحة) لا حوارُ المتصفّح الأصليّ — وهي نفسُها تتراجع إن غاب Bootstrap
+      window.confirmDelete({ title: 'تغيير القسم', message: message, okText: 'غيّر القسم', danger: false }).then(function (ok) {
         if (!ok) return;
         account.querySelector('input[name="confirm_department"]').value = '1';
         account.dataset.confirmed = '1';
