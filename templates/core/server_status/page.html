@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}حالة الخادم{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/server_status.css' %}?v=20261122-status">
+{% endblock %}
+
+{% block content %}
+<div class="ss-page" dir="rtl" data-api-url="{% url 'server_status_api' %}" data-contact-url="{% url 'server_contact_api' %}">
+
+  <header class="ss-head">
+    <span class="ss-crumb">الإعدادات / حالة الخادم</span>
+    <div class="ss-title-row">
+      <h1>حالة الخادم</h1>
+      <a class="ss-btn" href="{% url 'server_guide' %}">{% include 'core/server_status/_icon.html' with name='book' %}الدليل</a>
+    </div>
+    <p class="ss-lead">أوّلُ ما تراه حين تفتح النظام على حاسوب الخادم. كلُّ بطاقةٍ تقول ما حالُها، وماذا تفعل إن احتاجت.</p>
+  </header>
+
+  {% if autostart.state == 'warn' or autostart.state == 'bad' %}
+  <section class="ss-section ss-firstrun" aria-labelledby="ssAutoH">
+    <div class="ss-firstrun-head">
+      <span class="ss-ico" data-state="warn">{% include 'core/server_status/_icon.html' with name='power' %}</span>
+      <div>
+        <h2 id="ssAutoH">النظام لا يبدأ وحده مع الحاسوب</h2>
+        <p>إن أُعيد تشغيل الحاسوب أو انقطعت الكهرباء فلن يعمل النظام حتّى يشغّله أحدٌ يدويّاً. اضبطه مرّةً واحدة، في دقيقة:</p>
+      </div>
+    </div>
+    <ol class="ss-steps">
+      <li><span class="ss-step-n" aria-hidden="true">1</span><div><b>انسخ الأمر</b>
+        <div class="ss-code-row"><code class="ss-code" dir="ltr">{{ autostart_command }}</code>
+          <button type="button" class="ss-btn ss-btn-primary" data-copy="{{ autostart_command }}">{% include 'core/server_status/_icon.html' with name='copy' %}<span data-copy-label>نسخ</span></button></div></div></li>
+      <li><span class="ss-step-n" aria-hidden="true">2</span><div><b>افتح PowerShell بصلاحيّة المسؤول</b>
+        <p>زرّ «ابدأ» ← اكتب PowerShell ← زرّ الفأرة الأيمن على النتيجة ← «تشغيل كمسؤول» ← «نعم».</p></div></li>
+      <li><span class="ss-step-n" aria-hidden="true">3</span><div><b>الصق الأمر واضغط Enter</b>
+        <p>ينجح حين تظهر العبارة <span class="ss-mono" dir="ltr">[SC] ChangeServiceConfig SUCCESS</span>.</p></div></li>
+      <li><span class="ss-step-n" aria-hidden="true">4</span><div class="ss-step-last"><b>عُد إلى هنا وتحقّق</b>
+        <button type="button" class="ss-btn" data-refresh>{% include 'core/server_status/_icon.html' with name='refresh' %}<span data-refresh-label>أعِد الفحص</span></button></div></li>
+    </ol>
+    <p class="ss-note">أسهلُ من ذلك: افتح «لوحة تشغيل LetterSys» من سطح مكتب الخادم واضغط «ضبط التشغيل التلقائيّ» ثمّ «نعم».</p>
+  </section>
+  {% endif %}
+
+  <section class="ss-summary" data-state="{{ summary.state }}" aria-labelledby="ssSumH">
+    <span class="ss-summary-ico" data-state="{{ summary.state }}">{% if summary.state == 'ok' %}{% include 'core/server_status/_icon.html' with name='check' %}{% else %}{% include 'core/server_status/_icon.html' with name='alert' %}{% endif %}</span>
+    <div class="ss-summary-text">
+      <h2 id="ssSumH" data-summary-headline>{{ summary.headline }}</h2>
+      <p>بدأ النظامُ {{ started }}{% if release %} · النسخة <span class="ss-mono" dir="ltr">{{ release.head|slice:":7" }}</span>{% endif %}</p>
+      <p class="ss-checked"><span data-checked>آخرُ فحص: الآن</span> · يتحدّث وحده كلّ 30 ثانية</p>
+    </div>
+    {% if official_url %}
+    <div class="ss-linkbox">
+      <div class="ss-linkbox-text">
+        <span class="ss-linkbox-label">رابطُ النظام للموظّفين</span>
+        <span class="ss-mono" dir="ltr">{{ official_url }}</span>
+      </div>
+      <button type="button" class="ss-icon-btn" data-copy="{{ official_url }}" aria-label="نسخ الرابط">{% include 'core/server_status/_icon.html' with name='copy' %}</button>
+    </div>
+    {% endif %}
+  </section>
+  <p class="visually-hidden" role="status" aria-atomic="true" data-announce></p>
+
+  <div id="ssCards" data-cards>{% include 'core/server_status/_cards.html' %}</div>
+
+  <section class="ss-section" aria-labelledby="ssPanelH">
+    <h2 id="ssPanelH">التشغيلُ وإعادةُ التشغيل</h2>
+    <p>من <b>«لوحة تشغيل LetterSys»</b> على سطح مكتب هذا الحاسوب. تعمل حتّى لو كان النظام متوقّفاً، وفيها «تشغيل النظام» و«إعادة التشغيل» و«ضبط التشغيل التلقائيّ» و«تقرير مشكلة».</p>
+    <p>السجلّاتُ والمهامُّ المجدولة في <a class="ss-link" href="{% url 'system_ops' %}">«تشغيل النظام»</a>.</p>
+  </section>
+
+  <section class="ss-section" aria-labelledby="ssContactH">
+    <h2 id="ssContactH">من يُبلَّغ حين يتوقّف الخادم؟</h2>
+    <p>يظهر هذا للموظّف حين لا يصل إلى الخادم، فيعرف بمن يتّصل.</p>
+    <form class="ss-form" data-contact-form novalidate>
+      {% csrf_token %}
+      <div class="ss-field">
+        <label for="ssName">الاسم</label>
+        <input id="ssName" name="name" type="text" maxlength="80" value="{{ notify_name }}" autocomplete="name">
+      </div>
+      <div class="ss-field">
+        <label for="ssPhone">الرقم الداخليّ أو الهاتف</label>
+        <input id="ssPhone" name="phone" type="tel" inputmode="tel" maxlength="40" value="{{ notify_phone }}" placeholder="مثلاً 1023" autocomplete="tel" aria-describedby="ssContactMsg">
+      </div>
+      <button type="submit" class="ss-btn ss-btn-primary" data-contact-save>حفظ</button>
+      <p class="ss-msg" id="ssContactMsg" role="status" data-contact-msg></p>
+    </form>
+  </section>
+
+  <section class="ss-section" aria-labelledby="ssGuideH">
+    <div class="ss-title-row">
+      <h2 id="ssGuideH">إذا حدثت مشكلة</h2>
+      <a class="ss-link" href="{% url 'server_guide' %}">الدليل كاملاً</a>
+    </div>
+    <div class="ss-quick">
+      <a href="{% url 'server_guide' %}#unreachable">الموظّفون لا يصلون إلى النظام</a>
+      <a href="{% url 'server_guide' %}#bad-request">تظهر رسالة «Bad Request (400)»</a>
+      <a href="{% url 'server_guide' %}#slow">النظام بطيء أو لا يستجيب</a>
+      <a href="{% url 'server_guide' %}#power-cut">بعد انقطاع الكهرباء</a>
+    </div>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/server_status.js' %}?v=20261122-status" defer></script>
+{% endblock %}

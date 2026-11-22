@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}دليل التشغيل والمشكلات{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/server_status.css' %}?v=20261122-status">
+{% endblock %}
+
+{% block content %}
+<div class="ss-page" dir="rtl">
+  <header class="ss-head">
+    <span class="ss-crumb">{% if can_view_status %}<a href="{% url 'server_status' %}">حالة الخادم</a> / {% endif %}الدليل</span>
+    <div class="ss-title-row"><h1>دليل التشغيل والمشكلات</h1></div>
+    <p class="ss-lead">ابحث عمّا تراه أمامك. لكلّ مشكلةٍ معناها وخطواتُها بالترتيب، وما تفعله إن لم تنجح. نسخةٌ من هذا الدليل محفوظةٌ على حاسوب الخادم، فتفتحها «لوحة التشغيل» حتّى لو كان النظام متوقّفاً.</p>
+  </header>
+  {% include 'core/server_status/_guide_body.html' with base_url='' %}
+</div>
+{% endblock %}

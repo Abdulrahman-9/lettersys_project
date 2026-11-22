@@ -84,7 +84,8 @@ def nav_gates(request):
     from core.scoping import (can_archive, can_enter_book, can_manage_accounts, can_manage_departments, can_open_trash,
                               can_manage_mail, can_operate_mail,
                               can_manage_system, can_restore_system, can_use_desk, can_use_ledger,
-                              can_use_my_desk, can_use_system_admin, can_view_audit, can_view_reports)
+                              can_use_my_desk, can_use_system_admin, can_view_audit, can_view_reports,
+                              can_view_server_status)
     profile = getattr(user, 'profile', None)
     must_change = bool(profile and profile.must_change_password)
     system_admin = can_use_system_admin(user) and not must_change
@@ -129,6 +130,8 @@ def nav_gates(request):
         'ops_failures': ops_failures,
         # استعادةُ نسخة النظام إلى قاعدةٍ جديدة — حارسُ صفحتها نفسُه (قرارُ المالك 2026‑10‑07، البند 3)
         'restore_system': can_restore_system(user),
+        # «حالة الخادم» في قائمة الحساب — حارسُ صفحتها نفسُه (اختيارُ المالك 2026‑11‑19)
+        'server_status': can_view_server_status(user),
         'role_label': role_label,
         'department_name': department.name if department else '',
     }}

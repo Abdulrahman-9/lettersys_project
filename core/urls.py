@@ -8,6 +8,7 @@ from . import logging_views
 from . import api as api_views
 from . import reservation_api
 from .devices import urls as device_urls, views as device_views
+from .server_status import views as server_status_views
 from .views import system_admin
 from core.views import device_setup as device_setup_views
 from django.conf import settings
@@ -145,6 +146,11 @@ urlpatterns = [
     path("settings/network/",                    device_views.network_page,             name="network_settings"),
     path("devices/",                             include(device_urls.page_urlpatterns)),
     path("api/devices/",                         include(device_urls.api_urlpatterns)),
+    # ─── حالة الخادم (2026-11-19): للمدير العامّ، والدليلُ لكلّ مستخدم ─────────────────────────
+    path("settings/server/",                     server_status_views.status_page,       name="server_status"),
+    path("settings/server/guide/",               server_status_views.guide_page,        name="server_guide"),
+    path("api/server/status/",                   server_status_views.status_api,        name="server_status_api"),
+    path("api/server/contact/",                  server_status_views.contact_api,       name="server_contact_api"),
     path("entities/", views.entity_list, name="entity_list"),
     path("entities/merge/", views.entity_merge, name="entity_merge"),
     path("entities/<int:pk>/", views.entity_detail, name="entity_detail"),

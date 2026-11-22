@@ -317,9 +317,14 @@ class OpsCase(TestCase):
         self.backups = Path(tmp.name) / 'backups'
         self.logs.mkdir()
         self.backups.mkdir()
-        patcher = patch('core.backup_service.default_backup_dir', return_value=self.backups)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        # newest_backup يقرأ المجلّدَ المضبوط بلا إنشاء (configured_backup_dir)، ووقتُ تشغيل الحاسوب «غيرُ
+        # معروف» هنا فتبقى قاعدةُ 26 ساعة — حكمُ ما بعد التشغيل في core.server_status.tests.BackupTests
+        for name, value in (('core.backup_service.default_backup_dir', self.backups),
+                            ('core.backup_service.configured_backup_dir', self.backups),
+                            ('core.system_ops.system_booted_at', None)):
+            patcher = patch(name, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         settings_patch = override_settings(OPS_LOG_DIR=self.logs)
         settings_patch.enable()
         self.addCleanup(settings_patch.disable)

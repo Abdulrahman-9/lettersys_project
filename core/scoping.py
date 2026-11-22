@@ -240,6 +240,12 @@ def can_manage_devices(user) -> bool:
     return is_privileged(user)
 
 
+def can_view_server_status(user) -> bool:
+    """«حالة الخادم» وشريطُها في اللوحة وجهةُ التبليغ — للمدير العامّ وحده (اختيارُ المالك 2026‑11‑19):
+    إعادةُ التشغيل تقطع عملَ الجميع فتبقى بيد شخصٍ واحد. والدليلُ مفتوحٌ لكلّ مستخدم."""
+    return is_privileged(user)
+
+
 def can_restore_system(user) -> bool:
     """أيحقّ له **استعادةُ نسخةٍ مشفّرةٍ من هذا النظام** إلى قاعدةٍ جديدة
     (``/books/restore-system/``)؟ — لمدير النظام وحدَه (ملاحظةُ التكليف 2026‑10‑07).

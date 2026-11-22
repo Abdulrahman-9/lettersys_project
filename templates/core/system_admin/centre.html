@@ -1,7 +1,9 @@
 {% extends 'base.html' %}
-{% load ar_counts %}
+{% load ar_counts static %}
 {% block title %}مركز الأقسام{% endblock %}
+{% block extra_css %}{% if server_strip %}<link rel="stylesheet" href="{% static 'css/server_status.css' %}?v=20261122-status">{% endif %}{% endblock %}
 {% block content %}
+{% if server_strip %}{% include 'core/server_status/_strip.html' %}{% endif %}
 <div class="sa-page">
   <div class="sa-head">
     <div><h1>مركز الأقسام</h1><p>كلُّ قسمٍ بكتبه ونشاطه. ادخل قسماً لتعمل داخله.</p></div>

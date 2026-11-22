@@ -261,6 +261,7 @@
               {% if not nav.password_change_required %}
               <li><a class="dropdown-item" href="{% url 'password_change' %}"><i class="bi bi-key" aria-hidden="true"></i>تغيير كلمة المرور</a></li>
               <li><a class="dropdown-item" href="{% url 'network_settings' %}"><i class="bi bi-pc-display" aria-hidden="true"></i>هذا الجهاز</a></li>
+              {% if nav.server_status %}<li><a class="dropdown-item" href="{% url 'server_status' %}"><i class="bi bi-hdd-rack" aria-hidden="true"></i>حالة الخادم</a></li>{% endif %}
               <li><hr class="dropdown-divider"></li>
               {% endif %}
               <li>

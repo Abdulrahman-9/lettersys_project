@@ -65,11 +65,15 @@ def system_centre_view(request):
     picked = system_centre.filter_rows(rows, show=request.GET.get('show', ''), query=query, expanded=expanded)
     jobs = system_ops.job_statuses(now)
     backup = jobs[0]
+    # «حالة الخادم» أوّلُ ما يراه المدير العامّ: هذه صفحتُه بعد الدخول (مقيسٌ 11-19)، لا اللوحة
+    from core.scoping import can_view_server_status
+    from core.server_status.checks import strip_summary
     return render(request, 'core/system_admin/centre.html', {
         'rows': picked['rows'], 'matched': picked['matched'], 'show': picked['show'],
         'filters': picked['filters'], 'query': query, 'expanded': expanded, 'orphan': orphan,
         'backup': backup, 'backup_hour': _backup_hour(), 'failing': sum(1 for j in jobs if j['state'] == system_ops.STALE),
         'disk': system_ops.disk_percent(),
+        'server_strip': strip_summary() if can_view_server_status(request.user) else None,
     })
 
 

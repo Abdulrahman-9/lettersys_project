@@ -1,0 +1,115 @@
+{% comment %}نصُّ الدليل — المصدرُ الوحيد: يُضمَّن في صفحة التطبيق وفي النسخة المحفوظة على الخادم
+(export_server_guide) التي تفتحها لوحةُ التشغيل حين يتوقّف النظام. لكلّ مشكلةٍ مرسىً تربطه بطاقاتُ الحالة.
+base_url فارغٌ داخل التطبيق، وهو الرابطُ الرسميّ في النسخة المحفوظة.{% endcomment %}
+{% url 'server_status' as status_path %}{% url 'network_settings' as device_path %}{% url 'backup_database' as backup_path %}
+<div class="ss-guide-grid">
+
+  <article class="ss-guide-item" id="unreachable">
+    <h2>الموظّفون لا يصلون إلى النظام</h2>
+    <p class="ss-guide-what">الخادم متوقّف، أو حاسوبُ الخادم مطفأ، أو الشبكة منقطعة.</p>
+    <ol>
+      <li>على حاسوب الخادم افتح «لوحة تشغيل LetterSys» من سطح المكتب.</li>
+      <li>إن قالت «النظام متوقّف» فاضغط «تشغيل النظام» وانتظر نصف دقيقة.</li>
+      <li>جرّب من حاسوب موظّف الرابط <span class="ss-mono" dir="ltr">{{ official_url|default:"http://follow2:1312" }}</span>.</li>
+    </ol>
+    <p class="ss-guide-else"><b>إن لم ينجح:</b> اضغط «تقرير مشكلة» في اللوحة وأرسل الملفّ للدعم.</p>
+  </article>
+
+  <article class="ss-guide-item" id="bad-request">
+    <h2>تظهر رسالة «Bad Request (400)»</h2>
+    <p class="ss-guide-what">الرابطُ المكتوب ليس من الروابط التي يقبلها النظام. يحدث غالباً بعد تغيّر عنوان الشبكة.</p>
+    <ol>
+      <li>ادخل بالاسم <span class="ss-mono" dir="ltr">{{ official_url|default:"http://follow2:1312" }}</span> لا بالأرقام.</li>
+      <li>احذف الاختصاراتِ القديمة التي تبدأ بأرقام، وأنشئ اختصاراً بالاسم.</li>
+    </ol>
+    <p class="ss-guide-else"><b>إن ظهرت مع الاسم أيضاً:</b> تغيّر اسمُ الخادم أو إعدادُه. أبلغ الدعم.</p>
+  </article>
+
+  <article class="ss-guide-item" id="slow">
+    <h2>النظام بطيء أو لا يستجيب</h2>
+    <p class="ss-guide-what">طلبٌ ثقيل يشغل الخادم، أو علِق.</p>
+    <ol>
+      <li>انتظر دقيقة؛ المسحُ الكبير يأخذ وقتاً.</li>
+      <li>من «لوحة تشغيل LetterSys» اضغط «إعادة التشغيل». يتوقّف عند الجميع نحو عشر ثوانٍ ثمّ يعود.</li>
+    </ol>
+    <p class="ss-guide-else"><b>إن تكرّر في اليوم نفسه:</b> اضغط «تقرير مشكلة».</p>
+  </article>
+
+  <article class="ss-guide-item" id="disk">
+    <h2>القرص يكاد يمتلئ</h2>
+    <p class="ss-guide-what">قاعدةُ البيانات على القرص C:. إن امتلأ توقّف النظام عند الجميع.</p>
+    <ol>
+      <li>أفرغ سلّة المحذوفات، واحذف من «التنزيلات» ما تعرف أنّك لا تحتاجه.</li>
+      <li>من «إعدادات ويندوز» ← «النظام» ← «التخزين» شغّل «تنظيف القرص» للملفّات المؤقّتة.</li>
+      <li>لا تحذف شيئاً داخل مجلّد PostgreSQL ولا داخل <span class="ss-mono" dir="ltr">D:\lettersys</span>.</li>
+    </ol>
+    <p class="ss-guide-else"><b>إن بقي أقلّ من 10%:</b> اطلب نقل قاعدة البيانات إلى القرص D:.</p>
+  </article>
+
+  <article class="ss-guide-item" id="power-cut">
+    <h2>بعد انقطاع الكهرباء</h2>
+    <p class="ss-guide-what">يبدأ النظام وحده حين يعمل حاسوبُ الخادم، ما دام «التشغيل مع الحاسوب» مفعّلاً.</p>
+    <ol>
+      <li>شغّل حاسوب الخادم وانتظر دقيقتين.</li>
+      <li>افتح «لوحة تشغيل LetterSys»: إن قالت «يعمل» فلا شيء عليك.</li>
+      <li>إن قالت «متوقّف» فاضغط «تشغيل النظام».</li>
+    </ol>
+    <p class="ss-guide-else"><b>إن لم يبدأ:</b> اضغط «تقرير مشكلة».</p>
+  </article>
+
+  <article class="ss-guide-item" id="db">
+    <h2>لا يُفتح الدخول، أو تظهر «Server Error (500)»</h2>
+    <p class="ss-guide-what">قاعدةُ البيانات متوقّفة، أو حدث خطأٌ داخليّ.</p>
+    <ol>
+      <li>في «لوحة تشغيل LetterSys» انظر سطر «قاعدة البيانات».</li>
+      <li>اضغط «تشغيل النظام»؛ يشغّل قاعدة البيانات أوّلاً.</li>
+    </ol>
+    <p class="ss-guide-else"><b>إن بقي الخطأ:</b> اضغط «تقرير مشكلة».</p>
+  </article>
+
+  <article class="ss-guide-item" id="https">
+    <h2>«الاتّصال الآمن» متوقّف</h2>
+    <p class="ss-guide-what">خدمةُ الرابط الآمن مثبّتةٌ ولا تعمل. النظام يعمل بالرابط العاديّ، لكن لا تظهر للموظّف صفحةُ «لا اتّصال» حين يتوقّف الخادم.</p>
+    <ol>
+      <li>لا تحتاج شيئاً عاجلاً: الموظّفون يعملون بالرابط <span class="ss-mono" dir="ltr">{{ official_url|default:"http://follow2:1312" }}</span>.</li>
+      <li>يُضبط الرابطُ الآمن على اسم الخادم في الخطوة القادمة.</li>
+    </ol>
+  </article>
+
+  <article class="ss-guide-item" id="backup">
+    <h2>النسخةُ الاحتياطيّة متأخّرة أو غير موجودة</h2>
+    <p class="ss-guide-what">تُؤخذ نسخةُ قاعدة البيانات بعد تشغيل الحاسوب كلّ يوم. إن لم تُؤخذ فقد يضيع عملُ اليوم إن حدث عطل.</p>
+    <ol>
+      <li>افتح <a href="{{ base_url }}{{ backup_path }}">«النسخ الاحتياطيّ»</a> وخذ نسخةً جديدة من هناك.</li>
+      <li>تأكّد أنّ القرص D: موصولٌ وفيه مساحة.</li>
+    </ol>
+    <p class="ss-guide-else"><b>إن فشلت النسخة:</b> اضغط «تقرير مشكلة».</p>
+  </article>
+
+  <article class="ss-guide-item" id="scanner">
+    <h2>الماسح لا يعمل من حاسوب موظّف</h2>
+    <p class="ss-guide-what">وكيلُ المسح على ذلك الحاسوب غيرُ مثبّت، أو لا يعرف رابطَ النظام الجديد.</p>
+    <ol>
+      <li>افتح <a href="{{ base_url }}{{ device_path }}">«هذا الجهاز»</a> من قائمة الحساب.</li>
+      <li>إن قال «وكيل المسح: لا يثق» فشغّل LetterSys-Setup من المجلّد المشترك مرّةً.</li>
+      <li>جرّب «مسح تجريبيّ» من قسم الماسح.</li>
+    </ol>
+    <p class="ss-guide-else"><b>إن لم ينجح:</b> أبلغ المسؤول باسم الجهاز.</p>
+  </article>
+
+  <article class="ss-guide-item" id="autostart">
+    <h2>«التشغيل مع الحاسوب» غير مفعّل</h2>
+    <p class="ss-guide-what">لن يبدأ النظام وحده بعد إعادة تشغيل الحاسوب أو انقطاع الكهرباء.</p>
+    <ol>
+      <li>من «لوحة تشغيل LetterSys» اضغط «ضبط التشغيل التلقائيّ» ثمّ «نعم».</li>
+      <li>أو اتّبع الخطوات الأربع في <a href="{{ base_url }}{{ status_path }}">«حالة الخادم»</a>.</li>
+    </ol>
+  </article>
+
+  <article class="ss-guide-item ss-guide-note" id="report">
+    <h2>ما هو «تقرير مشكلة»؟</h2>
+    <p>يجمع زرُّه في «لوحة تشغيل LetterSys» حالةَ الخادم وآخرَ سجلّاته في ملفٍّ واحد على سطح المكتب، بلا كلمات مرور ولا رموز ولا محتوى كتب. أرسله للدعم كما هو.</p>
+    {% if notify_name or notify_phone %}<p><b>للتبليغ:</b> {{ notify_name }}{% if notify_phone %} · <span class="ss-mono" dir="ltr">{{ notify_phone }}</span>{% endif %}</p>{% endif %}
+  </article>
+
+</div>

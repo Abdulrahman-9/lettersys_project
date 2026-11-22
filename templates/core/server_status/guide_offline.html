@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>دليل التشغيل والمشكلات — LetterSys</title>
+{% comment %}نسخةٌ مستقلّة تفتحها «لوحة تشغيل LetterSys» من القرص حين لا يعمل النظام؛ تكتبها
+export_server_guide عند كلّ نشر. لا خطوطَ ولا ملفّاتٍ خارجيّة: كلُّ شيءٍ هنا.{% endcomment %}
+<style>
+:root{--bg:#f6f4ef;--surface:#ffffff;--surface-2:#f6f9f8;--ink:#14262b;--mute:#52656b;--line:#dfe7e5;--pri:#0f766e;--pri-soft:#e3f3f0;--pri-soft-ink:#0f5f58}
+@media (prefers-color-scheme: dark){:root{--bg:#0c1413;--surface:#13201e;--surface-2:#182826;--ink:#e4efed;--mute:#a3b6b2;--line:#283a37;--pri:#2dd4bf;--pri-soft:rgba(45,212,191,.13);--pri-soft-ink:#7fe9dc;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:16px;line-height:1.75}
+a{color:var(--pri)}a:focus-visible{outline:3px solid var(--pri);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 16px 48px;display:flex;flex-direction:column;gap:18px}
+h1{margin:0;font-size:28px}
+.lead{margin:0;color:var(--mute);max-width:70ch}
+.ss-mono{font-family:Consolas,'Cascadia Mono',monospace;font-weight:700;unicode-bidi:isolate}
+.ss-guide-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:14px}
+.ss-guide-item{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:8px}
+.ss-guide-item h2{margin:0;font-size:18px}
+.ss-guide-item ol{margin:0;padding-inline-start:22px}
+.ss-guide-what{margin:0;color:var(--mute)}
+.ss-guide-else{margin:0;padding-top:8px;border-top:1px solid var(--line);font-size:15px}
+.ss-guide-note{background:var(--pri-soft)}
+.ss-guide-note h2{color:var(--pri-soft-ink)}
+@media (max-width:480px){.ss-guide-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>دليل التشغيل والمشكلات</h1>
+  <p class="lead">نسخةٌ محفوظةٌ على حاسوب الخادم{% if generated_at %} (كُتبت {{ generated_at }}){% endif %}. حين يعود النظام تجد الدليل نفسه داخل التطبيق.</p>
+  {% include 'core/server_status/_guide_body.html' %}
+</div>
+</body>
+</html>

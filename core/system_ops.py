@@ -6,9 +6,11 @@
 """
 import re
 import shutil
+import sys
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import NamedTuple
 
 from django.conf import settings
 from django.utils import timezone
@@ -22,7 +24,37 @@ JOBS = (
     ('sessions', 'تنظيف الجلسات', 'task_clearsessions.log', 8 * 24 + 12),
     ('overdue', 'تنبيهات التأخّر', 'task_overdue.log', 72),
 )
+# حكمُ عمر النسخة — المصدرُ الوحيد (مركزُ النظام و«حالة الخادم» وشارةُ الشريط). الخادمُ يُطفأ ليلاً فتُؤخذ
+# نسخةٌ واحدة بعد كلّ تشغيل (مقيسٌ 11-19: فجوةُ 47 ساعة بعد عطلة، و143 تشغيلاً ساعيّاً «skipped»)، فالسؤال:
+# هل أُخذت نسخةٌ خلال ساعتين من تشغيل الحاسوب؟ ثمّ «26 ساعة» كالمعتاد: حاسوبٌ يبقى شغّالاً أيّاماً، أو يعود
+# من «الإقلاع السريع» فلا يتصفّر عدّادُه (مقيس: HiberbootEnabled=1)، لا يصمت حكمُه أسبوعاً (فيبل 11-19 و11-22).
 BACKUP_MAX_AGE_HOURS = 26
+BACKUP_GRACE_AFTER_BOOT = timedelta(hours=2)
+BACKUP_MAX_DAYS = 7
+_UNSET = object()
+
+
+def system_booted_at():
+    """وقتُ تشغيل الحاسوب بتوقيت النظام (``GetTickCount64``)؛ ‎None‎ خارج ويندوز."""
+    if sys.platform != 'win32':
+        return None
+    import ctypes
+    tick = ctypes.windll.kernel32.GetTickCount64
+    tick.restype = ctypes.c_ulonglong
+    return timezone.localtime() - timedelta(milliseconds=tick())
+
+
+def backup_is_late(latest, now, booted=_UNSET) -> bool:
+    """أحدثُ نسخةٍ متأخّرة؟ ``latest`` و``now`` و``booted`` بتوقيتٍ معلوم المنطقة. ``booted=None`` = غيرُ معروف."""
+    booted = system_booted_at() if booted is _UNSET else booted
+    if now - latest > timedelta(days=BACKUP_MAX_DAYS):
+        return True
+    if booted is not None:
+        if now - booted <= BACKUP_GRACE_AFTER_BOOT:
+            return False                  # بدأ الحاسوبُ للتوّ: نسخةُ التعويض لم تأخذ فرصتها
+        if latest < booted:
+            return True                   # مضت ساعتان على التشغيل ولا نسخةَ منذه
+    return now - latest > timedelta(hours=BACKUP_MAX_AGE_HOURS)
 
 # مفتاحٌ ⟵ ملفّ: الاسمُ لا يأتي من الطلب أبداً.
 LOG_TAIL_BYTES = 256 * 1024
@@ -77,40 +109,57 @@ def age_text(hours) -> str:
     return f'قبل {days} أيام' if days <= 10 else f'قبل {days} يوماً'
 
 
-def newest_backup():
-    """أحدثُ نسخة قاعدةٍ مشفَّرة، أو None."""
-    from core.backup_service import default_backup_dir
+class NewestBackup(NamedTuple):
+    path: Path
+    mtime: float
 
+
+def file_mtime(path):
+    """وقتُ تعديل الملفّ بالثواني، أو None إن غاب — تدويرُ النسخ قد يحذفه بين السرد والقراءة (فيبل 11-22)."""
     try:
-        files = list(default_backup_dir().glob('pg_backup_*.dump.enc'))
+        return path.stat().st_mtime
     except OSError:
         return None
-    return max(files, key=lambda p: p.stat().st_mtime, default=None)
+
+
+def newest_backup():
+    """أحدثُ نسخة قاعدةٍ مشفَّرة ووقتُها، أو None. يقرأ المجلّدَ المضبوط **ولا يُنشئه**: يُسأل مع كلّ صفحةٍ لمدير
+    النظام (شارةُ الشريط)، و``default_backup_dir`` يُنشئ ويسقط إلى قرص النظام — كتابةٌ لا تجوز في قراءة.
+    الوقتُ يُقرأ مرّةً هنا: ملفٌّ حُذف بعد السرد يُتخطّى، ولا يعود أحدٌ إلى ``stat`` فيسقط بخطأ."""
+    from core.backup_service import configured_backup_dir
+
+    try:
+        files = list(configured_backup_dir().glob('pg_backup_*.dump.enc'))
+    except OSError:
+        return None
+    stamped = [NewestBackup(path, mtime) for path in files if (mtime := file_mtime(path)) is not None]
+    return max(stamped, key=lambda backup: backup.mtime, default=None)
 
 
 def _backup_job(now):
     from core.models import BackupSettings
 
-    latest = newest_backup()
-    age = _age_hours(latest, now) if latest else None
+    newest = newest_backup()
+    stamp = datetime.fromtimestamp(newest.mtime, tz=now.tzinfo) if newest else None
+    age = (now - stamp).total_seconds() / 3600 if stamp else None
     if not BackupSettings.get().enabled:
         state, note = UNKNOWN, 'النسخ التلقائيّ معطَّل'
-    elif age is None:
+    elif stamp is None:
         state, note = STALE, 'لا توجد نسخة'
     else:
-        state = OK if age <= BACKUP_MAX_AGE_HOURS else STALE
-        note = f'آخر نسخة {age_text(age)} · الحدّ {BACKUP_MAX_AGE_HOURS} ساعة'
+        state = STALE if backup_is_late(stamp, now) else OK
+        note = f'آخر نسخة {age_text(age)}'
     return {'key': 'backup', 'name': 'النسخ الاحتياطيّ', 'state': state, 'note': note, 'age': age,
             'next_step': 'settings_backup' if state == STALE else ''}
 
 
 def _verify_alert_active(now):
     """ملفُّ التنبيه يعني عطلاً ما لم تأتِ بعده نسخةٌ أحدث منه."""
-    alert = ops_log_dir() / 'ALERT_VERIFY.txt'
-    if not alert.exists():
+    alert_mtime = file_mtime(ops_log_dir() / 'ALERT_VERIFY.txt')
+    if alert_mtime is None:
         return False
-    latest = newest_backup()
-    return latest is None or latest.stat().st_mtime <= alert.stat().st_mtime
+    newest = newest_backup()
+    return newest is None or newest.mtime <= alert_mtime
 
 
 def job_statuses(now=None):
@@ -135,11 +184,11 @@ def failing_job_count(now=None) -> int:
 
 
 def disk_percent():
-    """نسبةُ امتلاء قرص النسخ، أو None إن تعذّر القياس."""
-    from core.backup_service import default_backup_dir
+    """نسبةُ امتلاء قرص النسخ، أو None إن تعذّر القياس (قراءةٌ بلا إنشاء — انظر ``newest_backup``)."""
+    from core.backup_service import configured_backup_dir
 
     try:
-        usage = shutil.disk_usage(default_backup_dir())
+        usage = shutil.disk_usage(configured_backup_dir())
     except OSError:
         return None
     return round(usage.used * 100 / usage.total)

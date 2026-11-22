@@ -28,15 +28,21 @@ WINDOWS_PG_ROOTS = (Path(r"C:/Program Files/PostgreSQL"),
                     Path(r"C:/Program Files (x86)/PostgreSQL"))
 
 
+def configured_backup_dir() -> Path:
+    """مجلّدُ النسخ المضبوط — ``BACKUP_DIR`` في البيئة، وإلّا ``D:/trackbackup`` — **بلا إنشاءٍ ولا سقوط**:
+    لمن يقرأ فقط («حالة الخادم» تسأل عنه كلَّ دقيقة ولا يجوز أن تكتب على القرص)."""
+    configured = os.environ.get("BACKUP_DIR", "").strip()
+    return Path(configured) if configured else DEFAULT_BACKUP_DIR
+
+
 def default_backup_dir() -> Path:
-    """مجلّدُ النسخ — ``BACKUP_DIR`` في البيئة، وإلّا ``D:/trackbackup``.
+    """مجلّدُ النسخ لمن يكتب نسخة — المضبوطُ (``configured_backup_dir``)، ويُنشأ إن غاب.
 
     **والسقوطُ إلى داخل المشروع يصرخ ولا يصمت**: قرصُ النظام هنا مقيسٌ على
     حافّة الامتلاء (بَتَر ملفّاً فعلاً)، فنسخةٌ تُكتب عليه بهدوءٍ بدل القرص
     المنفصل هي أسوأ من فشلٍ صريح — تبدو ناجحةً حتى يوم الحاجة.
     """
-    configured = os.environ.get("BACKUP_DIR", "").strip()
-    directory = Path(configured) if configured else DEFAULT_BACKUP_DIR
+    directory = configured_backup_dir()
 
     if not directory.exists():
         try:

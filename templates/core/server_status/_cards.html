@@ -1,0 +1,21 @@
+{% comment %}بطاقاتُ «حالة الخادم» — المصدرُ الوحيد لعرضها: تُصيَّر في الصفحة وفي واجهة التحديث كلّ 30 ثانية.
+الترتيبُ والحكمُ من core/server_status/checks.py؛ القالبُ يعرض ولا يقرّر.{% endcomment %}
+<div class="ss-grid">
+{% for card in cards %}
+  <article class="ss-card" data-state="{{ card.state }}" id="card-{{ card.key }}" aria-labelledby="card-{{ card.key }}-h">
+    <div class="ss-card-head">
+      <span class="ss-ico">{% include 'core/server_status/_icon.html' with name=card.icon %}</span>
+      <h3 id="card-{{ card.key }}-h">{{ card.title }}</h3>
+      <span class="ss-pill" data-state="{{ card.state }}">{{ card.label }}</span>
+    </div>
+    {% if card.meter >= 0 %}<progress class="ss-meter" data-state="{{ card.state }}" max="100" value="{{ card.meter|stringformat:'.1f' }}" aria-label="مستعمل {{ card.meter|stringformat:'.1f' }} بالمئة">{{ card.meter|stringformat:'.1f' }}%</progress>{% endif %}
+    <p class="ss-card-text">{{ card.text }}</p>
+    {% if card.guide or card.link_url %}
+    <div class="ss-card-links">
+      {% if card.guide %}<a class="ss-link" href="{% url 'server_guide' %}#{{ card.guide }}">ماذا أفعل؟</a>{% endif %}
+      {% if card.link_url %}<a class="ss-link" href="{{ card.link_url }}">{{ card.link_label }}</a>{% endif %}
+    </div>
+    {% endif %}
+  </article>
+{% endfor %}
+</div>

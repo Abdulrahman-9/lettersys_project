@@ -136,6 +136,9 @@ class DevicePolicy(models.Model):
     server_addresses = models.JSONField(default=list, blank=True)
     previous_addresses = models.JSONField(default=list, blank=True)
     addresses_changed_at = models.DateTimeField(null=True, blank=True)
+    # «من يُبلَّغ حين يتوقّف الخادم» — يضبطه المديرُ العامّ في «حالة الخادم»، ويُعرض للموظّف حين لا اتّصال.
+    notify_name = models.CharField('من يُبلَّغ حين يتوقّف الخادم', max_length=80, blank=True)
+    notify_phone = models.CharField('رقمُه الداخليّ أو هاتفه', max_length=40, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod

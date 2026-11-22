@@ -1,0 +1,7 @@
+{% comment %}شريطُ «حالة الخادم» أعلى اللوحة للمدير العامّ — أوّلُ ما يراه حين يفتح النظام.
+الخلاصةُ من checks.strip_summary (محفوظةٌ دقيقة)؛ القالبُ يعرض ولا يقرّر.{% endcomment %}
+<a class="ss-strip" data-state="{{ server_strip.state }}" href="{% url 'server_status' %}">
+  <span class="ss-strip-ico" data-state="{{ server_strip.state }}">{% if server_strip.state == 'ok' %}{% include 'core/server_status/_icon.html' with name='check' %}{% else %}{% include 'core/server_status/_icon.html' with name='alert' %}{% endif %}</span>
+  <span class="ss-strip-text"><b>{{ server_strip.headline }}</b>{% if server_strip.first %}<span class="ss-strip-first"> · {{ server_strip.first.title }} ({{ server_strip.first.label }})</span>{% endif %}</span>
+  <span class="ss-strip-go">حالة الخادم</span>
+</a>

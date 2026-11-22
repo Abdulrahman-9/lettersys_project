@@ -421,6 +421,13 @@ WORKSTATION_KIT_VERSION = os.environ.get('LETTERSYS_WORKSTATION_KIT_VERSION', ''
 WORKSTATION_SHARE_PATH = os.environ.get('LETTERSYS_WORKSTATION_SHARE', '').strip()
 # كودُ إعلان الخادم يُكتب هنا على قرص الخادم (خارج المجلّد المشترك).
 DEVICES_DECLARE_CODE_FILE = os.environ.get('LETTERSYS_DECLARE_CODE_FILE', '').strip()
+# «حالة الخادم»: اسما خدمتَي ويندوز (التطبيق والرابط الآمن) كما في NSSM، والرابطُ الرسميّ للموظّفين
+# (فارغٌ = أوّلُ اسمٍ غير رقميّ في ALLOWED_HOSTS بمنفذ الطلب)، ونسخةُ الدليل المحفوظة للعمل بلا النظام.
+SERVER_STATUS_SERVICE = os.environ.get('LETTERSYS_SERVICE_NAME', 'LetterSys').strip()
+SERVER_STATUS_HTTPS_SERVICE = os.environ.get('LETTERSYS_HTTPS_SERVICE_NAME', 'LetterSysHTTPS').strip()
+LETTERSYS_OFFICIAL_URL = os.environ.get('LETTERSYS_OFFICIAL_URL', '').strip()
+SERVER_GUIDE_EXPORT_PATH = os.environ.get('LETTERSYS_GUIDE_EXPORT_PATH', '').strip() or str(
+    BASE_DIR / 'var' / 'guide' / 'index.html')
 _AGENT_ORIGINS = f"http://127.0.0.1:{_AGENT_PORT} http://localhost:{_AGENT_PORT}"
 SECURE_CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "

@@ -111,6 +111,11 @@ def dashboard(request):
         "command_center":   command_center,
         "insights":         insights,
     }
+    # «حالة الخادم» أوّلُ ما يراه المدير العامّ (طلبُ المالك 2026‑11‑19) — خلاصةٌ محفوظةٌ دقيقة
+    from core.scoping import can_view_server_status
+    if can_view_server_status(request.user):
+        from core.server_status.checks import strip_summary
+        ctx["server_strip"] = strip_summary()
     return render(request, "core/dashboard.html", ctx)
 
 
